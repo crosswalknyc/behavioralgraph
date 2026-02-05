@@ -3898,9 +3898,30 @@
         }
 
         async function restoreDefaultValuesForAllUsers() {
-            if (!confirm('Restore default values for all users? This will set everyone\'s Run Access and Behavioral Category Access to the defaults defined in the Quick Selects section (same as "Restore Defaults" in the user modal). Profile IQ stays on; other IQ access unchanged.')) return;
+            if (!confirm('Restore default values for all users? This will set everyone\'s Run Access and Behavioral Category Access to the same defaults as the "Restore Defaults" buttons in the user modal (from Quick Selects).')) return;
             try {
-                const response = await fetch('/api/admin/users/restore-defaults-all', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } });
+                // Same logic as the per-user Restore Defaults buttons (restoreRunAccessDefaults, restoreBehavioralCategoryDefaults)
+                await loadQuickSelects();
+                if (allRuns.length === 0) await loadCategoriesAndRuns();
+                const qsData = await fetch('/api/admin/quick-selects', { credentials: 'same-origin' }).then(r => r.json());
+                const runsData = qsData.runs || qsData.profiles || {};
+                const selectedRunKeys = allRuns.length === 0 ? ['*'] : allRuns.map(r => r.key).filter(key => runsData[key] !== false);
+                const useAllRuns = selectedRunKeys.length >= allRuns.length || Object.keys(runsData).length === 0;
+                const allowed_runs = useAllRuns ? ['*'] : selectedRunKeys;
+                const behSelected = MASTER_BEHAVIORAL_CATEGORIES.filter(cat => quickSelectBehaviorsData[cat] !== false);
+                const useAllBeh = behSelected.length >= MASTER_BEHAVIORAL_CATEGORIES.length;
+                const allowed_behavioral_categories = useAllBeh ? ['*'] : behSelected;
+                const body = JSON.stringify({
+                    allowed_runs,
+                    allowed_behavioral_categories,
+                    allowed_categories: ['*']
+                });
+                const response = await fetch('/api/admin/users/restore-defaults-all', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body
+                });
                 const data = await response.json();
                 if (data.success) {
                     showToast(data.message || `Default values restored for ${data.count} user(s).`);
