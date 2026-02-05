@@ -46084,17 +46084,13 @@
             showComparisonDeckSelectionPopup(moduleType, sectionTitle, profiles, selectedValues);
         }
         
-        function showComparisonValueSelector(moduleType, sectionId) {
-            const profiles = window.comparisonProfilesData || [];
-            if (profiles.length === 0) {
-                showNotification('⚠️ No comparison data available', 'warning');
-                return;
-            }
+        // Returns only the values currently displayed in the section (respects limit/sort)
+        function getComparisonSectionDisplayedValues(moduleType, profiles) {
+            if (moduleType === 'summary') return ['Crosswalk Respondents', 'Projected US', 'Median Age'];
             
-            let values = [];
-            if (moduleType === 'summary') {
-                values = ['Crosswalk Respondents', 'Projected US', 'Median Age'];
-            } else if (moduleType.startsWith('behavioral_')) {
+            const getSortProfileIdx = (sectionKey) => (typeof currentSortSection !== 'undefined' && currentSortSection === sectionKey && currentSortColumn != null) ? currentSortColumn : (primaryProfileIndex >= 0 ? primaryProfileIndex : 0);
+            
+            if (moduleType.startsWith('behavioral_')) {
                 const targetCatId = moduleType.replace('behavioral_', '');
                 let actualCat = null;
                 for (const p of profiles) {
@@ -46105,26 +46101,123 @@
                         if (actualCat) break;
                     }
                 }
-                const allValues = new Set();
-                profiles.forEach(p => {
-                    (p.behavioral?.[actualCat] || []).forEach(item => allValues.add(item.name));
+                if (!actualCat) return [];
+                const catKey = 'beh_' + actualCat;
+                const limit = getComparisonSectionLimit(catKey);
+                const sortType = getComparisonSectionSortType(catKey);
+                const genPopIdx = profiles.findIndex(p => {
+                    const n = (p.name || '').toUpperCase();
+                    return n.includes('GEN POP') || n.includes('GENPOP');
                 });
-                values = Array.from(allValues).sort();
-            } else if (moduleType === 'location') {
-                const allLocations = new Set();
+                const allValues = new Map();
+                const seenNormalized = new Set();
                 profiles.forEach(p => {
-                    (p.locations || []).forEach(loc => allLocations.add(loc.name || loc.dma || loc.state));
+                    (p.behavioral[actualCat] || []).forEach(item => {
+                        const normalizedName = normalizeNameForDedup(item.name);
+                        if (!seenNormalized.has(normalizedName)) {
+                            seenNormalized.add(normalizedName);
+                            allValues.set(item.name, {});
+                        }
+                    });
                 });
-                values = Array.from(allLocations).sort();
-            } else {
-                // Demographics (gender, age, ethnicity, income, education, etc.)
-                const demoKey = moduleType.startsWith('demo_') ? moduleType.replace('demo_', '') : moduleType;
-                const allValues = new Set();
-                profiles.forEach(p => {
-                    Object.keys(p.demographics?.[demoKey] || {}).forEach(v => allValues.add(v));
+                let dataRows = Array.from(allValues.keys()).map(value => {
+                    const normalizedValue = normalizeNameForDedup(value);
+                    const findItem = (items) => items.find(i => i.name === value || normalizeNameForDedup(i.name) === normalizedValue);
+                    const pctData = profiles.map(p => { const item = findItem(p.behavioral[actualCat] || []); return item ? item.pct : 0; });
+                    const genPopPct = genPopIdx >= 0 ? pctData[genPopIdx] : 0;
+                    const indexData = profiles.map((p, i) => {
+                        const pct = pctData[i];
+                        if (pct <= 0) return 0;
+                        if (genPopIdx >= 0 && i === genPopIdx) return 100;
+                        if (genPopPct > 0) return Math.round((pct / genPopPct) * 100);
+                        const item = findItem(p.behavioral[actualCat] || []); return item ? (item.index || 0) : 0;
+                    });
+                    return { value, pctData, indexData };
                 });
-                values = Array.from(allValues).sort();
+                const getSortValue = (row, idx) => sortType === 'index' ? (row.indexData[idx] || 0) : (row.pctData[idx] || 0);
+                const behSortDir = currentSortDirection || 'desc';
+                const sortProfileIdx = getSortProfileIdx(catKey);
+                if (sortProfileIdx !== null) {
+                    dataRows.sort((a, b) => behSortDir === 'asc' ? getSortValue(a, sortProfileIdx) - getSortValue(b, sortProfileIdx) : getSortValue(b, sortProfileIdx) - getSortValue(a, sortProfileIdx));
+                } else {
+                    dataRows.sort((a, b) => sortType === 'index' ? Math.max(...b.indexData) - Math.max(...a.indexData) : Math.max(...b.pctData) - Math.max(...a.pctData));
+                }
+                if (limit !== 'All') { const numLimit = parseInt(limit) || 15; dataRows = dataRows.slice(0, numLimit); }
+                return dataRows.map(r => r.value);
             }
+            
+            if (moduleType === 'location') {
+                const limit = getComparisonSectionLimit('location');
+                const sortType = getComparisonSectionSortType('location');
+                const genPopIdx = profiles.findIndex(p => { const n = (p.name || '').toUpperCase(); return n.includes('GEN POP') || n.includes('GENPOP'); });
+                const allLocs = new Map();
+                const seenNorm = new Set();
+                profiles.forEach(p => {
+                    (p.locations || []).forEach(loc => {
+                        const name = loc.name || loc.dma || loc.state;
+                        const norm = normalizeNameForDedup(name);
+                        if (!seenNorm.has(norm)) { seenNorm.add(norm); allLocs.set(name, {}); }
+                    });
+                });
+                let dataRows = Array.from(allLocs.keys()).map(name => {
+                    const norm = normalizeNameForDedup(name);
+                    const findLoc = (locs) => locs.find(l => normalizeNameForDedup(l.name || l.dma || l.state) === norm);
+                    const pctData = profiles.map(p => { const loc = findLoc(p.locations || []); return loc ? loc.pct : 0; });
+                    const genPopPct = genPopIdx >= 0 ? pctData[genPopIdx] : 0;
+                    const indexData = profiles.map((p, i) => {
+                        const pct = pctData[i]; if (pct <= 0) return 0; if (genPopIdx >= 0 && i === genPopIdx) return 100; if (genPopPct > 0) return Math.round((pct / genPopPct) * 100); const loc = findLoc(p.locations || []); return loc ? (loc.index || 0) : 0;
+                    });
+                    return { value: name, pctData, indexData };
+                });
+                const getSortVal = (row, i) => sortType === 'index' ? (row.indexData[i] || 0) : (row.pctData[i] || 0);
+                const sortDir = currentSortDirection || 'desc';
+                const locSortIdx = getSortProfileIdx('location');
+                dataRows.sort((a, b) => sortDir === 'asc' ? getSortVal(a, locSortIdx) - getSortVal(b, locSortIdx) : getSortVal(b, locSortIdx) - getSortVal(a, locSortIdx));
+                if (limit !== 'All') { const numLimit = parseInt(limit) || 15; dataRows = dataRows.slice(0, numLimit); }
+                return dataRows.map(r => r.value);
+            }
+            
+            // Demographics
+            const demoKey = moduleType.startsWith('demo_') ? moduleType.replace('demo_', '') : moduleType;
+            const sectionKey = 'demo_' + demoKey;
+            const limit = getComparisonSectionLimit(sectionKey);
+            const sortType = getComparisonSectionSortType(sectionKey);
+            const genPopProfile = profiles.find(p => { const n = (p.name || '').toUpperCase(); return n.includes('GEN POP') || n.includes('GENPOP'); });
+            const genPopDemo = genPopProfile?.demographics?.[demoKey] || {};
+            const getGenPopPct = (val) => {
+                if (genPopDemo[val] != null) return genPopDemo[val];
+                const k = Object.keys(genPopDemo).find(kk => (kk || '').toLowerCase() === (val || '').toLowerCase());
+                return k != null ? genPopDemo[k] : 0;
+            };
+            const allVals = new Set();
+            profiles.forEach(p => Object.keys(p.demographics?.[demoKey] || {}).forEach(v => allVals.add(v)));
+            let dataRows = Array.from(allVals).map(value => {
+                const pctData = profiles.map(p => p.demographics[demoKey]?.[value] || 0);
+                const genPopPct = getGenPopPct(value);
+                const indexData = profiles.map((p, i) => {
+                    const pct = pctData[i]; if (pct <= 0) return 0; if (genPopProfile && profiles[i] === genPopProfile) return 100; if (genPopPct > 0) return Math.round((pct / genPopPct) * 100); return p.demographicsIndex?.[demoKey]?.[value] || 0;
+                });
+                return { value, pctData, indexData };
+            });
+            const getSortVal = (row, idx) => sortType === 'index' ? (row.indexData[idx] || 0) : (row.pctData[idx] || 0);
+            const sortDir = currentSortDirection || 'desc';
+            const getAgeSortKey = (val) => { const s = (val || '').toString().trim(); if (/^<\d+/.test(s)) return 0; if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 99; const nums = s.match(/\d+/g); return nums && nums[0] ? parseInt(nums[0]) : 0; };
+            const demoSortIdx = getSortProfileIdx(sectionKey);
+            if (demoKey === 'age' && sortType === 'age') { dataRows.sort((a, b) => getAgeSortKey(a.value) - getAgeSortKey(b.value)); }
+            else if (demoSortIdx !== null && demoSortIdx >= 0) { dataRows.sort((a, b) => sortDir === 'asc' ? getSortVal(a, demoSortIdx) - getSortVal(b, demoSortIdx) : getSortVal(b, demoSortIdx) - getSortVal(a, demoSortIdx)); }
+            else { const idx = primaryProfileIndex >= 0 ? primaryProfileIndex : 0; dataRows.sort((a, b) => getSortVal(b, idx) - getSortVal(a, idx)); }
+            if (limit !== 'All' && !isNaN(parseInt(limit))) dataRows = dataRows.slice(0, parseInt(limit));
+            return dataRows.map(r => r.value);
+        }
+        
+        function showComparisonValueSelector(moduleType, sectionId) {
+            const profiles = window.comparisonProfilesData || [];
+            if (profiles.length === 0) {
+                showNotification('⚠️ No comparison data available', 'warning');
+                return;
+            }
+            
+            const values = getComparisonSectionDisplayedValues(moduleType, profiles);
             
             if (values.length === 0) {
                 showNotification('No values available for this section', 'warning');
