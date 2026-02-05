@@ -52025,12 +52025,15 @@
                     </div>
                 `;
             } else if (el.type === 'image') {
+                const objPos = el.objectPosition || 'center top';
                 return `
                     <div class="slide-element image-element ${isSelected ? 'selected' : ''}"
                          data-element-id="${el.id}"
                          style="${baseStyle} overflow: hidden;"
-                         onmousedown="startElementDrag(event, '${el.id}')">
-                        <img src="${el.src}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: ${el.borderRadius || 0}px; display: block;">
+                         onmousedown="startElementDrag(event, '${el.id}')"
+                         ondblclick="event.stopPropagation(); showImageCropPicker('${el.id}')"
+                         title="Double-click to adjust crop">
+                        <img src="${el.src}" style="width: 100%; height: 100%; object-fit: cover; object-position: ${objPos}; border-radius: ${el.borderRadius || 0}px; display: block;">
                         ${resizeHandles}
                     </div>
                 `;
@@ -52056,6 +52059,63 @@
                 `;
             }
             return '';
+        }
+        
+        function showImageCropPicker(elementId) {
+            const slide = currentEditingSlide === 0 ? currentEditingDeck?.titleSlide : currentEditingDeck?.slides?.[currentEditingSlide - 1];
+            if (!slide?.elements) return;
+            const el = slide.elements.find(e => e.id === elementId);
+            if (!el || el.type !== 'image') return;
+            
+            const positions = [
+                { value: 'left top', label: 'Top Left', icon: '↖' },
+                { value: 'center top', label: 'Top Center', icon: '↑' },
+                { value: 'right top', label: 'Top Right', icon: '↗' },
+                { value: 'left center', label: 'Center Left', icon: '←' },
+                { value: 'center center', label: 'Center', icon: '◆' },
+                { value: 'right center', label: 'Center Right', icon: '→' },
+                { value: 'left bottom', label: 'Bottom Left', icon: '↙' },
+                { value: 'center bottom', label: 'Bottom Center', icon: '↓' },
+                { value: 'right bottom', label: 'Bottom Right', icon: '↘' }
+            ];
+            const current = el.objectPosition || 'center top';
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'imageCropPickerModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 340px;">
+                    <div class="deck-workspace-header">
+                        <h2>🖼️ Adjust Image Crop</h2>
+                        <button onclick="document.getElementById('imageCropPickerModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Choose which part of the image to show:</p>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
+                            ${positions.map(p => `
+                                <button onclick="applyImageCrop('${elementId}', '${p.value}')" 
+                                        style="padding: 0.75rem; background: ${current === p.value ? 'var(--accent-cyan)' : 'var(--bg-input)'}; border: 2px solid ${current === p.value ? 'var(--accent-cyan)' : 'var(--border-color)'}; border-radius: 8px; color: var(--text-primary); cursor: pointer; font-size: 1.25rem; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;"
+                                        title="${p.label}">
+                                    <span>${p.icon}</span>
+                                    <span style="font-size: 0.6rem;">${p.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function applyImageCrop(elementId, objectPosition) {
+            const slide = currentEditingSlide === 0 ? currentEditingDeck?.titleSlide : currentEditingDeck?.slides?.[currentEditingSlide - 1];
+            if (!slide?.elements) return;
+            const el = slide.elements.find(e => e.id === elementId);
+            if (!el) return;
+            el.objectPosition = objectPosition;
+            document.getElementById('imageCropPickerModal')?.remove();
+            saveDeckChanges();
+            renderSlideEditor();
         }
         
         function initSlideElements() {
