@@ -37233,6 +37233,10 @@
         function renderAffinityMap(data) {
             if (!data || !data.behavioral) return;
             
+            // Don't run if affinity elements aren't in the DOM (e.g. Admin view)
+            const affTotalEl = document.getElementById('affTotalItems');
+            if (!affTotalEl) return;
+            
             const allItems = collectAllBehavioralItems(data);
             
             // === AFFINITY INSIGHTS ===
@@ -37252,10 +37256,13 @@
                 .sort((a, b) => b.avg - a.avg)[0];
             
             // Update scorecard
-            document.getElementById('affTotalItems').textContent = allItems.length;
-            document.getElementById('affHighIndex').textContent = highIndexItems.length;
-            document.getElementById('affAvgIndex').textContent = formatIndex(avgIndex);
-            document.getElementById('affTopCategory').textContent = topCategory?.cat || '--';
+            affTotalEl.textContent = allItems.length;
+            const affHighEl = document.getElementById('affHighIndex');
+            if (affHighEl) affHighEl.textContent = highIndexItems.length;
+            const affAvgEl = document.getElementById('affAvgIndex');
+            if (affAvgEl) affAvgEl.textContent = formatIndex(avgIndex);
+            const affTopEl = document.getElementById('affTopCategory');
+            if (affTopEl) affTopEl.textContent = topCategory?.cat || '--';
             
             // Generate key insights
             const topItems = allItems.sort((a, b) => b.index - a.index).slice(0, 5);
