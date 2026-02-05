@@ -5686,6 +5686,13 @@ def parse_number(value):
     except:
         return None
 
+def _first_numeric_in_row(row, start_idx=1):
+    """Return (numeric_value, column_index) for the first parseable number in row[start_idx:], or (None, None)."""
+    for j in range(start_idx, len(row)):
+        if row[j] and parse_number(row[j]) is not None:
+            return parse_number(row[j]), j
+    return None, None
+
 def parse_subscriber_iq_csv(csv_content):
     """Parse subscriber IQ CSV (show-to-platform attribution format)."""
     lines = csv_content.strip().split('\n')
@@ -5732,6 +5739,14 @@ def parse_subscriber_iq_csv(csv_content):
         second_col = row[1].strip() if len(row) > 1 and row[1] else ''
         # Also check combined for headers that span columns
         combined_check = (first_col + ' ' + second_col).strip().upper()
+        
+        # Global section detection (so we don't require strict CSV order)
+        if 'MONTHLY' in combined_check and ('SIGNUP' in combined_check or 'SIGNUPS' in combined_check):
+            current_section = 'monthly_signups'
+            continue
+        if 'PER-EPISODE' in combined_check or ('EPISODE' in combined_check and 'ATTRIBUTION' in combined_check):
+            current_section = 'episode_attribution'
+            continue
         
         # Metadata section
         if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in second_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in combined_check:
@@ -6137,30 +6152,56 @@ def parse_subscriber_iq_csv(csv_content):
                 }
                 print(f"   ✅ Fallback: Found Attributed Signups")
     
-    # Fallback: Try to find episodes if none were found
+    # Fallback: Try to find episodes if none were found (flexible column detection)
     if len(parsed['episode_attribution']) == 0:
         print("   ⚠️ No episodes found via section detection, trying fallback parsing...")
         for i, row in enumerate(rows):
             if not row or len(row) < 2:
                 continue
-            first_col = row[0].strip() if row[0] else ''
-            # Look for rows that start with a number (episode number)
-            if first_col and (first_col.isdigit() or first_col.startswith('Episode ')):
-                episode_num = first_col.replace('Episode ', '').strip() if first_col.startswith('Episode ') else first_col
-                # Check if row[1] looks like a number (signups count)
-                if row[1] and (row[1].strip().replace(',', '').isdigit()):
-                    signups_val = parse_number(row[1])
-                    if signups_val and signups_val > 0:  # Only add if it looks like real data
-                        parsed['episode_attribution'].append({
-                            'episode': episode_num,
-                            'signups': signups_val,
-                            'days_avg': row[3].strip() if len(row) > 3 else '',
-                            'min_avg_view': row[5].strip() if len(row) > 5 else '',
-                            'percentage': row[7].strip() if len(row) > 7 else '',
-                            'gen_pop': row[8].strip() if len(row) > 8 else ''
-                        })
-                        print(f"   ✅ Fallback: Found Episode {episode_num} with {signups_val} signups")
-    
+            first_col = (row[0].strip() if row[0] else '').strip()
+            # Look for rows that start with a number or "Episode N"
+            if not first_col:
+                continue
+            episode_num = None
+            if first_col.isdigit():
+                episode_num = first_col
+            elif first_col.lower().startswith('episode '):
+                episode_num = first_col[len('episode '):].strip() or first_col
+            if episode_num is None:
+                continue
+            signups_val, _ = _first_numeric_in_row(row, 1)
+            if signups_val is not None and signups_val > 0:
+                parsed['episode_attribution'].append({
+                    'episode': episode_num,
+                    'signups': signups_val,
+                    'days_avg': row[3].strip() if len(row) > 3 else '',
+                    'min_avg_view': row[5].strip() if len(row) > 5 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                })
+                print(f"   ✅ Fallback: Found Episode {episode_num} with {signups_val} signups")
+
+    # Fallback: Try to find monthly signups if none were found (flexible column detection)
+    if len(parsed['monthly_signups']) == 0:
+        print("   ⚠️ No monthly signups found via section detection, trying fallback parsing...")
+        for i in range(start_idx, len(rows)):
+            row = rows[i]
+            if not row or len(row) < 1:
+                continue
+            first_col = (row[0].strip() if row[0] else '').strip()
+            if not re.match(r'^\d{4}-\d{2}$', first_col):
+                continue
+            signups_val, _ = _first_numeric_in_row(row, 1)
+            if signups_val is not None:
+                parsed['monthly_signups'].append({
+                    'month': first_col,
+                    'signups': signups_val,
+                    'watched_show': row[3].strip() if len(row) > 3 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                })
+                print(f"   ✅ Fallback: Found month {first_col} with {signups_val} signups")
+
     # Log parsing summary
     print(f"📊 Parsing complete:")
     print(f"   Key metrics: {len(parsed['key_metrics'])} items")
