@@ -21902,7 +21902,7 @@
                         const months = monthlySignups.map(m => {
                             const [year, month] = m.month.split('-');
                             const date = new Date(year, parseInt(month) - 1);
-                            return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                            return date.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', year: 'numeric' }) + ' PST';
                         });
                         const monthlyDates = monthlySignups.map(m => {
                             const [year, month] = m.month.split('-');
@@ -34833,7 +34833,7 @@
                     <div class="deck-item-handle">⋮⋮</div>
                     <div class="deck-item-content">
                         <strong>${item.title}</strong>
-                        <span class="deck-item-date">${new Date(item.dateAdded).toLocaleDateString()}</span>
+                        <span class="deck-item-date">${formatDatePST(item.dateAdded)}</span>
                     </div>
                     <button class="deck-item-remove" onclick="removeDeckItem(${idx})">✕</button>
                 </div>
@@ -34866,7 +34866,7 @@
             
             // Generate a text-based report that can be printed/saved as PDF
             let content = `CROSSWALK AUDIENCE DECK\n`;
-            content += `Generated: ${new Date().toLocaleString()}\n`;
+            content += `Generated: ${formatDateTimePST(new Date())}\n`;
             content += `${'='.repeat(60)}\n\n`;
             
             deckWorkspaceItems.forEach((item, idx) => {
@@ -35013,7 +35013,7 @@
                 <body>
                     <div class="slide">
                         <div class="slide-title">CROSSWALK Audience Analysis</div>
-                        <div class="slide-subtitle">Generated: ${new Date().toLocaleString()}</div>
+                        <div class="slide-subtitle">Generated: ${formatDateTimePST(new Date())}</div>
                         <p>Deck contains ${items.length} slides</p>
                     </div>
             `;
@@ -35091,7 +35091,7 @@
 `;
             
             // Title slide
-            content += `<div class="slide"><h1>CROSSWALK Audience Analysis</h1><h2>${new Date().toLocaleDateString()}</h2><p>${items.length} slides</p></div>`;
+            content += `<div class="slide"><h1>CROSSWALK Audience Analysis</h1><h2>${formatDatePST(new Date())}</h2><p>${items.length} slides</p></div>`;
             
             items.forEach((item, idx) => {
                 content += `<div class="slide"><h1>${item.title || item.category || 'Slide ' + (idx + 1)}</h1><h2>${item.profileName || ''}</h2>`;
@@ -35156,7 +35156,7 @@
     <div class="slide">
         <div class="slide-title">CROSSWALK</div>
         <div class="slide-subtitle">Audience Analysis Deck</div>
-        <p style="font-size: 20px; color: #1d1d1f;">${items.length} slides • Generated ${new Date().toLocaleDateString()}</p>
+        <p style="font-size: 20px; color: #1d1d1f;">${items.length} slides • Generated ${formatDatePST(new Date())}</p>
         <div class="footer">Powered by Crosswalk</div>
     </div>
 `;
@@ -41352,7 +41352,7 @@
         <h1 class="slide-title" style="font-size: 48px; margin-top: 100px;">${profileName}</h1>
         <p class="slide-subtitle" style="font-size: 24px;">Audience Profile & Sponsorship Opportunities</p>
         <div style="margin-top: 60px; color: #64748b;">
-            <p>Generated: ${new Date().toLocaleDateString()}</p>
+            <p>Generated: ${formatDatePST(new Date())}</p>
             <p>Sample Size: n=${formatNumber(currentProfileData.sampleSize || 0)}</p>
             <p>Projected US Reach: ${formatNumber(currentProfileData.projectedUS || 0)}</p>
         </div>
@@ -41767,7 +41767,7 @@
                     ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
                     : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">✅ RELEASED</span>';
                 
-                const dateStr = result.created_at ? new Date(result.created_at).toLocaleDateString() : '';
+                const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
                 const purgatoryIdEsc = (result.purgatory_id || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
@@ -41858,7 +41858,7 @@
                     ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
                     : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">✅ RELEASED</span>';
                 
-                const dateStr = result.created_at ? new Date(result.created_at).toLocaleDateString() : '';
+                const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
                 
                 // Buttons: Download always available, Open in Profile IQ only if released
                 let buttons = '';
@@ -42089,7 +42089,7 @@
                     <div class="job-item">
                         <div class="job-info">
                             <h3>${displayName}</h3>
-                            <p>${job.category || ''} • ${new Date(job.created_at).toLocaleDateString()}</p>
+                            <p>${job.category || ''} • ${formatDatePST(job.created_at)}</p>
                         </div>
                         <div style="display: flex; gap: 0.35rem;">
                             ${isCompleted ? `
@@ -42201,6 +42201,19 @@
             return str.trim().split(/\s+/).map(word =>
                 word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
             ).join(' ');
+        }
+
+        function formatDateTimePST(dateInput) {
+            if (dateInput == null || dateInput === '') return '';
+            const d = new Date(dateInput);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'short', timeStyle: 'medium' }) + ' PST';
+        }
+        function formatDatePST(dateInput) {
+            if (dateInput == null || dateInput === '') return '';
+            const d = new Date(dateInput);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'short' }) + ' PST';
         }
 
         function getProfileFullName(profile) {
@@ -47507,7 +47520,7 @@
                                 <p><strong>Sample Size:</strong> ${formatNumber(primaryProfile.sampleSize || 0)} | <strong>Projected US:</strong> ${formatNumber(primaryProfile.projectedUS || 0)} | <strong>Median Age:</strong> ${primaryProfile.medianAge || 'N/A'}</p>
                                 ${comparisons.length > 0 ? `<p><strong>Comparisons:</strong> ${comparisons.map(c => c.name).join(', ')}</p>` : ''}
                                 ${genPopProfile ? `<p><strong>Baseline:</strong> Gen Pop (General Population)</p>` : ''}
-                            <p style="color: var(--text-secondary); font-size: 0.85rem;">Generated on ${new Date().toLocaleDateString()}</p>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem;">Generated on ${formatDatePST(new Date())}</p>
                         </div>
                         
                             ${aiInsights.executiveOverview ? `
@@ -48740,7 +48753,7 @@
                         <div class="data-point-header">
                             <div>
                                 <div class="data-point-title">${dp.title || dp.category}</div>
-                                <div class="data-point-meta">${dp.profileName} • ${dp.type} • ${new Date(dp.dateAdded).toLocaleDateString()}</div>
+                                <div class="data-point-meta">${dp.profileName} • ${dp.type} • ${formatDatePST(dp.dateAdded)}</div>
                             </div>
                             <div class="data-point-actions">
                                 <button onclick="event.stopPropagation(); addDataPointToDeck('${dp.id}')" style="background: var(--accent-lime); color: #000;" title="Add to Deck">📊</button>
@@ -49371,7 +49384,7 @@
                 <div class="shared-profile-item">
                     <div class="shared-profile-info">
                         <h4>${p.profileName}</h4>
-                        <p>Shared by ${p.sharedBy} • ${new Date(p.sharedAt).toLocaleDateString()}</p>
+                        <p>Shared by ${p.sharedBy} • ${formatDatePST(p.sharedAt)}</p>
                         ${p.comments?.length > 0 ? `<span style="font-size: 0.7rem; color: var(--accent-blue);">💬 ${p.comments.length} comments</span>` : ''}
                     </div>
                     <div style="display: flex; gap: 0.5rem;">
@@ -49484,7 +49497,7 @@
                 <div class="comment-item" data-id="${c.id}">
                     <div class="comment-header">
                         <span class="comment-author">${c.author}</span>
-                        <span class="comment-time">${new Date(c.time).toLocaleString()}</span>
+                        <span class="comment-time">${formatDateTimePST(c.time)}</span>
                     </div>
                     <div class="comment-text">${c.text}</div>
                     <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem; display: flex; justify-content: space-between; align-items: center;">
@@ -49496,7 +49509,7 @@
                             ${c.replies.map(r => `
                                 <div class="comment-reply" style="margin-bottom: 0.5rem;">
                                     <span style="font-weight: 600; font-size: 0.75rem;">${r.author}</span>
-                                    <span style="font-size: 0.65rem; color: var(--text-secondary);"> • ${new Date(r.time).toLocaleString()}</span>
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);"> • ${formatDateTimePST(r.time)}</span>
                                     <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">${r.text}</p>
                                 </div>
                             `).join('')}
@@ -49576,7 +49589,7 @@
                         <span>${getNotificationIcon(n.type)}</span>
                         <span>${n.message}</span>
                     </div>
-                    <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem;">${new Date(n.createdAt).toLocaleString()}</div>
+                    <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem;">${formatDateTimePST(n.createdAt)}</div>
                 </div>
             `).join('');
         }
@@ -50809,7 +50822,7 @@
                 // Use custom values if saved, otherwise use defaults
                 const profileName = titleSlide.title || slide.title || currentProfileData?.name || 'PROFILE NAME';
                 const today = new Date();
-                const defaultDateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                const defaultDateStr = today.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit', month: 'short', year: 'numeric' }) + ' PST';
                 const dateStr = titleSlide.date || defaultDateStr;
                 const branding = titleSlide.branding || 'Crosswalk Profile IQ';
                 
@@ -50950,7 +50963,7 @@
             // For Table of Contents slide
             if (slide.type === 'toc') {
                 const today = new Date();
-                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                const dateStr = today.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit', month: 'short', year: 'numeric' }) + ' PST';
                 const profileImage = getDeckTitleSlideProfileImage(currentEditingDeck?.titleSlide || {});
                 
                 // Get list of slide titles for TOC (exclude TOC and closing slides)
@@ -51038,7 +51051,7 @@
             // For Closing/Thank You slide - Bold typography matching inspiration
             if (slide.type === 'closing') {
                 const today = new Date();
-                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                const dateStr = today.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit', month: 'short', year: 'numeric' }) + ' PST';
                 
                 // Get presenter info
                 const presenterName = (currentUserFirstName && currentUserLastName) 
@@ -51217,7 +51230,7 @@
                 
                 const description = generateSlideDescription(slide);
                 const today = new Date();
-                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                const dateStr = today.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit', month: 'short', year: 'numeric' }) + ' PST';
                 const analysisBlock = slide.aiAnalysis ? `<div style="margin-top: 1rem; padding: 1rem; background: rgba(74, 138, 201, 0.1); border-radius: 8px; border-left: 3px solid var(--accent-cyan); font-size: 0.9rem; line-height: 1.5;"><div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">🤖 AI Key Points & Takeaways</div><div>${slide.aiAnalysis}</div></div>` : '';
                 
                 // Determine layout variant (rotate through 8 layouts, skipping layout 0 which is title slide and layout 1 which is TOC)
@@ -51776,7 +51789,7 @@
             }).join('');
             if (!html && idx > 0) {
                 const today = new Date();
-                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                const dateStr = today.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit', month: 'short', year: 'numeric' }) + ' PST';
                 return `
                     <!-- Header bar -->
                     <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
@@ -54941,7 +54954,7 @@
                             <div class="activity-icon">${getActivityIcon(a.action)}</div>
                             <div class="activity-content">
                                 <p><strong>${a.user || 'Unknown'}</strong> ${formatActivityAction(a.action)} ${a.details ? `<span style="color: var(--text-secondary);">${a.details}</span>` : ''}</p>
-                                <span class="activity-time">${new Date(a.timestamp).toLocaleString()}</span>
+                                <span class="activity-time">${formatDateTimePST(a.timestamp)}</span>
                             </div>
                         </div>
                     `).join('');
@@ -55669,7 +55682,7 @@
             const isGroup = currentChatConversation.isGroup;
             container.innerHTML = messages.map(msg => {
                 const isMe = msg.sender === currentUsername;
-                const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const time = new Date(msg.timestamp).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit' }) + ' PST';
                 const member = collabTeamMembers.find(m => m.username === msg.sender);
                 const senderName = isGroup && !isMe ? (member ? (member.first_name && member.last_name ? `${member.first_name} ${member.last_name}` : member.username) : msg.sender) : '';
                 return `

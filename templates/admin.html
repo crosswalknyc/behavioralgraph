@@ -2611,7 +2611,7 @@
             `;
             
             for (const item of items) {
-                const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : 'Unknown';
+                const createdAt = item.created_at ? formatDateTimePST(item.created_at) : 'Unknown';
                 const sourceLabel = item.source_type === 'svod_acquisition' ? '📺 SVOD' : '🎯 Profile';
                 const imageUrl = item.image_url || '';
                 const titleVal = (item.title || item.project_name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -4087,7 +4087,7 @@
                         lastLoginDisplay = `${Math.floor(diffDays / 7)}w ago`;
                         lastLoginColor = 'var(--text-secondary)';
                     } else {
-                        lastLoginDisplay = lastLogin.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        lastLoginDisplay = formatDateTimePST(lastLogin);
                         lastLoginColor = 'var(--text-secondary)';
                     }
                 }
@@ -4559,7 +4559,7 @@
                             </div>
                             <div class="feature-item">
                                 <span>Account Created</span>
-                                <span>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}</span>
+                                <span>${user.created_at ? formatDatePST(user.created_at) : 'Unknown'}</span>
                             </div>
                             <div class="feature-item">
                                 <span>Sessions</span>
@@ -4590,7 +4590,7 @@
                             ${profilesViewed.length > 0 ? profilesViewed.slice(0, 20).map(p => `
                                 <div class="activity-item">
                                     <span>📊 ${p.name || p.key}</span>
-                                    <span class="time">${p.viewed_at ? new Date(p.viewed_at).toLocaleString() : ''}</span>
+                                    <span class="time">${p.viewed_at ? formatDateTimePST(p.viewed_at) : ''}</span>
                                 </div>
                             `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No profiles viewed yet</div>'}
                         </div>
@@ -4604,7 +4604,7 @@
                             ${recentActions.length > 0 ? recentActions.slice(0, 30).map(a => `
                                 <div class="activity-item">
                                     <span>${getActionIcon(a.action)} ${formatActionName(a.action)}${a.details ? ': ' + a.details : ''}</span>
-                                    <span class="time">${a.timestamp ? new Date(a.timestamp).toLocaleString() : ''}</span>
+                                    <span class="time">${a.timestamp ? formatDateTimePST(a.timestamp) : ''}</span>
                                 </div>
                             `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No recent activity</div>'}
                         </div>
@@ -4660,14 +4660,24 @@
             return feature.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
 
-        function formatDateTimePST(isoString) {
-            if (!isoString) return null;
+        function formatDateTimePST(dateInput) {
+            if (dateInput == null || dateInput === '') return '';
             try {
-                const d = new Date(isoString);
-                const formatted = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'short', timeStyle: 'medium' });
-                return formatted + ' PST';
+                const d = new Date(dateInput);
+                if (isNaN(d.getTime())) return '';
+                return d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'short', timeStyle: 'medium' }) + ' PST';
             } catch (e) {
-                return isoString;
+                return String(dateInput);
+            }
+        }
+        function formatDatePST(dateInput) {
+            if (dateInput == null || dateInput === '') return '';
+            try {
+                const d = new Date(dateInput);
+                if (isNaN(d.getTime())) return '';
+                return d.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'short' }) + ' PST';
+            } catch (e) {
+                return String(dateInput);
             }
         }
 
@@ -6330,7 +6340,7 @@
 
         function renderFileRow(file) {
             const isSelected = selectedFiles.has(file.key);
-            const dateStr = file.last_modified ? new Date(file.last_modified).toLocaleDateString() : '--';
+            const dateStr = file.last_modified ? formatDateTimePST(file.last_modified) : '--';
             const hasCustomImage = file.custom_image ? true : false;
             const escapedKey = file.key.replace(/'/g, "\\'");
             const escapedName = (file.project_name || '').replace(/'/g, "\\'");
