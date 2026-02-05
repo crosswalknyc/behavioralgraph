@@ -5693,6 +5693,16 @@ def _first_numeric_in_row(row, start_idx=1):
             return parse_number(row[j]), j
     return None, None
 
+def _all_numerics_in_row(row, start_idx=1, max_count=4):
+    """Return list of (numeric_value, column_index) for parseable numbers in row[start_idx:], up to max_count."""
+    result = []
+    for j in range(start_idx, len(row)):
+        if len(result) >= max_count:
+            break
+        if row[j] and parse_number(row[j]) is not None:
+            result.append((parse_number(row[j]), j))
+    return result
+
 def parse_subscriber_iq_csv(csv_content):
     """Parse subscriber IQ CSV (show-to-platform attribution format)."""
     lines = csv_content.strip().split('\n')
@@ -5755,7 +5765,7 @@ def parse_subscriber_iq_csv(csv_content):
             continue
         elif current_section == 'metadata':
             if 'Show/Content Tracked' in first_col:
-                parsed['metadata']['show'] = row[1].strip() if len(row) > 1 else ''
+                parsed['metadata']['show'] = (row[1].strip() or (row[2].strip() if len(row) > 2 else '')) or ''
             elif 'Platform Tracked' in first_col or 'platform tracked' in first_col.lower():
                 # Try multiple columns for platform
                 platform_val = ''
@@ -5853,13 +5863,27 @@ def parse_subscriber_iq_csv(csv_content):
             
             if episode_num:
                 signups_val = parse_number(row[1]) if len(row) > 1 else None
-                print(f"   📊 Found Episode {episode_num}: signups={signups_val}, row={row[:3]}")
+                # CSV columns: 0=Episode N, 1=signups, 2=label, 3=days_avg value, 4=label, 5=min_avg_view value, 6=label, 7=%, 8=gen_pop
+                def _val(col_idx, skip_labels=None):
+                    if col_idx >= len(row): return ''
+                    s = row[col_idx].strip()
+                    if not s: return ''
+                    if skip_labels and s.lower() in (x.lower() for x in skip_labels): return ''
+                    if parse_number(s) is not None: return s
+                    if '%' in s: return s
+                    return s
+                days_avg = _val(3, ('signups', 'days avg', 'min avg view'))
+                min_avg_view = _val(5, ('signups', 'days avg', 'min avg view'))
+                pct_val = _val(7, ('signups', 'days avg', 'min avg view'))
+                if not pct_val and len(row) > 7 and '%' in row[7]:
+                    pct_val = row[7].strip()
+                print(f"   📊 Found Episode {episode_num}: signups={signups_val}, days_avg={days_avg}, pct={pct_val}, row={row[:8]}")
                 parsed['episode_attribution'].append({
                     'episode': episode_num,
                     'signups': signups_val,
-                    'days_avg': row[3].strip() if len(row) > 3 else '',
-                    'min_avg_view': row[5].strip() if len(row) > 5 else '',
-                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'days_avg': days_avg,
+                    'min_avg_view': min_avg_view,
+                    'percentage': pct_val,
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 })
             elif 'ATTRIBUTION SUMMARY' in first_col.upper() or 'ATTRIBUTION SUMMARY' in second_col.upper() or 'ATTRIBUTION SUMMARY' in combined_check:
@@ -6169,14 +6193,21 @@ def parse_subscriber_iq_csv(csv_content):
                 episode_num = first_col[len('episode '):].strip() or first_col
             if episode_num is None:
                 continue
-            signups_val, _ = _first_numeric_in_row(row, 1)
+            signups_val, signups_col = _first_numeric_in_row(row, 1)
             if signups_val is not None and signups_val > 0:
+                # Flexible columns: use fixed indices if present, else first numerics after signups
+                extra_numerics = _all_numerics_in_row(row, signups_col + 1, max_count=3)
+                days_avg = (row[3].strip() if len(row) > 3 and row[3].strip() and parse_number(row[3]) is not None else '') or (str(extra_numerics[0][0]) if len(extra_numerics) > 0 else '')
+                min_avg_view = (row[5].strip() if len(row) > 5 and row[5].strip() and parse_number(row[5]) is not None else '') or (str(extra_numerics[1][0]) if len(extra_numerics) > 1 else '')
+                pct_fb = row[7].strip() if len(row) > 7 else ''
+                if pct_fb and '%' not in pct_fb and pct_fb.lower() in ('signups', 'days avg', 'min avg view'):
+                    pct_fb = ''
                 parsed['episode_attribution'].append({
                     'episode': episode_num,
                     'signups': signups_val,
-                    'days_avg': row[3].strip() if len(row) > 3 else '',
-                    'min_avg_view': row[5].strip() if len(row) > 5 else '',
-                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'days_avg': days_avg,
+                    'min_avg_view': min_avg_view,
+                    'percentage': pct_fb,
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 })
                 print(f"   ✅ Fallback: Found Episode {episode_num} with {signups_val} signups")
@@ -6308,7 +6339,28 @@ def get_subscriber_iq_data(s3_key):
             parsed.get('attribution_summary', {})
         ])
         print(f"   Has any data: {has_data}")
-        
+
+        # Post-process episode_attribution: compute % of total when missing so cards fully populate
+        episode_attribution = parsed.get('episode_attribution') or []
+        if episode_attribution:
+            def _ep_signups_num(e):
+                v = e.get('signups')
+                if isinstance(v, (int, float)):
+                    return v
+                if isinstance(v, str):
+                    return parse_number(v) or 0
+                return 0
+            total_signups = sum(_ep_signups_num(e) for e in episode_attribution)
+            for ep in episode_attribution:
+                signups_val = _ep_signups_num(ep)
+                if signups_val is not None and total_signups and total_signups > 0:
+                    pct = (float(signups_val) / total_signups) * 100
+                    existing_pct = (ep.get('percentage') or '').strip()
+                    if not existing_pct or existing_pct == 'N/A':
+                        ep['percentage'] = f'{pct:.1f}%'
+                if not isinstance(ep.get('signups'), (int, float)) and ep.get('signups') is not None:
+                    ep['signups'] = parse_number(ep['signups']) if isinstance(ep.get('signups'), str) else ep['signups']
+
         # Extract show name from filename
         name_without_ext = s3_key.replace('.csv', '')
         match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)

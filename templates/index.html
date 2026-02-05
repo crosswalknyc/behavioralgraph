@@ -14404,21 +14404,20 @@
                             </div>
                         </div>
 
-                        <!-- Tabs -->
+                        <!-- Tabs (Insights first and default) -->
                         <div class="dashboard-tabs" id="subscriberTabs">
-                            <button class="tab-btn active" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
+                            <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                            <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
-                            <button class="tab-btn" onclick="showSubscriberTab('trends')"><span class="tab-icon">📈</span><span class="tab-label">TRENDS</span></button>
-                            <button class="tab-btn" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
                         </div>
                     </div>
 
                     <!-- Scrollable Tab Content -->
                     <div id="subscriberTabContent">
-                        <!-- Insights Tab -->
-                        <div id="subscriber-tab-insights" class="tab-content">
+                        <!-- Insights Tab (first and default) -->
+                        <div id="subscriber-tab-insights" class="tab-content active">
                             <!-- Executive Summary -->
                             <div id="subscriberExecutiveSummary" class="executive-summary-section"></div>
                             
@@ -14439,7 +14438,7 @@
                         </div>
 
                         <!-- Episodes Tab -->
-                        <div id="subscriber-tab-episodes" class="tab-content active">
+                        <div id="subscriber-tab-episodes" class="tab-content">
                             <div id="subscriberEpisodesInsights" class="tab-insights-section"></div>
                             
                             <!-- Timeline Chart -->
@@ -14527,20 +14526,6 @@
                             </div>
                         </div>
 
-                        <!-- Trends Tab -->
-                        <div id="subscriber-tab-trends" class="tab-content">
-                            <div id="subscriberTrendsInsights" class="tab-insights-section"></div>
-                            <div class="tab-section">
-                                <h3>📈 Monthly Signups</h3>
-                                <p class="section-description">Monthly trend of new platform signups driven by this show</p>
-                                <div id="subscriberMonthlySignupsChart" class="chart-container"></div>
-                            </div>
-                            <div class="tab-section">
-                                <h3>📉 Monthly Churn</h3>
-                                <p class="section-description">Monthly trend of platform churn attributed to this show</p>
-                                <div id="subscriberMonthlyChurnChart" class="chart-container"></div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -21239,7 +21224,7 @@
             } catch (e) { console.error('Error rendering trends:', e); }
             
             // Ensure the default tab (episodes) is shown
-            showSubscriberTab('episodes');
+            showSubscriberTab('insights');
         }
         
         // Save open subscriber tabs to localStorage
@@ -21476,23 +21461,28 @@
             const metrics = data.key_metrics || {};
             const summary = data.attribution_summary || {};
             
-            const totalWatchers = metrics.total_watchers?.count || 0;
+            const totalWatchers = Number(metrics.total_watchers?.count) || 0;
             const totalWatchersGenPop = metrics.total_watchers?.gen_pop || '';
-            const preExisting = metrics.pre_existing?.count || 0;
+            const preExisting = Number(metrics.pre_existing?.count) || 0;
             const preExistingGenPop = metrics.pre_existing?.gen_pop || '';
-            const newSignups = metrics.new_signups?.count || 0;
+            const newSignups = Number(metrics.new_signups?.count) || 0;
             const newSignupsGenPop = metrics.new_signups?.gen_pop || '';
-            const cleanSample = metrics.clean_sample?.count || 0;
+            const cleanSample = Number(metrics.clean_sample?.count) || 0;
             const cleanSampleGenPop = metrics.clean_sample?.gen_pop || '';
-            const totalSignups = summary.total?.count || 0;
+            const totalSignups = Number(summary.total?.count) || 0;
             const totalSignupsGenPop = summary.total?.gen_pop || '';
-            const attributedSignups = summary.attributed?.count || 0;
+            const attributedSignups = Number(summary.attributed?.count) || 0;
             const attributedSignupsGenPop = summary.attributed?.gen_pop || '';
-            const dormantReactive = summary.dormant_reactive?.count || 0;
+            const dormantReactive = Number(summary.dormant_reactive?.count) || 0;
             const dormantReactiveGenPop = summary.dormant_reactive?.gen_pop || '';
-            const totalConversionRate = metrics.total_conversion_rate || 'N/A';
-            const cleanConversionRate = metrics.clean_conversion_rate || 'N/A';
+            const totalConversionRate = metrics.total_conversion_rate || '';
+            const cleanConversionRate = metrics.clean_conversion_rate || '';
             const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
+            
+            // Use CSV conversion rate when available, else compute from viewers/signups
+            const conversionPctDisplay = (totalConversionRate && String(totalConversionRate).trim()) 
+                ? (String(totalConversionRate).replace('%', '') + '%') 
+                : (totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) + '%' : '0%');
             
             // Format values based on display mode
             const formatValue = (value, genPop) => {
@@ -21554,7 +21544,7 @@
                         </div>
                         <div class="exec-summary-metric has-tooltip" data-tooltip="Conversion Rate: Percentage of total show viewers who signed up for the platform to watch this show.">
                             <div class="exec-metric-label">Conversion Rate</div>
-                            <div class="exec-metric-value">${conversionPct}%</div>
+                            <div class="exec-metric-value">${conversionPctDisplay}</div>
                             <div class="exec-metric-desc">Viewers to subscribers</div>
                         </div>
                     </div>
@@ -22317,10 +22307,12 @@
             if (episodes.length === 0) {
                 container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode data available</p>';
             } else {
+                const totalSignups = episodes.reduce((s, e) => s + (Number(e.signups) || 0), 0);
+                const pct = (ep) => (ep.percentage && ep.percentage !== 'N/A' ? ep.percentage : (totalSignups ? ((Number(ep.signups) || 0) / totalSignups * 100).toFixed(1) + '%' : 'N/A'));
                 container.innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
                         ${episodes.map(ep => `
-                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="Episode ${ep.episode}: Drove ${formatNumber(ep.signups)} platform signups (${ep.percentage || 'N/A'} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
+                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="Episode ${ep.episode}: Drove ${formatNumber(ep.signups)} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
                                 <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">Episode ${ep.episode}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                                     <div class="has-tooltip" data-tooltip="Signups: Number of people who signed up for the platform specifically to watch this episode" style="display: flex; justify-content: space-between;">
@@ -22329,12 +22321,18 @@
                                     </div>
                                     <div class="has-tooltip" data-tooltip="% of Total: This episode's signups as a percentage of all signups across all episodes" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">% of Total:</span>
-                                        <span style="color: var(--text-primary);">${ep.percentage || 'N/A'}</span>
+                                        <span style="color: var(--text-primary);">${pct(ep)}</span>
                                     </div>
                                     ${ep.days_avg ? `
                                     <div class="has-tooltip" data-tooltip="Avg Days to Signup: Average number of days between when this episode became available and when users signed up for the platform" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">Avg Days to Signup:</span>
                                         <span style="color: var(--text-primary);">${ep.days_avg}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${ep.min_avg_view ? `
+                                    <div class="has-tooltip" data-tooltip="Min avg view: Minimum average view metric for this episode" style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">min avg view:</span>
+                                        <span style="color: var(--text-primary);">${ep.min_avg_view}</span>
                                     </div>
                                     ` : ''}
                                 </div>
@@ -24368,7 +24366,7 @@
                         }
                         if (genPopLoc != null && (genPopLoc.pct != null || genPopLoc.genPopPct != null)) {
                             genPopPct = parseFloat(genPopLoc.pct ?? genPopLoc.genPopPct) || 0;
-                            if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
+                            // Gen pop is actual % (0.78 = 0.78%), do not multiply by 100
                         }
                     }
                     // Fallback: hardcoded Gen Pop DMA percentages only when Gen Pop baseline locations not available
@@ -24397,7 +24395,7 @@
                     
                     // Fallback: Use Category Share if Gen Pop baseline not available
                     if (genPopPct === 0) {
-                        genPopPct = catShare > 0 ? (catShare < 1 ? catShare * 100 : catShare) : 0;
+                        genPopPct = catShare > 0 ? catShare : 0;
                     }
                     
                     // If this IS the Gen Pop profile, use profile pct as gen pop pct (they should be the same)
@@ -26250,11 +26248,10 @@
             }).join(' ');
         }
         
-        // Helper function to normalize gen pop percentage (if < 1, multiply by 100)
+        // Gen pop is always the actual percentage (e.g. 0.78 means 0.78%, 15.77 means 15.77%) - do not multiply by 100
         function normalizeGenPopPct(genPopPct) {
-            if (!genPopPct || genPopPct === 0) return 0;
-            // If value is less than 1, it's a decimal (0.4 = 0.4%), multiply by 100 to get percentage (40%)
-            return genPopPct < 1 ? genPopPct * 100 : genPopPct;
+            if (!genPopPct && genPopPct !== 0) return 0;
+            return Number(genPopPct);
         }
 
         // Helper function to calculate median for demographic data
@@ -26576,7 +26573,6 @@
                                 const pct = genderPcts[ctx.dataIndex] || 0;
                                 if (isGenPop) return isProjection ? formatNumber(Math.round(v)) : formatPct(pct);
                                 let genPop = genderGenPop[ctx.dataIndex] || 0;
-                                if (genPop > 0 && genPop < 1) genPop = genPop * 100;
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
@@ -26688,7 +26684,6 @@
                                 const pct = ethPcts[ctx.dataIndex] || 0;
                                 if (isGenPop) return isProjection ? formatNumber(Math.round(v)) : formatPct(pct);
                                 let genPop = ethGenPop[ctx.dataIndex] || 0;
-                                if (genPop > 0 && genPop < 1) genPop = genPop * 100;
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (!isGenPop && gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
@@ -27540,7 +27535,7 @@
             
             sorted.sort((a, b) => {
                 let diff = 0;
-                const gp = (x) => { let v = x.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                const gp = (x) => (x.genPopPct ?? 0);
                 switch (column) {
                     case 'index':
                         diff = b.index - a.index;
@@ -27653,7 +27648,7 @@
                 
                 dedupedItems.sort((a, b) => {
                     let diff = 0;
-                    const gp = (x) => { let v = x.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    const gp = (x) => (x.genPopPct ?? 0);
                     switch (column) {
                         case 'index':
                             diff = b.index - a.index;
@@ -28630,8 +28625,7 @@
             const US_POP = 324700000;
             
             function buildItemTooltip(item) {
-                let genPopPct = item.genPopPct || 0;
-                if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
+                let genPopPct = item.genPopPct ?? 0;
                 const profileDisplay = isProjection
                     ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
                     : formatValueOrNA(item.pct, true);
@@ -28782,12 +28776,7 @@
                                 const isOverIndex = item.index >= 100;
                                 const idxColor = isOverIndex ? '#10b981' : '#ef4444';
                                 
-                                // Normalize gen pop percentage
-                                let genPopPct = item.genPopPct || 0;
-                                if (genPopPct > 0 && genPopPct < 1) {
-                                    genPopPct = genPopPct * 100;
-                                }
-                                
+                                let genPopPct = item.genPopPct ?? 0;
                                 // Format profile and gen pop percentages
                                 const profileDisplay = isProjection 
                                     ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
@@ -28838,7 +28827,7 @@
             if (currentInterestSort === 'index') sorted.sort((a, b) => b.index - a.index);
             else if (currentInterestSort === 'pct') sorted.sort((a, b) => b.pct - a.pct);
             else if (currentInterestSort === 'genpop') {
-                const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                const gp = (i) => (i.genPopPct ?? 0);
                 sorted.sort((a, b) => gp(b) - gp(a));
             } else if (currentInterestSort === 'alpha') sorted.sort((a, b) => a.name.localeCompare(b.name));
             
@@ -28862,11 +28851,7 @@
                 const isOverIndex = item.index >= 100;
                 const indexColor = isOverIndex ? '#10b981' : '#ef4444';
                 
-                // Normalize gen pop percentage
-                let genPopPct = item.genPopPct || 0;
-                if (genPopPct > 0 && genPopPct < 1) {
-                    genPopPct = genPopPct * 100;
-                }
+                let genPopPct = item.genPopPct ?? 0;
                 
                 const profileDisplay = isProjection 
                     ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
@@ -30311,30 +30296,21 @@
             const isProjection = dashDisplayMode === 'projection';
             const US_POP = 324700000;
             sortMode = sortMode || 'pct';
-            const gpVal = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+            const gpVal = (i) => (i.genPopPct ?? 0);
             return items.map((item, idx) => {
                 const index = item.index || 0;
-                let genPopPct = item.genPopPct || 0;
-                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
-                if (genPopPct > 0 && genPopPct < 1) {
-                    genPopPct = genPopPct * 100;
-                }
+                const genPopPct = item.genPopPct ?? 0;
                 const profilePct = item.pct || 0;
                 // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
                 const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                 
-                // Show profile % and gen pop % alongside index - use N/A for 0
+                // Show profile % and gen pop % alongside index - use N/A for 0 (gen pop is actual %, e.g. 0.78 = 0.78%)
                 const profileDisplay = isProjection 
                     ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || 0)))
                     : formatValueOrNA(profilePct, true);
-                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
-                let normalizedGenPopPct = genPopPct;
-                if (genPopPct > 0 && genPopPct < 1) {
-                    normalizedGenPopPct = genPopPct * 100;
-                }
                 const genPopDisplay = isProjection 
-                    ? (normalizedGenPopPct === 0 || normalizedGenPopPct === null ? 'N/A' : formatNumber(Math.round((normalizedGenPopPct / 100) * US_POP)))
-                    : formatValueOrNA(normalizedGenPopPct, true);
+                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                    : formatValueOrNA(genPopPct, true);
                 
                 return `
                     <div class="behavioral-item">
@@ -30454,7 +30430,7 @@
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 } else if (sortValue === 'genpop') {
-                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    const gp = (i) => (i.genPopPct ?? 0);
                     filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -30563,7 +30539,7 @@
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 } else if (sortValue === 'genpop') {
-                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    const gp = (i) => (i.genPopPct ?? 0);
                     filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -30601,7 +30577,7 @@
                 } else if (sortValue === 'pct') {
                     items = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 } else if (sortValue === 'genpop') {
-                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    const gp = (i) => (i.genPopPct ?? 0);
                     items = items.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     items = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -30703,7 +30679,7 @@
                     sorted = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                     break;
                 case 'genpop': {
-                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    const gp = (i) => (i.genPopPct ?? 0);
                     sorted = items.sort((a, b) => gp(b) - gp(a));
                     break;
                 }
@@ -30794,7 +30770,7 @@
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 } else if (sortValue === 'genpop') {
-                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    const gp = (i) => (i.genPopPct ?? 0);
                     filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -30861,7 +30837,7 @@
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 } else if (sortValue === 'genpop') {
-                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    const gp = (i) => (i.genPopPct ?? 0);
                     filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -30976,7 +30952,7 @@
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 } else if (sortValue === 'genpop') {
-                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    const gp = (i) => (i.genPopPct ?? 0);
                     filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -31033,7 +31009,7 @@
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 } else if (sortValue === 'genpop') {
-                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    const gp = (i) => (i.genPopPct ?? 0);
                     filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -31282,7 +31258,7 @@
                     return topState.direction === 'asc' ? -diff : diff;
                 });
             } else if (topState.column === 'genpop') {
-                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                const gp = (loc) => (loc.genPopPct ?? 0);
                 sortedOverIndexing.sort((a, b) => {
                     const diff = gp(b) - gp(a);
                     return topState.direction === 'asc' ? -diff : diff;
@@ -31332,7 +31308,7 @@
                     return bottomState.direction === 'asc' ? -diff : diff;
                 });
             } else if (bottomState.column === 'genpop') {
-                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                const gp = (loc) => (loc.genPopPct ?? 0);
                 sortedUnderIndexing.sort((a, b) => {
                     const diff = gp(b) - gp(a);
                     return bottomState.direction === 'asc' ? -diff : diff;
@@ -31382,7 +31358,7 @@
                     return allState.direction === 'asc' ? -diff : diff;
                 });
             } else if (allState.column === 'genpop') {
-                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                const gp = (loc) => (loc.genPopPct ?? 0);
                 sortedAll.sort((a, b) => {
                     const diff = gp(b) - gp(a);
                     return allState.direction === 'asc' ? -diff : diff;
@@ -32347,7 +32323,7 @@
                     return state.direction === 'asc' ? -diff : diff;
                 });
             } else if (state.column === 'genpop') {
-                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                const gp = (loc) => (loc.genPopPct ?? 0);
                 sorted.sort((a, b) => {
                     const diff = gp(b) - gp(a);
                     return state.direction === 'asc' ? -diff : diff;
@@ -32415,7 +32391,7 @@
                     return state.direction === 'asc' ? -diff : diff;
                 });
             } else if (state.column === 'genpop') {
-                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                const gp = (loc) => (loc.genPopPct ?? 0);
                 sorted.sort((a, b) => {
                     const diff = gp(b) - gp(a);
                     return state.direction === 'asc' ? -diff : diff;
@@ -33740,10 +33716,6 @@
                     const audiencePct = (item.pct || 0).toFixed(2);
                     const audienceNumbers = Math.round((item.pct / 100) * US_POP);
                     let genPopPct = item.genPopPct || 0;
-                    // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
-                    if (genPopPct > 0 && genPopPct < 1) {
-                        genPopPct = genPopPct * 100;
-                    }
                     const genPopNumbers = Math.round((genPopPct / 100) * US_POP);
                     const index = item.index || 0;
                     csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}\n`;
@@ -36077,6 +36049,7 @@
                 // Save the new position to slide data
                 const slide = currentEditingDeck?.slides?.[slideSectionSlideIdx - 1];
                 if (slide) {
+                    pushDeckUndoState();
                     if (!slide.sectionPositions) slide.sectionPositions = {};
                     slide.sectionPositions[slideSectionType] = {
                         left: draggedSlideSection.style.left,
@@ -38562,10 +38535,6 @@
                 let genPopPct = item.genPopPct || 0;
                 const profilePct = item.pct || 0;
                 
-                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
-                if (genPopPct > 0 && genPopPct < 1) {
-                    genPopPct = genPopPct * 100;
-                }
                 
                 // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
                 const indexColor = index >= 100 ? '#10b981' : '#ef4444';
@@ -38608,13 +38577,7 @@
             } else if (sortBy === 'pct') {
                 items.sort((a, b) => b.pct - a.pct);
             } else if (sortBy === 'genpop') {
-                items.sort((a, b) => {
-                    let gpA = a.genPopPct || 0;
-                    let gpB = b.genPopPct || 0;
-                    if (gpA > 0 && gpA < 1) gpA *= 100;
-                    if (gpB > 0 && gpB < 1) gpB *= 100;
-                    return gpB - gpA;
-                });
+                items.sort((a, b) => (b.genPopPct || 0) - (a.genPopPct || 0));
             }
             
             container.innerHTML = renderAffinityList(items);
@@ -38847,10 +38810,6 @@
             let genPopPct = item.genPopPct || 0;
             const profilePct = item.pct || 0;
             
-            // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
-            if (genPopPct > 0 && genPopPct < 1) {
-                genPopPct = genPopPct * 100;
-            }
             
             // Format displays
             const profileDisplay = isProjection 
@@ -39063,13 +39022,7 @@
             } else if (sortBy === 'pct') {
                 items.sort((a, b) => b.pct - a.pct);
             } else if (sortBy === 'genpop') {
-                items.sort((a, b) => {
-                    let gpA = a.genPopPct || 0;
-                    let gpB = b.genPopPct || 0;
-                    if (gpA > 0 && gpA < 1) gpA *= 100;
-                    if (gpB > 0 && gpB < 1) gpB *= 100;
-                    return gpB - gpA;
-                });
+                items.sort((a, b) => (b.genPopPct || 0) - (a.genPopPct || 0));
             }
             
             // Render based on list type
@@ -40839,7 +40792,6 @@
                 if (!dmaKey || seenDma.has(dmaKey)) return;
                 seenDma.add(dmaKey);
                 let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
-                if (pct > 0 && pct < 1) pct = pct * 100;
                 if (pct >= 100) pct = pct / 100;
                 byDma[dmaKey] = pct;
                 const state = getStateFromLocation(loc.name);
@@ -42980,8 +42932,7 @@
                     // Also check catShare as fallback and normalize if < 1
                     let genPopPct = usGenPop > 0 ? (usGenPop / 324700000) * 100 : 0;
                     if (genPopPct === 0 && catShare > 0) {
-                        // Use catShare but normalize: if < 1, multiply by 100
-                        genPopPct = catShare < 1 ? catShare * 100 : catShare;
+                        genPopPct = catShare;
                     }
                     // Calculate Index = (brand pct / gen pop pct) * 100
                     const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
@@ -49711,6 +49662,8 @@
         
         let currentEditingDeck = null;
         let currentEditingSlide = 0;
+        const MAX_DECK_UNDO = 50;
+        let deckUndoStack = [];
         let slideEditorZoom = 'fit';  // 'fit' = fill area, or 50, 75, 100, 125, 150
         let speakerNotesVisible = (function(){ try { return localStorage.getItem('deckSpeakerNotesVisible') === '1'; } catch(_){ return false; } })();
         let deckEditorExpanded = false;   // Expand view = slide fills whole area
@@ -49718,6 +49671,34 @@
         function initWorkspaceDeckBuilder() {
             renderWorkspaceDecks();
             renderDeckDropdown();
+        }
+        
+        function pushDeckUndoState() {
+            if (!currentEditingDeck) return;
+            try {
+                deckUndoStack.push(JSON.parse(JSON.stringify(currentEditingDeck)));
+                if (deckUndoStack.length > MAX_DECK_UNDO) deckUndoStack.shift();
+            } catch (e) { /* ignore clone errors */ }
+        }
+        
+        function undoDeckBuilder() {
+            if (deckUndoStack.length === 0) return;
+            try {
+                const prev = deckUndoStack.pop();
+                if (prev && currentEditingDeck) {
+                    currentEditingDeck.id = prev.id;
+                    currentEditingDeck.name = prev.name;
+                    currentEditingDeck.titleSlide = prev.titleSlide ? JSON.parse(JSON.stringify(prev.titleSlide)) : {};
+                    currentEditingDeck.slides = Array.isArray(prev.slides) ? prev.slides.map(s => JSON.parse(JSON.stringify(s))) : [];
+                    if (currentEditingDeck.workspaceId !== undefined) currentEditingDeck.workspaceId = prev.workspaceId;
+                    if (currentEditingDeck.serverDeckId !== undefined) currentEditingDeck.serverDeckId = prev.serverDeckId;
+                    renderSlideEditor();
+                    renderSlideThumbnails();
+                    showNotification('↩️ Undo applied', 'success');
+                }
+            } catch (e) {
+                showNotification('Undo failed', 'error');
+            }
         }
         
         function renderWorkspaceDecks() {
@@ -49772,6 +49753,7 @@
             if (!value) {
                 currentEditingDeck = null;
                 currentEditingSlide = 0;
+                deckUndoStack = [];
                 renderSlideEditor();
                 return;
             }
@@ -49789,6 +49771,7 @@
                         if (!deck.slides) deck.slides = [];
                         currentEditingDeck = deck;
                         currentEditingSlide = 0;
+                        deckUndoStack = [];
                         renderWorkspaceDecks();
                         renderSlideEditor();
                         initDeckCollaboration();
@@ -49922,7 +49905,7 @@
         
         function deleteSlide(slideIdx) {
             if (!currentEditingDeck || slideIdx <= 0) return;
-            
+            pushDeckUndoState();
             const slide = currentEditingDeck.slides[slideIdx - 1];
             const slideName = slide?.title || slide?.customTitle || slide?.category || 'this slide';
             
@@ -50031,7 +50014,7 @@
             
             const realSlideIdx = slideIdx - 1; // Account for title slide
             if (!currentEditingDeck.slides[realSlideIdx]) return;
-            
+            pushDeckUndoState();
             // Add content item to slide
             if (!currentEditingDeck.slides[realSlideIdx].contentItems) {
                 currentEditingDeck.slides[realSlideIdx].contentItems = [];
@@ -50079,6 +50062,7 @@
                 notes: ''
             };
             
+            pushDeckUndoState();
             if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
             currentEditingDeck.slides.push(newSlide);
             
@@ -50353,6 +50337,7 @@
             
             currentEditingDeck = deck;
             currentEditingSlide = 0;
+            deckUndoStack = [];
             populateDeckSlidesWithProfileImage(deck);
             // If profile image not in cache yet, fetch by deck's profile name and re-populate when loaded
             const deckProfileName = deck?.titleSlide?.title || deck?.slides?.[0]?.customHeader?.profileName 
@@ -50448,6 +50433,7 @@
                         <!-- View Tab -->
                         <div class="ribbon-content ${currentRibbonTab === 'view' ? 'active' : ''}" id="ribbonView">
                             <div class="slide-toolbar-group">
+                                <button class="toolbar-btn" onclick="undoDeckBuilder()" title="Revert to previous state" ${deckUndoStack.length === 0 ? 'disabled' : ''}>↩️ Undo</button>
                                 <select class="toolbar-btn" onchange="setSlideViewZoom(this.value)" title="Zoom" style="padding: 0.2rem; min-width: 75px;">
                                     <option value="fit" ${slideEditorZoom === 'fit' ? 'selected' : ''}>Fit</option>
                                     <option value="50" ${slideEditorZoom === 50 ? 'selected' : ''}>50%</option>
@@ -50771,15 +50757,24 @@
             }
         }
         
-        // Source footer text for all slides
+        // Source footer text for all slides (base line; profile/sample/dates appended below)
         const SLIDE_FOOTER_TEXT = 'Source: Crosswalk Profile IQ, Prior 12 Months from a 10M Gen Pop Digital Behavioral Panel';
         
         function renderSlideElements(slide, idx) {
             // Get elements from slide or create defaults for title slide
             let elements = slide.elements || [];
             
-            // Footer HTML for all slides
-            const footerHtml = `<div class="slide-footer">${SLIDE_FOOTER_TEXT}</div>`;
+            // Build footer with profile name, sample size, projected US, and dates (same sources as first page)
+            const titleSlide = currentEditingDeck?.titleSlide || {};
+            const profileNameForFooter = titleSlide.title || currentProfileData?.name || 'PROFILE NAME';
+            const sampleSize = currentProfileData?.sampleSize ?? 0;
+            const projectedUS = currentProfileData?.projectedUS ?? 0;
+            const dateRangeEl = document.getElementById('dashDateRangeHeader');
+            let defaultDateRangeText = dateRangeEl?.textContent?.replace('Date Range: ', '').trim() || '';
+            if (!defaultDateRangeText && currentProfileData?.dateRange) defaultDateRangeText = currentProfileData.dateRange;
+            const dateRangeDisplay = titleSlide.dateRange || defaultDateRangeText || 'Not specified';
+            const fullFooterText = `${SLIDE_FOOTER_TEXT} | ${escapeHtml(profileNameForFooter)} | Crosswalk sample: n=${formatNumber(sampleSize)}, projected US: n=${formatNumber(projectedUS)} | Dates studied: ${escapeHtml(dateRangeDisplay)}`;
+            const footerHtml = `<div class="slide-footer">${fullFooterText}</div>`;
             
             // For title slide (Page 1 style - large profile name)
             if ((idx === 0 || slide.type === 'title') && elements.length === 0) {
@@ -51070,7 +51065,7 @@
                                  style="font-size: 0.6rem; font-style: italic; color: rgba(255,255,255,0.45); cursor: text; padding: 2px 4px; border-radius: 3px; margin-bottom: 0.2rem;"
                                  onfocus="this.style.background='rgba(255,255,255,0.05)'" 
                                  onblur="this.style.background='transparent'; updateClosingFooter(this.textContent)">
-                                ${escapeHtml(slide.footer || 'Source: Crosswalk Profile IQ, Prior 12 Months from a 10M Gen Pop Digital Behavioral Panel')}
+                                ${slide.footer ? escapeHtml(slide.footer) : fullFooterText}
                             </div>
                             <div contenteditable="true" 
                                  style="font-size: 0.6rem; color: #ef4444; text-decoration: underline; cursor: text; padding: 2px 4px; border-radius: 3px;"
@@ -52399,6 +52394,7 @@
         
         function addDemoBoxToSlide(data, slideIdx) {
             if (!currentEditingDeck || slideIdx === 0) return;
+            pushDeckUndoState();
             const slide = currentEditingDeck.slides[slideIdx - 1];
             if (!slide) return;
             if (!slide.elements) slide.elements = [];
@@ -52421,6 +52417,7 @@
         
         function addDemoBoxAsNewSlide(data) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             const key = (data.key || data.label || '').includes('_') 
                 ? (data.key || '').split('_').slice(1).join('_') || data.label 
                 : (data.key || data.label);
@@ -52525,7 +52522,7 @@
         
         function addSlideElement(type) {
             if (!currentEditingDeck) return;
-            
+            pushDeckUndoState();
             const slide = currentEditingSlide === 0 
                 ? currentEditingDeck.titleSlide 
                 : currentEditingDeck.slides[currentEditingSlide - 1];
@@ -52744,6 +52741,7 @@
         
         function duplicateSelectedElement() {
             if (!selectedElementId || !currentEditingDeck) return;
+            pushDeckUndoState();
             const slide = currentEditingSlide === 0 ? currentEditingDeck.titleSlide : currentEditingDeck.slides[currentEditingSlide - 1];
             if (!slide?.elements) return;
             const idx = slide.elements.findIndex(e => e.id === selectedElementId);
@@ -52872,7 +52870,7 @@
         
         function bringToFront() {
             if (!selectedElementId || !currentEditingDeck) return;
-            
+            pushDeckUndoState();
             const slide = currentEditingSlide === 0 
                 ? currentEditingDeck.titleSlide 
                 : currentEditingDeck.slides[currentEditingSlide - 1];
@@ -52890,7 +52888,7 @@
         
         function sendToBack() {
             if (!selectedElementId || !currentEditingDeck) return;
-            
+            pushDeckUndoState();
             const slide = currentEditingSlide === 0 
                 ? currentEditingDeck.titleSlide 
                 : currentEditingDeck.slides[currentEditingSlide - 1];
@@ -52908,7 +52906,7 @@
         
         function deleteSelectedElement() {
             if (!selectedElementId || !currentEditingDeck) return;
-            
+            pushDeckUndoState();
             const slide = currentEditingSlide === 0 
                 ? currentEditingDeck.titleSlide 
                 : currentEditingDeck.slides[currentEditingSlide - 1];
@@ -53986,6 +53984,7 @@
         
         function updateTitleSlide(field, value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
             currentEditingDeck.titleSlide[field] = value;
             saveDeckChanges();
@@ -53993,6 +53992,7 @@
         
         function updateTitleSlideProfileName(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
             currentEditingDeck.titleSlide.title = value.replace(/\.$/, ''); // Remove trailing period
             saveDeckChanges();
@@ -54000,6 +54000,7 @@
         
         function updateTitleSlideDate(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
             currentEditingDeck.titleSlide.date = value;
             saveDeckChanges();
@@ -54007,6 +54008,7 @@
         
         function updateTitleSlideBranding(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
             currentEditingDeck.titleSlide.branding = value;
             saveDeckChanges();
@@ -54014,6 +54016,7 @@
         
         function updateTitleSlidePresenterName(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
             currentEditingDeck.titleSlide.presenterName = value;
             saveDeckChanges();
@@ -54021,6 +54024,7 @@
         
         function updateTitleSlidePresenterCompany(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
             currentEditingDeck.titleSlide.presenterCompany = value;
             saveDeckChanges();
@@ -54028,6 +54032,7 @@
         
         function updateTitleSlideDateRange(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
             currentEditingDeck.titleSlide.dateRange = value;
             saveDeckChanges();
@@ -54035,6 +54040,7 @@
         
         function updateTocTitle(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             const tocSlide = currentEditingDeck.slides.find(s => s.type === 'toc');
             if (tocSlide) {
                 tocSlide.customTitle = value;
@@ -54044,6 +54050,7 @@
         
         function updateTocDescription(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             const tocSlide = currentEditingDeck.slides.find(s => s.type === 'toc');
             if (tocSlide) {
                 tocSlide.customDescription = value;
@@ -54053,6 +54060,7 @@
         
         function updateClosingTitle(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
             if (closingSlide) {
                 closingSlide.customTitle = value;
@@ -54062,6 +54070,7 @@
         
         function updateClosingPresenterName(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
             if (closingSlide) {
                 closingSlide.presenterName = value;
@@ -54071,6 +54080,7 @@
         
         function updateClosingPresenterCompany(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
             if (closingSlide) {
                 closingSlide.presenterCompany = value;
@@ -54080,6 +54090,7 @@
         
         function updateClosingPresenterEmail(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
             if (closingSlide) {
                 closingSlide.presenterEmail = value;
@@ -54089,6 +54100,7 @@
         
         function updateClosingFooter(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
             if (closingSlide) {
                 closingSlide.footer = value;
@@ -54098,6 +54110,7 @@
         
         function updateSlideTitle(idx, value) {
             if (!currentEditingDeck || idx === 0) return;
+            pushDeckUndoState();
             const slideIdx = idx - 1;
             if (currentEditingDeck.slides[slideIdx]) {
                 currentEditingDeck.slides[slideIdx].customTitle = value;
@@ -54107,6 +54120,7 @@
         
         function updateSlideHeaderText(idx, field, value) {
             if (!currentEditingDeck || idx === 0) return;
+            pushDeckUndoState();
             const slideIdx = idx - 1;
             if (currentEditingDeck.slides[slideIdx]) {
                 if (!currentEditingDeck.slides[slideIdx].customHeader) {
@@ -54119,6 +54133,7 @@
         
         function updateSlideDescription(idx, value) {
             if (!currentEditingDeck || idx === 0) return;
+            pushDeckUndoState();
             const slideIdx = idx - 1;
             if (currentEditingDeck.slides[slideIdx]) {
                 currentEditingDeck.slides[slideIdx].customDescription = value;
@@ -54134,6 +54149,7 @@
         
         function updateSlideNotes(idx, value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             if (idx === 0) {
                 if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
                 currentEditingDeck.titleSlide.notes = value;
@@ -54148,6 +54164,7 @@
         
         function updateDeckNameInEditor(value) {
             if (!currentEditingDeck) return;
+            pushDeckUndoState();
             currentEditingDeck.name = value;
             saveDeckChanges();
             renderWorkspaceDecks();
@@ -54188,9 +54205,8 @@
             if (!currentEditingDeck || idx <= 0) return;
             const slideIdx = idx - 1;
             const newIdx = slideIdx + direction;
-            
             if (newIdx < 0 || newIdx >= currentEditingDeck.slides.length) return;
-            
+            pushDeckUndoState();
             const slides = currentEditingDeck.slides;
             [slides[slideIdx], slides[newIdx]] = [slides[newIdx], slides[slideIdx]];
             
@@ -54202,7 +54218,7 @@
         function deleteSlideFromDeck(idx) {
             if (!currentEditingDeck || idx <= 0) return;
             if (!confirm('Delete this slide?')) return;
-            
+            pushDeckUndoState();
             const slideIdx = idx - 1;
             currentEditingDeck.slides.splice(slideIdx, 1);
             saveDeckChanges();
@@ -54284,7 +54300,7 @@
         function addTableOfContentsSlide() {
             document.getElementById('addSlideModal')?.remove();
             if (!currentEditingDeck) return;
-            
+            pushDeckUndoState();
             const slide = {
                 id: 'slide_' + Date.now(),
                 type: 'toc',
@@ -54307,7 +54323,7 @@
         function addBlankSlide() {
             document.getElementById('addSlideModal')?.remove();
             if (!currentEditingDeck) return;
-            
+            pushDeckUndoState();
             const slide = {
                 id: 'slide_' + Date.now(),
                 type: 'content',
@@ -54394,15 +54410,13 @@
         function addSelectedModulesToDeck() {
             const modal = document.getElementById('moduleSelectModal');
             if (!modal || !currentEditingDeck) return;
-            
             const checked = modal.querySelectorAll('.module-select-check:checked');
             if (checked.length === 0) {
                 alert('Please select at least one module');
                 return;
             }
-            
             modal.remove();
-            
+            pushDeckUndoState();
             if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
             
             // Find closing slide index to insert before it
@@ -54431,9 +54445,8 @@
         function addModuleToCurrentDeck(type, category) {
             document.getElementById('moduleSelectModal')?.remove();
             if (!currentEditingDeck) return;
-            
+            pushDeckUndoState();
             const item = createModuleItem(type, category);
-            
             if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
             
             // Insert before closing slide if it exists
