@@ -31624,7 +31624,7 @@
                 const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 tbody.innerHTML = rows.map((r, i) => {
                     const showName = r.show_name || '';
-                    const link = '<a href="#" onclick="openNetflixShowDetails(\'' + esc(showName) + '\', \'\', \'\', \'' + (date || '') + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + showName + '</a>';
+                    const link = '<a href="#" onclick="showNetflixEpisodesForShow(\'' + esc(showName) + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + showName + '</a>';
                     return '<tr><td>' + (i + 1) + '</td><td>' + link + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + netflixFormatMin(r.avg_watch_time) + '</td><td>' + netflixFormatMin(r.run_time) + '</td></tr>';
                 }).join('');
             }
@@ -31633,7 +31633,11 @@
         // Show episodes for a specific show on the selected date
         function showNetflixEpisodesForShow(showName) {
             if (!netflixRankerData || !netflixRankerData.by_date_episode) {
-                alert('Episode data not available. Try refreshing.');
+                const dateInp = document.getElementById('netflixDailyDate');
+                let date = dateInp ? dateInp.value : null;
+                if (!date) date = _getLastNetflixDateWithData(netflixRankerData || {}, 'by_date_episode');
+                if (!date && netflixRankerData) date = (netflixRankerData.date_range && netflixRankerData.date_range.max);
+                openNetflixShowDetails(showName, '', '', date || '');
                 return;
             }
             const dateInp = document.getElementById('netflixDailyDate');
@@ -31646,7 +31650,7 @@
             const showEpisodes = allEpisodes.filter(e => (e.show_name || '').toLowerCase() === showName.toLowerCase());
             
             if (showEpisodes.length === 0) {
-                alert('No episode data available for "' + showName + '" on ' + date);
+                openNetflixShowDetails(showName, '', '', date);
                 return;
             }
             
@@ -31679,7 +31683,7 @@
         function renderNetflixShowDetailsContent(contentEl, data) {
             const dmaRows = (data.dma_breakdown || []).slice(0, 15);
             const dmaTable = dmaRows.length > 0 
-                ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Projected Views</th><th>% of Total</th></tr></thead><tbody>' +
+                ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Views</th><th>% of Total</th></tr></thead><tbody>' +
                   dmaRows.map(d => '<tr><td>' + d.dma + '</td><td>' + netflixProjectedViews(d.views).toLocaleString() + '</td><td>' + d.percentage + '%</td></tr>').join('') +
                   '</tbody></table>'
                 : '<p style="color: var(--text-secondary);">No DMA data available</p>';
@@ -53726,6 +53730,42 @@
             return Math.round((views || 0) * 4949);
         }
         
+        function showRankerIQNetflixEpisodesForShow(showName) {
+            if (!rankerIQNetflixData || !rankerIQNetflixData.by_date_episode) {
+                const dateInp = document.getElementById('rankerIQNetflixDailyDate');
+                const date = dateInp ? dateInp.value : (rankerIQNetflixData && rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
+                openNetflixShowDetails(showName, '', '', date || '');
+                return;
+            }
+            const dateInp = document.getElementById('rankerIQNetflixDailyDate');
+            let date = dateInp ? dateInp.value : null;
+            if (!date) date = (rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
+            const allEpisodes = rankerIQNetflixData.by_date_episode[date] || [];
+            const showEpisodes = allEpisodes.filter(e => (e.show_name || '').toLowerCase() === showName.toLowerCase());
+            if (showEpisodes.length === 0) {
+                openNetflixShowDetails(showName, '', '', date || '');
+                return;
+            }
+            showEpisodes.sort((a, b) => (b.views || 0) - (a.views || 0));
+            showRankerIQNetflixSubTab('episodes');
+            const episodesDateInp = document.getElementById('rankerIQNetflixEpisodesDate');
+            if (episodesDateInp) episodesDateInp.value = date;
+            const tbody = document.getElementById('rankerIQNetflixEpisodesBody');
+            if (tbody) {
+                const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                tbody.innerHTML = '<tr><td colspan="8" style="padding: 0.5rem; background: var(--bg-dark); font-weight: 600;">Episodes for: ' + showName + ' (' + date + ') <a href="#" onclick="renderRankerIQNetflixEpisodesRanker(); return false;" style="color: var(--accent-cyan); margin-left: 1rem;">← Show All Episodes</a></td></tr>' +
+                    showEpisodes.map((r, i) => {
+                        const showNameEsc = esc(showName);
+                        const seasonEsc = esc(r.season || '');
+                        const epEsc = esc(r.episode_name || '');
+                        const dateEsc = (date || '').replace(/'/g, "\\'");
+                        const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'' + epEsc + '\', \'' + dateEsc + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a>';
+                        const epLink = (r.episode_name && r.episode_name !== '-') ? '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'' + epEsc + '\', \'' + dateEsc + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.episode_name || '-') + '</a>' : (r.episode_name || '-');
+                        return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.episode !== undefined && r.episode !== '' ? r.episode : '-') + '</td><td>' + epLink + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>';
+                    }).join('');
+            }
+        }
+
         function renderRankerIQNetflixDailyRanker() {
             const tbody = document.getElementById('rankerIQNetflixDailyBody');
             if (!tbody || !rankerIQNetflixData) return;
@@ -53737,7 +53777,7 @@
             const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             tbody.innerHTML = rows.slice(0, 100).map((r, i) => {
                 const showName = r.show_name || '';
-                const link = '<a href="#" onclick="openNetflixShowDetails(\'' + esc(showName) + '\', \'\', \'\', \'' + (date || '') + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + showName + '</a>';
+                const link = '<a href="#" onclick="showRankerIQNetflixEpisodesForShow(\'' + esc(showName) + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + showName + '</a>';
                 return '<tr><td>' + (i + 1) + '</td><td>' + link + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.genre || '') + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>';
             }).join('');
         }
