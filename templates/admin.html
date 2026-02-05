@@ -1841,19 +1841,25 @@
                                     </div>
                                 </div>
                                 <div>
-                                    <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">🧬 Behavioral Category Access</h5>
-                                    <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem;">
-                                        Control which behavioral categories this user can see in the Behavioral tab.
-                                    </p>
-                                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                                        <label class="checkbox-group" style="margin: 0;">
-                                            <input type="checkbox" id="allBehavioralCategories" checked onchange="toggleAllBehavioralCategories()">
-                                            <span>All Behavioral Categories</span>
-                                        </label>
-                                        <button type="button" class="btn btn-small btn-secondary" onclick="restoreBehavioralCategoryDefaults()">Restore Defaults</button>
+                                    <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; cursor: pointer; text-align: left; justify-content: flex-start;" onclick="toggleBehavioralCategorySection()">
+                                        <span style="font-size: 1rem;">🧬</span>
+                                        <h5 style="margin: 0; font-size: 0.85rem; color: var(--accent-cyan);">Behavioral Category Access</h5>
+                                        <span class="collapse-icon rotated" id="behavioralCategoryIcon" style="margin-left: 0.25rem;">▼</span>
                                     </div>
-                                    <div id="behavioralCategoryCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.25rem;">
-                                        <!-- Populated by JS -->
+                                    <div id="behavioralCategoryContent" style="display: none; margin-top: 0.5rem;">
+                                        <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem;">
+                                            Control which behavioral categories this user can see in the Behavioral tab.
+                                        </p>
+                                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                                            <label class="checkbox-group" style="margin: 0;">
+                                                <input type="checkbox" id="allBehavioralCategories" checked onchange="toggleAllBehavioralCategories()">
+                                                <span>All Behavioral Categories</span>
+                                            </label>
+                                            <button type="button" class="btn btn-small btn-secondary" onclick="restoreBehavioralCategoryDefaults()">Restore Defaults</button>
+                                        </div>
+                                        <div id="behavioralCategoryCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.25rem;">
+                                            <!-- Populated by JS -->
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -4581,6 +4587,18 @@
         function toggleRunAccessSection() {
             const content = document.getElementById('runAccessContent');
             const icon = document.getElementById('runAccessIcon');
+            if (!content || !icon) return;
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                icon.classList.remove('rotated');
+            } else {
+                content.style.display = 'none';
+                icon.classList.add('rotated');
+            }
+        }
+        function toggleBehavioralCategorySection() {
+            const content = document.getElementById('behavioralCategoryContent');
+            const icon = document.getElementById('behavioralCategoryIcon');
             if (!content || !icon) return;
             if (content.style.display === 'none' || content.style.display === '') {
                 content.style.display = 'block';
