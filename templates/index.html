@@ -15446,7 +15446,9 @@
                 document.head.appendChild(style);
             }
             
-            toast.innerHTML = `<span style="margin-right: 8px;">${icon}</span>${message}`;
+            // Strip leading icon from message if present so we don't show two
+            let text = String(message).replace(/^[\s]*(✅|❌|⚠️|ℹ️)\s*/, '').trim();
+            toast.innerHTML = `<span style="margin-right: 8px;">${icon}</span>${text}`;
             document.body.appendChild(toast);
             
             // Auto-remove after 4 seconds
