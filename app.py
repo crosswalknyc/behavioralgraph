@@ -9304,6 +9304,68 @@ def get_my_purgatory_items():
         print(f"Error getting user purgatory items: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/my-results', methods=['GET'])
+@requires_auth
+def get_my_results():
+    """Get all results created by the current user - both purgatory (pending) and released."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'Not authenticated'})
+        
+        username = session.get('username', '')
+        results = []
+        
+        # Get purgatory items (pending review)
+        purgatory_metadata = load_purgatory_metadata()
+        for purgatory_id, item in purgatory_metadata.items():
+            if item.get('created_by') == username and item.get('status') != 'rejected':
+                results.append({
+                    'id': purgatory_id,
+                    'project_name': item.get('project_name') or item.get('title', 'Unknown'),
+                    'category': item.get('category', ''),
+                    'created_at': item.get('created_at', ''),
+                    'source_type': item.get('source_type', 'profile_analysis'),
+                    'status': 'pending',  # In purgatory = pending
+                    'in_purgatory': True,
+                    's3_key': item.get('s3_key'),
+                    'bucket': item.get('bucket'),
+                    'purgatory_id': purgatory_id
+                })
+        
+        # Get released items (check S3 cache for items created by this user)
+        # We track released items by checking if they were in purgatory and released
+        for purgatory_id, item in purgatory_metadata.items():
+            if item.get('created_by') == username and item.get('status') == 'released':
+                results.append({
+                    'id': purgatory_id,
+                    'project_name': item.get('project_name') or item.get('title', 'Unknown'),
+                    'category': item.get('category', ''),
+                    'created_at': item.get('created_at', ''),
+                    'released_at': item.get('released_at', ''),
+                    'source_type': item.get('source_type', 'profile_analysis'),
+                    'status': 'released',
+                    'in_purgatory': False,
+                    's3_key': item.get('released_key') or item.get('s3_key', '').replace(S3_PURGATORY_PREFIX, ''),
+                    'bucket': item.get('bucket')
+                })
+        
+        # Sort by created_at descending
+        results.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'count': len(results),
+            'pending_count': sum(1 for r in results if r.get('status') == 'pending'),
+            'released_count': sum(1 for r in results if r.get('status') == 'released')
+        })
+        
+    except Exception as e:
+        print(f"Error getting user results: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
 # Default KPI mappings for known tickers
 DEFAULT_TICKER_KPIS = {
     'ADT': 'Monitoring & Related Services Revenue Against Churn',

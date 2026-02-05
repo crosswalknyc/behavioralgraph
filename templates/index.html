@@ -11436,19 +11436,21 @@
                     <div style="margin-top: 1.5rem; margin-bottom: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
-                            <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="refreshCache(true)" id="refreshBtn" title="Full refresh (re-extracts all categories)">🔄</button>
+                            <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="loadMyResults()" id="refreshMyResultsBtn" title="Refresh your results">🔄</button>
                         </div>
-                        <div id="cacheStatus" style="margin-top: 0.25rem;"></div>
+                        <div id="myResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
                     </div>
                     
                     <div style="margin-bottom: 0.75rem;">
-                        <input type="text" id="searchInput" placeholder="🔍 Search brands..." oninput="filterJobs()" style="margin-bottom: 0.5rem;">
-                        <select id="categoryFilter" onchange="filterJobs()" style="font-size: 0.8rem;">
-                            <option value="">All Categories</option>
+                        <input type="text" id="myResultsSearchInput" placeholder="🔍 Search your results..." oninput="filterMyResults()" style="margin-bottom: 0.5rem;">
+                        <select id="myResultsStatusFilter" onchange="filterMyResults()" style="font-size: 0.8rem;">
+                            <option value="">All Status</option>
+                            <option value="pending">⏳ Pending Review</option>
+                            <option value="released">✅ Released</option>
                         </select>
                     </div>
                     
-                    <div id="jobsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
+                    <div id="myResultsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
                 </div>
             </div>
         </div>
@@ -11793,19 +11795,21 @@
                             <div style="margin-top: 1.5rem; margin-bottom: 0.5rem;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
-                                    <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="refreshCache(true)" id="refreshBtn" title="Full refresh (re-extracts all categories)">🔄</button>
+                                    <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="loadMyResults()" title="Refresh your results">🔄</button>
                                 </div>
-                                <div id="cacheStatus" style="margin-top: 0.25rem;"></div>
+                                <div id="svodResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
                             </div>
                             
                             <div style="margin-bottom: 0.75rem;">
-                                <input type="text" id="searchInput" placeholder="🔍 Search brands..." oninput="filterJobs()" style="margin-bottom: 0.5rem;">
-                                <select id="categoryFilter" onchange="filterJobs()" style="font-size: 0.8rem;">
-                                    <option value="">All Categories</option>
+                                <input type="text" id="svodResultsSearchInput" placeholder="🔍 Search your results..." oninput="filterSvodResults()" style="margin-bottom: 0.5rem;">
+                                <select id="svodResultsStatusFilter" onchange="filterSvodResults()" style="font-size: 0.8rem;">
+                                    <option value="">All Status</option>
+                                    <option value="pending">⏳ Pending Review</option>
+                                    <option value="released">✅ Released</option>
                                 </select>
                             </div>
                             
-                            <div id="jobsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
+                            <div id="svodResultsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
                         </div>
                     </div>
                 </div>
@@ -16287,6 +16291,10 @@
                 const formView = document.getElementById('formView');
                 if (formView) {
                     formView.style.display = 'none';
+                }
+                // Load user's own results for the Results Library
+                if (typeof loadMyResults === 'function') {
+                    loadMyResults();
                 }
             }
         }
@@ -41545,6 +41553,219 @@
         }
         
         let cachePollingInterval = null;
+        
+        // User's own results (from Analysis IQ)
+        let myResults = [];
+        
+        async function loadMyResults() {
+            const container = document.getElementById('myResultsList');
+            const statusEl = document.getElementById('myResultsStatus');
+            const svodContainer = document.getElementById('svodResultsList');
+            const svodStatusEl = document.getElementById('svodResultsStatus');
+            
+            // Show loading in both containers
+            if (container) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;"><span class="spinner"></span> Loading your results...</div>';
+            }
+            if (svodContainer) {
+                svodContainer.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;"><span class="spinner"></span> Loading your results...</div>';
+            }
+            
+            try {
+                const response = await fetch('/api/my-results', { credentials: 'same-origin' });
+                
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load results');
+                }
+                
+                myResults = data.results || [];
+                
+                // Update status in both sections
+                const statusText = `${data.pending_count || 0} pending • ${data.released_count || 0} released`;
+                if (statusEl) {
+                    statusEl.innerHTML = statusText;
+                }
+                if (svodStatusEl) {
+                    svodStatusEl.innerHTML = statusText;
+                }
+                
+                // Render in both containers
+                renderMyResults(myResults);
+                renderSvodResults(myResults);
+                
+            } catch (error) {
+                console.error('Failed to load my results:', error);
+                const emptyMsg = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results yet. Run an analysis to get started.</div>';
+                if (container) {
+                    container.innerHTML = emptyMsg;
+                }
+                if (svodContainer) {
+                    svodContainer.innerHTML = emptyMsg;
+                }
+            }
+        }
+        
+        function filterMyResults() {
+            const searchTerm = (document.getElementById('myResultsSearchInput')?.value || '').toLowerCase().trim();
+            const statusFilter = document.getElementById('myResultsStatusFilter')?.value || '';
+            
+            let filtered = myResults;
+            
+            if (searchTerm) {
+                filtered = filtered.filter(r => 
+                    (r.project_name || '').toLowerCase().includes(searchTerm) ||
+                    (r.category || '').toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            if (statusFilter) {
+                filtered = filtered.filter(r => r.status === statusFilter);
+            }
+            
+            renderMyResults(filtered);
+        }
+        
+        function renderMyResults(results) {
+            const container = document.getElementById('myResultsList');
+            if (!container) return;
+            
+            if (!results || results.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results yet. Run an analysis to get started.</div>';
+                return;
+            }
+            
+            const html = results.map(result => {
+                const isPending = result.status === 'pending' || result.in_purgatory;
+                const statusBadge = isPending 
+                    ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
+                    : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">✅ RELEASED</span>';
+                
+                const dateStr = result.created_at ? new Date(result.created_at).toLocaleDateString() : '';
+                
+                // Buttons: Download always available, Open in Profile IQ only if released
+                let buttons = '';
+                if (isPending) {
+                    // Pending: only download button
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadPurgatoryResult('${result.purgatory_id}')" title="Download CSV">📥</button>`;
+                } else {
+                    // Released: both open and download buttons
+                    buttons = `
+                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="openReleasedResult('${result.s3_key}', '${result.bucket || ''}')" title="Open in Profile IQ">📊</button>
+                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadReleasedResult('${result.s3_key}', '${result.bucket || ''}')" title="Download CSV">📥</button>
+                    `;
+                }
+                
+                return `
+                    <div class="job-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${result.project_name || 'Unknown'}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${result.category || ''} • ${dateStr}</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
+                            ${statusBadge}
+                            ${buttons}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.innerHTML = html;
+        }
+        
+        function downloadPurgatoryResult(purgatoryId) {
+            window.open(`/api/purgatory/download/${encodeURIComponent(purgatoryId)}`, '_blank');
+        }
+        
+        function openReleasedResult(s3Key, bucket) {
+            // Load the result into Profile IQ
+            if (bucket === 'svod-acquisition' || s3Key.includes('svod')) {
+                // SVOD results - may need different handling
+                showNotification('Loading SVOD result...', 'info');
+                loadCachedResult(s3Key);
+            } else {
+                // Regular profile result
+                loadCachedResult(s3Key);
+            }
+        }
+        
+        function downloadReleasedResult(s3Key, bucket) {
+            window.location.href = `/api/download-cached/${encodeURIComponent(s3Key)}`;
+        }
+        
+        // SVOD Results Library functions (mirrors the Profile IQ Results Library)
+        function filterSvodResults() {
+            const searchTerm = (document.getElementById('svodResultsSearchInput')?.value || '').toLowerCase().trim();
+            const statusFilter = document.getElementById('svodResultsStatusFilter')?.value || '';
+            
+            let filtered = myResults;
+            
+            if (searchTerm) {
+                filtered = filtered.filter(r => 
+                    (r.project_name || '').toLowerCase().includes(searchTerm) ||
+                    (r.category || '').toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            if (statusFilter) {
+                filtered = filtered.filter(r => r.status === statusFilter);
+            }
+            
+            renderSvodResults(filtered);
+        }
+        
+        function renderSvodResults(results) {
+            const container = document.getElementById('svodResultsList');
+            if (!container) return;
+            
+            if (!results || results.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results yet. Run an analysis to get started.</div>';
+                return;
+            }
+            
+            const html = results.map(result => {
+                const isPending = result.status === 'pending' || result.in_purgatory;
+                const statusBadge = isPending 
+                    ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
+                    : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">✅ RELEASED</span>';
+                
+                const dateStr = result.created_at ? new Date(result.created_at).toLocaleDateString() : '';
+                
+                // Buttons: Download always available, Open in Profile IQ only if released
+                let buttons = '';
+                if (isPending) {
+                    // Pending: only download button
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadPurgatoryResult('${result.purgatory_id}')" title="Download CSV">📥</button>`;
+                } else {
+                    // Released: both open and download buttons
+                    buttons = `
+                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="openReleasedResult('${result.s3_key}', '${result.bucket || ''}')" title="Open in Profile IQ">📊</button>
+                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadReleasedResult('${result.s3_key}', '${result.bucket || ''}')" title="Download CSV">📥</button>
+                    `;
+                }
+                
+                return `
+                    <div class="job-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${result.project_name || 'Unknown'}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${result.category || ''} • ${dateStr}</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
+                            ${statusBadge}
+                            ${buttons}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.innerHTML = html;
+        }
         
         async function loadJobs(showLoading = true) {
             const container = document.getElementById('jobsList');
