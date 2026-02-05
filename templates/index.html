@@ -16549,7 +16549,8 @@
                 
                 const data = await response.json();
                 if (response.ok) {
-                    document.getElementById('customTalentTheaterJobStatus').style.display = 'block';
+                    showAnalysisStatusModal();
+                    document.getElementById('statusModalText').textContent = 'Talent Ticket Sale IQ';
                     pollCustomTalentTheaterJobStatus(data.job_id);
                 } else {
                     alert('Error: ' + (data.error || 'Failed to submit job'));
@@ -16839,23 +16840,28 @@
                     const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
                     const data = await response.json();
                     
-                    const statusContent = document.getElementById('customTalentTheaterJobStatusContent');
-                    if (statusContent) {
-                        statusContent.innerHTML = `
-                            <div><strong>Status:</strong> ${data.status}</div>
-                            <div><strong>Progress:</strong> ${data.progress || 0}%</div>
-                            <div><strong>Message:</strong> ${data.message || 'Processing...'}</div>
-                            ${data.error ? `<div style="color: var(--accent-red);"><strong>Error:</strong> ${data.error}</div>` : ''}
-                        `;
-                    }
+                    updateAnalysisStatusModal({
+                        project_name: data.project_name || 'Talent Ticket Sale IQ',
+                        message: data.message || 'Processing...',
+                        progress: data.progress || 0
+                    });
                     
-                    if (data.status === 'completed' || data.status === 'failed' || attempts >= maxAttempts) {
+                    if (data.status === 'completed') {
                         clearInterval(pollInterval);
+                        closeAnalysisStatusModal();
+                        showAnalysisCompletePopup(jobId, data.s3_key, 'talent_theater');
+                    } else if (data.status === 'failed') {
+                        clearInterval(pollInterval);
+                        showAnalysisStatusModalError(data.error || data.message || 'Analysis failed');
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        showAnalysisStatusModalError('Analysis timed out.');
                     }
                 } catch (error) {
                     console.error('Error polling job status:', error);
                     if (attempts >= maxAttempts) {
                         clearInterval(pollInterval);
+                        showAnalysisStatusModalError(error.message || 'Polling failed');
                     }
                 }
             }, 2000);
@@ -44319,6 +44325,21 @@
 
             container.innerHTML = html;
             
+            // Ensure comparison tab close (×) works for names with apostrophes e.g. Kevin O'Leary - bind once per container
+            if (container && !container._compCloseBound) {
+                container._compCloseBound = true;
+                container.addEventListener('click', function(e) {
+                    const btn = e.target.closest('.comp-profile-tab-close');
+                    if (!btn) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const profileId = btn.getAttribute('data-profile-id');
+                    if (profileId == null) return;
+                    const isSegment = btn.getAttribute('data-is-segment') === 'true';
+                    removeProfileFromComparison(profileId, isSegment);
+                });
+            }
+            
             // Update the Jump To dropdown: only sections that are on screen and that the user has access to
             updateJumpToDropdown(availableCategories, hasLocations, sortedBehavioralCats, selectedCategories);
         }
@@ -55654,8 +55675,12 @@
             currentAnalysisType = analysisType;
             
             // Update the modal content
-            const typeLabel = analysisType === 'svod_acquisition' ? '📺 SVOD Acquisition IQ' : '🎯 Profile Analysis';
-            document.getElementById('analysisCompleteType').textContent = typeLabel;
+            const typeLabels = {
+                'svod_acquisition': '📺 SVOD Acquisition IQ',
+                'talent_theater': '🎫 Talent Ticket Sale IQ',
+                'profile_analysis': '🎯 Profile Analysis'
+            };
+            document.getElementById('analysisCompleteType').textContent = typeLabels[analysisType] || '🎯 Profile Analysis';
             
             // Show the modal
             document.getElementById('analysisCompleteModal').classList.add('active');
