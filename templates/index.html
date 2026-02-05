@@ -43769,21 +43769,21 @@
                 return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})">${name}${sortIndicator} ${ageDisplay}</th>`;
             };
             
-            // Helper to generate export menu HTML for comparison sections
+            // Helper to generate export menu HTML for comparison sections (Export section = current; Export all = all segments)
             const exportMenuHtml = (moduleType, sectionId) => `
                 <div class="comp-export-dropdown" style="position: relative; display: inline-block;">
                     <button class="btn btn-small" onclick="toggleComparisonExportMenu('${sectionId}', event)" 
                             style="font-size: 0.7rem; padding: 0.3rem 0.6rem; background: var(--accent-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">
                         📥 Export ▼
                     </button>
-                    <div id="comp-export-menu-${sectionId}" class="comp-export-menu" style="display: none; position: absolute; right: 0; top: 100%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; min-width: 150px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                    <div id="comp-export-menu-${sectionId}" class="comp-export-menu" style="display: none; position: absolute; right: 0; top: 100%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; min-width: 180px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                        <div style="padding: 0.35rem 0.75rem; font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); border-bottom: 1px solid var(--border-color);">Export section</div>
                         <button onclick="exportComparisonSectionCSV('${moduleType}')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
                             📄 Download CSV
                         </button>
                         <button onclick="exportComparisonSectionPNG('${moduleType}')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
                             🖼️ Download PNG
                         </button>
-                        <div style="border-top: 1px solid var(--border-color); margin: 0.25rem 0;"></div>
                         <div style="position: relative; display: inline-block; width: 100%;">
                             <button onclick="toggleComparisonDeckMenu('${sectionId}', event)" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
                                 ➕ Add to Deck ▾
@@ -43793,6 +43793,14 @@
                                 <button onclick="event.stopPropagation(); showComparisonValueSelector('${moduleType}', '${sectionId}'); closeComparisonDeckMenu('${sectionId}')">Select Values to Add</button>
                             </div>
                         </div>
+                        <div style="border-top: 1px solid var(--border-color); margin: 0.25rem 0;"></div>
+                        <div style="padding: 0.35rem 0.75rem; font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); border-bottom: 1px solid var(--border-color);">Export all</div>
+                        <button onclick="exportComparisonAllCSV()" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                            📄 Download all as CSV
+                        </button>
+                        <button onclick="exportComparisonAllPNG()" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                            🖼️ Download all as PNG
+                        </button>
                     </div>
                 </div>
             `;
@@ -44196,8 +44204,8 @@
 
             container.innerHTML = html;
             
-            // Update the Jump To dropdown with all possible modules, grouped by section
-            updateJumpToDropdown(availableCategories, hasLocations, sortedBehavioralCats);
+            // Update the Jump To dropdown: only sections that are on screen and that the user has access to
+            updateJumpToDropdown(availableCategories, hasLocations, sortedBehavioralCats, selectedCategories);
         }
         
         const compDemoLabels = {
@@ -44212,32 +44220,32 @@
             occupation: 'Occupation'
         };
         
-        function updateJumpToDropdown(availableCategories, hasLocations, sortedBehavioralCats) {
+        function updateJumpToDropdown(availableCategories, hasLocations, sortedBehavioralCats, selectedCategoriesSet) {
             const dropdown = document.getElementById('compJumpToSelect');
             if (!dropdown) return;
             
             let options = `<option value="">📍 Jump to...</option>`;
+            const selected = selectedCategoriesSet || selectedCategories;
             
-            // Group 1: Demographics & Location
-            options += `<optgroup label="Demographics & Location">`;
+            // Only include sections that are actually shown on screen (selected) and that user has access to
+            options += `<optgroup label="Demographics &amp; Location">`;
             options += `<option value="comp-summary">📊 Summary Data</option>`;
             (availableCategories.demographics || []).forEach(key => {
+                if (!selected.has('demo_' + key)) return;
                 const label = compDemoLabels[key] || key;
                 const emoji = { gender: '👫', age: '📅', ethnicity: '🌍', income: '💰', education: '🎓', relationship: '💑', sexual_orientation: '🏳️‍🌈', parental_status: '👶', occupation: '💼' }[key] || '📋';
                 options += `<option value="comp-${key}">${emoji} ${label}</option>`;
             });
-            if (hasLocations) {
+            if (hasLocations && selected.has('location')) {
                 options += `<option value="comp-location">📍 Location</option>`;
             }
             options += `</optgroup>`;
             
-            // Group 2: Interests - no longer shown (INTEREST card removed from behavioral)
-            
-            // Group 3: Behavioral (only categories user has been granted access to)
             const behavioralCats = (sortedBehavioralCats || []).slice();
             if (behavioralCats.length > 0) {
                 options += `<optgroup label="Behavioral">`;
                 behavioralCats.forEach(cat => {
+                    if (!selected.has('beh_' + cat)) return;
                     const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
                     options += `<option value="comp-beh-${safeId}">🎯 ${cat}</option>`;
                 });
@@ -46234,6 +46242,135 @@
             } catch (error) {
                 console.error('PNG export error:', error);
                 showNotification('Failed to export PNG: ' + error.message, 'error');
+            }
+        }
+        
+        function getComparisonSectionModuleTypesForExport() {
+            const list = ['summary'];
+            (availableCategories.demographics || []).forEach(key => {
+                if (selectedCategories.has('demo_' + key)) list.push(key);
+            });
+            if (selectedCategories.has('location')) list.push('location');
+            (availableCategories.behavioral || []).forEach(cat => {
+                if (selectedCategories.has('beh_' + cat)) list.push('behavioral_' + cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase());
+            });
+            return list;
+        }
+        
+        function exportComparisonAllCSV() {
+            document.querySelectorAll('.comp-export-menu').forEach(m => m.style.display = 'none');
+            const profiles = window.comparisonProfilesData || [];
+            if (profiles.length === 0) {
+                showNotification('No comparison data available', 'warning');
+                return;
+            }
+            const sectionTypes = getComparisonSectionModuleTypesForExport();
+            if (sectionTypes.length === 0) {
+                showNotification('No sections selected to export', 'warning');
+                return;
+            }
+            let fullCsv = '';
+            sectionTypes.forEach(moduleType => {
+                const sectionTitle = moduleType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                fullCsv += '\r\n*** ' + sectionTitle + ' ***\r\n';
+                let csvContent = '';
+                if (moduleType === 'summary') {
+                    csvContent = 'Metric,' + profiles.map(p => `"${p.name}"`).join(',') + '\n';
+                    csvContent += 'Crosswalk Respondents,' + profiles.map(p => p.sampleSize || 0).join(',') + '\n';
+                    csvContent += 'Projected US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
+                    csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
+                } else if (moduleType === 'location') {
+                    const headerRow = ['Value'];
+                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); headerRow.push(`"${p.name} Index"`); });
+                    csvContent += headerRow.join(',') + '\n';
+                    const allLocations = new Set();
+                    profiles.forEach(p => (p.locations || []).forEach(loc => allLocations.add(loc.name || loc.dma)));
+                    Array.from(allLocations).forEach(locName => {
+                        const row = ['"' + locName.replace(/"/g, '""') + '"'];
+                        profiles.forEach(p => {
+                            const loc = (p.locations || []).find(l => (l.name || l.dma) === locName);
+                            row.push(loc ? (loc.pct?.toFixed(2) || '0') : '-');
+                            row.push(loc ? (loc.index || '-') : '-');
+                        });
+                        csvContent += row.join(',') + '\n';
+                    });
+                } else if (moduleType.startsWith('behavioral_')) {
+                    const actualCat = moduleType.replace('behavioral_', '').replace(/_/g, ' ');
+                    let catKey = null;
+                    for (const p of profiles) {
+                        if (p.behavioral && Object.keys(p.behavioral).length) {
+                            catKey = Object.keys(p.behavioral).find(c => c.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() === moduleType.replace('behavioral_', ''));
+                            if (catKey) break;
+                        }
+                    }
+                    if (!catKey) return;
+                    const headerRow = ['Value'];
+                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); headerRow.push(`"${p.name} Index"`); });
+                    csvContent += headerRow.join(',') + '\n';
+                    const allValues = new Set();
+                    profiles.forEach(p => (p.behavioral?.[catKey] || []).forEach(item => allValues.add(item.name)));
+                    Array.from(allValues).forEach(value => {
+                        const row = ['"' + value.replace(/"/g, '""') + '"'];
+                        profiles.forEach(p => {
+                            const item = (p.behavioral?.[catKey] || []).find(i => i.name === value);
+                            row.push(item ? (item.pct?.toFixed(2) || '0') : '-');
+                            row.push(item ? (item.index || '-') : '-');
+                        });
+                        csvContent += row.join(',') + '\n';
+                    });
+                } else {
+                    const demoType = moduleType.replace('demo_', '');
+                    const headerRow = ['Value'];
+                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); headerRow.push(`"${p.name} Index"`); });
+                    csvContent += headerRow.join(',') + '\n';
+                    const allValues = new Set();
+                    profiles.forEach(p => Object.keys(p.demographics?.[demoType] || {}).forEach(v => allValues.add(v)));
+                    const getIndex = (profile, dt, value) => (profile.demographicsIndex && profile.demographicsIndex[dt] && profile.demographicsIndex[dt][value]) ? profile.demographicsIndex[dt][value] : '-';
+                    Array.from(allValues).forEach(value => {
+                        const row = ['"' + value.replace(/"/g, '""') + '"'];
+                        profiles.forEach(p => {
+                            const pct = p.demographics?.[demoType]?.[value];
+                            row.push(pct !== undefined ? pct.toFixed(2) : '-');
+                            row.push(getIndex(p, demoType, value));
+                        });
+                        csvContent += row.join(',') + '\n';
+                    });
+                }
+                fullCsv += csvContent;
+            });
+            const blob = new Blob([fullCsv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `comparison_all_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            showNotification('All sections CSV downloaded', 'success');
+        }
+        
+        async function exportComparisonAllPNG() {
+            document.querySelectorAll('.comp-export-menu').forEach(m => m.style.display = 'none');
+            const container = document.getElementById('comparisonResults');
+            if (!container || !container.children.length) {
+                showNotification('No comparison data to export', 'warning');
+                return;
+            }
+            try {
+                if (typeof html2canvas === 'undefined') {
+                    showNotification('Loading image library...', 'info');
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                    document.head.appendChild(script);
+                    await new Promise((resolve, reject) => { script.onload = resolve; script.onerror = () => reject(new Error('Failed to load html2canvas')); });
+                }
+                showNotification('Generating PNG...', 'info');
+                const canvas = await html2canvas(container, { backgroundColor: '#1a1a2e', scale: 2, logging: false, useCORS: true });
+                const link = document.createElement('a');
+                link.download = `comparison_all_${new Date().toISOString().split('T')[0]}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                showNotification('All sections PNG downloaded!', 'success');
+            } catch (error) {
+                console.error('Export all PNG error:', error);
+                showNotification('Failed to export PNG: ' + (error.message || 'Unknown error'), 'error');
             }
         }
         
