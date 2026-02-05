@@ -24052,6 +24052,7 @@
 
         function startPolling() {
             if (pollInterval) clearInterval(pollInterval);
+            console.log(`[Profile Analysis] Polling job ${currentJobId} every 2s...`);
             pollInterval = setInterval(updateJobStatus, 2000);
             updateJobStatus();
         }
@@ -24061,12 +24062,17 @@
             try {
                 const response = await fetch(`/api/status/${currentJobId}`, { credentials: 'same-origin' });
                 const data = await response.json().catch(() => ({}));
+                const status = data.status || 'unknown';
+                const progress = data.progress != null ? data.progress : 0;
+                const message = data.message || '';
+                console.log(`Job ${currentJobId} status: ${status} (${progress}%)${message ? ' — ' + message : ''}`);
                 if (response.status === 401) {
                     clearInterval(pollInterval);
                     window.location.href = '/login';
                     return;
                 }
                 if (response.status === 404) {
+                    console.warn(`Job ${currentJobId} — status unavailable (404). Check Results Library.`);
                     clearInterval(pollInterval);
                     loadJobs();
                     showAnalysisStatusModalError('Status unavailable. Refresh the page and check Results Library for your run.');
@@ -24089,6 +24095,7 @@
                     progressFillElements.forEach(el => el.style.width = (data.progress || 0) + '%');
 
                     if (data.status === 'completed') {
+                        console.log(`Job ${currentJobId} completed.`);
                         clearInterval(pollInterval);
                         loadJobs();
                         // Close status modal and show download popup for Profile Analysis
@@ -24103,6 +24110,7 @@
                         viewResultsBtnElements.forEach(btn => { btn.onclick = () => loadJobResult(currentJobId); });
                     }
                     if (data.status === 'failed') {
+                        console.error(`Job ${currentJobId} failed:`, data.error || 'Analysis failed');
                         clearInterval(pollInterval);
                         loadJobs();
                         showAnalysisStatusModalError(data.error || 'Analysis failed');
@@ -24114,7 +24122,9 @@
                         errorMessageElements.forEach(el => el.textContent = data.error || 'Error');
                     }
                 }
-            } catch (error) { console.error('Status error:', error); }
+            } catch (error) {
+                console.error(`Job ${currentJobId} poll error:`, error);
+            }
         }
 
         async function loadJobResult(jobId) {
