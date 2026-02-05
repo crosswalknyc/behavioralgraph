@@ -24800,7 +24800,7 @@
                         <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectDashboardProfile('${idEsc}')" title="${fullNameAttr}">
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.9rem; opacity: 0.7;">${icon}</span>
-                                <span style="flex: 1;">${fullName}</span>
+                                <span style="flex: 1;">${fullNameAttr}</span>
                                 <span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${getCategoryDisplayLabel(cat)}</span>
                             </div>
                         </div>
@@ -24879,7 +24879,7 @@
                                 const fullNameAttr = escapeAttr(fullName);
                                 return `
                                     <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${fullNameAttr}">
-                                        ${fullName}
+                                        ${fullNameAttr}
                                     </div>
                                 `;
                             }).join('')}
@@ -24921,20 +24921,55 @@
             // Track profile view
             trackActivity('profile_view', profileId);
             
-            // Load and display the profile data
+            // Load and display the profile data (with auto-retry at released S3 location if 404 on purgatory key)
             try {
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(profileId)}`, { credentials: 'same-origin' });
+                let response = await fetch(`/api/get-csv-data/${encodeURIComponent(profileId)}`, { credentials: 'same-origin' });
                 if (response.status === 401) { window.location.href = '/login'; return; }
-                const data = await response.json();
-                
+                let data = await response.json();
+                let effectiveId = profileId;
+
+                // If 404 and this was a purgatory key, try the released location (same filename without purgatory/ prefix)
+                if (!data.success && response.status === 404 && profileId.startsWith('purgatory/')) {
+                    const releasedKey = profileId.replace(/^purgatory\//, '');
+                    const retryResponse = await fetch(`/api/get-csv-data/${encodeURIComponent(releasedKey)}`, { credentials: 'same-origin' });
+                    if (retryResponse.ok) {
+                        const retryData = await retryResponse.json();
+                        if (retryData.success && retryData.data) {
+                            response = retryResponse;
+                            data = retryData;
+                            effectiveId = releasedKey;
+                            // Update in-memory profile list so this profile uses the new S3 location
+                            const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
+                            if (profile) {
+                                profile.s3_key = releasedKey;
+                                profile.job_id = releasedKey;
+                            }
+                            // Update session cache so future loads use the new key
+                            const cached = getSessionJobsCache();
+                            if (cached && cached.jobs) {
+                                cached.jobs.forEach(j => {
+                                    if ((j.s3_key || j.job_id) === profileId) {
+                                        j.s3_key = releasedKey;
+                                        j.job_id = j.job_id || j.s3_key;
+                                    }
+                                });
+                                setSessionJobsCache(cached);
+                            }
+                            selectedDashProfile = releasedKey;
+                            if (typeof showNotification === 'function') {
+                                showNotification('Profile was released from Purgatory; loaded from new location.', 'info');
+                            }
+                        }
+                    }
+                }
+
                 if (data.success && data.data) {
                     const parsed = parseAllData(data.data);
-                    const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
+                    const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === effectiveId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
                     
-                    // Create new tab
                     const newTab = {
-                        id: profileId,
+                        id: effectiveId,
                         name: brandName,
                         dateRange: data.date_range || '',
                         data: data,
@@ -24942,19 +24977,32 @@
                     };
                     
                     openProfileTabs.push(newTab);
-                    activeProfileTabId = profileId;
+                    activeProfileTabId = effectiveId;
                     
-                    // Save to localStorage
                     saveOpenTabs();
-                    
-                    // Render tabs bar
                     renderProfileTabsBar();
-                    
-                    // Display the profile data
+                    renderDashboardProfileTree(dashboardProfiles);
                     displayProfileTabData(newTab);
+                } else {
+                    const is404 = response.status === 404;
+                    const msg = is404
+                        ? 'Profile file not found. It may have been moved (e.g. after release from Purgatory). Click ↻ to refresh the profile list.'
+                        : (data.error || 'Failed to load profile.');
+                    if (typeof showNotification === 'function') {
+                        showNotification(msg, 'error');
+                    } else {
+                        alert(msg);
+                    }
+                    console.error('Error loading profile:', response.status, data.error || data);
                 }
             } catch (error) {
                 console.error('Error loading profile:', error);
+                const msg = 'Failed to load profile. Click ↻ to refresh the profile list and try again.';
+                if (typeof showNotification === 'function') {
+                    showNotification(msg, 'error');
+                } else {
+                    alert(msg);
+                }
             }
         }
         
