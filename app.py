@@ -1482,8 +1482,7 @@ def privacy_page():
 @requires_admin
 def admin_portal():
     # Get current user's role to pass to template
-    username = session.get('username')
-    user = get_user(username)
+    user = get_current_user()
     current_role = user.get('role', 'user') if user else 'user'
     return render_template('admin.html', current_user_role=current_role)
 
@@ -2022,7 +2021,7 @@ def create_user():
         }
         
         # Purgatory approval (only super_admin can set this on create)
-        current_user = get_user(session.get('username'))
+        current_user = get_current_user()
         if current_user and current_user.get('role') == 'super_admin':
             data['users'][username]['has_purgatory_approval'] = req_data.get('has_purgatory_approval', False)
         
@@ -2113,7 +2112,7 @@ def update_user(username):
             user['collab_team'] = req_data['collab_team']
         # Purgatory approval (only super_admin can set this)
         if 'has_purgatory_approval' in req_data:
-            current_user = get_user(session.get('username'))
+            current_user = get_current_user()
             if current_user and current_user.get('role') == 'super_admin':
                 user['has_purgatory_approval'] = req_data['has_purgatory_approval']
         
