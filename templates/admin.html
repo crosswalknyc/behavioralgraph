@@ -2676,6 +2676,7 @@
                             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                                 <button class="btn btn-small btn-secondary" onclick="previewPurgatoryFile('${purgatoryIdEsc}')" title="Preview">👁️</button>
                                 <button class="btn btn-small btn-secondary" onclick="downloadPurgatoryFile('${purgatoryIdEsc}')" title="Download">⬇️</button>
+                                <button class="btn btn-small btn-secondary" onclick="savePurgatoryItem('${purgatoryIdEsc}')" title="Save title, category, and image without releasing">💾 Save</button>
                                 <button class="btn btn-small btn-success" onclick="releasePurgatoryItem('${purgatoryIdEsc}')" title="Release">✅ Release</button>
                                 <button class="btn btn-small btn-danger" onclick="rejectPurgatoryItem('${purgatoryIdEsc}')" title="Reject">❌</button>
                             </div>
@@ -2686,6 +2687,37 @@
             
             html += '</tbody></table>';
             container.innerHTML = html;
+        }
+        
+        async function savePurgatoryItem(purgatoryId) {
+            const rows = document.querySelectorAll('#purgatoryItemsList tr[data-purgatory-id]');
+            const row = Array.from(rows).find(tr => tr.getAttribute('data-purgatory-id') === purgatoryId);
+            if (!row) { showToast('Row not found', true); return; }
+            const title = row.querySelector('input[data-field="title"]').value.trim();
+            const categorySelect = row.querySelector('select[data-field="category"]');
+            const category = categorySelect ? categorySelect.value : '';
+            try {
+                const response = await fetch('/api/admin/purgatory/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        purgatory_id: purgatoryId,
+                        title: title,
+                        category: category,
+                        project_name: title
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('Saved. Title, category, and image (if set) are updated.');
+                } else {
+                    showToast(data.error || 'Save failed', true);
+                }
+            } catch (error) {
+                console.error('Error saving purgatory item:', error);
+                showToast('Error saving', true);
+            }
         }
         
         async function releasePurgatoryItem(purgatoryId) {
