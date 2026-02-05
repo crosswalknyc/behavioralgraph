@@ -45570,20 +45570,34 @@
             let csvContent = '';
             const sectionTitle = moduleType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
             
-            // Header row with profile names
-            csvContent += 'Value,' + profiles.map(p => `"${p.name}"`).join(',') + '\n';
+            // Header row with profile names - include % and Index columns for each profile
+            const headerRow = ['Value'];
+            profiles.forEach(p => {
+                headerRow.push(`"${p.name} %"`);
+                headerRow.push(`"${p.name} Index"`);
+            });
+            csvContent += headerRow.join(',') + '\n';
             
             // Get data based on module type
             if (moduleType === 'summary') {
+                // Summary doesn't have index, just values
+                csvContent = 'Metric,' + profiles.map(p => `"${p.name}"`).join(',') + '\n';
                 csvContent += 'Crosswalk Respondents,' + profiles.map(p => p.sampleSize || 0).join(',') + '\n';
                 csvContent += 'Projected US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
                 csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
             } else if (moduleType.startsWith('behavioral_')) {
                 const catName = moduleType.replace('behavioral_', '').replace(/_/g, ' ');
                 // Find the actual category name (case-insensitive match)
-                const actualCat = Object.keys(profiles[0]?.behavioral || {}).find(c => 
-                    c.toLowerCase().replace(/[^a-z0-9]/g, '_') === moduleType.replace('behavioral_', '')
-                ) || catName;
+                let actualCat = null;
+                for (const p of profiles) {
+                    if (p.behavioral) {
+                        actualCat = Object.keys(p.behavioral).find(c => 
+                            c.toLowerCase().replace(/[^a-z0-9]/g, '_') === moduleType.replace('behavioral_', '')
+                        );
+                        if (actualCat) break;
+                    }
+                }
+                if (!actualCat) actualCat = catName;
                 
                 // Get all unique values across profiles
                 const allValues = new Set();
@@ -45592,12 +45606,14 @@
                 });
                 
                 Array.from(allValues).forEach(value => {
-                    const row = ['"' + value + '"'];
+                    const row = ['"' + value.replace(/"/g, '""') + '"'];
                     profiles.forEach(p => {
                         const item = (p.behavioral?.[actualCat] || []).find(i => i.name === value);
                         if (item) {
-                            row.push(`"${item.pct?.toFixed(2) || 0}% (Idx: ${item.index || '-'})"`);
+                            row.push(item.pct?.toFixed(2) || '0');
+                            row.push(item.index || '-');
                         } else {
+                            row.push('-');
                             row.push('-');
                         }
                     });
@@ -45611,12 +45627,14 @@
                 });
                 
                 Array.from(allLocations).forEach(locName => {
-                    const row = ['"' + locName + '"'];
+                    const row = ['"' + locName.replace(/"/g, '""') + '"'];
                     profiles.forEach(p => {
                         const loc = (p.locations || []).find(l => (l.name || l.dma) === locName);
                         if (loc) {
-                            row.push(`"${loc.pct?.toFixed(2) || 0}% (Idx: ${loc.index || '-'})"`);
+                            row.push(loc.pct?.toFixed(2) || '0');
+                            row.push(loc.index || '-');
                         } else {
+                            row.push('-');
                             row.push('-');
                         }
                     });
@@ -45624,19 +45642,34 @@
                 });
             } else {
                 // Demographics (gender, age, ethnicity, income, etc.)
+                // moduleType could be 'gender', 'age', 'demo_gender', 'demo_age', etc.
                 const demoType = moduleType.replace('demo_', '');
                 const allValues = new Set();
+                
+                // Collect all unique values across all profiles
                 profiles.forEach(p => {
-                    Object.keys(p.demographics?.[demoType] || {}).forEach(v => allValues.add(v));
+                    const demoData = p.demographics?.[demoType] || {};
+                    Object.keys(demoData).forEach(v => allValues.add(v));
                 });
                 
+                // Get index data if available
+                const getIndex = (profile, demoType, value) => {
+                    // Try to find index in demographicsIndex
+                    if (profile.demographicsIndex && profile.demographicsIndex[demoType]) {
+                        return profile.demographicsIndex[demoType][value] || '-';
+                    }
+                    return '-';
+                };
+                
                 Array.from(allValues).forEach(value => {
-                    const row = ['"' + value + '"'];
+                    const row = ['"' + value.replace(/"/g, '""') + '"'];
                     profiles.forEach(p => {
                         const pct = p.demographics?.[demoType]?.[value];
                         if (pct !== undefined) {
-                            row.push(pct.toFixed(2) + '%');
+                            row.push(pct.toFixed(2));
+                            row.push(getIndex(p, demoType, value));
                         } else {
+                            row.push('-');
                             row.push('-');
                         }
                     });
@@ -45651,28 +45684,47 @@
             link.download = `comparison_${moduleType}_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
             
+            // Close the dropdown menu
+            document.querySelectorAll('.comp-export-menu').forEach(m => m.style.display = 'none');
+            
             showNotification(`CSV downloaded: ${sectionTitle}`, 'success');
         }
         
         // Export comparison section to PNG
         async function exportComparisonSectionPNG(moduleType) {
+            // Close the dropdown menu first
+            document.querySelectorAll('.comp-export-menu').forEach(m => m.style.display = 'none');
+            
             const profiles = window.comparisonProfilesData || [];
             if (profiles.length === 0) {
                 showNotification('No comparison data available', 'warning');
                 return;
             }
             
-            // Find the section element
+            // Find the section element - try multiple ID patterns
             let sectionId = 'comp-' + moduleType;
-            if (moduleType.startsWith('behavioral_')) {
+            let section = document.getElementById(sectionId);
+            
+            // Try behavioral pattern
+            if (!section && moduleType.startsWith('behavioral_')) {
                 sectionId = 'comp-beh-' + moduleType.replace('behavioral_', '');
-            } else if (moduleType.startsWith('demo_')) {
-                sectionId = 'comp-' + moduleType.replace('demo_', '');
+                section = document.getElementById(sectionId);
             }
             
-            const section = document.getElementById(sectionId);
+            // Try without demo_ prefix for demographics
+            if (!section && moduleType.startsWith('demo_')) {
+                sectionId = 'comp-' + moduleType.replace('demo_', '');
+                section = document.getElementById(sectionId);
+            }
+            
+            // For simple demographic types like 'gender', 'age', etc.
+            if (!section) {
+                section = document.getElementById('comp-' + moduleType);
+            }
+            
             if (!section) {
                 showNotification('Section not found: ' + moduleType, 'error');
+                console.error('Could not find section for moduleType:', moduleType, 'tried IDs:', sectionId);
                 return;
             }
             
@@ -45680,12 +45732,13 @@
                 // Use html2canvas if available, otherwise load it
                 if (typeof html2canvas === 'undefined') {
                     // Load html2canvas dynamically
+                    showNotification('Loading image library...', 'info');
                     const script = document.createElement('script');
                     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
                     document.head.appendChild(script);
                     await new Promise((resolve, reject) => {
                         script.onload = resolve;
-                        script.onerror = reject;
+                        script.onerror = () => reject(new Error('Failed to load html2canvas'));
                     });
                 }
                 
@@ -45694,7 +45747,8 @@
                 const canvas = await html2canvas(section, {
                     backgroundColor: '#1a1a2e',
                     scale: 2,
-                    logging: false
+                    logging: false,
+                    useCORS: true
                 });
                 
                 const link = document.createElement('a');
@@ -45710,6 +45764,9 @@
         }
         
         function addComparisonModuleToDeck(moduleType) {
+            // Close the dropdown menu first
+            document.querySelectorAll('.comp-export-menu').forEach(m => m.style.display = 'none');
+            
             if (!currentEditingDeck) {
                 showNotification('⚠️ Please create or select a deck first', 'warning');
                 showTab('collaboration');
@@ -45723,25 +45780,63 @@
                 return;
             }
             
-            // Create a slide with comparison data
+            // Determine section title based on moduleType
+            let sectionTitle = moduleType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            if (moduleType.startsWith('behavioral_')) {
+                sectionTitle = moduleType.replace('behavioral_', '').replace(/_/g, ' ').toUpperCase();
+            } else if (moduleType.startsWith('demo_')) {
+                sectionTitle = moduleType.replace('demo_', '').replace(/\b\w/g, c => c.toUpperCase());
+            }
+            
+            // Extract only the relevant data for this section
+            const extractSectionData = (profile) => {
+                const baseData = {
+                    name: profile.name,
+                    color: profile.color,
+                    sampleSize: profile.sampleSize,
+                    projectedUS: profile.projectedUS,
+                    medianAge: profile.medianAge
+                };
+                
+                if (moduleType === 'summary') {
+                    return baseData;
+                } else if (moduleType === 'location') {
+                    return { ...baseData, locations: profile.locations };
+                } else if (moduleType.startsWith('behavioral_')) {
+                    const catName = moduleType.replace('behavioral_', '').replace(/_/g, ' ');
+                    // Find actual category name
+                    let actualCat = null;
+                    if (profile.behavioral) {
+                        actualCat = Object.keys(profile.behavioral).find(c => 
+                            c.toLowerCase().replace(/[^a-z0-9]/g, '_') === moduleType.replace('behavioral_', '')
+                        );
+                    }
+                    return { 
+                        ...baseData, 
+                        behavioral: actualCat ? { [actualCat]: profile.behavioral[actualCat] } : {}
+                    };
+                } else {
+                    // Demographics - moduleType is like 'gender', 'age', 'ethnicity', 'income', etc.
+                    const demoType = moduleType.replace('demo_', '');
+                    return { 
+                        ...baseData, 
+                        demographics: { [demoType]: profile.demographics?.[demoType] || {} },
+                        demographicsIndex: profile.demographicsIndex ? { [demoType]: profile.demographicsIndex[demoType] } : {}
+                    };
+                }
+            };
+            
+            // Create a slide with only the relevant comparison data for this section
             const slide = {
                 id: 'slide_' + Date.now(),
                 type: 'comparison',
                 comparisonType: moduleType,
-                title: `Comparison: ${moduleType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`,
+                title: `Comparison: ${sectionTitle}`,
                 data: {
-                    profiles: profiles.map(p => ({
-                        name: p.name,
-                        color: p.color,
-                        sampleSize: p.sampleSize,
-                        projectedUS: p.projectedUS,
-                        medianAge: p.medianAge,
-                        demographics: p.demographics,
-                        behavioral: p.behavioral,
-                        locations: p.locations
-                    })),
+                    profiles: profiles.map(extractSectionData),
                     moduleType: moduleType,
-                    displayMode: displayMode
+                    displayMode: displayMode,
+                    profileNames: profiles.map(p => p.name)
                 },
                 notes: '',
                 elements: []
