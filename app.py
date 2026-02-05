@@ -1349,15 +1349,29 @@ def validate_demographics_consistency(new_demographics, existing_demographics, t
     is_valid = len(discrepancies) == 0
     return is_valid, discrepancies
 
-def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, use_purgatory=True):
+def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, use_purgatory=True, bucket=None, category=None, source_type='profile_analysis'):
     """Upload a result file to S3. By default uploads to purgatory/ for admin review before release."""
     if not s3_client:
         return None
     try:
+        target_bucket = bucket or S3_BUCKET
         timestamp = datetime.now().strftime('%m_%d_%Y_%H_%M')
         base_key = f"{brand_name}_{timestamp}.csv"
         s3_key = (S3_PURGATORY_PREFIX + base_key) if use_purgatory else base_key
-        s3_client.upload_file(file_path, S3_BUCKET, s3_key)
+        s3_client.upload_file(file_path, target_bucket, s3_key)
+        
+        # If using purgatory, add to purgatory metadata for tracking
+        if use_purgatory and created_by:
+            add_to_purgatory(
+                s3_key=s3_key,
+                bucket=target_bucket,
+                created_by=created_by,
+                project_name=brand_name,
+                category=category or 'Uncategorized',
+                source_type=source_type
+            )
+            print(f"✅ Added to purgatory: {s3_key} (bucket: {target_bucket}, user: {created_by})")
+        
         return s3_key
     except Exception as e:
         print(f"Error uploading to S3: {e}")
@@ -9073,6 +9087,12 @@ def get_user_purgatory_items(username):
     
     return user_items
 
+def _add_user_profile(s3_key, created_by):
+    """Track user profile creation (legacy function - now handled by purgatory metadata)."""
+    # This is now handled by the purgatory metadata system
+    # Keeping as stub for backward compatibility
+    print(f"📝 Profile created: {s3_key} by {created_by}")
+
 
 # ============================================================================
 # PURGATORY API ENDPOINTS
@@ -12989,7 +13009,28 @@ def run_svod_acquisition(job_id):
                     output_file = str(csv_files[0])
                     if os.path.exists(output_file):
                         jobs[job_id]['result_file'] = output_file
-                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                        
+                        # Upload to SVOD bucket purgatory
+                        update_job_status(job_id, progress=90, message='Uploading to purgatory...')
+                        created_by = job.get('username', '')
+                        s3_key = upload_to_s3(
+                            output_file, 
+                            params['project_name'], 
+                            params['campaign_start'], 
+                            params['campaign_end'],
+                            created_by=created_by,
+                            use_purgatory=True,
+                            bucket=SUBSCRIBER_S3_BUCKET,
+                            category='SVOD Acquisition',
+                            source_type='svod_acquisition'
+                        )
+                        
+                        if s3_key:
+                            jobs[job_id]['s3_key'] = s3_key
+                            jobs[job_id]['purgatory_id'] = f"{SUBSCRIBER_S3_BUCKET}:{s3_key}"
+                            print(f"✅ SVOD Acquisition uploaded to purgatory: {s3_key}")
+                        
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!', s3_key=s3_key)
                     else:
                         update_job_status(job_id, status='failed', error='Output file not found')
                 else:

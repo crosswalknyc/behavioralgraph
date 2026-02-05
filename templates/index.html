@@ -1823,6 +1823,15 @@
             overflow: hidden;
         }
         
+        /* When collapsed, hide entire toolbar row (collapse btn is now in action row next to US %) */
+        .toolbar-row.collapsed {
+            max-height: 0;
+            min-height: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+        
         .toolbar-collapse-btn {
             background: rgba(139, 92, 246, 0.2);
             border: 1px solid rgba(139, 92, 246, 0.4);
@@ -1846,14 +1855,7 @@
             flex-shrink: 0;
             align-self: center;
         }
-        .toolbar-row.collapsed .toolbar-collapse-wrapper {
-            align-self: flex-start;
-        }
-        .toolbar-row.collapsed .toolbar-collapse-btn {
-            align-self: flex-start;
-        }
-        
-        .toolbar-row.collapsed #toolbarCollapseIcon {
+        .toolbar-collapse-btn.collapsed #toolbarCollapseIcon {
             transform: rotate(180deg);
         }
         
@@ -11043,6 +11045,59 @@
         </div>
     </div>
     
+    <!-- Analysis Complete Modal - Download Popup -->
+    <div class="credits-modal" id="analysisCompleteModal" onclick="if(event.target === this) closeAnalysisCompleteModal()">
+        <div class="credits-modal-content" style="max-width: 500px;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+            <h2 style="color: var(--accent-lime); margin-bottom: 1rem;">Data Analysis Complete!</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;">
+                Download your data now and it will be populated into your dashboard shortly.
+            </p>
+            
+            <div style="background: var(--bg-dark); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span style="color: var(--text-secondary);">Analysis Type:</span>
+                    <span id="analysisCompleteType" style="color: var(--text-primary); font-weight: 600;">Profile Analysis</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-secondary);">Status:</span>
+                    <span style="color: var(--accent-lime); font-weight: 600;">✅ Ready for Download</span>
+                </div>
+            </div>
+            
+            <button id="downloadAnalysisBtn" onclick="downloadAnalysisFile()" style="
+                background: linear-gradient(135deg, var(--accent-lime), #9acd32);
+                color: #000;
+                border: none;
+                padding: 1rem 2rem;
+                border-radius: 8px;
+                font-weight: 700;
+                font-size: 1.1rem;
+                cursor: pointer;
+                width: 100%;
+                margin-bottom: 1rem;
+                transition: all 0.2s;
+            ">
+                ⬇️ Download CSV File
+            </button>
+            
+            <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">
+                📋 Your data has been submitted for admin review and will appear in the dashboard once approved.
+            </p>
+            
+            <button onclick="closeAnalysisCompleteModal()" style="
+                background: var(--bg-dark); 
+                border: 1px solid var(--border-color); 
+                color: var(--text-primary); 
+                padding: 0.5rem 1.5rem; 
+                border-radius: 6px; 
+                cursor: pointer;
+            ">
+                Close
+            </button>
+        </div>
+    </div>
+    
     <div class="container">
         <header>
             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem;">
@@ -12305,12 +12360,6 @@
                         </div>
                     </div>
                 </div>
-                <div class="toolbar-collapse-wrapper" style="display: flex; flex-direction: column; align-items: center; gap: 0.2rem;">
-                    <button class="toolbar-collapse-btn has-tooltip" id="toolbarCollapseBtn" onclick="toggleToolbar()" data-tooltip="Collapse/Expand Toolbar">
-                        <span id="toolbarCollapseIcon">▲</span>
-                    </button>
-                    <span id="toolbarCollapseLabel" style="font-size: 0.65rem; color: var(--text-secondary); font-weight: 600;">HIDE</span>
-                </div>
             </div>
             
             <!-- Action Buttons Row with Tab Title -->
@@ -12330,6 +12379,12 @@
                     </div>
                     <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
                         <span id="dashDisplayLabel">US %</span>
+                    </div>
+                    <div class="toolbar-collapse-wrapper toolbar-collapse-inline" style="display: flex; align-items: center; gap: 0.35rem;">
+                        <button class="toolbar-collapse-btn has-tooltip" id="toolbarCollapseBtn" onclick="toggleToolbar()" data-tooltip="Collapse/Expand Toolbar">
+                            <span id="toolbarCollapseIcon">▲</span>
+                        </button>
+                        <span id="toolbarCollapseLabel" style="font-size: 0.65rem; color: var(--text-secondary); font-weight: 600;">HIDE</span>
                     </div>
                 </div>
                 <div class="inline-tab-header" id="inlineTabHeader" style="display: flex; align-items: center; gap: 0.75rem;">
@@ -16724,7 +16779,11 @@
                         `;
                     }
                     
-                    if (data.status === 'completed' || data.status === 'failed' || attempts >= maxAttempts) {
+                    if (data.status === 'completed') {
+                        clearInterval(pollInterval);
+                        // Show the download popup
+                        showAnalysisCompletePopup(jobId, data.s3_key, 'svod_acquisition');
+                    } else if (data.status === 'failed' || attempts >= maxAttempts) {
                         clearInterval(pollInterval);
                     }
                 } catch (error) {
@@ -23998,6 +24057,9 @@
                         });
                         
                         loadJobs();
+                        
+                        // Show the download popup for Profile Analysis
+                        showAnalysisCompletePopup(currentJobId, data.s3_key, 'profile_analysis');
                     }
                     if (data.status === 'failed') {
                         clearInterval(pollInterval);
@@ -25129,6 +25191,7 @@
         function toggleToolbar() {
             const toolbarRow = document.getElementById('toolbarRow');
             const profileHeaderRow = document.getElementById('profileHeaderRow');
+            const collapseBtn = document.getElementById('toolbarCollapseBtn');
             if (!toolbarRow) return;
             
             toolbarCollapsed = !toolbarCollapsed;
@@ -25137,9 +25200,11 @@
             if (toolbarCollapsed) {
                 toolbarRow.classList.add('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
+                if (collapseBtn) collapseBtn.classList.add('collapsed');
             } else {
                 toolbarRow.classList.remove('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.remove('collapsed');
+                if (collapseBtn) collapseBtn.classList.remove('collapsed');
             }
             const labelEl = document.getElementById('toolbarCollapseLabel');
             if (labelEl) labelEl.textContent = toolbarCollapsed ? 'SHOW' : 'HIDE';
@@ -25150,11 +25215,14 @@
             const toolbarRow = document.getElementById('toolbarRow');
             const profileHeaderRow = document.getElementById('profileHeaderRow');
             const labelEl = document.getElementById('toolbarCollapseLabel');
+            const collapseBtn = document.getElementById('toolbarCollapseBtn');
             if (toolbarCollapsed) {
                 if (toolbarRow) toolbarRow.classList.add('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
+                if (collapseBtn) collapseBtn.classList.add('collapsed');
                 if (labelEl) labelEl.textContent = 'SHOW';
             } else {
+                if (collapseBtn) collapseBtn.classList.remove('collapsed');
                 if (labelEl) labelEl.textContent = 'HIDE';
             }
         }
@@ -34537,7 +34605,7 @@
                     currentDeckData = null;
                     await loadSavedDecks();
                     refreshDeckBuilder();
-                    showNotification('✅ Deck deleted', 'success');
+                    showNotification('Deck deleted', 'success');
                 }
             } catch (e) {
                 alert('Error deleting deck');
@@ -52529,7 +52597,7 @@
             currentEditingSlide = 0;
             renderWorkspaceDecks();
             renderSlideEditor();
-            showNotification('✅ Deck deleted', 'success');
+            showNotification('Deck deleted', 'success');
         }
         
         function showAddSlideOptions() {
@@ -53468,6 +53536,47 @@
         
         function closeCreditsModal() {
             document.getElementById('creditsModal').classList.remove('active');
+        }
+        
+        // ============================================================================
+        // ANALYSIS COMPLETE MODAL (Purgatory Download)
+        // ============================================================================
+        
+        let currentAnalysisJobId = null;
+        let currentAnalysisS3Key = null;
+        let currentAnalysisType = null;
+        
+        function showAnalysisCompletePopup(jobId, s3Key, analysisType) {
+            currentAnalysisJobId = jobId;
+            currentAnalysisS3Key = s3Key;
+            currentAnalysisType = analysisType;
+            
+            // Update the modal content
+            const typeLabel = analysisType === 'svod_acquisition' ? '📺 SVOD Acquisition IQ' : '🎯 Profile Analysis';
+            document.getElementById('analysisCompleteType').textContent = typeLabel;
+            
+            // Show the modal
+            document.getElementById('analysisCompleteModal').classList.add('active');
+        }
+        
+        function closeAnalysisCompleteModal() {
+            document.getElementById('analysisCompleteModal').classList.remove('active');
+            currentAnalysisJobId = null;
+            currentAnalysisS3Key = null;
+            currentAnalysisType = null;
+        }
+        
+        function downloadAnalysisFile() {
+            if (currentAnalysisJobId) {
+                // Download via job ID
+                window.open(`/api/download/${currentAnalysisJobId}`, '_blank');
+            } else if (currentAnalysisS3Key) {
+                // Fallback to S3 key download
+                const purgatoryId = currentAnalysisType === 'svod_acquisition' 
+                    ? `svod-acquisition:${currentAnalysisS3Key}`
+                    : `dashboard-inputs:${currentAnalysisS3Key}`;
+                window.open(`/api/purgatory/download/${encodeURIComponent(purgatoryId)}`, '_blank');
+            }
         }
         
         async function requestMoreCredits() {

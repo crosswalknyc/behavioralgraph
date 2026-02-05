@@ -918,6 +918,7 @@
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="showAdminTab('users')">👥 Users</button>
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
+            <button class="admin-tab" onclick="showAdminTab('purgatory')">⏳ Purgatory</button>
             <button class="admin-tab" onclick="showAdminTab('images')">🖼️ Profile Images</button>
             <button class="admin-tab" onclick="showAdminTab('tickers')">📈 Tickers</button>
             <button class="admin-tab" onclick="showAdminTab('settings')">⚙️ Settings</button>
@@ -994,6 +995,41 @@
                     <div id="recentRunsList">
                         <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading recent runs...</p>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PURGATORY SECTION -->
+        <div id="section-purgatory" class="admin-section">
+            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="stat-card">
+                    <h3>Pending Review</h3>
+                    <div class="stat-value orange" id="purgatoryPendingCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Profile Analysis</h3>
+                    <div class="stat-value blue" id="purgatoryProfileCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>SVOD Acquisition</h3>
+                    <div class="stat-value purple" id="purgatorySvodCount">0</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h2>⏳ Purgatory - Pending Admin Review</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-secondary" onclick="loadPurgatoryItems()">↻ Refresh</button>
+                    </div>
+                </div>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.85rem;">
+                    Files uploaded from Profile Analysis and SVOD Acquisition IQ appear here for review. 
+                    Verify the title, category, and image before releasing to the main dashboard.
+                </p>
+                
+                <div id="purgatoryItemsList">
+                    <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading purgatory items...</p>
                 </div>
             </div>
         </div>
@@ -2407,6 +2443,186 @@
                 checkGmailStatus();
                 loadQuickSelects(); // Load quick selects when settings tab is opened
             }
+            if (tabName === 'purgatory') {
+                loadPurgatoryItems();
+            }
+        }
+        
+        // ============================================================================
+        // PURGATORY FUNCTIONS
+        // ============================================================================
+        
+        async function loadPurgatoryItems() {
+            try {
+                const response = await fetch('/api/admin/purgatory', {
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderPurgatoryItems(data.items);
+                    
+                    // Update counts
+                    document.getElementById('purgatoryPendingCount').textContent = data.items.length;
+                    const profileCount = data.items.filter(i => i.source_type === 'profile_analysis').length;
+                    const svodCount = data.items.filter(i => i.source_type === 'svod_acquisition').length;
+                    document.getElementById('purgatoryProfileCount').textContent = profileCount;
+                    document.getElementById('purgatorySvodCount').textContent = svodCount;
+                } else {
+                    document.getElementById('purgatoryItemsList').innerHTML = 
+                        `<p style="color: var(--accent-red);">Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Error loading purgatory items:', error);
+                document.getElementById('purgatoryItemsList').innerHTML = 
+                    `<p style="color: var(--accent-red);">Error loading purgatory items</p>`;
+            }
+        }
+        
+        function renderPurgatoryItems(items) {
+            const container = document.getElementById('purgatoryItemsList');
+            
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                        <p>No items pending review</p>
+                        <p style="font-size: 0.8rem;">All analysis results have been processed</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `
+                <table class="content-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">Image</th>
+                            <th>Title / Project</th>
+                            <th>Category</th>
+                            <th>Source</th>
+                            <th>Created By</th>
+                            <th>Created At</th>
+                            <th style="width: 200px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            for (const item of items) {
+                const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : 'Unknown';
+                const sourceLabel = item.source_type === 'svod_acquisition' ? '📺 SVOD' : '🎯 Profile';
+                const imageUrl = item.image_url || '';
+                
+                html += `
+                    <tr data-purgatory-id="${item.purgatory_id}">
+                        <td>
+                            <div class="purgatory-image-preview" style="width: 60px; height: 60px; border-radius: 8px; overflow: hidden; background: var(--bg-input); display: flex; align-items: center; justify-content: center;">
+                                ${imageUrl ? 
+                                    `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.innerHTML='📊'">` : 
+                                    '<span style="font-size: 1.5rem;">📊</span>'
+                                }
+                            </div>
+                        </td>
+                        <td>
+                            <input type="text" class="purgatory-title-input" value="${item.title || item.project_name}" 
+                                   style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; color: var(--text-primary); width: 100%;"
+                                   data-field="title">
+                        </td>
+                        <td>
+                            <input type="text" class="purgatory-category-input" value="${item.category || ''}" 
+                                   style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; color: var(--text-primary); width: 100%;"
+                                   data-field="category">
+                        </td>
+                        <td><span class="badge ${item.source_type === 'svod_acquisition' ? 'badge-admin' : 'badge-user'}">${sourceLabel}</span></td>
+                        <td style="color: var(--text-secondary);">${item.created_by}</td>
+                        <td style="color: var(--text-secondary); font-size: 0.8rem;">${createdAt}</td>
+                        <td>
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                <button class="btn btn-small btn-secondary" onclick="previewPurgatoryFile('${item.purgatory_id}')" title="Preview">👁️</button>
+                                <button class="btn btn-small btn-secondary" onclick="downloadPurgatoryFile('${item.purgatory_id}')" title="Download">⬇️</button>
+                                <button class="btn btn-small btn-success" onclick="releasePurgatoryItem('${item.purgatory_id}')" title="Release">✅ Release</button>
+                                <button class="btn btn-small btn-danger" onclick="rejectPurgatoryItem('${item.purgatory_id}')" title="Reject">❌</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+        
+        async function releasePurgatoryItem(purgatoryId) {
+            // Get the updated values from the row
+            const row = document.querySelector(`tr[data-purgatory-id="${purgatoryId}"]`);
+            const title = row.querySelector('input[data-field="title"]').value;
+            const category = row.querySelector('input[data-field="category"]').value;
+            
+            if (!confirm(`Release "${title}" to the main dashboard?\n\nThis will make it visible to all users.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/purgatory/release', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        purgatory_id: purgatoryId,
+                        title: title,
+                        category: category
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Item released successfully!');
+                    loadPurgatoryItems();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error releasing item:', error);
+                alert('Error releasing item');
+            }
+        }
+        
+        async function rejectPurgatoryItem(purgatoryId) {
+            if (!confirm('Are you sure you want to reject and delete this item?\n\nThis cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/purgatory/reject', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ purgatory_id: purgatoryId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Item rejected and deleted');
+                    loadPurgatoryItems();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error rejecting item:', error);
+                alert('Error rejecting item');
+            }
+        }
+        
+        function downloadPurgatoryFile(purgatoryId) {
+            window.open(`/api/purgatory/download/${encodeURIComponent(purgatoryId)}`, '_blank');
+        }
+        
+        async function previewPurgatoryFile(purgatoryId) {
+            // Open in new tab for preview
+            window.open(`/api/purgatory/download/${encodeURIComponent(purgatoryId)}`, '_blank');
         }
         
         // Settings Tab Switching
