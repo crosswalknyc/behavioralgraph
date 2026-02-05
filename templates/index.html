@@ -11048,6 +11048,33 @@
         </div>
     </div>
     
+    <!-- Analysis Status Modal - Tracks job progress, warns not to navigate away -->
+    <div class="credits-modal" id="analysisStatusModal">
+        <div class="credits-modal-content" style="max-width: 480px;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <div class="spinner" style="width: 28px; height: 28px; border-width: 2px;"></div>
+                <h2 style="margin: 0; color: var(--accent-cyan); font-size: 1.1rem;">Analysis In Progress</h2>
+            </div>
+            <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                <p style="margin: 0; color: var(--accent-orange); font-size: 0.9rem; font-weight: 600;">⚠️ Don't navigate away until the analysis completes</p>
+            </div>
+            <div id="analysisStatusModalRunning">
+                <div id="statusModalText" style="font-weight: 600; margin-bottom: 0.35rem;">Processing...</div>
+                <div id="statusModalMessage" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Starting analysis</div>
+                <div class="progress-bar"><div class="progress-fill" id="statusModalProgress" style="width: 0%"></div></div>
+            </div>
+            <div id="analysisStatusModalComplete" style="display: none; text-align: center;">
+                <div style="font-size: 2.5rem;">✅</div>
+                <div style="margin: 0.5rem 0; color: var(--accent-lime);">Complete!</div>
+            </div>
+            <div id="analysisStatusModalError" style="display: none; text-align: center;">
+                <div style="font-size: 2.5rem;">❌</div>
+                <div id="statusModalErrorMessage" style="color: var(--accent-red); margin: 0.5rem 0;"></div>
+            </div>
+            <button id="analysisStatusModalCloseBtn" onclick="closeAnalysisStatusModal()" style="display: none; margin-top: 1rem; width: 100%; background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.6rem; border-radius: 6px; cursor: pointer;">Close</button>
+        </div>
+    </div>
+    
     <!-- Analysis Complete Modal - Download Popup -->
     <div class="credits-modal" id="analysisCompleteModal" onclick="if(event.target === this) closeAnalysisCompleteModal()">
         <div class="credits-modal-content" style="max-width: 500px;">
@@ -23970,7 +23997,7 @@
                     if (data.credits_left !== undefined) {
                         updateCreditsDisplay(data.credits_left);
                     }
-                    showCurrentJob();
+                    showAnalysisStatusModal();
                     startPolling();
                     loadJobs();
                 } else { 
@@ -24032,51 +24059,50 @@
                 }
                 if (response.status === 404) {
                     clearInterval(pollInterval);
+                    loadJobs();
+                    showAnalysisStatusModalError('Status unavailable. Refresh the page and check Results Library for your run.');
                     const statusMessageElements = document.querySelectorAll('#statusMessage');
                     statusMessageElements.forEach(el => { el.textContent = 'Status unavailable. Refresh the page and check Results Library for your run.'; el.style.color = 'var(--accent-orange)'; });
-                    loadJobs();
                     return;
                 }
                 if (response.ok) {
-                    // Update all status elements (works for both formView and Custom Analysis)
+                    // Update status modal (popup)
+                    const statusModal = document.getElementById('analysisStatusModal');
+                    if (statusModal && statusModal.classList.contains('active')) {
+                        updateAnalysisStatusModal(data);
+                    }
+                    // Also update inline elements for backward compat (formView / Custom Analysis)
                     const statusTextElements = document.querySelectorAll('#statusText');
                     const statusMessageElements = document.querySelectorAll('#statusMessage');
                     const progressFillElements = document.querySelectorAll('#progressFill');
-                    
                     statusTextElements.forEach(el => el.textContent = data.project_name || 'Processing...');
                     statusMessageElements.forEach(el => { el.textContent = data.message || 'In progress'; el.style.color = ''; });
                     progressFillElements.forEach(el => el.style.width = (data.progress || 0) + '%');
 
                     if (data.status === 'completed') {
                         clearInterval(pollInterval);
-                        // Update all status displays
+                        loadJobs();
+                        // Close status modal and show download popup for Profile Analysis
+                        closeAnalysisStatusModal();
+                        showAnalysisCompletePopup(currentJobId, data.s3_key, 'profile_analysis');
+                        // Update inline displays
                         const statusRunningElements = document.querySelectorAll('#statusRunning');
                         const statusCompleteElements = document.querySelectorAll('#statusComplete');
                         const viewResultsBtnElements = document.querySelectorAll('#viewResultsBtn');
-                        
                         statusRunningElements.forEach(el => el.style.display = 'none');
                         statusCompleteElements.forEach(el => el.style.display = 'block');
-                        viewResultsBtnElements.forEach(btn => {
-                            btn.onclick = () => loadJobResult(currentJobId);
-                        });
-                        
-                        loadJobs();
-                        
-                        // Show the download popup for Profile Analysis
-                        showAnalysisCompletePopup(currentJobId, data.s3_key, 'profile_analysis');
+                        viewResultsBtnElements.forEach(btn => { btn.onclick = () => loadJobResult(currentJobId); });
                     }
                     if (data.status === 'failed') {
                         clearInterval(pollInterval);
-                        // Update all error displays
+                        loadJobs();
+                        showAnalysisStatusModalError(data.error || 'Analysis failed');
                         const statusRunningElements = document.querySelectorAll('#statusRunning');
                         const statusErrorElements = document.querySelectorAll('#statusError');
                         const errorMessageElements = document.querySelectorAll('#errorMessage');
-                        
                         statusRunningElements.forEach(el => el.style.display = 'none');
                         statusErrorElements.forEach(el => el.style.display = 'block');
                         errorMessageElements.forEach(el => el.textContent = data.error || 'Error');
-                        
-                        loadJobs();
                     }
                 }
             } catch (error) { console.error('Status error:', error); }
@@ -54598,6 +54624,64 @@
         
         function closeCreditsModal() {
             document.getElementById('creditsModal').classList.remove('active');
+        }
+        
+        // ============================================================================
+        // ANALYSIS STATUS MODAL (In-Progress Popup)
+        // ============================================================================
+        
+        let analysisStatusModalOpen = false;
+        
+        function showAnalysisStatusModal() {
+            const modal = document.getElementById('analysisStatusModal');
+            if (!modal) return;
+            modal.classList.add('active');
+            analysisStatusModalOpen = true;
+            window.addEventListener('beforeunload', handleAnalysisBeforeUnload);
+            document.getElementById('analysisStatusModalRunning').style.display = 'block';
+            document.getElementById('analysisStatusModalComplete').style.display = 'none';
+            document.getElementById('analysisStatusModalError').style.display = 'none';
+            document.getElementById('analysisStatusModalCloseBtn').style.display = 'none';
+            document.getElementById('statusModalText').textContent = 'Processing...';
+            document.getElementById('statusModalMessage').textContent = 'Starting analysis';
+            document.getElementById('statusModalProgress').style.width = '0%';
+        }
+        
+        function closeAnalysisStatusModal() {
+            const modal = document.getElementById('analysisStatusModal');
+            if (modal) modal.classList.remove('active');
+            analysisStatusModalOpen = false;
+            window.removeEventListener('beforeunload', handleAnalysisBeforeUnload);
+        }
+        
+        function handleAnalysisBeforeUnload(e) {
+            if (analysisStatusModalOpen) {
+                e.preventDefault();
+                e.returnValue = 'Analysis in progress. Are you sure you want to leave?';
+            }
+        }
+        
+        function updateAnalysisStatusModal(data) {
+            const textEl = document.getElementById('statusModalText');
+            const msgEl = document.getElementById('statusModalMessage');
+            const progEl = document.getElementById('statusModalProgress');
+            if (textEl) textEl.textContent = data.project_name || 'Processing...';
+            if (msgEl) msgEl.textContent = data.message || 'In progress';
+            if (progEl) progEl.style.width = (data.progress || 0) + '%';
+        }
+        
+        function showAnalysisStatusModalComplete() {
+            document.getElementById('analysisStatusModalRunning').style.display = 'none';
+            document.getElementById('analysisStatusModalComplete').style.display = 'block';
+            document.getElementById('analysisStatusModalCloseBtn').style.display = 'block';
+        }
+        
+        function showAnalysisStatusModalError(errorMsg) {
+            document.getElementById('analysisStatusModalRunning').style.display = 'none';
+            document.getElementById('analysisStatusModalError').style.display = 'block';
+            const errEl = document.getElementById('statusModalErrorMessage');
+            if (errEl) errEl.textContent = errorMsg || 'Analysis failed';
+            document.getElementById('analysisStatusModalCloseBtn').style.display = 'block';
         }
         
         // ============================================================================
