@@ -4688,11 +4688,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # For new runs, the pipeline is complete - go straight to save
     # For previous runs, the pipeline is also complete - go straight to save
     
-    # Insert 'Brand Input' row at the top before saving
+    # Insert 'Brand Input' row at the top before saving (include category when set)
     if brands and isinstance(brands, list) and len(brands) == 1:
         brand_input_str = brands[0]
     else:
         brand_input_str = ', '.join(brands) if brands else ''
+    if brand_category and str(brand_category).strip() and str(brand_category).strip().upper() not in ('', 'GENERAL'):
+        brand_input_str = f"{brand_category} | {brand_input_str}"
     brand_row = pd.DataFrame({
         'Column': ['BRAND INPUT'],
         'Value': [brand_input_str],
@@ -6479,13 +6481,17 @@ def boost_sports_categories_by_436x(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def get_brand_input_names(df: pd.DataFrame) -> set:
-    """Extract all brand input names from the BRAND INPUT row, returning a set of uppercase names for comparison."""
+    """Extract all brand input names from the BRAND INPUT row, returning a set of uppercase names for comparison.
+    If Value is 'Category | Brand1, Brand2', only the brand part (after ' | ') is used for matching."""
     brand_names = set()
     bi_mask = df['Column'].str.upper() == 'BRAND INPUT'
     if bi_mask.any():
-        brand_input_value = df.loc[bi_mask, 'Value'].iloc[0]
+        brand_input_value = str(df.loc[bi_mask, 'Value'].iloc[0]).strip()
+        # If category prefix present (e.g. "ACTOR | Kevin O'Leary"), use only the part after " | " for name matching
+        if ' | ' in brand_input_value:
+            brand_input_value = brand_input_value.split(' | ', 1)[1].strip()
         # Handle comma-separated list
-        names = [b.strip().upper() for b in str(brand_input_value).split(',')]
+        names = [b.strip().upper() for b in brand_input_value.split(',')]
         brand_names.update(names)
     return brand_names
 

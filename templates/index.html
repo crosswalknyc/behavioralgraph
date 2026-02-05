@@ -11317,9 +11317,11 @@
 
                         <div class="form-section">
                             <div class="form-section-title">Additional Options</div>
+                            {% if role == 'super_admin' %}
                             <div class="form-row">
                                 <label class="checkbox-group"><input type="checkbox" id="include_frequency"><span>Include visit frequency analysis?</span></label>
                             </div>
+                            {% endif %}
                             <div class="form-row">
                                 <label class="checkbox-group"><input type="checkbox" id="is_listener_watcher" onchange="toggleListenerOptions()"><span>Is this a listener/watcher/player profile?</span></label>
                             </div>
@@ -11683,9 +11685,11 @@
 
                                 <div class="form-section">
                                     <div class="form-section-title">Additional Options</div>
+                                    {% if role == 'super_admin' %}
                                     <div class="form-row">
                                         <label class="checkbox-group"><input type="checkbox" id="include_frequency"><span>Include visit frequency analysis?</span></label>
                                     </div>
+                                    {% endif %}
                                     <div class="form-row">
                                         <label class="checkbox-group"><input type="checkbox" id="is_listener_watcher" onchange="toggleListenerOptions()"><span>Is this a listener/watcher/player profile?</span></label>
                                     </div>
