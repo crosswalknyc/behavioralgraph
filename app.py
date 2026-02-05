@@ -2157,15 +2157,37 @@ def delete_user(username):
 @app.route('/api/admin/users/restore-defaults-all', methods=['POST'])
 @requires_admin
 def restore_defaults_all_users():
-    """Set default access values for all users (categories, runs, behavioral categories, IQ flags)."""
+    """Set all users' access to the defaults defined in Admin Quick Selects (runs/profiles, behavioral categories)."""
     try:
+        # Load admin Quick Selects (same source as "Restore Defaults" in user modal)
+        quick_selects = load_json_from_s3(QUICK_SELECTS_FILE, use_cache=False)
+        profiles_default = quick_selects.get('profiles', {}) or quick_selects.get('runs', {})
+        behaviors_default = quick_selects.get('behaviors', {})
+
+        # Runs: selected = keys where value is not False; if all selected or empty, use ['*']
+        selected_runs = [k for k, v in profiles_default.items() if v is not False]
+        if not profiles_default or len(selected_runs) >= len(profiles_default):
+            allowed_runs = ['*']
+        else:
+            allowed_runs = selected_runs
+
+        # Behavioral: selected = keys where value is not False; if all selected or empty, use ['*']
+        selected_behaviors = [k for k, v in behaviors_default.items() if v is not False]
+        if not behaviors_default or len(selected_behaviors) >= len(behaviors_default):
+            allowed_behavioral_categories = ['*']
+        else:
+            allowed_behavioral_categories = selected_behaviors
+
+        # Dashboard categories: Quick Selects don't define this; admin "Restore Defaults" uses all
+        allowed_categories = ['*']
+
         data = load_users()
         users = data.get('users', {})
         count = 0
         for username, user in users.items():
-            user['allowed_categories'] = ['*']
-            user['allowed_runs'] = ['*']
-            user['allowed_behavioral_categories'] = ['*']
+            user['allowed_categories'] = list(allowed_categories)
+            user['allowed_runs'] = list(allowed_runs)
+            user['allowed_behavioral_categories'] = list(allowed_behavioral_categories)
             user['has_profile_iq_access'] = True
             user['has_subscriber_iq_access'] = False
             user['has_hedge_fund_iq_access'] = False
@@ -2177,7 +2199,7 @@ def restore_defaults_all_users():
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
             count += 1
         save_users(data)
-        return jsonify({'success': True, 'message': f'Default values restored for {count} user(s)', 'count': count})
+        return jsonify({'success': True, 'message': f'Restored Quick Select defaults for {count} user(s)', 'count': count})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

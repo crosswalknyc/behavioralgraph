@@ -3898,7 +3898,7 @@
         }
 
         async function restoreDefaultValuesForAllUsers() {
-            if (!confirm('Restore default values for all users? This will set everyone\'s categories, runs, behavioral categories, and IQ access to the defaults (all categories/runs, Profile IQ on, others off).')) return;
+            if (!confirm('Restore default values for all users? This will set everyone\'s Run Access and Behavioral Category Access to the defaults defined in the Quick Selects section (same as "Restore Defaults" in the user modal). Profile IQ stays on; other IQ access unchanged.')) return;
             try {
                 const response = await fetch('/api/admin/users/restore-defaults-all', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } });
                 const data = await response.json();
