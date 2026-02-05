@@ -2293,28 +2293,30 @@
         /* Content action buttons - positioned above sidebar, matching sidebar width */
         .content-action-buttons {
             display: flex;
-            gap: 0.4rem;
-            flex-wrap: wrap;
+            gap: 0.3rem;
+            flex-wrap: nowrap;
             flex-shrink: 0;
             position: relative;
             z-index: 100;
             background: transparent;
-            width: 280px;
-            max-width: 280px;
+            width: auto;
+            max-width: 320px;
             justify-content: flex-start;
             margin-top: 0.75rem;
+            align-items: center;
         }
         
         .content-action-buttons .dash-action-btn,
         .content-action-buttons .display-mode-toggle {
-            font-size: 0.7rem;
-            padding: 0.35rem 0.5rem;
+            font-size: 0.6rem;
+            padding: 0.3rem 0.4rem;
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 4px;
             color: var(--text-secondary);
             cursor: pointer;
             transition: all 0.2s;
+            white-space: nowrap;
         }
         
         .content-action-buttons .dash-action-btn:hover,
@@ -12380,11 +12382,9 @@
                     <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
-                    <div class="toolbar-collapse-wrapper toolbar-collapse-inline" style="display: flex; align-items: center; gap: 0.35rem;">
-                        <button class="toolbar-collapse-btn has-tooltip" id="toolbarCollapseBtn" onclick="toggleToolbar()" data-tooltip="Collapse/Expand Toolbar">
-                            <span id="toolbarCollapseIcon">▲</span>
-                        </button>
-                        <span id="toolbarCollapseLabel" style="font-size: 0.65rem; color: var(--text-secondary); font-weight: 600;">HIDE</span>
+                    <div class="display-mode-toggle has-tooltip" id="toolbarCollapseWrapper" onclick="toggleToolbar()" data-tooltip="Collapse/Expand Toolbar" style="display: flex; align-items: center; gap: 0.2rem; cursor: pointer;">
+                        <span id="toolbarCollapseIcon" style="font-size: 0.5rem;">▲</span>
+                        <span id="toolbarCollapseLabel" style="font-size: 0.6rem;">HIDE</span>
                     </div>
                 </div>
                 <div class="inline-tab-header" id="inlineTabHeader" style="display: flex; align-items: center; gap: 0.75rem;">
@@ -25185,7 +25185,7 @@
         function toggleToolbar() {
             const toolbarRow = document.getElementById('toolbarRow');
             const profileHeaderRow = document.getElementById('profileHeaderRow');
-            const collapseBtn = document.getElementById('toolbarCollapseBtn');
+            const collapseIcon = document.getElementById('toolbarCollapseIcon');
             if (!toolbarRow) return;
             
             toolbarCollapsed = !toolbarCollapsed;
@@ -25194,11 +25194,11 @@
             if (toolbarCollapsed) {
                 toolbarRow.classList.add('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
-                if (collapseBtn) collapseBtn.classList.add('collapsed');
+                if (collapseIcon) collapseIcon.style.transform = 'rotate(180deg)';
             } else {
                 toolbarRow.classList.remove('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.remove('collapsed');
-                if (collapseBtn) collapseBtn.classList.remove('collapsed');
+                if (collapseIcon) collapseIcon.style.transform = 'rotate(0deg)';
             }
             const labelEl = document.getElementById('toolbarCollapseLabel');
             if (labelEl) labelEl.textContent = toolbarCollapsed ? 'SHOW' : 'HIDE';
@@ -25209,14 +25209,14 @@
             const toolbarRow = document.getElementById('toolbarRow');
             const profileHeaderRow = document.getElementById('profileHeaderRow');
             const labelEl = document.getElementById('toolbarCollapseLabel');
-            const collapseBtn = document.getElementById('toolbarCollapseBtn');
+            const collapseIcon = document.getElementById('toolbarCollapseIcon');
             if (toolbarCollapsed) {
                 if (toolbarRow) toolbarRow.classList.add('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
-                if (collapseBtn) collapseBtn.classList.add('collapsed');
+                if (collapseIcon) collapseIcon.style.transform = 'rotate(180deg)';
                 if (labelEl) labelEl.textContent = 'SHOW';
             } else {
-                if (collapseBtn) collapseBtn.classList.remove('collapsed');
+                if (collapseIcon) collapseIcon.style.transform = 'rotate(0deg)';
                 if (labelEl) labelEl.textContent = 'HIDE';
             }
         }
