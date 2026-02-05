@@ -9686,10 +9686,10 @@ def get_user_purgatory():
         print(f"❌ Error getting user purgatory: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/api/purgatory/download/<purgatory_id>')
+@app.route('/api/purgatory/download/<path:purgatory_id>')
 @requires_auth
 def download_purgatory_file(purgatory_id):
-    """Download a file from purgatory (user can download their own files)."""
+    """Download a file from purgatory (user can download their own files). purgatory_id may contain colons and slashes (e.g. bucket:key)."""
     try:
         user = get_current_user()
         if not user:

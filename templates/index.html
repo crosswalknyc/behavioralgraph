@@ -11479,6 +11479,13 @@
                         </select>
                     </div>
                     
+                    <div id="myResultsListHeader" style="display: none; padding: 0.35rem 0.6rem 0.15rem; font-size: 0.65rem; color: var(--text-secondary); font-weight: 600; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); margin-bottom: 0.25rem;">
+                        <span style="flex: 1; min-width: 0;">Project</span>
+                        <span style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
+                            <span style="min-width: 3.5rem;">Dashboard Status</span>
+                            <span style="min-width: 2rem;">Download</span>
+                        </span>
+                    </div>
                     <div id="myResultsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
                 </div>
             </div>
@@ -41744,12 +41751,15 @@
         
         function renderMyResults(results) {
             const container = document.getElementById('myResultsList');
+            const headerEl = document.getElementById('myResultsListHeader');
             if (!container) return;
             
+            if (headerEl) headerEl.style.display = 'none';
             if (!results || results.length === 0) {
                 container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results yet. Run an analysis to get started.</div>';
                 return;
             }
+            if (headerEl) headerEl.style.display = 'flex';
             
             const html = results.map(result => {
                 const isPending = result.status === 'pending' || result.in_purgatory;
@@ -41758,17 +41768,18 @@
                     : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">✅ RELEASED</span>';
                 
                 const dateStr = result.created_at ? new Date(result.created_at).toLocaleDateString() : '';
+                const purgatoryIdEsc = (result.purgatory_id || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 
                 // Buttons: Download always available, Open in Profile IQ only if released
                 let buttons = '';
                 if (isPending) {
-                    // Pending: only download button
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadPurgatoryResult('${result.purgatory_id}')" title="Download CSV">📥</button>`;
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadPurgatoryResult('${purgatoryIdEsc}')" title="Download CSV">📥</button>`;
                 } else {
-                    // Released: both open and download buttons
                     buttons = `
-                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="openReleasedResult('${result.s3_key}', '${result.bucket || ''}')" title="Open in Profile IQ">📊</button>
-                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadReleasedResult('${result.s3_key}', '${result.bucket || ''}')" title="Download CSV">📥</button>
+                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Open in Profile IQ">📊</button>
+                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>
                     `;
                 }
                 
