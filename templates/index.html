@@ -42543,6 +42543,23 @@
             }
         }
 
+        // Delegated click for comparison tab close (handles names with apostrophes e.g. Kevin O'Leary)
+        document.addEventListener('DOMContentLoaded', function bindCompTabClose() {
+            const el = document.getElementById('comparisonResults');
+            if (!el || el._compCloseBound) return;
+            el._compCloseBound = true;
+            el.addEventListener('click', function(e) {
+                const btn = e.target.closest('.comp-profile-tab-close');
+                if (!btn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const profileId = btn.getAttribute('data-profile-id');
+                if (profileId == null) return;
+                const isSegment = btn.getAttribute('data-is-segment') === 'true';
+                removeProfileFromComparison(profileId, isSegment);
+            });
+        });
+
         function toggleBrandCategory() {
             if (expandedCategories.has('BRAND')) {
                 expandedCategories.delete('BRAND');
@@ -43880,16 +43897,17 @@
             `;
 
             // Build profile tabs bar for comparison (no median age in tabs)
+            // Use data-profile-id / data-is-segment so names with apostrophes (e.g. Kevin O'Leary) don't break close button
             const profileTabsHtml = profiles.map((p, idx) => {
                 const isPrimary = idx === primaryProfileIndex;
                 const primaryIndicator = isPrimary ? '<span class="comp-profile-tab-primary" title="Primary Profile">★</span>' : '';
                 const primaryClass = isPrimary ? 'is-primary' : '';
-                const idEsc = escapeIdForOnclick(p.id);
+                const idAttr = (p.id != null ? String(p.id) : '').replace(/"/g, '&quot;');
                 return `
                     <div class="comp-profile-tab ${primaryClass}" style="background: linear-gradient(135deg, ${p.color}dd, ${p.color}99); border-bottom: 3px solid ${p.color};" onclick="setPrimaryProfile(${idx})" title="${isPrimary ? 'Primary Profile' : 'Click to set as primary'}">
                         ${primaryIndicator}
                         <span class="comp-profile-tab-name">${p.name}</span>
-                        <button class="comp-profile-tab-close" onclick="event.stopPropagation(); removeProfileFromComparison('${idEsc}', ${p.isSegment || false})" title="Remove from comparison">×</button>
+                        <button type="button" class="comp-profile-tab-close" data-profile-id="${idAttr}" data-is-segment="${p.isSegment === true}" title="Remove from comparison">×</button>
                     </div>
                 `;
             }).join('');
