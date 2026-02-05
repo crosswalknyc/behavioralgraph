@@ -15710,6 +15710,16 @@
             return String(Math.round(n));
         }
         
+        // Format percentage for insights/differentiators. Never show 100% (represents entire sample).
+        function formatInsightPct(pct, opts) {
+            if (pct == null || pct === '' || isNaN(Number(pct))) return '';
+            const n = Number(pct);
+            if (n >= 99.99) return '\u2014'; // em dash, never show 100%
+            if (opts && opts.isProjection && opts.sampleSize != null)
+                return formatNumber(Math.round((n / 100) * opts.sampleSize));
+            return n.toFixed(2) + '%';
+        }
+        
         // Never display "Latinx" in UI — show "LATINO" (all caps) for latinx or Latino from raw data.
         function displayDemographicLabel(s) {
             if (s == null || typeof s !== 'string') return s;
@@ -25455,11 +25465,11 @@
                 const isGenPopCat = isSelectedProfileGenPop();
                 const top5Tooltip = stats.top5Items.map((item, idx) => {
                     const itemName = item.name || item.brand || 'Unknown';
-                    const itemPct = (item.pct || item.percentage || 0).toFixed(2);
-                    if (isGenPopCat) return `${idx + 1}. ${itemName}: ${itemPct}%`;
+                    const itemPctDisplay = formatInsightPct(item.pct || item.percentage);
+                    if (isGenPopCat) return `${idx + 1}. ${itemName}: ${itemPctDisplay}`;
                     const itemGP = (item.genPopPct || item.genPop || item.gen_pop || 0);
-                    const itemGPDisplay = itemGP < 0.01 ? 'N/A' : itemGP.toFixed(2) + '%';
-                    return `${idx + 1}. ${itemName}: ${itemPct}% (GP: ${itemGPDisplay})`;
+                    const itemGPDisplay = itemGP < 0.01 ? 'N/A' : formatInsightPct(itemGP);
+                    return `${idx + 1}. ${itemName}: ${itemPctDisplay} (GP: ${itemGPDisplay})`;
                 }).join(' | ');
                 return `
                 <div class="behavioral-top-cat has-tooltip" style="cursor: pointer;" onclick="jumpToBehavioralCategory('${cat}')" data-tooltip="Top 5: ${top5Tooltip}. Click to view all ${cat} items.">
@@ -26072,8 +26082,8 @@
                 });
             });
             
-            // Sort by index and take top differentiators
-            const topDiffs = allIndexes.sort((a, b) => b.idx - a.idx).slice(0, 5);
+            // Sort by index and take top differentiators (exclude 100% = entire sample)
+            const topDiffs = allIndexes.filter(d => (d.pct || 0) < 99.99).sort((a, b) => b.idx - a.idx).slice(0, 5);
             
             topDiffs.forEach(d => {
                 const catEmoji = {
@@ -26085,12 +26095,8 @@
                 const displayKey = d.category === 'age' ? getAgeDisplayLabel(d.key) : d.key;
                 const profilePct = d.pct;
                 const genPopPct = d.genPopPct;
-                const profileDisplay = isProjection 
-                    ? formatNumber(Math.round((profilePct / 100) * sampleSize))
-                    : profilePct.toFixed(2) + '%';
-                const genPopDisplay = isProjection 
-                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_DEMO_INSIGHTS))
-                    : genPopPct.toFixed(2) + '%';
+                const profileDisplay = formatInsightPct(profilePct, isProjection ? { isProjection: true, sampleSize } : null);
+                const genPopDisplay = formatInsightPct(genPopPct, isProjection ? { isProjection: true, sampleSize: US_POP_DEMO_INSIGHTS } : null);
                 
                 differentiators.push({
                     icon: catEmoji,
@@ -26121,18 +26127,14 @@
                 });
             });
             
-            const topUnder = underIndexes.sort((a, b) => a.idx - b.idx).slice(0, 2);
+            const topUnder = underIndexes.filter(u => (u.pct || 0) < 99.99).sort((a, b) => a.idx - b.idx).slice(0, 2);
             topUnder.forEach(u => {
                 // Use getAgeDisplayLabel for age ranges to match demographics page
                 const displayKey = u.category === 'age' ? getAgeDisplayLabel(u.key) : u.key;
                 const profilePct = u.pct;
                 const genPopPct = u.genPopPct;
-                const profileDisplay = isProjection 
-                    ? formatNumber(Math.round((profilePct / 100) * sampleSize))
-                    : profilePct.toFixed(2) + '%';
-                const genPopDisplay = isProjection 
-                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_DEMO_INSIGHTS))
-                    : genPopPct.toFixed(2) + '%';
+                const profileDisplay = formatInsightPct(profilePct, isProjection ? { isProjection: true, sampleSize } : null);
+                const genPopDisplay = formatInsightPct(genPopPct, isProjection ? { isProjection: true, sampleSize: US_POP_DEMO_INSIGHTS } : null);
                 
                 differentiators.push({
                     icon: '⚠️',
@@ -27488,12 +27490,8 @@
             sorted = sorted.slice(0, 6);
             
             container.innerHTML = sorted.map(h => {
-                const profileDisplay = isProjectionDemo 
-                    ? formatNumber(Math.round((h.profilePct / 100) * sampleSize))
-                    : h.profilePct.toFixed(2) + '%';
-                const genPopDisplay = isProjectionDemo 
-                    ? formatNumber(Math.round((h.genPopPct / 100) * US_POP_DEMO))
-                    : h.genPopPct.toFixed(2) + '%';
+                const profileDisplay = formatInsightPct(h.profilePct, isProjectionDemo ? { isProjection: true, sampleSize } : null);
+                const genPopDisplay = formatInsightPct(h.genPopPct, isProjectionDemo ? { isProjection: true, sampleSize: US_POP_DEMO } : null);
                 const indexClass = h.index >= 100 ? 'high' : 'low';
                 // Use getAgeDisplayLabel for age ranges to match demographics page
                 const displayValue = h.category.toLowerCase() === 'age' ? getAgeDisplayLabel(h.value) : h.value;
@@ -27570,7 +27568,7 @@
                 <div class="highlight-item">
                     <span class="label">${item.name}</span>
                     <span style="font-size: 0.75rem; color: var(--text-secondary);">${categoryDisplay}</span>
-                    <span>${item.pct.toFixed(1)}%</span>
+                    <span>${formatInsightPct(item.pct)}</span>
                     <span class="differentiator-index ${indexClass}">${formatIndex(item.index)}</span>
                 </div>
             `;
@@ -27602,21 +27600,17 @@
             const isProjectionCats = dashDisplayMode === 'projection';
             const isGenPopCat = isSelectedProfileGenPop();
             container.innerHTML = sorted.map(([cat, stats]) => {
-                const profileDisplay = isProjectionCats 
-                    ? formatNumber(Math.round((stats.avgPct / 100) * US_POP_CATS))
-                    : stats.avgPct.toFixed(2) + '%';
+                const profileDisplay = formatInsightPct(stats.avgPct, isProjectionCats ? { isProjection: true, sampleSize: US_POP_CATS } : null);
                 const gpDisplay = stats.avgGenPop < 0.01 
                     ? 'N/A' 
-                    : (isProjectionCats 
-                        ? formatNumber(Math.round((stats.avgGenPop / 100) * US_POP_CATS))
-                        : stats.avgGenPop.toFixed(2) + '%');
+                    : formatInsightPct(stats.avgGenPop, isProjectionCats ? { isProjection: true, sampleSize: US_POP_CATS } : null);
                 const top5Tooltip = stats.top5Items.map((item, idx) => {
                     const itemName = item.name || item.brand || 'Unknown';
-                    const itemPct = (item.pct || item.percentage || 0).toFixed(2);
-                    if (isGenPopCat) return `${idx + 1}. ${itemName}: ${itemPct}%`;
+                    const itemPctDisplay = formatInsightPct(item.pct || item.percentage);
+                    if (isGenPopCat) return `${idx + 1}. ${itemName}: ${itemPctDisplay}`;
                     const itemGP = (item.genPopPct || item.genPop || item.gen_pop || 0);
-                    const itemGPDisplay = itemGP < 0.01 ? 'N/A' : itemGP.toFixed(2) + '%';
-                    return `${idx + 1}. ${itemName}: ${itemPct}% (GP: ${itemGPDisplay})`;
+                    const itemGPDisplay = itemGP < 0.01 ? 'N/A' : formatInsightPct(itemGP);
+                    return `${idx + 1}. ${itemName}: ${itemPctDisplay} (GP: ${itemGPDisplay})`;
                 }).join(' | ');
                 return `<div class="behavioral-top-cat has-tooltip" style="cursor: pointer;" onclick="jumpToBehavioralCategory('${cat.replace(/'/g, "\\'")}')" data-tooltip="Top 5: ${top5Tooltip.replace(/"/g, '&quot;')}. Click to view all ${cat.replace(/'/g, "\\'")} items.">
                     <span class="cat-name" style="flex: 1; text-align: left;">${cat}</span>
@@ -27693,12 +27687,8 @@
                 const itemsHtml = catGroup.items.map(item => {
                     const profilePct = item.pct || 0;
                     const genPopPct = item.genPopPct || 0;
-                    const profileDisplay = isProjectionDiff 
-                        ? formatNumber(Math.round((profilePct / 100) * US_POP_DIFF))
-                        : profilePct.toFixed(2) + '%';
-                    const genPopDisplay = isProjectionDiff 
-                        ? formatNumber(Math.round((genPopPct / 100) * US_POP_DIFF))
-                        : genPopPct.toFixed(2) + '%';
+                    const profileDisplay = formatInsightPct(profilePct, isProjectionDiff ? { isProjection: true, sampleSize: US_POP_DIFF } : null);
+                    const genPopDisplay = formatInsightPct(genPopPct, isProjectionDiff ? { isProjection: true, sampleSize: US_POP_DIFF } : null);
                     const indexClass = item.index >= 100 ? 'high' : 'low';
                     return `
                         <div class="differentiator-grouped-item">
@@ -36524,8 +36514,8 @@
             
             // Calculate key metrics
             const sortedByIndex = [...allItems].sort((a, b) => b.index - a.index);
-            const topOverIndexers = sortedByIndex.filter(i => i.index > 100).slice(0, 25);
-            const topUnderIndexers = sortedByIndex.filter(i => i.index < 100).sort((a, b) => a.index - b.index).slice(0, 25);
+            const topOverIndexers = sortedByIndex.filter(i => i.index > 100 && (i.pct || 0) < 99.99).slice(0, 25);
+            const topUnderIndexers = sortedByIndex.filter(i => i.index < 100 && (i.pct || 0) < 99.99).sort((a, b) => a.index - b.index).slice(0, 25);
             const avgOverIndex = topOverIndexers.length > 0 ? Math.round(topOverIndexers.reduce((s,i) => s + i.index, 0) / topOverIndexers.length) : 0;
             const uniquenessScore = Math.min(100, Math.round((topOverIndexers.filter(i => i.index > 150).length / Math.max(1, topOverIndexers.length)) * 100));
             const categoryCount = Object.keys(data.behavioral).length;
@@ -36627,7 +36617,7 @@
                         const genPopPct = data.demographicsGenPop[cat.toLowerCase()]?.[val] || 0;
                         const projection = data.demographicsProjection?.[cat.toLowerCase()]?.[val] || 0;
                         
-                        if (idx > 110 || idx < 80) {
+                        if ((idx > 110 || idx < 80) && profilePct < 99.99) {
                             demoHighlightsData.push({ 
                                 category: cat, 
                                 value: val, 
@@ -36652,7 +36642,7 @@
             
             // Interest Highlights - top over-indexing interests/behaviors
             const interestHighlightsData = allItems
-                .filter(i => i.index >= 120 && i.pct < 99 && i.pct >= 30) // Over-indexing items, exclude near-100% items, require profile % >= 30%
+                .filter(i => i.index >= 120 && i.pct < 99.99 && i.pct >= 30) // Over-indexing items, exclude 100% (entire sample), require profile % >= 30%
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 20) // Keep top 20 for sorting flexibility
                 .map(item => ({
@@ -36671,7 +36661,7 @@
             
             // Top differentiators - group by SMART category based on item name, show top 5 items per category
             const itemsBySmartCategory = {};
-            allItems.filter(i => i.index > 120 && i.pct >= 30).forEach(item => { // Require profile % >= 30%
+            allItems.filter(i => i.index > 120 && i.pct >= 30 && i.pct < 99.99).forEach(item => { // Require profile % >= 30%; exclude 100% (entire sample)
                 // Use smart categorization based on item name instead of raw data category
                 const smartCategory = categorizeInterest(item.name);
                 if (!itemsBySmartCategory[smartCategory]) {
@@ -36704,12 +36694,8 @@
             if (topOverEl) topOverEl.innerHTML = topOverIndexers.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
-                const profileDisplay = isProjectionInsights 
-                    ? formatNumber(Math.round((profilePct / 100) * US_POP_INSIGHTS))
-                    : profilePct.toFixed(2) + '%';
-                const genPopDisplay = isProjectionInsights 
-                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_INSIGHTS))
-                    : genPopPct.toFixed(2) + '%';
+                const profileDisplay = formatInsightPct(profilePct, isProjectionInsights ? { isProjection: true, sampleSize: US_POP_INSIGHTS } : null);
+                const genPopDisplay = formatInsightPct(genPopPct, isProjectionInsights ? { isProjection: true, sampleSize: US_POP_INSIGHTS } : null);
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -36727,12 +36713,8 @@
             if (topUnderEl) topUnderEl.innerHTML = topUnderIndexers.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
-                const profileDisplay = isProjectionInsights 
-                    ? formatNumber(Math.round((profilePct / 100) * US_POP_INSIGHTS))
-                    : profilePct.toFixed(2) + '%';
-                const genPopDisplay = isProjectionInsights 
-                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_INSIGHTS))
-                    : genPopPct.toFixed(2) + '%';
+                const profileDisplay = formatInsightPct(profilePct, isProjectionInsights ? { isProjection: true, sampleSize: US_POP_INSIGHTS } : null);
+                const genPopDisplay = formatInsightPct(genPopPct, isProjectionInsights ? { isProjection: true, sampleSize: US_POP_INSIGHTS } : null);
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -36745,9 +36727,10 @@
                 `;
             }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No under-indexing items</p>';
             
-            // Category champions - show Profile %, Gen Pop %, and Index
+            // Category champions - show Profile %, Gen Pop %, and Index (exclude 100% = entire sample)
             const categoryChampions = {};
             allItems.forEach(item => {
+                if ((item.pct || 0) >= 99.99) return;
                 if (!categoryChampions[item.category] || item.index > categoryChampions[item.category].index) {
                     categoryChampions[item.category] = item;
                 }
@@ -36761,12 +36744,8 @@
                 .map(([cat, item]) => {
                     const profilePct = item.pct || 0;
                     const genPopPct = item.genPopPct || 0;
-                    const profileDisplay = isProjectionChamp 
-                        ? formatNumber(Math.round((profilePct / 100) * US_POP_CHAMP))
-                        : profilePct.toFixed(2) + '%';
-                    const genPopDisplay = isProjectionChamp 
-                        ? formatNumber(Math.round((genPopPct / 100) * US_POP_CHAMP))
-                        : genPopPct.toFixed(2) + '%';
+                    const profileDisplay = formatInsightPct(profilePct, isProjectionChamp ? { isProjection: true, sampleSize: US_POP_CHAMP } : null);
+                    const genPopDisplay = formatInsightPct(genPopPct, isProjectionChamp ? { isProjection: true, sampleSize: US_POP_CHAMP } : null);
                     return `
                     <div class="champion-item">
                         <div class="champion-category">${cat}</div>
@@ -36789,7 +36768,7 @@
             // Hidden gems - high index but lower visibility categories
             const nicheCategories = ['PODCAST', 'GAMING', 'EMERGING', 'NICHE', 'LOCAL'];
             const hiddenGems = allItems
-                .filter(i => i.index > 130 && (i.pct < 5 || nicheCategories.some(n => i.category.toUpperCase().includes(n))))
+                .filter(i => (i.pct || 0) < 99.99 && i.index > 130 && (i.pct < 5 || nicheCategories.some(n => i.category.toUpperCase().includes(n))))
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 12);
             const US_POP_HIDDEN = 324700000;
@@ -36798,12 +36777,8 @@
             if (hiddenGemsEl) hiddenGemsEl.innerHTML = hiddenGems.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
-                const profileDisplay = isProjectionHidden 
-                    ? formatNumber(Math.round((profilePct / 100) * US_POP_HIDDEN))
-                    : profilePct.toFixed(2) + '%';
-                const genPopDisplay = isProjectionHidden 
-                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_HIDDEN))
-                    : genPopPct.toFixed(2) + '%';
+                const profileDisplay = formatInsightPct(profilePct, isProjectionHidden ? { isProjection: true, sampleSize: US_POP_HIDDEN } : null);
+                const genPopDisplay = formatInsightPct(genPopPct, isProjectionHidden ? { isProjection: true, sampleSize: US_POP_HIDDEN } : null);
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -36815,10 +36790,10 @@
             `;
             }).join('') || '<p style="color: var(--text-secondary);">No hidden gems found</p>';
             
-            // Rising behaviors (emerging categories)
+            // Rising behaviors (emerging categories) - exclude 100%
             const emergingCats = ['STREAMING', 'APP', 'SOCIAL', 'GAMING', 'CRYPTO', 'WELLNESS'];
             const risingBehaviors = allItems
-                .filter(i => i.index > 110 && emergingCats.some(e => i.category.toUpperCase().includes(e)))
+                .filter(i => (i.pct || 0) < 99.99 && i.index > 110 && emergingCats.some(e => i.category.toUpperCase().includes(e)))
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 12);
             const US_POP_RISING = 324700000;
@@ -36827,12 +36802,8 @@
             if (risingBehaviorsEl) risingBehaviorsEl.innerHTML = risingBehaviors.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
-                const profileDisplay = isProjectionRising 
-                    ? formatNumber(Math.round((profilePct / 100) * US_POP_RISING))
-                    : profilePct.toFixed(2) + '%';
-                const genPopDisplay = isProjectionRising 
-                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_RISING))
-                    : genPopPct.toFixed(2) + '%';
+                const profileDisplay = formatInsightPct(profilePct, isProjectionRising ? { isProjection: true, sampleSize: US_POP_RISING } : null);
+                const genPopDisplay = formatInsightPct(genPopPct, isProjectionRising ? { isProjection: true, sampleSize: US_POP_RISING } : null);
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
