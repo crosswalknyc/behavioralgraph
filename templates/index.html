@@ -12368,12 +12368,11 @@
             <div class="action-buttons-row" style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; margin-bottom: 0.5rem;">
                 <div class="content-action-buttons" id="contentActionButtons" style="margin-top: 0;">
                     <div class="dash-dropdown">
-                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
+                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, or full report as PDF." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
                         <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
                             <a href="javascript:void(0)" onclick="exportToCSV(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📄 All Data (CSV)</a>
                             <a href="javascript:void(0)" onclick="exportAllPNG(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">🖼️ All Charts (PNG)</a>
                             <a href="javascript:void(0)" onclick="exportPDF(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📑 Full Report (PDF)</a>
-                            <a href="javascript:void(0)" onclick="addCurrentTabToDeck(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">➕ Add Page to Deck</a>
                         </div>
                     </div>
                     <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
