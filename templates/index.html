@@ -46006,25 +46006,24 @@
         }
         
         function showComparisonDeckSelectionPopup(moduleType, sectionTitle, profiles) {
-            // Check if there are any workspaces/decks
+            // Check if there are any workspaces
             const hasWorkspaces = Object.keys(workspaces || {}).length > 0;
-            const hasDecks = Object.values(workspaceDecks || {}).some(decks => decks && decks.length > 0);
             
-            if (!hasWorkspaces || !hasDecks) {
-                // Show "create first" modal
+            if (!hasWorkspaces) {
+                // Show "create workspace first" modal
                 const modal = document.createElement('div');
                 modal.className = 'deck-workspace-modal';
                 modal.id = 'createFirstModal';
                 modal.innerHTML = `
                     <div class="deck-workspace-content" style="max-width: 400px;">
                         <div class="deck-workspace-header">
-                            <h2>📁 Create a Deck First</h2>
+                            <h2>📁 Create a Workspace First</h2>
                             <button onclick="document.getElementById('createFirstModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                         </div>
                         <div style="padding: 1.5rem; text-align: left;">
                             <p style="margin-bottom: 1.5rem; color: var(--text-secondary); line-height: 1.6;">
-                                To add comparison data to a deck, you need to create a workspace and deck first. 
-                                Go to the <strong>Workspace</strong> tab to create a deck.
+                                To add comparison data to a deck, you need to create a workspace first. 
+                                Go to the <strong>Workspace</strong> tab to create one.
                             </p>
                             <div style="display: flex; gap: 0.75rem;">
                                 <button class="btn btn-secondary" onclick="document.getElementById('createFirstModal').remove()" style="flex: 1;">Cancel</button>
@@ -46037,7 +46036,7 @@
                 return;
             }
             
-            // Build workspace and deck options
+            // Build workspace options
             let workspaceOptions = '';
             Object.entries(workspaces || {}).forEach(([wsId, ws]) => {
                 const selected = (lastUsedWorkspace && wsId === lastUsedWorkspace) ? 'selected' : '';
@@ -46050,6 +46049,8 @@
             
             // Store the comparison data for later use
             window.pendingComparisonData = { moduleType, sectionTitle, profiles };
+            // Reset pending collaborators for comparison
+            window.pendingComparisonCollaborators = [];
             
             modal.innerHTML = `
                 <div class="deck-workspace-content" style="max-width: 480px;">
@@ -46067,20 +46068,38 @@
                         </div>
                         
                         <div style="margin-bottom: 1rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Workspace</label>
-                            <select id="compDeckSelectWorkspace" onchange="updateComparisonDeckOptions()" style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">WORKSPACE</label>
+                            <select id="compDeckSelectWorkspace" onchange="updateComparisonDeckOptions()" style="width: 100%; padding: 0.6rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
                                 ${workspaceOptions}
                             </select>
                         </div>
                         
                         <div style="margin-bottom: 1rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Deck</label>
-                            <select id="compDeckSelectDeck" style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">DECK</label>
+                            <select id="compDeckSelectDeck" style="width: 100%; padding: 0.6rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
                                 <option value="">Select a deck...</option>
                             </select>
+                            <button onclick="quickCreateComparisonDeck()" style="margin-top: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.75rem; background: transparent; border: 1px dashed var(--border-color); color: var(--text-secondary); border-radius: 4px; cursor: pointer;">+ Create New Deck</button>
                         </div>
                         
-                        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                        <!-- Collaborate Section -->
+                        <div style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-weight: 600; font-size: 0.8rem; color: #c4b5fd;">
+                                <span>👥</span> COLLABORATE (Optional)
+                            </label>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Invite team members to work on this deck with you.</p>
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <input type="email" id="compDeckCollabEmail" placeholder="Enter email address" 
+                                       style="flex: 1; padding: 0.5rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.85rem;"
+                                       onkeypress="if(event.key==='Enter'){event.preventDefault();addComparisonCollaboratorToList();}">
+                                <button onclick="addComparisonCollaboratorToList()" class="btn btn-small" style="padding: 0.5rem 0.75rem; background: rgba(139, 92, 246, 0.3); border: 1px solid rgba(139, 92, 246, 0.5); color: #c4b5fd;">Add</button>
+                            </div>
+                            <div id="compDeckCollabList" style="display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 24px;">
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); font-style: italic;">No collaborators added yet</span>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.75rem;">
                             <button class="btn btn-secondary" onclick="document.getElementById('comparisonDeckModal').remove()" style="flex: 1;">CANCEL</button>
                             <button class="btn btn-primary" onclick="confirmAddComparisonToDeck()" style="flex: 1;">ADD TO DECK</button>
                         </div>
@@ -46099,12 +46118,117 @@
             if (!wsId || !deckSelect) return;
             
             const decks = workspaceDecks[wsId] || [];
-            let options = '<option value="">Select a deck...</option>';
-            decks.forEach(deck => {
-                const selected = (lastUsedDeck && deck.id === lastUsedDeck) ? 'selected' : '';
-                options += `<option value="${deck.id}" ${selected}>${deck.name}</option>`;
-            });
-            deckSelect.innerHTML = options;
+            if (decks.length === 0) {
+                deckSelect.innerHTML = '<option value="">No decks - create one first</option>';
+            } else {
+                // Pre-select last used deck if it exists in this workspace
+                deckSelect.innerHTML = decks.map(d => {
+                    const selected = (lastUsedDeck && d.id === lastUsedDeck && wsId === lastUsedWorkspace) ? 'selected' : '';
+                    return `<option value="${d.id}" ${selected}>${d.name} (${d.slides?.length || 0} slides)</option>`;
+                }).join('');
+            }
+        }
+        
+        function quickCreateComparisonDeck() {
+            const wsId = document.getElementById('compDeckSelectWorkspace')?.value;
+            if (!wsId) {
+                showNotification('⚠️ Please select a workspace first', 'warning');
+                return;
+            }
+            
+            const name = prompt('Enter deck name:', 'New Comparison Deck');
+            if (!name) return;
+            
+            // Create TOC slide
+            const tocSlide = {
+                id: 'toc_' + Date.now(),
+                type: 'toc',
+                title: 'Table of Contents',
+                dateAdded: new Date().toISOString()
+            };
+            
+            // Create closing slide
+            const closingSlide = {
+                id: 'closing_' + Date.now(),
+                type: 'closing',
+                title: 'Thank You',
+                dateAdded: new Date().toISOString()
+            };
+            
+            const newDeck = {
+                id: 'deck_' + Date.now(),
+                name: name,
+                workspaceId: wsId,
+                slides: [tocSlide, closingSlide],
+                titleSlide: {
+                    title: 'Audience Comparison',
+                    subtitle: 'Powered by Crosswalk IQ',
+                    image: null
+                },
+                createdBy: currentUsername,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            
+            if (!workspaceDecks[wsId]) workspaceDecks[wsId] = [];
+            workspaceDecks[wsId].push(newDeck);
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            updateComparisonDeckOptions();
+            document.getElementById('compDeckSelectDeck').value = newDeck.id;
+            showNotification(`✅ Deck "${name}" created!`, 'success');
+        }
+        
+        function addComparisonCollaboratorToList() {
+            const emailInput = document.getElementById('compDeckCollabEmail');
+            const listDiv = document.getElementById('compDeckCollabList');
+            if (!emailInput || !listDiv) return;
+            
+            const email = emailInput.value.trim().toLowerCase();
+            if (!email) return;
+            
+            // Basic email validation
+            if (!email.includes('@') || !email.includes('.')) {
+                showNotification('⚠️ Please enter a valid email address', 'warning');
+                return;
+            }
+            
+            // Check if already added
+            if (!window.pendingComparisonCollaborators) window.pendingComparisonCollaborators = [];
+            if (window.pendingComparisonCollaborators.includes(email)) {
+                showNotification('⚠️ This email is already added', 'warning');
+                return;
+            }
+            
+            window.pendingComparisonCollaborators.push(email);
+            emailInput.value = '';
+            
+            // Update the list display
+            listDiv.innerHTML = window.pendingComparisonCollaborators.map(e => `
+                <span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; background: rgba(139, 92, 246, 0.2); border-radius: 12px; font-size: 0.7rem; color: #c4b5fd;">
+                    ${e}
+                    <button onclick="removeComparisonCollaborator('${e}')" style="background: none; border: none; color: #c4b5fd; cursor: pointer; padding: 0; font-size: 0.8rem; line-height: 1;">×</button>
+                </span>
+            `).join('');
+        }
+        
+        function removeComparisonCollaborator(email) {
+            if (!window.pendingComparisonCollaborators) return;
+            window.pendingComparisonCollaborators = window.pendingComparisonCollaborators.filter(e => e !== email);
+            
+            const listDiv = document.getElementById('compDeckCollabList');
+            if (!listDiv) return;
+            
+            if (window.pendingComparisonCollaborators.length === 0) {
+                listDiv.innerHTML = '<span style="font-size: 0.7rem; color: var(--text-secondary); font-style: italic;">No collaborators added yet</span>';
+            } else {
+                listDiv.innerHTML = window.pendingComparisonCollaborators.map(e => `
+                    <span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; background: rgba(139, 92, 246, 0.2); border-radius: 12px; font-size: 0.7rem; color: #c4b5fd;">
+                        ${e}
+                        <button onclick="removeComparisonCollaborator('${e}')" style="background: none; border: none; color: #c4b5fd; cursor: pointer; padding: 0; font-size: 0.8rem; line-height: 1;">×</button>
+                    </span>
+                `).join('');
+            }
         }
         
         async function confirmAddComparisonToDeck() {
@@ -46198,6 +46322,22 @@
             lastUsedWorkspace = wsId;
             lastUsedDeck = deckId;
             
+            // Add collaborators if any were specified
+            let collabCount = 0;
+            if (window.pendingComparisonCollaborators && window.pendingComparisonCollaborators.length > 0) {
+                if (!deck.collaborators) deck.collaborators = [];
+                window.pendingComparisonCollaborators.forEach(email => {
+                    if (!deck.collaborators.find(c => c.email === email)) {
+                        deck.collaborators.push({
+                            email: email,
+                            addedAt: new Date().toISOString(),
+                            addedBy: currentUsername || 'unknown'
+                        });
+                        collabCount++;
+                    }
+                });
+            }
+            
             // Save to localStorage
             try {
                 localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
@@ -46216,7 +46356,8 @@
                             description: deck.description,
                             slides: deck.slides,
                             titleSlide: deck.titleSlide,
-                            template: deck.template
+                            template: deck.template,
+                            collaborators: deck.collaborators
                         }),
                         credentials: 'same-origin'
                     });
@@ -46228,8 +46369,12 @@
             // Close modal
             document.getElementById('comparisonDeckModal')?.remove();
             
-            // Show success
-            showNotification(`✅ Added "${slide.title}" to ${deck.name}`, 'success');
+            // Show success message
+            let message = `✅ Added "${slide.title}" to ${deck.name}`;
+            if (collabCount > 0) {
+                message += ` and invited ${collabCount} collaborator(s)`;
+            }
+            showNotification(message, 'success');
             
             // Refresh deck editor if this deck is being edited
             if (currentEditingDeck && currentEditingDeck.id === deck.id) {
@@ -46239,6 +46384,7 @@
             
             // Clean up
             window.pendingComparisonData = null;
+            window.pendingComparisonCollaborators = [];
         }
         
         function findSharedBehaviors(profiles) {
