@@ -516,7 +516,7 @@
             font-style: italic;
             color: var(--text-secondary);
         }
-        #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; padding-top: 1.25rem; }
         #rankerIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #talentSearchIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #talentTheaterIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
@@ -1796,6 +1796,9 @@
         }
         
         .tab-btn.tool-tab.admin-only {
+            border: 1px dashed rgba(239, 68, 68, 0.5);
+        }
+        .comp-tab.admin-only {
             border: 1px dashed rgba(239, 68, 68, 0.5);
         }
         
@@ -9005,6 +9008,34 @@
             min-width: 34px;
         }
         
+        .deck-collaborator-avatars {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .deck-collab-avatar {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+            font-size: 0.65rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            border: 2px solid var(--bg-card);
+            box-shadow: 0 0 0 1px var(--border-color);
+        }
+        .deck-collab-avatar.owner { background: var(--accent-lime); color: #0a0a0a; }
+        .deck-collab-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+        
         .deck-builder-container {
             display: grid;
             grid-template-columns: 200px 1fr 280px;
@@ -14057,9 +14088,9 @@
                 <!-- Comparison Analysis Tabs with Action Buttons -->
                 <div class="comp-analysis-tabs">
                     <button class="comp-tab active" onclick="showCompTab('tables')">📊 Side-by-Side</button>
-                    <button class="comp-tab" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
-                    <button class="comp-tab" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
-                    <button class="comp-tab" onclick="showCompTab('gap')">🎯 Gap Analysis</button>
+                    <button class="comp-tab" data-feature="overlapAnalysis" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
+                    <button class="comp-tab" data-feature="benchmarking" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
+                    <button class="comp-tab" data-feature="gapAnalysis" onclick="showCompTab('gap')">🎯 Gap Analysis</button>
                     <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section">
                             <option value="">📍 Jump to...</option>
                         </select>
@@ -14277,6 +14308,7 @@
                                        onchange="updateDeckNameInEditor(this.value)">
                                 <span id="deckSlideCount" style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;">0 slides</span>
                             </div>
+                            <div id="deckCollaboratorAvatars" class="deck-collaborator-avatars" style="display: none; align-items: center; gap: 0.25rem; margin-left: 0.5rem; padding-left: 0.5rem; border-left: 1px solid var(--border-color);" title="People with access"></div>
                             <button onclick="showWorkspaceActions()" class="btn btn-small btn-secondary" style="padding: 0.35rem 0.5rem; font-size: 0.75rem; margin-left: auto;" title="Workspace settings">⚙️</button>
                         </div>
                         
@@ -14435,6 +14467,8 @@
                             
                             <!-- Key Metrics Overview -->
                             <div id="subscriberKeyMetrics" class="strategic-section"></div>
+                            <!-- Subscription Revenue (from SVOD pricing × total signups) -->
+                            <div id="subscriberSubscriptionRevenue" class="strategic-section"></div>
                         </div>
 
                         <!-- Episodes Tab -->
@@ -15368,7 +15402,11 @@
             deckBuilder: true,
             rankers: true,
             // Insights Sub Tabs
-            insightsSummary: true
+            insightsSummary: true,
+            // Compare sub-tabs
+            overlapAnalysis: true,
+            benchmarking: true,
+            gapAnalysis: true
         };
         
         // User info variables (needed early for deck/slide rendering)
@@ -21149,24 +21187,28 @@
             const tabs = document.getElementById('subscriberTabs');
             
             currentSubscriberData = data;
+            data.platform = response.platform || '';
+            data.svod_pricing = response.svod_pricing || {};
             
             const metadata = data.metadata || {};
-            // Genre displayed in header (replaces former Platform Tracked)
+            const platformName = response.platform || metadata.platform || '';
             const genre = metadata.genre || '';
             const exclusion = metadata.exclusion_window || '';
             const attribution = metadata.attribution_window || '';
-            // Get date range from tab, response, or metadata as fallback
             const finalDateRange = dateRange || date_range || metadata.date_range || '';
             const finalShow = show || showFromData || 'UNKNOWN SHOW';
             
             console.log('📅 Date range check:', { dateRange, date_range, metadata_date_range: metadata.date_range, final: finalDateRange });
-            console.log('📂 Genre check:', { metadata_genre: metadata.genre, final: genre });
+            console.log('📂 Platform/Genre:', { platform: platformName, genre });
             
             if (showNameHeader) showNameHeader.textContent = finalShow.toUpperCase();
             
             if (platformHeader) {
-                platformHeader.textContent = genre ? `Genre: ${genre}` : '';
-                platformHeader.style.display = genre ? 'block' : 'none';
+                const parts = [];
+                if (platformName) parts.push('Platform: ' + platformName);
+                if (genre) parts.push('Genre: ' + genre);
+                platformHeader.textContent = parts.join(' · ') || '';
+                platformHeader.style.display = (platformName || genre) ? 'block' : 'none';
             }
             
             if (dateRangeHeader) {
@@ -21409,9 +21451,10 @@
                 label.textContent = subscriberGenPopMode ? 'GEN POP' : 'ACTUAL';
             }
             
-            // Re-render demographics to show gen pop projections
+            // Re-render insights (revenue uses signups) and demographics
             if (currentSubscriberData) {
-                console.log('📊 Re-rendering demographics with Gen Pop mode:', subscriberGenPopMode);
+                console.log('📊 Re-rendering with Gen Pop mode:', subscriberGenPopMode);
+                renderSubscriberInsights(currentSubscriberData);
                 renderSubscriberDemographics(currentSubscriberData);
             } else {
                 console.warn('⚠️ No currentSubscriberData available to re-render');
@@ -21448,6 +21491,7 @@
             const audienceAcquisitionContainer = document.getElementById('subscriberAudienceAcquisition');
             const recommendationsContainer = document.getElementById('subscriberRecommendations');
             const keyMetricsContainer = document.getElementById('subscriberKeyMetrics');
+            const subscriptionRevenueContainer = document.getElementById('subscriberSubscriptionRevenue');
             
             if (!execSummaryContainer || !platformValueContainer || !contentPerformanceContainer || 
                 !audienceAcquisitionContainer || !recommendationsContainer || !keyMetricsContainer) {
@@ -21827,6 +21871,73 @@
                     </div>
                 `;
             }
+            
+            // 7. SUBSCRIPTION REVENUE (from SVOD pricing × total signups)
+            const subscriberPlatformName = data.platform || data.metadata?.platform || '';
+            const pricing = data.svod_pricing || {};
+            const signupsForRevenue = (subscriberGenPopMode && totalSignupsGenPop)
+                ? (parse_number(totalSignupsGenPop) || totalSignups)
+                : totalSignups;
+            const hasPricing = (pricing.ad_supported != null && pricing.ad_supported !== '') || (pricing.premium != null && pricing.premium !== '');
+            if (subscriptionRevenueContainer) {
+                if (hasPricing && signupsForRevenue > 0) {
+                    const ad = Number(pricing.ad_supported) || 0;
+                    const prem = Number(pricing.premium) || 0;
+                    const fmt = (n) => (n >= 1e9 ? (n/1e9).toFixed(2) + 'B' : n >= 1e6 ? (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? (n/1e3).toFixed(2) + 'K' : n.toFixed(2));
+                    const monthlyAd = signupsForRevenue * ad;
+                    const monthlyPrem = signupsForRevenue * prem;
+                    const weeklyAd = monthlyAd / (52/12);
+                    const weeklyPrem = monthlyPrem / (52/12);
+                    const yearlyAd = monthlyAd * 12;
+                    const yearlyPrem = monthlyPrem * 12;
+                    subscriptionRevenueContainer.innerHTML = `
+                        <div class="strategic-card">
+                            <h3>💰 Subscription Revenue (from this show)</h3>
+                            <p class="section-description" style="margin-bottom: 1rem;">Estimated subscription revenue the streaming platform generates from signups attributed to this show. Uses total signups × monthly price. Configure prices in Admin → Settings → SVOD Pricing.</p>
+                            <div class="value-assessment-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                                <div class="value-metric-card">
+                                    <div class="value-metric-header"><span class="value-icon">📅</span><span class="value-label">Weekly</span></div>
+                                    ${ad > 0 ? `<div class="value-metric-desc">Ad-supported: $${fmt(weeklyAd)}</div>` : ''}
+                                    ${prem > 0 ? `<div class="value-metric-desc">Premium: $${fmt(weeklyPrem)}</div>` : ''}
+                                    ${ad === 0 && prem === 0 ? '<div class="value-metric-desc">—</div>' : ''}
+                                </div>
+                                <div class="value-metric-card">
+                                    <div class="value-metric-header"><span class="value-icon">📆</span><span class="value-label">Monthly</span></div>
+                                    ${ad > 0 ? `<div class="value-metric-desc">Ad-supported: $${fmt(monthlyAd)}</div>` : ''}
+                                    ${prem > 0 ? `<div class="value-metric-desc">Premium: $${fmt(monthlyPrem)}</div>` : ''}
+                                    ${ad === 0 && prem === 0 ? '<div class="value-metric-desc">—</div>' : ''}
+                                </div>
+                                <div class="value-metric-card">
+                                    <div class="value-metric-header"><span class="value-icon">📈</span><span class="value-label">Yearly</span></div>
+                                    ${ad > 0 ? `<div class="value-metric-desc">Ad-supported: $${fmt(yearlyAd)}</div>` : ''}
+                                    ${prem > 0 ? `<div class="value-metric-desc">Premium: $${fmt(yearlyPrem)}</div>` : ''}
+                                    ${ad === 0 && prem === 0 ? '<div class="value-metric-desc">—</div>' : ''}
+                                </div>
+                            </div>
+                            <div class="value-metric-breakdown" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
+                                Based on ${formatNumber(signupsForRevenue)} signups
+                                ${ad > 0 || prem > 0 ? ' × $' + (ad > 0 ? ad + ' (ad-supported)' : '') + (prem > 0 ? (ad > 0 ? ', $' : '$') + prem + ' (premium)' : '') + ' per month' : ''}.
+                                ${subscriberPlatformName ? ' Platform: ' + subscriberPlatformName + '.' : ''}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    subscriptionRevenueContainer.innerHTML = `
+                        <div class="strategic-card">
+                            <h3>💰 Subscription Revenue</h3>
+                            <p class="section-description">To see estimated subscription revenue here, add pricing for this show's platform in <strong>Admin → Settings → SVOD Pricing</strong>. Platform from CSV: <strong>${subscriberPlatformName || '—'}</strong></p>
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        function parse_number(s) {
+            if (s == null || s === '') return null;
+            if (typeof s === 'number' && !isNaN(s)) return s;
+            const t = String(s).replace(/,/g, '').replace(/[Kk]$/, 'e3').replace(/[Mm]$/, 'e6').replace(/[Bb]$/, 'e9');
+            const n = parseFloat(t);
+            return isNaN(n) ? null : n;
         }
         
         function renderSubscriberEpisodes(data) {
@@ -50379,10 +50490,10 @@
             if (!currentEditingDeck) {
                 if (emptyEl) emptyEl.style.display = 'block';
                 if (contentEl) contentEl.style.display = 'none';
-                // Hide header controls when no deck selected
                 if (titleControls) titleControls.style.display = 'none';
                 if (actionButtons) actionButtons.style.display = 'none';
-                // Hide ribbon toolbar
+                const avatarsEl = document.getElementById('deckCollaboratorAvatars');
+                if (avatarsEl) { avatarsEl.style.display = 'none'; avatarsEl.innerHTML = ''; }
                 const ribbonRow = document.getElementById('ribbonToolbarRow');
                 if (ribbonRow) ribbonRow.style.display = 'none';
                 return;
@@ -50400,6 +50511,32 @@
             if (actionButtons) actionButtons.style.display = 'flex';
             if (titleInput) titleInput.value = deck.name || 'Untitled Deck';
             if (slideCount) slideCount.textContent = `${allSlides.length} slides`;
+            
+            // Show who has access: owner + collaborators (profile icons next to toolbar)
+            const avatarsEl = document.getElementById('deckCollaboratorAvatars');
+            if (avatarsEl) {
+                const people = [];
+                const ownerId = deck.owner || '';
+                if (ownerId) {
+                    const ownerName = deck.owner_name || ownerId;
+                    const initials = ownerName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || ownerId.slice(0, 2).toUpperCase();
+                    people.push({ id: ownerId, name: ownerName, initials, isOwner: true });
+                }
+                (deck.collaborators || []).forEach(c => {
+                    const name = c.name || c.email || c.user_id || 'Collaborator';
+                    const initials = name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || (c.email || c.user_id || '?').slice(0, 2).toUpperCase();
+                    people.push({ id: c.user_id || c.email, name, initials, isOwner: false });
+                });
+                if (people.length > 0) {
+                    avatarsEl.style.display = 'flex';
+                    avatarsEl.innerHTML = people.map(p => `
+                        <div class="deck-collab-avatar ${p.isOwner ? 'owner' : ''}" title="${p.isOwner ? 'Owner: ' : ''}${escapeHtml(p.name)}" aria-label="${escapeHtml(p.name)}">${escapeHtml(p.initials)}</div>
+                    `).join('');
+                } else {
+                    avatarsEl.style.display = 'none';
+                    avatarsEl.innerHTML = '';
+                }
+            }
             
             // Update deck action button tooltips with deck title
             const deckTitle = deck.name || 'Untitled Deck';
@@ -50894,12 +51031,8 @@
                             ${profileImageHtml}
                         </div>`}
                         
-                        <!-- Right side info - EDITABLE -->
+                        <!-- Right side info - EDITABLE (date removed from top right per request) -->
                         <div style="position: absolute; right: 5%; top: 45%; text-align: right; font-size: 0.7rem; color: rgba(255,255,255,0.7);">
-                            <div contenteditable="true" 
-                                 style="cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
-                                 onblur="this.style.background='transparent'; updateTitleSlideDate(this.textContent)">${dateStr}</div>
                             <div contenteditable="true" 
                                  style="margin-top: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px;"
                                  onfocus="this.style.background='rgba(255,255,255,0.1)'" 
@@ -56237,6 +56370,10 @@
 </body>
 </html>
 </html>
+
+
+
+
 
 
 

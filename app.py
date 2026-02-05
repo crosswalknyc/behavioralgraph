@@ -5805,25 +5805,25 @@ def parse_subscriber_iq_csv(csv_content):
             if 'Show/Content Tracked' in first_col:
                 # New schema: value often in col 3 (e.g. "Show/Content Tracked,,,Landman")
                 parsed['metadata']['show'] = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '') or ''
+            elif 'Platform Tracked' in first_col:
+                # Value in col 3 (e.g. "Platform Tracked,,,paramount+")
+                platform_val = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+                parsed['metadata']['platform'] = platform_val
+                if platform_val:
+                    print(f"   📺 Found platform: '{platform_val}' from row {i}")
             elif 'Analysis Date Range' in first_col or 'Date Range' in first_col or 'date range' in first_col.lower():
-                # Try multiple columns for date range
-                date_range_val = ''
-                if len(row) > 1:
-                    date_range_val = row[1].strip()
-                if not date_range_val and len(row) > 2:
-                    date_range_val = row[2].strip()
-                if not date_range_val and len(row) > 0:
-                    # Sometimes the date might be in the same cell after a colon
-                    if ':' in first_col:
-                        parts = first_col.split(':', 1)
-                        if len(parts) > 1:
-                            date_range_val = parts[1].strip()
+                # Try multiple columns for date range (col 3 common in Landman-style CSV)
+                date_range_val = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+                if not date_range_val and len(row) > 0 and ':' in first_col:
+                    parts = first_col.split(':', 1)
+                    if len(parts) > 1:
+                        date_range_val = parts[1].strip()
                 parsed['metadata']['date_range'] = date_range_val
-                print(f"   📅 Found date range: '{date_range_val}' from row {i}: {row[:3]}")
+                print(f"   📅 Found date range: '{date_range_val}' from row {i}: {row[:4]}")
             elif 'Exclusion Window' in first_col:
-                parsed['metadata']['exclusion_window'] = row[1].strip() if len(row) > 1 else ''
+                parsed['metadata']['exclusion_window'] = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Attribution Window' in first_col:
-                parsed['metadata']['attribution_window'] = row[1].strip() if len(row) > 1 else ''
+                parsed['metadata']['attribution_window'] = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Genre' in first_col:
                 # New schema: Genre value in col 3 (e.g. "Genre,,,Serialized Drama"); fallback to col 2, then col 1
                 genre_val = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
@@ -5835,44 +5835,51 @@ def parse_subscriber_iq_csv(csv_content):
                 print(f"   ✅ Entered KEY METRICS section at row {i}: first_col='{first_col}', second_col='{second_col}'")
                 continue
         
-        # Key metrics
+        # Key metrics (CSV: Category, Episode Date, Count, ..., Percentage, Gen Pop Projection -> count in col 2, gen_pop in col 9)
         elif current_section == 'key_metrics':
+            def _count_val(r):
+                n = parse_number(r[2]) if len(r) > 2 else None
+                if n is None and len(r) > 1:
+                    n = parse_number(r[1])
+                return n
+            def _gen_pop_val(r):
+                return (r[9].strip() if len(r) > 9 else '') or (r[8].strip() if len(r) > 8 else '')
             if 'Total Show Watchers' in first_col:
-                count_val = parse_number(row[1]) if len(row) > 1 else None
-                gen_pop_val = row[8].strip() if len(row) > 8 else ''
-                print(f"   📊 Found Total Show Watchers: row={row[:3]}, count={count_val}, gen_pop={gen_pop_val}, row_len={len(row)}")
+                count_val = _count_val(row)
+                gen_pop_val = _gen_pop_val(row)
+                print(f"   📊 Found Total Show Watchers: row={row[:4]}, count={count_val}, gen_pop={gen_pop_val}, row_len={len(row)}")
                 parsed['key_metrics']['total_watchers'] = {
                     'count': count_val,
                     'gen_pop': gen_pop_val
                 }
             elif 'Pre-Existing' in first_col or 'Pre Existing' in first_col:
-                count_val = parse_number(row[1]) if len(row) > 1 else None
-                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                count_val = _count_val(row)
+                gen_pop_val = _gen_pop_val(row)
                 print(f"   📊 Found Pre-Existing Series Viewers: count={count_val}, gen_pop={gen_pop_val}")
                 parsed['key_metrics']['pre_existing'] = {
                     'count': count_val,
                     'gen_pop': gen_pop_val
                 }
             elif 'Clean Sample' in first_col or 'Clean Sample (New First Time Viewers)' in first_col:
-                count_val = parse_number(row[1]) if len(row) > 1 else None
-                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                count_val = _count_val(row)
+                gen_pop_val = _gen_pop_val(row)
                 print(f"   📊 Found Clean Sample: count={count_val}, gen_pop={gen_pop_val}")
                 parsed['key_metrics']['clean_sample'] = {
                     'count': count_val,
                     'gen_pop': gen_pop_val
                 }
             elif 'New Platform Signups' in first_col:
-                count_val = parse_number(row[1]) if len(row) > 1 else None
-                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                count_val = _count_val(row)
+                gen_pop_val = _gen_pop_val(row)
                 print(f"   📊 Found New Platform Signups: count={count_val}, gen_pop={gen_pop_val}")
                 parsed['key_metrics']['new_signups'] = {
                     'count': count_val,
                     'gen_pop': gen_pop_val
                 }
             elif 'Clean Conversion Rate' in first_col:
-                parsed['key_metrics']['clean_conversion_rate'] = row[1].strip() if len(row) > 1 else ''
+                parsed['key_metrics']['clean_conversion_rate'] = (row[8].strip() if len(row) > 8 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Total Show Conversion Rate' in first_col:
-                parsed['key_metrics']['total_conversion_rate'] = row[1].strip() if len(row) > 1 else ''
+                parsed['key_metrics']['total_conversion_rate'] = (row[8].strip() if len(row) > 8 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Average Days' in first_col:
                 parsed['key_metrics']['avg_days_to_signup'] = row[3].strip() if len(row) > 3 else ''
             elif 'PER-EPISODE ATTRIBUTION' in first_col.upper() or 'PER-EPISODE ATTRIBUTION' in second_col.upper() or 'PER-EPISODE ATTRIBUTION' in combined_check:
@@ -5938,12 +5945,17 @@ def parse_subscriber_iq_csv(csv_content):
                 print(f"   ✅ Entered ATTRIBUTION SUMMARY section at row {i}: first_col='{first_col}', second_col='{second_col}'")
                 continue
         
-        # Attribution summary
+        # Attribution summary (count in col 2, gen_pop in col 9 when available)
         elif current_section == 'attribution_summary':
+            def _attr_count(r):
+                n = parse_number(r[2]) if len(r) > 2 else None
+                return n if n is not None else (parse_number(r[1]) if len(r) > 1 else None)
+            def _attr_gen_pop(r):
+                return (r[9].strip() if len(r) > 9 else '') or (r[8].strip() if len(r) > 8 else '')
             if 'Attributed Signups' in first_col:
-                count_val = parse_number(row[1]) if len(row) > 1 else None
+                count_val = _attr_count(row)
                 pct_val = row[7].strip() if len(row) > 7 else ''
-                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                gen_pop_val = _attr_gen_pop(row)
                 print(f"   📊 Found Attributed Signups: count={count_val}, pct={pct_val}, gen_pop={gen_pop_val}")
                 parsed['attribution_summary']['attributed'] = {
                     'count': count_val,
@@ -5951,9 +5963,9 @@ def parse_subscriber_iq_csv(csv_content):
                     'gen_pop': gen_pop_val
                 }
             elif 'Dormant to Reactive' in first_col:
-                count_val = parse_number(row[1]) if len(row) > 1 else None
+                count_val = _attr_count(row)
                 pct_val = row[7].strip() if len(row) > 7 else ''
-                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                gen_pop_val = _attr_gen_pop(row)
                 print(f"   📊 Found Dormant to Reactive: count={count_val}, pct={pct_val}, gen_pop={gen_pop_val}")
                 parsed['attribution_summary']['dormant_reactive'] = {
                     'count': count_val,
@@ -5961,9 +5973,9 @@ def parse_subscriber_iq_csv(csv_content):
                     'gen_pop': gen_pop_val
                 }
             elif 'TOTAL SIGNUPS' in first_col:
-                count_val = parse_number(row[1]) if len(row) > 1 else None
+                count_val = _attr_count(row)
                 pct_val = row[7].strip() if len(row) > 7 else ''
-                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                gen_pop_val = _attr_gen_pop(row)
                 print(f"   📊 Found TOTAL SIGNUPS: count={count_val}, pct={pct_val}, gen_pop={gen_pop_val}")
                 parsed['attribution_summary']['total'] = {
                     'count': count_val,
@@ -5974,15 +5986,17 @@ def parse_subscriber_iq_csv(csv_content):
                 current_section = 'signup_timing'
                 continue
         
-        # Signup timing
+        # Signup timing (signups in col 2, gen_pop in col 9 when available)
         elif current_section == 'signup_timing':
             if first_col and first_col not in ['', 'SIGNUP TIMING (Days After Show is Available)']:
                 if 'Days Later' in first_col or first_col in ['Same Day', 'Day 1']:
+                    signups_val = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+                    gen_pop_val = (row[9].strip() if len(row) > 9 else '') or (row[8].strip() if len(row) > 8 else '')
                     parsed['signup_timing'].append({
                         'timing': first_col,
-                        'signups': row[1].strip() if len(row) > 1 else '',
+                        'signups': signups_val,
                         'percentage': row[7].strip() if len(row) > 7 else '',
-                        'gen_pop': row[8].strip() if len(row) > 8 else ''
+                        'gen_pop': gen_pop_val
                     })
             elif 'SIGNUP TIMING PER EPISODE' in first_col or 'SIGNUP TIMING PER EPISODE' in second_col:
                 current_section = 'episode_signup_timing'
@@ -5996,11 +6010,13 @@ def parse_subscriber_iq_csv(csv_content):
                 if episode_num not in parsed['episode_signup_timing']:
                     parsed['episode_signup_timing'][episode_num] = []
             elif current_episode and first_col and ('Days Later' in first_col or first_col in ['Same Day', 'Day 1']):
+                signups_val = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+                gen_pop_val = (row[9].strip() if len(row) > 9 else '') or (row[8].strip() if len(row) > 8 else '')
                 parsed['episode_signup_timing'][current_episode].append({
                     'timing': first_col,
-                    'signups': row[1].strip() if len(row) > 1 else '',
+                    'signups': signups_val,
                     'percentage': row[7].strip() if len(row) > 7 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'gen_pop': gen_pop_val
                 })
             elif 'POST-SIGNUP TOUCHPOINT ANALYSIS' in first_col or 'POST-SIGNUP TOUCHPOINT ANALYSIS' in second_col:
                 current_section = 'post_signup_touchpoints'
@@ -6416,8 +6432,19 @@ def get_subscriber_iq_data(s3_key):
         else:
             show_name = name_without_ext.replace('_', ' ')
         
-        # Get date range from metadata
+        # Get date range and platform from metadata
         date_range = parsed['metadata'].get('date_range', '')
+        platform_key = (parsed['metadata'].get('platform') or '').strip().lower().replace(' ', '')
+        if not platform_key and 'platform' in parsed['metadata']:
+            platform_key = str(parsed['metadata']['platform']).strip().lower().replace(' ', '')
+        # Resolve platform key for pricing (e.g. "paramount+" -> same key in svod_pricing)
+        svod_pricing = load_svod_pricing()
+        pricing_for_platform = {}
+        if platform_key:
+            for key, val in svod_pricing.items():
+                if key.strip().lower().replace(' ', '') == platform_key:
+                    pricing_for_platform = val if isinstance(val, dict) else {}
+                    break
         
         print(f"✅ Returning subscriber IQ data for show: {show_name.upper()}")
         print(f"   Data keys: {list(parsed.keys())}")
@@ -6429,7 +6456,9 @@ def get_subscriber_iq_data(s3_key):
             'data': parsed,
             'show': show_name.upper(),
             'date_range': date_range,
-            's3_key': s3_key
+            's3_key': s3_key,
+            'platform': parsed['metadata'].get('platform', ''),
+            'svod_pricing': pricing_for_platform
         }
         
         # Verify the response can be serialized
@@ -7418,7 +7447,10 @@ def get_live_features():
                 'content': True,
                 'collaborate': True,
                 'deckBuilder': True,
-                'rankers': True
+                'rankers': True,
+                'overlapAnalysis': True,
+                'benchmarking': True,
+                'gapAnalysis': True
             }
         })
 
@@ -9198,6 +9230,9 @@ def rename_file():
 # SVOD file metadata storage key
 SVOD_METADATA_KEY = 'system/svod_metadata.json'
 
+# SVOD pricing per platform (admin-configured): { "paramount+": { "ad_supported": 5.99, "premium": 11.99 }, ... }
+SVOD_PRICING_KEY = 'system/svod_pricing.json'
+
 # Hedge Fund IQ ticker metadata storage key
 TICKER_METADATA_KEY = 'system/ticker_metadata.json'
 
@@ -9810,6 +9845,54 @@ def save_svod_metadata(metadata):
         return True
     except:
         return False
+
+def load_svod_pricing():
+    """Load SVOD pricing (ad_supported, premium per platform) from S3."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=SVOD_PRICING_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return {}
+
+def save_svod_pricing(pricing):
+    """Save SVOD pricing to S3."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=SVOD_PRICING_KEY,
+            Body=json.dumps(pricing, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except:
+        return False
+
+@app.route('/api/settings/svod-pricing', methods=['GET', 'POST'])
+@requires_auth
+def svod_pricing_api():
+    """GET: return SVOD pricing for all platforms. POST: save (admin only)."""
+    if request.method == 'GET':
+        try:
+            pricing = load_svod_pricing()
+            return jsonify({'success': True, 'pricing': pricing})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    # POST
+    if not (g.get('user') and g.user.get('role') in ['admin', 'super_admin']):
+        return jsonify({'success': False, 'error': 'Admin required'}), 403
+    try:
+        data = request.get_json() or {}
+        pricing = data.get('pricing', {})
+        if not isinstance(pricing, dict):
+            return jsonify({'success': False, 'error': 'pricing must be an object'}), 400
+        save_svod_pricing(pricing)
+        return jsonify({'success': True, 'message': 'SVOD pricing saved'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/user/purgatory', methods=['GET'])
 @requires_auth
@@ -11758,7 +11841,8 @@ def add_deck_collaborator(deck_id):
         email = data.get('email', '').strip().lower()
         user_id = data.get('user_id', '')
         name = data.get('name', '')
-        role = data.get('role', 'editor')  # editor or viewer
+        # Shared access grants full (editor) access to the deck
+        role = 'editor'
         
         if not email and not user_id:
             return jsonify({'success': False, 'error': 'Email or user_id required'})
@@ -11806,7 +11890,15 @@ def add_deck_collaborator(deck_id):
             ContentType='application/json'
         )
         
-        # TODO: Send email notification to the collaborator
+        # Email collaborator: invited to collaborate on PROFILE NAME deck by FIRST LAST, with login link
+        deck_name = deck.get('name') or 'Untitled Deck'
+        inviter = get_current_user()
+        first_name = (inviter or {}).get('first_name', '') or session.get('username', 'A colleague')
+        last_name = (inviter or {}).get('last_name', '')
+        inviter_display = f"{first_name} {last_name}".strip() or session.get('username', 'A colleague')
+        app_url = os.environ.get('APP_URL', request.host_url.rstrip('/'))
+        if email:
+            _send_deck_collaboration_invite(email, deck_name, inviter_display, app_url)
         
         return jsonify({'success': True, 'collaborator': new_collaborator, 'deck': deck})
     except s3_client.exceptions.NoSuchKey:

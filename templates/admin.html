@@ -1316,6 +1316,7 @@
                 <button class="admin-tab active" onclick="showSettingsTab('gmail')">📧 Gmail Integration</button>
                 <button class="admin-tab" onclick="showSettingsTab('quickSelects')">⚡ Quick Selects</button>
                 <button class="admin-tab" onclick="showSettingsTab('liveFeatures')">🚀 Live Features</button>
+                <button class="admin-tab" onclick="showSettingsTab('svodPricing')">📺 SVOD Pricing</button>
             </div>
             
             <!-- Gmail Integration Tab -->
@@ -1590,6 +1591,27 @@
                                 <span style="font-size: 1.25rem;">🗂️</span>
                                 <span style="font-size: 0.9rem;">Workspace</span>
                             </label>
+                            
+                            <!-- Overlap Analysis (Compare sub-tab) -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="overlapAnalysis" checked onchange="updateLiveFeature('overlapAnalysis', this.checked)">
+                                <span style="font-size: 1.25rem;">🔄</span>
+                                <span style="font-size: 0.9rem;">Overlap Analysis</span>
+                            </label>
+                            
+                            <!-- Benchmarking (Compare sub-tab) -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="benchmarking" checked onchange="updateLiveFeature('benchmarking', this.checked)">
+                                <span style="font-size: 1.25rem;">📈</span>
+                                <span style="font-size: 0.9rem;">Benchmarking</span>
+                            </label>
+                            
+                            <!-- Gap Analysis (Compare sub-tab) -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="gapAnalysis" checked onchange="updateLiveFeature('gapAnalysis', this.checked)">
+                                <span style="font-size: 1.25rem;">🎯</span>
+                                <span style="font-size: 0.9rem;">Gap Analysis</span>
+                            </label>
                         </div>
                         
                         
@@ -1598,6 +1620,30 @@
                                 Features that are not live will show a red dotted outline to admins indicating they are "Admin Only" and will be hidden from regular users.
                             </p>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SVOD Pricing Tab -->
+            <div id="settings-tab-svodPricing" class="settings-tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📺 SVOD Pricing</h2>
+                        <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            Set monthly subscription costs per streaming platform. Used in Subscriber IQ to estimate subscription revenue from show-attributed signups. Platform key must match the CSV "Platform Tracked" value (e.g. paramount+, netflix).
+                        </p>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <button class="btn btn-small btn-success" onclick="addSvodPricingRow()">+ Add Platform</button>
+                            <button class="btn btn-small btn-primary" onclick="saveSvodPricing()">💾 Save SVOD Pricing</button>
+                        </div>
+                        <div id="svodPricingList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <!-- Rows populated by JS -->
+                        </div>
+                        <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary);">
+                            Revenue in Subscriber IQ = (Total Signups × monthly price) for weekly (÷4.33), monthly, and yearly (×12).
+                        </p>
                     </div>
                 </div>
             </div>
@@ -2861,8 +2907,97 @@
                 })();
             }
             
+            if (tabName === 'svodPricing') {
+                loadSvodPricingUI();
+            }
+            
             if (tabName === 'liveFeatures') {
                 loadLiveFeatures();
+            }
+        }
+        
+        // SVOD Pricing (Settings)
+        async function loadSvodPricingUI() {
+            const listEl = document.getElementById('svodPricingList');
+            if (!listEl) return;
+            try {
+                const res = await fetch('/api/settings/svod-pricing', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed to load');
+                const pricing = data.pricing || {};
+                listEl.innerHTML = '';
+                const platforms = Object.keys(pricing);
+                if (platforms.length === 0) {
+                    listEl.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.9rem;">No platforms yet. Click "Add Platform" to add one.</p>';
+                    return;
+                }
+                platforms.forEach(platformKey => {
+                    const row = pricing[platformKey] || {};
+                    listEl.appendChild(createSvodPricingRow(platformKey, row.ad_supported, row.premium));
+                });
+            } catch (e) {
+                listEl.innerHTML = '<p style="color: #ef4444;">Error loading: ' + (e.message || 'Unknown') + '</p>';
+            }
+        }
+        
+        function createSvodPricingRow(platformKey, adSupported, premium) {
+            const div = document.createElement('div');
+            div.className = 'svod-pricing-row';
+            div.style.cssText = 'display: grid; grid-template-columns: 1fr auto auto auto; gap: 0.75rem; align-items: center; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);';
+            const keyId = 'svod_key_' + (platformKey || '').replace(/\W/g, '_') + '_' + Math.random().toString(36).slice(2, 8);
+            const adId = 'svod_ad_' + keyId;
+            const premId = 'svod_prem_' + keyId;
+            div.innerHTML = `
+                <input type="text" class="svod-platform-key" data-key="${keyId}" value="${(platformKey || '').replace(/"/g, '&quot;')}" placeholder="e.g. paramount+, netflix" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+                    <span>Ad $</span>
+                    <input type="number" step="0.01" min="0" id="${adId}" value="${adSupported != null && adSupported !== '' ? Number(adSupported) : ''}" placeholder="5.99" style="width: 5rem; padding: 0.35rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+                    <span>Premium $</span>
+                    <input type="number" step="0.01" min="0" id="${premId}" value="${premium != null && premium !== '' ? Number(premium) : ''}" placeholder="11.99" style="width: 5rem; padding: 0.35rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                </label>
+                <button type="button" class="btn btn-small" onclick="this.closest('.svod-pricing-row').remove()" style="background: rgba(239,68,68,0.2); color: #ef4444;">Remove</button>
+            `;
+            return div;
+        }
+        
+        function addSvodPricingRow() {
+            const listEl = document.getElementById('svodPricingList');
+            if (!listEl) return;
+            const first = listEl.querySelector('.svod-pricing-row');
+            if (first && listEl.querySelector('p')) listEl.innerHTML = '';
+            listEl.appendChild(createSvodPricingRow('', '', ''));
+        }
+        
+        async function saveSvodPricing() {
+            const listEl = document.getElementById('svodPricingList');
+            if (!listEl) return;
+            const rows = listEl.querySelectorAll('.svod-pricing-row');
+            const pricing = {};
+            rows.forEach(row => {
+                const keyInput = row.querySelector('.svod-platform-key');
+                const numInputs = row.querySelectorAll('input[type="number"]');
+                const key = (keyInput && keyInput.value) ? keyInput.value.trim().toLowerCase().replace(/\s+/g, '') : '';
+                if (!key) return;
+                const ad = numInputs[0] && numInputs[0].value !== '' ? parseFloat(numInputs[0].value) : null;
+                const prem = numInputs[1] && numInputs[1].value !== '' ? parseFloat(numInputs[1].value) : null;
+                pricing[key] = { ad_supported: ad, premium: prem };
+            });
+            try {
+                const res = await fetch('/api/settings/svod-pricing', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pricing })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Save failed');
+                if (typeof showToast === 'function') showToast('SVOD pricing saved');
+                else alert('SVOD pricing saved');
+            } catch (e) {
+                if (typeof showToast === 'function') showToast(e.message || 'Error saving', true);
+                else alert('Error: ' + e.message);
             }
         }
         
@@ -3548,7 +3683,10 @@
             collaborate: true,
             deckBuilder: true,
             rankers: true,
-            insightsSummary: true
+            insightsSummary: true,
+            overlapAnalysis: true,
+            benchmarking: true,
+            gapAnalysis: true
         };
         
         // Load Live Features from server
