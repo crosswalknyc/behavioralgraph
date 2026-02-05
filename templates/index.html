@@ -43342,6 +43342,28 @@
                 const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
                 return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})">${name}${sortIndicator} ${ageDisplay}</th>`;
             };
+            
+            // Helper to generate export menu HTML for comparison sections
+            const exportMenuHtml = (moduleType, sectionId) => `
+                <div class="comp-export-dropdown" style="position: relative; display: inline-block;">
+                    <button class="btn btn-small" onclick="toggleComparisonExportMenu('${sectionId}', event)" 
+                            style="font-size: 0.7rem; padding: 0.3rem 0.6rem; background: var(--accent-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        📥 Export ▼
+                    </button>
+                    <div id="comp-export-menu-${sectionId}" class="comp-export-menu" style="display: none; position: absolute; right: 0; top: 100%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; min-width: 150px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                        <button onclick="exportComparisonSectionCSV('${moduleType}')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                            📄 Download CSV
+                        </button>
+                        <button onclick="exportComparisonSectionPNG('${moduleType}')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                            🖼️ Download PNG
+                        </button>
+                        <div style="border-top: 1px solid var(--border-color); margin: 0.25rem 0;"></div>
+                        <button onclick="addComparisonModuleToDeck('${moduleType}')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                            ➕ Add to Deck
+                        </button>
+                    </div>
+                </div>
+            `;
 
             // Build profile tabs bar for comparison (no median age in tabs)
             const profileTabsHtml = profiles.map((p, idx) => {
@@ -43370,7 +43392,24 @@
                 <div class="comp-section" id="comp-summary">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center;">
                         <span>Comparison Data</span>
-                        ${getComparisonExportMenuHtml('summary', 'summary')}
+                        <div class="comp-export-dropdown" style="position: relative; display: inline-block;">
+                            <button class="btn btn-small" onclick="toggleComparisonExportMenu('summary', event)" 
+                                    style="font-size: 0.7rem; padding: 0.3rem 0.6rem; background: var(--accent-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                📥 Export ▼
+                            </button>
+                            <div id="comp-export-menu-summary" class="comp-export-menu" style="display: none; position: absolute; right: 0; top: 100%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; min-width: 150px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                                <button onclick="exportComparisonSectionCSV('summary')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                                    📄 Download CSV
+                                </button>
+                                <button onclick="exportComparisonSectionPNG('summary')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                                    🖼️ Download PNG
+                                </button>
+                                <div style="border-top: 1px solid var(--border-color); margin: 0.25rem 0;"></div>
+                                <button onclick="addComparisonModuleToDeck('summary')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                                    ➕ Add to Deck
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <table class="comp-table">
                         <thead>
@@ -43424,7 +43463,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${genderCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            ${getComparisonExportMenuHtml('gender', 'gender')}
+                            ${exportMenuHtml('gender', 'gender')}
                             <select onchange="setComparisonSectionLimit('demo_gender', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${genderLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${genderLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43464,7 +43503,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ageCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            ${getComparisonExportMenuHtml('age', 'age')}
+                            ${exportMenuHtml('age', 'age')}
                             <select onchange="setComparisonSectionLimit('demo_age', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${ageLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${ageLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43505,7 +43544,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ethnicityCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            ${getComparisonExportMenuHtml('ethnicity', 'ethnicity')}
+                            ${exportMenuHtml('ethnicity', 'ethnicity')}
                             <select onchange="setComparisonSectionLimit('demo_ethnicity', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${ethnicityLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${ethnicityLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43545,7 +43584,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${incomeCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            ${getComparisonExportMenuHtml('income', 'income')}
+                            ${exportMenuHtml('income', 'income')}
                             <select onchange="setComparisonSectionLimit('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${incomeLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${incomeLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43593,7 +43632,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${count} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            ${getComparisonExportMenuHtml(key, 'demo_' + key)}
+                            ${exportMenuHtml(key, 'demo_' + key)}
                             <select onchange="setComparisonSectionLimit('demo_${key}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${limit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${limit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43645,7 +43684,7 @@
                                 <span style="font-size: 0.65rem; font-weight: normal; opacity: 0.7;">Index: <span style="color: #10b981;">●</span> &gt;100 | <span style="color: #ef4444;">●</span> &lt;100</span>
                             </span>
                             <span style="display: flex; align-items: center; gap: 0.35rem;">
-                                ${getComparisonExportMenuHtml('behavioral_' + safeCatId, 'beh_' + safeCatId)}
+                                ${exportMenuHtml('behavioral_' + safeCatId, 'beh_' + safeCatId)}
                                 <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                     <option value="15" ${currentLimit == 15 ? 'selected' : ''}>Top 15</option>
                                     <option value="25" ${currentLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43688,7 +43727,7 @@
                         <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
                             <span style="white-space: nowrap;">Locations/DMAs</span>
                             <span style="display: flex; align-items: center; gap: 0.35rem;">
-                                ${getComparisonExportMenuHtml('location', 'location')}
+                                ${exportMenuHtml('location', 'location')}
                                 <select onchange="setComparisonSectionLimit('location', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                     <option value="15" ${locationLimit == 15 ? 'selected' : ''}>Top 15</option>
                                     <option value="25" ${locationLimit == 25 ? 'selected' : ''}>Top 25</option>
