@@ -21381,13 +21381,28 @@
             if (/K/i.test(s)) return v * 1e3;
             return v;
         }
+        function _parseDisplayName(displayName) {
+            if (!displayName || typeof displayName !== 'string') return { movie: '', talent: '' };
+            const words = displayName.trim().split(/\s+/);
+            if (words.length >= 2) {
+                const talent = words.slice(-2).join(' ');
+                const movie = words.slice(0, -2).join(' ');
+                return { movie: movie || words[0], talent };
+            }
+            return { movie: words[0] || '', talent: '' };
+        }
         function displayTicketSalesData(resp) {
             const d = resp.data || {};
             const meta = d.metadata || {};
-            const talentName = meta.talent_name || meta.talent_tracked || '';
-            const movieName = meta.movie_tracked || '';
+            let talentName = meta.talent_name || meta.talent_tracked || '';
+            let movieName = meta.movie_tracked || '';
             const dateRange = meta.date_range || '';
-            const competitor = meta.competitor_name || meta.competitive_talent;
+            let competitor = meta.competitor_name || meta.competitive_talent;
+            if (!talentName || !movieName) {
+                const fallback = _parseDisplayName(resp.display_name);
+                if (!movieName) movieName = fallback.movie;
+                if (!talentName) talentName = fallback.talent;
+            }
             const hasCompetitor = competitor && competitor.toString().toLowerCase() !== 'none';
             const esc = (x) => (x || '').toString().replace(/</g, '&lt;');
             
@@ -21429,8 +21444,11 @@
             const talentAttrib = [
                 { name: talentName, conv: ta.theater_conversions, pct: ta.theater_conversions_pct, genPop: talentConvGenPop }
             ];
-            if (hasCompetitor && ca.theater_conversions != null) {
-                talentAttrib.push({ name: competitor, conv: ca.theater_conversions, pct: ca.theater_conversions_pct, genPop: compConvGenPop });
+            const hasCompetitiveData = ca && (ca.theater_conversions != null || ca.theater_conversions_gen_pop || (d.competitive_by_platform || []).length);
+            if ((hasCompetitor || hasCompetitiveData) && competitor) {
+                talentAttrib.push({ name: competitor, conv: ca?.theater_conversions, pct: ca?.theater_conversions_pct, genPop: compConvGenPop });
+            } else if (hasCompetitiveData && !competitor) {
+                talentAttrib.push({ name: 'Competitive Talent', conv: ca?.theater_conversions, pct: ca?.theater_conversions_pct, genPop: compConvGenPop });
             }
             document.getElementById('ticketSalesTalentAttributionSection').innerHTML = `
                 <h3 style="margin: 0 0 1rem 0;">Talent Attribution</h3>
@@ -21447,13 +21465,13 @@
             
             // Ticket Sales by Outlet: combined platform table with all talents
             const platformSets = [
-                { talent: talentName, rows: d.talent_by_platform || [] }
+                { talent: talentName || 'Primary Talent', rows: d.talent_by_platform || [] }
             ];
-            if (hasCompetitor && (d.competitive_by_platform || []).length) {
-                platformSets.push({ talent: competitor, rows: d.competitive_by_platform || [] });
+            if ((hasCompetitor || hasCompetitiveData) && (d.competitive_by_platform || []).length) {
+                platformSets.push({ talent: competitor || 'Competitive Talent', rows: d.competitive_by_platform || [] });
             }
             const allPlatforms = new Set();
-            platformSets.forEach(ps => ps.rows.forEach(r => allPlatforms.add((r.platform || '').toLowerCase())));
+            platformSets.forEach(ps => ps.rows.forEach(r => { const p = (r.platform || '').trim().toLowerCase(); if (p) allPlatforms.add(p); }));
             const platformOrder = ['fandango','amc theatres','amc','alamo drafthouse','cinemark theatres','cinemark','regal cinemas','regal'];
             const sortedPlatforms = Array.from(allPlatforms).sort((a,b) => {
                 const ai = platformOrder.findIndex(p => a.includes(p));

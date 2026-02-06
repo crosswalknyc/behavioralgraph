@@ -6719,6 +6719,8 @@ def parse_ticket_sales_iq_csv(csv_content):
     def _fmt(s):
         return str(s).strip() if s else ''
     
+    # Strip BOM and normalize
+    csv_content = csv_content.lstrip('\ufeff').strip()
     rows = list(csv_module.reader(io.StringIO(csv_content)))
     if not rows:
         return parsed
@@ -6782,6 +6784,9 @@ def parse_ticket_sales_iq_csv(csv_content):
         # Talent attribution (label in cat, value in col1)
         if current_section == 'talent':
             if '→ Theater Conversions' in cat or 'Theater Conversions' in cat:
+                if not talent_name and '→' in cat:
+                    talent_name = cat.split('→')[0].strip()
+                    parsed['metadata']['talent_tracked'] = talent_name
                 parsed['talent_attribution']['theater_conversions'] = _parse_num(col1) or col1
                 parsed['talent_attribution']['theater_conversions_pct'] = pct or None
                 parsed['talent_attribution']['theater_conversions_gen_pop'] = gen_pop or None
@@ -6791,17 +6796,22 @@ def parse_ticket_sales_iq_csv(csv_content):
                 parsed['talent_attribution']['total_hits_gen_pop'] = gen_pop or None
         
         # Competitive attribution (only if competitor exists)
-        if current_section == 'competitive' and competitor_name:
-            if parsed['competitive_attribution'] is None:
-                parsed['competitive_attribution'] = {}
+        if current_section == 'competitive':
             if '→ Theater Conversions' in cat or 'Theater Conversions' in cat:
-                parsed['competitive_attribution']['theater_conversions'] = _parse_num(col1) or col1
-                parsed['competitive_attribution']['theater_conversions_pct'] = pct or None
-                parsed['competitive_attribution']['theater_conversions_gen_pop'] = gen_pop or None
-            elif 'Total' in cat and 'Hits' in cat:
-                parsed['competitive_attribution']['total_hits'] = _parse_num(col1) or col1
-                parsed['competitive_attribution']['total_hits_pct'] = pct or None
-                parsed['competitive_attribution']['total_hits_gen_pop'] = gen_pop or None
+                if not competitor_name and '→' in cat:
+                    competitor_name = cat.split('→')[0].strip()
+                    parsed['metadata']['competitive_talent'] = competitor_name
+            if competitor_name:
+                if parsed['competitive_attribution'] is None:
+                    parsed['competitive_attribution'] = {}
+                if '→ Theater Conversions' in cat or 'Theater Conversions' in cat:
+                    parsed['competitive_attribution']['theater_conversions'] = _parse_num(col1) or col1
+                    parsed['competitive_attribution']['theater_conversions_pct'] = pct or None
+                    parsed['competitive_attribution']['theater_conversions_gen_pop'] = gen_pop or None
+                elif 'Total' in cat and 'Hits' in cat:
+                    parsed['competitive_attribution']['total_hits'] = _parse_num(col1) or col1
+                    parsed['competitive_attribution']['total_hits_pct'] = pct or None
+                    parsed['competitive_attribution']['total_hits_gen_pop'] = gen_pop or None
         
         # Talent by platform (platform in col0, count in col1)
         if current_section == 'talent_platform':
