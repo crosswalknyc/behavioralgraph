@@ -3107,12 +3107,9 @@
             position: relative;
             padding: 0.5rem 0.25rem;
             box-sizing: border-box;
-            display: flex;
-            justify-content: center;
-            align-items: center;
         }
         .chart-container canvas { max-width: 100%; display: block; }
-        /* Demographics: center pie/donut + legend in the card; limit width so legend has room and block is centered */
+        /* Demographics: center chart block in the card (no flex - Chart.js needs block layout to size canvas) */
         .charts-grid .chart-container {
             max-width: min(100%, 540px);
             margin-left: auto;
