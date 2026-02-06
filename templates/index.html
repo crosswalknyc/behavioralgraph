@@ -21501,15 +21501,16 @@
             const totalViewersNum = _parseGenPop(totalMovieViewersGenPop);
             const pctDueToTalent = totalViewersNum > 0 ? ((totalTicketsDueToTalent / totalViewersNum) * 100).toFixed(2) + '%' : '0%';
             
-            // Summary cards: Total Movie Viewers (Gen Pop only), % bought due to talent, Total tickets due to talent
+            // Summary cards: Total Movie Viewers, % bought due to talent, Total tickets due to talent
             const fmtGenPopDisplay = (v) => v && v !== '—' ? _fmtGenPopInt(v) : '—';
+            const totalMovieViewersTooltip = 'Total number of digital ticket sales tracked from one of the following platforms: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS.';
             const summaryCards = [
-                { label: 'Total Movie Viewers (Gen Pop)', value: fmtGenPopDisplay(totalMovieViewersGenPop) },
+                { label: 'Total Movie Viewers', value: fmtGenPopDisplay(totalMovieViewersGenPop), tooltip: totalMovieViewersTooltip },
                 { label: 'Tickets Purchased Due to Talent', value: _fmtGenPopInt(String(totalTicketsDueToTalent)) },
                 { label: '% Who Bought Ticket Due to Talent', value: pctDueToTalent }
             ];
             document.getElementById('ticketSalesSummaryCards').innerHTML = summaryCards.map(c => `
-                <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
+                <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"${c.tooltip ? ` title="${esc(c.tooltip)}"` : ''}>
                     <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">${esc(c.label)}</div>
                     <div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">${esc(c.value)}</div>
                 </div>
