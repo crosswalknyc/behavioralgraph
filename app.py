@@ -6753,7 +6753,7 @@ def parse_ticket_sales_iq_csv(csv_content):
         elif cat == 'Movie Tracked':
             parsed['metadata']['movie_tracked'] = col3
         elif cat == 'Analysis Date Range':
-            parsed['metadata']['date_range'] = col3
+            parsed['metadata']['date_range'] = col2 or col3
         
         # Section headers (may be in cat or col1)
         section_label = cat or col1
@@ -6776,8 +6776,8 @@ def parse_ticket_sales_iq_csv(csv_content):
                 current_section = 'talent_platform'
             continue
         
-        # Key metrics (label in col1, value in col2)
-        if current_section == 'key_metrics' and 'Total Movie Viewers' in col1:
+        # Key metrics (label may be in col0/cat or col1)
+        if current_section == 'key_metrics' and ('Total Movie Viewers' in (cat or col1)):
             parsed['key_metrics']['total_movie_viewers'] = _parse_num(col2) or col2
             parsed['key_metrics']['total_movie_viewers_gen_pop'] = gen_pop or None
         

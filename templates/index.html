@@ -21381,6 +21381,10 @@
             if (/K/i.test(s)) return v * 1e3;
             return v;
         }
+        function _fmtGenPopInt(s) {
+            const n = Math.round(_parseGenPop(s));
+            return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+        }
         function _parseDisplayName(displayName) {
             if (!displayName || typeof displayName !== 'string') return { movie: '', talent: '' };
             const words = displayName.trim().split(/\s+/);
@@ -21427,10 +21431,10 @@
             const pctDueToTalent = totalViewersNum > 0 ? ((totalTicketsDueToTalent / totalViewersNum) * 100).toFixed(2) + '%' : '0%';
             
             // Summary cards: Total Movie Viewers (Gen Pop only), % bought due to talent, Total tickets due to talent
-            const fmtGenPop = (v) => v && v !== '—' ? String(v) : '—';
+            const fmtGenPopDisplay = (v) => v && v !== '—' ? _fmtGenPopInt(v) : '—';
             const summaryCards = [
-                { label: 'Total Movie Viewers (Gen Pop)', value: fmtGenPop(totalMovieViewersGenPop) },
-                { label: 'Tickets Purchased Due to Talent', value: totalTicketsDueToTalent >= 1e6 ? (totalTicketsDueToTalent/1e6).toFixed(2) + 'M' : totalTicketsDueToTalent >= 1e3 ? (totalTicketsDueToTalent/1e3).toFixed(2) + 'K' : String(Math.round(totalTicketsDueToTalent)) },
+                { label: 'Total Movie Viewers (Gen Pop)', value: fmtGenPopDisplay(totalMovieViewersGenPop) },
+                { label: 'Tickets Purchased Due to Talent', value: _fmtGenPopInt(String(totalTicketsDueToTalent)) },
                 { label: '% Who Bought Ticket Due to Talent', value: pctDueToTalent }
             ];
             document.getElementById('ticketSalesSummaryCards').innerHTML = summaryCards.map(c => `
@@ -21440,24 +21444,27 @@
                 </div>
             `).join('');
             
-            // Talent Attribution: each talent with X → Theater Conversions (number + percentage)
+            // Talent Attribution: each talent with X → Theater Conversions and Total X Hits (Movie Viewers)
             const talentAttrib = [
-                { name: talentName, conv: ta.theater_conversions, pct: ta.theater_conversions_pct, genPop: talentConvGenPop }
+                { name: talentName, convGenPop: talentConvGenPop, pct: ta.theater_conversions_pct, hitsGenPop: ta.total_hits_gen_pop }
             ];
             const hasCompetitiveData = ca && (ca.theater_conversions != null || ca.theater_conversions_gen_pop || (d.competitive_by_platform || []).length);
             if ((hasCompetitor || hasCompetitiveData) && competitor) {
-                talentAttrib.push({ name: competitor, conv: ca?.theater_conversions, pct: ca?.theater_conversions_pct, genPop: compConvGenPop });
+                talentAttrib.push({ name: competitor, convGenPop: compConvGenPop, pct: ca?.theater_conversions_pct, hitsGenPop: ca?.total_hits_gen_pop });
             } else if (hasCompetitiveData && !competitor) {
-                talentAttrib.push({ name: 'Competitive Talent', conv: ca?.theater_conversions, pct: ca?.theater_conversions_pct, genPop: compConvGenPop });
+                talentAttrib.push({ name: 'Competitive Talent', convGenPop: compConvGenPop, pct: ca?.theater_conversions_pct, hitsGenPop: ca?.total_hits_gen_pop });
             }
             document.getElementById('ticketSalesTalentAttributionSection').innerHTML = `
                 <h3 style="margin: 0 0 1rem 0;">Talent Attribution</h3>
                 <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Ticket sales each listed talent drove</p>
-                <div class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;">
+                <div class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;">
                     ${talentAttrib.map(t => `
                         <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
                             <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">${esc(t.name)} → Theater Conversions</div>
-                            <div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">${fmtGenPop(t.genPop)}${t.pct ? ' <span style="color: var(--text-secondary); font-weight: 500;">(' + esc(t.pct) + ')</span>' : ''}</div>
+                            <div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">${fmtGenPopDisplay(t.convGenPop)}${t.pct ? ' <span style="color: var(--text-secondary); font-weight: 500;">(' + esc(t.pct) + ')</span>' : ''}</div>
+                            <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-top: 0.75rem; margin-bottom: 0.25rem;">Total ${esc(t.name)} Hits (Movie Viewers)</div>
+                            <div class="insight-value" style="font-size: 1rem; font-weight: 600; color: var(--accent-cyan);">${fmtGenPopDisplay(t.hitsGenPop)}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">People who bought tickets after engaging online with ${esc(t.name)} within 14 days</div>
                         </div>
                     `).join('')}
                 </div>
@@ -21485,6 +21492,7 @@
                 const r = rows.find(x => (x.platform || '').toLowerCase() === platform);
                 return r ? (r.gen_pop || '0') : '0';
             };
+            const fmtOutletVal = (v) => _fmtGenPopInt(v);
             const getDisplayName = (plat) => {
                 for (const ps of platformSets) {
                     const r = ps.rows.find(x => (x.platform || '').toLowerCase() === plat);
@@ -21494,7 +21502,7 @@
             };
             const thead = '<tr><th>Outlet</th>' + platformSets.map(ps => `<th>${esc(ps.talent)}</th>`).join('') + '</tr>';
             const tbody = sortedPlatforms.map(plat => {
-                const cells = platformSets.map(ps => `<td>${esc(getGenPopFor(ps.rows, plat))}</td>`);
+                const cells = platformSets.map(ps => `<td>${esc(fmtOutletVal(getGenPopFor(ps.rows, plat)))}</td>`);
                 return `<tr><td>${esc(getDisplayName(plat))}</td>${cells.join('')}</tr>`;
             }).join('');
             document.getElementById('ticketSalesByOutletSection').innerHTML = `
