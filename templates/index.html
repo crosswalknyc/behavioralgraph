@@ -3012,7 +3012,7 @@
             }
         }
 
-        /* Demographics chart cards - restored 2-col layout with comfortable padding */
+        /* Demographics chart cards - fixed size so donut + legend fit without cutoff */
         .chart-card {
             background: var(--bg-card);
             border-radius: 8px;
@@ -3020,7 +3020,10 @@
             position: relative;
             min-width: 0;
             overflow: visible;
-            font-size: clamp(0.7rem, 1.2vw + 0.4rem, 0.9rem);
+            font-size: 0.85rem;
+            min-height: 340px;
+            display: flex;
+            flex-direction: column;
         }
         
         .chart-card.dragging {
@@ -3138,12 +3141,13 @@
             align-items: center;
         }
         .chart-container canvas { max-width: 100%; display: block; }
-        /* Demographics: donut charts fill the box - ample space for chart + legend */
+        /* Demographics: fixed height so donut is large and legend has room (no dynamic sizing) */
         .charts-grid .chart-container {
-            min-height: 280px;
-            height: clamp(280px, 35vw + 120px, 380px);
+            height: 300px;
+            min-height: 300px;
             width: 100%;
             overflow: visible;
+            flex: 1 1 auto;
         }
 
         /* Occupation chart: full width and dynamic height for readable long labels */
@@ -3160,16 +3164,16 @@
             .occupation-chart-container { min-height: min(550px, 60vh); }
         }
         
-        /* Responsive chart sizing - doughnuts fill the box */
+        /* Demographics cards: keep fixed sizes on smaller screens so layout stays consistent */
         @media (max-width: 1600px) {
-            .chart-container { height: clamp(260px, 30vw + 120px, 360px); }
-            .charts-grid .chart-container { min-height: 280px; height: clamp(280px, 32vw + 120px, 360px); }
+            .charts-grid .chart-card { min-height: 340px; }
+            .charts-grid .chart-container { height: 300px; min-height: 300px; }
         }
         @media (max-width: 800px) {
             .charts-grid { grid-template-columns: 1fr; }
-            .chart-container { height: clamp(280px, 40vw + 120px, 380px); }
-            .charts-grid .chart-container { min-height: 280px; height: clamp(280px, 40vw + 120px, 380px); }
-            .chart-card h3 { font-size: clamp(0.75rem, 2.5vw + 0.5rem, 0.9rem); }
+            .charts-grid .chart-card { min-height: 340px; }
+            .charts-grid .chart-container { height: 300px; min-height: 300px; }
+            .chart-card h3 { font-size: 0.85rem; }
         }
         
         /* Dynamic fonts: all dashboard boxes scale with viewport to prevent text cutoff */
@@ -26767,23 +26771,22 @@
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
             const effectiveWidth = Math.max(chartContainerWidth, Math.floor(vw / 2));
             const legendFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
-            const legendFontSizeCircular = Math.max(13, Math.min(18, Math.floor(chartContainerWidth / 24))); // Donut legend: readable, fills box
             const axisFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
             const dataLabelFontSize = Math.max(10, Math.min(15, axisFontSize));
-            // Reserve space for legend; balanced so donut + legend both fill the box
-            const legendAreaWidth = Math.max(180, Math.floor(chartContainerWidth * 0.48));
-            const layoutPaddingCircular = { left: 12, right: legendAreaWidth, top: 12, bottom: 12 };
+            // Fixed legend width so "X.XX% (GP: X.XX%)" fits without cutoff; donut gets the rest (larger)
+            const legendAreaWidth = 185;
+            const layoutPaddingCircular = { left: 8, right: legendAreaWidth, top: 8, bottom: 8 };
             const legendOptionsCircular = { 
                 display: true, 
                 position: 'right', 
                 align: 'center', 
-                maxWidth: legendAreaWidth - 8,
-                padding: { left: 12, right: 8 }, 
+                maxWidth: legendAreaWidth,
+                padding: { left: 6, right: 4 }, 
                 labels: { 
                     color: '#e6f1ff', 
-                    font: { size: legendFontSizeCircular }, 
-                    boxWidth: 16, 
-                    padding: 10,
+                    font: { size: 11 }, 
+                    boxWidth: 12, 
+                    padding: 6,
                     textAlign: 'left'
                 } 
             };
