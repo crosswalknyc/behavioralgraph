@@ -3107,13 +3107,19 @@
             position: relative;
             padding: 0.5rem 0.25rem;
             box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         .chart-container canvas { max-width: 100%; display: block; }
-        /* Demographics: center chart block in the card (no flex - Chart.js needs block layout to size canvas) */
+        /* Demographics: larger donuts, centered in card; chart+legend fill the box; no text cutoff */
         .charts-grid .chart-container {
-            max-width: min(100%, 540px);
+            min-height: 320px;
+            height: clamp(320px, 38vw + 140px, 460px);
+            max-width: min(100%, 640px);
             margin-left: auto;
             margin-right: auto;
+            overflow: visible;
         }
 
         /* Occupation chart: full width and dynamic height for readable long labels */
@@ -3132,15 +3138,16 @@
         
         /* Responsive chart sizing - scales with viewport so doughnuts fill the box */
         @media (max-width: 1600px) {
-            .chart-container { height: clamp(240px, 24vw + 100px, 320px); }
+            .chart-container { height: clamp(280px, 30vw + 120px, 400px); }
+            .charts-grid .chart-container { min-height: 300px; height: clamp(300px, 34vw + 130px, 420px); }
         }
-        
         @media (max-width: 1200px) {
-            .chart-container { height: clamp(220px, 22vw + 90px, 300px); }
+            .chart-container { height: clamp(260px, 28vw + 100px, 360px); }
+            .charts-grid .chart-container { min-height: 280px; height: clamp(280px, 32vw + 120px, 400px); }
         }
-        
         @media (max-width: 800px) {
-            .chart-container { height: clamp(260px, 36vw + 100px, 340px); }
+            .chart-container { height: clamp(280px, 40vw + 120px, 380px); }
+            .charts-grid .chart-container { min-height: 300px; height: clamp(300px, 42vw + 130px, 420px); }
             .chart-card h3 { font-size: clamp(0.75rem, 2.5vw + 0.5rem, 0.9rem); }
         }
         
@@ -23902,9 +23909,9 @@
 
                 if (col === 'SAMPLE SIZE') {
                     sampleSize = rawNum || catShare || 0;
-                    // Projected US comes from F4 (US Gen Pop Projection column on SAMPLE SIZE row)
-                    if (usPop > 0) projectedUS = usPop;
                 }
+                // Projected sample size is in F4: column F (US Gen Pop Projection) on BRAND INPUT row (row 4)
+                if (col === 'BRAND INPUT' && usPop > 0) projectedUS = usPop;
 
                 if (col === 'MEDIAN AGE' || col.includes('MEDIAN') && col.includes('AGE')) {
                     medianAge = brandPen || catShare || parseFloat(val) || 0;
@@ -23927,10 +23934,7 @@
                     }
                 }
 
-                // Fallback: also check BRAND INPUT row for projectedUS if not already set
-                if (col === 'BRAND INPUT' && projectedUS === 0) {
-                    projectedUS = usPop || 0;
-                }
+                // (projectedUS from BRAND INPUT row handled above)
             });
 
             return { sampleSize, projectedUS, medianAge, demographics, genPop };
@@ -24599,23 +24603,17 @@
                 }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 100;
 
-                // Sample size is in Original Raw Numbers OR Category Share column for SAMPLE SIZE row
-                // Projected US is in US Gen Pop Projection column (F4) for SAMPLE SIZE row
+                // Original sample size: column D (Category Share) on SAMPLE SIZE row (row 5)
                 if (category === 'SAMPLE SIZE') {
-                    // Try different columns where sample size might be
                     const possibleSize = parseInt(row['Original Raw Numbers']) || 
                                         parseInt(row['Category Share']) || 
                                         parseInt(row['Brand Penetration (Row)']) || 0;
                     if (possibleSize > 0) result.sampleSize = possibleSize;
-                    
-                    // Projected US comes from F4 (US Gen Pop Projection column on SAMPLE SIZE row)
-                    const projectedFromF4 = parseInt(row['US Gen Pop Projection'] || 0);
-                    if (projectedFromF4 > 0) result.projectedUS = projectedFromF4;
                 }
-                
-                // Fallback: also check BRAND INPUT row for projectedUS if not already set
-                if (category === 'BRAND INPUT' && result.projectedUS === 0) {
-                    result.projectedUS = usProjection;
+                // Projected sample size: column F (US Gen Pop Projection) on BRAND INPUT row (row 4 = F4)
+                if (category === 'BRAND INPUT') {
+                    const projectedFromF4 = parseInt(row['US Gen Pop Projection'] || row[5] || 0);
+                    if (projectedFromF4 > 0) result.projectedUS = projectedFromF4;
                 }
 
                 // Store BRAND CATEGORY for display (e.g. SERIES - Netflix -> append platform to title)
@@ -26672,15 +26670,15 @@
             const legendFontSizeCircular = Math.max(10, Math.min(13, legendFontSize)); // Readable size for demographics donut legends
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
-            // Reserve space for legend so full text (e.g. "FEMALE 53.22% (GP: 48.35%)") is not cut off; min width so legend never truncates
-            const legendAreaWidth = Math.max(260, Math.floor(chartContainerWidth * 0.52));
-            const layoutPaddingCircular = { left: 10, right: legendAreaWidth, top: 8, bottom: 8 };
+            // Reserve space for legend so full text (e.g. "FEMALE 53.22% (GP: 48.35%)") is not cut off; allow chart more room so donut fills the box
+            const legendAreaWidth = Math.max(240, Math.floor(chartContainerWidth * 0.48));
+            const layoutPaddingCircular = { left: 12, right: legendAreaWidth, top: 12, bottom: 12 };
             const legendOptionsCircular = { 
                 display: true, 
                 position: 'right', 
                 align: 'center', 
-                maxWidth: legendAreaWidth - 16,
-                padding: { left: 24, right: 10 }, 
+                maxWidth: legendAreaWidth - 12,
+                padding: { left: 20, right: 8 }, 
                 labels: { 
                     color: '#e6f1ff', 
                     font: { size: legendFontSizeCircular }, 

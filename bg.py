@@ -4967,9 +4967,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Recalculate US Gen Pop Projection from final Original Raw Numbers
     df_final = add_us_gen_pop_projection(df_final)
     
-    # Final row ordering and CSV save - using exact order from reference file
+    # Final row ordering: row 4 = BRAND INPUT, row 5 = SAMPLE SIZE (original sample size in column D row 5; projected in column F row 4)
     CATEGORY_ORDER = [
-        "INPUT_METADATA", "BRAND INPUT", "SAMPLE SIZE", "AVID FAN", "CASUAL FAN",
+        "INPUT_METADATA", "BRAND CATEGORY", "BRAND INPUT", "SAMPLE SIZE", "AVID FAN", "CASUAL FAN",
         "AGE", "EDUCATION", "ETHNICITY", "GENDER", "INCOME", "RELATIONSHIP", 
         "SEXUAL_ORIENTATION", "PARENTAL_STATUS", "OCCUPATION", "LOCATION",
         "INTEREST", "AMUSEMENT PARKS", "APP/PLATFORM USAGE", "AUTOMOBILE", "BANKING",
@@ -4984,7 +4984,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         "NHL", "NWSL", "MLS", "PREMIER LEAGUE",
         "MLB", "LA LIGA", "GOLF", "SERIE A", "SOCCER", "TENNIS", "UEFA",
         "RUGBY", "VOLLEYBALL", "COLLEGE/UNIVERSITY", "ACCESSORIES", "APPAREL/FOOTWEAR",
-        "BEAUTY/WELLNESS", "BRAND CATEGORY", "CPG", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
+        "BEAUTY/WELLNESS", "CPG", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
         "PETS", "TECHNOLOGY BRAND"
     ]
     
@@ -5060,13 +5060,27 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # This allows dash variants to be found during parsing, but only non-dash appears in output
     df_final = remove_dash_variants_from_output(df_final, brands)
     
-    # Reorder columns
+    # Reorder columns: A=Column, B=Value, C=Brand Penetration, D=Category Share, E=Original Raw Numbers, F=US Gen Pop Projection
     column_order = ['Column', 'Value', 'Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers', 'US Gen Pop Projection']
     existing_columns = [col for col in column_order if col in df_final.columns]
     other_columns = [col for col in df_final.columns if col not in column_order]
     df_final = df_final[existing_columns + other_columns]
 
-    # Save to CSV
+    # Place projected sample size in column F row 4 (BRAND INPUT row). Original sample size is in column D row 5 (SAMPLE SIZE row).
+    sample_mask = df_final['Column'].str.upper() == 'SAMPLE SIZE'
+    bi_mask = df_final['Column'].str.upper() == 'BRAND INPUT'
+    if sample_mask.any() and bi_mask.any() and 'Category Share' in df_final.columns and 'US Gen Pop Projection' in df_final.columns:
+        try:
+            raw_val = df_final.loc[sample_mask, 'Category Share'].iloc[0]
+            sample_size = int(float(str(raw_val).replace(',', '')))
+            if sample_size > 0:
+                projected = int((sample_size / 10_000_000.0) * 324_700_000.0)
+                df_final.loc[bi_mask, 'US Gen Pop Projection'] = str(projected)
+        except Exception as e:
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"⚠️ Could not set F4 from D5: {e}")
+
+    # Save to CSV (row 1=header, row 2=INPUT_METADATA, row 3=BRAND CATEGORY, row 4=BRAND INPUT with F4=projected US, row 5=SAMPLE SIZE with D5=original sample size)
     try:
         df_final.to_csv(final_file, index=False)
         print(f"✅ Successfully saved to: {final_file}")
