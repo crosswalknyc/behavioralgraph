@@ -11147,6 +11147,18 @@
         </div>
     </div>
     
+    <!-- Profile Released Modal - Shown when a purgatory profile is released -->
+    <div class="credits-modal" id="profileReleasedModal" style="display: none;" onclick="if(event.target === this) closeProfileReleasedModal()">
+        <div class="credits-modal-content" style="max-width: 460px;" onclick="event.stopPropagation()">
+            <h2>✅ Profile IQ Ready</h2>
+            <p id="profileReleasedMessage" style="margin: 0 0 1.25rem 0; color: var(--text-secondary); line-height: 1.5;">Your Profile IQ of <strong id="profileReleasedName"></strong> has been loaded into your dashboard.</p>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button id="profileReleasedViewBtn" class="btn btn-primary" onclick="handleProfileReleasedView()">View in Profile IQ</button>
+                <button onclick="closeProfileReleasedModal()" style="background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1.25rem; border-radius: 6px; cursor: pointer;">Dismiss</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Analysis Status Modal - Tracks job progress, warns not to navigate away -->
     <div class="credits-modal" id="analysisStatusModal">
         <div class="credits-modal-content" style="max-width: 480px;">
@@ -15710,6 +15722,9 @@
             // Initialize global tooltip system
             initGlobalTooltip();
             
+            // Check for profile-released notifications (purgatory release)
+            checkProfileReleasedNotifications();
+            
             // Attach event listeners to ALL navigation buttons
             const navButtons = [
                 { id: 'profileIQTab', handler: showProfileIQ },
@@ -16232,6 +16247,8 @@
             
             // Load profiles
             loadDashboardProfiles();
+            // Check for profile-released notifications when switching to Profile IQ
+            checkProfileReleasedNotifications();
         }
         
         window.showSubscriberIQ = function() {
@@ -25010,6 +25027,62 @@
 
         function filterDashboardProfiles() {
             renderDashboardProfileTree(dashboardProfiles);
+        }
+
+        // Profile-released notifications (when purgatory profile is released)
+        let currentProfileReleasedNotification = null;
+
+        async function checkProfileReleasedNotifications() {
+            try {
+                const res = await fetch('/api/notifications/profile-released', { credentials: 'same-origin' });
+                if (res.status === 401 || !res.ok) return;
+                const data = await res.json();
+                const notifications = data.notifications || [];
+                if (notifications.length > 0) {
+                    const n = notifications[0];
+                    currentProfileReleasedNotification = n;
+                    document.getElementById('profileReleasedName').textContent = n.profile_name || 'Unknown';
+                    document.getElementById('profileReleasedModal').style.display = 'flex';
+                }
+            } catch (e) { console.warn('Profile-released check failed:', e); }
+        }
+
+        async function closeProfileReleasedModal() {
+            const n = currentProfileReleasedNotification;
+            document.getElementById('profileReleasedModal').style.display = 'none';
+            currentProfileReleasedNotification = null;
+            if (n && n.id) {
+                try {
+                    await fetch('/api/notifications/profile-released/dismiss', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: [n.id] })
+                    });
+                } catch (_) {}
+            }
+        }
+
+        async function handleProfileReleasedView() {
+            const n = currentProfileReleasedNotification;
+            if (!n || !n.s3_key) { closeProfileReleasedModal(); return; }
+            closeProfileReleasedModal();
+            if (typeof showProfileIQ === 'function') showProfileIQ();
+            clearSessionJobsCache();
+            const container = document.getElementById('dashProfileTree');
+            if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Refreshing...</div>';
+            const res = await fetch('/api/jobs?refresh=1', { credentials: 'same-origin' });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.jobs) { setSessionJobsCache(data); dashboardProfiles = data.jobs; renderDashboardProfileTree(dashboardProfiles); }
+            }
+            if (typeof selectDashboardProfile === 'function') selectDashboardProfile(n.s3_key);
+            try {
+                await fetch('/api/notifications/profile-released/dismiss', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: [n.id] })
+                });
+            } catch (_) {}
         }
 
         async function selectDashboardProfile(profileId) {

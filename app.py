@@ -3222,6 +3222,43 @@ def get_credit_usage():
 
 
 # ============================================================================
+# PROFILE RELEASED NOTIFICATIONS
+# ============================================================================
+
+@app.route('/api/notifications/profile-released')
+@requires_auth
+def get_profile_released_notifications():
+    """Get unread profile-released notifications for the current user."""
+    username = session.get('username')
+    if not username:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    data = load_profile_released_notifications()
+    notifications = [n for n in data.get(username, []) if not n.get('read')]
+    return jsonify({'success': True, 'notifications': notifications})
+
+
+@app.route('/api/notifications/profile-released/dismiss', methods=['POST'])
+@requires_auth
+def dismiss_profile_released_notifications():
+    """Mark profile-released notification(s) as read."""
+    username = session.get('username')
+    if not username:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    body = request.get_json() or {}
+    ids = body.get('ids', [])
+    if not ids:
+        return jsonify({'success': True})
+    data = load_profile_released_notifications()
+    user_notifs = data.get(username, [])
+    for n in user_notifs:
+        if n.get('id') in ids:
+            n['read'] = True
+    data[username] = user_notifs
+    save_profile_released_notifications(data)
+    return jsonify({'success': True})
+
+
+# ============================================================================
 # CHAT STATUS API (Available/Busy)
 # ============================================================================
 
@@ -9399,6 +9436,66 @@ TICKER_METADATA_KEY = 'system/ticker_metadata.json'
 # Purgatory metadata storage key - tracks files pending admin review
 PURGATORY_METADATA_KEY = 'system/purgatory_metadata.json'
 
+# Profile released notifications - per-user notifications when their purgatory profile is released
+PROFILE_RELEASED_NOTIFICATIONS_KEY = 'system/profile_released_notifications.json'
+
+def load_profile_released_notifications():
+    """Load profile-released notifications from S3."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=PROFILE_RELEASED_NOTIFICATIONS_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return {}
+
+def save_profile_released_notifications(data):
+    """Save profile-released notifications to S3."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=PROFILE_RELEASED_NOTIFICATIONS_KEY,
+            Body=json.dumps(data, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except Exception as e:
+        print(f"Error saving profile released notifications: {e}")
+        return False
+
+def add_profile_released_notification(username, profile_name, s3_key):
+    """Add a notification for a user when their profile is released from purgatory."""
+    data = load_profile_released_notifications()
+    if username not in data:
+        data[username] = []
+    data[username].append({
+        'id': str(uuid.uuid4()),
+        'profile_name': profile_name,
+        's3_key': s3_key,
+        'created_at': datetime.now().isoformat(),
+        'read': False
+    })
+    return save_profile_released_notifications(data)
+
+def send_profile_released_email(created_by, profile_name, released_s3_key):
+    """Send email to the profile creator when their profile is released from purgatory."""
+    data = load_users()
+    user = data.get('users', {}).get(created_by, {})
+    email = user.get('email')
+    if not email:
+        print(f"⚠️ No email for user {created_by}, skipping profile-released email")
+        return False, "No email for user"
+    base_url = os.environ.get('APP_BASE_URL', 'https://behavioral-graph.onrender.com')
+    profile_url = f"{base_url}/#profileiq"
+    subject = f"Your Profile IQ: {profile_name} is now available"
+    html = f"""<p>Good news! Your Profile IQ analysis for <strong>{profile_name}</strong> has been released from review and is now available in your dashboard.</p>
+<p><a href="{profile_url}" style="background:#007bff;color:white;padding:8px 16px;text-decoration:none;border-radius:6px;">View in Profile IQ</a></p>
+<p>— Behavioral Graph Team</p>"""
+    text = f"Your Profile IQ analysis for {profile_name} has been released and is now available. View it at: {profile_url}"
+    return send_email_via_gmail(email, subject, html, text)
+
 def load_purgatory_metadata():
     """Load purgatory file metadata from S3."""
     if not s3_client:
@@ -9781,6 +9878,13 @@ def release_purgatory_item():
                             s3_cache['jobs'][i]['category'] = item['category']
                         save_persisted_cache()
                         break
+            
+            # Notify the creator: email + in-dashboard notification
+            created_by = item.get('created_by')
+            if created_by:
+                profile_name = display_name or item.get('project_name', 'Unknown Profile')
+                send_profile_released_email(created_by, profile_name, result)
+                add_profile_released_notification(created_by, profile_name, result)
             
             return jsonify({
                 'success': True,
