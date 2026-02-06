@@ -14998,10 +14998,7 @@
                         <div id="ticketSalesSummaryCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
                         <div id="ticketSalesAttributionSection" style="margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: var(--text-secondary);">Attribution</h3>
-                            <div id="ticketSalesAttributionGrid" style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: stretch;">
-                                <div id="ticketSalesAttributionLeft" style="display: flex; flex-direction: column; gap: 1rem; min-width: 0;"></div>
-                                <div id="ticketSalesAttributionRight" style="min-height: 100%; display: flex; align-items: stretch;"></div>
-                            </div>
+                            <div id="ticketSalesAttributionGrid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1rem; aspect-ratio: 1; max-height: 420px;"></div>
                         </div>
                         <div id="ticketSalesTalentAttributionSection" style="margin-bottom: 1.5rem;"></div>
                         <div id="ticketSalesPerTalentChart" style="height: 260px; margin-bottom: 1.5rem; display: none;"></div>
@@ -21767,11 +21764,9 @@
             const lastClickData = ta.map(t => ({ name: (t.name || '').toUpperCase(), value: _parseGenPop(t.convGenPop || '0') }));
             const assistedData = ta.map(t => ({ name: (t.name || '').toUpperCase(), value: _parseGenPop(t.hitsGenPop || '0') }));
             
-            const leftContainer = document.getElementById('ticketSalesAttributionLeft');
-            const rightContainer = document.getElementById('ticketSalesAttributionRight');
-            if (leftContainer && rightContainer && typeof Chart !== 'undefined') {
-                leftContainer.innerHTML = '';
-                rightContainer.innerHTML = '';
+            const gridContainer = document.getElementById('ticketSalesAttributionGrid');
+            if (gridContainer && typeof Chart !== 'undefined') {
+                gridContainer.innerHTML = '';
                 const pieColors = ['rgba(147, 51, 234, 0.85)', 'rgba(163, 230, 53, 0.85)', 'rgba(245, 158, 11, 0.85)'];
                 const fmtVal = (v) => v >= 1e6 ? (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? (v/1e3).toFixed(1) + 'K' : String(Math.round(v));
                 const showPctBar = ticketSalesAttributionDisplayMode === 'percent';
@@ -21781,10 +21776,10 @@
                 const attMetricValues = showPctBar ? [pctLc, pctAs] : [d.totalTicketsDueToTalent, d.totalHitsAssisted];
                 const attMetricTotal = attMetricValues.reduce((s, v) => s + v, 0);
                 const attMetricDiv = document.createElement('div');
-                attMetricDiv.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 200px; position: relative;';
+                attMetricDiv.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 100%; min-height: 0; position: relative; display: flex; flex-direction: column;';
                 const attMetricCanvas = document.createElement('canvas');
                 attMetricDiv.appendChild(attMetricCanvas);
-                leftContainer.appendChild(attMetricDiv);
+                gridContainer.appendChild(attMetricDiv);
                 if (ticketSalesCharts.barChart) ticketSalesCharts.barChart.destroy();
                 ticketSalesCharts.barChart = new Chart(attMetricCanvas, {
                     type: 'pie',
@@ -21805,10 +21800,10 @@
                     const total = data.reduce((s, x) => s + x.value, 0);
                     if (data.length === 0 || total === 0) return;
                     const div = document.createElement('div');
-                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 200px; position: relative;';
+                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 100%; min-height: 0; position: relative; display: flex; flex-direction: column;';
                     const canvas = document.createElement('canvas');
                     div.appendChild(canvas);
-                    leftContainer.appendChild(div);
+                    gridContainer.appendChild(div);
                     if (ticketSalesCharts['pie' + (idx === 0 ? 'LastClick' : 'Assisted')]) {
                         ticketSalesCharts['pie' + (idx === 0 ? 'LastClick' : 'Assisted')].destroy();
                     }
@@ -21856,11 +21851,11 @@
                 const combinedTotal = combinedValues.reduce((s, v) => s + v, 0);
                 if (combinedLabels.length > 0 && combinedTotal > 0) {
                     const div = document.createElement('div');
-                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); flex: 1; min-height: 400px; position: relative; display: flex; flex-direction: column;';
+                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 100%; min-height: 0; position: relative; display: flex; flex-direction: column;';
                     const canvas = document.createElement('canvas');
                     canvas.style.flex = '1';
                     div.appendChild(canvas);
-                    rightContainer.appendChild(div);
+                    gridContainer.appendChild(div);
                     if (ticketSalesCharts.pieCombined) ticketSalesCharts.pieCombined.destroy();
                     ticketSalesCharts.pieCombined = new Chart(canvas, {
                         type: 'pie',
