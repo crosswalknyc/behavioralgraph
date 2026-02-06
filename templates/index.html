@@ -21731,9 +21731,7 @@
             const summaryCards = [
                 { label: 'Total Movie Viewers', value: fmtGenPopDisplay(d.totalMovieViewersGenPop), tooltip: totalMovieViewersTooltip },
                 { label: 'Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: lastClickVal, tooltip: lastClickTooltip },
-                { label: '% of Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: lastClickVal, tooltip: lastClickTooltip },
-                { label: 'Tickets Purchased within a 14 day window of Talent Interaction (Assisted Conversion)', value: assistedVal, tooltip: assistedTooltip },
-                { label: '% Who Purchased Tickets within a 14 day window of Talent Interaction (Assisted Conversion)', value: assistedVal, tooltip: assistedTooltip }
+                { label: 'Tickets Purchased within a 14 day window of Talent Interaction (Assisted Conversion)', value: assistedVal, tooltip: assistedTooltip }
             ];
             const cardsEl = document.getElementById('ticketSalesSummaryCards');
             if (cardsEl) cardsEl.innerHTML = summaryCards.map(c => '<div class="insight-card" style="background: var(--bg-card); border-radius: 6px; padding: 0.75rem; border: 1px solid var(--border-color);"' + (c.tooltip ? ' title="' + esc(c.tooltip) + '"' : '') + '><div class="insight-label" style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.2rem;">' + esc(c.label) + '</div><div class="insight-value" style="font-size: 1rem; font-weight: 700; color: var(--accent-cyan);">' + esc(c.value) + '</div></div>').join('');
