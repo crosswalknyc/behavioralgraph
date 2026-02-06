@@ -503,7 +503,7 @@ GENPOP_DEMOGRAPHICS = [
     ("GENDER", "Prefer not to say", 0.0926),
     ("ETHNICITY", "White", 59.0489),
     ("ETHNICITY", "Black", 14.3119),
-    ("ETHNICITY", "Latino", 18.6083),
+    ("ETHNICITY", "LatinX", 18.6083),
     ("ETHNICITY", "Asian", 3.0309),
     ("ETHNICITY", "Other", 5.0001),
     ("EDUCATION", "Complete College/University", 43.517),
@@ -1327,7 +1327,7 @@ def get_user_inputs():
         fields = {
             "GENDER": "Gender (N for no or Female, Male, Trans Male, Trans Female, Non-binary): ",
             "AGE": "Age group (N for no or <16, 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+): ",
-            "ETHNICITY": "Ethnicity (N for no or White, Latino, Other, Black, Asian): ",
+            "ETHNICITY": "Ethnicity (N for no or White, LatinX, Other, Black, Asian): ",
             "INCOME": "HHI (N for no or $40K - $60K, $60K - $75K, $75K - $100K, $100K - $150K, $150K - $250K, $250K+): ",
             "EDUCATION": "Education (N for no or Complete College/University, Completed HS only, Completed Grad School, None): ",
             "RELATIONSHIP": "Relationship (N for no or Single, In a Relationship, Married, Other, Divorced): ",
@@ -1354,7 +1354,7 @@ def get_user_inputs():
                 "<16", "16-18", "18-20", "21-25", "26-30", "31-40", "41-59", "60+"
             ],
             "ETHNICITY": [
-                "White", "Latino", "Other", "Black", "Asian"
+                "White", "LatinX", "Other", "Black", "Asian"
             ],
             "INCOME": [
                 "$40K - $60K", "$60K - $75K", "$75K - $100K", "$100K - $150K", "$150K - $250K", "$250K+"
@@ -1433,7 +1433,7 @@ def get_user_inputs():
 # Build & normalize cap tables (base 10M)
 ethnicity_age_caps = pd.DataFrame({
     'AGE': ['<16', '16-18', '19-20', '21-25', '26-30', '31-40', '41-59', '60+'] * 5,
-    'ETHNICITY': ['White'] * 8 + ['Black'] * 8 + ['Latino'] * 8 + ['Asian'] * 8 + ['Other'] * 8,
+    'ETHNICITY': ['White'] * 8 + ['Black'] * 8 + ['LatinX'] * 8 + ['Asian'] * 8 + ['Other'] * 8,
     'MAX_COUNT': [
         886395,176361,153117,382102,375845,771541,1464555,1814626,
         244157,46567,39189,95525,89329,170718,287550,233094,
@@ -1617,8 +1617,7 @@ def capitalize_words(text):
     # Special case handling for specific terms
     special_cases = {
         # Demographics
-        'latinx': 'Latino',
-        'latino': 'Latino',
+        'latinx': 'LatinX',
         'lgbt': 'LGBT',
         'lgbtq': 'LGBTQ',
         'lgbtq+': 'LGBTQ+',
@@ -2095,7 +2094,7 @@ def enforce_espn_consistency_final(df):
                 
             # Update US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns and max_raw_numbers > 0:
-                genpop = int((max_raw_numbers / 10_000_000) * 324_700_000)
+                genpop = int((max_raw_numbers / 10_000_000) * 324_770_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
         except:
             pass
@@ -4688,13 +4687,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # For new runs, the pipeline is complete - go straight to save
     # For previous runs, the pipeline is also complete - go straight to save
     
-    # Insert 'Brand Input' row at the top before saving (include category when set)
+    # Insert 'Brand Input' row at the top before saving
     if brands and isinstance(brands, list) and len(brands) == 1:
         brand_input_str = brands[0]
     else:
         brand_input_str = ', '.join(brands) if brands else ''
-    if brand_category and str(brand_category).strip() and str(brand_category).strip().upper() not in ('', 'GENERAL'):
-        brand_input_str = f"{brand_category} | {brand_input_str}"
     brand_row = pd.DataFrame({
         'Column': ['BRAND INPUT'],
         'Value': [brand_input_str],
@@ -4967,9 +4964,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Recalculate US Gen Pop Projection from final Original Raw Numbers
     df_final = add_us_gen_pop_projection(df_final)
     
-    # Final row ordering: row 4 = BRAND INPUT, row 5 = SAMPLE SIZE (original sample size in column D row 5; projected in column F row 4)
+    # Final row ordering and CSV save - using exact order from reference file
     CATEGORY_ORDER = [
-        "INPUT_METADATA", "BRAND CATEGORY", "BRAND INPUT", "SAMPLE SIZE", "AVID FAN", "CASUAL FAN",
+        "INPUT_METADATA", "BRAND INPUT", "SAMPLE SIZE", "AVID FAN", "CASUAL FAN",
         "AGE", "EDUCATION", "ETHNICITY", "GENDER", "INCOME", "RELATIONSHIP", 
         "SEXUAL_ORIENTATION", "PARENTAL_STATUS", "OCCUPATION", "LOCATION",
         "INTEREST", "AMUSEMENT PARKS", "APP/PLATFORM USAGE", "AUTOMOBILE", "BANKING",
@@ -4984,7 +4981,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         "NHL", "NWSL", "MLS", "PREMIER LEAGUE",
         "MLB", "LA LIGA", "GOLF", "SERIE A", "SOCCER", "TENNIS", "UEFA",
         "RUGBY", "VOLLEYBALL", "COLLEGE/UNIVERSITY", "ACCESSORIES", "APPAREL/FOOTWEAR",
-        "BEAUTY/WELLNESS", "CPG", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
+        "BEAUTY/WELLNESS", "BRAND CATEGORY", "CPG", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
         "PETS", "TECHNOLOGY BRAND"
     ]
     
@@ -5060,27 +5057,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # This allows dash variants to be found during parsing, but only non-dash appears in output
     df_final = remove_dash_variants_from_output(df_final, brands)
     
-    # Reorder columns: A=Column, B=Value, C=Brand Penetration, D=Category Share, E=Original Raw Numbers, F=US Gen Pop Projection
+    # Reorder columns
     column_order = ['Column', 'Value', 'Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers', 'US Gen Pop Projection']
     existing_columns = [col for col in column_order if col in df_final.columns]
     other_columns = [col for col in df_final.columns if col not in column_order]
     df_final = df_final[existing_columns + other_columns]
 
-    # Place projected sample size in column F row 4 (BRAND INPUT row). Original sample size is in column D row 5 (SAMPLE SIZE row).
-    sample_mask = df_final['Column'].str.upper() == 'SAMPLE SIZE'
-    bi_mask = df_final['Column'].str.upper() == 'BRAND INPUT'
-    if sample_mask.any() and bi_mask.any() and 'Category Share' in df_final.columns and 'US Gen Pop Projection' in df_final.columns:
-        try:
-            raw_val = df_final.loc[sample_mask, 'Category Share'].iloc[0]
-            sample_size = int(float(str(raw_val).replace(',', '')))
-            if sample_size > 0:
-                projected = int((sample_size / 10_000_000.0) * 324_700_000.0)
-                df_final.loc[bi_mask, 'US Gen Pop Projection'] = str(projected)
-        except Exception as e:
-            if not SILENCE_VERBOSE_OUTPUT:
-                print(f"⚠️ Could not set F4 from D5: {e}")
-
-    # Save to CSV (row 1=header, row 2=INPUT_METADATA, row 3=BRAND CATEGORY, row 4=BRAND INPUT with F4=projected US, row 5=SAMPLE SIZE with D5=original sample size)
+    # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
         print(f"✅ Successfully saved to: {final_file}")
@@ -5697,7 +5680,7 @@ def get_hardcoded_genpop_demographics():
         ],
         'ETHNICITY': [
             ('WHITE', 59.0489, 5904890),
-            ('LATINO', 18.6083, 1860830),
+            ('LATINX', 18.6083, 1860830),
             ('BLACK', 14.3119, 1431190),
             ('OTHER', 5.0001, 500009),
             ('ASIAN', 3.0309, 303090)
@@ -6495,17 +6478,13 @@ def boost_sports_categories_by_436x(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def get_brand_input_names(df: pd.DataFrame) -> set:
-    """Extract all brand input names from the BRAND INPUT row, returning a set of uppercase names for comparison.
-    If Value is 'Category | Brand1, Brand2', only the brand part (after ' | ') is used for matching."""
+    """Extract all brand input names from the BRAND INPUT row, returning a set of uppercase names for comparison."""
     brand_names = set()
     bi_mask = df['Column'].str.upper() == 'BRAND INPUT'
     if bi_mask.any():
-        brand_input_value = str(df.loc[bi_mask, 'Value'].iloc[0]).strip()
-        # If category prefix present (e.g. "ACTOR | Kevin O'Leary"), use only the part after " | " for name matching
-        if ' | ' in brand_input_value:
-            brand_input_value = brand_input_value.split(' | ', 1)[1].strip()
+        brand_input_value = df.loc[bi_mask, 'Value'].iloc[0]
         # Handle comma-separated list
-        names = [b.strip().upper() for b in brand_input_value.split(',')]
+        names = [b.strip().upper() for b in str(brand_input_value).split(',')]
         brand_names.update(names)
     return brand_names
 
@@ -9347,7 +9326,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
     # --- ENSURE ALL ETHNICITY CATEGORIES ARE PRESENT ---
     def ensure_all_ethnicity_categories(df_behavior_data, df_demo_final):
         """
-        Ensure all ethnicity categories (White, Asian, Latino, Black) are always present.
+        Ensure all ethnicity categories (White, Asian, LatinX, Black) are always present.
         Add missing ones with random noise while maintaining 100% total.
         """
         # Check if we have demographic data
@@ -9359,7 +9338,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             return df_behavior_data
         
         ethnicity_data = df_demo_final[ethnicity_mask].copy()
-        required_ethnicities = ['white', 'asian', 'latino', 'black']
+        required_ethnicities = ['white', 'asian', 'latinx', 'black']
         existing_ethnicities = ethnicity_data['Value'].str.lower().tolist()
         
         missing_ethnicities = []
@@ -9462,7 +9441,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             'Complete College/University', 'Completed HS only', 'Completed Grad School', 'Other'
         ],
         'ETHNICITY': [
-            'White', 'Latino', 'Asian', 'Black', 'Other'
+            'White', 'Latinx', 'Asian', 'Black', 'Other'
         ]
         # Note: LOCATION is now handled in REQUIRED_DEMOGRAPHICS
     }
@@ -9837,7 +9816,7 @@ REQUIRED_DEMOGRAPHICS = {
         'Complete College/University', 'Completed HS only', 'Completed Grad School'
     ],
     'ETHNICITY': [
-        'White', 'Latino', 'Asian', 'Black',
+        'White', 'Latinx', 'Asian', 'Black',
     ],
     'GENDER': [
         'Female', 'Male', 'Trans Female', 'Trans Male', 'Non-Binary'
@@ -14735,22 +14714,19 @@ def finalize_original_raw_numbers_for_output(df):
         'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'
     }
 
-    # Ensure demographic categories have empty raw numbers (except SAMPLE SIZE)
+    # Ensure demographic categories have empty raw numbers
     for category in demographic_categories:
-        if category.upper() == 'SAMPLE SIZE':
-            continue  # SAMPLE SIZE gets its raw number set below from Percentage
         mask = df['Column'].str.upper() == category.upper()
         if mask.any():
             df.loc[mask, final_col] = ''
 
-    # Resolve sample size and set SAMPLE SIZE row's Original Raw Numbers so US Gen Pop Projection = (sample_size/10M)*324.7M
+    # Resolve sample size
     sample_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
     sample_size = None
     if sample_mask.any():
         try:
             sample_val = df.loc[sample_mask, 'Percentage'].iloc[0]
             sample_size = int(float(str(sample_val).replace(',', '')))
-            df.loc[sample_mask, final_col] = str(sample_size)
         except Exception:
             sample_size = None
 
