@@ -13227,7 +13227,7 @@ def submit_talent_search():
         
         # Create job
         job_id = str(uuid.uuid4())
-        username = user.get('username', 'unknown')
+        username = session.get('username', 'unknown')
         
         jobs[job_id] = {
             'job_id': job_id,
@@ -13295,7 +13295,7 @@ def submit_talent_theater():
         if not start_date or not end_date:
             return jsonify({'error': 'Start date and end date are required'}), 400
         
-        username = user.get('username', 'unknown')
+        username = session.get('username', 'unknown')
         if not has_credits_for(username, CREDITS_TICKET_SALES):
             _, credits_left = check_user_credits(username)
             return jsonify({
@@ -13585,7 +13585,7 @@ def submit_svod_acquisition():
         if genre and genre not in SVOD_ALLOWED_GENRES:
             return jsonify({'error': f'Genre must be one of: {", ".join(SVOD_ALLOWED_GENRES)}'}), 400
         
-        username = user.get('username', 'unknown')
+        username = session.get('username', 'unknown')
         if not has_credits_for(username, CREDITS_SVOD):
             _, credits_left = check_user_credits(username)
             return jsonify({
@@ -13676,7 +13676,7 @@ def submit_campaign_roi():
         if not post_domains:
             return jsonify({'error': 'At least one post domain is required'}), 400
         
-        username = user.get('username', 'unknown')
+        username = session.get('username', 'unknown')
         if not has_credits_for(username, CREDITS_CAMPAIGN_ROI):
             _, credits_left = check_user_credits(username)
             return jsonify({
@@ -13977,7 +13977,7 @@ def submit_cross_show():
         
         # Create job
         job_id = str(uuid.uuid4())
-        username = user.get('username', 'unknown')
+        username = session.get('username', 'unknown')
         
         jobs[job_id] = {
             'job_id': job_id,
@@ -14042,7 +14042,7 @@ def submit_watch_time():
         if not show_names:
             return jsonify({'error': 'At least one show name is required'}), 400
         
-        username = user.get('username', 'unknown')
+        username = session.get('username', 'unknown')
         if not has_credits_for(username, CREDITS_WATCH_TIME):
             _, credits_left = check_user_credits(username)
             return jsonify({
