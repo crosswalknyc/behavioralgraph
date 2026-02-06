@@ -6622,19 +6622,20 @@
             const isSelected = selectedFiles.has(file.key);
             const dateStr = file.last_modified ? formatDateTimePST(file.last_modified) : '--';
             const hasCustomImage = file.custom_image ? true : false;
-            const escapedKey = file.key.replace(/'/g, "\\'");
-            const escapedName = (file.project_name || '').replace(/'/g, "\\'");
-            const escapedCategory = (file.category || 'Uncategorized').replace(/'/g, "\\'");
-            const escapedImage = (file.custom_image || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+            const escapedKey = (file.key || '').replace(/'/g, "\\'").replace(/`/g, '\\`');
+            const escapedName = (file.project_name || '').replace(/'/g, "\\'").replace(/`/g, '\\`');
+            const escapedCategory = (file.category || 'Uncategorized').replace(/'/g, "\\'").replace(/`/g, '\\`');
+            const escapedImage = (file.custom_image || '').replace(/"/g, '&quot;').replace(/'/g, "\\'").replace(/`/g, '\\`');
             const profileImageArgs = isTicketSales
-                ? `'${escapedName || escapedKey}', '${escapedKey}', '', '${escapedImage}'`
-                : `'${escapedName || escapedKey}', '${escapedKey}'`;
-            const archiveDeleteBtns = isTicketSales ? '' : (
-                showingArchived ?
-                    `<button class="btn btn-small btn-success btn-icon" onclick="restoreFile('${escapedKey}')" title="Restore">↩️</button>` :
-                    `<button class="btn btn-small btn-archive btn-icon" onclick="archiveFile('${escapedKey}')" title="Archive">📦</button>`
-                ) + `<button class="btn btn-small btn-danger btn-icon" onclick="deleteFile('${escapedKey}')" title="Delete permanently">🗑️</button>`
-            );
+                ? "'" + (escapedName || escapedKey) + "', '" + escapedKey + "', '', '" + escapedImage + "'"
+                : "'" + (escapedName || escapedKey) + "', '" + escapedKey + "'";
+            let archiveDeleteBtns = '';
+            if (!isTicketSales) {
+                archiveDeleteBtns = (showingArchived
+                    ? '<button class="btn btn-small btn-success btn-icon" onclick="restoreFile(\'' + escapedKey + '\')" title="Restore">↩️</button>'
+                    : '<button class="btn btn-small btn-archive btn-icon" onclick="archiveFile(\'' + escapedKey + '\')" title="Archive">📦</button>')
+                    + '<button class="btn btn-small btn-danger btn-icon" onclick="deleteFile(\'' + escapedKey + '\')" title="Delete permanently">🗑️</button>';
+            }
             
             return `
                 <tr data-key="${file.key}" class="${isSelected ? 'selected' : ''}">
@@ -6642,7 +6643,7 @@
                     <td class="file-name" title="${file.key}">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <div class="profile-thumb" id="thumb-${file.key.replace(/[^a-zA-Z0-9]/g, '_')}" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: var(--bg-input); flex-shrink: 0; border: 2px solid ${hasCustomImage ? 'var(--accent-lime)' : 'var(--border-color)'};">
-                                ${hasCustomImage ? `<img src="${file.custom_image}" style="width: 100%; height: 100%; object-fit: cover;">` : ''}
+                                ${hasCustomImage ? '<img src="' + (file.custom_image || '').replace(/"/g, '&quot;') + '" style="width: 100%; height: 100%; object-fit: cover;">' : ''}
                             </div>
                             <span>${file.key.split('/').pop()}</span>
                         </div>
