@@ -14982,6 +14982,9 @@
                                 <div class="display-mode-toggle" id="ticketSalesDisplayToggle" onclick="toggleTicketSalesDisplayMode()" title="Toggle between US % and US #">
                                     <span id="ticketSalesDisplayModeLabel">US %</span>
                                 </div>
+                                <div class="display-mode-toggle" id="ticketSalesHoverToggle" onclick="toggleHoverDescriptors()" title="Toggle detailed tooltip descriptions on/off when hovering over data elements.">
+                                    <span id="ticketSalesHoverToggleLabel">HOVER ON</span>
+                                </div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <span style="font-size: 0.75rem; color: var(--text-secondary);">View:</span>
                                     <select id="ticketSalesViewSelect" onchange="toggleTicketSalesDataView()" style="padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
@@ -26442,15 +26445,21 @@
             localStorage.setItem('bg_hover_enabled', hoverEnabled);
             const toggle = document.getElementById('hoverToggle');
             const label = document.getElementById('hoverToggleLabel');
+            const tsToggle = document.getElementById('ticketSalesHoverToggle');
+            const tsLabel = document.getElementById('ticketSalesHoverToggleLabel');
             const tooltip = document.getElementById('globalTooltip');
             
             if (hoverEnabled) {
                 if (toggle) toggle.classList.remove('active');
                 if (label) label.textContent = 'HOVER ON';
+                if (tsToggle) tsToggle.classList.remove('active');
+                if (tsLabel) tsLabel.textContent = 'HOVER ON';
                 document.body.classList.remove('hover-disabled');
             } else {
                 if (toggle) toggle.classList.add('active');
                 if (label) label.textContent = 'HOVER OFF';
+                if (tsToggle) tsToggle.classList.add('active');
+                if (tsLabel) tsLabel.textContent = 'HOVER OFF';
                 document.body.classList.add('hover-disabled');
                 
                 // Hide any currently visible tooltip using inline styles
@@ -26473,12 +26482,18 @@
             const subscriberOn = localStorage.getItem('bg_subscriber_hover_enabled') !== 'false';
             const toggle = document.getElementById('hoverToggle');
             const label = document.getElementById('hoverToggleLabel');
+            const tsToggle = document.getElementById('ticketSalesHoverToggle');
+            const tsLabel = document.getElementById('ticketSalesHoverToggleLabel');
             const tickerToggle = document.getElementById('tickerHoverToggle');
             const tickerLabel = document.getElementById('tickerHoverToggleLabel');
             const subLabel = document.getElementById('subscriberHoverToggleLabel');
             if (!hoverOn && (toggle || label)) {
                 if (toggle) toggle.classList.add('active');
                 if (label) label.textContent = 'HOVER OFF';
+            }
+            if (!hoverOn && (tsToggle || tsLabel)) {
+                if (tsToggle) tsToggle.classList.add('active');
+                if (tsLabel) tsLabel.textContent = 'HOVER OFF';
             }
             if (!tickerOn && (tickerToggle || tickerLabel)) {
                 if (tickerToggle) tickerToggle.classList.add('active');
