@@ -15124,13 +15124,16 @@ def enforce_streaming_music_top6(df):
     return df
 
 def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
-    """Add US Gen Pop Projection = (Original Raw Numbers / 10,000,000) * 324,700,000.
+    """Add US Gen Pop Projection = (Original Raw Numbers / 10,000,000) * 329,900,000.
 
     Uses finalized 'Original Raw Numbers'. For SAMPLE SIZE row, uses Percentage value as raw number.
-    Writes a new column 'US Gen Pop Projection' formatted to 0 decimals where possible (string), 
+    The projected sample size (from SAMPLE SIZE row, column D) is placed in BRAND INPUT row (column F).
+    Writes a new column 'US Gen Pop Projection' formatted to 0 decimals where possible (string),
     leaves non-numeric rows as-is.
     """
     import pandas as pd
+    US_POPULATION = 329_900_000
+    SAMPLE_CAP = 10_000_000
     if df is None or df.empty:
         return df
     df = df.copy()
@@ -15157,7 +15160,7 @@ def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
                             pass
     
     raw_num = pd.to_numeric(df[raw_col].astype(str).str.replace(',', ''), errors='coerce')
-    proj = (raw_num / 10_000_000.0) * 324_700_000.0
+    proj = (raw_num / SAMPLE_CAP) * US_POPULATION
     # Format as integer-like string (no decimals) when numeric, else keep empty
     formatted = []
     for p in proj:
@@ -15166,6 +15169,31 @@ def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
         else:
             formatted.append(f"{int(round(p))}")
     df['US Gen Pop Projection'] = formatted
+
+    # Ensure SAMPLE SIZE (column D row 4) projected to gen pop is placed in BRAND INPUT (column F row 3)
+    # Formula: (sample_size / 10,000,000) * 329,900,000
+    sample_size_val = None
+    if sample_size_mask.any():
+        for idx in df[sample_size_mask].index:
+            for col in [raw_col, 'Category Share', 'Percentage']:
+                if col in df.columns:
+                    val = df.at[idx, col]
+                    try:
+                        v = float(str(val).replace(',', '').strip())
+                        if v > 0:
+                            sample_size_val = v
+                            break
+                    except Exception:
+                        pass
+            if sample_size_val is not None:
+                break
+
+    if sample_size_val is not None:
+        projected_sample = int(round((sample_size_val / SAMPLE_CAP) * US_POPULATION))
+        brand_input_mask = df['Column'].str.upper() == 'BRAND INPUT'
+        if brand_input_mask.any():
+            df.loc[brand_input_mask, 'US Gen Pop Projection'] = str(projected_sample)
+
     return df
 
 def enforce_streaming_platform_top(df: pd.DataFrame) -> pd.DataFrame:
