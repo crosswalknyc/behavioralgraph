@@ -124,6 +124,7 @@ SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
+TICKET_SALES_S3_BUCKET = 'ticket-sales-iq'  # Bucket for Ticket Sales IQ (talent-to-theater attribution)
 # FORCE us-east-2 - all buckets are in this region, ignore AWS_REGION env var if set
 S3_REGION = 'us-east-2'
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
@@ -3391,6 +3392,7 @@ def index():
         allowed_behavioral_categories = ['*']
         has_rankers_iq = True
         rankers_iq_options = ['*']
+        has_ticket_sales_iq = True
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
@@ -3401,6 +3403,7 @@ def index():
         allowed_behavioral_categories = user.get('allowed_behavioral_categories', ['*']) if user else ['*']
         has_rankers_iq = user.get('has_rankers_iq_access', False) if user else False
         rankers_iq_options = user.get('rankers_iq_options', []) if user else []
+        has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
     
     # Get user info for credits request
     first_name = user.get('first_name', '') if user else ''
@@ -3426,6 +3429,7 @@ def index():
                            quick_select_behaviors_exclusions=quick_select_behaviors_exclusions,
                            has_rankers_iq_access=has_rankers_iq,
                            rankers_iq_options=rankers_iq_options,
+                           has_ticket_sales_iq_access=has_ticket_sales_iq,
                            first_name=first_name,
                            last_name=last_name,
                            company=company,
@@ -6673,6 +6677,227 @@ def get_subscriber_iq_data(s3_key):
         return jsonify(response_data)
     except Exception as e:
         print(f"❌ Error in get_subscriber_iq_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
+
+
+# ============================================================================
+# TICKET SALES IQ (talent-to-theater attribution)
+# ============================================================================
+
+def parse_ticket_sales_iq_csv(csv_content):
+    """Parse talent-to-theater attribution CSV into structured data.
+    Schema: Category, Count, Count Label, Secondary Count, Secondary Label, Percentage, Gen Pop Projection
+    If Competitive Talent(s) is None/empty, omit competitive sections from output.
+    """
+    import csv as csv_module
+    parsed = {
+        'metadata': {},
+        'key_metrics': {},
+        'talent_attribution': {},
+        'competitive_attribution': None,  # None if no competitor, else dict
+        'talent_by_platform': [],
+        'competitive_by_platform': []  # [] if no competitor
+    }
+    
+    def _parse_num(s):
+        if s is None or str(s).strip() == '':
+            return None
+        s = str(s).strip()
+        for suffix, mult in [('M', 1e6), ('K', 1e3)]:
+            if suffix in s.upper():
+                try:
+                    return float(re.sub(r'[^\d.]', '', s)) * mult
+                except ValueError:
+                    return None
+        try:
+            return float(s.replace(',', ''))
+        except ValueError:
+            return None
+    
+    def _fmt(s):
+        return str(s).strip() if s else ''
+    
+    rows = list(csv_module.reader(io.StringIO(csv_content)))
+    if not rows:
+        return parsed
+    
+    talent_name = ''
+    competitor_name = ''
+    current_section = None
+    
+    for i, row in enumerate(rows):
+        if len(row) < 2:
+            continue
+        cat = _fmt(row[0])
+        col1 = _fmt(row[1]) if len(row) > 1 else ''
+        col2 = _fmt(row[2]) if len(row) > 2 else ''
+        col3 = _fmt(row[3]) if len(row) > 3 else ''
+        pct = _fmt(row[5]) if len(row) > 5 else ''
+        gen_pop = _fmt(row[6]) if len(row) > 6 else ''
+        
+        # Metadata (value in col3 for Talent Tracked, Competitive Talent(s), etc.)
+        if cat == 'Talent Tracked':
+            talent_name = col3
+            parsed['metadata']['talent_tracked'] = talent_name
+        elif cat == 'Competitive Talent(s)':
+            raw = col3
+            if raw and raw.lower() not in ('none', 'n/a', '-'):
+                competitor_name = raw
+            else:
+                competitor_name = None
+            parsed['metadata']['competitive_talent'] = competitor_name
+        elif cat == 'Movie Tracked':
+            parsed['metadata']['movie_tracked'] = col3
+        elif cat == 'Analysis Date Range':
+            parsed['metadata']['date_range'] = col3
+        
+        # Section headers (may be in cat or col1)
+        section_label = cat or col1
+        if 'KEY METRICS' in section_label:
+            current_section = 'key_metrics'
+            continue
+        if 'TALENT ATTRIBUTION' in section_label and 'COMPETITIVE' not in section_label.upper():
+            current_section = 'talent'
+            continue
+        if 'COMPETITIVE TALENT ATTRIBUTION' in section_label:
+            current_section = 'competitive'
+            continue
+        if '→ THEATER BY PLATFORM' in section_label.upper():
+            # "COMPETITIVE TALENT → THEATER BY PLATFORM" or "[CompetitorName] → THEATER BY PLATFORM"
+            if 'COMPETITIVE' in section_label.upper():
+                current_section = 'competitive_platform'
+            elif competitor_name and competitor_name.upper() in section_label.upper():
+                current_section = 'competitive_platform'
+            else:
+                current_section = 'talent_platform'
+            continue
+        
+        # Key metrics (label in col1, value in col2)
+        if current_section == 'key_metrics' and 'Total Movie Viewers' in col1:
+            parsed['key_metrics']['total_movie_viewers'] = _parse_num(col2) or col2
+            parsed['key_metrics']['total_movie_viewers_gen_pop'] = gen_pop or None
+        
+        # Talent attribution (label in cat, value in col1)
+        if current_section == 'talent':
+            if '→ Theater Conversions' in cat or 'Theater Conversions' in cat:
+                parsed['talent_attribution']['theater_conversions'] = _parse_num(col1) or col1
+                parsed['talent_attribution']['theater_conversions_pct'] = pct or None
+                parsed['talent_attribution']['theater_conversions_gen_pop'] = gen_pop or None
+            elif 'Total' in cat and 'Hits' in cat:
+                parsed['talent_attribution']['total_hits'] = _parse_num(col1) or col1
+                parsed['talent_attribution']['total_hits_pct'] = pct or None
+                parsed['talent_attribution']['total_hits_gen_pop'] = gen_pop or None
+        
+        # Competitive attribution (only if competitor exists)
+        if current_section == 'competitive' and competitor_name:
+            if parsed['competitive_attribution'] is None:
+                parsed['competitive_attribution'] = {}
+            if '→ Theater Conversions' in cat or 'Theater Conversions' in cat:
+                parsed['competitive_attribution']['theater_conversions'] = _parse_num(col1) or col1
+                parsed['competitive_attribution']['theater_conversions_pct'] = pct or None
+                parsed['competitive_attribution']['theater_conversions_gen_pop'] = gen_pop or None
+            elif 'Total' in cat and 'Hits' in cat:
+                parsed['competitive_attribution']['total_hits'] = _parse_num(col1) or col1
+                parsed['competitive_attribution']['total_hits_pct'] = pct or None
+                parsed['competitive_attribution']['total_hits_gen_pop'] = gen_pop or None
+        
+        # Talent by platform (platform in col0, count in col1)
+        if current_section == 'talent_platform':
+            platform = cat
+            if platform and platform.upper() not in ('TALENT ATTRIBUTION', 'COMPETITIVE', 'KEY METRICS'):
+                cn = _parse_num(col1) if col1 else None
+                if cn is not None or (col1 and str(col1).replace(',', '').replace('.', '').isdigit()):
+                    parsed['talent_by_platform'].append({
+                        'platform': platform,
+                        'conversions': _parse_num(col1) or col1,
+                        'percentage': pct or None,
+                        'gen_pop': gen_pop or None
+                    })
+        
+        # Competitive by platform
+        if current_section == 'competitive_platform' and competitor_name:
+            platform = cat
+            if platform and platform.upper() not in ('TALENT ATTRIBUTION', 'COMPETITIVE', 'KEY METRICS'):
+                cn = _parse_num(col1) if col1 else None
+                if cn is not None or (col1 and str(col1).replace(',', '').replace('.', '').isdigit()):
+                    parsed['competitive_by_platform'].append({
+                        'platform': platform,
+                        'conversions': _parse_num(col1) or col1,
+                        'percentage': pct or None,
+                        'gen_pop': gen_pop or None
+                    })
+    
+    parsed['metadata']['talent_name'] = talent_name
+    parsed['metadata']['competitor_name'] = competitor_name
+    return parsed
+
+
+@app.route('/api/ticket-sales-iq/list')
+@requires_auth
+def list_ticket_sales_iq_files():
+    """List all ticket sales IQ CSV files from S3 bucket ticket-sales-iq."""
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    
+    try:
+        files = []
+        paginator = s3_client.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket=TICKET_SALES_S3_BUCKET):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.csv'):
+                    continue
+                name_without_ext = key.replace('.csv', '')
+                # Format: Movie_Talent_MM_DD_YYYY_HH_MM.csv (e.g. mercy_chris pratt_02_06_2026_11_41.csv)
+                match = re.match(r'^(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                if match:
+                    display_name = match.group(1).replace('_', ' ')
+                else:
+                    display_name = name_without_ext.replace('_', ' ')
+                
+                files.append({
+                    's3_key': key,
+                    'display_name': display_name,
+                    'size': obj['Size'],
+                    'last_modified': obj['LastModified'].isoformat()
+                })
+        
+        files.sort(key=lambda x: x['last_modified'], reverse=True)
+        return jsonify({'success': True, 'files': files})
+    except Exception as e:
+        print(f"❌ Error listing ticket sales IQ files: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ticket-sales-iq/data/<path:s3_key>')
+@requires_auth
+def get_ticket_sales_iq_data(s3_key):
+    """Get ticket sales IQ CSV data as JSON."""
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    
+    try:
+        response = s3_client.get_object(Bucket=TICKET_SALES_S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read().decode('utf-8')
+        parsed = parse_ticket_sales_iq_csv(csv_content)
+        
+        name_without_ext = s3_key.replace('.csv', '')
+        match = re.match(r'^(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+        display_name = match.group(1).replace('_', ' ') if match else name_without_ext.replace('_', ' ')
+        
+        return jsonify({
+            'success': True,
+            'data': parsed,
+            'display_name': display_name,
+            's3_key': s3_key
+        })
+    except Exception as e:
+        print(f"❌ Error in get_ticket_sales_iq_data: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
