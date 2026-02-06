@@ -7990,6 +7990,37 @@
             font-size: 0.75rem;
         }
 
+        .comp-chart-type-btn {
+            padding: 0.1rem 0.35rem;
+            font-size: 0.75rem;
+            line-height: 1;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .comp-chart-type-btn:hover {
+            background: rgba(90, 154, 217, 0.3);
+            border-color: var(--accent-blue);
+        }
+
+        .comp-bar-cell.column-chart {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+        .comp-bar-cell.column-chart .comp-bar {
+            width: 14px;
+            height: 48px;
+            flex: 0 0 auto;
+        }
+        .comp-bar-cell.column-chart .comp-bar-fill {
+            width: 100%;
+            height: var(--col-fill-height, 0%);
+        }
+
         .index-badge {
             min-width: 38px;
             text-align: left;
@@ -43860,6 +43891,19 @@
             return comparisonSectionSortTypes[sectionKey] || 'pct';
         }
 
+        // Per-column chart type: 'bar' (horizontal) or 'column' (vertical). Key: section -> profileIdx -> 'bar'|'column'
+        let comparisonChartType = {};
+        function getComparisonChartType(section, profileIdx) {
+            return (comparisonChartType[section] && comparisonChartType[section][profileIdx]) || 'bar';
+        }
+        function toggleComparisonColumnChart(section, profileIdx) {
+            if (!comparisonChartType[section]) comparisonChartType[section] = {};
+            comparisonChartType[section][profileIdx] = getComparisonChartType(section, profileIdx) === 'column' ? 'bar' : 'column';
+            if (window.comparisonProfilesData) {
+                renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+            }
+        }
+
         function sortComparisonTable(section, profileIndex) {
             const profiles = window.comparisonProfilesData;
             if (!profiles || profiles.length === 0) return;
@@ -44058,15 +44102,18 @@
                 }
             });
 
-            // Helper to create sortable header with median age (only shown for age section)
+            // Helper to create sortable header with median age (only shown for age section) and bar/column toggle
             const sortableHeader = (section, idx, name, color, medianAge) => {
                 const isSorted = sortSection === section && sortProfileIdx === idx;
                 const isPrimary = idx === primaryProfileIndex;
                 const primaryClass = isPrimary ? 'primary-col' : '';
-                // Only show median age badge in the Age section
+                const chartType = getComparisonChartType(section, idx);
+                const chartTitle = chartType === 'column' ? 'Switch to bar chart (horizontal)' : 'Switch to column chart (vertical)';
+                const chartIcon = chartType === 'column' ? '▬' : '▯';
+                const chartToggleBtn = `<button type="button" class="comp-chart-type-btn" onclick="event.stopPropagation(); toggleComparisonColumnChart('${section}', ${idx})" title="${chartTitle}">${chartIcon}</button>`;
                 const ageDisplay = (section === 'age' && medianAge > 0) ? `<span class="header-median-age" title="Median Age">Median: ${medianAge.toFixed(2)}</span>` : '';
                 const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
-                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})">${name}${sortIndicator} ${ageDisplay}</th>`;
+                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})"><span style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap;">${name}${sortIndicator} ${chartToggleBtn} ${ageDisplay}</span></th>`;
             };
             
             // Helper to generate export menu HTML for comparison sections (Export section = current; Export all = all segments)
@@ -44453,7 +44500,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : primaryProfileIndex, currentLimit, currentSortType, compDisplayMode)}
+                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : primaryProfileIndex, currentLimit, currentSortType, compDisplayMode, catKey)}
                             </tbody>
                         </table>
                     </div>
@@ -44585,7 +44632,7 @@
             return seenNormalized.size;
         }
 
-        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode) {
+        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode, sectionKey) {
             const useProjection = (mode !== undefined && mode !== null) ? mode === 'projection' : displayMode === 'projection';
             // Gen Pop is the baseline: never show index for Gen Pop column; compute others as (profile% / Gen Pop%) * 100
             const genPopIdx = profiles.findIndex(p => {
@@ -44686,12 +44733,17 @@
                         const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
                         const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                         const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
-                        
+                        const section = sectionKey != null ? sectionKey : ('beh_' + category);
+                        const isColumn = getComparisonChartType(section, i) === 'column';
+                        const maxPctBeh = 30;
+                        const fillPct = Math.min(pct / maxPctBeh * 100, 100);
+                        const cellClass = isColumn ? 'comp-bar-cell column-chart' : 'comp-bar-cell';
+                        const fillStyle = isColumn ? `height: ${fillPct}%; width: 100%; background: ${p.color};` : `width: ${fillPct}%; background: ${p.color};`;
                         return `
                             <td class="${primaryClass} ${isGenPopCol ? 'genpop-column' : ''}">
-                                <div class="comp-bar-cell">
+                                <div class="${cellClass}">
                                     <div class="comp-bar">
-                                        <div class="comp-bar-fill" style="width: ${Math.min(pct / 30 * 100, 100)}%; background: ${p.color};"></div>
+                                        <div class="comp-bar-fill" style="${fillStyle}"></div>
                                     </div>
                                     <span class="comp-bar-pct">${displayVal}</span>
                                     ${indexDisplay}
@@ -44797,12 +44849,15 @@
                         const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
                         const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                         const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>` : '';
-                        
+                        const isColumn = getComparisonChartType('location', i) === 'column';
+                        const fillPct = Math.min(pct / 10 * 100, 100);
+                        const cellClass = isColumn ? 'comp-bar-cell column-chart' : 'comp-bar-cell';
+                        const fillStyle = isColumn ? `height: ${fillPct}%; width: 100%; background: ${p.color};` : `width: ${fillPct}%; background: ${p.color};`;
                         return `
                             <td class="${primaryClass} ${isGenPopCol ? 'genpop-column' : ''}">
-                                <div class="comp-bar-cell">
+                                <div class="${cellClass}">
                                     <div class="comp-bar">
-                                        <div class="comp-bar-fill" style="width: ${Math.min(pct / 10 * 100, 100)}%; background: ${p.color};"></div>
+                                        <div class="comp-bar-fill" style="${fillStyle}"></div>
                                     </div>
                                     <span class="comp-bar-pct">${displayVal}</span>
                                     ${indexDisplay}
@@ -44915,11 +44970,17 @@
                             const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                             const indexBadge = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor};">${index}</span>` : '';
                             
+                            const isColumn = getComparisonChartType(demoType, i) === 'column';
+                            const fillPct = Math.min(pct / maxPct * 100, 100);
+                            const cellClass = isColumn ? 'comp-bar-cell column-chart' : 'comp-bar-cell';
+                            const fillStyle = isColumn
+                                ? `height: ${fillPct}%; width: 100%; background: ${p.color};`
+                                : `width: ${fillPct}%; background: ${p.color};`;
                             return `
                                 <td class="${primaryClass} ${isGenPopCol ? 'genpop-column' : ''}">
-                                    <div class="comp-bar-cell">
+                                    <div class="${cellClass}">
                                         <div class="comp-bar">
-                                            <div class="comp-bar-fill" style="width: ${Math.min(pct / maxPct * 100, 100)}%; background: ${p.color};"></div>
+                                            <div class="comp-bar-fill" style="${fillStyle}"></div>
                                         </div>
                                         <span class="comp-bar-pct">${displayVal}</span>
                                         ${indexBadge}
