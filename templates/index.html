@@ -3150,18 +3150,18 @@
             padding: 0.2rem 0;
         }
 
-        /* Occupation chart: full width and dynamic height for readable long labels */
+        /* Occupation chart: full width, room for larger bars and wrapped labels */
         .chart-card-occupation { grid-column: 1 / -1; }
         .occupation-chart-container {
-            min-height: 400px;
+            min-height: 520px;
             height: auto;
-            max-height: min(900px, 75vh);
+            max-height: min(1100px, 82vh);
             overflow-x: auto;
             overflow-y: auto;
             position: relative;
         }
         @media (min-height: 700px) {
-            .occupation-chart-container { min-height: min(550px, 60vh); }
+            .occupation-chart-container { min-height: min(600px, 65vh); }
         }
         
         /* Demographics cards: keep fixed sizes on smaller screens so layout stays consistent */
@@ -27644,10 +27644,10 @@
                 const occCanvas = document.getElementById('occupationChart');
                 const occContainer = occCanvas ? occCanvas.closest('.occupation-chart-container') : null;
                 if (occChartType === 'bar' && occCanvas) {
-                    const barHeight = 44; // Height per bar for readable labels
-                    const calculatedHeight = Math.max(occLabels.length * barHeight, 400);
+                    const barHeight = 58; // Taller bars and more vertical space so labels can wrap and be read
+                    const calculatedHeight = Math.max(occLabels.length * barHeight, 500);
                     const vh = window.innerHeight || 600;
-                    const maxH = Math.min(900, Math.floor(vh * 0.75)); // Cap at 75vh for window fit
+                    const maxH = Math.min(1100, Math.floor(vh * 0.8)); // Allow more height so all text fits
                     occCanvas.style.height = Math.min(calculatedHeight, maxH) + 'px';
                 } else if (occCanvas) {
                     occCanvas.style.height = '400px'; // Default height for circular charts
@@ -27655,12 +27655,12 @@
                 
                 charts.occupation = new Chart(occCanvas, {
                     type: occChartType,
-                    data: { labels: occLabels, datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 4 : 0, barPercentage: 0.6, categoryPercentage: 0.9 }] },
+                    data: { labels: occLabels, datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 6 : 0, barPercentage: 0.72, categoryPercentage: 0.82 }] },
                     options: { 
                         indexAxis: occChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: occIsCircular ? { ...layoutPaddingCircular, top: 15, bottom: 15 } : { right: 50, top: 15, bottom: 15, left: 16 } },
+                        layout: { padding: occIsCircular ? { ...layoutPaddingCircular, top: 15, bottom: 15 } : { right: 50, top: 15, bottom: 15, left: 28 } },
                         plugins: { 
                             legend: occIsCircular ? {
                                 ...legendOptionsCircular,
@@ -27711,36 +27711,39 @@
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: Math.max(9, axisFontSize - 2), weight: '500' },
+                                    font: { size: Math.max(10, axisFontSize - 1), weight: '500' },
                                     autoSkip: false,
-                                    padding: 10,
+                                    padding: 14,
+                                    maxRotation: 0,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
-                                        // Split long occupation labels at 38 chars for readability (avoid truncation)
-                                        if (label.length > 38) {
-                                            const words = label.split(' ');
+                                        // Wrap long occupation labels so full text is visible (max 32 chars per line)
+                                        const maxChars = 32;
+                                        if (label && label.length > maxChars) {
+                                            const words = String(label).split(' ');
                                             const lines = [];
                                             let currentLine = '';
                                             words.forEach(word => {
-                                                if ((currentLine + ' ' + word).trim().length > 38 && currentLine.length > 0) {
+                                                const next = currentLine ? currentLine + ' ' + word : word;
+                                                if (next.length > maxChars && currentLine.length > 0) {
                                                     lines.push(currentLine.trim());
                                                     currentLine = word;
                                                 } else {
-                                                    currentLine = currentLine ? currentLine + ' ' + word : word;
+                                                    currentLine = next.trim();
                                                 }
                                             });
-                                            if (currentLine) lines.push(currentLine.trim());
-                                            return lines;
+                                            if (currentLine) lines.push(currentLine);
+                                            return lines.length ? lines : label;
                                         }
                                         return label;
                                     }
                                 },
                                 afterFit: (scale) => {
-                                    // Reserve enough space for long occupation labels (e.g. "Building and Grounds Cleaning and Maintenance")
+                                    // Reserve enough width for wrapped occupation labels so nothing is cut off
                                     const maxLabelLen = occLabels.reduce((m, l) => Math.max(m, String(l).length), 0);
-                                    const charsPerLine = 38;
+                                    const charsPerLine = 32;
                                     const lines = Math.ceil(maxLabelLen / charsPerLine) || 1;
-                                    const minWidth = Math.max(420, Math.min(620, lines * 180));
+                                    const minWidth = Math.max(480, Math.min(720, lines * 240));
                                     scale.width = Math.max(scale.width, minWidth);
                                 }
                             }
