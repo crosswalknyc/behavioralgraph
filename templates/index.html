@@ -14995,16 +14995,16 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="ticketSalesSummaryCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;"></div>
-                        <div id="ticketSalesAttributionSection" style="margin-bottom: 2rem;">
-                            <h3 style="margin: 0 0 1rem 0;">Attribution</h3>
-                            <div id="ticketSalesPieCharts" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;"></div>
-                            <div id="ticketSalesBarChart" style="height: 280px; position: relative;"></div>
+                        <div id="ticketSalesSummaryCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;"></div>
+                        <div id="ticketSalesAttributionSection" style="margin-bottom: 1.5rem;">
+                            <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: var(--text-secondary);">Attribution</h3>
+                            <div id="ticketSalesPieCharts" style="display: grid; grid-template-columns: repeat(3, minmax(0, 200px)); gap: 0.75rem; margin-bottom: 1rem; justify-content: start;"></div>
+                            <div id="ticketSalesBarChart" style="height: 180px; position: relative; max-width: 420px;"></div>
                         </div>
-                        <div id="ticketSalesTalentAttributionSection" style="margin-bottom: 2rem;"></div>
-                        <div id="ticketSalesPerTalentChart" style="height: 280px; margin-bottom: 2rem; display: none;"></div>
-                        <div id="ticketSalesByOutletSection" style="margin-bottom: 2rem;"></div>
-                        <div id="ticketSalesOutletChart" style="height: 280px; margin-bottom: 2rem; display: none;"></div>
+                        <div id="ticketSalesTalentAttributionSection" style="margin-bottom: 1.5rem;"></div>
+                        <div id="ticketSalesPerTalentChart" style="height: 200px; margin-bottom: 1.5rem; display: none;"></div>
+                        <div id="ticketSalesByOutletSection" style="margin-bottom: 1.5rem;"></div>
+                        <div id="ticketSalesOutletChart" style="height: 200px; margin-bottom: 1.5rem; display: none;"></div>
                     </div>
                 </div>
             </div>
@@ -21630,7 +21630,7 @@
                 `;
             }).join('');
             const section = document.getElementById('ticketSalesTalentAttributionSection');
-            if (section) section.innerHTML = '<h3 style="margin: 0 0 1rem 0;">Talent Attribution</h3><p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Per-talent Last Click and Assisted Conversions</p><div class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;">' + cardsHtml + '</div>';
+            if (section) section.innerHTML = '<h3 style="margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600; color: var(--text-secondary);">Talent Attribution</h3><p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Per-talent Last Click and Assisted Conversions</p><div class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem;">' + cardsHtml + '</div>';
             
             const perTalentChart = document.getElementById('ticketSalesPerTalentChart');
             if (perTalentChart && typeof Chart !== 'undefined' && ta.length > 0) {
@@ -21736,7 +21736,7 @@
                 { label: '% Who Purchased Tickets within a 14 day window of Talent Interaction (Assisted Conversion)', value: assistedVal, tooltip: assistedTooltip }
             ];
             const cardsEl = document.getElementById('ticketSalesSummaryCards');
-            if (cardsEl) cardsEl.innerHTML = summaryCards.map(c => '<div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"' + (c.tooltip ? ' title="' + esc(c.tooltip) + '"' : '') + '><div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">' + esc(c.label) + '</div><div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">' + esc(c.value) + '</div></div>').join('');
+            if (cardsEl) cardsEl.innerHTML = summaryCards.map(c => '<div class="insight-card" style="background: var(--bg-card); border-radius: 6px; padding: 0.75rem; border: 1px solid var(--border-color);"' + (c.tooltip ? ' title="' + esc(c.tooltip) + '"' : '') + '><div class="insight-label" style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.2rem;">' + esc(c.label) + '</div><div class="insight-value" style="font-size: 1rem; font-weight: 700; color: var(--accent-cyan);">' + esc(c.value) + '</div></div>').join('');
             
             const ta = d.talentAttrib || [];
             const lastClickData = ta.map(t => ({ name: (t.name || '').toUpperCase(), value: _parseGenPop(t.convGenPop || '0') }));
@@ -21747,12 +21747,13 @@
             if (pieContainer && typeof Chart !== 'undefined') {
                 pieContainer.innerHTML = '';
                 const pieColors = ['rgba(147, 51, 234, 0.85)', 'rgba(163, 230, 53, 0.85)', 'rgba(245, 158, 11, 0.85)'];
+                const fmtVal = (v) => v >= 1e6 ? (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? (v/1e3).toFixed(1) + 'K' : String(Math.round(v));
                 ['Last Click Attribution', 'Assisted Conversion'].forEach((title, idx) => {
                     const data = idx === 0 ? lastClickData : assistedData;
                     const total = data.reduce((s, x) => s + x.value, 0);
                     if (data.length === 0 || total === 0) return;
                     const div = document.createElement('div');
-                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);';
+                    div.style.cssText = 'background: var(--bg-card); border-radius: 6px; padding: 0.6rem; border: 1px solid var(--border-color); max-height: 200px; position: relative;';
                     const canvas = document.createElement('canvas');
                     div.appendChild(canvas);
                     pieContainer.appendChild(div);
@@ -21765,12 +21766,25 @@
                             labels: data.map(x => x.name),
                             datasets: [{ data: data.map(x => x.value), backgroundColor: pieColors.slice(0, Math.max(data.length, 2)) }]
                         },
+                        plugins: [ChartDataLabels],
                         options: {
                             responsive: true,
                             maintainAspectRatio: true,
+                            layout: { padding: 4 },
                             plugins: {
-                                title: { display: true, text: title, color: '#e2e8f0' },
-                                legend: { position: 'bottom', labels: { color: '#e2e8f0' } }
+                                title: { display: true, text: title, color: '#94a3b8', font: { size: 12 } },
+                                legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 10, padding: 6, font: { size: 10 } } },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (c) => { const pct = total > 0 ? ((c.raw / total) * 100).toFixed(1) : 0; return ` ${c.label}: ${fmtVal(c.raw)} (${pct}%)`; }
+                                    }
+                                },
+                                datalabels: {
+                                    color: '#e2e8f0',
+                                    font: { size: 10 },
+                                    formatter: (v) => total > 0 ? ((v / total) * 100).toFixed(0) + '%' : '',
+                                    display: (ctx) => ctx.dataset.data[ctx.dataIndex] / total >= 0.08
+                                }
                             }
                         }
                     });
@@ -21790,7 +21804,7 @@
                 const combinedTotal = combinedValues.reduce((s, v) => s + v, 0);
                 if (combinedLabels.length > 0 && combinedTotal > 0) {
                     const div = document.createElement('div');
-                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);';
+                    div.style.cssText = 'background: var(--bg-card); border-radius: 6px; padding: 0.6rem; border: 1px solid var(--border-color); max-height: 200px; position: relative;';
                     const canvas = document.createElement('canvas');
                     div.appendChild(canvas);
                     pieContainer.appendChild(div);
@@ -21801,12 +21815,25 @@
                             labels: combinedLabels,
                             datasets: [{ data: combinedValues, backgroundColor: combinedColors }]
                         },
+                        plugins: [ChartDataLabels],
                         options: {
                             responsive: true,
                             maintainAspectRatio: true,
+                            layout: { padding: 4 },
                             plugins: {
-                                title: { display: true, text: 'Combined: Last Click & Assisted by Talent', color: '#e2e8f0' },
-                                legend: { position: 'bottom', labels: { color: '#e2e8f0' } }
+                                title: { display: true, text: 'Combined by Talent', color: '#94a3b8', font: { size: 12 } },
+                                legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 10, padding: 6, font: { size: 9 } } },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (c) => { const pct = combinedTotal > 0 ? ((c.raw / combinedTotal) * 100).toFixed(1) : 0; return ` ${c.label}: ${fmtVal(c.raw)} (${pct}%)`; }
+                                    }
+                                },
+                                datalabels: {
+                                    color: '#e2e8f0',
+                                    font: { size: 9 },
+                                    formatter: (v) => combinedTotal > 0 ? ((v / combinedTotal) * 100).toFixed(0) + '%' : '',
+                                    display: (ctx) => ctx.dataset.data[ctx.dataIndex] / combinedTotal >= 0.06
+                                }
                             }
                         }
                     });
@@ -21832,13 +21859,19 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        layout: { padding: { top: 8, bottom: 4 } },
                         plugins: {
-                            title: { display: true, text: 'Attribution Metrics', color: '#e2e8f0' },
-                            legend: { display: false }
+                            title: { display: true, text: 'Attribution Metrics', color: '#94a3b8', font: { size: 12 } },
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (c) => ' ' + (showPctBar ? c.raw.toFixed(2) + '%' : _fmtGenPopInt(String(c.raw)))
+                                }
+                            }
                         },
                         scales: {
-                            y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } },
-                            x: { ticks: { color: '#94a3b8', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                            y: { beginAtZero: true, ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' } },
+                            x: { ticks: { color: '#94a3b8', maxRotation: 45, font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' } }
                         }
                     }
                 });
