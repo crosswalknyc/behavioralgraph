@@ -11663,7 +11663,7 @@
                     {% endif %}
                     {% if 'talent_theater' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
-                        🎫 Talent Ticket Sale IQ
+                        🎫 Ticket Sales IQ
                     </button>
                     {% endif %}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
@@ -12078,10 +12078,11 @@
                     </div>
                 </div>
 
-                <!-- Talent Ticket Sale IQ Tab Content -->
+                <!-- Ticket Sales IQ Tab Content -->
                 <div id="customAnalysisTabContentTalentTheater" class="custom-analysis-tab-content">
+                    <div class="main-grid">
                     <div class="card">
-                        <h2>🎫 Talent Ticket Sale IQ</h2>
+                        <h2>🎫 Ticket Sales IQ</h2>
                         <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">🎫 10 Credits Per Analysis</div>
                         <p class="section-description">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
@@ -12138,6 +12139,53 @@
                                 <div id="customTalentTheaterJobStatusContent"></div>
                             </div>
                         </div>
+                    </div>
+                    <div class="card">
+                        <h2>📈 Ticket Sales IQ</h2>
+                        <div id="ticketSalesCurrentJob" style="display: none;">
+                            <div class="status-panel">
+                                <div id="ticketSalesStatusRunning">
+                                    <div class="spinner"></div>
+                                    <div class="pulse" id="ticketSalesStatusText">Processing...</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);" id="ticketSalesStatusMessage">Analysis in progress</div>
+                                    <div class="progress-bar"><div class="progress-fill" id="ticketSalesProgressFill" style="width: 0%"></div></div>
+                                </div>
+                                <div id="ticketSalesStatusComplete" style="display: none;">
+                                    <div style="font-size: 2.5rem;">✅</div>
+                                    <div style="margin: 0.5rem 0;">Complete!</div>
+                                    <button class="btn btn-success" id="ticketSalesViewResultsBtn" style="margin-top: 0.75rem;">📊 View in Dashboard</button>
+                                </div>
+                                <div id="ticketSalesStatusError" style="display: none;">
+                                    <div style="font-size: 2.5rem;">❌</div>
+                                    <div style="color: var(--accent-red);" id="ticketSalesErrorMessage"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="ticketSalesNoCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
+                        <div style="margin-top: 1.5rem; margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                                <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="loadTicketSalesResults()" id="refreshTicketSalesResultsBtn" title="Refresh results">🔄</button>
+                            </div>
+                            <div id="ticketSalesResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
+                        </div>
+                        <div style="margin-bottom: 0.75rem;">
+                            <input type="text" id="ticketSalesResultsSearchInput" placeholder="🔍 Search your results..." oninput="filterTicketSalesResults()" style="margin-bottom: 0.5rem;">
+                            <select id="ticketSalesResultsStatusFilter" onchange="filterTicketSalesResults()" style="font-size: 0.8rem;">
+                                <option value="">All Status</option>
+                                <option value="pending">⏳ Pending Review</option>
+                                <option value="released">📊 In Dashboard</option>
+                            </select>
+                        </div>
+                        <div id="ticketSalesResultsListHeader" style="display: none; padding: 0.35rem 0.6rem 0.15rem; font-size: 0.65rem; color: var(--text-secondary); font-weight: 600; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); margin-bottom: 0.25rem;">
+                            <span style="flex: 1; min-width: 0;">Project</span>
+                            <span style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
+                                <span style="min-width: 3.5rem;">Dashboard Status</span>
+                                <span style="min-width: 2rem;">Download</span>
+                            </span>
+                        </div>
+                        <div id="ticketSalesResultsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
+                    </div>
                     </div>
                 </div>
 
@@ -15451,7 +15499,7 @@
             <div class="dashboard-layout">
                 <div class="dashboard-tab-content" style="padding: 2rem;">
                     <div class="card">
-                        <h2>🎫 Talent Ticket Sale IQ</h2>
+                        <h2>🎫 Ticket Sales IQ</h2>
                         <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">🎫 10 Credits Per Analysis</div>
                         <p class="section-description">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
@@ -16580,6 +16628,7 @@
                 const content = document.getElementById('customAnalysisTabContentTalentTheater');
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
+                if (typeof loadTicketSalesResults === 'function') loadTicketSalesResults();
             } else if (tabName === 'svod-acquisition') {
                 const tab = document.getElementById('customAnalysisTabSVODAcquisition');
                 const content = document.getElementById('customAnalysisTabContentSVODAcquisition');
@@ -16698,7 +16747,7 @@
                 const data = await response.json();
                 if (response.ok) {
                     showAnalysisStatusModal();
-                    document.getElementById('statusModalText').textContent = 'Talent Ticket Sale IQ';
+                    document.getElementById('statusModalText').textContent = 'Ticket Sales IQ';
                     pollCustomTalentTheaterJobStatus(data.job_id);
                 } else {
                     alert('Error: ' + (data.error || 'Failed to submit job'));
@@ -16989,7 +17038,7 @@
                     const data = await response.json();
                     
                     updateAnalysisStatusModal({
-                        project_name: data.project_name || 'Talent Ticket Sale IQ',
+                        project_name: data.project_name || 'Ticket Sales IQ',
                         message: data.message || 'Processing...',
                         progress: data.progress || 0
                     });
@@ -16998,6 +17047,7 @@
                         clearInterval(pollInterval);
                         closeAnalysisStatusModal();
                         showAnalysisCompletePopup(jobId, data.s3_key, 'talent_theater');
+                        if (typeof loadTicketSalesResults === 'function') loadTicketSalesResults();
                     } else if (data.status === 'failed') {
                         clearInterval(pollInterval);
                         showAnalysisStatusModalError(data.error || data.message || 'Analysis failed');
@@ -42236,6 +42286,103 @@
             container.innerHTML = html;
         }
         
+        // Ticket Sales IQ Results Library (filtered from my-results by source_type)
+        let ticketSalesResults = [];
+        
+        async function loadTicketSalesResults() {
+            const container = document.getElementById('ticketSalesResultsList');
+            const statusEl = document.getElementById('ticketSalesResultsStatus');
+            const headerEl = document.getElementById('ticketSalesResultsListHeader');
+            if (container) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;"><span class="spinner"></span> Loading...</div>';
+            }
+            try {
+                const response = await fetch('/api/my-results', { credentials: 'same-origin' });
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await response.json();
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load results');
+                }
+                const all = data.results || [];
+                ticketSalesResults = all.filter(r => (r.source_type || '') === 'ticket_sales_iq');
+                const pending = ticketSalesResults.filter(r => r.status === 'pending' || r.in_purgatory).length;
+                const released = ticketSalesResults.filter(r => r.status === 'released').length;
+                if (statusEl) {
+                    statusEl.textContent = `${pending} pending • ${released} in dashboard`;
+                }
+                filterTicketSalesResults();
+            } catch (err) {
+                console.error('Failed to load Ticket Sales results:', err);
+                if (container) {
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Unable to load results.</div>';
+                }
+                if (headerEl) headerEl.style.display = 'none';
+            }
+        }
+        
+        function filterTicketSalesResults() {
+            const searchTerm = (document.getElementById('ticketSalesResultsSearchInput')?.value || '').toLowerCase().trim();
+            const statusFilter = document.getElementById('ticketSalesResultsStatusFilter')?.value || '';
+            let filtered = ticketSalesResults;
+            if (searchTerm) {
+                filtered = filtered.filter(r =>
+                    (r.project_name || '').toLowerCase().includes(searchTerm) ||
+                    (r.category || '').toLowerCase().includes(searchTerm)
+                );
+            }
+            if (statusFilter) {
+                filtered = filtered.filter(r => r.status === statusFilter);
+            }
+            renderTicketSalesResults(filtered);
+        }
+        
+        function renderTicketSalesResults(results) {
+            const container = document.getElementById('ticketSalesResultsList');
+            const headerEl = document.getElementById('ticketSalesResultsListHeader');
+            if (!container) return;
+            if (headerEl) headerEl.style.display = 'none';
+            if (!results || results.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No Ticket Sales IQ results yet. Run an analysis to get started.</div>';
+                return;
+            }
+            if (headerEl) headerEl.style.display = 'flex';
+            const html = results.map(result => {
+                const isPending = result.status === 'pending' || result.in_purgatory;
+                const statusBadge = isPending
+                    ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
+                    : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
+                const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
+                const purgatoryIdEsc = (result.purgatory_id || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                let buttons = '';
+                if (isPending) {
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${purgatoryIdEsc}')" title="Download CSV (Ticket Sales IQ)">📥</button>`;
+                } else {
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV (Ticket Sales IQ)">📥</button>`;
+                }
+                const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
+                const categoryLabel = capitalizeFirstLetters(result.category || '');
+                const rowStyle = 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;';
+                return `
+                    <div class="job-item" style="${rowStyle}">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${categoryLabel} • ${dateStr}</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
+                            ${statusBadge}
+                            ${buttons}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            container.innerHTML = html;
+        }
+        
         async function loadJobs(showLoading = true) {
             const container = document.getElementById('jobsList');
             const cacheStatus = document.getElementById('cacheStatus');
@@ -56004,7 +56151,7 @@
             // Update the modal content
             const typeLabels = {
                 'svod_acquisition': '📺 SVOD Acquisition IQ',
-                'talent_theater': '🎫 Talent Ticket Sale IQ',
+                'talent_theater': '🎫 Ticket Sales IQ',
                 'profile_analysis': '🎯 Profile Analysis'
             };
             document.getElementById('analysisCompleteType').textContent = typeLabels[analysisType] || '🎯 Profile Analysis';

@@ -13517,6 +13517,23 @@ def run_talent_theater(job_id):
                 output_file = str(csv_files[0])
                 if os.path.exists(output_file):
                     jobs[job_id]['result_file'] = output_file
+                    # Upload to purgatory so it appears in Ticket Sales IQ Results Library (source: Ticket Sales IQ)
+                    created_by = jobs[job_id].get('username', '')
+                    talent_name = params.get('talent_name', '')
+                    movie_name = params.get('movie_name', '')
+                    project_name = f"{talent_name}_{movie_name}" if (talent_name and movie_name) else csv_files[0].stem
+                    s3_key = upload_to_s3(
+                        output_file,
+                        project_name,
+                        params.get('start_date', ''),
+                        params.get('end_date', ''),
+                        created_by=created_by,
+                        use_purgatory=True,
+                        category='Ticket Sales',
+                        source_type='ticket_sales_iq'
+                    )
+                    if s3_key:
+                        jobs[job_id]['s3_key'] = s3_key
                     update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
                 else:
                     update_job_status(job_id, status='failed', error='Output file not found')
