@@ -14977,7 +14977,17 @@
                                 </div>
                             </div>
                         </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <div class="display-mode-toggle" id="ticketSalesDisplayToggle" onclick="toggleTicketSalesDisplayMode()" title="Toggle between US % and US #">
+                                <span id="ticketSalesDisplayModeLabel">US %</span>
+                            </div>
+                        </div>
                         <div id="ticketSalesSummaryCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;"></div>
+                        <div id="ticketSalesAttributionSection" style="margin-bottom: 2rem;">
+                            <h3 style="margin: 0 0 1rem 0;">Attribution</h3>
+                            <div id="ticketSalesPieCharts" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;"></div>
+                            <div id="ticketSalesBarChart" style="height: 280px; position: relative;"></div>
+                        </div>
                         <div id="ticketSalesTalentAttributionSection" style="margin-bottom: 2rem;"></div>
                         <div id="ticketSalesByOutletSection" style="margin-bottom: 2rem;"></div>
                     </div>
@@ -21331,6 +21341,9 @@
         });
         
         let ticketSalesProfiles = [];
+        let ticketSalesAttributionDisplayMode = 'percent';
+        let currentTicketSalesData = null;
+        let ticketSalesCharts = { pieLastClick: null, pieAssisted: null, barChart: null };
         
         async function loadTicketSalesProfiles() {
             try {
@@ -21508,26 +21521,7 @@
             const totalHitsAssisted = _parseGenPop(ta.total_hits_gen_pop || '0') + (showCompetitorBlocks ? _parseGenPop(ca?.total_hits_gen_pop || '0') : 0);
             const pctAssisted = totalViewersNum > 0 ? ((totalHitsAssisted / totalViewersNum) * 100).toFixed(2) + '%' : '0%';
             
-            // Summary cards
-            const fmtGenPopDisplay = (v) => v && v !== '—' ? _fmtGenPopInt(v) : '—';
-            const totalMovieViewersTooltip = 'Total number of digital ticket sales tracked from one of the following platforms: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS.';
-            const lastClickTooltip = 'Number of digital tickets sold to panelists who had a digital touchpoint to tracked talent directly before ticket purchase.';
-            const assistedTooltip = 'Number of digital tickets sold to panelists who had a digital touchpoint to tracked talent within 14 days before ticket purchase.';
-            const summaryCards = [
-                { label: 'Total Movie Viewers', value: fmtGenPopDisplay(totalMovieViewersGenPop), tooltip: totalMovieViewersTooltip },
-                { label: 'Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: _fmtGenPopInt(String(totalTicketsDueToTalent)), tooltip: lastClickTooltip },
-                { label: '% of Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: pctDueToTalent, tooltip: lastClickTooltip },
-                { label: 'Tickets Purchased within a 14 day window of Talent Interaction (Assisted Conversion)', value: _fmtGenPopInt(String(totalHitsAssisted)), tooltip: assistedTooltip },
-                { label: '% Who Purchased Tickets within a 14 day window of Talent Interaction (Assisted Conversion)', value: pctAssisted, tooltip: assistedTooltip }
-            ];
-            document.getElementById('ticketSalesSummaryCards').innerHTML = summaryCards.map(c => `
-                <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"${c.tooltip ? ` title="${esc(c.tooltip)}"` : ''}>
-                    <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">${esc(c.label)}</div>
-                    <div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">${esc(c.value)}</div>
-                </div>
-            `).join('');
-            
-            // Talent Attribution: each talent with X → Theater Conversions and Total X Hits (Movie Viewers)
+            // Talent Attribution (build early for pie charts)
             const talentAttrib = [
                 { name: talentName, convGenPop: talentConvGenPop, pct: ta.theater_conversions_pct, hitsGenPop: ta.total_hits_gen_pop }
             ];
@@ -21538,6 +21532,16 @@
                     talentAttrib.push({ name: 'Competitive Talent', convGenPop: compConvGenPop, pct: ca?.theater_conversions_pct, hitsGenPop: ca?.total_hits_gen_pop });
                 }
             }
+            
+            currentTicketSalesData = {
+                totalMovieViewersGenPop, totalViewersNum, totalTicketsDueToTalent, pctDueToTalent,
+                totalHitsAssisted, pctAssisted, talentAttrib, fmtGenPopDisplay: (v) => v && v !== '—' ? _fmtGenPopInt(v) : '—'
+            };
+            
+            const tsLabel = document.getElementById('ticketSalesDisplayModeLabel');
+            if (tsLabel) tsLabel.textContent = ticketSalesAttributionDisplayMode === 'percent' ? 'US %' : 'US #';
+            renderTicketSalesSummaryAndCharts(resp);
+            
             document.getElementById('ticketSalesTalentAttributionSection').innerHTML = `
                 <h3 style="margin: 0 0 1rem 0;">Talent Attribution</h3>
                 <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Ticket sales each listed talent drove</p>
@@ -21594,6 +21598,104 @@
                 <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Gen Pop projections by platform for each talent</p>
                 <div style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
             `;
+        }
+        
+        function toggleTicketSalesDisplayMode() {
+            ticketSalesAttributionDisplayMode = ticketSalesAttributionDisplayMode === 'percent' ? 'number' : 'percent';
+            const label = document.getElementById('ticketSalesDisplayModeLabel');
+            if (label) label.textContent = ticketSalesAttributionDisplayMode === 'percent' ? 'US %' : 'US #';
+            if (currentTicketSalesData) renderTicketSalesSummaryAndCharts();
+        }
+        
+        function renderTicketSalesSummaryAndCharts(resp) {
+            if (!currentTicketSalesData) return;
+            const d = currentTicketSalesData;
+            const esc = (x) => (x || '').toString().replace(/</g, '&lt;');
+            const fmtGenPopDisplay = d.fmtGenPopDisplay || ((v) => v && v !== '—' ? _fmtGenPopInt(v) : '—');
+            const showPct = ticketSalesAttributionDisplayMode === 'percent';
+            const lastClickVal = showPct ? d.pctDueToTalent : _fmtGenPopInt(String(d.totalTicketsDueToTalent));
+            const assistedVal = showPct ? d.pctAssisted : _fmtGenPopInt(String(d.totalHitsAssisted));
+            const totalMovieViewersTooltip = 'Total number of digital ticket sales tracked from one of the following platforms: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS.';
+            const lastClickTooltip = 'Number of digital tickets sold to panelists who had a digital touchpoint to tracked talent directly before ticket purchase.';
+            const assistedTooltip = 'Number of digital tickets sold to panelists who had a digital touchpoint to tracked talent within 14 days before ticket purchase.';
+            const summaryCards = [
+                { label: 'Total Movie Viewers', value: fmtGenPopDisplay(d.totalMovieViewersGenPop), tooltip: totalMovieViewersTooltip },
+                { label: 'Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: lastClickVal, tooltip: lastClickTooltip },
+                { label: '% of Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: lastClickVal, tooltip: lastClickTooltip },
+                { label: 'Tickets Purchased within a 14 day window of Talent Interaction (Assisted Conversion)', value: assistedVal, tooltip: assistedTooltip },
+                { label: '% Who Purchased Tickets within a 14 day window of Talent Interaction (Assisted Conversion)', value: assistedVal, tooltip: assistedTooltip }
+            ];
+            const cardsEl = document.getElementById('ticketSalesSummaryCards');
+            if (cardsEl) cardsEl.innerHTML = summaryCards.map(c => '<div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"' + (c.tooltip ? ' title="' + esc(c.tooltip) + '"' : '') + '><div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">' + esc(c.label) + '</div><div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">' + esc(c.value) + '</div></div>').join('');
+            
+            const ta = d.talentAttrib || [];
+            const lastClickData = ta.map(t => ({ name: (t.name || '').toUpperCase(), value: _parseGenPop(t.convGenPop || '0') }));
+            const assistedData = ta.map(t => ({ name: (t.name || '').toUpperCase(), value: _parseGenPop(t.hitsGenPop || '0') }));
+            
+            const pieContainer = document.getElementById('ticketSalesPieCharts');
+            const barContainer = document.getElementById('ticketSalesBarChart');
+            if (pieContainer && typeof Chart !== 'undefined') {
+                pieContainer.innerHTML = '';
+                ['Last Click Attribution', 'Assisted Conversion'].forEach((title, idx) => {
+                    const data = idx === 0 ? lastClickData : assistedData;
+                    const total = data.reduce((s, x) => s + x.value, 0);
+                    if (data.length === 0 || total === 0) return;
+                    const div = document.createElement('div');
+                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);';
+                    const canvas = document.createElement('canvas');
+                    div.appendChild(canvas);
+                    pieContainer.appendChild(div);
+                    if (ticketSalesCharts['pie' + (idx === 0 ? 'LastClick' : 'Assisted')]) {
+                        ticketSalesCharts['pie' + (idx === 0 ? 'LastClick' : 'Assisted')].destroy();
+                    }
+                    ticketSalesCharts['pie' + (idx === 0 ? 'LastClick' : 'Assisted')] = new Chart(canvas, {
+                        type: 'pie',
+                        data: {
+                            labels: data.map(x => x.name),
+                            datasets: [{ data: data.map(x => x.value), backgroundColor: ['rgba(6, 182, 212, 0.8)', 'rgba(200, 255, 0, 0.8)', 'rgba(253, 151, 31, 0.8)'] }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                title: { display: true, text: title, color: '#e2e8f0' },
+                                legend: { position: 'bottom', labels: { color: '#e2e8f0' } }
+                            }
+                        }
+                    });
+                });
+            }
+            
+            if (barContainer && typeof Chart !== 'undefined') {
+                barContainer.innerHTML = '';
+                const canvas = document.createElement('canvas');
+                barContainer.appendChild(canvas);
+                if (ticketSalesCharts.barChart) ticketSalesCharts.barChart.destroy();
+                const showPctBar = ticketSalesAttributionDisplayMode === 'percent';
+                const pctLc = d.totalViewersNum > 0 ? (d.totalTicketsDueToTalent / d.totalViewersNum * 100) : 0;
+                const pctAs = d.totalViewersNum > 0 ? (d.totalHitsAssisted / d.totalViewersNum * 100) : 0;
+                const barLabels = showPctBar ? ['Last Click %', 'Assisted %'] : ['Last Click #', 'Assisted #'];
+                const barValues = showPctBar ? [pctLc, pctAs] : [d.totalTicketsDueToTalent, d.totalHitsAssisted];
+                ticketSalesCharts.barChart = new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: barLabels,
+                        datasets: [{ label: showPctBar ? 'Percent (%)' : 'Count', data: barValues, backgroundColor: ['rgba(6, 182, 212, 0.6)', 'rgba(200, 255, 0, 0.6)'], borderColor: ['rgba(6, 182, 212, 1)', 'rgba(200, 255, 0, 1)'], borderWidth: 1 }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: true, text: 'Attribution Metrics', color: '#e2e8f0' },
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                            x: { ticks: { color: '#94a3b8', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                        }
+                    }
+                });
+            }
         }
         
         async function loadSubscriberProfiles() {
