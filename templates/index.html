@@ -21518,11 +21518,15 @@
             const talentAttrib = [
                 { name: talentName, convGenPop: talentConvGenPop, pct: ta.theater_conversions_pct, hitsGenPop: ta.total_hits_gen_pop }
             ];
-            const hasCompetitiveData = ca && (ca.theater_conversions != null || ca.theater_conversions_gen_pop || (d.competitive_by_platform || []).length);
-            if ((hasCompetitor || hasCompetitiveData) && competitor) {
-                talentAttrib.push({ name: competitor, convGenPop: compConvGenPop, pct: ca?.theater_conversions_pct, hitsGenPop: ca?.total_hits_gen_pop });
-            } else if (hasCompetitiveData && !competitor) {
-                talentAttrib.push({ name: 'Competitive Talent', convGenPop: compConvGenPop, pct: ca?.theater_conversions_pct, hitsGenPop: ca?.total_hits_gen_pop });
+            const compConvNum = _parseGenPop(compConvGenPop);
+            const hasCompetitivePlatformData = (d.competitive_by_platform || []).some(r => _parseGenPop(r.gen_pop || '0') > 0);
+            const showCompetitorBlocks = hasCompetitor || compConvNum > 0 || hasCompetitivePlatformData;
+            if (showCompetitorBlocks) {
+                if (competitor) {
+                    talentAttrib.push({ name: competitor, convGenPop: compConvGenPop, pct: ca?.theater_conversions_pct, hitsGenPop: ca?.total_hits_gen_pop });
+                } else {
+                    talentAttrib.push({ name: 'Competitive Talent', convGenPop: compConvGenPop, pct: ca?.theater_conversions_pct, hitsGenPop: ca?.total_hits_gen_pop });
+                }
             }
             document.getElementById('ticketSalesTalentAttributionSection').innerHTML = `
                 <h3 style="margin: 0 0 1rem 0;">Talent Attribution</h3>
@@ -21544,7 +21548,7 @@
             const platformSets = [
                 { talent: talentName || 'Primary Talent', rows: d.talent_by_platform || [] }
             ];
-            if ((hasCompetitor || hasCompetitiveData) && (d.competitive_by_platform || []).length) {
+            if (showCompetitorBlocks && (d.competitive_by_platform || []).length) {
                 platformSets.push({ talent: competitor || 'Competitive Talent', rows: d.competitive_by_platform || [] });
             }
             const allPlatforms = new Set();
