@@ -1063,6 +1063,13 @@ def get_current_user():
     data = load_users()
     return data['users'].get(session['username'])
 
+# Credit cost per analysis type
+CREDITS_PROFILE_ANALYSIS = 5
+CREDITS_TICKET_SALES = 10
+CREDITS_SVOD = 7
+CREDITS_CAMPAIGN_ROI = 6
+CREDITS_WATCH_TIME = 1
+
 def check_user_credits(username):
     """Check if user has credits remaining. Returns (has_credits, credits_left)."""
     data = load_users()
@@ -1075,6 +1082,15 @@ def check_user_credits(username):
         return True, -1
     
     return user['credits'] > 0, user['credits']
+
+def has_credits_for(username, amount):
+    """Return True if user has at least `amount` credits (or unlimited)."""
+    has_credits, credits_left = check_user_credits(username)
+    if not has_credits:
+        return False
+    if credits_left == -1:
+        return True
+    return credits_left >= amount
 
 def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1):
     """Consume credits from user. Optionally record usage in history. Returns True if successful."""
@@ -8679,14 +8695,13 @@ def get_job_data(job_id):
 def submit_analysis():
     """Submit a new behavioral graph analysis job."""
     try:
-        # Check user credits first
+        # Check user credits first (Profile Analysis costs 5 credits)
         username = session.get('username')
-        has_credits, credits_left = check_user_credits(username)
-        
-        if not has_credits:
+        if not has_credits_for(username, CREDITS_PROFILE_ANALYSIS):
+            _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': 'No credits remaining. Please contact an administrator to get more credits.',
-                'credits_left': 0
+                'error': f'Profile Analysis requires {CREDITS_PROFILE_ANALYSIS} credits. You have {"no" if credits_left == 0 else credits_left} remaining. Please contact an administrator to get more credits.',
+                'credits_left': 0 if credits_left != -1 else -1
             }), 403
         
         data = request.json
@@ -8830,9 +8845,9 @@ def submit_analysis():
         thread.daemon = True
         thread.start()
         
-        # Consume credit for this run (record what it was used for)
+        # Consume credits for this run (record what it was used for)
         desc = f"{project_name} ({brands[0] if brands else project_name} {start_date}–{end_date})"
-        consume_credit(username, description=desc, job_id=job_id, pull_type='Profile Analysis', credits_used=1)
+        consume_credit(username, description=desc, job_id=job_id, pull_type='Profile Analysis', credits_used=CREDITS_PROFILE_ANALYSIS)
 
         # Get updated credits
         _, credits_left = check_user_credits(username)
@@ -13108,9 +13123,16 @@ def submit_talent_theater():
         if not start_date or not end_date:
             return jsonify({'error': 'Start date and end date are required'}), 400
         
+        username = user.get('username', 'unknown')
+        if not has_credits_for(username, CREDITS_TICKET_SALES):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'Ticket Sales requires {CREDITS_TICKET_SALES} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1
+            }), 403
+        
         # Create job
         job_id = str(uuid.uuid4())
-        username = user.get('username', 'unknown')
         
         jobs[job_id] = {
             'job_id': job_id,
@@ -13132,7 +13154,10 @@ def submit_talent_theater():
             }
         }
         
-        # Start job in background thread
+        # Consume credits and start job
+        desc = f"{talent_name} / {movie_name} ({start_date}–{end_date})"
+        if not consume_credit(username, description=desc, job_id=job_id, pull_type='Ticket Sales', credits_used=CREDITS_TICKET_SALES):
+            return jsonify({'error': 'Insufficient credits.'}), 403
         thread = threading.Thread(target=run_talent_theater, args=(job_id,))
         thread.daemon = True
         thread.start()
@@ -13388,9 +13413,16 @@ def submit_svod_acquisition():
         if genre and genre not in SVOD_ALLOWED_GENRES:
             return jsonify({'error': f'Genre must be one of: {", ".join(SVOD_ALLOWED_GENRES)}'}), 400
         
+        username = user.get('username', 'unknown')
+        if not has_credits_for(username, CREDITS_SVOD):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'SVOD Acquisition requires {CREDITS_SVOD} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1
+            }), 403
+        
         # Create job
         job_id = str(uuid.uuid4())
-        username = user.get('username', 'unknown')
         
         jobs[job_id] = {
             'job_id': job_id,
@@ -13417,7 +13449,9 @@ def submit_svod_acquisition():
             }
         }
         
-        # Start job in background thread
+        desc = f"{project_name} ({campaign_start}–{campaign_end})"
+        if not consume_credit(username, description=desc, job_id=job_id, pull_type='SVOD', credits_used=CREDITS_SVOD):
+            return jsonify({'error': 'Insufficient credits.'}), 403
         thread = threading.Thread(target=run_svod_acquisition, args=(job_id,))
         thread.daemon = True
         thread.start()
@@ -13470,9 +13504,16 @@ def submit_campaign_roi():
         if not post_domains:
             return jsonify({'error': 'At least one post domain is required'}), 400
         
+        username = user.get('username', 'unknown')
+        if not has_credits_for(username, CREDITS_CAMPAIGN_ROI):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'Campaign ROI requires {CREDITS_CAMPAIGN_ROI} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1
+            }), 403
+        
         # Create job
         job_id = str(uuid.uuid4())
-        username = user.get('username', 'unknown')
         
         jobs[job_id] = {
             'job_id': job_id,
@@ -13499,7 +13540,9 @@ def submit_campaign_roi():
             }
         }
         
-        # Start job in background thread
+        desc = f"{project_name} ({campaign_start}–{campaign_end})"
+        if not consume_credit(username, description=desc, job_id=job_id, pull_type='Campaign ROI', credits_used=CREDITS_CAMPAIGN_ROI):
+            return jsonify({'error': 'Insufficient credits.'}), 403
         thread = threading.Thread(target=run_campaign_roi, args=(job_id,))
         thread.daemon = True
         thread.start()
@@ -13827,9 +13870,16 @@ def submit_watch_time():
         if not show_names:
             return jsonify({'error': 'At least one show name is required'}), 400
         
+        username = user.get('username', 'unknown')
+        if not has_credits_for(username, CREDITS_WATCH_TIME):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'Watch Time requires {CREDITS_WATCH_TIME} credit(s). You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1
+            }), 403
+        
         # Create job
         job_id = str(uuid.uuid4())
-        username = user.get('username', 'unknown')
         
         jobs[job_id] = {
             'job_id': job_id,
@@ -13850,7 +13900,9 @@ def submit_watch_time():
             }
         }
         
-        # Start job in background thread
+        desc = f"Watch Time ({start_date}–{end_date})"
+        if not consume_credit(username, description=desc, job_id=job_id, pull_type='Watch Time', credits_used=CREDITS_WATCH_TIME):
+            return jsonify({'error': 'Insufficient credits.'}), 403
         thread = threading.Thread(target=run_watch_time, args=(job_id,))
         thread.daemon = True
         thread.start()
