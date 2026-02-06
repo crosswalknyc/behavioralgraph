@@ -2322,20 +2322,23 @@
             position: relative;
         }
         
-        /* Action row: same column alignment as dashboard-layout (sidebar | content) so headers align with data below */
+        /* Action row: first column = sidebar width (280px), gap = 1rem, header never starts before this mark */
         .action-buttons-row {
             display: grid;
-            grid-template-columns: 280px 1fr;
+            grid-template-columns: minmax(280px, 280px) 1fr;
             gap: 1rem;
             align-items: center;
             margin-top: 0.75rem;
             margin-bottom: 0.5rem;
             min-width: 0;
         }
+        /* Header (e.g. Deep Insights) always starts after sidebar + gap; aligned with tab content below */
         .action-buttons-row .inline-tab-header {
             min-width: 0;
+            margin-left: 0;
+            padding-left: 0;
         }
-        /* Content action buttons - first column, over sidebar */
+        /* Content action buttons - first column only; never encroach into header space */
         .content-action-buttons {
             display: flex;
             gap: 0.3rem;
@@ -2344,7 +2347,7 @@
             position: relative;
             z-index: 100;
             background: transparent;
-            width: auto;
+            width: 100%;
             max-width: 280px;
             justify-content: flex-start;
             margin-top: 0;
