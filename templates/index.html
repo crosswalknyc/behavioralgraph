@@ -22407,8 +22407,8 @@
             const newSignupsGenPop = metrics.new_signups?.gen_pop || '';
             const cleanSample = Number(metrics.clean_sample?.count) || 0;
             const cleanSampleGenPop = metrics.clean_sample?.gen_pop || '';
-            const totalSignups = Number(summary.total?.count) || 0;
-            const totalSignupsGenPop = summary.total?.gen_pop || '';
+            const totalSignups = Number(summary.total?.count) || Number(metrics.new_signups?.count) || 0;
+            const totalSignupsGenPop = summary.total?.gen_pop || metrics.new_signups?.gen_pop || '';
             const attributedSignups = Number(summary.attributed?.count) || 0;
             const attributedSignupsGenPop = summary.attributed?.gen_pop || '';
             const dormantReactive = Number(summary.dormant_reactive?.count) || 0;
@@ -22561,10 +22561,11 @@
                         <div class="episode-performance-grid">
                             ${topEpisodes.map((ep, idx) => {
                                 const episodePct = totalSignups > 0 ? ((ep.signups / totalSignups) * 100).toFixed(2) : 0;
+                                const epLabel = (ep.episode || '').includes('/') ? ep.episode : `Episode ${ep.episode}`;
                                 return `
-                                    <div class="episode-performance-card ${idx === 0 ? 'top-performer' : ''} has-tooltip" data-tooltip="Episode ${ep.episode}: Drove ${formatNumber(ep.signups)} platform signups (${episodePct}% of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
+                                    <div class="episode-performance-card ${idx === 0 ? 'top-performer' : ''} has-tooltip" data-tooltip="${epLabel}: Drove ${formatNumber(ep.signups)} platform signups (${episodePct}% of total). ${ep.days_avg ? `Average ${ep.days_avg} days from release to signup.` : ''}">
                                         <div class="episode-rank">#${idx + 1}</div>
-                                        <div class="episode-title">Episode ${ep.episode}</div>
+                                        <div class="episode-title">${epLabel}</div>
                                         <div class="episode-impact">
                                             <div class="impact-value">${formatNumber(ep.signups)}</div>
                                             <div class="impact-label">Signups</div>
@@ -22577,7 +22578,7 @@
                         </div>
                         <div class="performance-insight">
                             <strong>Content Strategy Insight:</strong> 
-                            ${topEpisodes[0] ? `Episode ${topEpisodes[0].episode} drove the highest subscriber acquisition (${formatNumber(topEpisodes[0].signups)} signups, ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(2)}% of total). ` : ''}
+                            ${topEpisodes[0] ? `${(topEpisodes[0].episode || '').includes('/') ? 'Date ' + topEpisodes[0].episode : 'Episode ' + topEpisodes[0].episode} drove the highest subscriber acquisition (${formatNumber(topEpisodes[0].signups)} signups, ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(2)}% of total). ` : ''}
                             ${topEpisodes.length > 1 ? `Top 3 episodes accounted for ${((topEpisodes.slice(0, 3).reduce((sum, ep) => sum + (ep.signups || 0), 0) / totalSignups) * 100).toFixed(2)}% of all signups, ` : ''}
                             indicating ${topEpisodes.length > 0 && topEpisodes[0].signups > (totalSignups / topEpisodes.length) ? 'strong episode-level performance' : 'distributed engagement'}.
                         </div>

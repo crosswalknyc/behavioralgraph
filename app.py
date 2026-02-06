@@ -6028,25 +6028,31 @@ def parse_subscriber_iq_csv(csv_content):
         if not row or all(not cell.strip() for cell in row):
             continue
         
-        # Check for section headers - can be in first or second column
+        # Check for section headers - can be in first, second, or third column (Chris Rock format uses col 2)
         first_col = row[0].strip() if len(row) > 0 and row[0] else ''
         second_col = row[1].strip() if len(row) > 1 and row[1] else ''
-        # Also check combined for headers that span columns
-        combined_check = (first_col + ' ' + second_col).strip().upper()
+        third_col = row[2].strip() if len(row) > 2 and row[2] else ''
+        combined_check = (first_col + ' ' + second_col + ' ' + third_col).strip().upper()
         
         # Global section detection (so we don't require strict CSV order)
         if 'MONTHLY' in combined_check and ('SIGNUP' in combined_check or 'SIGNUPS' in combined_check):
             current_section = 'monthly_signups'
             continue
-        if 'PER-EPISODE' in combined_check or ('EPISODE' in combined_check and 'ATTRIBUTION' in combined_check):
+        if 'ATTRIBUTION SUMMARY' in combined_check or 'ATTRIBUTION SUMMARY' in third_col.upper():
+            current_section = 'attribution_summary'
+            print(f"   ✅ Entered ATTRIBUTION SUMMARY section at row {i}")
+            continue
+        if 'PER-EPISODE' in combined_check or 'PER-DATE ATTRIBUTION' in combined_check or ('EPISODE' in combined_check and 'ATTRIBUTION' in combined_check):
             current_section = 'episode_attribution'
             continue
         
-        # Metadata section
-        if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in second_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in combined_check:
+        # Metadata section (also enter when we see metadata rows before any section header)
+        if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in second_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in third_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in combined_check:
             current_section = 'metadata'
             print(f"   ✅ Entered metadata section at row {i}")
             continue
+        if 'Show/Content Tracked' in first_col or 'Platform Tracked' in first_col:
+            current_section = 'metadata'
         elif current_section == 'metadata':
             if 'Show/Content Tracked' in first_col:
                 # New schema: value often in col 3 (e.g. "Show/Content Tracked,,,Landman")
@@ -6076,9 +6082,9 @@ def parse_subscriber_iq_csv(csv_content):
                 parsed['metadata']['genre'] = genre_val
                 if genre_val:
                     print(f"   📂 Found genre: '{genre_val}' from row {i}")
-            elif 'KEY METRICS' in first_col.upper() or 'KEY METRICS' in second_col.upper() or 'KEY METRICS' in combined_check:
+            elif 'KEY METRICS' in first_col.upper() or 'KEY METRICS' in second_col.upper() or 'KEY METRICS' in third_col.upper() or 'KEY METRICS' in combined_check:
                 current_section = 'key_metrics'
-                print(f"   ✅ Entered KEY METRICS section at row {i}: first_col='{first_col}', second_col='{second_col}'")
+                print(f"   ✅ Entered KEY METRICS section at row {i}: first_col='{first_col}', second_col='{second_col}', third_col='{third_col}'")
                 continue
         
         # Key metrics (CSV: Category, Episode Date, Count, ..., Percentage, Gen Pop Projection -> count in col 2, gen_pop in col 9)
@@ -6127,13 +6133,17 @@ def parse_subscriber_iq_csv(csv_content):
             elif 'Total Show Conversion Rate' in first_col:
                 parsed['key_metrics']['total_conversion_rate'] = (row[8].strip() if len(row) > 8 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Average Days' in first_col:
-                parsed['key_metrics']['avg_days_to_signup'] = row[3].strip() if len(row) > 3 else ''
-            elif 'PER-EPISODE ATTRIBUTION' in first_col.upper() or 'PER-EPISODE ATTRIBUTION' in second_col.upper() or 'PER-EPISODE ATTRIBUTION' in combined_check:
+                # Value can be in col 3 (e.g. "7.2"); strip trailing "days" if present
+                val = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '')
+                if val and val.lower().endswith('days'):
+                    val = val[:-4].strip()
+                parsed['key_metrics']['avg_days_to_signup'] = val
+            elif 'PER-EPISODE ATTRIBUTION' in first_col.upper() or 'PER-EPISODE ATTRIBUTION' in second_col.upper() or 'PER-EPISODE ATTRIBUTION' in third_col.upper() or 'PER-EPISODE ATTRIBUTION' in combined_check:
                 current_section = 'episode_attribution'
                 print(f"   ✅ Entered PER-EPISODE ATTRIBUTION section at row {i}: first_col='{first_col}', second_col='{second_col}'")
                 continue
         
-        # Episode attribution
+        # Episode attribution (and PER-DATE attribution for stand-up/special format)
         elif current_section == 'episode_attribution':
             # Handle both "Episode X" and just "X" formats
             episode_num = None
@@ -6143,6 +6153,12 @@ def parse_subscriber_iq_csv(csv_content):
                 episode_num = first_col.strip()
             elif first_col and len(first_col) <= 3 and first_col.replace(' ', '').isdigit():
                 episode_num = first_col.replace(' ', '').strip()
+            # PER-DATE format: date in col 0 (e.g. 03/08/23), signups in col 2
+            elif first_col and '/' in first_col and parse_number(row[2] if len(row) > 2 else '') is not None:
+                episode_num = first_col  # Use date as "episode" label for Content Performance
+            elif first_col and '/' in first_col and parse_number(row[2] if len(row) > 2 else '') is None and len(row) > 2 and row[2].strip().lower() != 'signups':
+                # Skip sub-rows like "  Same Day" under a date
+                continue
             
             if episode_num:
                 # Support two CSV layouts:
@@ -6200,7 +6216,7 @@ def parse_subscriber_iq_csv(csv_content):
                 return (r[9].strip() if len(r) > 9 else '') or (r[8].strip() if len(r) > 8 else '')
             if 'Attributed Signups' in first_col:
                 count_val = _attr_count(row)
-                pct_val = row[7].strip() if len(row) > 7 else ''
+                pct_val = (row[8].strip() if len(row) > 8 and '%' in str(row[8]) else '') or (row[7].strip() if len(row) > 7 else '')
                 gen_pop_val = _attr_gen_pop(row)
                 print(f"   📊 Found Attributed Signups: count={count_val}, pct={pct_val}, gen_pop={gen_pop_val}")
                 parsed['attribution_summary']['attributed'] = {
@@ -6210,7 +6226,7 @@ def parse_subscriber_iq_csv(csv_content):
                 }
             elif 'Dormant to Reactive' in first_col:
                 count_val = _attr_count(row)
-                pct_val = row[7].strip() if len(row) > 7 else ''
+                pct_val = (row[8].strip() if len(row) > 8 and '%' in str(row[8]) else '') or (row[7].strip() if len(row) > 7 else '')
                 gen_pop_val = _attr_gen_pop(row)
                 print(f"   📊 Found Dormant to Reactive: count={count_val}, pct={pct_val}, gen_pop={gen_pop_val}")
                 parsed['attribution_summary']['dormant_reactive'] = {
@@ -6220,7 +6236,7 @@ def parse_subscriber_iq_csv(csv_content):
                 }
             elif 'TOTAL SIGNUPS' in first_col:
                 count_val = _attr_count(row)
-                pct_val = row[7].strip() if len(row) > 7 else ''
+                pct_val = (row[8].strip() if len(row) > 8 and '%' in str(row[8]) else '') or (row[7].strip() if len(row) > 7 else '')
                 gen_pop_val = _attr_gen_pop(row)
                 print(f"   📊 Found TOTAL SIGNUPS: count={count_val}, pct={pct_val}, gen_pop={gen_pop_val}")
                 parsed['attribution_summary']['total'] = {
