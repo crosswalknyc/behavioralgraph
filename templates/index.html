@@ -12501,7 +12501,7 @@
                     </div>
                 </div>
                 <div class="inline-tab-header" id="inlineTabHeader" style="display: flex; align-items: center; gap: 0.75rem;">
-                    <h2 style="margin: 0; font-size: 1.1rem;">🔬 Deep Insights</h2>
+                    <h2 class="has-tooltip" style="margin: 0; font-size: 1.1rem;" data-tooltip="Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.">🔬 Deep Insights</h2>
                     <p style="margin: 0; color: var(--text-secondary); font-size: 0.8rem;">Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.</p>
                 </div>
             </div>
@@ -12645,7 +12645,7 @@
                                             <option value="column">▮ Col</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Gender')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Gender')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Gender')">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Gender')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Gender')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Gender')">➕</button></span>
                                     </span>
                                 </h3>
                                 <div class="chart-container"><canvas id="genderChart"></canvas></div>
@@ -12665,7 +12665,7 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Ethnicity')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Ethnicity')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Ethnicity')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Ethnicity')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Ethnicity')">➕</button></span>
                                     </span>
                                 </h3>
                                 <div class="chart-container"><canvas id="ethnicityChart"></canvas></div>
@@ -12692,9 +12692,9 @@
                                             <option value="value">Val↓</option>
                                         </select>
                                         <span class="module-action-btns">
-                                            <button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Income')">CSV</button>
-                                            <button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Income')">PNG</button>
-                                            <button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Income')">➕</button>
+                                            <button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Income')">CSV</button>
+                                            <button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Income')">PNG</button>
+                                            <button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Income')">➕</button>
                                         </span>
                                     </span>
                                 </h3>
@@ -12715,7 +12715,7 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Education')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Education')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Education')">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Education')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Education')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Education')">➕</button></span>
                                     </span>
                                 </h3>
                                 <div class="chart-container"><canvas id="educationChart"></canvas></div>
@@ -12735,7 +12735,7 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Relationship Status')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Relationship Status')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Relationship Status')">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Relationship Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Relationship Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Relationship Status')">➕</button></span>
                                     </span>
                                 </h3>
                                 <div class="chart-container"><canvas id="relationshipChart"></canvas></div>
@@ -12755,7 +12755,7 @@
                                             <option value="column">▮ Col</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Sexual Orientation')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Sexual Orientation')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Sexual Orientation')">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Sexual Orientation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Sexual Orientation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Sexual Orientation')">➕</button></span>
                                     </span>
                                 </h3>
                                 <div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div>
@@ -12775,7 +12775,7 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Parental Status')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Parental Status')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Parental Status')">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Parental Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Parental Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Parental Status')">➕</button></span>
                                     </span>
                                 </h3>
                                 <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
@@ -12795,7 +12795,7 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
                                     </span>
                                 </h3>
                                 <div class="chart-container occupation-chart-container">
@@ -12962,7 +12962,7 @@
                             <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;" class="has-tooltip" data-tooltip="Over-Indexing DMAs: Markets where your audience is more concentrated than Gen Pop. Index ≥1.0x means equal to or higher concentration. Target these for media buys and activations.">
                                 <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                 <span>🔥 Over-Indexing DMAs (≥1.0x)</span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Over-Indexing DMAs')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Over-Indexing DMAs')">➕</button></span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('location', 'Over-Indexing DMAs')">CSV</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('location', 'Over-Indexing DMAs')">➕</button></span>
                             </h3>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
@@ -12996,7 +12996,7 @@
                             <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;" class="has-tooltip" data-tooltip="Under-Indexing DMAs: Markets where your audience is less concentrated than Gen Pop. Index <1.0x means lower concentration. Consider reducing spend or using different messaging in these areas.">
                                 <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                 <span>❄️ Under-Indexing DMAs (&lt;1.0x)</span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Under-Indexing DMAs')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Under-Indexing DMAs')">➕</button></span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('location', 'Under-Indexing DMAs')">CSV</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('location', 'Under-Indexing DMAs')">➕</button></span>
                             </h3>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
@@ -13093,7 +13093,7 @@
                                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                                             <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
                                             <input type="date" id="netflixAllDate" onchange="renderNetflixAllRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                            <button class="module-btn csv-btn" onclick="exportNetflixAllCSV()">CSV</button>
+                                            <button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportNetflixAllCSV()">CSV</button>
                                         </div>
                                     </div>
                                     <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">All content ranked by views. Grouped by Show + Season + Episode # + Episode Name.</p>
@@ -13106,7 +13106,7 @@
                                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                                             <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
                                             <input type="date" id="netflixDailyDate" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                            <button class="module-btn csv-btn" onclick="exportNetflixDailyCSV()">CSV</button>
+                                            <button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportNetflixDailyCSV()">CSV</button>
                                         </div>
                                     </div>
                                     <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem;">
@@ -13130,7 +13130,7 @@
                                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                                             <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
                                             <input type="date" id="netflixSeasonsDate" onchange="renderNetflixSeasonsRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                            <button class="module-btn csv-btn" onclick="exportNetflixSeasonsCSV()">CSV</button>
+                                            <button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportNetflixSeasonsCSV()">CSV</button>
                                         </div>
                                     </div>
                                     <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Shows only (no movies). Ranked by Show + Season combined.</p>
@@ -13143,7 +13143,7 @@
                                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                                             <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
                                             <input type="date" id="netflixEpisodesDate" onchange="renderNetflixEpisodesRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                            <button class="module-btn csv-btn" onclick="exportNetflixEpisodesCSV()">CSV</button>
+                                            <button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportNetflixEpisodesCSV()">CSV</button>
                                         </div>
                                     </div>
                                     <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Ranked by episode.</p>
@@ -13155,7 +13155,7 @@
                                         <h3 style="margin: 0;">📈 Show Trends (Past Year)</h3>
                                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                                             <select id="netflixTrendsShow" onchange="renderNetflixTrends()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 200px;"><option value="">Select show...</option></select>
-                                            <button class="module-btn csv-btn" onclick="exportNetflixTrendsCSV()">CSV</button>
+                                            <button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportNetflixTrendsCSV()">CSV</button>
                                         </div>
                                     </div>
                                     <div id="netflixTrendsChartWrap" style="min-height: 300px;"><canvas id="netflixTrendsChart"></canvas></div>
@@ -13173,7 +13173,7 @@
                                 <div id="netflix-topshows" class="netflix-sub-content">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
                                         <h3 style="margin: 0;">🏆 Top 20 Shows Over Time</h3>
-                                        <button class="module-btn csv-btn" onclick="exportNetflixTopShowsCSV()">CSV</button>
+                                        <button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportNetflixTopShowsCSV()">CSV</button>
                                     </div>
                                     <div id="netflixTopShowsChartWrap" style="min-height: 400px;"><canvas id="netflixTopShowsChart"></canvas></div>
                                     <div id="netflixTopShowsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
@@ -26879,7 +26879,7 @@
                             },
                             afterFit: (scale) => { scale.width = Math.max(scale.width, 180); }
                         }
-                    }
+                    })
                 },
                 plugins: [ChartDataLabels]
             });
