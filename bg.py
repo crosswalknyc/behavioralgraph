@@ -15,16 +15,16 @@ and reliable brand metrics across all categories.
                     📊 SAMPLE SIZE INFLATION
 ================================================================================
 
-INFLATION FACTOR: Conditional (3x or 1x)
------------------------------------------
-- If sample size ≤ 3M: Multiply by 3x
-- If sample size > 3M: Use actual size (no inflation, 1x)
-- Capped at 10,000,000 maximum
+INFLATION FACTOR: Intelligent scaling (151x down to 1x)
+------------------------------------------------------
+- Try 151x first; if result > 10M, try 125x, 111x, 85x, 55x, 25x, 5x, 2.5x, or 1x
+- Result capped at 10,000,000 maximum
 - Examples: 
-  • 1M UIDs → 3M sample size (3x applied)
-  • 2M UIDs → 6M sample size (3x applied)
-  • 4M UIDs → 4M sample size (no inflation, > 3M threshold)
-- Location: Lines 3438-3443, 3469-3472
+  • ~66K UIDs → 10M sample size (151x applied, capped)
+  • 100K UIDs → 8.5M sample size (85x applied)
+  • 200K UIDs → 5M sample size (25x applied)
+  • 4M UIDs → 4M sample size (1x, no inflation)
+- Location: get_final_sample_size(), lines ~3737-3775
 - All percentages calculated from final sample size
 
 ================================================================================
@@ -203,7 +203,7 @@ All brand input entries in the output CSV will have:
 1.  Data Loading → Load from Snowflake database
 2.  Normalization → Standardize category/value names
 3.  🔄 ESPN Layer 1: consolidate_espn_brands() - Initial ESPN+/ESPN merge
-4.  Set Raw Numbers → From percentages using sample size (3x if ≤3M, 1x if >3M)
+4.  Set Raw Numbers → From percentages using sample size (151x down to 1x, capped at 10M)
 5.  2x Boost → All behavioral categories
 6.  Sports 40x/4.36x Boost → Major leagues and other sports
 7.  Dynamic Threshold Boosts → SEARCH ENGINE/AI (65% threshold)
@@ -225,7 +225,7 @@ All brand input entries in the output CSV will have:
 ================================================================================
 
 Sample Size Inflation:
-  - Lines 3438-3443, 3469-3472: INFLATION_FACTOR = 3 (≤3M) or 1 (>3M)
+  - get_final_sample_size(): INFLATION_FACTOR = 151, 125, 111, 85, 55, 25, 5, 2.5, or 1 (stays ≤10M)
 
 Boosting Functions:
   - Lines 4650-4698: boost_all_behavioral_by_2x()
@@ -265,7 +265,7 @@ Additional Boosting:
 ================================================================================
 
 To modify behavior:
-- Sample size inflation: Lines 3438-3443, 3469-3472 - currently 3x (≤3M) or 1x (>3M)
+- Sample size inflation: 151x down to 1x intelligently scaled to stay ≤10M
 - Universal boost: Modify multiplier in boost_all_behavioral_by_2x() (Line 4693)
 - Sports boost: Modify multipliers in boost_sports_categories_by_436x() (Line 6020, 6023) - ALL teams boosted
 - Dynamic thresholds: Change min_threshold values (Lines 4028-4031)
@@ -3734,25 +3734,20 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # INFLATE SAMPLE SIZE by 3x (capped at 10M) - BUT only if sample size <= 3M
-        # If sample size > 3M, use actual sample size (no inflation)
-        if bounded > 3_000_000:
-            INFLATION_FACTOR = 1  # No inflation for large samples
-            inflated_sample_size = bounded * INFLATION_FACTOR
-        else:
-            INFLATION_FACTOR = 3  # 3x inflation for samples <= 3M
-            inflated_sample_size = bounded * INFLATION_FACTOR
-        
-        # Cap at 10M regardless of GenPop or regular run
+        # INFLATE SAMPLE SIZE: try 151x first, then scale down to 125x, 111x, 85x, 55x, 25x, 5x, 2.5x, or 1x
+        # so the result never exceeds 10M
+        INFLATION_OPTIONS = [151, 125, 111, 85, 55, 25, 5, 2.5, 1]
+        INFLATION_FACTOR = 1
+        for mult in INFLATION_OPTIONS:
+            if bounded * mult <= GENPOP_SAMPLE_CAP:
+                INFLATION_FACTOR = mult
+                break
+        inflated_sample_size = bounded * INFLATION_FACTOR
         final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
-        
-        # Optional: tidy to a multiple of 10 for readability
         final_sample_size = (final_sample_size // 10) * 10
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"📊 Actual sampled UIDs: {actual_sample_size:,}")
-            print(f"📊 Inflation factor: {INFLATION_FACTOR}x")
-            if INFLATION_FACTOR == 1:
-                print(f"📊 Sample size > 3M: Using actual sample size (no inflation)")
+            print(f"📊 Inflation factor: {INFLATION_FACTOR}x (chosen so result ≤ 10M)")
             print(f"📊 Final sample size: {inflated_sample_size:,}")
             print(f"🔒 Sample size cap (10M): {GENPOP_SAMPLE_CAP:,}")
             print(f"✅ Final SAMPLE SIZE set to: {final_sample_size:,}")
@@ -3765,12 +3760,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # INFLATE SAMPLE SIZE by 3x (capped at 10M) - fallback path
-        # If sample size > 3M, use actual sample size (no inflation)
-        if bounded > 3_000_000:
-            INFLATION_FACTOR = 1  # No inflation for large samples
-        else:
-            INFLATION_FACTOR = 3  # 3x inflation for samples <= 3M
+        # INFLATE SAMPLE SIZE: try 151x, then scale down to stay under 10M (fallback path)
+        INFLATION_OPTIONS = [151, 125, 111, 85, 55, 25, 5, 2.5, 1]
+        INFLATION_FACTOR = 1
+        for mult in INFLATION_OPTIONS:
+            if bounded * mult <= GENPOP_SAMPLE_CAP:
+                INFLATION_FACTOR = mult
+                break
         inflated_sample_size = bounded * INFLATION_FACTOR
         final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
         final_sample_size = (final_sample_size // 10) * 10
@@ -3798,7 +3794,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         }
     ])
     
-    # SAMPLE SIZE value verified - conditional inflation (6x if ≤3M, 1x if >3M) and capped at 10M
+    # SAMPLE SIZE value verified - intelligent inflation (151x down to 1x) and capped at 10M
 
     # --- Begin: Behavior percentage transformation with added noise ---
     # Apply organic scaling to all behavior categories to ensure reasonable representation
@@ -4943,7 +4939,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = deduplicate_location_data(df_final)
     
     # scale_raw_numbers_to_universe DISABLED - per user request
-    # SAMPLE SIZE uses conditional inflation: 3x if ≤3M, 1x if >3M (capped at 10M)
+    # SAMPLE SIZE uses intelligent inflation: 151x down to 1x (capped at 10M)
     # All raw numbers will calculate naturally from: (percentage/100) × sample_size
     
     # Recalculate percentages DISABLED - percentages stay as organic counts from database
