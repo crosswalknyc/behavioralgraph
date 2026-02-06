@@ -2779,6 +2779,9 @@ def get_admin_content():
         
         print(f"📋 Cache lookup built with {len(cached_lookup)} entries")
         
+        # Purgatory files are not in s3_cache; use purgatory metadata for category and display name
+        purgatory_meta = load_purgatory_metadata() if s3_client else {}
+        
         # Get active files
         active_files = []
         paginator = s3.get_paginator('list_objects_v2')
@@ -2792,17 +2795,27 @@ def get_admin_content():
                 # Parse file info
                 filename = key.split('/')[-1]
                 
-                # Try to get category and project_name from cache (which has proper brand categories from CSV)
-                cached = cached_lookup.get(key, {})
-                category = cached.get('category', 'Uncategorized')
-                
-                # Generate display name with timestamp removal
-                if 'project_name' not in cached:
-                    name_without_ext = filename.replace('.csv', '')
-                    name_without_timestamp = remove_timestamp_from_name(name_without_ext)
-                    project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+                # Purgatory keys: category and project_name come from purgatory metadata
+                if key.startswith(S3_PURGATORY_PREFIX):
+                    purgatory_id = f"{S3_BUCKET}:{key}"
+                    item = purgatory_meta.get(purgatory_id, {})
+                    category = (item.get('category') or 'Uncategorized').strip() or 'Uncategorized'
+                    project_name = (item.get('title') or item.get('project_name') or '').strip()
+                    if not project_name:
+                        name_without_ext = filename.replace('.csv', '')
+                        name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                        project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
                 else:
-                    project_name = cached['project_name']
+                    # Try to get category and project_name from cache (which has proper brand categories from CSV)
+                    cached = cached_lookup.get(key, {})
+                    category = cached.get('category', 'Uncategorized')
+                    # Generate display name with timestamp removal
+                    if 'project_name' not in cached:
+                        name_without_ext = filename.replace('.csv', '')
+                        name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                        project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+                    else:
+                        project_name = cached['project_name']
                 last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                 
                 active_files.append({
@@ -10342,7 +10355,16 @@ def change_file_category():
             ContentType='text/csv'
         )
         
-        # Update cache - find job in s3_cache and update its category
+        # If this is a purgatory file, update purgatory metadata so category persists in admin list
+        if file_key.startswith(S3_PURGATORY_PREFIX):
+            purgatory_id = f"{S3_BUCKET}:{file_key}"
+            metadata = load_purgatory_metadata()
+            if purgatory_id in metadata:
+                metadata[purgatory_id]['category'] = new_category
+                save_purgatory_metadata(metadata)
+                print(f"🏷️ Updated purgatory metadata category for {file_key} to {new_category}")
+        
+        # Update cache - find job in s3_cache and update its category (released files only; purgatory not in cache)
         if s3_cache and 'jobs' in s3_cache:
             for job in s3_cache.get('jobs', []):
                 if job.get('key') == file_key or job.get('s3_key') == file_key:
@@ -10680,6 +10702,30 @@ def list_jobs():
                 cat = j.get('category')
                 if cat:
                     categories.add(cat)
+        
+        # Include purgatory items in the list so they appear in the dashboard and can be viewed
+        existing_keys = {e.get('s3_key') for e in job_list if e.get('s3_key')}
+        for purgatory_id, item in purgatory_meta.items():
+            if item.get('status') == 'approved' and item.get('released_key'):
+                continue  # Already released; may be in cache under released_key
+            s3_key = item.get('s3_key')
+            if not s3_key or s3_key in existing_keys:
+                continue
+            existing_keys.add(s3_key)
+            job_list.append({
+                'job_id': s3_key,
+                'project_name': item.get('title') or item.get('project_name') or 'Unknown',
+                'status': 'cached',
+                'progress': 100,
+                'created_at': item.get('created_at') or '',
+                'source': 's3',
+                'category': item.get('category') or 'Uncategorized',
+                's3_key': s3_key,
+                'display_name': item.get('title') or item.get('project_name')
+            })
+            cat = item.get('category')
+            if cat:
+                categories.add(cat)
         
         # Sort by created_at descending (safe key for missing/None values)
         sorted_jobs = sorted(job_list, key=lambda x: x.get('created_at') or '', reverse=True)
