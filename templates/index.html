@@ -207,6 +207,10 @@
         .credits-info-row:last-child {
             border-bottom: none;
         }
+        .credits-used-row:hover {
+            background: rgba(102, 217, 239, 0.08);
+            border-radius: 4px;
+        }
         
         .credits-info-label {
             color: var(--text-secondary);
@@ -11056,9 +11060,17 @@
                     <span class="credits-info-label">Available Credits</span>
                     <span class="credits-info-value" id="modalCreditsAvailable">{{ 'Unlimited' if credits == -1 else credits }}</span>
                 </div>
-                <div class="credits-info-row">
+                <div class="credits-info-row credits-used-row" id="creditsUsedRow" onclick="toggleCreditUsageDetail()" style="cursor: pointer;" title="Click to see what each credit was used for">
                     <span class="credits-info-label">Credits Used</span>
-                    <span class="credits-info-value">{{ credits_used }}</span>
+                    <span class="credits-info-value" id="modalCreditsUsed">{{ credits_used }}</span>
+                    <span class="credits-used-chevron" id="creditsUsedChevron" style="margin-left: 0.25rem; font-size: 0.7rem;">▾</span>
+                </div>
+                <div id="creditUsageDetail" style="display: none; margin-top: 0.5rem; margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color); max-height: 240px; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">What each credit was used for</span>
+                        <button type="button" class="module-btn csv-btn has-tooltip" data-tooltip="Export usage history to CSV" onclick="event.stopPropagation(); exportCreditUsageCSV();" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Export CSV</button>
+                    </div>
+                    <div id="creditUsageList" style="font-size: 0.8rem;"></div>
                 </div>
                 <div class="credits-info-row">
                     <span class="credits-info-label">Account</span>
@@ -11214,7 +11226,7 @@
                     <button class="view-btn {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'super_admin' or role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
-                    <button class="view-btn has-tooltip" id="customAnalysisBtn" data-tooltip="Create Your Own Analysis with Our Data">🔧 Analysis IQ</button>
+                    <button class="view-btn has-tooltip" id="customAnalysisBtn" data-tooltip="Create and run your own analysis">🔧 Analysis IQ</button>
                     {% endif %}
                     {% if role == 'super_admin' or role == 'admin' %}
                     <a href="/admin" class="view-btn" id="adminViewBtn">🔐 Admin</a>
@@ -55668,6 +55680,72 @@
         
         function closeCreditsModal() {
             document.getElementById('creditsModal').classList.remove('active');
+            const detail = document.getElementById('creditUsageDetail');
+            if (detail) detail.style.display = 'none';
+            const chevron = document.getElementById('creditsUsedChevron');
+            if (chevron) chevron.textContent = '▾';
+        }
+
+        let creditUsageCache = null;
+        function toggleCreditUsageDetail() {
+            const detail = document.getElementById('creditUsageDetail');
+            const chevron = document.getElementById('creditsUsedChevron');
+            if (!detail || !chevron) return;
+            if (detail.style.display === 'none' || !detail.style.display) {
+                detail.style.display = 'block';
+                chevron.textContent = '▴';
+                const listEl = document.getElementById('creditUsageList');
+                if (!listEl) return;
+                listEl.innerHTML = '<span style="color: var(--text-secondary);">Loading...</span>';
+                fetch('/api/credit-usage')
+                    .then(r => r.json())
+                    .then(data => {
+                        creditUsageCache = data.usage || [];
+                        if (creditUsageCache.length === 0) {
+                            listEl.innerHTML = '<span style="color: var(--text-secondary);">No usage history recorded yet. New analysis runs will appear here.</span>';
+                            return;
+                        }
+                        listEl.innerHTML = creditUsageCache.map((row, i) => {
+                            const d = row.used_at ? new Date(row.used_at) : null;
+                            const dateStr = d ? d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '';
+                            return `<div style="padding: 0.35rem 0; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; gap: 0.5rem;"><span>${escapeHtml(row.description || 'Analysis run')}</span><span style="color: var(--text-secondary); flex-shrink: 0;">${escapeHtml(dateStr)}</span></div>`;
+                        }).join('');
+                    })
+                    .catch(() => {
+                        listEl.innerHTML = '<span style="color: var(--accent-red);">Could not load usage history.</span>';
+                    });
+            } else {
+                detail.style.display = 'none';
+                chevron.textContent = '▾';
+            }
+        }
+        function exportCreditUsageCSV() {
+            const doExport = (rows) => {
+                const headers = ['Date', 'Description', 'Job ID'];
+                const csvRows = [headers.join(',')];
+                (rows || []).forEach(row => {
+                    const d = row.used_at ? new Date(row.used_at) : null;
+                    const dateStr = d ? d.toISOString() : '';
+                    const desc = (row.description || '').replace(/"/g, '""');
+                    const jobId = (row.job_id || '').replace(/"/g, '""');
+                    csvRows.push(`"${dateStr}","${desc}","${jobId}"`);
+                });
+                const csv = csvRows.join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'credit_usage_history.csv';
+                a.click();
+                URL.revokeObjectURL(a.href);
+            };
+            if (creditUsageCache) {
+                doExport(creditUsageCache);
+            } else {
+                fetch('/api/credit-usage').then(r => r.json()).then(data => {
+                    creditUsageCache = data.usage || [];
+                    doExport(creditUsageCache);
+                }).catch(() => doExport([]));
+            }
         }
         
         // ============================================================================

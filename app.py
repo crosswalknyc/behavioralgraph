@@ -1076,24 +1076,37 @@ def check_user_credits(username):
     
     return user['credits'] > 0, user['credits']
 
-def consume_credit(username):
-    """Consume one credit from user. Returns True if successful."""
+def consume_credit(username, description=None, job_id=None):
+    """Consume one credit from user. Optionally record usage in history. Returns True if successful."""
     data = load_users()
     user = data['users'].get(username)
     if not user:
         return False
-    
+
+    used_at = datetime.now().isoformat()
+    entry = {
+        'used_at': used_at,
+        'description': description or 'Analysis run',
+        'job_id': job_id or ''
+    }
+
     # -1 means unlimited
     if user['credits'] == -1:
         user['credits_used'] = user.get('credits_used', 0) + 1
+        history = user.setdefault('credit_usage_history', [])
+        history.insert(0, entry)
+        user['credit_usage_history'] = history[:500]  # cap at 500
         save_users(data)
         return True
-    
+
     if user['credits'] <= 0:
         return False
-    
+
     user['credits'] -= 1
     user['credits_used'] = user.get('credits_used', 0) + 1
+    history = user.setdefault('credit_usage_history', [])
+    history.insert(0, entry)
+    user['credit_usage_history'] = history[:500]
     save_users(data)
     return True
 
@@ -3177,6 +3190,17 @@ def get_user_info():
         'allowed_runs': user.get('allowed_runs', ['*']),
         'collab_team': user.get('collab_team', [])
     })
+
+
+@app.route('/api/credit-usage')
+@requires_auth
+def get_credit_usage():
+    """Return current user's credit usage history (what each credit was used for). Newest first."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    history = user.get('credit_usage_history', [])
+    return jsonify({'success': True, 'usage': history})
 
 
 # ============================================================================
@@ -8797,9 +8821,10 @@ def submit_analysis():
         thread.daemon = True
         thread.start()
         
-        # Consume credit for this run
-        consume_credit(username)
-        
+        # Consume credit for this run (record what it was used for)
+        desc = f"{project_name} ({brands[0] if brands else project_name} {start_date}–{end_date})"
+        consume_credit(username, description=desc, job_id=job_id)
+
         # Get updated credits
         _, credits_left = check_user_credits(username)
         

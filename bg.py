@@ -2095,7 +2095,7 @@ def enforce_espn_consistency_final(df):
                 
             # Update US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns and max_raw_numbers > 0:
-                genpop = int((max_raw_numbers / 10_000_000) * 324_770_000)
+                genpop = int((max_raw_numbers / 10_000_000) * 324_700_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
         except:
             pass
@@ -14721,19 +14721,22 @@ def finalize_original_raw_numbers_for_output(df):
         'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'
     }
 
-    # Ensure demographic categories have empty raw numbers
+    # Ensure demographic categories have empty raw numbers (except SAMPLE SIZE)
     for category in demographic_categories:
+        if category.upper() == 'SAMPLE SIZE':
+            continue  # SAMPLE SIZE gets its raw number set below from Percentage
         mask = df['Column'].str.upper() == category.upper()
         if mask.any():
             df.loc[mask, final_col] = ''
 
-    # Resolve sample size
+    # Resolve sample size and set SAMPLE SIZE row's Original Raw Numbers so US Gen Pop Projection = (sample_size/10M)*324.7M
     sample_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
     sample_size = None
     if sample_mask.any():
         try:
             sample_val = df.loc[sample_mask, 'Percentage'].iloc[0]
             sample_size = int(float(str(sample_val).replace(',', '')))
+            df.loc[sample_mask, final_col] = str(sample_size)
         except Exception:
             sample_size = None
 
