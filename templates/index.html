@@ -21645,8 +21645,8 @@
                     data: {
                         labels: labels,
                         datasets: [
-                            { label: (showPct ? '% ' : '') + 'Last Click', data: lastClickVals, backgroundColor: 'rgba(6, 182, 212, 0.6)', borderColor: 'rgba(6, 182, 212, 1)', borderWidth: 1 },
-                            { label: (showPct ? '% ' : '') + 'Assisted', data: assistedVals, backgroundColor: 'rgba(200, 255, 0, 0.6)', borderColor: 'rgba(200, 255, 0, 1)', borderWidth: 1 }
+                            { label: (showPct ? '% ' : '') + 'Last Click', data: lastClickVals, backgroundColor: 'rgba(147, 51, 234, 0.65)', borderColor: 'rgba(147, 51, 234, 1)', borderWidth: 1 },
+                            { label: (showPct ? '% ' : '') + 'Assisted', data: assistedVals, backgroundColor: 'rgba(163, 230, 53, 0.65)', borderColor: 'rgba(163, 230, 53, 1)', borderWidth: 1 }
                         ]
                     },
                     options: {
@@ -21680,7 +21680,7 @@
                 outletChart.appendChild(canvas);
                 const outletLabels = sorted.map(p => (d.getDisplayName(p) || p).toUpperCase());
                 const datasets = ps.map((p, i) => {
-                    const colors = ['rgba(6, 182, 212, 0.6)', 'rgba(200, 255, 0, 0.6)', 'rgba(253, 151, 31, 0.6)'];
+                    const colors = ['rgba(147, 51, 234, 0.65)', 'rgba(163, 230, 53, 0.65)', 'rgba(245, 158, 11, 0.65)'];
                     const data = sorted.map(plat => _parseGenPop(d.getGenPopFor(p.rows, plat) || '0'));
                     return { label: (p.talent || '').toUpperCase(), data, backgroundColor: colors[i % colors.length], borderColor: colors[i % colors.length].replace('0.6', '1'), borderWidth: 1 };
                 });
@@ -21743,7 +21743,7 @@
             const barContainer = document.getElementById('ticketSalesBarChart');
             if (pieContainer && typeof Chart !== 'undefined') {
                 pieContainer.innerHTML = '';
-                const pieColors = ['rgba(6, 182, 212, 0.8)', 'rgba(200, 255, 0, 0.8)', 'rgba(253, 151, 31, 0.8)'];
+                const pieColors = ['rgba(147, 51, 234, 0.85)', 'rgba(163, 230, 53, 0.85)', 'rgba(245, 158, 11, 0.85)'];
                 ['Last Click Attribution', 'Assisted Conversion'].forEach((title, idx) => {
                     const data = idx === 0 ? lastClickData : assistedData;
                     const total = data.reduce((s, x) => s + x.value, 0);
@@ -21775,14 +21775,14 @@
                 const combinedLabels = [];
                 const combinedValues = [];
                 const combinedColors = [];
-                const lcColors = ['rgba(6, 182, 212, 0.9)', 'rgba(6, 182, 212, 0.6)'];
-                const asColors = ['rgba(200, 255, 0, 0.9)', 'rgba(200, 255, 0, 0.6)'];
+                const combinedSliceColors = ['rgba(147, 51, 234, 0.9)', 'rgba(219, 39, 119, 0.9)', 'rgba(245, 158, 11, 0.9)', 'rgba(163, 230, 53, 0.9)'];
                 ta.forEach((t, i) => {
                     const nameUp = (t.name || '').toUpperCase();
                     const lc = _parseGenPop(t.convGenPop || '0');
                     const as = _parseGenPop(t.hitsGenPop || '0');
-                    if (lc > 0) { combinedLabels.push(nameUp + ' – Last Click'); combinedValues.push(lc); combinedColors.push(lcColors[i % lcColors.length]); }
-                    if (as > 0) { combinedLabels.push(nameUp + ' – Assisted'); combinedValues.push(as); combinedColors.push(asColors[i % asColors.length]); }
+                    const colorIdx = i * 2;
+                    if (lc > 0) { combinedLabels.push(nameUp + ' – Last Click'); combinedValues.push(lc); combinedColors.push(combinedSliceColors[colorIdx % combinedSliceColors.length]); }
+                    if (as > 0) { combinedLabels.push(nameUp + ' – Assisted'); combinedValues.push(as); combinedColors.push(combinedSliceColors[(colorIdx + 1) % combinedSliceColors.length]); }
                 });
                 const combinedTotal = combinedValues.reduce((s, v) => s + v, 0);
                 if (combinedLabels.length > 0 && combinedTotal > 0) {
@@ -21824,7 +21824,7 @@
                     type: 'bar',
                     data: {
                         labels: barLabels,
-                        datasets: [{ label: showPctBar ? 'Percent (%)' : 'Count', data: barValues, backgroundColor: ['rgba(6, 182, 212, 0.6)', 'rgba(200, 255, 0, 0.6)'], borderColor: ['rgba(6, 182, 212, 1)', 'rgba(200, 255, 0, 1)'], borderWidth: 1 }]
+                        datasets: [{ label: showPctBar ? 'Percent (%)' : 'Count', data: barValues, backgroundColor: ['rgba(147, 51, 234, 0.65)', 'rgba(163, 230, 53, 0.65)'], borderColor: ['rgba(147, 51, 234, 1)', 'rgba(163, 230, 53, 1)'], borderWidth: 1 }]
                     },
                     options: {
                         responsive: true,
