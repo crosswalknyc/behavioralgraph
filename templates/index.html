@@ -14998,8 +14998,10 @@
                         <div id="ticketSalesSummaryCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
                         <div id="ticketSalesAttributionSection" style="margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: var(--text-secondary);">Attribution</h3>
-                            <div id="ticketSalesPieCharts" style="display: grid; grid-template-columns: repeat(3, minmax(0, 280px)); gap: 1rem; margin-bottom: 1.25rem; justify-content: start;"></div>
-                            <div id="ticketSalesBarChart" style="position: relative;"></div>
+                            <div id="ticketSalesAttributionGrid" style="display: grid; grid-template-columns: auto 1fr; gap: 1rem; align-items: stretch;">
+                                <div id="ticketSalesAttributionLeft" style="display: flex; flex-direction: column; gap: 1rem; min-width: 0;"></div>
+                                <div id="ticketSalesAttributionRight" style="min-height: 100%; display: flex; align-items: stretch;"></div>
+                            </div>
                         </div>
                         <div id="ticketSalesTalentAttributionSection" style="margin-bottom: 1.5rem;"></div>
                         <div id="ticketSalesPerTalentChart" style="height: 260px; margin-bottom: 1.5rem; display: none;"></div>
@@ -21755,8 +21757,6 @@
             const revenueTooltip = 'Estimated box office revenue assuming $15 per ticket.';
             const summaryCards = [
                 { label: 'Total Movie Viewers', value: fmtGenPopDisplay(d.totalMovieViewersGenPop), tooltip: totalMovieViewersTooltip },
-                { label: 'Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: lastClickVal, tooltip: lastClickTooltip },
-                { label: 'Tickets Purchased within a 14 day window of Talent Interaction (Assisted Conversion)', value: assistedVal, tooltip: assistedTooltip },
                 { label: 'Box Office Revenue – Last Click ($15/ticket)', value: _fmtRevenue(lcRevenue), tooltip: revenueTooltip },
                 { label: 'Box Office Revenue – Assisted ($15/ticket)', value: _fmtRevenue(asRevenue), tooltip: revenueTooltip }
             ];
@@ -21767,21 +21767,48 @@
             const lastClickData = ta.map(t => ({ name: (t.name || '').toUpperCase(), value: _parseGenPop(t.convGenPop || '0') }));
             const assistedData = ta.map(t => ({ name: (t.name || '').toUpperCase(), value: _parseGenPop(t.hitsGenPop || '0') }));
             
-            const pieContainer = document.getElementById('ticketSalesPieCharts');
-            const barContainer = document.getElementById('ticketSalesBarChart');
-            if (pieContainer && typeof Chart !== 'undefined') {
-                pieContainer.innerHTML = '';
+            const leftContainer = document.getElementById('ticketSalesAttributionLeft');
+            const rightContainer = document.getElementById('ticketSalesAttributionRight');
+            if (leftContainer && rightContainer && typeof Chart !== 'undefined') {
+                leftContainer.innerHTML = '';
+                rightContainer.innerHTML = '';
                 const pieColors = ['rgba(147, 51, 234, 0.85)', 'rgba(163, 230, 53, 0.85)', 'rgba(245, 158, 11, 0.85)'];
                 const fmtVal = (v) => v >= 1e6 ? (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? (v/1e3).toFixed(1) + 'K' : String(Math.round(v));
+                const showPctBar = ticketSalesAttributionDisplayMode === 'percent';
+                const pctLc = d.totalViewersNum > 0 ? (d.totalTicketsDueToTalent / d.totalViewersNum * 100) : 0;
+                const pctAs = d.totalViewersNum > 0 ? (d.totalHitsAssisted / d.totalViewersNum * 100) : 0;
+                const attMetricLabels = showPctBar ? ['Last Click %', 'Assisted %'] : ['Last Click #', 'Assisted #'];
+                const attMetricValues = showPctBar ? [pctLc, pctAs] : [d.totalTicketsDueToTalent, d.totalHitsAssisted];
+                const attMetricTotal = attMetricValues.reduce((s, v) => s + v, 0);
+                const attMetricDiv = document.createElement('div');
+                attMetricDiv.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 200px; position: relative;';
+                const attMetricCanvas = document.createElement('canvas');
+                attMetricDiv.appendChild(attMetricCanvas);
+                leftContainer.appendChild(attMetricDiv);
+                if (ticketSalesCharts.barChart) ticketSalesCharts.barChart.destroy();
+                ticketSalesCharts.barChart = new Chart(attMetricCanvas, {
+                    type: 'pie',
+                    data: { labels: attMetricLabels, datasets: [{ data: attMetricValues, backgroundColor: ['rgba(147, 51, 234, 0.85)', 'rgba(163, 230, 53, 0.85)'] }] },
+                    plugins: [ChartDataLabels],
+                    options: {
+                        responsive: true, maintainAspectRatio: true, layout: { padding: 8 },
+                        plugins: {
+                            title: { display: true, text: 'Attribution Metrics', color: '#94a3b8', font: { size: 14 } },
+                            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } },
+                            tooltip: { callbacks: { label: (c) => { const pct = attMetricTotal > 0 ? ((c.raw / attMetricTotal) * 100).toFixed(1) : 0; return ` ${c.label}: ${showPctBar ? c.raw.toFixed(2) + '%' : _fmtGenPopInt(String(c.raw))} (${pct}% of total)`; } } },
+                            datalabels: { color: '#e2e8f0', font: { size: 11 }, formatter: (v) => attMetricTotal > 0 ? ((v / attMetricTotal) * 100).toFixed(0) + '%' : '' }
+                        }
+                    }
+                });
                 ['Last Click Attribution', 'Assisted Conversion'].forEach((title, idx) => {
                     const data = idx === 0 ? lastClickData : assistedData;
                     const total = data.reduce((s, x) => s + x.value, 0);
                     if (data.length === 0 || total === 0) return;
                     const div = document.createElement('div');
-                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 280px; position: relative;';
+                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 200px; position: relative;';
                     const canvas = document.createElement('canvas');
                     div.appendChild(canvas);
-                    pieContainer.appendChild(div);
+                    leftContainer.appendChild(div);
                     if (ticketSalesCharts['pie' + (idx === 0 ? 'LastClick' : 'Assisted')]) {
                         ticketSalesCharts['pie' + (idx === 0 ? 'LastClick' : 'Assisted')].destroy();
                     }
@@ -21829,10 +21856,11 @@
                 const combinedTotal = combinedValues.reduce((s, v) => s + v, 0);
                 if (combinedLabels.length > 0 && combinedTotal > 0) {
                     const div = document.createElement('div');
-                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 280px; position: relative;';
+                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); flex: 1; min-height: 400px; position: relative; display: flex; flex-direction: column;';
                     const canvas = document.createElement('canvas');
+                    canvas.style.flex = '1';
                     div.appendChild(canvas);
-                    pieContainer.appendChild(div);
+                    rightContainer.appendChild(div);
                     if (ticketSalesCharts.pieCombined) ticketSalesCharts.pieCombined.destroy();
                     ticketSalesCharts.pieCombined = new Chart(canvas, {
                         type: 'pie',
@@ -21843,7 +21871,7 @@
                         plugins: [ChartDataLabels],
                         options: {
                             responsive: true,
-                            maintainAspectRatio: true,
+                            maintainAspectRatio: false,
                             layout: { padding: 8 },
                             plugins: {
                                 title: { display: true, text: 'Combined by Talent', color: '#94a3b8', font: { size: 14 } },
@@ -21863,53 +21891,6 @@
                         }
                     });
                 }
-            }
-            
-            if (barContainer && typeof Chart !== 'undefined') {
-                barContainer.innerHTML = '';
-                const wrapper = document.createElement('div');
-                wrapper.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-width: 240px; max-height: 260px; position: relative;';
-                const canvas = document.createElement('canvas');
-                wrapper.appendChild(canvas);
-                barContainer.appendChild(wrapper);
-                barContainer.style.height = 'auto';
-                if (ticketSalesCharts.barChart) ticketSalesCharts.barChart.destroy();
-                const showPctBar = ticketSalesAttributionDisplayMode === 'percent';
-                const pctLc = d.totalViewersNum > 0 ? (d.totalTicketsDueToTalent / d.totalViewersNum * 100) : 0;
-                const pctAs = d.totalViewersNum > 0 ? (d.totalHitsAssisted / d.totalViewersNum * 100) : 0;
-                const pieLabels = showPctBar ? ['Last Click %', 'Assisted %'] : ['Last Click #', 'Assisted #'];
-                const pieValues = showPctBar ? [pctLc, pctAs] : [d.totalTicketsDueToTalent, d.totalHitsAssisted];
-                const total = pieValues.reduce((s, v) => s + v, 0);
-                ticketSalesCharts.barChart = new Chart(canvas, {
-                    type: 'pie',
-                    data: {
-                        labels: pieLabels,
-                        datasets: [{ data: pieValues, backgroundColor: ['rgba(147, 51, 234, 0.85)', 'rgba(163, 230, 53, 0.85)'] }]
-                    },
-                    plugins: [ChartDataLabels],
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        layout: { padding: 8 },
-                        plugins: {
-                            title: { display: true, text: 'Attribution Metrics', color: '#94a3b8', font: { size: 14 } },
-                            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } },
-                            tooltip: {
-                                callbacks: {
-                                    label: (c) => {
-                                        const pct = total > 0 ? ((c.raw / total) * 100).toFixed(1) : 0;
-                                        return ` ${c.label}: ${showPctBar ? c.raw.toFixed(2) + '%' : _fmtGenPopInt(String(c.raw))} (${pct}% of total)`;
-                                    }
-                                }
-                            },
-                            datalabels: {
-                                color: '#e2e8f0',
-                                font: { size: 11 },
-                                formatter: (v) => total > 0 ? ((v / total) * 100).toFixed(0) + '%' : ''
-                            }
-                        }
-                    }
-                });
             }
         }
         
