@@ -99,61 +99,85 @@ def connect_snowflake():
 # ====================================
 # === Brand variation generation ===
 # ====================================
+def _add_truncated_name_variations(variations, words):
+    """
+    Add truncated/abbreviated name variations for talent and movie names.
+    Common patterns: DARIUS-RUC (first name + first 3 of last), first initial + last, etc.
+    """
+    if len(words) < 2:
+        return
+    first = words[0]
+    last = words[-1]
+    # First 5 of first + first 3 of last (e.g. DARIUS-RUC for Darius Rucker)
+    f5 = first[:5].lower() if len(first) >= 5 else first.lower()
+    l3 = last[:3].lower() if len(last) >= 3 else last.lower()
+    for sep in ['-', '_', '', '.', '+']:
+        if sep:
+            variations.add(f5 + sep + l3)
+            variations.add(f5.upper() + sep + l3.upper())
+    # Full first + first 3 of last
+    variations.add(first.lower() + '-' + l3)
+    variations.add(first.upper() + '-' + l3.upper())
+    variations.add(first.lower() + '_' + l3)
+    variations.add(first.upper() + '_' + l3.upper())
+    # First initial + last name
+    fi = first[0].lower()
+    variations.add(fi + '-' + last.lower())
+    variations.add(fi.upper() + '-' + last.upper())
+    variations.add(fi + '_' + last.lower())
+    variations.add(fi.upper() + '_' + last.upper())
+    variations.add(fi + last.lower())
+    variations.add(fi.upper() + last.upper())
+    # First 3 of first + last
+    f3 = first[:3].lower() if len(first) >= 3 else first.lower()
+    variations.add(f3 + '-' + last.lower())
+    variations.add(f3.upper() + '-' + last.upper())
+
+
 def generate_search_term_variations(search_term):
     """
-    Generate common URL variations of a search term for clickstream matching.
-    Uses the same logic as BG.py's generate_brand_variations().
+    Generate full breadth of search term variations for talent, competitive talent, and movie.
+    Includes URL patterns, case variations, and truncated/abbreviated name forms (e.g. DARIUS-RUC).
     """
     variations = set()
     
     # Clean the original input
     original = search_term.strip().lower()
     variations.add(original)
+    variations.add(search_term.strip())  # Original casing
+    variations.add(search_term.strip().upper())  # All caps
     
     # Split into words for processing
-    words = original.split()
+    words = [w.strip() for w in original.split() if w.strip()]
     
     if len(words) > 1:
         # Common URL patterns
         joined = "".join(words)
-        variations.add(joined)  # e.g., disneyplus
-        variations.add("-".join(words))  # e.g., disney-plus
-        variations.add("+".join(words))  # e.g., disney+plus
-        variations.add("_".join(words))  # e.g., disney_plus
-        variations.add(".".join(words))  # e.g., disney.plus
-        variations.add("&".join(words))  # e.g., disney&plus
-        variations.add("%20".join(words))  # e.g., disney%20plus (URL encoded space)
-        variations.add("|".join(words))  # e.g., disney|plus (pipe)
-        variations.add("~".join(words))  # e.g., disney~plus (tilde)
-        variations.add("@".join(words))  # e.g., disney@plus (at symbol)
-        variations.add("#".join(words))  # e.g., disney#plus (hash)
-        variations.add("$".join(words))  # e.g., disney$plus (dollar)
-        variations.add("*".join(words))  # e.g., disney*plus (asterisk)
-        variations.add("=".join(words))  # e.g., disney=plus (equals - URL parameters)
-        variations.add("/".join(words))  # e.g., disney/plus (forward slash - path segments)
+        variations.add(joined)
+        variations.add(joined.upper())
+        for sep in ['-', '+', '_', '.', '&', '%20', '|', '~', '@', '#', '$', '*', '=', '/']:
+            v = sep.join(words)
+            variations.add(v)
+            variations.add(v.upper())
+            if sep in ['-', '_', '.']:
+                vcap = sep.join(word.capitalize() for word in words)
+                variations.add(vcap)
         
         # Case variations
         camel_case = words[0] + "".join(word.capitalize() for word in words[1:])
-        variations.add(camel_case)  # e.g., disneyPlus
-        
+        variations.add(camel_case)
         pascal_case = "".join(word.capitalize() for word in words)
-        variations.add(pascal_case)  # e.g., DisneyPlus
+        variations.add(pascal_case)
         
         # URL encoded variations
-        variations.add("%2B".join(words))  # e.g., disney%2Bplus (URL encoded +)
-        variations.add("%26".join(words))  # e.g., disney%26plus (URL encoded &)
-        variations.add("%2E".join(words))  # e.g., disney%2Eplus (URL encoded .)
-        variations.add("%5F".join(words))  # e.g., disney%5Fplus (URL encoded _)
-        variations.add("%2D".join(words))  # e.g., disney%2Dplus (URL encoded -)
-        variations.add("%7C".join(words))  # e.g., disney%7Cplus (URL encoded |)
-        variations.add("%3D".join(words))  # e.g., disney%3Dplus (URL encoded =)
-        variations.add("%2F".join(words))  # e.g., disney%2Fplus (URL encoded /)
+        for enc_sep, sep in [('%2B', '+'), ('%26', '&'), ('%2E', '.'), ('%5F', '_'),
+                             ('%2D', '-'), ('%7C', '|'), ('%3D', '='), ('%2F', '/')]:
+            v = enc_sep.join(words)
+            variations.add(v)
         
-        # Mixed case with separators
-        variations.add("-".join(word.capitalize() for word in words))  # e.g., Disney-Plus
-        variations.add("_".join(word.capitalize() for word in words))  # e.g., Disney_Plus
-        variations.add(".".join(word.capitalize() for word in words))  # e.g., Disney.Plus
-        
+        # Truncated/abbreviated name variations (DARIUS-RUC style)
+        _add_truncated_name_variations(variations, words)
+    
     return sorted(list(variations))
 
 
@@ -205,13 +229,16 @@ def get_user_input():
         sys.exit(1)
     
     # Show summary
+    talent_vars = generate_search_term_variations(talent_name)
+    movie_vars = generate_search_term_variations(movie_name)
     print("\n" + "=" * 60)
     print("📊 SUMMARY OF WHAT WILL BE TRACKED:")
     print("=" * 60)
-    print(f"🎬 Talent: '{talent_name}' (with 30+ URL variations)")
+    print(f"🎬 Talent: '{talent_name}' (with {len(talent_vars)}+ search variations including DARIUS-RUC style)")
     if competitive_talents:
-        print(f"🏆 Competitive Talent(s): {', '.join(competitive_talents)} (with 30+ URL variations each)")
-    print(f"🎥 Movie: '{movie_name}' (with 30+ URL variations)")
+        comp_counts = [len(generate_search_term_variations(c)) for c in competitive_talents]
+        print(f"🏆 Competitive Talent(s): {', '.join(competitive_talents)} ({min(comp_counts)}+ variations each)")
+    print(f"🎥 Movie: '{movie_name}' (with {len(movie_vars)}+ search variations)")
     print(f"📅 Date Range: {start_date.date()} to {end_date.date()}")
     print(f"🎭 Theater Platforms: {', '.join(THEATER_PLATFORMS)}")
     print("=" * 60 + "\n")

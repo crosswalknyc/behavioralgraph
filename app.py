@@ -13754,6 +13754,7 @@ def run_talent_theater(job_id):
                         params.get('end_date', ''),
                         created_by=created_by,
                         use_purgatory=True,
+                        bucket=TICKET_SALES_S3_BUCKET,
                         category='Ticket Sales',
                         source_type='ticket_sales_iq'
                     )
