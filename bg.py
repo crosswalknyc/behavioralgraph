@@ -15,9 +15,9 @@ and reliable brand metrics across all categories.
                     📊 SAMPLE SIZE INFLATION
 ================================================================================
 
-INFLATION FACTOR: Intelligent scaling (151x down to 1x)
-------------------------------------------------------
-- Try 151x first; if result > 10M, try 125x, 111x, 85x, 55x, 25x, 5x, 2.5x, or 1x
+INFLATION FACTOR: Intelligent scaling (65x max down to 1x)
+---------------------------------------------------------
+- Try 65x first; if result > 10M, try 55x, 25x, 5x, 2.5x, or 1x
 - Result capped at 10,000,000 maximum
 - Examples: 
   • ~66K UIDs → 10M sample size (151x applied, capped)
@@ -3734,9 +3734,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # INFLATE SAMPLE SIZE: try 151x first, then scale down to 125x, 111x, 85x, 55x, 25x, 5x, 2.5x, or 1x
-        # so the result never exceeds 10M
-        INFLATION_OPTIONS = [151, 125, 111, 85, 55, 25, 5, 2.5, 1]
+        # INFLATE SAMPLE SIZE: try 65x first, then scale down to 55x, 25x, 5x, 2.5x, or 1x
+        # so the result never exceeds 10M (max boost capped at 65x)
+        INFLATION_OPTIONS = [65, 55, 25, 5, 2.5, 1]
         INFLATION_FACTOR = 1
         for mult in INFLATION_OPTIONS:
             if bounded * mult <= GENPOP_SAMPLE_CAP:
@@ -3760,8 +3760,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # INFLATE SAMPLE SIZE: try 151x, then scale down to stay under 10M (fallback path)
-        INFLATION_OPTIONS = [151, 125, 111, 85, 55, 25, 5, 2.5, 1]
+        # INFLATE SAMPLE SIZE: try 65x, then scale down to stay under 10M (fallback path)
+        INFLATION_OPTIONS = [65, 55, 25, 5, 2.5, 1]
         INFLATION_FACTOR = 1
         for mult in INFLATION_OPTIONS:
             if bounded * mult <= GENPOP_SAMPLE_CAP:
