@@ -3012,7 +3012,7 @@
             }
         }
 
-        /* Chart cards - restored to original sizing for proper donut display */
+        /* Demographics chart cards - restored 2-col layout with comfortable padding */
         .chart-card {
             background: var(--bg-card);
             border-radius: 8px;
@@ -3138,10 +3138,10 @@
             align-items: center;
         }
         .chart-container canvas { max-width: 100%; display: block; }
-        /* Demographics: donut+legend fill the card; adequate height for doughnuts */
+        /* Demographics: donut charts fill the box - ample space for chart + legend */
         .charts-grid .chart-container {
             min-height: 280px;
-            height: clamp(280px, 30vw + 120px, 400px);
+            height: clamp(280px, 35vw + 120px, 380px);
             width: 100%;
             overflow: visible;
         }
@@ -3160,20 +3160,15 @@
             .occupation-chart-container { min-height: min(550px, 60vh); }
         }
         
-        /* Responsive chart sizing - smaller cards, doughnuts fill the box */
+        /* Responsive chart sizing - doughnuts fill the box */
         @media (max-width: 1600px) {
-            .chart-container { height: clamp(240px, 26vw + 100px, 340px); }
-            .charts-grid .chart-container { min-height: 220px; height: clamp(220px, 26vw + 100px, 320px); }
-        }
-        @media (max-width: 1200px) {
-            .charts-grid { grid-template-columns: repeat(2, 1fr); }
-            .chart-container { height: clamp(240px, 26vw + 90px, 320px); }
-            .charts-grid .chart-container { min-height: 220px; height: clamp(220px, 28vw + 100px, 320px); }
+            .chart-container { height: clamp(260px, 30vw + 120px, 360px); }
+            .charts-grid .chart-container { min-height: 280px; height: clamp(280px, 32vw + 120px, 360px); }
         }
         @media (max-width: 800px) {
             .charts-grid { grid-template-columns: 1fr; }
-            .chart-container { height: clamp(260px, 36vw + 100px, 340px); }
-            .charts-grid .chart-container { min-height: 260px; height: clamp(260px, 38vw + 110px, 360px); }
+            .chart-container { height: clamp(280px, 40vw + 120px, 380px); }
+            .charts-grid .chart-container { min-height: 280px; height: clamp(280px, 40vw + 120px, 380px); }
             .chart-card h3 { font-size: clamp(0.75rem, 2.5vw + 0.5rem, 0.9rem); }
         }
         
@@ -11284,7 +11279,7 @@
             <div class="main-grid">
                 <div class="card">
                     <h2>📊 Analysis Parameters</h2>
-                    <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">🪄 <em>5 Credits Per Analysis</em></div>
+                    <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">🎫 5 Credits Per Analysis</div>
                     <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
                     <form id="analysisForm">
                         <div class="form-section">
@@ -11654,7 +11649,7 @@
                     <div class="main-grid">
                         <div class="card">
                             <h2>📊 Analysis Parameters</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">🪄 <em>5 Credits Per Analysis</em></div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">🎫 5 Credits Per Analysis</div>
                             <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
                             <form id="analysisForm">
                                 <div class="form-section">
@@ -26770,25 +26765,25 @@
             const ageChartEl = document.getElementById('ageChart');
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
-            const effectiveWidth = Math.max(chartContainerWidth, Math.floor(vw / 4));
+            const effectiveWidth = Math.max(chartContainerWidth, Math.floor(vw / 2));
             const legendFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
-            const legendFontSizeCircular = Math.max(12, Math.min(16, legendFontSize)); // Larger text to fill the box for demographics donut legends
+            const legendFontSizeCircular = Math.max(13, Math.min(18, Math.floor(chartContainerWidth / 24))); // Donut legend: readable, fills box
             const axisFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
             const dataLabelFontSize = Math.max(10, Math.min(15, axisFontSize));
-            // Reserve space for legend; use more of card for legend text so it fills the box
-            const legendAreaWidth = Math.max(200, Math.floor(chartContainerWidth * 0.52));
-            const layoutPaddingCircular = { left: 8, right: legendAreaWidth, top: 8, bottom: 8 };
+            // Reserve space for legend; balanced so donut + legend both fill the box
+            const legendAreaWidth = Math.max(180, Math.floor(chartContainerWidth * 0.48));
+            const layoutPaddingCircular = { left: 12, right: legendAreaWidth, top: 12, bottom: 12 };
             const legendOptionsCircular = { 
                 display: true, 
                 position: 'right', 
                 align: 'center', 
                 maxWidth: legendAreaWidth - 8,
-                padding: { left: 16, right: 6 }, 
+                padding: { left: 12, right: 8 }, 
                 labels: { 
                     color: '#e6f1ff', 
                     font: { size: legendFontSizeCircular }, 
-                    boxWidth: 14, 
-                    padding: 8,
+                    boxWidth: 16, 
+                    padding: 10,
                     textAlign: 'left'
                 } 
             };
