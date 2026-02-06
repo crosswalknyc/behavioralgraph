@@ -3103,8 +3103,17 @@
             position: relative;
             padding: 0.5rem 0.25rem;
             box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         .chart-container canvas { max-width: 100%; display: block; }
+        /* Demographics: center pie/donut + legend in the card; limit width so legend has room and block is centered */
+        .charts-grid .chart-container {
+            max-width: min(100%, 540px);
+            margin-left: auto;
+            margin-right: auto;
+        }
 
         /* Occupation chart: full width and dynamic height for readable long labels */
         .chart-card-occupation { grid-column: 1 / -1; }
@@ -11520,7 +11529,7 @@
                         <select id="myResultsStatusFilter" onchange="filterMyResults()" style="font-size: 0.8rem;">
                             <option value="">All Status</option>
                             <option value="pending">⏳ Pending Review</option>
-                            <option value="released">✅ Released</option>
+                            <option value="released">📊 In Dashboard</option>
                         </select>
                     </div>
                     
@@ -11888,7 +11897,7 @@
                                 <select id="svodResultsStatusFilter" onchange="filterSvodResults()" style="font-size: 0.8rem;">
                                     <option value="">All Status</option>
                                     <option value="pending">⏳ Pending Review</option>
-                                    <option value="released">✅ Released</option>
+                                    <option value="released">📊 In Dashboard</option>
                                 </select>
                             </div>
                             
@@ -12538,7 +12547,7 @@
                                 <div class="stat-label">📊 Crosswalk Respondents</div>
                                 <div class="stat-value"><span class="stat-prefix">n=</span><span id="dashSampleSize">0</span></div>
                             </div>
-                            <div class="stat-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented. Calculated by applying panel weighting factors to sample size based on census data." data-projection-number="true">
+                            <div class="stat-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented. Calculated by applying panel weighting factors to sample size based on census data.">
                                 <div class="stat-label">🇺🇸 Projected US</div>
                                 <div class="stat-value" id="dashProjectedUS">0</div>
                             </div>
@@ -12602,6 +12611,7 @@
                                     <span class="chart-card-controls-row">
                                         <select id="ageChartType" onchange="changeChartType('age', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose how to visualize the age data.">
                                             <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
@@ -12632,6 +12642,7 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Gender')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Gender')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Gender')">➕</button></span>
@@ -12649,6 +12660,7 @@
                                     <span class="chart-card-controls-row">
                                         <select id="ethnicityChartType" onchange="changeChartType('ethnicity', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
                                             <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
@@ -12669,6 +12681,7 @@
                                     <span class="chart-card-controls-row">
                                         <select id="incomeChartType" onchange="changeChartType('income', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
                                             <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
@@ -12697,6 +12710,7 @@
                                     <span class="chart-card-controls-row">
                                         <select id="educationChartType" onchange="changeChartType('education', this.value)" class="chart-type-select">
                                             <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
@@ -12716,6 +12730,7 @@
                                     <span class="chart-card-controls-row">
                                         <select id="relationshipChartType" onchange="changeChartType('relationship', this.value)" class="chart-type-select">
                                             <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
@@ -12737,6 +12752,7 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Sexual Orientation')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Sexual Orientation')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Sexual Orientation')">➕</button></span>
@@ -12754,6 +12770,7 @@
                                     <span class="chart-card-controls-row">
                                         <select id="parentalStatusChartType" onchange="changeChartType('parentalStatus', this.value)" class="chart-type-select">
                                             <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
@@ -12773,6 +12790,7 @@
                                     <span class="chart-card-controls-row">
                                         <select id="occupationChartType" onchange="changeChartType('occupation', this.value)" class="chart-type-select">
                                             <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
@@ -13865,7 +13883,7 @@
                                         <span class="metric-label">Sample Size</span>
                                     </div>
                                 </div>
-                                <div class="metric-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented by this audience. Calculated by applying panel weighting factors to the sample size based on census data." data-projection-number="true">
+                                <div class="metric-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented by this audience. Calculated by applying panel weighting factors to the sample size based on census data.">
                                     <div class="metric-icon">🇺🇸</div>
                                     <div class="metric-content">
                                         <span class="metric-value" id="insightsProjectedUS">--</span>
@@ -15687,16 +15705,7 @@
                         const text = this.getAttribute('data-tooltip');
                         if (!text) return;
                         
-                        let displayText = text;
-                        let el = this;
-                        while (el) {
-                            if (el.getAttribute && el.getAttribute('data-projection-number') === 'true') {
-                                displayText = text + '\n\nProjected using the 2026 Gen Pop number of 329,900,000';
-                                break;
-                            }
-                            el = el.parentElement;
-                        }
-                        tooltip.textContent = displayText;
+                        tooltip.textContent = text;
                         
                         // Position below the mouse pointer
                         let left = e.clientX - 150;
@@ -18189,7 +18198,7 @@
                                 <div style="font-size: 0.75rem; color: var(--text-secondary);">Sample Size</div>
                                 <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${formatNumber(parsed.sampleSize)}</div>
                             </div>
-                            <div class="has-tooltip" data-tooltip="Projected US population for this profile." data-projection-number="true">
+                            <div>
                                 <div style="font-size: 0.75rem; color: var(--text-secondary);">Projected US</div>
                                 <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${formatNumber(parsed.projectedUS)}</div>
                             </div>
@@ -26654,16 +26663,15 @@
             const legendFontSizeCircular = Math.max(10, Math.min(13, legendFontSize)); // Readable size for demographics donut legends
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
-            // Reserve space for legend; doughnut uses rest; extra left padding on legend adds gap between donut and text
-            // Calculate legend width based on container - leave room for chart (50%) and some padding
-            const legendAreaWidth = Math.floor(chartContainerWidth * 0.48);
+            // Reserve space for legend so full text (e.g. "FEMALE 53.22% (GP: 48.35%)") is not cut off; min width so legend never truncates
+            const legendAreaWidth = Math.max(260, Math.floor(chartContainerWidth * 0.52));
             const layoutPaddingCircular = { left: 10, right: legendAreaWidth, top: 8, bottom: 8 };
             const legendOptionsCircular = { 
                 display: true, 
                 position: 'right', 
                 align: 'center', 
-                maxWidth: legendAreaWidth - 20,
-                padding: { left: 30, right: 10 }, 
+                maxWidth: legendAreaWidth - 16,
+                padding: { left: 24, right: 10 }, 
                 labels: { 
                     color: '#e6f1ff', 
                     font: { size: legendFontSizeCircular }, 
@@ -26704,9 +26712,12 @@
             
             const ageChartType = chartTypePrefs.age || 'bar';
             const ageIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ageChartType);
+            const ageIsBarLike = ageChartType === 'bar' || ageChartType === 'column';
+            const ageChartTypeEffective = ageChartType === 'column' ? 'bar' : ageChartType;
+            const ageIndexAxis = ageIsCircular || ageChartType === 'line' ? 'x' : (ageChartType === 'bar' ? 'y' : 'x');
             
             charts.age = new Chart(document.getElementById('ageChart'), {
-                type: ageChartType,
+                type: ageChartTypeEffective,
                 data: { 
                     labels: ageLabels, 
                     datasets: [{ 
@@ -26719,7 +26730,7 @@
                     }] 
                 },
                 options: { 
-                    indexAxis: ageIsCircular || ageChartType === 'line' ? 'x' : 'y', 
+                    indexAxis: ageIndexAxis,
                     responsive: true, 
                     maintainAspectRatio: false,
                     layout: { padding: ageIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
@@ -26727,7 +26738,7 @@
                         legend: ageIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
                         datalabels: ageIsCircular ? { display: false } : {
                             anchor: 'end',
-                            align: 'end',
+                            align: ageChartType === 'column' ? 'top' : 'end',
                             font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
                                 if (isGenPop) return '#fff';
@@ -26747,10 +26758,13 @@
                             }
                         }
                     }, 
-                    scales: ageIsCircular ? {} : { 
+                    scales: ageIsCircular ? {} : (ageChartType === 'column' ? { 
+                        x: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: axisFontSize } } }, 
+                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: ageMax } 
+                    } : { 
                         x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: ageMax }, 
                         y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: axisFontSize } } } 
-                    } 
+                    })
                 },
                 plugins: [ChartDataLabels]
             });
@@ -26765,17 +26779,18 @@
             
             const genderChartType = chartTypePrefs.gender || 'doughnut';
             const genderIsCircular = ['doughnut', 'pie', 'polarArea'].includes(genderChartType);
-            
-            // Calculate max for x-axis with padding for labels (horizontal bar)
-            const genderMax = genderChartType === 'bar' ? Math.max(...genderData) * 1.5 : undefined; // 50% padding for horizontal labels
+            const genderIsBarLike = genderChartType === 'bar' || genderChartType === 'column';
+            const genderChartTypeEffective = genderChartType === 'column' ? 'bar' : genderChartType;
+            const genderIndexAxis = genderChartType === 'bar' ? 'y' : (genderChartType === 'column' ? 'x' : 'x');
+            const genderMax = genderIsBarLike ? Math.max(...genderData) * 1.5 : undefined;
             
             // Gender median display removed - not needed for categorical data
             
             charts.gender = new Chart(document.getElementById('genderChart'), {
-                type: genderChartType,
-                data: { labels: genderLabels, datasets: [{ data: genderData, backgroundColor: colors, borderRadius: genderChartType === 'bar' ? 4 : 0 }] },
+                type: genderChartTypeEffective,
+                data: { labels: genderLabels, datasets: [{ data: genderData, backgroundColor: colors, borderRadius: genderIsBarLike ? 4 : 0 }] },
                 options: { 
-                    indexAxis: genderChartType === 'bar' ? 'y' : 'x',
+                    indexAxis: genderIndexAxis,
                     responsive: true, 
                     maintainAspectRatio: false,
                     layout: { padding: genderIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
@@ -26804,8 +26819,8 @@
                                 }
                             }
                         } : { display: false },
-                        datalabels: genderChartType === 'bar' ? {
-                            anchor: 'end', align: 'end', font: { size: dataLabelFontSize, weight: 'bold' },
+                        datalabels: genderIsBarLike ? {
+                            anchor: 'end', align: genderChartType === 'column' ? 'top' : 'end', font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
                                 const genPop = genderGenPop[ctx.dataIndex] || 0;
@@ -26824,7 +26839,13 @@
                             }
                         } : { display: false }
                     },
-                        scales: genderIsCircular ? {} : {
+                        scales: genderIsCircular ? {} : (genderChartType === 'column' ? {
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#e6f1ff', font: { size: axisFontSize }, autoSkip: false }
+                        },
+                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: genderMax }
+                    } : {
                         x: { 
                             grid: { color: '#1e3a5f' }, 
                             ticks: { color: '#8892b0', font: { size: axisFontSize } },
@@ -26838,12 +26859,10 @@
                                 autoSkip: false,
                                 callback: function(value, index, ticks) {
                                     const label = this.getLabelForValue(value);
-                                    // Split long labels into multiple lines at 20 characters
                                     if (label.length > 20) {
                                         const words = label.split(' ');
                                         const lines = [];
                                         let currentLine = '';
-                                        
                                         words.forEach(word => {
                                             if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
                                                 lines.push(currentLine.trim());
@@ -26858,9 +26877,10 @@
                                     return label;
                                 }
                             },
-                            afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
+                            afterFit: (scale) => { scale.width = Math.max(scale.width, 180); }
                         }
                     }
+                    })
                 },
                 plugins: [ChartDataLabels]
             });
@@ -29000,13 +29020,10 @@
                 .slice(0, 6);
             
             container.innerHTML = categoryCards.map(cat => {
-                const avgColor = cat.avgIndex >= 100 ? '#10b981' : '#ef4444';
-                const avgPctDisplay = cat.avgPct.toFixed(2) + '%';
                 return `
                     <div class="interest-category-card">
                         <h4>
                             <span>${cat.name}</span>
-                            <span class="cat-avg" style="color: ${avgColor};">Avg: ${avgPctDisplay}</span>
                         </h4>
                         <div class="interest-category-header" style="display: flex; justify-content: space-between; padding: 0.25rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; gap: 1rem;">
                             <span style="flex: 1; text-align: left;">Item</span>
@@ -36804,14 +36821,14 @@
             
             const audienceSnapshotEl2 = document.getElementById('audienceSnapshot');
             if (audienceSnapshotEl2) audienceSnapshotEl2.innerHTML = demoInsights.map(d => {
-                const idxValue = (d.index / 100).toFixed(3);
+                const idxDisplay = String(Math.round(Number(d.index)));
                 const idxColor = d.index >= 100 ? '#10b981' : '#ef4444';
                 return `
-                <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience. Index: ${idxValue}x vs Gen Pop.">
+                <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience. Index: ${idxDisplay} vs Gen Pop (100 = same as Gen Pop).">
                     <div class="snapshot-label">${d.label}</div>
                     <div class="snapshot-value">${d.value}</div>
                     <div class="snapshot-subtext">${d.sub}</div>
-                    <div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxValue}x</div>
+                    <div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxDisplay}</div>
                 </div>
             `}).join('') || '<div class="snapshot-loading">No demographic data</div>';
             
@@ -41871,7 +41888,7 @@
                 myResults = data.results || [];
                 
                 // Update status in both sections
-                const statusText = `${data.pending_count || 0} pending • ${data.released_count || 0} released`;
+                const statusText = `${data.pending_count || 0} pending • ${data.released_count || 0} in dashboard`;
                 if (statusEl) {
                     statusEl.innerHTML = statusText;
                 }
@@ -41931,7 +41948,7 @@
                 const isPending = result.status === 'pending' || result.in_purgatory;
                 const statusBadge = isPending 
                     ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
-                    : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">✅ RELEASED</span>';
+                    : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
                 
                 const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
                 const purgatoryIdEsc = (result.purgatory_id || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
@@ -41941,18 +41958,20 @@
                 // Buttons: Download always available, Open in Profile IQ only if released
                 let buttons = '';
                 if (isPending) {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadPurgatoryResult('${purgatoryIdEsc}')" title="Download CSV">📥</button>`;
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${purgatoryIdEsc}')" title="Download CSV">📥</button>`;
                 } else {
                     buttons = `
-                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Open in Profile IQ">📊</button>
-                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>
+                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="event.stopPropagation(); openReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Open in Profile IQ">📊</button>
+                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>
                     `;
                 }
                 
                 const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
+                const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
+                const rowStyle = isPending ? 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' : 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;';
                 return `
-                    <div class="job-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;">
+                    <div class="job-item" style="${rowStyle}" ${rowClick} ${rowClick ? 'title="Click to open in Profile IQ"' : ''}>
                         <div style="flex: 1; min-width: 0;">
                             <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</div>
                             <div style="font-size: 0.7rem; color: var(--text-secondary);">${categoryLabel} • ${dateStr}</div>
@@ -42022,27 +42041,29 @@
                 const isPending = result.status === 'pending' || result.in_purgatory;
                 const statusBadge = isPending 
                     ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
-                    : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">✅ RELEASED</span>';
+                    : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
                 
                 const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
+                const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 
                 // Buttons: Download always available, Open in Profile IQ only if released
                 let buttons = '';
                 if (isPending) {
-                    // Pending: only download button
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadPurgatoryResult('${result.purgatory_id}')" title="Download CSV">📥</button>`;
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${result.purgatory_id}')" title="Download CSV">📥</button>`;
                 } else {
-                    // Released: both open and download buttons
                     buttons = `
-                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="openReleasedResult('${result.s3_key}', '${result.bucket || ''}')" title="Open in Profile IQ">📊</button>
-                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="downloadReleasedResult('${result.s3_key}', '${result.bucket || ''}')" title="Download CSV">📥</button>
+                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="event.stopPropagation(); openReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Open in Profile IQ">📊</button>
+                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>
                     `;
                 }
                 
                 const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
+                const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
+                const rowStyle = isPending ? 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' : 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;';
                 return `
-                    <div class="job-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;">
+                    <div class="job-item" style="${rowStyle}" ${rowClick} ${rowClick ? 'title="Click to open in Profile IQ"' : ''}>
                         <div style="flex: 1; min-width: 0;">
                             <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</div>
                             <div style="font-size: 0.7rem; color: var(--text-secondary);">${categoryLabel} • ${dateStr}</div>
@@ -42721,11 +42742,34 @@
             renderComparisonProfiles(filtered);
         }
 
+        /** When adding a profile to comparison from the selector, open it as a new tab (after the last tab) if not already open. */
+        async function openProfileAsNewTabIfNeeded(profileId) {
+            if (!profileId || openProfileTabs.some(t => t.id === profileId)) return;
+            const profile = comparisonProfiles.find(p => (p.s3_key || p.job_id) === profileId && !p.isSegment);
+            if (!profile) return; // segment or not found - don't fetch
+            try {
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(profileId)}`, { credentials: 'same-origin' });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (!data.success || !data.data) return;
+                const parsed = parseAllData(data.data);
+                const brandName = data.brand || getProfileFullName(profile);
+                const newTab = { id: profileId, name: brandName, dateRange: data.date_range || '', data: data, parsed: parsed };
+                openProfileTabs.push(newTab);
+                saveOpenTabs();
+                renderProfileTabsBar();
+            } catch (e) {
+                console.warn('Could not open profile as tab:', e);
+            }
+        }
+
         function toggleComparisonProfile(id) {
             if (selectedForComparison.has(id)) {
                 selectedForComparison.delete(id);
             } else {
                 selectedForComparison.add(id);
+                // When adding a profile from comparison selector, also open it as a new tab after the last tab (non-segment only)
+                openProfileAsNewTabIfNeeded(id);
             }
             updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
@@ -42956,7 +43000,7 @@
                                 <span class="profile-stat-label">Crosswalk Respondents</span>
                                 <span class="profile-stat-value">n=${formatNumber(profile.sampleSize)}</span>
                             </div>
-                            <div class="profile-stat-row has-tooltip" data-tooltip="Projected US population for this profile." data-projection-number="true">
+                            <div class="profile-stat-row">
                                 <span class="profile-stat-label">Projected US</span>
                                 <span class="profile-stat-value">${formatNumber(profile.projectedUS)}</span>
                             </div>
@@ -43993,7 +44037,7 @@
                                 <td>Crosswalk Respondents</td>
                                 ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">n=${formatNumber(p.sampleSize)}</td>`).join('')}
                             </tr>
-                            <tr class="has-tooltip" data-tooltip="Projected US population for each profile." data-projection-number="true">
+                            <tr>
                                 <td>Projected US</td>
                                 ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">${formatNumber(p.projectedUS)}</td>`).join('')}
                             </tr>
@@ -45328,7 +45372,7 @@
                                         return `<td style="color: ${pct >= 50 ? 'var(--accent-lime)' : 'var(--accent-red)'};">${pct}%</td>`;
                                     }).join('')}
                                 </tr>
-                                <tr class="has-tooltip" data-tooltip="Projected US population for this audience segment." data-projection-number="true">
+                                <tr class="has-tooltip" data-tooltip="Projected US population for this audience segment.">
                                     <td>Projected US Pop</td>
                                     ${benchmarks.map(b => `<td>${formatNumber(b.projectedUS || 0)}</td>`).join('')}
                                 </tr>
@@ -54110,7 +54154,7 @@
                             </thead>
                             <tbody>
                                 <tr><td>Respondents</td>${profiles.map(p => `<td>n=${formatNumber(compareProjectedN(p.sampleSize))}</td>`).join('')}</tr>
-                                <tr class="has-tooltip" data-tooltip="Projected US population for each profile." data-projection-number="true"><td>Projected US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
+                                <tr><td>Projected US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
                                 <tr><td>Median Age</td>${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '-'}</td>`).join('')}</tr>
                             </tbody>
                         </table>

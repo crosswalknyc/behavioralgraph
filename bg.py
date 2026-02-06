@@ -15,12 +15,16 @@ and reliable brand metrics across all categories.
                     📊 SAMPLE SIZE INFLATION
 ================================================================================
 
-INFLATION FACTOR: Smart scale (151x down to 2x until < 10M)
------------------------------------------------------------
-- Try in order: 151x, 101x, 51x, 25x, 11x, 5x, 2x; use first multiplier where result < 10M
-- Final sample size never >= 10,000,000
-- Examples: 67K UIDs → 151x → 10.05M (too high) → 101x → 6.7M ✓; 500K → 151x → 75M → ... → 2x → 1M ✓
-- US Gen Pop projection: (value / 10,000,000) * 329,900,000
+INFLATION FACTOR: Conditional (3x or 1x)
+-----------------------------------------
+- If sample size ≤ 3M: Multiply by 3x
+- If sample size > 3M: Use actual size (no inflation, 1x)
+- Capped at 10,000,000 maximum
+- Examples: 
+  • 1M UIDs → 3M sample size (3x applied)
+  • 2M UIDs → 6M sample size (3x applied)
+  • 4M UIDs → 4M sample size (no inflation, > 3M threshold)
+- Location: Lines 3438-3443, 3469-3472
 - All percentages calculated from final sample size
 
 ================================================================================
@@ -199,7 +203,7 @@ All brand input entries in the output CSV will have:
 1.  Data Loading → Load from Snowflake database
 2.  Normalization → Standardize category/value names
 3.  🔄 ESPN Layer 1: consolidate_espn_brands() - Initial ESPN+/ESPN merge
-4.  Set Raw Numbers → From percentages using sample size (smart scale 151x→2x until < 10M)
+4.  Set Raw Numbers → From percentages using sample size (3x if ≤3M, 1x if >3M)
 5.  2x Boost → All behavioral categories
 6.  Sports 40x/4.36x Boost → Major leagues and other sports
 7.  Dynamic Threshold Boosts → SEARCH ENGINE/AI (65% threshold)
@@ -261,7 +265,7 @@ Additional Boosting:
 ================================================================================
 
 To modify behavior:
-- Sample size inflation: smart scale 151x→101x→51x→25x→11x→5x→2x until < 10M
+- Sample size inflation: Lines 3438-3443, 3469-3472 - currently 3x (≤3M) or 1x (>3M)
 - Universal boost: Modify multiplier in boost_all_behavioral_by_2x() (Line 4693)
 - Sports boost: Modify multipliers in boost_sports_categories_by_436x() (Line 6020, 6023) - ALL teams boosted
 - Dynamic thresholds: Change min_threshold values (Lines 4028-4031)
@@ -278,9 +282,6 @@ import numpy as np
 import re
 import random
 from datetime import datetime
-
-# US population for Gen Pop projection: (value / 10_000_000) * US_POPULATION
-US_POPULATION = 329_900_000
 
 OUTPUT_FOLDER = os.path.expanduser("~/Desktop/Behavioral_Graph")
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
@@ -1842,7 +1843,7 @@ def enforce_input_brand_100(df_behavior, input_brands):
                 
                 # Update US Gen Pop Projection if it exists
                 if 'US Gen Pop Projection' in df_behavior.columns:
-                    us_projection = (sample_size / 10_000_000) * US_POPULATION
+                    us_projection = (sample_size / 10_000_000) * 324_700_000
                     df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
                 
                 brands_set_to_100 += 1
@@ -2094,7 +2095,7 @@ def enforce_espn_consistency_final(df):
                 
             # Update US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns and max_raw_numbers > 0:
-                genpop = int((max_raw_numbers / 10_000_000) * US_POPULATION)
+                genpop = int((max_raw_numbers / 10_000_000) * 324_770_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
         except:
             pass
@@ -2183,7 +2184,7 @@ def divide_espn_by_2_final(df):
             
             # Update US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns:
-                genpop = int((divided_raw / 10_000_000) * US_POPULATION)
+                genpop = int((divided_raw / 10_000_000) * 324_700_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
     
     # Recalculate Category Share within each category to maintain proper proportions
@@ -2291,7 +2292,7 @@ def boost_netflix_3x_rob_lowe(df, project_name):
                     
                     # Update US Gen Pop Projection
                     if 'US Gen Pop Projection' in df.columns:
-                        genpop = int((boosted_raw / 10_000_000) * US_POPULATION)
+                        genpop = int((boosted_raw / 10_000_000) * 324_700_000)
                         df.at[idx, 'US Gen Pop Projection'] = str(genpop)
                 
                 if not SILENCE_VERBOSE_OUTPUT:
@@ -3734,23 +3735,26 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # INFLATE SAMPLE SIZE: try 151x, then 101x, 51x, 25x, 11x, 5x, 2x until result < 10M (never >= 10M)
-        BOOST_CANDIDATES = [151, 101, 51, 25, 11, 5, 2]
-        INFLATION_FACTOR = 1
-        inflated_sample_size = bounded
-        for mult in BOOST_CANDIDATES:
-            candidate = bounded * mult
-            if candidate < GENPOP_SAMPLE_CAP:
-                INFLATION_FACTOR = mult
-                inflated_sample_size = candidate
-                break
+        # INFLATE SAMPLE SIZE by 3x (capped at 10M) - BUT only if sample size <= 3M
+        # If sample size > 3M, use actual sample size (no inflation)
+        if bounded > 3_000_000:
+            INFLATION_FACTOR = 1  # No inflation for large samples
+            inflated_sample_size = bounded * INFLATION_FACTOR
+        else:
+            INFLATION_FACTOR = 3  # 3x inflation for samples <= 3M
+            inflated_sample_size = bounded * INFLATION_FACTOR
         
+        # Cap at 10M regardless of GenPop or regular run
         final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
+        
+        # Optional: tidy to a multiple of 10 for readability
         final_sample_size = (final_sample_size // 10) * 10
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"📊 Actual sampled UIDs: {actual_sample_size:,}")
-            print(f"📊 Inflation factor: {INFLATION_FACTOR}x (smart scale: try 151x→101x→51x→25x→11x→5x→2x until < 10M)")
-            print(f"📊 Final sample size: {final_sample_size:,}")
+            print(f"📊 Inflation factor: {INFLATION_FACTOR}x")
+            if INFLATION_FACTOR == 1:
+                print(f"📊 Sample size > 3M: Using actual sample size (no inflation)")
+            print(f"📊 Final sample size: {inflated_sample_size:,}")
             print(f"🔒 Sample size cap (10M): {GENPOP_SAMPLE_CAP:,}")
             print(f"✅ Final SAMPLE SIZE set to: {final_sample_size:,}")
     except Exception as e:
@@ -3762,15 +3766,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # Fallback: same smart-scale (151x down to 2x until < 10M)
-        BOOST_CANDIDATES = [151, 101, 51, 25, 11, 5, 2]
-        INFLATION_FACTOR = 1
-        inflated_sample_size = bounded
-        for mult in BOOST_CANDIDATES:
-            if bounded * mult < GENPOP_SAMPLE_CAP:
-                INFLATION_FACTOR = mult
-                inflated_sample_size = bounded * mult
-                break
+        # INFLATE SAMPLE SIZE by 3x (capped at 10M) - fallback path
+        # If sample size > 3M, use actual sample size (no inflation)
+        if bounded > 3_000_000:
+            INFLATION_FACTOR = 1  # No inflation for large samples
+        else:
+            INFLATION_FACTOR = 3  # 3x inflation for samples <= 3M
+        inflated_sample_size = bounded * INFLATION_FACTOR
         final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
         final_sample_size = (final_sample_size // 10) * 10
     
@@ -3797,7 +3799,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         }
     ])
     
-    # SAMPLE SIZE: smart-scale inflation (151x down to 2x until < 10M), capped at 10M
+    # SAMPLE SIZE value verified - conditional inflation (6x if ≤3M, 1x if >3M) and capped at 10M
 
     # --- Begin: Behavior percentage transformation with added noise ---
     # Apply organic scaling to all behavior categories to ensure reasonable representation
@@ -4944,7 +4946,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = deduplicate_location_data(df_final)
     
     # scale_raw_numbers_to_universe DISABLED - per user request
-    # SAMPLE SIZE uses smart-scale inflation: 151x→101x→51x→25x→11x→5x→2x until < 10M
+    # SAMPLE SIZE uses conditional inflation: 3x if ≤3M, 1x if >3M (capped at 10M)
     # All raw numbers will calculate naturally from: (percentage/100) × sample_size
     
     # Recalculate percentages DISABLED - percentages stay as organic counts from database
@@ -5220,9 +5222,9 @@ def adjust_platform_to_100_percent(df, platform_name):
         if 'Original Raw Numbers' in df.columns:
             df.loc[idx, 'Original Raw Numbers'] = int(sample_size)
         
-        # Calculate US Gen Pop Projection = (sample_size / 10,000,000) * 329,900,000
+        # Calculate US Gen Pop Projection = (sample_size / 10,000,000) * 324,700,000
         if 'US Gen Pop Projection' in df.columns:
-            us_population = US_POPULATION
+            us_population = 324_700_000
             gen_pop = int((sample_size / 10_000_000) * us_population)
             df.loc[idx, 'US Gen Pop Projection'] = gen_pop
         
@@ -6615,7 +6617,7 @@ def divide_interest_category_by_2(df: pd.DataFrame) -> pd.DataFrame:
             
             # Recalculate US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns:
-                genpop = int((new_raw / 10_000_000) * US_POPULATION)
+                genpop = int((new_raw / 10_000_000) * 324_700_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
             
             changes += 1
@@ -6751,7 +6753,7 @@ def divide_streaming_music_category_by_2(df: pd.DataFrame) -> pd.DataFrame:
             
             # Recalculate US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns:
-                genpop = int((new_raw / 10_000_000) * US_POPULATION)
+                genpop = int((new_raw / 10_000_000) * 324_700_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
             
             changes += 1
@@ -7258,7 +7260,7 @@ def divide_sports_categories_by_4(df: pd.DataFrame) -> pd.DataFrame:
                 
                 # Recalculate US Gen Pop Projection
                 if 'US Gen Pop Projection' in df.columns:
-                    genpop = int((new_raw / 10_000_000) * US_POPULATION)
+                    genpop = int((new_raw / 10_000_000) * 324_700_000)
                     df.at[idx, 'US Gen Pop Projection'] = str(genpop)
                 
                 changes += 1
@@ -7649,7 +7651,7 @@ def cap_high_brand_penetration(df: pd.DataFrame, cap_threshold=92.0, min_cap=80.
             if 'US Gen Pop Projection' in df.columns and raw_col:
                 try:
                     raw_val = int(float(str(df.at[idx, raw_col]).replace(',', '')))
-                    genpop = int((raw_val / 10_000_000) * US_POPULATION)
+                    genpop = int((raw_val / 10_000_000) * 324_700_000)
                     df.at[idx, 'US Gen Pop Projection'] = str(genpop)
                 except:
                     pass
@@ -15129,7 +15131,7 @@ def enforce_streaming_music_top6(df):
     return df
 
 def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
-    """Add US Gen Pop Projection = (Original Raw Numbers / 10,000,000) * 329,900,000.
+    """Add US Gen Pop Projection = (Original Raw Numbers / 10,000,000) * 324,700,000.
 
     Uses finalized 'Original Raw Numbers'. For SAMPLE SIZE row, uses Percentage value as raw number.
     Writes a new column 'US Gen Pop Projection' formatted to 0 decimals where possible (string), 
@@ -15162,7 +15164,7 @@ def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
                             pass
     
     raw_num = pd.to_numeric(df[raw_col].astype(str).str.replace(',', ''), errors='coerce')
-    proj = (raw_num / 10_000_000.0) * US_POPULATION
+    proj = (raw_num / 10_000_000.0) * 324_700_000.0
     # Format as integer-like string (no decimals) when numeric, else keep empty
     formatted = []
     for p in proj:

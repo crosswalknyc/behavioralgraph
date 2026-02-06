@@ -9831,27 +9831,28 @@ def get_my_results():
         username = session.get('username', '')
         results = []
         
-        # Get purgatory items (pending review)
+        # Get purgatory items (pending review) and released items (approved = in dashboard)
         purgatory_metadata = load_purgatory_metadata()
         for purgatory_id, item in purgatory_metadata.items():
-            if item.get('created_by') == username and item.get('status') != 'rejected':
-                results.append({
-                    'id': purgatory_id,
-                    'project_name': item.get('project_name') or item.get('title', 'Unknown'),
-                    'category': item.get('category', ''),
-                    'created_at': item.get('created_at', ''),
-                    'source_type': item.get('source_type', 'profile_analysis'),
-                    'status': 'pending',  # In purgatory = pending
-                    'in_purgatory': True,
-                    's3_key': item.get('s3_key'),
-                    'bucket': item.get('bucket'),
-                    'purgatory_id': purgatory_id
-                })
-        
-        # Get released items (check S3 cache for items created by this user)
-        # We track released items by checking if they were in purgatory and released
-        for purgatory_id, item in purgatory_metadata.items():
-            if item.get('created_by') == username and item.get('status') == 'released':
+            if item.get('created_by') != username:
+                continue
+            if item.get('status') == 'rejected':
+                continue
+            st = item.get('status', '')
+            has_released_key = bool(item.get('released_key'))
+            has_released_at = bool(item.get('released_at'))
+            # Released = status approved/released OR metadata shows it was released (released_key/released_at)
+            is_released = st in ('released', 'approved') or has_released_key or has_released_at
+            # Fallback: if metadata still says pending but file was moved (e.g. metadata not saved), check S3
+            if not is_released and item.get('s3_key', '').startswith(S3_PURGATORY_PREFIX):
+                released_key = item['s3_key'].replace(S3_PURGATORY_PREFIX, '', 1)
+                try:
+                    s3_client.head_object(Bucket=item.get('bucket', S3_BUCKET), Key=released_key)
+                    is_released = True  # File exists at released path -> was released
+                except Exception:
+                    pass
+            if is_released:
+                released_key = item.get('released_key') or item.get('s3_key', '').replace(S3_PURGATORY_PREFIX, '')
                 results.append({
                     'id': purgatory_id,
                     'project_name': item.get('project_name') or item.get('title', 'Unknown'),
@@ -9861,8 +9862,21 @@ def get_my_results():
                     'source_type': item.get('source_type', 'profile_analysis'),
                     'status': 'released',
                     'in_purgatory': False,
-                    's3_key': item.get('released_key') or item.get('s3_key', '').replace(S3_PURGATORY_PREFIX, ''),
+                    's3_key': released_key,
                     'bucket': item.get('bucket')
+                })
+            else:
+                results.append({
+                    'id': purgatory_id,
+                    'project_name': item.get('project_name') or item.get('title', 'Unknown'),
+                    'category': item.get('category', ''),
+                    'created_at': item.get('created_at', ''),
+                    'source_type': item.get('source_type', 'profile_analysis'),
+                    'status': 'pending',
+                    'in_purgatory': True,
+                    's3_key': item.get('s3_key'),
+                    'bucket': item.get('bucket'),
+                    'purgatory_id': purgatory_id
                 })
         
         # Sort by created_at descending
@@ -10420,10 +10434,11 @@ def list_jobs():
                 'loading': True
             })
         
-        # If refresh=1, sync cache from S3 so new/updated files show up immediately (e.g. Profile IQ dashboard load)
+        # If refresh=1, load latest persisted cache (from any worker) then sync with S3 so new/updated files show up for all users
         if request.args.get('refresh') and s3_client and cache_loading_complete:
             try:
-                smart_cache_update()
+                load_persisted_cache()  # Pick up cache saved by other workers (e.g. after release from purgatory)
+                smart_cache_update()   # Sync with actual S3 listing (add new, remove deleted)
             except Exception as e:
                 print(f"⚠️ list_jobs refresh error: {e}")
         
