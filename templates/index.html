@@ -462,7 +462,6 @@
         }
         .user-role-badge.super_admin { background: rgba(255, 99, 132, 0.2); color: #ff6384; }
         .user-role-badge.admin { background: rgba(174, 129, 255, 0.2); color: #ae81ff; }
-        .user-role-badge.enterprise { background: rgba(253, 151, 31, 0.2); color: #fd971f; }
         .user-role-badge.user { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
 
         .header-right-section {
@@ -11268,7 +11267,7 @@
                     <button class="view-btn {% if not has_rankers_iq_access %}disabled{% endif %}" id="rankerIQTab" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</button>
                     <button class="view-btn {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
-                    {% if role == 'super_admin' or role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
+                    {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                     <button class="view-btn has-tooltip" id="customAnalysisBtn" data-tooltip="Create and run your own analysis">🔧 Analysis IQ</button>
                     {% endif %}
                     {% if role == 'super_admin' or role == 'admin' %}

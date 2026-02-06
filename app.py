@@ -999,7 +999,7 @@ def init_users():
     if 'liz' not in data['users']:
         data['users']['liz'] = {
             "password_hash": hash_password("ZestyBuffalo"),
-            "role": "enterprise",
+            "role": "user",
             "credits": 5,
             "credits_used": 0,
             "created_at": datetime.now().isoformat(),
@@ -1010,14 +1010,14 @@ def init_users():
         changed = True
     elif not is_valid_hash(data['users']['liz'].get('password_hash', '')):
         data['users']['liz']['password_hash'] = hash_password("ZestyBuffalo")
-        data['users']['liz']['role'] = "enterprise"
+        data['users']['liz']['role'] = "user"
         changed = True
     
     # Check for jessie user
     if 'jessie' not in data['users']:
         data['users']['jessie'] = {
             "password_hash": hash_password("SpicySriracha"),
-            "role": "enterprise",
+            "role": "user",
             "credits": 5,
             "credits_used": 0,
             "created_at": datetime.now().isoformat(),
@@ -1028,7 +1028,7 @@ def init_users():
         changed = True
     elif not is_valid_hash(data['users']['jessie'].get('password_hash', '')):
         data['users']['jessie']['password_hash'] = hash_password("SpicySriracha")
-        data['users']['jessie']['role'] = "enterprise"
+        data['users']['jessie']['role'] = "user"
         changed = True
     
     if changed:
@@ -1128,6 +1128,12 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
     user['credit_usage_history'] = history[:500]
     save_users(data)
     return True
+
+def _normalize_role(role):
+    """Treat legacy 'enterprise' as 'user'; only user, admin, super_admin are valid."""
+    if role == 'enterprise':
+        return 'user'
+    return role if role in ('user', 'admin', 'super_admin') else (role or 'user')
 
 # ============================================================================
 # AUTHENTICATION DECORATORS
@@ -1487,7 +1493,7 @@ def login_page():
         
         # Set session
         session['username'] = username
-        session['role'] = user.get('role', 'user')
+        session['role'] = _normalize_role(user.get('role', 'user'))
         
         # Always redirect to dashboard, admin can access admin panel from there
         return jsonify({'success': True, 'redirect': '/'})
@@ -1515,7 +1521,7 @@ def privacy_page():
 def admin_portal():
     # Get current user's role to pass to template
     user = get_current_user()
-    current_role = user.get('role', 'user') if user else 'user'
+    current_role = _normalize_role(user.get('role', 'user') if user else 'user')
     return render_template('admin.html', current_user_role=current_role)
 
 # ============================================================================
@@ -2021,7 +2027,7 @@ def create_user():
         if username in data['users']:
             return jsonify({'success': False, 'error': 'Username already exists'})
         
-        role = req_data.get('role', 'user')
+        role = _normalize_role(req_data.get('role', 'user'))
         
         data['users'][username] = {
             'password_hash': hash_password(password),
@@ -2111,7 +2117,7 @@ def update_user(username):
         if 'department' in req_data:
             user['department'] = req_data['department']
         if 'role' in req_data:
-            user['role'] = req_data['role']
+            user['role'] = _normalize_role(req_data['role'])
         if 'credits' in req_data:
             user['credits'] = req_data['credits']
         if 'access_expires' in req_data:
@@ -3189,7 +3195,7 @@ def get_users_list():
         for username, user in data.get('users', {}).items():
             users.append({
                 'username': username,
-                'role': user.get('role', 'user'),
+                'role': _normalize_role(user.get('role', 'user')),
                 'company': user.get('company', ''),
                 'department': user.get('department', ''),
                 'first_name': user.get('first_name', ''),
@@ -3212,7 +3218,7 @@ def get_user_info():
     return jsonify({
         'success': True,
         'username': session['username'],
-        'role': user.get('role', 'user'),
+        'role': _normalize_role(user.get('role', 'user')),
         'company': user.get('company', ''),
         'company_logo': user.get('company_logo', ''),
         'department': user.get('department', ''),
@@ -3348,7 +3354,7 @@ def set_chat_status():
 @requires_auth
 def index():
     user = get_current_user()
-    role = user.get('role', 'user') if user else 'user'
+    role = _normalize_role(user.get('role', 'user') if user else 'user')
     
     # Load quick-select behavioral exclusions (applies to all users globally)
     # Bypass cache so admin changes propagate to all users immediately across workers
@@ -13187,7 +13193,7 @@ def submit_talent_search():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -13257,7 +13263,7 @@ def submit_talent_theater():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -13528,7 +13534,7 @@ def submit_svod_acquisition():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -13631,7 +13637,7 @@ def submit_campaign_roi():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -13937,7 +13943,7 @@ def submit_cross_show():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -14007,7 +14013,7 @@ def submit_watch_time():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
