@@ -2894,12 +2894,53 @@ def get_admin_content():
         except Exception as svod_err:
             print(f"⚠️ Error loading SVOD files: {svod_err}")
         
+        # Get Ticket Sales IQ files from ticket-sales-iq bucket
+        ticket_sales_files = []
+        try:
+            ts_metadata = load_ticket_sales_metadata()
+            ts_paginator = s3.get_paginator('list_objects_v2')
+            for page in ts_paginator.paginate(Bucket=TICKET_SALES_S3_BUCKET, Prefix=''):
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    if not key.endswith('.csv'):
+                        continue
+                    name_without_ext = key.replace('.csv', '')
+                    match = re.match(r'^(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                    if match:
+                        default_display = match.group(1).replace('_', ' ')
+                    else:
+                        default_display = name_without_ext.replace('_', ' ')
+                    meta = ts_metadata.get(key, {})
+                    project_name = (meta.get('display_name') or default_display).strip()
+                    category = (meta.get('category') or 'Uncategorized').strip() or 'Uncategorized'
+                    image_url = meta.get('image_url') or ''
+                    last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                    ticket_sales_files.append({
+                        'key': f'ticket-sales-iq/{key}',
+                        'filename': key.split('/')[-1],
+                        'project_name': project_name,
+                        'category': category,
+                        'size': obj.get('Size', 0),
+                        'last_modified': last_modified,
+                        'created_at': last_modified,
+                        'bucket': TICKET_SALES_S3_BUCKET,
+                        's3_key': key,
+                        'is_ticket_sales': True,
+                        'custom_image': image_url if image_url else None
+                    })
+            print(f"✅ Found {len(ticket_sales_files)} Ticket Sales IQ files")
+            active_files.extend(ticket_sales_files)
+        except Exception as ts_err:
+            print(f"⚠️ Error loading Ticket Sales files: {ts_err}")
+        
         # Load profile image cache to check for custom images
         if not profile_image_cache:
             load_profile_image_cache()
         
-        # Add custom image info to each file
+        # Add custom image info to each file (skip ticket sales - they use ticket_sales_metadata)
         for f in active_files:
+            if f.get('is_ticket_sales'):
+                continue
             cache_key = f.get('project_name', '').lower().strip()
             if cache_key in profile_image_cache:
                 cached = profile_image_cache[cache_key]
@@ -6847,11 +6888,12 @@ def parse_ticket_sales_iq_csv(csv_content):
 @app.route('/api/ticket-sales-iq/list')
 @requires_auth
 def list_ticket_sales_iq_files():
-    """List all ticket sales IQ CSV files from S3 bucket ticket-sales-iq."""
+    """List all ticket sales IQ CSV files from S3 bucket ticket-sales-iq, with metadata (display_name, category, image_url)."""
     if not s3_client:
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     
     try:
+        ts_meta = load_ticket_sales_metadata()
         files = []
         paginator = s3_client.get_paginator('list_objects_v2')
         
@@ -6861,16 +6903,21 @@ def list_ticket_sales_iq_files():
                 if not key.endswith('.csv'):
                     continue
                 name_without_ext = key.replace('.csv', '')
-                # Format: Movie_Talent_MM_DD_YYYY_HH_MM.csv (e.g. mercy_chris pratt_02_06_2026_11_41.csv)
                 match = re.match(r'^(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
                 if match:
-                    display_name = match.group(1).replace('_', ' ')
+                    default_display = match.group(1).replace('_', ' ')
                 else:
-                    display_name = name_without_ext.replace('_', ' ')
+                    default_display = name_without_ext.replace('_', ' ')
+                meta = ts_meta.get(key, {})
+                display_name = (meta.get('display_name') or default_display).strip()
+                category = (meta.get('category') or 'Uncategorized').strip() or 'Uncategorized'
+                image_url = meta.get('image_url') or ''
                 
                 files.append({
                     's3_key': key,
                     'display_name': display_name,
+                    'category': category,
+                    'image_url': image_url if image_url else None,
                     'size': obj['Size'],
                     'last_modified': obj['LastModified'].isoformat()
                 })
@@ -6896,14 +6943,19 @@ def get_ticket_sales_iq_data(s3_key):
         csv_content = response['Body'].read().decode('utf-8')
         parsed = parse_ticket_sales_iq_csv(csv_content)
         
+        ts_meta = load_ticket_sales_metadata()
+        meta = ts_meta.get(s3_key, {})
         name_without_ext = s3_key.replace('.csv', '')
         match = re.match(r'^(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
-        display_name = match.group(1).replace('_', ' ') if match else name_without_ext.replace('_', ' ')
+        default_display = match.group(1).replace('_', ' ') if match else name_without_ext.replace('_', ' ')
+        display_name = (meta.get('display_name') or default_display).strip()
+        image_url = meta.get('image_url') or ''
         
         return jsonify({
             'success': True,
             'data': parsed,
             'display_name': display_name,
+            'image_url': image_url if image_url else None,
             's3_key': s3_key
         })
     except Exception as e:
@@ -9590,7 +9642,7 @@ def remove_profile_image():
 @app.route('/api/admin/rename-file', methods=['POST'])
 @requires_admin
 def rename_file():
-    """Rename a file in S3 (copy to new key, delete old)."""
+    """Rename a file in S3 (copy to new key, delete old). For Ticket Sales, only update display_name in metadata."""
     global s3_cache
     
     try:
@@ -9601,6 +9653,20 @@ def rename_file():
         
         if not old_key or not new_name:
             return jsonify({'success': False, 'error': 'Old key and new name required'})
+        
+        # Ticket Sales: only update display_name in metadata (don't rename S3 file)
+        if old_key.startswith('ticket-sales-iq/'):
+            actual_key = old_key.replace('ticket-sales-iq/', '')
+            meta = load_ticket_sales_metadata()
+            if actual_key not in meta:
+                meta[actual_key] = {}
+            meta[actual_key]['display_name'] = (display_name or new_name.replace('_', ' ')).strip()
+            save_ticket_sales_metadata(meta)
+            return jsonify({
+                'success': True,
+                'new_key': old_key,
+                'message': 'Display name updated successfully'
+            })
         
         # Get the folder path and extension from old key
         folder = '/'.join(old_key.split('/')[:-1])
@@ -9684,6 +9750,9 @@ def rename_file():
 
 # SVOD file metadata storage key
 SVOD_METADATA_KEY = 'system/svod_metadata.json'
+
+# Ticket Sales IQ metadata storage key (display_name, category, image_url per s3_key)
+TICKET_SALES_METADATA_KEY = 'system/ticket_sales_metadata.json'
 
 # SVOD pricing per platform (admin-configured): { "paramount+": { "ad_supported": 5.99, "premium": 11.99 }, ... }
 SVOD_PRICING_KEY = 'system/svod_pricing.json'
@@ -10396,6 +10465,31 @@ def save_svod_metadata(metadata):
     except:
         return False
 
+def load_ticket_sales_metadata():
+    """Load Ticket Sales IQ file metadata (display_name, category, image_url) from S3."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=TICKET_SALES_METADATA_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return {}
+
+def save_ticket_sales_metadata(metadata):
+    """Save Ticket Sales IQ file metadata to S3."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=TICKET_SALES_METADATA_KEY,
+            Body=json.dumps(metadata, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except:
+        return False
+
 def load_svod_pricing():
     """Load SVOD pricing (ad_supported, premium per platform) from S3."""
     if not s3_client:
@@ -10531,6 +10625,78 @@ def view_purgatory_file():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/ticket-sales-image', methods=['POST'])
+@requires_admin
+def set_ticket_sales_image():
+    """Set image for a Ticket Sales IQ file (upload or URL)."""
+    import uuid
+    try:
+        s3_key = None
+        image_url = None
+        if 'file' in request.files and request.files['file'].filename:
+            file = request.files['file']
+            s3_key = request.form.get('ticket_sales_s3_key')
+            if not s3_key:
+                return jsonify({'success': False, 'error': 'ticket_sales_s3_key required'})
+            if s3_key.startswith('ticket-sales-iq/'):
+                s3_key = s3_key.replace('ticket-sales-iq/', '')
+            file_data = file.read()
+            if len(file_data) > 2 * 1024 * 1024:
+                return jsonify({'success': False, 'error': 'File too large (max 2MB)'})
+            ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'jpg'
+            if ext not in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
+                ext = 'jpg'
+            content_type = f'image/{ext}'
+            if ext == 'jpg':
+                content_type = 'image/jpeg'
+            upload_key = f"ticket-sales-images/{uuid.uuid4().hex}.{ext}"
+            s3_client.put_object(Bucket=S3_BUCKET, Key=upload_key, Body=file_data, ContentType=content_type)
+            image_url = f"/api/profile-image-file/{upload_key}"
+        else:
+            data = request.get_json() or {}
+            s3_key = data.get('ticket_sales_s3_key') or data.get('s3_key')
+            image_url = (data.get('image_url') or '').strip()
+            if not s3_key or not image_url:
+                return jsonify({'success': False, 'error': 'ticket_sales_s3_key and image_url required'})
+            if s3_key.startswith('ticket-sales-iq/'):
+                s3_key = s3_key.replace('ticket-sales-iq/', '')
+        meta = load_ticket_sales_metadata()
+        if s3_key not in meta:
+            meta[s3_key] = {}
+        meta[s3_key]['image_url'] = image_url
+        save_ticket_sales_metadata(meta)
+        return jsonify({'success': True, 'image_url': image_url, 'message': 'Image saved'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/ticket-sales-metadata', methods=['POST'])
+@requires_admin
+def update_ticket_sales_metadata():
+    """Update display_name, category, or image_url for a Ticket Sales IQ file."""
+    try:
+        data = request.get_json()
+        s3_key = data.get('s3_key')  # Key within ticket-sales-iq bucket (e.g. "mercy_chris pratt_02_06_2026_11_41.csv")
+        if not s3_key:
+            return jsonify({'success': False, 'error': 's3_key required'})
+        # Normalize: strip ticket-sales-iq/ prefix if passed
+        if s3_key.startswith('ticket-sales-iq/'):
+            s3_key = s3_key.replace('ticket-sales-iq/', '')
+        meta = load_ticket_sales_metadata()
+        if s3_key not in meta:
+            meta[s3_key] = {}
+        if 'display_name' in data:
+            meta[s3_key]['display_name'] = (data['display_name'] or '').strip()
+        if 'category' in data:
+            meta[s3_key]['category'] = (data['category'] or '').strip().upper()
+        if 'image_url' in data:
+            meta[s3_key]['image_url'] = (data['image_url'] or '').strip()
+        save_ticket_sales_metadata(meta)
+        return jsonify({'success': True, 'message': 'Metadata updated'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/admin/change-category', methods=['POST'])
 @requires_admin
 def change_file_category():
@@ -10544,6 +10710,21 @@ def change_file_category():
         
         if not file_key or not new_category:
             return jsonify({'success': False, 'error': 'File key and category required'})
+        
+        # Check if this is a Ticket Sales IQ file (stored in ticket-sales-iq bucket)
+        if file_key.startswith('ticket-sales-iq/'):
+            actual_key = file_key.replace('ticket-sales-iq/', '')
+            metadata = load_ticket_sales_metadata()
+            if actual_key not in metadata:
+                metadata[actual_key] = {}
+            metadata[actual_key]['category'] = new_category
+            save_ticket_sales_metadata(metadata)
+            print(f"🏷️ Changed Ticket Sales category for {actual_key} to {new_category}")
+            return jsonify({
+                'success': True,
+                'new_category': new_category,
+                'message': f'Category updated to {new_category}'
+            })
         
         # Check if this is a SVOD file (stored in svod-acquisition bucket)
         if file_key.startswith('svod-acquisition/'):

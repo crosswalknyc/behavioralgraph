@@ -5962,17 +5962,31 @@
         
         // ============ CATEGORY CHANGE ============
         
-        function openCategoryModal(fileKey, currentCategory) {
+        function openCategoryModal(fileKey, currentCategory, isTicketSales = false) {
             document.getElementById('categoryFileKey').value = fileKey;
             document.getElementById('currentCategory').textContent = currentCategory || 'Uncategorized';
             document.getElementById('newCategory').value = currentCategory || '';
             document.getElementById('customCategory').value = '';
             
-            // Check if this is a SVOD file
             const isSvod = fileKey.startsWith('svod-acquisition/');
             const select = document.getElementById('newCategory');
             
-            if (isSvod) {
+            if (isTicketSales || fileKey.startsWith('ticket-sales-iq/')) {
+                // Ticket Sales: show category options (CMS-managed, not in output files)
+                const tsCategories = new Set();
+                contentFiles.forEach(f => {
+                    if (f.is_ticket_sales || (f.key && f.key.startsWith('ticket-sales-iq/'))) {
+                        if (f.category && f.category !== 'Uncategorized') tsCategories.add(f.category);
+                    }
+                });
+                ['MOVIES', 'TALENT', 'BOX OFFICE', 'ACTOR', 'ACTRESS'].forEach(c => tsCategories.add(c));
+                select.innerHTML = '<option value="">Select category...</option>';
+                Array.from(tsCategories).sort().forEach(cat => {
+                    select.innerHTML += `<option value="${cat}">${cat}</option>`;
+                });
+                const label = select.previousElementSibling;
+                if (label) label.innerHTML = 'Select Ticket Sales Category';
+            } else if (isSvod) {
                 // For SVOD files, show all categories as subcategories under SVOD ACQUISITION
                 // Get all unique categories from SVOD files
                 const svodCategories = new Set();
@@ -6122,12 +6136,14 @@
         
         async function saveProfileImage() {
             const profileName = document.getElementById('profileImageName').value;
+            const fileKey = document.getElementById('profileImageKey').value;
             const fileInput = document.getElementById('profileImageFile');
             const urlInput = document.getElementById('profileImageUrl').value.trim();
+            const isTicketSales = fileKey && fileKey.startsWith('ticket-sales-iq/');
             
-            console.log('Saving profile image:', { profileName, hasFile: !!(fileInput.files && fileInput.files[0]), urlInput });
+            console.log('Saving profile image:', { profileName, fileKey, isTicketSales, hasFile: !!(fileInput.files && fileInput.files[0]), urlInput });
             
-            if (!profileName) {
+            if (!profileName && !isTicketSales) {
                 showToast('No profile selected', true);
                 return;
             }
@@ -6140,28 +6156,40 @@
             try {
                 let response;
                 
-                if (fileInput.files && fileInput.files[0]) {
-                    // Upload file
+                if (isTicketSales) {
+                    // Ticket Sales: use ticket-sales-image API
+                    if (fileInput.files && fileInput.files[0]) {
+                        const formData = new FormData();
+                        formData.append('file', fileInput.files[0]);
+                        formData.append('ticket_sales_s3_key', fileKey);
+                        response = await fetch('/api/admin/ticket-sales-image', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            body: formData
+                        });
+                    } else {
+                        response = await fetch('/api/admin/ticket-sales-image', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                ticket_sales_s3_key: fileKey,
+                                image_url: urlInput
+                            })
+                        });
+                    }
+                } else if (fileInput.files && fileInput.files[0]) {
+                    // Upload file (profile/image)
                     const formData = new FormData();
                     formData.append('file', fileInput.files[0]);
                     formData.append('profile_name', profileName);
-                    
-                    console.log('Uploading file:', fileInput.files[0].name);
-                    
                     response = await fetch('/api/admin/profile-image', {
                         method: 'POST',
                         credentials: 'same-origin',
                         body: formData
                     });
                 } else {
-                    // Set URL
-                    console.log('Setting URL:', urlInput);
-                    console.log('Profile name:', profileName);
-                    console.log('Request payload:', JSON.stringify({
-                        profile_name: profileName,
-                        image_url: urlInput
-                    }));
-                    
+                    // Set URL (profile/image)
                     response = await fetch('/api/admin/profile-image', {
                         method: 'POST',
                         credentials: 'same-origin',
@@ -6187,49 +6215,42 @@
                 
                 if (data.success) {
                     console.log('✅ Image saved successfully!', data);
-                    showToast('Profile image saved!');
+                    showToast(isTicketSales ? 'Ticket Sales image saved!' : 'Profile image saved!');
                     
-                    const purgatoryId = document.getElementById('profileImagePurgatoryId').value;
-                    if (purgatoryId && data.image_url) {
-                        try {
-                            const updateRes = await fetch('/api/admin/purgatory/update', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                credentials: 'same-origin',
-                                body: JSON.stringify({ purgatory_id: purgatoryId, image_url: data.image_url })
-                            });
-                            const updateData = await updateRes.json();
-                            if (updateData.success) {
-                                showToast('Image saved and purgatory item updated');
-                                loadPurgatoryItems();
+                    if (!isTicketSales) {
+                        const purgatoryId = document.getElementById('profileImagePurgatoryId').value;
+                        if (purgatoryId && data.image_url) {
+                            try {
+                                const updateRes = await fetch('/api/admin/purgatory/update', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    credentials: 'same-origin',
+                                    body: JSON.stringify({ purgatory_id: purgatoryId, image_url: data.image_url })
+                                });
+                                const updateData = await updateRes.json();
+                                if (updateData.success) {
+                                    showToast('Image saved and purgatory item updated');
+                                    loadPurgatoryItems();
+                                }
+                            } catch (e) {
+                                console.error('Purgatory update error:', e);
                             }
-                        } catch (e) {
-                            console.error('Purgatory update error:', e);
                         }
+                        // Verify it's in the cache (profile images only)
+                        setTimeout(async () => {
+                            try {
+                                const verifyResponse = await fetch(`/api/debug/image-cache/${encodeURIComponent(profileName)}`, { credentials: 'same-origin' });
+                                const verifyData = await verifyResponse.json();
+                                if (verifyData.in_s3) console.log('✅ Confirmed: Image is in S3 cache');
+                            } catch (e) { console.error('Could not verify cache:', e); }
+                        }, 1000);
                     }
-                    
-                    // Verify it's in the cache
-                    setTimeout(async () => {
-                        try {
-                            const verifyResponse = await fetch(`/api/debug/image-cache/${encodeURIComponent(profileName)}`, { credentials: 'same-origin' });
-                            const verifyData = await verifyResponse.json();
-                            console.log('🔍 Cache verification:', verifyData);
-                            if (verifyData.in_s3) {
-                                console.log('✅ Confirmed: Image is in S3 cache');
-                            } else {
-                                console.warn('⚠️ Warning: Image not found in S3 cache after save');
-                            }
-                        } catch (e) {
-                            console.error('Could not verify cache:', e);
-                        }
-                    }, 1000);
                     
                     closeProfileImageModal();
                     document.getElementById('profileImagePurgatoryId').value = '';
-                    // Small delay to ensure cache is updated on server
                     setTimeout(() => {
-                        loadContentFiles(); // Refresh to show new image
-                        loadProfileImages(); // Refresh profile images list
+                        loadContentFiles();
+                        if (!isTicketSales) loadProfileImages();
                     }, 500);
                 } else {
                     showToast(data.error || 'Failed to save image', true);
@@ -6395,13 +6416,16 @@
         function renderContentAccordions(files) {
             const container = document.getElementById('contentAccordions');
             
-            // Separate SVOD files from regular files
+            // Separate SVOD, Ticket Sales, and regular files
             const svodFiles = [];
+            const ticketSalesFiles = [];
             const regularFiles = [];
             
             files.forEach(file => {
                 if (file.is_svod || (file.key && file.key.startsWith('svod-acquisition/')) || (file.bucket === 'svod-acquisition')) {
                     svodFiles.push(file);
+                } else if (file.is_ticket_sales || (file.key && file.key.startsWith('ticket-sales-iq/'))) {
+                    ticketSalesFiles.push(file);
                 } else {
                     regularFiles.push(file);
                 }
@@ -6423,11 +6447,20 @@
                 byCategory[cat].push(file);
             });
 
+            // Group Ticket Sales files by subcategory
+            const ticketSalesBySubcategory = {};
+            ticketSalesFiles.forEach(file => {
+                const subcat = file.category || 'Uncategorized';
+                if (!ticketSalesBySubcategory[subcat]) ticketSalesBySubcategory[subcat] = [];
+                ticketSalesBySubcategory[subcat].push(file);
+            });
+            const sortedTicketSalesSubcategories = Object.keys(ticketSalesBySubcategory).sort();
+
             // Sort categories
             const sortedCategories = Object.keys(byCategory).sort();
             const sortedSvodSubcategories = Object.keys(svodBySubcategory).sort();
 
-            if (sortedCategories.length === 0 && sortedSvodSubcategories.length === 0) {
+            if (sortedCategories.length === 0 && sortedSvodSubcategories.length === 0 && sortedTicketSalesSubcategories.length === 0) {
                 container.innerHTML = `<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem; text-align: center;">
                     ${showingArchived ? 'No archived files found.' : 'No content files found.'}
                 </p>`;
@@ -6474,6 +6507,55 @@
                                                 </thead>
                                                 <tbody>
                                                     ${subcatFiles.map(file => renderFileRow(file)).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Ticket Sales IQ master category with subcategories
+            if (sortedTicketSalesSubcategories.length > 0) {
+                const totalTsFiles = ticketSalesFiles.length;
+                html += `
+                    <div class="category-accordion" data-category="TICKET SALES" data-master-category="true">
+                        <div class="category-accordion-header" onclick="toggleAccordion(this)">
+                            <div class="category-accordion-title">
+                                <span class="category-accordion-arrow">▼</span>
+                                <span>🎟️ TICKET SALES</span>
+                                <span class="badge badge-user">${totalTsFiles} files</span>
+                            </div>
+                        </div>
+                        <div class="category-accordion-content">
+                            ${sortedTicketSalesSubcategories.map(subcat => {
+                                const subcatFiles = ticketSalesBySubcategory[subcat];
+                                return `
+                                    <div class="subcategory-accordion" data-subcategory="${subcat}" style="margin-bottom: 1rem; border-left: 3px solid var(--accent-cyan); padding-left: 1rem;">
+                                        <div class="category-accordion-header" onclick="toggleAccordion(this)">
+                                            <div class="category-accordion-title">
+                                                <span class="category-accordion-arrow">▼</span>
+                                                <span>${getCategoryIcon(subcat)} ${subcat}</span>
+                                                <span class="badge badge-user">${subcatFiles.length} files</span>
+                                            </div>
+                                        </div>
+                                        <div class="category-accordion-content">
+                                            <table class="content-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width: 40px;"><input type="checkbox" onchange="toggleCategorySelection('${subcat}', this.checked, false, true)"></th>
+                                                        <th>File Name</th>
+                                                        <th>Project</th>
+                                                        <th>Date</th>
+                                                        <th>Size</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${subcatFiles.map(file => renderFileRow(file, true)).join('')}
                                                 </tbody>
                                             </table>
                                         </div>
@@ -6536,13 +6618,23 @@
             return icons[category.toUpperCase()] || icons[category] || '📁';
         }
 
-        function renderFileRow(file) {
+        function renderFileRow(file, isTicketSales = false) {
             const isSelected = selectedFiles.has(file.key);
             const dateStr = file.last_modified ? formatDateTimePST(file.last_modified) : '--';
             const hasCustomImage = file.custom_image ? true : false;
             const escapedKey = file.key.replace(/'/g, "\\'");
             const escapedName = (file.project_name || '').replace(/'/g, "\\'");
             const escapedCategory = (file.category || 'Uncategorized').replace(/'/g, "\\'");
+            const escapedImage = (file.custom_image || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+            const profileImageArgs = isTicketSales
+                ? `'${escapedName || escapedKey}', '${escapedKey}', '', '${escapedImage}'`
+                : `'${escapedName || escapedKey}', '${escapedKey}'`;
+            const archiveDeleteBtns = isTicketSales ? '' : (
+                showingArchived ?
+                    `<button class="btn btn-small btn-success btn-icon" onclick="restoreFile('${escapedKey}')" title="Restore">↩️</button>` :
+                    `<button class="btn btn-small btn-archive btn-icon" onclick="archiveFile('${escapedKey}')" title="Archive">📦</button>`
+                ) + `<button class="btn btn-small btn-danger btn-icon" onclick="deleteFile('${escapedKey}')" title="Delete permanently">🗑️</button>`
+            );
             
             return `
                 <tr data-key="${file.key}" class="${isSelected ? 'selected' : ''}">
@@ -6560,14 +6652,10 @@
                     <td style="font-size: 0.75rem;">${formatBytes(file.size)}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn btn-small btn-icon" onclick="openCategoryModal('${escapedKey}', '${escapedCategory}')" title="Change Category">🏷️</button>
-                            <button class="btn btn-small btn-icon" onclick="openRenameModal('${escapedKey}', '${escapedName}')" title="Rename File">✏️</button>
-                            <button class="btn btn-small btn-icon" onclick="openProfileImageModal('${escapedName || escapedKey}', '${escapedKey}')" title="Set Profile Image" style="background: ${hasCustomImage ? 'var(--accent-lime)' : 'var(--bg-input)'}; color: ${hasCustomImage ? '#1a1a1a' : 'var(--text-primary)'};">🖼️</button>
-                            ${showingArchived ? 
-                                `<button class="btn btn-small btn-success btn-icon" onclick="restoreFile('${escapedKey}')" title="Restore">↩️</button>` :
-                                `<button class="btn btn-small btn-archive btn-icon" onclick="archiveFile('${escapedKey}')" title="Archive">📦</button>`
-                            }
-                            <button class="btn btn-small btn-danger btn-icon" onclick="deleteFile('${escapedKey}')" title="Delete permanently">🗑️</button>
+                            <button class="btn btn-small btn-icon" onclick="openCategoryModal('${escapedKey}', '${escapedCategory}', ${isTicketSales})" title="Change Category">🏷️</button>
+                            <button class="btn btn-small btn-icon" onclick="openRenameModal('${escapedKey}', '${escapedName}')" title="Edit Display Name">✏️</button>
+                            <button class="btn btn-small btn-icon" onclick="openProfileImageModal(${profileImageArgs})" title="Set Image" style="background: ${hasCustomImage ? 'var(--accent-lime)' : 'var(--bg-input)'}; color: ${hasCustomImage ? '#1a1a1a' : 'var(--text-primary)'};">🖼️</button>
+                            ${archiveDeleteBtns}
                         </div>
                     </td>
                 </tr>
@@ -6588,7 +6676,7 @@
             updateSelectionBar();
         }
 
-        function toggleCategorySelection(category, checked, isSvodSubcategory = false) {
+        function toggleCategorySelection(category, checked, isSvodSubcategory = false, isTicketSalesSubcategory = false) {
             const files = showingArchived ? archivedFiles : contentFiles;
             if (isSvodSubcategory) {
                 // For SVOD subcategories, only select SVOD files with this subcategory
@@ -6602,11 +6690,24 @@
                         selectedFiles.delete(file.key);
                     }
                 });
+            } else if (isTicketSalesSubcategory) {
+                // For Ticket Sales subcategories
+                files.filter(f => {
+                    const isTs = f.is_ticket_sales || (f.key && f.key.startsWith('ticket-sales-iq/'));
+                    return isTs && (f.category || 'Uncategorized') === category;
+                }).forEach(file => {
+                    if (checked) {
+                        selectedFiles.add(file.key);
+                    } else {
+                        selectedFiles.delete(file.key);
+                    }
+                });
             } else {
-                // For regular categories, only select non-SVOD files
+                // For regular categories, only select non-SVOD, non-Ticket-Sales files
                 files.filter(f => {
                     const isSvod = f.is_svod || (f.key && f.key.startsWith('svod-acquisition/')) || (f.bucket === 'svod-acquisition');
-                    return !isSvod && (f.category || 'Uncategorized') === category;
+                    const isTs = f.is_ticket_sales || (f.key && f.key.startsWith('ticket-sales-iq/'));
+                    return !isSvod && !isTs && (f.category || 'Uncategorized') === category;
                 }).forEach(file => {
                     if (checked) {
                         selectedFiles.add(file.key);
@@ -6745,19 +6846,26 @@
         async function bulkArchive() {
             const keys = Array.from(selectedFiles);
             if (keys.length === 0) return;
-            
-            if (!confirm(`Archive ${keys.length} file(s)?\n\nThey will be moved to the historic folder.`)) return;
+            const tsKeys = keys.filter(k => k.startsWith('ticket-sales-iq/'));
+            const archiveKeys = keys.filter(k => !k.startsWith('ticket-sales-iq/'));
+            if (tsKeys.length > 0 && archiveKeys.length === 0) {
+                showToast('Ticket Sales files cannot be archived from here', true);
+                return;
+            }
+            if (archiveKeys.length === 0) return;
+            if (tsKeys.length > 0) showToast(`${tsKeys.length} Ticket Sales file(s) skipped (not archivable)`);
+            if (!confirm(`Archive ${archiveKeys.length} file(s)?\n\nThey will be moved to the historic folder.`)) return;
             
             try {
                 const response = await fetch('/api/admin/content/archive', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keys })
+                    body: JSON.stringify({ keys: archiveKeys })
                 });
 
                 const data = await response.json();
                 if (data.success) {
-                    showToast(`${keys.length} file(s) archived successfully`);
+                    showToast(`${archiveKeys.length} file(s) archived successfully`);
                     selectedFiles.clear();
                     updateSelectionBar();
                     loadContentFiles();
@@ -6772,20 +6880,28 @@
         async function bulkDelete() {
             const keys = Array.from(selectedFiles);
             if (keys.length === 0) return;
+            const tsKeys = keys.filter(k => k.startsWith('ticket-sales-iq/'));
+            const deleteKeys = keys.filter(k => !k.startsWith('ticket-sales-iq/'));
+            if (tsKeys.length > 0 && deleteKeys.length === 0) {
+                showToast('Ticket Sales files cannot be deleted from here', true);
+                return;
+            }
+            if (deleteKeys.length === 0) return;
+            if (tsKeys.length > 0) showToast(`${tsKeys.length} Ticket Sales file(s) skipped (not deletable)`);
             
-            if (!confirm(`⚠️ PERMANENTLY DELETE ${keys.length} file(s)?\n\nThis action cannot be undone!`)) return;
+            if (!confirm(`⚠️ PERMANENTLY DELETE ${deleteKeys.length} file(s)?\n\nThis action cannot be undone!`)) return;
             if (!confirm('Are you absolutely sure? These files will be gone forever.')) return;
             
             try {
                 const response = await fetch('/api/admin/content/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keys })
+                    body: JSON.stringify({ keys: deleteKeys })
                 });
 
                 const data = await response.json();
                 if (data.success) {
-                    showToast(`${keys.length} file(s) deleted permanently`);
+                    showToast(`${deleteKeys.length} file(s) deleted permanently`);
                     selectedFiles.clear();
                     updateSelectionBar();
                     loadContentFiles();

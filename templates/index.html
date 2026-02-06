@@ -14943,6 +14943,16 @@
                     <div class="sidebar-header-section">
                         <h3>🎫 Talent-to-Theater</h3>
                         <input type="text" id="ticketSalesSearchInput" class="sidebar-search" placeholder="🔍 Search..." onkeyup="filterTicketSalesProfiles()">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
+                            <select id="ticketSalesSortSelect" onchange="sortTicketSalesProfiles(this.value)" style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="date-desc">Newest First</option>
+                                <option value="date-asc">Oldest First</option>
+                                <option value="name">Name A-Z</option>
+                                <option value="name-desc">Name Z-A</option>
+                                <option value="category">Category</option>
+                            </select>
+                        </div>
                     </div>
                     <div id="ticketSalesProfileTree" class="profile-select-tree"></div>
                 </div>
@@ -21341,15 +21351,62 @@
             const container = document.getElementById('ticketSalesProfileTree');
             if (!container) return;
             const searchTerm = (document.getElementById('ticketSalesSearchInput')?.value || '').toLowerCase();
+            const sortBy = (document.getElementById('ticketSalesSortSelect')?.value || 'date-desc');
             const matches = searchTerm ? ticketSalesProfiles.filter(p => 
-                (p.display_name || p.s3_key || '').toLowerCase().includes(searchTerm)
+                (p.display_name || p.s3_key || '').toLowerCase().includes(searchTerm) ||
+                (p.category && p.category.toLowerCase().includes(searchTerm))
             ) : ticketSalesProfiles;
-            let html = '';
-            matches.forEach(file => {
-                const key = (file.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-                html += `<div class="sidebar-item" onclick="selectTicketSalesProfile('${key}')"><span class="sidebar-item-name">${(file.display_name || file.s3_key || 'Unknown').replace(/</g, '&lt;')}</span></div>`;
+            
+            // Sort
+            const sorted = [...matches];
+            if (sortBy === 'date-desc') sorted.sort((a,b) => new Date(b.last_modified || 0) - new Date(a.last_modified || 0));
+            else if (sortBy === 'date-asc') sorted.sort((a,b) => new Date(a.last_modified || 0) - new Date(b.last_modified || 0));
+            else if (sortBy === 'name') sorted.sort((a,b) => (a.display_name || '').localeCompare(b.display_name || ''));
+            else if (sortBy === 'name-desc') sorted.sort((a,b) => (b.display_name || '').localeCompare(a.display_name || ''));
+            else if (sortBy === 'category') sorted.sort((a,b) => {
+                const ca = (a.category || 'Uncategorized').toLowerCase();
+                const cb = (b.category || 'Uncategorized').toLowerCase();
+                return ca !== cb ? ca.localeCompare(cb) : (a.display_name || '').localeCompare(b.display_name || '');
             });
+            
+            let html = '';
+            if (sortBy === 'category') {
+                // Group by category
+                const byCategory = {};
+                sorted.forEach(file => {
+                    const cat = file.category || 'Uncategorized';
+                    if (!byCategory[cat]) byCategory[cat] = [];
+                    byCategory[cat].push(file);
+                });
+                Object.keys(byCategory).sort().forEach(category => {
+                    const files = byCategory[category];
+                    if (Object.keys(byCategory).length > 1) {
+                        html += `<div class="category-item" onclick="toggleTicketSalesCategory(this)"><span class="arrow">▶</span><span class="sidebar-category-name">${(category || 'Uncategorized').replace(/</g, '&lt;')}</span></div>`;
+                        html += `<div class="category-children">`;
+                    }
+                    files.forEach(file => {
+                        const key = (file.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                        html += `<div class="sidebar-item" onclick="selectTicketSalesProfile('${key}')"><span class="sidebar-item-name">${(file.display_name || file.s3_key || 'Unknown').replace(/</g, '&lt;')}</span></div>`;
+                    });
+                    if (Object.keys(byCategory).length > 1) html += `</div>`;
+                });
+            } else {
+                sorted.forEach(file => {
+                    const key = (file.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                    html += `<div class="sidebar-item" onclick="selectTicketSalesProfile('${key}')"><span class="sidebar-item-name">${(file.display_name || file.s3_key || 'Unknown').replace(/</g, '&lt;')}</span></div>`;
+                });
+            }
             container.innerHTML = html || '<div class="sidebar-item">No reports found</div>';
+        }
+        
+        function toggleTicketSalesCategory(el) {
+            el.classList.toggle('open');
+            const children = el.nextElementSibling;
+            if (children) children.classList.toggle('open');
+        }
+        
+        function sortTicketSalesProfiles(val) {
+            renderTicketSalesProfileTree();
         }
         
         function filterTicketSalesProfiles() {
@@ -21416,7 +21473,20 @@
             const talentList = [talentName];
             if (hasCompetitor) talentList.push(competitor);
             document.getElementById('ticketSalesTalentTrackedList').innerHTML = '<strong>Talent Tracked:</strong> ' + esc(talentList.join(', '));
-            document.getElementById('ticketSalesProfileImagePlaceholder').textContent = '🎬';
+            const profileImg = document.getElementById('ticketSalesProfileImage');
+            const placeholder = document.getElementById('ticketSalesProfileImagePlaceholder');
+            if (resp.image_url) {
+                placeholder.style.display = 'none';
+                let img = profileImg.querySelector('img');
+                if (!img) { img = document.createElement('img'); img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:8px;'; profileImg.appendChild(img); }
+                img.src = resp.image_url;
+                img.style.display = 'block';
+            } else {
+                placeholder.style.display = '';
+                placeholder.textContent = '🎬';
+                const img = profileImg.querySelector('img');
+                if (img) img.style.display = 'none';
+            }
             
             const km = d.key_metrics || {};
             const ta = d.talent_attribution || {};
