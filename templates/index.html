@@ -21501,13 +21501,14 @@
             const totalViewersNum = _parseGenPop(totalMovieViewersGenPop);
             const pctDueToTalent = totalViewersNum > 0 ? ((totalTicketsDueToTalent / totalViewersNum) * 100).toFixed(2) + '%' : '0%';
             
-            // Summary cards: Total Movie Viewers, % bought due to talent, Total tickets due to talent
+            // Summary cards: Total Movie Viewers, Tickets Purchased (Last Click), % Tickets Purchased (Last Click)
             const fmtGenPopDisplay = (v) => v && v !== '—' ? _fmtGenPopInt(v) : '—';
             const totalMovieViewersTooltip = 'Total number of digital ticket sales tracked from one of the following platforms: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS.';
+            const lastClickTooltip = 'Number of digital tickets sold to panelists who had a digital touchpoint to tracked talent directly before ticket purchase.';
             const summaryCards = [
                 { label: 'Total Movie Viewers', value: fmtGenPopDisplay(totalMovieViewersGenPop), tooltip: totalMovieViewersTooltip },
-                { label: 'Tickets Purchased Due to Talent', value: _fmtGenPopInt(String(totalTicketsDueToTalent)) },
-                { label: '% Who Bought Ticket Due to Talent', value: pctDueToTalent }
+                { label: 'Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: _fmtGenPopInt(String(totalTicketsDueToTalent)), tooltip: lastClickTooltip },
+                { label: '% of Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: pctDueToTalent, tooltip: lastClickTooltip }
             ];
             document.getElementById('ticketSalesSummaryCards').innerHTML = summaryCards.map(c => `
                 <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"${c.tooltip ? ` title="${esc(c.tooltip)}"` : ''}>
