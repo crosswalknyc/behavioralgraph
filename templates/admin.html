@@ -5979,7 +5979,7 @@
                         if (f.category && f.category !== 'Uncategorized') tsCategories.add(f.category);
                     }
                 });
-                ['MOVIES', 'TALENT', 'BOX OFFICE', 'ACTOR', 'ACTRESS'].forEach(c => tsCategories.add(c));
+                ['Drama', 'Comedy', 'Documentary', 'Animation', 'Musical'].forEach(c => tsCategories.add(c));
                 select.innerHTML = '<option value="">Select category...</option>';
                 Array.from(tsCategories).sort().forEach(cat => {
                     select.innerHTML += `<option value="${cat}">${cat}</option>`;
