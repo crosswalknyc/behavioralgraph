@@ -5492,12 +5492,19 @@ def get_csv_data(s3_key):
         df = pd.read_csv(io.StringIO(csv_content))
         df = df.fillna('')
         brand_name = None
-        for job in s3_cache.get('jobs', []):
-            if (job.get('s3_key') or job.get('key')) == key:
-                brand_name = job.get('display_name') or job.get('project_name') or job.get('name')
-                break
+        # Purgatory keys are not in s3_cache; use purgatory metadata for display name (admin may have changed it)
+        if key.startswith(S3_PURGATORY_PREFIX):
+            purgatory_meta = load_purgatory_metadata()
+            purgatory_id = f"{S3_BUCKET}:{key}"
+            if purgatory_id in purgatory_meta:
+                brand_name = purgatory_meta[purgatory_id].get('title') or purgatory_meta[purgatory_id].get('project_name')
         if not brand_name:
-            name_without_ext = key.replace('.csv', '')
+            for job in s3_cache.get('jobs', []):
+                if (job.get('s3_key') or job.get('key')) == key:
+                    brand_name = job.get('display_name') or job.get('project_name') or job.get('name')
+                    break
+        if not brand_name:
+            name_without_ext = key.replace('.csv', '').replace(S3_PURGATORY_PREFIX, '')
             match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
             if match:
                 brand_name = match.group(1).replace('_', ' ')
@@ -9677,9 +9684,10 @@ def update_purgatory_item():
         if purgatory_id not in metadata:
             return jsonify({'success': False, 'error': 'Item not found in purgatory'})
         
-        # Update allowed fields
+        # Update allowed fields (title is the profile display name; keep project_name in sync)
         if 'title' in data:
             metadata[purgatory_id]['title'] = data['title']
+            metadata[purgatory_id]['project_name'] = data['title']
         if 'category' in data:
             metadata[purgatory_id]['category'] = data['category']
         if 'image_url' in data:
@@ -9743,6 +9751,19 @@ def release_purgatory_item():
             
             # Refresh cache to pick up the new file
             smart_cache_update()
+            # Apply admin's display name and category to the new cache entry so dashboard shows them
+            display_name = item.get('title') or item.get('project_name', '')
+            if display_name and s3_cache.get('jobs'):
+                for i, job in enumerate(s3_cache['jobs']):
+                    if (job.get('s3_key') or job.get('key')) == result:
+                        s3_cache['jobs'][i]['display_name'] = display_name
+                        s3_cache['jobs'][i]['name'] = display_name
+                        s3_cache['jobs'][i]['project_name'] = display_name
+                        s3_cache['jobs'][i]['brand'] = display_name
+                        if item.get('category'):
+                            s3_cache['jobs'][i]['category'] = item['category']
+                        save_persisted_cache()
+                        break
             
             return jsonify({
                 'success': True,
@@ -10478,18 +10499,32 @@ def list_jobs():
             except Exception:
                 pass  # Don't block on activity tracking
         
-        # Add local jobs (always fresh)
+        # Add local jobs (always fresh); for purgatory s3_keys merge display name and category from purgatory metadata
+        purgatory_meta = load_purgatory_metadata() if s3_client else {}
         for job_id, job in jobs.items():
-            job_list.append({
+            entry = {
                 'job_id': job_id,
                 'project_name': job.get('project_name', ''),
                 'status': job.get('status', 'unknown'),
                 'progress': job.get('progress', 0),
                 'created_at': job.get('created_at', ''),
                 'source': 'local',
-                'category': 'LOCAL'
-            })
-            categories.add('LOCAL')
+                'category': 'LOCAL',
+                's3_key': job.get('s3_key'),
+                'display_name': job.get('display_name')
+            }
+            s3_key = job.get('s3_key') or ''
+            if s3_key.startswith(S3_PURGATORY_PREFIX):
+                purgatory_id = f"{S3_BUCKET}:{s3_key}"
+                if purgatory_id in purgatory_meta:
+                    item = purgatory_meta[purgatory_id]
+                    entry['category'] = item.get('category') or 'Uncategorized'
+                    entry['project_name'] = item.get('title') or item.get('project_name') or entry['project_name']
+                    entry['display_name'] = item.get('title') or entry['project_name']
+                    categories.add(entry['category'])
+            else:
+                categories.add('LOCAL')
+            job_list.append(entry)
         
         # Use persisted cache only - no S3 scanning on page load for speed
         # If cache is empty, try to load persisted cache
@@ -11346,10 +11381,10 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 import shutil
                 shutil.copy2(result_file, output_path)
                 
-                # Upload to S3 (purgatory - admin must release to main bucket)
+                # Upload to S3 (purgatory - admin must release to main bucket); pass brand_category so purgatory shows selected category
                 update_job_status(job_id, progress=95, message='Saving to cache...')
                 created_by = jobs.get(job_id, {}).get('created_by', '')
-                s3_key = upload_to_s3(output_path, brands[0] if brands else project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True)
+                s3_key = upload_to_s3(output_path, brands[0] if brands else project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True, category=brand_category or 'GENERAL')
                 if s3_key:
                     _add_user_profile(s3_key, created_by)
                 update_job_status(

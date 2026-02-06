@@ -211,6 +211,32 @@
             background: rgba(102, 217, 239, 0.08);
             border-radius: 4px;
         }
+        .credits-used-row .credits-used-value-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+        .credits-used-row .credits-info-value {
+            text-align: right;
+        }
+        .credits-used-chevron {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.25rem;
+            height: 1.25rem;
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+            background: rgba(102, 217, 239, 0.15);
+            border: 1px solid rgba(102, 217, 239, 0.4);
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .credits-used-row:hover .credits-used-chevron {
+            background: rgba(102, 217, 239, 0.25);
+            border-color: var(--accent-cyan);
+        }
         
         .credits-info-label {
             color: var(--text-secondary);
@@ -11066,8 +11092,10 @@
                 </div>
                 <div class="credits-info-row credits-used-row" id="creditsUsedRow" onclick="toggleCreditUsageDetail()" style="cursor: pointer;" title="Click to see what each credit was used for">
                     <span class="credits-info-label">Credits Used</span>
-                    <span class="credits-info-value" id="modalCreditsUsed">{{ credits_used }}</span>
-                    <span class="credits-used-chevron" id="creditsUsedChevron" style="margin-left: 0.25rem; font-size: 0.7rem;">▾</span>
+                    <span class="credits-used-value-wrap">
+                        <span class="credits-info-value" id="modalCreditsUsed">{{ credits_used }}</span>
+                        <span class="credits-used-chevron" id="creditsUsedChevron" aria-label="Expand to view usage">▾</span>
+                    </span>
                 </div>
                 <div id="creditUsageDetail" style="display: none; margin-top: 0.5rem; margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color); max-height: 240px; overflow-y: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
