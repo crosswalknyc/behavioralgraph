@@ -21631,20 +21631,27 @@
                 const asNum = _parseGenPop(t.hitsGenPop || '0');
                 const lcRev = _fmtRevenue(lcNum * TICKET_PRICE);
                 const asRev = _fmtRevenue(asNum * TICKET_PRICE);
+                const tooltip = `Tickets sold to panelists who engaged with ${esc(t.name)} online within 14 days before purchase.`;
                 return `
-                    <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
-                        <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">Total ${esc(nameUp)} Last Click Conversions</div>
-                        <div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">${fmtGenPopDisplay(t.convGenPop)}${t.pct ? ' <span style="color: var(--text-secondary); font-weight: 500;">(' + esc(t.pct) + ')</span>' : ''}</div>
-                        <div style="font-size: 0.65rem; color: var(--accent-lime); margin-top: 0.15rem;">Revenue ($15/ticket): ${esc(lcRev)}</div>
-                        <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-top: 0.75rem; margin-bottom: 0.25rem;">Total ${esc(nameUp)} Assisted Conversions</div>
-                        <div class="insight-value" style="font-size: 1rem; font-weight: 600; color: var(--accent-cyan);">${fmtGenPopDisplay(t.hitsGenPop)}</div>
-                        <div style="font-size: 0.65rem; color: var(--accent-lime); margin-top: 0.15rem;">Revenue ($15/ticket): ${esc(asRev)}</div>
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">People who bought tickets after engaging online with ${esc(t.name)} within 14 days</div>
+                    <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1.25rem; border: 1px solid var(--border-color);" title="${esc(tooltip)}">
+                        <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--accent-cyan); letter-spacing: 0.5px; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">${esc(nameUp)}</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div>
+                                <div style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">Last Click</div>
+                                <div style="font-size: 1.15rem; font-weight: 700; color: var(--accent-cyan);">${fmtGenPopDisplay(t.convGenPop)}${t.pct ? ' <span style="font-size: 0.85rem; color: var(--text-secondary);">(' + esc(t.pct) + ')</span>' : ''}</div>
+                                <div style="font-size: 0.7rem; color: var(--accent-lime); margin-top: 0.2rem;">${esc(lcRev)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">Assisted</div>
+                                <div style="font-size: 1.15rem; font-weight: 700; color: var(--accent-cyan);">${fmtGenPopDisplay(t.hitsGenPop)}</div>
+                                <div style="font-size: 0.7rem; color: var(--accent-lime); margin-top: 0.2rem;">${esc(asRev)}</div>
+                            </div>
+                        </div>
                     </div>
                 `;
             }).join('');
             const section = document.getElementById('ticketSalesTalentAttributionSection');
-            if (section) section.innerHTML = '<h3 style="margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600; color: var(--text-secondary);">Talent Attribution</h3><p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Per-talent Last Click and Assisted Conversions</p><div class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;">' + cardsHtml + '</div>';
+            if (section) section.innerHTML = '<h3 style="margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600; color: var(--text-secondary);">Talent Attribution</h3><p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Last Click vs Assisted conversions and revenue per talent (hover for definition)</p><div class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">' + cardsHtml + '</div>';
             
             const perTalentChart = document.getElementById('ticketSalesPerTalentChart');
             if (perTalentChart && typeof Chart !== 'undefined' && ta.length > 0) {
