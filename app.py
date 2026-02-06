@@ -56,8 +56,17 @@ except ImportError:
     else:
         print("⚠️ No .env file found, using system environment variables only")
 
-# Add parent directory to path for importing bg module
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Prefer repo-root bg.py (same script as running locally from finished_codes); fallback to bg-webapp/bg.py
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_APP_DIR)
+_BG_ROOT = os.path.join(_REPO_ROOT, 'bg.py')
+_BG_LOCAL = os.path.join(_APP_DIR, 'bg.py')
+if os.path.isfile(_BG_ROOT):
+    sys.path.insert(0, _REPO_ROOT)
+    _BG_SOURCE = 'repo root (finished_codes/bg.py)'
+else:
+    sys.path.insert(0, _APP_DIR)
+    _BG_SOURCE = 'app dir (bg-webapp/bg.py)'
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
@@ -11272,12 +11281,15 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
     try:
         update_job_status(job_id, status='running', progress=5, message='Initializing...')
         
-        # Import the bg module
+        # Import the bg module (same as local when run from finished_codes; see startup path setup)
         try:
             import bg
             import random
             import numpy as np
             from config import SNOWFLAKE_CONFIG
+            # Log which bg script is running so you can confirm it matches local
+            _bg_file = getattr(bg, '__file__', 'unknown')
+            print(f"📜 Profile analysis using bg from: {_bg_file}")
         except ImportError as e:
             update_job_status(job_id, status='failed', error=f'Module import failed: {str(e)}')
             return
