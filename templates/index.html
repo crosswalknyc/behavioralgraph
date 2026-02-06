@@ -11214,7 +11214,7 @@
                     <button class="view-btn {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'super_admin' or role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
-                    <button class="view-btn" id="customAnalysisBtn">🔧 Analysis IQ</button>
+                    <button class="view-btn has-tooltip" id="customAnalysisBtn" data-tooltip="Create Your Own Analysis with Our Data">🔧 Analysis IQ</button>
                     {% endif %}
                     {% if role == 'super_admin' or role == 'admin' %}
                     <a href="/admin" class="view-btn" id="adminViewBtn">🔐 Admin</a>
@@ -26880,7 +26880,6 @@
                             afterFit: (scale) => { scale.width = Math.max(scale.width, 180); }
                         }
                     }
-                    })
                 },
                 plugins: [ChartDataLabels]
             });
