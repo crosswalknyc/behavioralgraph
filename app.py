@@ -8793,7 +8793,7 @@ def submit_analysis():
         project_name = data['project_name'].replace(' ', '_')
         project_name = re.sub(r'[<>:"/\\|?*]', '_', project_name)
         
-        # Parse brands
+        # Parse brands (same as terminal: comma-separated, optional URL strip)
         brands_raw = data['brands'].replace('\n', ',')
         brands = []
         for b in brands_raw.split(','):
@@ -8803,17 +8803,7 @@ def submit_analysis():
             match = re.search(r'https?://([^/]+)', b)
             clean_brand = match.group(1).lower() if match else b.lower()
             brands.append(clean_brand)
-        
-        # Auto-format brand variations
-        expanded_brands = []
-        for brand in brands:
-            expanded_brands.append(brand)
-            if '.' in brand:
-                expanded_brands.append(brand.replace('.', ''))
-            if ' ' in brand:
-                expanded_brands.append(brand.replace(' ', ''))
-                expanded_brands.append(brand.replace(' ', '-'))
-        brands = list(set(expanded_brands))
+        # Full expansion to all name combos (like terminal "Auto Format Inputs? Y") is done in run_analysis via bg.generate_brand_variations
         
         # Parse dates
         try:
@@ -11304,6 +11294,14 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         except ImportError as e:
             update_job_status(job_id, status='failed', error=f'Module import failed: {str(e)}')
             return
+        
+        # ========== EXPAND BRANDS TO ALL NAME COMBOS (matches terminal "Auto Format Inputs? Y") ==========
+        if hasattr(bg, 'generate_brand_variations') and brands:
+            expanded = []
+            for b in brands:
+                expanded.extend(bg.generate_brand_variations(b))
+            brands = list(dict.fromkeys(expanded))  # preserve order, remove exact dupes
+            print(f"🔄 Expanded to {len(brands)} brand variants for search and BRAND INPUT row")
         
         # ========== DETERMINISTIC SEEDING (matches terminal behavior) ==========
         # Create consistent random seed based on inputs for reproducible results

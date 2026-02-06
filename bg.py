@@ -1021,6 +1021,13 @@ def connect_snowflake():
 def clean_brand(brand):
     return re.sub(r'\W+', '', brand.strip().lower())
 
+def _escape_brand_for_sql(b):
+    """Return (escaped_for_like, escaped_for_eq) for safe use in SQL. LIKE needs % _ \\ escaped; = needs ' escaped."""
+    b = (b or '').strip()
+    eq_esc = b.replace("'", "''")
+    like_esc = eq_esc.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return like_esc, eq_esc
+
 def progress_monitor(label: str, conn):
     """Monitor long-running queries with progress updates"""
     import threading
@@ -1073,13 +1080,13 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
     """
     print("🔍 Performing FULL UNIVERSE SCAN (no sampling)...")
     
-    # Build brand filter - partial matching for URL, exact matching for COMMON_NAME
-    cleaned_brands = [clean_brand(b) for b in brands]
-    if cleaned_brands:
-        brand_filter = " OR ".join([
-            f"(LOWER(URL) LIKE '%{b}%' OR LOWER(COMMON_NAME) = '{b}')"
-            for b in cleaned_brands
-        ])
+    # Build brand filter from all variants (partial URL, exact COMMON_NAME) with SQL escaping
+    if brands:
+        clauses = []
+        for b in brands:
+            like_esc, eq_esc = _escape_brand_for_sql(b)
+            clauses.append(f"(LOWER(URL) LIKE '%' || '{like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) = '{eq_esc}')")
+        brand_filter = " OR ".join(clauses)
     else:
         brand_filter = "1=1"
     
@@ -2589,7 +2596,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         previous_demo_lookup, previous_behavioral_lookup, previous_sample_dates, previous_behavior_dates, previous_brand_input = load_previous_run_data(previous_file_path)
 
     print("📦 Creating sample UID group...")
-    cleaned_brands = [clean_brand(b) for b in brands]
+    cleaned_brands = [clean_brand(b) for b in brands]  # still used for any logic that needs normalized form
     
     # Show which processing approach will be used
     if use_full_population_fastpath and not is_genpop:
@@ -2597,28 +2604,24 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     else:
         print("📊 Using DEFAULT PATH: Traditional 100% sampling approach with 6X-Large warehouse")
     
-    # Initialize brand_filter for use in both paths
-    if not is_genpop:
-        if cleaned_brands:
-            brand_filter = " OR ".join([
-                f"(LOWER(URL) LIKE '%{b}%' OR LOWER(COMMON_NAME) = '{b}')"
-                for b in cleaned_brands
-            ])
-        else:
-            brand_filter = "1=1"
+    # Initialize brand_filter from all variants (same as perform_full_universe_scan) with SQL escaping
+    if not is_genpop and brands:
+        clauses = []
+        for b in brands:
+            like_esc, eq_esc = _escape_brand_for_sql(b)
+            clauses.append(f"(LOWER(URL) LIKE '%' || '{like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) = '{eq_esc}')")
+        brand_filter = " OR ".join(clauses)
+    elif not is_genpop:
+        brand_filter = "1=1"
     else:
         brand_filter = "1=1"
 
     if use_full_population_fastpath and not is_genpop:
-        # Fast path: streaming aggregation optimized for 3XL warehouse and millions of UIDs
-        # This path uses CTEs and single-pass processing for maximum efficiency
+        # Fast path: streaming aggregation - match COMMON_NAME against each variant with escaping
         print("🚀 Fast path: streaming aggregation for full population...")
-        
-        # Build brand list inline (no temp table needed) - this is for the fast path only
-        if cleaned_brands:
-            fast_path_brand_filter = " OR ".join([f"LOWER(c.COMMON_NAME) = '{b.lower()}'" for b in cleaned_brands])
+        if brands:
+            fast_path_brand_filter = " OR ".join([f"LOWER(c.COMMON_NAME) = '{_escape_brand_for_sql(b)[1]}'" for b in brands])
         else:
-            # If no brands provided, use all from HOST_MAPPING
             fast_path_brand_filter = "c.COMMON_NAME IS NOT NULL"
         
         # Add date range optimization hints for 3XL warehouse
@@ -8490,12 +8493,15 @@ def calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purc
         if not SILENCE_VERBOSE_OUTPUT:
             print("📊 Calculating visit frequency metrics...")
     
-    # Recreate the brand filter logic for frequency analysis
-    cleaned_brands = [clean_brand(b) for b in brands]
-    brand_filter = " OR ".join([
-        f"(LOWER(URL) LIKE '%{b}%' OR LOWER(COMMON_NAME) = '{b}')"
-        for b in cleaned_brands
-    ])
+    # Recreate the brand filter from all variants (same escaping as pipeline)
+    if brands:
+        clauses = []
+        for b in brands:
+            like_esc, eq_esc = _escape_brand_for_sql(b)
+            clauses.append(f"(LOWER(URL) LIKE '%' || '{like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) = '{eq_esc}')")
+        brand_filter = " OR ".join(clauses)
+    else:
+        brand_filter = "1=1"
     
     # If purchasers_only is True, add SLUGS filtering
     if purchasers_only:
