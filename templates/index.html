@@ -21472,7 +21472,7 @@
             document.getElementById('ticketSalesDateRangeHeader').textContent = dateRange ? dateRange : '';
             const talentList = [talentName];
             if (hasCompetitor) talentList.push(competitor);
-            document.getElementById('ticketSalesTalentTrackedList').innerHTML = '<strong>Talent Tracked:</strong> ' + esc(talentList.join(', '));
+            document.getElementById('ticketSalesTalentTrackedList').innerHTML = '<strong>Talent Tracked:</strong> ' + esc(talentList.map(t => (t || '').toUpperCase()).join(', '));
             const profileImg = document.getElementById('ticketSalesProfileImage');
             const placeholder = document.getElementById('ticketSalesProfileImagePlaceholder');
             if (resp.image_url) {
