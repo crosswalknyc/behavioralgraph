@@ -21472,6 +21472,13 @@
             const n = Math.round(_parseGenPop(s));
             return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
         }
+        function _fmtRevenue(v) {
+            if (!v || v <= 0) return '$0';
+            if (v >= 1e9) return '$' + (v / 1e9).toFixed(1) + 'B';
+            if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+            if (v >= 1e3) return '$' + (v / 1e3).toFixed(0) + 'K';
+            return '$' + Math.round(v);
+        }
         function _parseDisplayName(displayName) {
             if (!displayName || typeof displayName !== 'string') return { movie: '', talent: '' };
             const words = displayName.trim().split(/\s+/);
@@ -21617,14 +21624,21 @@
             const ta = d.talentAttrib || [];
             const esc = (x) => (x || '').toString().replace(/</g, '&lt;');
             const fmtGenPopDisplay = d.fmtGenPopDisplay || ((v) => v && v !== '—' ? _fmtGenPopInt(v) : '—');
+            const TICKET_PRICE = 15;
             const cardsHtml = ta.map(t => {
                 const nameUp = (t.name || '').toUpperCase();
+                const lcNum = _parseGenPop(t.convGenPop || '0');
+                const asNum = _parseGenPop(t.hitsGenPop || '0');
+                const lcRev = _fmtRevenue(lcNum * TICKET_PRICE);
+                const asRev = _fmtRevenue(asNum * TICKET_PRICE);
                 return `
                     <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
                         <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">Total ${esc(nameUp)} Last Click Conversions</div>
                         <div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">${fmtGenPopDisplay(t.convGenPop)}${t.pct ? ' <span style="color: var(--text-secondary); font-weight: 500;">(' + esc(t.pct) + ')</span>' : ''}</div>
+                        <div style="font-size: 0.65rem; color: var(--accent-lime); margin-top: 0.15rem;">Revenue ($15/ticket): ${esc(lcRev)}</div>
                         <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-top: 0.75rem; margin-bottom: 0.25rem;">Total ${esc(nameUp)} Assisted Conversions</div>
                         <div class="insight-value" style="font-size: 1rem; font-weight: 600; color: var(--accent-cyan);">${fmtGenPopDisplay(t.hitsGenPop)}</div>
+                        <div style="font-size: 0.65rem; color: var(--accent-lime); margin-top: 0.15rem;">Revenue ($15/ticket): ${esc(asRev)}</div>
                         <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">People who bought tickets after engaging online with ${esc(t.name)} within 14 days</div>
                     </div>
                 `;
@@ -21728,10 +21742,16 @@
             const totalMovieViewersTooltip = 'Total number of digital ticket sales tracked from one of the following platforms: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS.';
             const lastClickTooltip = 'Number of digital tickets sold to panelists who had a digital touchpoint to tracked talent directly before ticket purchase.';
             const assistedTooltip = 'Number of digital tickets sold to panelists who had a digital touchpoint to tracked talent within 14 days before ticket purchase.';
+            const TICKET_PRICE = 15;
+            const lcRevenue = (d.totalTicketsDueToTalent || 0) * TICKET_PRICE;
+            const asRevenue = (d.totalHitsAssisted || 0) * TICKET_PRICE;
+            const revenueTooltip = 'Estimated box office revenue assuming $15 per ticket.';
             const summaryCards = [
                 { label: 'Total Movie Viewers', value: fmtGenPopDisplay(d.totalMovieViewersGenPop), tooltip: totalMovieViewersTooltip },
                 { label: 'Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: lastClickVal, tooltip: lastClickTooltip },
-                { label: 'Tickets Purchased within a 14 day window of Talent Interaction (Assisted Conversion)', value: assistedVal, tooltip: assistedTooltip }
+                { label: 'Tickets Purchased within a 14 day window of Talent Interaction (Assisted Conversion)', value: assistedVal, tooltip: assistedTooltip },
+                { label: 'Box Office Revenue – Last Click ($15/ticket)', value: _fmtRevenue(lcRevenue), tooltip: revenueTooltip },
+                { label: 'Box Office Revenue – Assisted ($15/ticket)', value: _fmtRevenue(asRevenue), tooltip: revenueTooltip }
             ];
             const cardsEl = document.getElementById('ticketSalesSummaryCards');
             if (cardsEl) cardsEl.innerHTML = summaryCards.map(c => '<div class="insight-card" style="background: var(--bg-card); border-radius: 6px; padding: 0.75rem; border: 1px solid var(--border-color);"' + (c.tooltip ? ' title="' + esc(c.tooltip) + '"' : '') + '><div class="insight-label" style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.2rem;">' + esc(c.label) + '</div><div class="insight-value" style="font-size: 1rem; font-weight: 700; color: var(--accent-cyan);">' + esc(c.value) + '</div></div>').join('');
