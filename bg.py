@@ -4666,8 +4666,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         mask_sample = df_final["Column"] == "SAMPLE SIZE"
         if mask_sample.any():
             # Don't override the Value field - it contains the date information
-            # Keep sample size as integer, don't format as percentage
-            df_final.loc[mask_sample, "Percentage"] = df_final.loc[mask_sample, "Percentage"].astype(float).astype(int).astype(str)
+            # Keep sample size as integer, don't format as percentage (fillna(0) avoids NaN->int error)
+            df_final.loc[mask_sample, "Percentage"] = df_final.loc[mask_sample, "Percentage"].astype(float).fillna(0).astype(int).astype(str)
         
         # Special handling for Brand Category row (keep as 0.0)
         mask_brand_category = df_final["Column"] == "BRAND CATEGORY"
@@ -4758,8 +4758,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         mask_sample = df_final["Column"] == "SAMPLE SIZE"
         if mask_sample.any():
             # Don't override the Value field - it contains the date information
-            # Keep sample size as integer, don't format as percentage
-            df_final.loc[mask_sample, "Percentage"] = df_final.loc[mask_sample, "Percentage"].astype(float).astype(int).astype(str)
+            # Keep sample size as integer, don't format as percentage (fillna(0) avoids NaN->int error)
+            df_final.loc[mask_sample, "Percentage"] = df_final.loc[mask_sample, "Percentage"].astype(float).fillna(0).astype(int).astype(str)
         
         # Special handling for Brand Category row (keep as 0.0)
         mask_brand_category = df_final["Column"] == "BRAND CATEGORY"
