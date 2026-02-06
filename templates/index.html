@@ -11232,7 +11232,7 @@
         <div class="credits-modal-content" style="max-width: 500px;">
             <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
             <h2 style="color: var(--accent-lime); margin-bottom: 1rem;">Data Analysis Complete!</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;">
+            <p id="analysisCompleteMessage" style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;">
                 Download your data now and it will be populated into your dashboard shortly.
             </p>
             
@@ -11243,7 +11243,7 @@
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: var(--text-secondary);">Status:</span>
-                    <span style="color: var(--accent-lime); font-weight: 600;">✅ Ready for Download</span>
+                    <span id="analysisCompleteStatus" style="color: var(--accent-lime); font-weight: 600;">✅ Ready for Download</span>
                 </div>
             </div>
             
@@ -11263,7 +11263,7 @@
                 ⬇️ Download CSV File
             </button>
             
-            <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">
+            <p id="analysisCompleteFootnote" style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">
                 📋 Your data has been submitted for admin review and will appear in the dashboard once approved.
             </p>
             
@@ -11638,7 +11638,6 @@
                         <span style="flex: 1; min-width: 0;">Project</span>
                         <span style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
                             <span style="min-width: 3.5rem;">Dashboard Status</span>
-                            <span style="min-width: 2rem;">Download</span>
                         </span>
                     </div>
                     <div id="myResultsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
@@ -24259,24 +24258,58 @@
         });
 
         async function loadCachedResult(fileKey) {
-            try {
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(fileKey)}`, { credentials: 'same-origin' });
-                if (response.status === 401) { window.location.href = '/login'; return; }
+            const tryKey = async (key) => {
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(key)}`, { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return { needRedirect: true }; }
                 const data = await response.json();
-                if (data.success) {
+                return { response, data, ok: data.success && data.data };
+            };
+            try {
+                let result = await tryKey(fileKey);
+                if (result.needRedirect) return;
+                let { response, data, ok } = result;
+                // If 404 and key looks like purgatory path, retry with released location (no prefix)
+                if (!ok && response.status === 404 && fileKey && fileKey.startsWith('purgatory/')) {
+                    const releasedKey = fileKey.replace(/^purgatory\/?/, '');
+                    if (releasedKey && releasedKey !== fileKey) {
+                        result = await tryKey(releasedKey);
+                        if (result.needRedirect) return;
+                        response = result.response;
+                        data = result.data;
+                        ok = result.ok;
+                        if (ok && data.s3_key) {
+                            fileKey = data.s3_key;
+                            if (typeof showNotification === 'function') {
+                                showNotification('Profile was released from Purgatory; loaded from dashboard.', 'info');
+                            }
+                        }
+                    }
+                }
+                if (ok && data.data) {
                     currentCSVData = data.data;
                     currentS3Key = fileKey;
-                    selectedDashProfile = fileKey; // Set selected profile for sidebar
+                    selectedDashProfile = fileKey;
                     renderDashboard(data.data, data.brand, data.date_range);
                     showDashboardView();
-                    applyGenPopMode(); // Hide index/GP when Gen Pop is selected
+                    applyGenPopMode();
                 } else {
-                    console.error('API returned error:', data.error);
-                    alert('Failed to load: ' + (data.error || 'Unknown error'));
+                    const msg = response.status === 404
+                        ? 'Profile file not found. It may have been moved (e.g. after release from Purgatory). Click ↻ to refresh the profile list.'
+                        : (data.error || 'Unknown error');
+                    if (typeof showNotification === 'function') {
+                        showNotification(msg, 'error');
+                    } else {
+                        alert('Failed to load: ' + msg);
+                    }
                 }
-            } catch (error) { 
-                console.error('Failed to load:', error); 
-                alert('Failed to load result: ' + error.message);
+            } catch (error) {
+                console.error('Failed to load:', error);
+                const msg = 'Failed to load result. Click ↻ to refresh the profile list and try again.';
+                if (typeof showNotification === 'function') {
+                    showNotification(msg, 'error');
+                } else {
+                    alert(msg);
+                }
             }
         }
 
@@ -32897,9 +32930,12 @@
         }
 
         function downloadCurrentCSV() {
-            trackActivity('download_csv', currentS3Key || currentJobId);
-            if (currentS3Key) window.location.href = `/api/download-cached/${encodeURIComponent(currentS3Key)}`;
-            else if (currentJobId) window.location.href = `/api/download/${currentJobId}`;
+            // Profile Analysis: CSV download disabled; view in dashboard only
+            if (typeof showNotification === 'function') {
+                showNotification('CSV download is not available for profile analysis. View and export insights from the dashboard modules.', 'info');
+            } else {
+                alert('CSV download is not available for profile analysis.');
+            }
         }
         
         // ============================================================================
@@ -41496,10 +41532,11 @@
                 alert('Please select a profile first');
                 return;
             }
-            
-            // This downloads the original CSV
-            if (currentS3Key) {
-                window.location.href = `/api/download-cached/${encodeURIComponent(currentS3Key)}`;
+            // Profile Analysis: CSV download is not available; view data in dashboard only
+            if (typeof showNotification === 'function') {
+                showNotification('CSV download is not available for profile analysis. View and export insights from the dashboard modules.', 'info');
+            } else {
+                alert('CSV download is not available for profile analysis. View and export insights from the dashboard modules.');
             }
         }
         
@@ -42099,18 +42136,18 @@
                 }
                 
                 myResults = data.results || [];
-                
-                // Update status in both sections
+                const profileOnly = myResults.filter(r => (r.source_type || 'profile_analysis') === 'profile_analysis');
+                const profilePending = profileOnly.filter(r => r.status === 'pending' || r.in_purgatory).length;
+                const profileReleased = profileOnly.filter(r => r.status === 'released').length;
                 const statusText = `${data.pending_count || 0} pending • ${data.released_count || 0} in dashboard`;
+                const profileStatusText = `${profilePending} pending • ${profileReleased} in dashboard`;
                 if (statusEl) {
-                    statusEl.innerHTML = statusText;
+                    statusEl.innerHTML = profileStatusText;
                 }
                 if (svodStatusEl) {
                     svodStatusEl.innerHTML = statusText;
                 }
-                
-                // Render in both containers
-                renderMyResults(myResults);
+                renderMyResults(profileOnly);
                 renderSvodResults(myResults);
                 
             } catch (error) {
@@ -42128,20 +42165,17 @@
         function filterMyResults() {
             const searchTerm = (document.getElementById('myResultsSearchInput')?.value || '').toLowerCase().trim();
             const statusFilter = document.getElementById('myResultsStatusFilter')?.value || '';
-            
-            let filtered = myResults;
-            
+            // Profile IQ Results Library shows only profile analysis results
+            let filtered = myResults.filter(r => (r.source_type || 'profile_analysis') === 'profile_analysis');
             if (searchTerm) {
-                filtered = filtered.filter(r => 
+                filtered = filtered.filter(r =>
                     (r.project_name || '').toLowerCase().includes(searchTerm) ||
                     (r.category || '').toLowerCase().includes(searchTerm)
                 );
             }
-            
             if (statusFilter) {
                 filtered = filtered.filter(r => r.status === statusFilter);
             }
-            
             renderMyResults(filtered);
         }
         
@@ -42159,36 +42193,25 @@
             
             const html = results.map(result => {
                 const isPending = result.status === 'pending' || result.in_purgatory;
-                const statusBadge = isPending 
+                const statusBadge = isPending
                     ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
                     : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
-                
                 const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
-                const purgatoryIdEsc = (result.purgatory_id || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-                
-                // Buttons: Download always available, Open in Profile IQ only if released
-                let buttons = '';
-                if (isPending) {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${purgatoryIdEsc}')" title="Download CSV">📥</button>`;
-                } else {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
-                }
-                
+                // Profile Analysis: no CSV download; released rows open in dashboard on click
                 const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
                 const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
                 const rowStyle = isPending ? 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' : 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;';
                 return `
-                    <div class="job-item" style="${rowStyle}" ${rowClick} ${rowClick ? 'title="Click to open in Profile IQ"' : ''}>
+                    <div class="job-item" style="${rowStyle}" ${rowClick} ${rowClick ? 'title="Click to open in Dashboard"' : ''}>
                         <div style="flex: 1; min-width: 0;">
                             <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</div>
                             <div style="font-size: 0.7rem; color: var(--text-secondary);">${categoryLabel} • ${dateStr}</div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
                             ${statusBadge}
-                            ${buttons}
                         </div>
                     </div>
                 `;
@@ -56148,7 +56171,6 @@
             currentAnalysisS3Key = s3Key;
             currentAnalysisType = analysisType;
             
-            // Update the modal content
             const typeLabels = {
                 'svod_acquisition': '📺 SVOD Acquisition IQ',
                 'talent_theater': '🎫 Ticket Sales IQ',
@@ -56156,10 +56178,19 @@
             };
             document.getElementById('analysisCompleteType').textContent = typeLabels[analysisType] || '🎯 Profile Analysis';
             
-            // Show the modal
-            document.getElementById('analysisCompleteModal').classList.add('active');
+            const isProfile = analysisType === 'profile_analysis';
+            const downloadBtn = document.getElementById('downloadAnalysisBtn');
+            const statusEl = document.getElementById('analysisCompleteStatus');
+            const messageEl = document.getElementById('analysisCompleteMessage');
+            const footnoteEl = document.getElementById('analysisCompleteFootnote');
+            if (downloadBtn) downloadBtn.style.display = isProfile ? 'none' : 'block';
+            if (statusEl) statusEl.textContent = isProfile ? '⏳ Pending review' : '✅ Ready for Download';
+            if (messageEl) messageEl.textContent = isProfile
+                ? 'Your analysis has been submitted for review. It will appear in the dashboard once approved. Check the Results Library for status.'
+                : 'Download your data now and it will be populated into your dashboard shortly.';
+            if (footnoteEl) footnoteEl.style.display = isProfile ? 'none' : 'block';
             
-            // Auto-refresh profile area and Results Library so the new run appears immediately
+            document.getElementById('analysisCompleteModal').classList.add('active');
             if (typeof refreshDashboardProfiles === 'function') refreshDashboardProfiles();
             if (typeof loadMyResults === 'function') loadMyResults();
         }
