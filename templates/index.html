@@ -14978,8 +14978,18 @@
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                            <div class="display-mode-toggle" id="ticketSalesDisplayToggle" onclick="toggleTicketSalesDisplayMode()" title="Toggle between US % and US #">
-                                <span id="ticketSalesDisplayModeLabel">US %</span>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                <div class="display-mode-toggle" id="ticketSalesDisplayToggle" onclick="toggleTicketSalesDisplayMode()" title="Toggle between US % and US #">
+                                    <span id="ticketSalesDisplayModeLabel">US %</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary);">View:</span>
+                                    <select id="ticketSalesViewSelect" onchange="toggleTicketSalesDataView()" style="padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="talent">By Talent</option>
+                                        <option value="outlet">By Outlet</option>
+                                        <option value="metric">By Metric</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <div id="ticketSalesSummaryCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;"></div>
@@ -14989,7 +14999,9 @@
                             <div id="ticketSalesBarChart" style="height: 280px; position: relative;"></div>
                         </div>
                         <div id="ticketSalesTalentAttributionSection" style="margin-bottom: 2rem;"></div>
+                        <div id="ticketSalesPerTalentChart" style="height: 280px; margin-bottom: 2rem; display: none;"></div>
                         <div id="ticketSalesByOutletSection" style="margin-bottom: 2rem;"></div>
+                        <div id="ticketSalesOutletChart" style="height: 280px; margin-bottom: 2rem; display: none;"></div>
                     </div>
                 </div>
             </div>
@@ -21342,8 +21354,9 @@
         
         let ticketSalesProfiles = [];
         let ticketSalesAttributionDisplayMode = 'percent';
+        let ticketSalesDataView = 'talent';
         let currentTicketSalesData = null;
-        let ticketSalesCharts = { pieLastClick: null, pieAssisted: null, barChart: null };
+        let ticketSalesCharts = { pieLastClick: null, pieAssisted: null, barChart: null, talentBar: null, outletBar: null };
         
         async function loadTicketSalesProfiles() {
             try {
@@ -21533,32 +21546,7 @@
                 }
             }
             
-            currentTicketSalesData = {
-                totalMovieViewersGenPop, totalViewersNum, totalTicketsDueToTalent, pctDueToTalent,
-                totalHitsAssisted, pctAssisted, talentAttrib, fmtGenPopDisplay: (v) => v && v !== '—' ? _fmtGenPopInt(v) : '—'
-            };
-            
-            const tsLabel = document.getElementById('ticketSalesDisplayModeLabel');
-            if (tsLabel) tsLabel.textContent = ticketSalesAttributionDisplayMode === 'percent' ? 'US %' : 'US #';
-            renderTicketSalesSummaryAndCharts(resp);
-            
-            document.getElementById('ticketSalesTalentAttributionSection').innerHTML = `
-                <h3 style="margin: 0 0 1rem 0;">Talent Attribution</h3>
-                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Ticket sales each listed talent drove</p>
-                <div class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;">
-                    ${talentAttrib.map(t => `
-                        <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
-                            <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">${esc(t.name)} → Theater Conversions</div>
-                            <div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">${fmtGenPopDisplay(t.convGenPop)}${t.pct ? ' <span style="color: var(--text-secondary); font-weight: 500;">(' + esc(t.pct) + ')</span>' : ''}</div>
-                            <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-top: 0.75rem; margin-bottom: 0.25rem;">Total ${esc(t.name)} Hits (Movie Viewers)</div>
-                            <div class="insight-value" style="font-size: 1rem; font-weight: 600; color: var(--accent-cyan);">${fmtGenPopDisplay(t.hitsGenPop)}</div>
-                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">People who bought tickets after engaging online with ${esc(t.name)} within 14 days</div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-            
-            // Ticket Sales by Outlet: combined platform table with all talents
+            // Ticket Sales by Outlet: build platform data
             const platformSets = [
                 { talent: talentName || 'Primary Talent', rows: d.talent_by_platform || [] }
             ];
@@ -21588,23 +21576,142 @@
                 }
                 return (plat || '').toUpperCase();
             };
-            const thead = '<tr><th>OUTLET</th>' + platformSets.map(ps => `<th>${esc((ps.talent || '').toUpperCase())}</th>`).join('') + '</tr>';
-            const tbody = sortedPlatforms.map(plat => {
-                const cells = platformSets.map(ps => `<td>${esc(fmtOutletVal(getGenPopFor(ps.rows, plat)))}</td>`);
-                return `<tr><td>${esc(getDisplayName(plat))}</td>${cells.join('')}</tr>`;
-            }).join('');
-            document.getElementById('ticketSalesByOutletSection').innerHTML = `
-                <h3 style="margin: 0 0 1rem 0;">Ticket Sales by Outlet</h3>
-                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Gen Pop projections by platform for each talent</p>
-                <div style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
-            `;
+            
+            currentTicketSalesData = {
+                totalMovieViewersGenPop, totalViewersNum, totalTicketsDueToTalent, pctDueToTalent,
+                totalHitsAssisted, pctAssisted, talentAttrib, fmtGenPopDisplay: (v) => v && v !== '—' ? _fmtGenPopInt(v) : '—',
+                platformSets, sortedPlatforms, getGenPopFor, fmtOutletVal, getDisplayName
+            };
+            
+            const tsLabel = document.getElementById('ticketSalesDisplayModeLabel');
+            if (tsLabel) tsLabel.textContent = ticketSalesAttributionDisplayMode === 'percent' ? 'US %' : 'US #';
+            renderTicketSalesSummaryAndCharts(resp);
+            renderTicketSalesTalentSection();
+            renderTicketSalesOutletSection();
+            renderTicketSalesDataViews();
         }
         
         function toggleTicketSalesDisplayMode() {
             ticketSalesAttributionDisplayMode = ticketSalesAttributionDisplayMode === 'percent' ? 'number' : 'percent';
             const label = document.getElementById('ticketSalesDisplayModeLabel');
             if (label) label.textContent = ticketSalesAttributionDisplayMode === 'percent' ? 'US %' : 'US #';
-            if (currentTicketSalesData) renderTicketSalesSummaryAndCharts();
+            if (currentTicketSalesData) {
+                renderTicketSalesSummaryAndCharts();
+                renderTicketSalesTalentSection();
+                renderTicketSalesDataViews();
+            }
+        }
+        
+        function toggleTicketSalesDataView() {
+            const sel = document.getElementById('ticketSalesViewSelect');
+            if (sel) ticketSalesDataView = sel.value;
+            renderTicketSalesDataViews();
+        }
+        
+        function renderTicketSalesTalentSection() {
+            if (!currentTicketSalesData) return;
+            const d = currentTicketSalesData;
+            const ta = d.talentAttrib || [];
+            const esc = (x) => (x || '').toString().replace(/</g, '&lt;');
+            const fmtGenPopDisplay = d.fmtGenPopDisplay || ((v) => v && v !== '—' ? _fmtGenPopInt(v) : '—');
+            const cardsHtml = ta.map(t => {
+                const nameUp = (t.name || '').toUpperCase();
+                return `
+                    <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
+                        <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem;">Total ${esc(nameUp)} Last Click Conversions</div>
+                        <div class="insight-value" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">${fmtGenPopDisplay(t.convGenPop)}${t.pct ? ' <span style="color: var(--text-secondary); font-weight: 500;">(' + esc(t.pct) + ')</span>' : ''}</div>
+                        <div class="insight-label" style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-top: 0.75rem; margin-bottom: 0.25rem;">Total ${esc(nameUp)} Assisted Conversions</div>
+                        <div class="insight-value" style="font-size: 1rem; font-weight: 600; color: var(--accent-cyan);">${fmtGenPopDisplay(t.hitsGenPop)}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">People who bought tickets after engaging online with ${esc(t.name)} within 14 days</div>
+                    </div>
+                `;
+            }).join('');
+            const section = document.getElementById('ticketSalesTalentAttributionSection');
+            if (section) section.innerHTML = '<h3 style="margin: 0 0 1rem 0;">Talent Attribution</h3><p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Per-talent Last Click and Assisted Conversions</p><div class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;">' + cardsHtml + '</div>';
+            
+            const perTalentChart = document.getElementById('ticketSalesPerTalentChart');
+            if (perTalentChart && typeof Chart !== 'undefined' && ta.length > 0) {
+                perTalentChart.innerHTML = '';
+                const canvas = document.createElement('canvas');
+                perTalentChart.appendChild(canvas);
+                if (ticketSalesCharts.talentBar) ticketSalesCharts.talentBar.destroy();
+                const showPct = ticketSalesAttributionDisplayMode === 'percent';
+                const totalViewers = d.totalViewersNum || 1;
+                const labels = ta.map(t => (t.name || '').toUpperCase());
+                const lastClickVals = ta.map(t => showPct ? (_parseGenPop(t.convGenPop || '0') / totalViewers * 100) : _parseGenPop(t.convGenPop || '0'));
+                const assistedVals = ta.map(t => showPct ? (_parseGenPop(t.hitsGenPop || '0') / totalViewers * 100) : _parseGenPop(t.hitsGenPop || '0'));
+                ticketSalesCharts.talentBar = new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            { label: (showPct ? '% ' : '') + 'Last Click', data: lastClickVals, backgroundColor: 'rgba(6, 182, 212, 0.6)', borderColor: 'rgba(6, 182, 212, 1)', borderWidth: 1 },
+                            { label: (showPct ? '% ' : '') + 'Assisted', data: assistedVals, backgroundColor: 'rgba(200, 255, 0, 0.6)', borderColor: 'rgba(200, 255, 0, 1)', borderWidth: 1 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { title: { display: true, text: 'Per-Talent: Last Click vs Assisted Conversions', color: '#e2e8f0' }, legend: { labels: { color: '#e2e8f0' } } },
+                        scales: { y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } }, x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } } }
+                    }
+                });
+            }
+        }
+        
+        function renderTicketSalesOutletSection() {
+            if (!currentTicketSalesData || !currentTicketSalesData.platformSets) return;
+            const d = currentTicketSalesData;
+            const esc = (x) => (x || '').toString().replace(/</g, '&lt;');
+            const ps = d.platformSets || [];
+            const sorted = d.sortedPlatforms || [];
+            const thead = '<tr><th>OUTLET</th>' + ps.map(p => '<th>' + esc((p.talent || '').toUpperCase()) + '</th>').join('') + '</tr>';
+            const tbody = sorted.map(plat => {
+                const cells = ps.map(p => '<td>' + esc(d.fmtOutletVal(d.getGenPopFor(p.rows, plat))) + '</td>');
+                return '<tr><td>' + esc(d.getDisplayName(plat)) + '</td>' + cells.join('') + '</tr>';
+            }).join('');
+            const section = document.getElementById('ticketSalesByOutletSection');
+            if (section) section.innerHTML = '<h3 style="margin: 0 0 1rem 0;">Ticket Sales by Outlet</h3><p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Gen Pop projections by platform for each talent</p><div style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>';
+            
+            const outletChart = document.getElementById('ticketSalesOutletChart');
+            if (outletChart && typeof Chart !== 'undefined' && ps.length > 0 && sorted.length > 0) {
+                outletChart.innerHTML = '';
+                const canvas = document.createElement('canvas');
+                outletChart.appendChild(canvas);
+                const outletLabels = sorted.map(p => (d.getDisplayName(p) || p).toUpperCase());
+                const datasets = ps.map((p, i) => {
+                    const colors = ['rgba(6, 182, 212, 0.6)', 'rgba(200, 255, 0, 0.6)', 'rgba(253, 151, 31, 0.6)'];
+                    const data = sorted.map(plat => _parseGenPop(d.getGenPopFor(p.rows, plat) || '0'));
+                    return { label: (p.talent || '').toUpperCase(), data, backgroundColor: colors[i % colors.length], borderColor: colors[i % colors.length].replace('0.6', '1'), borderWidth: 1 };
+                });
+                if (ticketSalesCharts.outletBar) ticketSalesCharts.outletBar.destroy();
+                ticketSalesCharts.outletBar = new Chart(canvas, {
+                    type: 'bar',
+                    data: { labels: outletLabels, datasets: datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { title: { display: true, text: 'Ticket Sales by Outlet (by Talent)', color: '#e2e8f0' }, legend: { labels: { color: '#e2e8f0' } } },
+                        scales: { y: { beginAtZero: true, stacked: false, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } }, x: { ticks: { color: '#94a3b8', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.1)' } } }
+                    }
+                });
+            }
+        }
+        
+        function renderTicketSalesDataViews() {
+            const perTalentChart = document.getElementById('ticketSalesPerTalentChart');
+            const outletChart = document.getElementById('ticketSalesOutletChart');
+            const attrSection = document.getElementById('ticketSalesAttributionSection');
+            if (ticketSalesDataView === 'talent') {
+                if (perTalentChart) perTalentChart.style.display = 'block';
+                if (outletChart) outletChart.style.display = 'none';
+            } else if (ticketSalesDataView === 'outlet') {
+                if (perTalentChart) perTalentChart.style.display = 'none';
+                if (outletChart) outletChart.style.display = 'block';
+            } else {
+                if (perTalentChart) perTalentChart.style.display = 'none';
+                if (outletChart) outletChart.style.display = 'none';
+            }
         }
         
         function renderTicketSalesSummaryAndCharts(resp) {
