@@ -958,59 +958,43 @@ def connect_snowflake():
     if not SILENCE_VERBOSE_OUTPUT:
         print("🔌 Connecting to Snowflake...")
     
-    # Load credentials from config or environment variables (web app uses config)
-    try:
-        from config import SNOWFLAKE_CONFIG
-    except ImportError:
-        SNOWFLAKE_CONFIG = {}
-    
+    # Credentials from environment (required for webapp; set in .env or deploy config)
     import os
-    user = os.environ.get('SNOWFLAKE_USER') or SNOWFLAKE_CONFIG.get('user', '')
-    password = os.environ.get('SNOWFLAKE_PASSWORD') or SNOWFLAKE_CONFIG.get('password', '')
-    account = os.environ.get('SNOWFLAKE_ACCOUNT') or SNOWFLAKE_CONFIG.get('account', '')
-    warehouse = os.environ.get('SNOWFLAKE_WAREHOUSE') or SNOWFLAKE_CONFIG.get('warehouse', 'BEHAVIORGRAPH6X')
-    database = os.environ.get('SNOWFLAKE_DATABASE') or SNOWFLAKE_CONFIG.get('database', 'BEHAVIORALGRAPH')
-    schema = os.environ.get('SNOWFLAKE_SCHEMA') or SNOWFLAKE_CONFIG.get('schema', 'PUBLIC')
-    role = os.environ.get('SNOWFLAKE_ROLE') or SNOWFLAKE_CONFIG.get('role', 'ACCOUNTADMIN')
-    token = os.environ.get('SNOWFLAKE_TOKEN') or SNOWFLAKE_CONFIG.get('token', '')
-    
-    if not user or not account:
-        raise ValueError("SNOWFLAKE_USER and SNOWFLAKE_ACCOUNT must be set (via config or environment)")
-    
+    _user = os.environ.get("SNOWFLAKE_USER", "")
+    _token = os.environ.get("SNOWFLAKE_TOKEN", "")
+    _password = os.environ.get("SNOWFLAKE_PASSWORD", "")
+    _account = os.environ.get("SNOWFLAKE_ACCOUNT", "qsodrkt-hgb46445")
+    _warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE", "BEHAVIORGRAPH6X")
+    _database = os.environ.get("SNOWFLAKE_DATABASE", "BEHAVIORALGRAPH")
+    _schema = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
+    _role = os.environ.get("SNOWFLAKE_ROLE", "ACCOUNTADMIN")
+
     # Try programmatic access token first, fallback to password if needed
     try:
-        if token:
-            conn = snowflake.connector.connect(
-                user=user,
-                token=token,
-                account=account,
-                warehouse=warehouse,
-                database=database,
-                schema=schema,
-                role=role,
-                insecure_mode=True,
-                ocsp_fail_open=True
-            )
-            if not SILENCE_VERBOSE_OUTPUT:
-                print("✅ Connected using programmatic access token")
-        else:
-            raise Exception("No token provided, using password auth")
+        conn = snowflake.connector.connect(
+            user=_user,
+            token=_token,
+            authenticator='PROGRAMMATIC_ACCESS_TOKEN',
+            account=_account,
+            warehouse=_warehouse,
+            database=_database,
+            schema=_schema,
+            role=_role
+        )
+        if not SILENCE_VERBOSE_OUTPUT:
+            print("✅ Connected using programmatic access token")
     except Exception as token_error:
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"⚠️ Token authentication failed: {token_error}")
             print("🔄 Falling back to password authentication...")
-        if not password:
-            raise ValueError("SNOWFLAKE_PASSWORD must be set as environment variable")
         conn = snowflake.connector.connect(
-            user=user,
-            password=password,
-            account=account,
-            warehouse=warehouse,
-            database=database,
-            schema=schema,
-            role=role,
-            insecure_mode=True,
-            ocsp_fail_open=True
+            user=_user,
+            password=_password,
+            account=_account,
+            warehouse=_warehouse,
+            database=_database,
+            schema=_schema,
+            role=_role
         )
         if not SILENCE_VERBOSE_OUTPUT:
             print("✅ Connected using password authentication")
@@ -4666,8 +4650,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         mask_sample = df_final["Column"] == "SAMPLE SIZE"
         if mask_sample.any():
             # Don't override the Value field - it contains the date information
-            # Keep sample size as integer, don't format as percentage (fillna(0) avoids NaN->int error)
-            df_final.loc[mask_sample, "Percentage"] = df_final.loc[mask_sample, "Percentage"].astype(float).fillna(0).astype(int).astype(str)
+            # Keep sample size as integer, don't format as percentage
+            df_final.loc[mask_sample, "Percentage"] = df_final.loc[mask_sample, "Percentage"].astype(float).astype(int).astype(str)
         
         # Special handling for Brand Category row (keep as 0.0)
         mask_brand_category = df_final["Column"] == "BRAND CATEGORY"
@@ -4758,8 +4742,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         mask_sample = df_final["Column"] == "SAMPLE SIZE"
         if mask_sample.any():
             # Don't override the Value field - it contains the date information
-            # Keep sample size as integer, don't format as percentage (fillna(0) avoids NaN->int error)
-            df_final.loc[mask_sample, "Percentage"] = df_final.loc[mask_sample, "Percentage"].astype(float).fillna(0).astype(int).astype(str)
+            # Keep sample size as integer, don't format as percentage
+            df_final.loc[mask_sample, "Percentage"] = df_final.loc[mask_sample, "Percentage"].astype(float).astype(int).astype(str)
         
         # Special handling for Brand Category row (keep as 0.0)
         mask_brand_category = df_final["Column"] == "BRAND CATEGORY"

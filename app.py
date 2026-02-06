@@ -56,17 +56,9 @@ except ImportError:
     else:
         print("⚠️ No .env file found, using system environment variables only")
 
-# Prefer repo-root bg.py (same script as running locally from finished_codes); fallback to bg-webapp/bg.py
+# Use the integrated bg.py (same as local script; lives in bg-webapp/bg.py)
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
-_REPO_ROOT = os.path.dirname(_APP_DIR)
-_BG_ROOT = os.path.join(_REPO_ROOT, 'bg.py')
-_BG_LOCAL = os.path.join(_APP_DIR, 'bg.py')
-if os.path.isfile(_BG_ROOT):
-    sys.path.insert(0, _REPO_ROOT)
-    _BG_SOURCE = 'repo root (finished_codes/bg.py)'
-else:
-    sys.path.insert(0, _APP_DIR)
-    _BG_SOURCE = 'app dir (bg-webapp/bg.py)'
+sys.path.insert(0, _APP_DIR)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
