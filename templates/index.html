@@ -21501,14 +21501,24 @@
             const totalViewersNum = _parseGenPop(totalMovieViewersGenPop);
             const pctDueToTalent = totalViewersNum > 0 ? ((totalTicketsDueToTalent / totalViewersNum) * 100).toFixed(2) + '%' : '0%';
             
-            // Summary cards: Total Movie Viewers, Tickets Purchased (Last Click), % Tickets Purchased (Last Click)
+            // Assisted Conversion: sum of all Total X Hits (Movie Viewers) across talents
+            const compConvNum = _parseGenPop(compConvGenPop);
+            const hasCompetitivePlatformData = (d.competitive_by_platform || []).some(r => _parseGenPop(r.gen_pop || '0') > 0);
+            const showCompetitorBlocks = hasCompetitor || compConvNum > 0 || hasCompetitivePlatformData;
+            const totalHitsAssisted = _parseGenPop(ta.total_hits_gen_pop || '0') + (showCompetitorBlocks ? _parseGenPop(ca?.total_hits_gen_pop || '0') : 0);
+            const pctAssisted = totalViewersNum > 0 ? ((totalHitsAssisted / totalViewersNum) * 100).toFixed(2) + '%' : '0%';
+            
+            // Summary cards
             const fmtGenPopDisplay = (v) => v && v !== '—' ? _fmtGenPopInt(v) : '—';
             const totalMovieViewersTooltip = 'Total number of digital ticket sales tracked from one of the following platforms: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS.';
             const lastClickTooltip = 'Number of digital tickets sold to panelists who had a digital touchpoint to tracked talent directly before ticket purchase.';
+            const assistedTooltip = 'Number of digital tickets sold to panelists who had a digital touchpoint to tracked talent within 14 days before ticket purchase.';
             const summaryCards = [
                 { label: 'Total Movie Viewers', value: fmtGenPopDisplay(totalMovieViewersGenPop), tooltip: totalMovieViewersTooltip },
                 { label: 'Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: _fmtGenPopInt(String(totalTicketsDueToTalent)), tooltip: lastClickTooltip },
-                { label: '% of Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: pctDueToTalent, tooltip: lastClickTooltip }
+                { label: '% of Tickets Purchased directly after Talent Interaction (Last Click Attribution)', value: pctDueToTalent, tooltip: lastClickTooltip },
+                { label: 'Tickets Purchased within a 14 day window of Talent Interaction (Assisted Conversion)', value: _fmtGenPopInt(String(totalHitsAssisted)), tooltip: assistedTooltip },
+                { label: '% Who Purchased Tickets within a 14 day window of Talent Interaction (Assisted Conversion)', value: pctAssisted, tooltip: assistedTooltip }
             ];
             document.getElementById('ticketSalesSummaryCards').innerHTML = summaryCards.map(c => `
                 <div class="insight-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"${c.tooltip ? ` title="${esc(c.tooltip)}"` : ''}>
@@ -21521,9 +21531,6 @@
             const talentAttrib = [
                 { name: talentName, convGenPop: talentConvGenPop, pct: ta.theater_conversions_pct, hitsGenPop: ta.total_hits_gen_pop }
             ];
-            const compConvNum = _parseGenPop(compConvGenPop);
-            const hasCompetitivePlatformData = (d.competitive_by_platform || []).some(r => _parseGenPop(r.gen_pop || '0') > 0);
-            const showCompetitorBlocks = hasCompetitor || compConvNum > 0 || hasCompetitivePlatformData;
             if (showCompetitorBlocks) {
                 if (competitor) {
                     talentAttrib.push({ name: competitor, convGenPop: compConvGenPop, pct: ca?.theater_conversions_pct, hitsGenPop: ca?.total_hits_gen_pop });
