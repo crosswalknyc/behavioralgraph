@@ -3011,11 +3011,11 @@
             }
         }
 
-        /* Demographics chart cards - fixed size so donut + legend fit without cutoff */
+        /* Demographics chart cards - less padding so legend text isn't cut off */
         .chart-card {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 1rem;
+            padding: 0.6rem 0.75rem;
             position: relative;
             min-width: 0;
             overflow: visible;
@@ -3133,20 +3133,21 @@
             height: clamp(260px, 26vw + 120px, 360px);
             overflow: visible;
             position: relative;
-            padding: 0.5rem 0.25rem;
+            padding: 0.25rem 0;
             box-sizing: border-box;
             display: flex;
             justify-content: center;
             align-items: center;
         }
         .chart-container canvas { max-width: 100%; display: block; }
-        /* Demographics: fixed height so donut is large and legend has room (no dynamic sizing) */
+        /* Demographics: fixed height, minimal padding so legend text fits */
         .charts-grid .chart-container {
             height: 300px;
             min-height: 300px;
             width: 100%;
             overflow: visible;
             flex: 1 1 auto;
+            padding: 0.2rem 0;
         }
 
         /* Occupation chart: full width and dynamic height for readable long labels */
@@ -26772,20 +26773,20 @@
             const legendFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
             const axisFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
             const dataLabelFontSize = Math.max(10, Math.min(15, axisFontSize));
-            // Fixed legend width so "X.XX% (GP: X.XX%)" fits without cutoff; donut gets the rest (larger)
-            const legendAreaWidth = 185;
-            const layoutPaddingCircular = { left: 8, right: legendAreaWidth, top: 8, bottom: 8 };
+            // Legend width sized so "NON-BINARY 2.37% (GP: 2.09%)" and similar never cut off
+            const legendAreaWidth = 240;
+            const layoutPaddingCircular = { left: 6, right: legendAreaWidth, top: 6, bottom: 6 };
             const legendOptionsCircular = { 
                 display: true, 
                 position: 'right', 
                 align: 'center', 
                 maxWidth: legendAreaWidth,
-                padding: { left: 6, right: 4 }, 
+                padding: { left: 4, right: 2 }, 
                 labels: { 
                     color: '#e6f1ff', 
                     font: { size: 11 }, 
                     boxWidth: 12, 
-                    padding: 6,
+                    padding: 5,
                     textAlign: 'left'
                 } 
             };
