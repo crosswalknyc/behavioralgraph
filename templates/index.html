@@ -14999,7 +14999,7 @@
                         <div id="ticketSalesAttributionSection" style="margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: var(--text-secondary);">Attribution</h3>
                             <div id="ticketSalesPieCharts" style="display: grid; grid-template-columns: repeat(3, minmax(0, 280px)); gap: 1rem; margin-bottom: 1.25rem; justify-content: start;"></div>
-                            <div id="ticketSalesBarChart" style="height: 240px; position: relative; max-width: 520px;"></div>
+                            <div id="ticketSalesBarChart" style="position: relative;"></div>
                         </div>
                         <div id="ticketSalesTalentAttributionSection" style="margin-bottom: 1.5rem;"></div>
                         <div id="ticketSalesPerTalentChart" style="height: 260px; margin-bottom: 1.5rem; display: none;"></div>
@@ -21867,36 +21867,46 @@
             
             if (barContainer && typeof Chart !== 'undefined') {
                 barContainer.innerHTML = '';
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-width: 240px; max-height: 260px; position: relative;';
                 const canvas = document.createElement('canvas');
-                barContainer.appendChild(canvas);
+                wrapper.appendChild(canvas);
+                barContainer.appendChild(wrapper);
+                barContainer.style.height = 'auto';
                 if (ticketSalesCharts.barChart) ticketSalesCharts.barChart.destroy();
                 const showPctBar = ticketSalesAttributionDisplayMode === 'percent';
                 const pctLc = d.totalViewersNum > 0 ? (d.totalTicketsDueToTalent / d.totalViewersNum * 100) : 0;
                 const pctAs = d.totalViewersNum > 0 ? (d.totalHitsAssisted / d.totalViewersNum * 100) : 0;
-                const barLabels = showPctBar ? ['Last Click %', 'Assisted %'] : ['Last Click #', 'Assisted #'];
-                const barValues = showPctBar ? [pctLc, pctAs] : [d.totalTicketsDueToTalent, d.totalHitsAssisted];
+                const pieLabels = showPctBar ? ['Last Click %', 'Assisted %'] : ['Last Click #', 'Assisted #'];
+                const pieValues = showPctBar ? [pctLc, pctAs] : [d.totalTicketsDueToTalent, d.totalHitsAssisted];
+                const total = pieValues.reduce((s, v) => s + v, 0);
                 ticketSalesCharts.barChart = new Chart(canvas, {
-                    type: 'bar',
+                    type: 'pie',
                     data: {
-                        labels: barLabels,
-                        datasets: [{ label: showPctBar ? 'Percent (%)' : 'Count', data: barValues, backgroundColor: ['rgba(147, 51, 234, 0.65)', 'rgba(163, 230, 53, 0.65)'], borderColor: ['rgba(147, 51, 234, 1)', 'rgba(163, 230, 53, 1)'], borderWidth: 1 }]
+                        labels: pieLabels,
+                        datasets: [{ data: pieValues, backgroundColor: ['rgba(147, 51, 234, 0.85)', 'rgba(163, 230, 53, 0.85)'] }]
                     },
+                    plugins: [ChartDataLabels],
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false,
-                        layout: { padding: { top: 8, bottom: 4 } },
+                        maintainAspectRatio: true,
+                        layout: { padding: 8 },
                         plugins: {
                             title: { display: true, text: 'Attribution Metrics', color: '#94a3b8', font: { size: 14 } },
-                            legend: { display: false },
+                            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } },
                             tooltip: {
                                 callbacks: {
-                                    label: (c) => ' ' + (showPctBar ? c.raw.toFixed(2) + '%' : _fmtGenPopInt(String(c.raw)))
+                                    label: (c) => {
+                                        const pct = total > 0 ? ((c.raw / total) * 100).toFixed(1) : 0;
+                                        return ` ${c.label}: ${showPctBar ? c.raw.toFixed(2) + '%' : _fmtGenPopInt(String(c.raw))} (${pct}% of total)`;
+                                    }
                                 }
+                            },
+                            datalabels: {
+                                color: '#e2e8f0',
+                                font: { size: 11 },
+                                formatter: (v) => total > 0 ? ((v / total) * 100).toFixed(0) + '%' : ''
                             }
-                        },
-                        scales: {
-                            y: { beginAtZero: true, ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.08)' } },
-                            x: { ticks: { color: '#94a3b8', maxRotation: 45, font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.08)' } }
                         }
                     }
                 });
