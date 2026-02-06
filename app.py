@@ -1076,8 +1076,8 @@ def check_user_credits(username):
     
     return user['credits'] > 0, user['credits']
 
-def consume_credit(username, description=None, job_id=None):
-    """Consume one credit from user. Optionally record usage in history. Returns True if successful."""
+def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1):
+    """Consume credits from user. Optionally record usage in history. Returns True if successful."""
     data = load_users()
     user = data['users'].get(username)
     if not user:
@@ -1087,23 +1087,25 @@ def consume_credit(username, description=None, job_id=None):
     entry = {
         'used_at': used_at,
         'description': description or 'Analysis run',
-        'job_id': job_id or ''
+        'job_id': job_id or '',
+        'pull_type': pull_type or 'Profile Analysis',
+        'credits_used': credits_used
     }
 
     # -1 means unlimited
     if user['credits'] == -1:
-        user['credits_used'] = user.get('credits_used', 0) + 1
+        user['credits_used'] = user.get('credits_used', 0) + credits_used
         history = user.setdefault('credit_usage_history', [])
         history.insert(0, entry)
         user['credit_usage_history'] = history[:500]  # cap at 500
         save_users(data)
         return True
 
-    if user['credits'] <= 0:
+    if user['credits'] < credits_used:
         return False
 
-    user['credits'] -= 1
-    user['credits_used'] = user.get('credits_used', 0) + 1
+    user['credits'] -= credits_used
+    user['credits_used'] = user.get('credits_used', 0) + credits_used
     history = user.setdefault('credit_usage_history', [])
     history.insert(0, entry)
     user['credit_usage_history'] = history[:500]
@@ -8830,7 +8832,7 @@ def submit_analysis():
         
         # Consume credit for this run (record what it was used for)
         desc = f"{project_name} ({brands[0] if brands else project_name} {start_date}–{end_date})"
-        consume_credit(username, description=desc, job_id=job_id)
+        consume_credit(username, description=desc, job_id=job_id, pull_type='Profile Analysis', credits_used=1)
 
         # Get updated credits
         _, credits_left = check_user_credits(username)
@@ -10521,6 +10523,9 @@ def list_jobs():
                     entry['category'] = item.get('category') or 'Uncategorized'
                     entry['project_name'] = item.get('title') or item.get('project_name') or entry['project_name']
                     entry['display_name'] = item.get('title') or entry['project_name']
+                    # Use released key if item was released so "View in Dashboard" works without 404
+                    if item.get('released_key'):
+                        entry['s3_key'] = item['released_key']
                     categories.add(entry['category'])
             else:
                 categories.add('LOCAL')

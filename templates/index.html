@@ -11272,6 +11272,7 @@
             <div class="main-grid">
                 <div class="card">
                     <h2>📊 Analysis Parameters</h2>
+                    <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
                     <form id="analysisForm">
                         <div class="form-section">
                             <div class="form-section-title">Define Your Profile</div>
@@ -11370,7 +11371,7 @@
                             </div>
                             <div class="form-group">
                                 <label>Profile Subject (comma-separated)</label>
-                                <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter the name of the profile you want to pull. Consider adding all possible spellings and variations to yield best results. This is not case sensitive.</small>
+                                <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter the name of the profile you want to pull. Consider adding all possible spellings and variations to yield best results. Ensure you have checked your spelling because once you click "Run Analysis" you can't go back to fix it. This is not case sensitive.</small>
                                 <textarea id="brands" placeholder="Kevin O' Leary, Kevin O Leary, Kevin OLeary, Mr. Wonderful, Mr Wonderful" required></textarea>
                             </div>
                             <div class="form-row">
@@ -11420,11 +11421,11 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Start Date</label>
-                                        <input type="date" id="start_date" required>
+                                        <input type="date" id="start_date" value="2025-12-01" required>
                                     </div>
                                     <div class="form-group">
                                         <label>End Date</label>
-                                        <input type="date" id="end_date" required>
+                                        <input type="date" id="end_date" value="2025-12-31" required>
                                     </div>
                                 </div>
                             </div>
@@ -11433,22 +11434,22 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Sample Start</label>
-                                        <input type="date" id="sample_start_date">
+                                        <input type="date" id="sample_start_date" value="2025-12-01">
                                     </div>
                                     <div class="form-group">
                                         <label>Sample End</label>
-                                        <input type="date" id="sample_end_date">
+                                        <input type="date" id="sample_end_date" value="2025-12-31">
                                     </div>
                                 </div>
                                 <div style="font-size: 0.7rem; color: var(--accent-cyan); margin: 0.5rem 0;">Behavior Study Dates</div>
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Behavior Start</label>
-                                        <input type="date" id="behavior_start_date">
+                                        <input type="date" id="behavior_start_date" value="2025-12-01">
                                     </div>
                                     <div class="form-group">
                                         <label>Behavior End</label>
-                                        <input type="date" id="behavior_end_date">
+                                        <input type="date" id="behavior_end_date" value="2025-12-31">
                                     </div>
                                 </div>
                             </div>
@@ -11640,6 +11641,7 @@
                     <div class="main-grid">
                         <div class="card">
                             <h2>📊 Analysis Parameters</h2>
+                            <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
                             <form id="analysisForm">
                                 <div class="form-section">
                                     <div class="form-section-title">Define Your Profile</div>
@@ -11738,7 +11740,7 @@
                                     </div>
                                     <div class="form-group">
                                         <label>Profile Subject (comma-separated)</label>
-                                        <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter the name of the profile you want to pull. Consider adding all possible spellings and variations to yield best results. This is not case sensitive.</small>
+                                        <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter the name of the profile you want to pull. Consider adding all possible spellings and variations to yield best results. Ensure you have checked your spelling because once you click "Run Analysis" you can't go back to fix it. This is not case sensitive.</small>
                                         <textarea id="brands" placeholder="Kevin O' Leary, Kevin O Leary, Kevin OLeary, Mr. Wonderful, Mr Wonderful" required></textarea>
                                     </div>
                                     <div class="form-row">
@@ -11785,43 +11787,43 @@
                                     <div class="form-row" style="margin-bottom: 0.5rem;">
                                         <label class="checkbox-group"><input type="checkbox" id="same_dates" checked onchange="toggleDateFields()"><span>Same dates for Sample & Behavior</span></label>
                                     </div>
-                                    <div id="singleDateRange">
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Start Date</label>
-                                                <input type="date" id="start_date" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>End Date</label>
-                                                <input type="date" id="end_date" required>
-                                            </div>
-                                        </div>
+                            <div id="singleDateRange">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Start Date</label>
+                                        <input type="date" id="start_date" value="2025-12-01" required>
                                     </div>
-                                    <div id="separateDateRanges" style="display: none;">
-                                        <div style="font-size: 0.7rem; color: var(--accent-cyan); margin-bottom: 0.5rem;">Sample Group Dates</div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Sample Start</label>
-                                                <input type="date" id="sample_start_date">
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Sample End</label>
-                                                <input type="date" id="sample_end_date">
-                                            </div>
-                                        </div>
-                                        <div style="font-size: 0.7rem; color: var(--accent-cyan); margin: 0.5rem 0;">Behavior Study Dates</div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Behavior Start</label>
-                                                <input type="date" id="behavior_start_date">
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Behavior End</label>
-                                                <input type="date" id="behavior_end_date">
-                                            </div>
-                                        </div>
+                                    <div class="form-group">
+                                        <label>End Date</label>
+                                        <input type="date" id="end_date" value="2025-12-31" required>
                                     </div>
                                 </div>
+                            </div>
+                            <div id="separateDateRanges" style="display: none;">
+                                <div style="font-size: 0.7rem; color: var(--accent-cyan); margin-bottom: 0.5rem;">Sample Group Dates</div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Sample Start</label>
+                                        <input type="date" id="sample_start_date" value="2025-12-01">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Sample End</label>
+                                        <input type="date" id="sample_end_date" value="2025-12-31">
+                                    </div>
+                                </div>
+                                <div style="font-size: 0.7rem; color: var(--accent-cyan); margin: 0.5rem 0;">Behavior Study Dates</div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Behavior Start</label>
+                                        <input type="date" id="behavior_start_date" value="2025-12-01">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Behavior End</label>
+                                        <input type="date" id="behavior_end_date" value="2025-12-31">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
                                 {% if role == 'super_admin' %}
                                 <div class="collapsible">
@@ -41994,10 +41996,7 @@
                 if (isPending) {
                     buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${purgatoryIdEsc}')" title="Download CSV">📥</button>`;
                 } else {
-                    buttons = `
-                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="event.stopPropagation(); openReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Open in Profile IQ">📊</button>
-                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>
-                    `;
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
                 }
                 
                 const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
@@ -42086,10 +42085,7 @@
                 if (isPending) {
                     buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${result.purgatory_id}')" title="Download CSV">📥</button>`;
                 } else {
-                    buttons = `
-                        <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="event.stopPropagation(); openReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Open in Profile IQ">📊</button>
-                        <button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>
-                    `;
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
                 }
                 
                 const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
@@ -55729,9 +55725,13 @@
                             return;
                         }
                         listEl.innerHTML = creditUsageCache.map((row, i) => {
+                            const pullType = row.pull_type || 'Profile Analysis';
+                            const credits = row.credits_used != null ? row.credits_used : 1;
+                            const namePart = (row.description || 'Analysis run').split(' (')[0].trim().replace(/\s+/g, '_');
+                            const displayLine = `${pullType} | ${escapeHtml(namePart)} | ${credits} credit${credits !== 1 ? 's' : ''}`;
                             const d = row.used_at ? new Date(row.used_at) : null;
                             const dateStr = d ? d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '';
-                            return `<div style="padding: 0.35rem 0; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; gap: 0.5rem;"><span>${escapeHtml(row.description || 'Analysis run')}</span><span style="color: var(--text-secondary); flex-shrink: 0;">${escapeHtml(dateStr)}</span></div>`;
+                            return `<div style="padding: 0.35rem 0; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; gap: 0.5rem;"><span>${displayLine}</span><span style="color: var(--text-secondary); flex-shrink: 0;">${escapeHtml(dateStr)}</span></div>`;
                         }).join('');
                     })
                     .catch(() => {
@@ -55744,14 +55744,16 @@
         }
         function exportCreditUsageCSV() {
             const doExport = (rows) => {
-                const headers = ['Date', 'Description', 'Job ID'];
+                const headers = ['Date', 'Pull Type', 'Description', 'Credits Used', 'Job ID'];
                 const csvRows = [headers.join(',')];
                 (rows || []).forEach(row => {
                     const d = row.used_at ? new Date(row.used_at) : null;
                     const dateStr = d ? d.toISOString() : '';
+                    const pullType = (row.pull_type || 'Profile Analysis').replace(/"/g, '""');
                     const desc = (row.description || '').replace(/"/g, '""');
+                    const creditsUsed = row.credits_used != null ? row.credits_used : 1;
                     const jobId = (row.job_id || '').replace(/"/g, '""');
-                    csvRows.push(`"${dateStr}","${desc}","${jobId}"`);
+                    csvRows.push(`"${dateStr}","${pullType}","${desc}","${creditsUsed}","${jobId}"`);
                 });
                 const csv = csvRows.join('\n');
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -55852,6 +55854,10 @@
             
             // Show the modal
             document.getElementById('analysisCompleteModal').classList.add('active');
+            
+            // Auto-refresh profile area and Results Library so the new run appears immediately
+            if (typeof refreshDashboardProfiles === 'function') refreshDashboardProfiles();
+            if (typeof loadMyResults === 'function') loadMyResults();
         }
         
         function closeAnalysisCompleteModal() {
