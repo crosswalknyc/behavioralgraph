@@ -971,7 +971,8 @@ def connect_snowflake():
     _schema = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
     _role = os.environ.get("SNOWFLAKE_ROLE", "ACCOUNTADMIN")
 
-    # Try programmatic access token first, fallback to password if needed
+    # insecure_mode=True skips OCSP cert validation; avoids 254007 when Snowflake uses
+    # internal/customer-stage S3 URLs (e.g. sfc-va3-*-customer-stage.s3.amazonaws.com) with revoked certs
     try:
         conn = snowflake.connector.connect(
             user=_user,
@@ -981,7 +982,8 @@ def connect_snowflake():
             warehouse=_warehouse,
             database=_database,
             schema=_schema,
-            role=_role
+            role=_role,
+            insecure_mode=True,
         )
         if not SILENCE_VERBOSE_OUTPUT:
             print("✅ Connected using programmatic access token")
@@ -996,7 +998,8 @@ def connect_snowflake():
             warehouse=_warehouse,
             database=_database,
             schema=_schema,
-            role=_role
+            role=_role,
+            insecure_mode=True,
         )
         if not SILENCE_VERBOSE_OUTPUT:
             print("✅ Connected using password authentication")
