@@ -21446,6 +21446,21 @@
         }
         
         async function loadSubscriberProfiles() {
+            try {
+                const response = await fetch('/api/subscriber-iq/list', { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                const data = await response.json();
+                
+                if (data.success) {
+                    subscriberProfiles = data.files;
+                    renderSubscriberProfileTree();
+                } else {
+                    console.error('Failed to load subscriber profiles:', data.error);
+                }
+            } catch (error) {
+                console.error('Error loading subscriber profiles:', error);
+            }
+        }
         
         function renderSubscriberProfileTree() {
             const container = document.getElementById('subscriberProfileTree');
