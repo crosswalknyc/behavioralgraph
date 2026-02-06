@@ -20,11 +20,9 @@ INFLATION FACTOR: Intelligent scaling (65x max down to 1x)
 - Try 65x first; if result > 10M, try 55x, 25x, 5x, 2.5x, or 1x
 - Result capped at 10,000,000 maximum
 - Examples: 
-  • ~66K UIDs → 10M sample size (151x applied, capped)
-  • 100K UIDs → 8.5M sample size (85x applied)
+  • ~154K UIDs → 10M sample size (65x applied, capped)
   • 200K UIDs → 5M sample size (25x applied)
   • 4M UIDs → 4M sample size (1x, no inflation)
-- Location: get_final_sample_size(), lines ~3737-3775
 - All percentages calculated from final sample size
 
 ================================================================================
@@ -203,7 +201,7 @@ All brand input entries in the output CSV will have:
 1.  Data Loading → Load from Snowflake database
 2.  Normalization → Standardize category/value names
 3.  🔄 ESPN Layer 1: consolidate_espn_brands() - Initial ESPN+/ESPN merge
-4.  Set Raw Numbers → From percentages using sample size (151x down to 1x, capped at 10M)
+4.  Set Raw Numbers → From percentages using sample size (65x max down to 1x, capped at 10M)
 5.  2x Boost → All behavioral categories
 6.  Sports 40x/4.36x Boost → Major leagues and other sports
 7.  Dynamic Threshold Boosts → SEARCH ENGINE/AI (65% threshold)
@@ -225,7 +223,7 @@ All brand input entries in the output CSV will have:
 ================================================================================
 
 Sample Size Inflation:
-  - get_final_sample_size(): INFLATION_FACTOR = 151, 125, 111, 85, 55, 25, 5, 2.5, or 1 (stays ≤10M)
+  - get_final_sample_size(): INFLATION_FACTOR = 65, 55, 25, 5, 2.5, or 1 (stays ≤10M)
 
 Boosting Functions:
   - Lines 4650-4698: boost_all_behavioral_by_2x()
@@ -265,7 +263,7 @@ Additional Boosting:
 ================================================================================
 
 To modify behavior:
-- Sample size inflation: 151x down to 1x intelligently scaled to stay ≤10M
+- Sample size inflation: 65x max down to 1x intelligently scaled to stay ≤10M
 - Universal boost: Modify multiplier in boost_all_behavioral_by_2x() (Line 4693)
 - Sports boost: Modify multipliers in boost_sports_categories_by_436x() (Line 6020, 6023) - ALL teams boosted
 - Dynamic thresholds: Change min_threshold values (Lines 4028-4031)
@@ -281,9 +279,234 @@ import snowflake.connector
 import numpy as np
 import re
 import random
+import glob
 from datetime import datetime
 
+# Optional S3 support for caching
+try:
+    import boto3
+    from botocore.exceptions import ClientError, NoCredentialsError
+    S3_AVAILABLE = True
+except ImportError:
+    S3_AVAILABLE = False
+    print("⚠️ boto3 not available - S3 caching disabled")
+
 OUTPUT_FOLDER = os.path.expanduser("~/Desktop/Behavioral_Graph")
+
+# S3 Configuration
+S3_BUCKET = 'dashboard-inputs'
+S3_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+
+# ============================================================================
+# S3 CACHE & DEMOGRAPHIC VALIDATION FUNCTIONS
+# ============================================================================
+
+def get_s3_client():
+    """Get S3 client if available."""
+    if not S3_AVAILABLE:
+        return None
+    try:
+        return boto3.client(
+            's3',
+            region_name=S3_REGION,
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
+        )
+    except Exception as e:
+        print(f"⚠️ S3 client error: {e}")
+        return None
+
+def extract_demographics_from_df(df):
+    """Extract demographic distributions from a DataFrame for comparison."""
+    demographics = {}
+    demo_categories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 
+                       'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS']
+    
+    for _, row in df.iterrows():
+        category = str(row.get('Column', '')).upper()
+        if category in demo_categories:
+            value = row.get('Value', '')
+            try:
+                # Try to get the percentage from Brand Penetration or Category Share
+                percentage = float(row.get('Brand Penetration (Row)', row.get('Category Share', 0)))
+                if category not in demographics:
+                    demographics[category] = {}
+                demographics[category][value] = percentage
+            except (ValueError, TypeError):
+                pass
+    return demographics
+
+def extract_sample_size_from_df(df):
+    """Extract sample size from DataFrame."""
+    sample_rows = df[df['Column'] == 'SAMPLE SIZE']
+    if not sample_rows.empty:
+        try:
+            return int(sample_rows.iloc[0].get('Original Raw Numbers', 0))
+        except (ValueError, TypeError):
+            pass
+    return None
+
+def validate_demographic_consistency(new_demographics, reference_demographics, tolerance=5.0):
+    """
+    Validate that new demographics are within tolerance of reference demographics.
+    
+    Args:
+        new_demographics: Dict of {category: {value: percentage}}
+        reference_demographics: Dict of {category: {value: percentage}}
+        tolerance: Maximum allowed percentage point difference (default 5%)
+    
+    Returns:
+        (is_valid, discrepancies): Tuple of bool and list of discrepancy dicts
+    """
+    discrepancies = []
+    
+    for category, ref_values in reference_demographics.items():
+        if category not in new_demographics:
+            continue
+        
+        new_values = new_demographics[category]
+        
+        for value, ref_pct in ref_values.items():
+            if value in new_values:
+                new_pct = new_values[value]
+                diff = abs(new_pct - ref_pct)
+                
+                if diff > tolerance:
+                    discrepancies.append({
+                        'category': category,
+                        'value': value,
+                        'reference': ref_pct,
+                        'new': new_pct,
+                        'difference': diff
+                    })
+    
+    is_valid = len(discrepancies) == 0
+    return is_valid, discrepancies
+
+def validate_sample_size_consistency(new_sample_size, reference_sample_size, tolerance_pct=5.0):
+    """
+    Validate that new sample size is within tolerance of reference.
+    
+    Args:
+        new_sample_size: New run's sample size
+        reference_sample_size: Reference sample size
+        tolerance_pct: Maximum allowed percentage difference (default 5%)
+    
+    Returns:
+        (is_valid, diff_pct): Tuple of bool and actual percentage difference
+    """
+    if not reference_sample_size or not new_sample_size:
+        return True, 0
+    
+    diff_pct = abs(new_sample_size - reference_sample_size) / reference_sample_size * 100
+    is_valid = diff_pct <= tolerance_pct
+    
+    return is_valid, diff_pct
+
+def check_s3_for_existing_results(brand, start_date, end_date):
+    """
+    Check S3 bucket for existing results matching the brand and dates.
+    
+    Returns:
+        (exact_match, similar_files): Tuple of (dict or None, list of dicts)
+    """
+    s3_client = get_s3_client()
+    if not s3_client:
+        return None, []
+    
+    normalized_brand = brand.lower().strip().replace(' ', '_').replace('.', '')
+    exact_match = None
+    similar_files = []
+    
+    try:
+        paginator = s3_client.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket=S3_BUCKET):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.csv'):
+                    continue
+                
+                filename_lower = key.lower()
+                if normalized_brand not in filename_lower and brand.lower() not in filename_lower:
+                    continue
+                
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+                    csv_content = response['Body'].read().decode('utf-8')
+                    
+                    # Parse the CSV to extract metadata
+                    from io import StringIO
+                    df = pd.read_csv(StringIO(csv_content))
+                    
+                    # Look for INPUT_METADATA row
+                    metadata_rows = df[df['Column'] == 'INPUT_METADATA']
+                    if not metadata_rows.empty:
+                        metadata_value = str(metadata_rows.iloc[0]['Value'])
+                        
+                        # Parse metadata: BRAND:xxx_SAMPLE_START:xxx_SAMPLE_END:xxx...
+                        file_start = None
+                        file_end = None
+                        file_brand = None
+                        
+                        parts = metadata_value.split('_')
+                        for i, part in enumerate(parts):
+                            if part.startswith('BRAND:'):
+                                file_brand = part.replace('BRAND:', '').lower()
+                            elif part.startswith('SAMPLE') and i + 1 < len(parts):
+                                next_part = parts[i + 1]
+                                if next_part.startswith('START:'):
+                                    file_start = next_part.replace('START:', '')
+                                elif next_part.startswith('END:'):
+                                    file_end = next_part.replace('END:', '')
+                        
+                        # Check for match
+                        if file_brand and (normalized_brand in file_brand or brand.lower() in file_brand):
+                            demographics = extract_demographics_from_df(df)
+                            sample_size = extract_sample_size_from_df(df)
+                            
+                            if file_start == start_date and file_end == end_date:
+                                exact_match = {
+                                    'key': key,
+                                    'df': df,
+                                    'demographics': demographics,
+                                    'sample_size': sample_size,
+                                    'last_modified': obj['LastModified'].isoformat()
+                                }
+                            else:
+                                similar_files.append({
+                                    'key': key,
+                                    'df': df,
+                                    'demographics': demographics,
+                                    'sample_size': sample_size,
+                                    'start_date': file_start,
+                                    'end_date': file_end,
+                                    'last_modified': obj['LastModified'].isoformat()
+                                })
+                except Exception as e:
+                    continue
+                    
+    except Exception as e:
+        print(f"⚠️ S3 check error: {e}")
+    
+    return exact_match, similar_files
+
+def upload_result_to_s3(file_path, brand_name):
+    """Upload a result file to S3."""
+    s3_client = get_s3_client()
+    if not s3_client:
+        return None
+    
+    try:
+        timestamp = datetime.now().strftime('%m_%d_%Y_%H_%M')
+        s3_key = f"{brand_name}_{timestamp}.csv"
+        
+        s3_client.upload_file(file_path, S3_BUCKET, s3_key)
+        print(f"✅ Uploaded to S3: s3://{S3_BUCKET}/{s3_key}")
+        return s3_key
+    except Exception as e:
+        print(f"⚠️ S3 upload error: {e}")
+        return None
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 # Global flag for limited changes mode
@@ -735,10 +958,13 @@ def connect_snowflake():
     if not SILENCE_VERBOSE_OUTPUT:
         print("🔌 Connecting to Snowflake...")
     
-    # Load credentials from config or environment variables
-    from config import SNOWFLAKE_CONFIG
-    import os
+    # Load credentials from config or environment variables (web app uses config)
+    try:
+        from config import SNOWFLAKE_CONFIG
+    except ImportError:
+        SNOWFLAKE_CONFIG = {}
     
+    import os
     user = os.environ.get('SNOWFLAKE_USER') or SNOWFLAKE_CONFIG.get('user', '')
     password = os.environ.get('SNOWFLAKE_PASSWORD') or SNOWFLAKE_CONFIG.get('password', '')
     account = os.environ.get('SNOWFLAKE_ACCOUNT') or SNOWFLAKE_CONFIG.get('account', '')
@@ -749,7 +975,7 @@ def connect_snowflake():
     token = os.environ.get('SNOWFLAKE_TOKEN') or SNOWFLAKE_CONFIG.get('token', '')
     
     if not user or not account:
-        raise ValueError("SNOWFLAKE_USER and SNOWFLAKE_ACCOUNT must be set as environment variables")
+        raise ValueError("SNOWFLAKE_USER and SNOWFLAKE_ACCOUNT must be set (via config or environment)")
     
     # Try programmatic access token first, fallback to password if needed
     try:
@@ -762,8 +988,8 @@ def connect_snowflake():
                 database=database,
                 schema=schema,
                 role=role,
-                insecure_mode=True,   # Bypass SSL certificate validation
-                ocsp_fail_open=True   # Allow connection even if OCSP check fails
+                insecure_mode=True,
+                ocsp_fail_open=True
             )
             if not SILENCE_VERBOSE_OUTPUT:
                 print("✅ Connected using programmatic access token")
@@ -783,8 +1009,8 @@ def connect_snowflake():
             database=database,
             schema=schema,
             role=role,
-            insecure_mode=True,   # Bypass SSL certificate validation
-            ocsp_fail_open=True   # Allow connection even if OCSP check fails
+            insecure_mode=True,
+            ocsp_fail_open=True
         )
         if not SILENCE_VERBOSE_OUTPUT:
             print("✅ Connected using password authentication")
@@ -3794,7 +4020,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         }
     ])
     
-    # SAMPLE SIZE value verified - intelligent inflation (151x down to 1x) and capped at 10M
+    # SAMPLE SIZE value verified - intelligent inflation (65x max down to 1x) and capped at 10M
 
     # --- Begin: Behavior percentage transformation with added noise ---
     # Apply organic scaling to all behavior categories to ensure reasonable representation
@@ -4939,7 +5165,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = deduplicate_location_data(df_final)
     
     # scale_raw_numbers_to_universe DISABLED - per user request
-    # SAMPLE SIZE uses intelligent inflation: 151x down to 1x (capped at 10M)
+    # SAMPLE SIZE uses intelligent inflation: 65x max down to 1x (capped at 10M)
     # All raw numbers will calculate naturally from: (percentage/100) × sample_size
     
     # Recalculate percentages DISABLED - percentages stay as organic counts from database
@@ -15122,10 +15348,9 @@ def enforce_streaming_music_top6(df):
 def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
     """Add US Gen Pop Projection = (Original Raw Numbers / 10,000,000) * 329,900,000.
 
-    Uses finalized 'Original Raw Numbers'. For SAMPLE SIZE row, uses Percentage value as raw number.
-    The projected sample size (from SAMPLE SIZE row, column D) is placed in BRAND INPUT row (column F).
-    Writes a new column 'US Gen Pop Projection' formatted to 0 decimals where possible (string),
-    leaves non-numeric rows as-is.
+    Uses finalized 'Original Raw Numbers'. For SAMPLE SIZE row, uses Category Share/Percentage
+    as raw number if Original Raw Numbers is missing. The projected sample size (from SAMPLE SIZE
+    row, column D) is placed in BRAND INPUT row (column F).
     """
     import pandas as pd
     US_POPULATION = 329_900_000
@@ -15136,28 +15361,27 @@ def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
     if 'Original Raw Numbers' not in df.columns:
         df['US Gen Pop Projection'] = ''
         return df
-    # At this point in the pipeline, the column should be 'Original Raw Numbers' (after rename)
     raw_col = 'Original Raw Numbers'
-    
-    # Handle SAMPLE SIZE row specially - use Percentage value as the raw number if Original Raw Numbers is missing/empty
+
+    # Handle SAMPLE SIZE row: use Category Share or Percentage as raw number if Original Raw Numbers is missing/empty
     sample_size_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
     if sample_size_mask.any():
         for idx in df[sample_size_mask].index:
             raw_val = df.at[idx, raw_col]
-            # If Original Raw Numbers is missing, empty, or NaN, use Percentage value
-            if pd.isna(raw_val) or str(raw_val).strip() in ('', 'nan', 'NaN', 'None'):
-                if 'Percentage' in df.columns:
-                    pct_val = df.at[idx, 'Percentage']
-                    if not pd.isna(pct_val) and str(pct_val).strip() not in ('', 'nan', 'NaN'):
+            if pd.isna(raw_val) or str(raw_val).strip() in ('', 'nan', 'NaN', 'None') or float(str(raw_val).replace(',', '')) == 0:
+                for col in ['Category Share', 'Percentage']:
+                    if col in df.columns:
+                        val = df.at[idx, col]
                         try:
-                            # Use Percentage as the raw number for SAMPLE SIZE
-                            df.at[idx, raw_col] = str(int(float(str(pct_val).replace(',', ''))))
-                        except:
+                            v = float(str(val).replace(',', '').strip())
+                            if v > 0:
+                                df.at[idx, raw_col] = str(int(v))
+                                break
+                        except Exception:
                             pass
-    
+
     raw_num = pd.to_numeric(df[raw_col].astype(str).str.replace(',', ''), errors='coerce')
     proj = (raw_num / SAMPLE_CAP) * US_POPULATION
-    # Format as integer-like string (no decimals) when numeric, else keep empty
     formatted = []
     for p in proj:
         if pd.isna(p):
@@ -15166,8 +15390,7 @@ def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
             formatted.append(f"{int(round(p))}")
     df['US Gen Pop Projection'] = formatted
 
-    # Ensure SAMPLE SIZE (column D row 4) projected to gen pop is placed in BRAND INPUT (column F row 3)
-    # Formula: (sample_size / 10,000,000) * 329,900,000
+    # Place projected sample size (from SAMPLE SIZE row, col D) in BRAND INPUT row (col F)
     sample_size_val = None
     if sample_size_mask.any():
         for idx in df[sample_size_mask].index:
