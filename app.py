@@ -148,14 +148,17 @@ try:
         signature_version='s3v4',  # Force signature version 4 for presigned URLs
         s3={'addressing_style': 'virtual'}  # Use virtual-hosted-style URLs
     )
+    # Use explicit endpoint so we never pick up AWS_ENDPOINT_URL_S3 (e.g. staging URL with revoked cert)
+    s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
     s3_client = boto3.client(
         's3',
         region_name=S3_REGION,
+        endpoint_url=s3_endpoint,
         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
         config=config
     )
-    print(f"✅ S3 client initialized for region: {S3_REGION} with signature version 4")
+    print(f"✅ S3 client initialized for region: {S3_REGION} with signature version 4 (endpoint: {s3_endpoint})")
     print(f"🔍 S3 client region: {s3_client.meta.region_name}")
     # Use same client for all buckets (all in us-east-2)
     hedge_fund_s3_client = s3_client
@@ -169,9 +172,11 @@ except Exception as e:
             signature_version='s3v4',
             s3={'addressing_style': 'virtual'}
         )
+        s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
         s3_client = boto3.client(
             's3',
             region_name=S3_REGION,
+            endpoint_url=s3_endpoint,
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
             config=config
@@ -2768,10 +2773,12 @@ def get_admin_content():
         return jsonify({'success': False, 'error': 'AWS credentials not configured'})
     
     try:
+        s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
         s3 = boto3.client('s3',
                           aws_access_key_id=aws_key,
                           aws_secret_access_key=aws_secret,
-                          region_name=S3_REGION)
+                          region_name=S3_REGION,
+                          endpoint_url=s3_endpoint)
         
         bucket_name = 'dashboard-inputs'
         print(f"📂 Scanning S3 bucket: {bucket_name}")
@@ -2946,10 +2953,12 @@ def archive_content():
         if not keys:
             return jsonify({'success': False, 'error': 'No files specified'})
         
+        s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
         s3 = boto3.client('s3',
                           aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
                           aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                          region_name=S3_REGION)
+                          region_name=S3_REGION,
+                          endpoint_url=s3_endpoint)
         
         bucket_name = 'dashboard-inputs'
         archived_count = 0
@@ -3005,10 +3014,12 @@ def restore_content():
         if not keys:
             return jsonify({'success': False, 'error': 'No files specified'})
         
+        s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
         s3 = boto3.client('s3',
                           aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
                           aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                          region_name=S3_REGION)
+                          region_name=S3_REGION,
+                          endpoint_url=s3_endpoint)
         
         bucket_name = 'dashboard-inputs'
         restored_count = 0
@@ -3061,10 +3072,12 @@ def delete_content():
         if not keys:
             return jsonify({'success': False, 'error': 'No files specified'})
         
+        s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
         s3 = boto3.client('s3',
                           aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
                           aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                          region_name=S3_REGION)
+                          region_name=S3_REGION,
+                          endpoint_url=s3_endpoint)
         
         bucket_name = 'dashboard-inputs'
         deleted_count = 0

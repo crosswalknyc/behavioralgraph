@@ -293,22 +293,24 @@ except ImportError:
 
 OUTPUT_FOLDER = os.path.expanduser("~/Desktop/Behavioral_Graph")
 
-# S3 Configuration
+# S3 Configuration (use us-east-2 to match app.py; explicit endpoint avoids env override with bad cert)
 S3_BUCKET = 'dashboard-inputs'
-S3_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+S3_REGION = 'us-east-2'
 
 # ============================================================================
 # S3 CACHE & DEMOGRAPHIC VALIDATION FUNCTIONS
 # ============================================================================
 
 def get_s3_client():
-    """Get S3 client if available."""
+    """Get S3 client if available. Uses explicit endpoint to avoid AWS_ENDPOINT_URL_S3 (e.g. staging URL with revoked cert)."""
     if not S3_AVAILABLE:
         return None
     try:
+        endpoint_url = f'https://s3.{S3_REGION}.amazonaws.com'
         return boto3.client(
             's3',
             region_name=S3_REGION,
+            endpoint_url=endpoint_url,
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
         )
