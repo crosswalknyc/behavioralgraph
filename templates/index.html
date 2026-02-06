@@ -21580,11 +21580,11 @@
             const getDisplayName = (plat) => {
                 for (const ps of platformSets) {
                     const r = ps.rows.find(x => (x.platform || '').toLowerCase() === plat);
-                    if (r && r.platform) return r.platform;
+                    if (r && r.platform) return (r.platform || '').toUpperCase();
                 }
-                return plat;
+                return (plat || '').toUpperCase();
             };
-            const thead = '<tr><th>Outlet</th>' + platformSets.map(ps => `<th>${esc(ps.talent)}</th>`).join('') + '</tr>';
+            const thead = '<tr><th>OUTLET</th>' + platformSets.map(ps => `<th>${esc((ps.talent || '').toUpperCase())}</th>`).join('') + '</tr>';
             const tbody = sortedPlatforms.map(plat => {
                 const cells = platformSets.map(ps => `<td>${esc(fmtOutletVal(getGenPopFor(ps.rows, plat)))}</td>`);
                 return `<tr><td>${esc(getDisplayName(plat))}</td>${cells.join('')}</tr>`;
