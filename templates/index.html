@@ -11471,7 +11471,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Start Date</label>
-                                        <input type="date" id="start_date" value="2025-12-01" required>
+                                        <input type="date" id="start_date" value="2025-01-01" required>
                                     </div>
                                     <div class="form-group">
                                         <label>End Date</label>
@@ -11484,7 +11484,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Sample Start</label>
-                                        <input type="date" id="sample_start_date" value="2025-12-01">
+                                        <input type="date" id="sample_start_date" value="2025-01-01">
                                     </div>
                                     <div class="form-group">
                                         <label>Sample End</label>
@@ -11495,7 +11495,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Behavior Start</label>
-                                        <input type="date" id="behavior_start_date" value="2025-12-01">
+                                        <input type="date" id="behavior_start_date" value="2025-01-01">
                                     </div>
                                     <div class="form-group">
                                         <label>Behavior End</label>
@@ -11842,7 +11842,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Start Date</label>
-                                        <input type="date" id="start_date" value="2025-12-01" required>
+                                        <input type="date" id="start_date" value="2025-01-01" required>
                                     </div>
                                     <div class="form-group">
                                         <label>End Date</label>
@@ -11855,7 +11855,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Sample Start</label>
-                                        <input type="date" id="sample_start_date" value="2025-12-01">
+                                        <input type="date" id="sample_start_date" value="2025-01-01">
                                     </div>
                                     <div class="form-group">
                                         <label>Sample End</label>
@@ -11866,7 +11866,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Behavior Start</label>
-                                        <input type="date" id="behavior_start_date" value="2025-12-01">
+                                        <input type="date" id="behavior_start_date" value="2025-01-01">
                                     </div>
                                     <div class="form-group">
                                         <label>Behavior End</label>
@@ -15732,12 +15732,10 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            const today = new Date();
-            const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
             const startDateInput = document.getElementById('start_date');
             const endDateInput = document.getElementById('end_date');
-            if (startDateInput) startDateInput.value = formatDate(thirtyDaysAgo);
-            if (endDateInput) endDateInput.value = formatDate(today);
+            if (startDateInput) startDateInput.value = '2025-01-01';
+            if (endDateInput) endDateInput.value = '2025-12-31';
             
             // Load live features and apply visibility
             loadAndApplyLiveFeatures();
