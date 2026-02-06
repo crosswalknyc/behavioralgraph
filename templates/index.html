@@ -1310,6 +1310,12 @@
         .btn-success { background: var(--accent-lime); color: #1a1a1a; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-small { padding: 0.35rem 0.75rem; font-size: 0.7rem; width: auto; }
+        .btn-run-analysis {
+            border-radius: 9999px; background: #4a8ac9; color: white;
+            padding: 0.75rem 1.5rem; font-weight: 700; text-transform: uppercase;
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+        }
+        .btn-run-analysis:hover { background: #3d7ab5; color: white; }
 
         .collapsible { border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1rem; }
         .collapsible-header { display: flex; justify-content: space-between; padding: 0.75rem 1rem; cursor: pointer; background: var(--bg-input); font-size: 0.8rem; }
@@ -11657,7 +11663,7 @@
                     {% endif %}
                     {% if 'talent_theater' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
-                        🎭 Talent Ticket Sale IQ
+                        🎫 Talent Ticket Sale IQ
                     </button>
                     {% endif %}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
@@ -12075,8 +12081,9 @@
                 <!-- Talent Ticket Sale IQ Tab Content -->
                 <div id="customAnalysisTabContentTalentTheater" class="custom-analysis-tab-content">
                     <div class="card">
-                        <h2>🎭 Talent Ticket Sale IQ</h2>
-                        <p class="section-description">Track how many users went from talent searches to theater platforms</p>
+                        <h2>🎫 Talent Ticket Sale IQ</h2>
+                        <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">🎫 10 Credits Per Analysis</div>
+                        <p class="section-description">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
                         <form id="customTalentTheaterForm">
                             <div class="form-section">
@@ -12085,21 +12092,24 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Talent Name</label>
-                                        <input type="text" id="customTalentTheaterTalentName" placeholder="e.g., Taylor Swift" required>
+                                        <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter the name of the talent you want to track. Consider adding all possible spellings and variations to yield best results. Ensure you have checked your spelling because once you click "Run Analysis" you can't go back to fix it. This is not case sensitive.</small>
+                                        <input type="text" id="customTalentTheaterTalentName" placeholder="Kevin O'Leary, Kevin O Leary, Kevin OLeary, Mr. Wonderful, Mr Wonderful" required>
                                     </div>
                                 </div>
                                 
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Competitive Talent Name(s) (comma-separated, optional)</label>
-                                        <input type="text" id="customTalentTheaterCompetitiveTalents" placeholder="e.g., Ariana Grande, Billie Eilish">
+                                        <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter the name of the talent you want to track. Consider adding all possible spellings and variations to yield best results. Ensure you have checked your spelling because once you click "Run Analysis" you can't go back to fix it. This is not case sensitive.</small>
+                                        <input type="text" id="customTalentTheaterCompetitiveTalents" placeholder="Kevin O'Leary, Kevin O Leary, Kevin OLeary, Mr. Wonderful, Mr Wonderful">
                                     </div>
                                 </div>
                                 
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label>Movie Name</label>
-                                        <input type="text" id="customTalentTheaterMovieName" placeholder="e.g., The Eras Tour" required>
+                                        <label>Movie/Event Name</label>
+                                        <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Consider adding all possible spellings and variations to yield best results. Ensure you have checked your spelling because once you click "Run Analysis" you can't go back to fix it. This is not case sensitive.</small>
+                                        <input type="text" id="customTalentTheaterMovieName" placeholder="The Eras Tour, Eras Tour, Era Tour" required>
                                     </div>
                                 </div>
                                 
@@ -12115,7 +12125,7 @@
                                 </div>
                                 
                                 <div class="form-actions">
-                                    <button type="submit" class="btn-primary">Run Analysis</button>
+                                    <button type="submit" class="btn-primary btn-run-analysis">🚀 RUN ANALYSIS</button>
                                 </div>
                             </div>
                         </form>
@@ -15440,9 +15450,9 @@
             <div class="dashboard-layout">
                 <div class="dashboard-tab-content" style="padding: 2rem;">
                     <div class="card">
-                    <div class="card">
-                        <h2>🎭 Talent Ticket Sale IQ</h2>
-                        <p class="section-description">Track how many users went from talent searches to theater platforms</p>
+                        <h2>🎫 Talent Ticket Sale IQ</h2>
+                        <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">🎫 10 Credits Per Analysis</div>
+                        <p class="section-description">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
                         <form id="talentTheaterForm">
                             <div class="form-section">
@@ -15451,21 +15461,24 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Talent Name</label>
-                                        <input type="text" id="talentTheaterTalentName" placeholder="e.g., Taylor Swift" required>
+                                        <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter the name of the talent you want to track. Consider adding all possible spellings and variations to yield best results. Ensure you have checked your spelling because once you click "Run Analysis" you can't go back to fix it. This is not case sensitive.</small>
+                                        <input type="text" id="talentTheaterTalentName" placeholder="Kevin O'Leary, Kevin O Leary, Kevin OLeary, Mr. Wonderful, Mr Wonderful" required>
                                     </div>
                                 </div>
                                 
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Competitive Talent Name(s) (comma-separated, optional)</label>
-                                        <input type="text" id="talentTheaterCompetitiveTalents" placeholder="e.g., Ariana Grande, Billie Eilish">
+                                        <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter the name of the talent you want to track. Consider adding all possible spellings and variations to yield best results. Ensure you have checked your spelling because once you click "Run Analysis" you can't go back to fix it. This is not case sensitive.</small>
+                                        <input type="text" id="talentTheaterCompetitiveTalents" placeholder="Kevin O'Leary, Kevin O Leary, Kevin OLeary, Mr. Wonderful, Mr Wonderful">
                                     </div>
                                 </div>
                                 
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label>Movie Name</label>
-                                        <input type="text" id="talentTheaterMovieName" placeholder="e.g., The Eras Tour" required>
+                                        <label>Movie/Event Name</label>
+                                        <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Consider adding all possible spellings and variations to yield best results. Ensure you have checked your spelling because once you click "Run Analysis" you can't go back to fix it. This is not case sensitive.</small>
+                                        <input type="text" id="talentTheaterMovieName" placeholder="The Eras Tour, Eras Tour, Era Tour" required>
                                     </div>
                                 </div>
                                 
@@ -15481,7 +15494,7 @@
                                 </div>
                                 
                                 <div class="form-actions">
-                                    <button type="submit" class="btn-primary">Run Analysis</button>
+                                    <button type="submit" class="btn-primary btn-run-analysis">🚀 RUN ANALYSIS</button>
                                 </div>
                             </div>
                         </form>
