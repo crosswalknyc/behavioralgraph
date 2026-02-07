@@ -6053,6 +6053,10 @@ def parse_subscriber_iq_csv(csv_content):
         if 'PER-EPISODE' in combined_check or 'PER-DATE ATTRIBUTION' in combined_check or ('EPISODE' in combined_check and 'ATTRIBUTION' in combined_check):
             current_section = 'episode_attribution'
             continue
+        if 'SIGNUP TIMING' in combined_check and ('DAYS AFTER' in combined_check or 'SHOW' in combined_check or 'AVAILABLE' in combined_check):
+            current_section = 'signup_timing'
+            print(f"   ✅ Entered SIGNUP TIMING section at row {i}")
+            continue
         
         # Metadata section (also enter when we see metadata rows before any section header)
         if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in second_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in third_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in combined_check:
@@ -6252,11 +6256,11 @@ def parse_subscriber_iq_csv(csv_content):
                     'percentage': pct_val,
                     'gen_pop': gen_pop_val
                 }
-            elif 'SIGNUP TIMING (Days After Show is Available)' in first_col or 'SIGNUP TIMING (Days After Show is Available)' in second_col:
+            elif 'SIGNUP TIMING' in first_col or 'SIGNUP TIMING' in second_col or 'SIGNUP TIMING' in third_col:
                 current_section = 'signup_timing'
                 continue
         
-        # Signup timing (signups in col 2, gen_pop in col 9 when available)
+        # Signup timing (signups in col 2 or col 1, day label in col 0; gen_pop in col 9)
         elif current_section == 'signup_timing':
             if first_col and first_col not in ['', 'SIGNUP TIMING (Days After Show is Available)']:
                 if 'Days Later' in first_col or first_col in ['Same Day', 'Day 1']:

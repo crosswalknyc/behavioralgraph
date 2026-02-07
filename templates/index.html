@@ -23399,7 +23399,27 @@
             }
             
             const metrics = data.key_metrics || {};
-            const timingData = data.signup_timing || [];
+            function getDaysFromTiming(t) {
+                const s = (t.timing || '').toString().trim();
+                if (s === 'Same Day') return 0;
+                if (s === 'Day 1') return 1;
+                const m = s.match(/^(\d+)/);
+                return m ? parseInt(m[1], 10) : 999;
+            }
+            let timingData = data.signup_timing || [];
+            if (timingData.length === 0 && data.episode_signup_timing && typeof data.episode_signup_timing === 'object') {
+                const aggregated = {};
+                for (const epKey of Object.keys(data.episode_signup_timing)) {
+                    const items = data.episode_signup_timing[epKey] || [];
+                    for (const t of items) {
+                        const label = (t.timing || '').toString().trim();
+                        if (!label) continue;
+                        aggregated[label] = (aggregated[label] || 0) + (parseNumber(t.signups) || 0);
+                    }
+                }
+                timingData = Object.entries(aggregated).map(([timing, signups]) => ({ timing, signups: String(signups) }));
+                timingData.sort((a, b) => getDaysFromTiming(a) - getDaysFromTiming(b));
+            }
             const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
             const show = data.metadata?.show || 'this show';
             
@@ -23430,10 +23450,7 @@
                 
                 if (timingData.length > 0) {
                     const totalSignups = timingData.reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
-                    const earlySignups = timingData.filter(t => {
-                        const days = parseInt(t.timing) || 999;
-                        return days <= 7;
-                    }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                    const earlySignups = timingData.filter(t => getDaysFromTiming(t) <= 7).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
                     const earlyPct = totalSignups > 0 ? ((earlySignups / totalSignups) * 100).toFixed(2) : 0;
                     
                     if (earlyPct > 50) {
@@ -23457,26 +23474,15 @@
                 ` : '';
             }
             
-            // Render Timing Metrics
+            // Render Timing Metrics (show overview even when no distribution data, using avg_days_to_signup)
             const metricsContainer = document.getElementById('subscriberTimingMetrics');
-            if (metricsContainer && timingData.length > 0) {
+            if (metricsContainer) {
                 const totalSignups = timingData.reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
-                const earlySignups = timingData.filter(t => {
-                    const days = parseInt(t.timing) || 999;
-                    return days <= 7;
-                }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                const earlySignups = timingData.filter(t => getDaysFromTiming(t) <= 7).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
                 const earlyPct = totalSignups > 0 ? ((earlySignups / totalSignups) * 100).toFixed(2) : 0;
-                
-                const midSignups = timingData.filter(t => {
-                    const days = parseInt(t.timing) || 999;
-                    return days > 7 && days <= 30;
-                }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                const midSignups = timingData.filter(t => { const d = getDaysFromTiming(t); return d > 7 && d <= 30; }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
                 const midPct = totalSignups > 0 ? ((midSignups / totalSignups) * 100).toFixed(2) : 0;
-                
-                const lateSignups = timingData.filter(t => {
-                    const days = parseInt(t.timing) || 999;
-                    return days > 30;
-                }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                const lateSignups = timingData.filter(t => getDaysFromTiming(t) > 30).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
                 const latePct = totalSignups > 0 ? ((lateSignups / totalSignups) * 100).toFixed(2) : 0;
                 
                 metricsContainer.innerHTML = `
