@@ -6035,6 +6035,14 @@ def parse_subscriber_iq_csv(csv_content):
         combined_check = (first_col + ' ' + second_col + ' ' + third_col).strip().upper()
         
         # Global section detection (so we don't require strict CSV order)
+        if 'COMPETITIVE' in combined_check and 'PLATFORM' in combined_check:
+            current_section = 'competitive_platforms'
+            print(f"   ✅ Entered COMPETITIVE PLATFORMS section at row {i}")
+            continue
+        if 'DEMOGRAPHICS' in combined_check:
+            current_section = 'demographics'
+            print(f"   ✅ Entered DEMOGRAPHICS section at row {i}")
+            continue
         if 'MONTHLY' in combined_check and ('SIGNUP' in combined_check or 'SIGNUPS' in combined_check):
             current_section = 'monthly_signups'
             continue
@@ -6305,17 +6313,16 @@ def parse_subscriber_iq_csv(csv_content):
                 current_section = 'competitive_platforms'
                 continue
         
-        # Competitive platforms
+        # Competitive platforms (platform in col A/B/C, percentage in col E or col H)
         elif current_section == 'competitive_platforms':
-            if first_col and first_col not in ['', 'COMPETITIVE PLATFORMS (% of Show Watchers)']:
-                if first_col and not first_col.startswith(','):
-                    platform = first_col.strip()
-                    percentage = row[7].strip() if len(row) > 7 else ''
-                    parsed['competitive_platforms'].append({
-                        'platform': platform,
-                        'percentage': percentage
-                    })
-            elif 'MONTHLY PLATFORM SIGNUPS' in first_col or 'MONTHLY PLATFORM SIGNUPS' in second_col:
+            platform = (first_col or second_col or (row[2].strip() if len(row) > 2 else '')).strip()
+            if platform and 'COMPETITIVE' not in platform.upper() and 'PLATFORM' not in platform.upper():
+                percentage = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '') or (row[8].strip() if len(row) > 8 else '')
+                parsed['competitive_platforms'].append({
+                    'platform': platform,
+                    'percentage': percentage
+                })
+            elif 'MONTHLY' in combined_check and ('SIGNUP' in combined_check or 'SIGNUPS' in combined_check):
                 current_section = 'monthly_signups'
                 continue
         
@@ -6363,15 +6370,20 @@ def parse_subscriber_iq_csv(csv_content):
                 first_col_upper = first_col.upper().strip()
                 gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER']
                 
+                # Count/percentage/gen_pop: try col C/E/F (indices 2,4,5) then col B/H/I (1,7,8)
+                _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+                _pct = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
+                _gen = (row[5].strip() if len(row) > 5 else '') or (row[8].strip() if len(row) > 8 else '')
+                
                 # Only add if it's not a gender entry and looks like an age range
                 if not any(keyword in first_col_upper for keyword in gender_keywords):
                     # Check if it looks like an age range (contains numbers or age-like patterns)
                     if any(char.isdigit() for char in first_col) or '-' in first_col or '+' in first_col or 'to' in first_col_upper or 'and' in first_col_upper:
                         parsed['demographics']['age'].append({
                             'age_range': first_col,
-                            'count': row[1].strip() if len(row) > 1 else '',
-                            'percentage': row[7].strip() if len(row) > 7 else '',
-                            'gen_pop': row[8].strip() if len(row) > 8 else ''
+                            'count': _count,
+                            'percentage': _pct,
+                            'gen_pop': _gen
                         })
                     else:
                         print(f"   ⚠️ Skipping potential gender entry in age section: '{first_col}'")
@@ -6380,18 +6392,21 @@ def parse_subscriber_iq_csv(csv_content):
                     print(f"   ⚠️ Found gender entry '{first_col}' in age section, moving to gender data")
                     parsed['demographics']['gender'].append({
                         'gender': first_col,
-                        'count': row[1].strip() if len(row) > 1 else '',
-                        'percentage': row[7].strip() if len(row) > 7 else '',
-                        'gen_pop': row[8].strip() if len(row) > 8 else ''
+                        'count': _count,
+                        'percentage': _pct,
+                        'gen_pop': _gen
                     })
         
         elif current_section == 'demographics_gender':
             if first_col and first_col not in ['', 'GENDER']:
+                _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+                _pct = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
+                _gen = (row[5].strip() if len(row) > 5 else '') or (row[8].strip() if len(row) > 8 else '')
                 parsed['demographics']['gender'].append({
                     'gender': first_col,
-                    'count': row[1].strip() if len(row) > 1 else '',
-                    'percentage': row[7].strip() if len(row) > 7 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'count': _count,
+                    'percentage': _pct,
+                    'gen_pop': _gen
                 })
     
     # Fallback: If date range wasn't found, try to find it anywhere in the CSV
@@ -6565,12 +6580,71 @@ def parse_subscriber_iq_csv(csv_content):
                 })
                 print(f"   ✅ Fallback: Found month {first_col} with {signups_val} signups")
 
+    # Fallback: Competitive platforms if empty (platform in col A/B/C, percentage in col E)
+    if len(parsed['competitive_platforms']) == 0:
+        print("   ⚠️ No competitive platforms found, trying fallback...")
+        in_comp = False
+        for i, row in enumerate(rows):
+            if not row:
+                continue
+            first_col = (row[0].strip() if len(row) > 0 and row[0] else '').strip()
+            second_col = (row[1].strip() if len(row) > 1 and row[1] else '').strip()
+            third_col = (row[2].strip() if len(row) > 2 and row[2] else '').strip()
+            comb = (first_col + ' ' + second_col + ' ' + third_col).upper()
+            if 'COMPETITIVE' in comb and 'PLATFORM' in comb:
+                in_comp = True
+                continue
+            if in_comp and ('MONTHLY' in comb or 'DEMOGRAPHICS' in comb or 'CHURN' in comb):
+                break
+            if in_comp:
+                platform = first_col or second_col or third_col
+                if platform and 'COMPETITIVE' not in platform.upper() and 'PLATFORM' not in platform.upper():
+                    pct = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
+                    parsed['competitive_platforms'].append({'platform': platform, 'percentage': pct})
+        if parsed['competitive_platforms']:
+            print(f"   ✅ Fallback: Found {len(parsed['competitive_platforms'])} competitive platforms")
+
+    # Fallback: Demographics if empty (AGE/GENDER in col A, count in col C, pct in col E)
+    if (not parsed['demographics']['age'] and not parsed['demographics']['gender']):
+        print("   ⚠️ No demographics found, trying fallback...")
+        in_demo = False
+        demo_sub = None
+        for i, row in enumerate(rows):
+            if not row:
+                continue
+            first_col = (row[0].strip() if len(row) > 0 and row[0] else '').strip()
+            comb = (first_col + ' ' + (row[1].strip() if len(row) > 1 else '') + ' ' + (row[2].strip() if len(row) > 2 else '')).upper()
+            if 'DEMOGRAPHICS' in comb:
+                in_demo = True
+                demo_sub = None
+                continue
+            if not in_demo:
+                continue
+            if first_col == 'AGE':
+                demo_sub = 'age'
+                continue
+            if first_col == 'GENDER':
+                demo_sub = 'gender'
+                continue
+            if demo_sub and first_col and first_col not in ('AGE', 'GENDER'):
+                _c = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+                _p = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
+                _g = (row[5].strip() if len(row) > 5 else '') or (row[8].strip() if len(row) > 8 else '')
+                if demo_sub == 'age' and (any(c.isdigit() for c in first_col) or '-' in first_col or '+' in first_col):
+                    parsed['demographics']['age'].append({'age_range': first_col, 'count': _c, 'percentage': _p, 'gen_pop': _g})
+                elif demo_sub == 'gender':
+                    parsed['demographics']['gender'].append({'gender': first_col, 'count': _c, 'percentage': _p, 'gen_pop': _g})
+        if parsed['demographics']['age'] or parsed['demographics']['gender']:
+            print(f"   ✅ Fallback: Found demographics (age: {len(parsed['demographics']['age'])}, gender: {len(parsed['demographics']['gender'])})")
+
     # Log parsing summary
     print(f"📊 Parsing complete:")
     print(f"   Key metrics: {len(parsed['key_metrics'])} items")
     print(f"   Episodes: {len(parsed['episode_attribution'])} items")
     print(f"   Signup timing: {len(parsed['signup_timing'])} items")
     print(f"   Attribution summary: {len(parsed['attribution_summary'])} items")
+    print(f"   Competitive platforms: {len(parsed['competitive_platforms'])} items")
+    print(f"   Demographics age: {len(parsed['demographics']['age'])} items, gender: {len(parsed['demographics']['gender'])} items")
     if parsed['key_metrics'].get('total_watchers'):
         print(f"   Total Watchers: {parsed['key_metrics']['total_watchers']}")
     
