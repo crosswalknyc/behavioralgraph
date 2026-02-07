@@ -83,14 +83,25 @@ SNOWFLAKE_SCHEMA = "PUBLIC"
 # === Snowflake connect ===
 # =========================
 def connect_snowflake():
+    import os
+    # Prefer env vars when set (e.g. on Render) so credentials aren't hardcoded in cloud
+    user = os.environ.get("SNOWFLAKE_USER") or SNOWFLAKE_USER
+    password = os.environ.get("SNOWFLAKE_PASSWORD") or SNOWFLAKE_PASSWORD
+    account = os.environ.get("SNOWFLAKE_ACCOUNT") or SNOWFLAKE_ACCOUNT
+    warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE") or SNOWFLAKE_WAREHOUSE
+    database = os.environ.get("SNOWFLAKE_DATABASE") or SNOWFLAKE_DATABASE
+    schema = os.environ.get("SNOWFLAKE_SCHEMA") or SNOWFLAKE_SCHEMA
     print("Connecting to Snowflake...")
     conn = snowflake.connector.connect(
-        user=SNOWFLAKE_USER,
-        password=SNOWFLAKE_PASSWORD,
-        account=SNOWFLAKE_ACCOUNT,
-        warehouse=SNOWFLAKE_WAREHOUSE,
-        database=SNOWFLAKE_DATABASE,
-        schema=SNOWFLAKE_SCHEMA,
+        user=user,
+        password=password,
+        account=account,
+        warehouse=warehouse,
+        database=database,
+        schema=schema,
+        insecure_mode=True,  # Avoid OCSP/SSL timeouts (e.g. on Render) that can surface as concurrent.futures errors
+        connection_timeout=90,
+        network_timeout=3600,
     )
     print("Connected to Snowflake.")
     return conn

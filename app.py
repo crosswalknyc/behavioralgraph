@@ -14358,6 +14358,9 @@ def run_svod_acquisition(job_id):
             campaign_end = episode_dates[-1]['air_date']
         
         competitive_brands = module.get_competitive_platforms(params['platform_name']) if hasattr(module, 'get_competitive_platforms') else []
+        from pathlib import Path
+        output_folder = Path(OUTPUT_DIR) / "attribution"
+        output_folder.mkdir(parents=True, exist_ok=True)
         script_params = {
             'project_name': params['project_name'],
             'auto_format': True,
@@ -14372,7 +14375,8 @@ def run_svod_acquisition(job_id):
             'episode_dates': episode_dates,
             'platform_name': params['platform_name'],
             'competitive_brands': competitive_brands,
-            'genre': params.get('genre', '') or ''
+            'genre': params.get('genre', '') or '',
+            'output_dir': str(output_folder),
         }
         
         # Run the analysis function
@@ -14389,19 +14393,17 @@ def run_svod_acquisition(job_id):
             
             update_job_status(job_id, progress=80, message='Writing output...')
             
-            # Call write_output
+            # Call write_output (writes to script_params['output_dir'] = server output folder)
             if hasattr(module, 'write_output'):
                 module.write_output(summary_df, comp_df, demo_df, timing_df, episode_df, monthly_df, episode_timing_df, churn_df, post_signup_touchpoints_df, script_params)
             else:
                 update_job_status(job_id, status='failed', error='Script does not have write_output function')
                 return
             
-            # Find the output file (it's written to Desktop/attribution folder)
-            from pathlib import Path
-            output_folder = Path.home() / "Desktop" / "attribution"
+            # Find the output file in the server output folder (same as Talent Theater)
             if output_folder.exists():
-                # Find the most recent CSV file matching the project name
-                csv_files = list(output_folder.glob(f"{params['project_name']}*.csv"))
+                safe_name = re.sub(r'[<>:"/\\|?*\']', '', params['project_name']).strip()[:100]
+                csv_files = list(output_folder.glob(f"{safe_name}*.csv"))
                 if csv_files:
                     csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
                     output_file = str(csv_files[0])

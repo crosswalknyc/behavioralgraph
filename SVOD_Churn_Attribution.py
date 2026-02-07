@@ -83,14 +83,25 @@ SNOWFLAKE_SCHEMA = "PUBLIC"
 # === Snowflake connect ===
 # =========================
 def connect_snowflake():
+    import os
+    # Prefer env vars when set (e.g. on Render) so credentials aren't hardcoded in cloud
+    user = os.environ.get("SNOWFLAKE_USER") or SNOWFLAKE_USER
+    password = os.environ.get("SNOWFLAKE_PASSWORD") or SNOWFLAKE_PASSWORD
+    account = os.environ.get("SNOWFLAKE_ACCOUNT") or SNOWFLAKE_ACCOUNT
+    warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE") or SNOWFLAKE_WAREHOUSE
+    database = os.environ.get("SNOWFLAKE_DATABASE") or SNOWFLAKE_DATABASE
+    schema = os.environ.get("SNOWFLAKE_SCHEMA") or SNOWFLAKE_SCHEMA
     print("Connecting to Snowflake...")
     conn = snowflake.connector.connect(
-        user=SNOWFLAKE_USER,
-        password=SNOWFLAKE_PASSWORD,
-        account=SNOWFLAKE_ACCOUNT,
-        warehouse=SNOWFLAKE_WAREHOUSE,
-        database=SNOWFLAKE_DATABASE,
-        schema=SNOWFLAKE_SCHEMA,
+        user=user,
+        password=password,
+        account=account,
+        warehouse=warehouse,
+        database=database,
+        schema=schema,
+        insecure_mode=True,  # Avoid OCSP/SSL timeouts (e.g. on Render) that can surface as concurrent.futures errors
+        connection_timeout=90,
+        network_timeout=3600,
     )
     print("Connected to Snowflake.")
     return conn
@@ -1589,8 +1600,9 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
 
     df_out = pd.DataFrame(rows, columns=["Category", "Episode Date", "Count", "Count Label", "Secondary Count", "Secondary Label", "Tertiary Count", "Tertiary Label", "Percentage", "Gen Pop Projection"])
 
-    # Write to Desktop/attribution
-    output_folder = Path.home() / "Desktop" / "attribution"
+    # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
+    output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
+    output_folder = output_folder if isinstance(output_folder, Path) else Path(output_folder)
     output_folder.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M")
     # Sanitize project name for filename (remove invalid characters)
