@@ -11789,6 +11789,14 @@ def _save_job_status_to_s3(job_id, job_data):
 # ANALYSIS RUNNER
 # ============================================================================
 
+def _shorten_error_for_ui(error_str, max_len=4000):
+    """Keep error readable in UI: cap length, preserve start and end (exception usually at end)."""
+    if not error_str or len(error_str) <= max_len:
+        return error_str or ''
+    half = max_len // 2
+    return error_str[:half] + '\n\n... [truncated] ...\n\n' + error_str[-half:]
+
+
 def update_job_status(job_id, status=None, progress=None, message=None, error=None, result_file=None, demographic_validation=None, s3_key=None):
     """Update job status - simplified to avoid verbose terminal output."""
     if job_id in jobs:
@@ -11801,7 +11809,7 @@ def update_job_status(job_id, status=None, progress=None, message=None, error=No
             jobs[job_id]['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
             jobs[job_id]['logs'] = jobs[job_id]['logs'][-5:]
         if error:
-            jobs[job_id]['error'] = error
+            jobs[job_id]['error'] = _shorten_error_for_ui(str(error))
         if result_file:
             jobs[job_id]['result_file'] = result_file
         if demographic_validation:
