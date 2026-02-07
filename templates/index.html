@@ -1164,8 +1164,8 @@
             grid-template-columns: 1fr 1fr;
             grid-template-rows: 1fr 1fr;
             gap: 1.25rem;
-            min-height: 320px;
-            height: min(480px, 52vh);
+            min-height: 360px;
+            height: min(560px, 60vh);
             margin-bottom: 1.5rem;
         }
         .attribution-charts-grid .attribution-chart-card {
@@ -1182,7 +1182,6 @@
             flex: 1;
             min-height: 0;
             min-width: 0;
-            max-height: 180px;
         }
 
         .timing-metrics-grid {
@@ -22071,9 +22070,8 @@
                     plugins: [ChartDataLabels],
                     options: {
                         responsive: true,
-                        maintainAspectRatio: true,
-                        aspectRatio: 1.4,
-                        layout: { padding: 18 },
+                        maintainAspectRatio: false,
+                        layout: { padding: 12 },
                         plugins: {
                             title: { display: true, text: 'Attribution Metrics', color: '#94a3b8', font: { size: 12 } },
                             legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 12, padding: 5 } },
@@ -22111,9 +22109,8 @@
                         plugins: [ChartDataLabels],
                         options: {
                             responsive: true,
-                            maintainAspectRatio: true,
-                            aspectRatio: 1.4,
-                            layout: { padding: 18 },
+                            maintainAspectRatio: false,
+                            layout: { padding: 12 },
                             plugins: {
                                 title: { display: true, text: 'Combined by Talent', color: '#94a3b8', font: { size: 12 } },
                                 legend: {
@@ -22156,9 +22153,8 @@
                         plugins: [ChartDataLabels],
                         options: {
                             responsive: true,
-                            maintainAspectRatio: true,
-                            aspectRatio: 1.4,
-                            layout: { padding: 18 },
+                            maintainAspectRatio: false,
+                            layout: { padding: 12 },
                             plugins: {
                                 title: { display: true, text: title, color: '#94a3b8', font: { size: 12 } },
                                 legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12, padding: 5, font: { size: 10 } } },
