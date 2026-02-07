@@ -1163,16 +1163,16 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             grid-template-rows: 1fr 1fr;
-            gap: 1rem;
-            min-height: 380px;
-            height: min(520px, 55vh);
+            gap: 1.25rem;
+            min-height: 320px;
+            height: min(480px, 52vh);
             margin-bottom: 1.5rem;
         }
         .attribution-charts-grid .attribution-chart-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 0.75rem 1rem;
+            padding: 1rem 1.25rem;
             min-height: 0;
             display: flex;
             flex-direction: column;
@@ -1182,6 +1182,7 @@
             flex: 1;
             min-height: 0;
             min-width: 0;
+            max-height: 180px;
         }
 
         .timing-metrics-grid {
@@ -21853,13 +21854,14 @@
                     plugins: [ChartDataLabels],
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false,
-                        layout: { padding: 10 },
+                        maintainAspectRatio: true,
+                        aspectRatio: 1.4,
+                        layout: { padding: 18 },
                         plugins: {
-                            title: { display: true, text: 'Attribution Metrics', color: '#94a3b8', font: { size: 13 } },
-                            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 14, padding: 6 } },
+                            title: { display: true, text: 'Attribution Metrics', color: '#94a3b8', font: { size: 12 } },
+                            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 12, padding: 5 } },
                             tooltip: { callbacks: { label: (c) => { const pct = attMetricTotal > 0 ? ((c.raw / attMetricTotal) * 100).toFixed(1) : 0; return ` ${c.label}: ${showPctBar ? c.raw.toFixed(2) + '%' : _fmtGenPopInt(String(c.raw))} (${pct}% of total)`; } } },
-                            datalabels: { color: '#e2e8f0', font: { size: 12 }, formatter: (v) => attMetricTotal > 0 ? ((v / attMetricTotal) * 100).toFixed(0) + '%' : '' }
+                            datalabels: { color: '#e2e8f0', font: { size: 11 }, formatter: (v) => attMetricTotal > 0 ? ((v / attMetricTotal) * 100).toFixed(0) + '%' : '' }
                         }
                     }
                 });
@@ -21872,8 +21874,8 @@
                     const lc = _parseGenPop(t.convGenPop || '0');
                     const as = _parseGenPop(t.hitsGenPop || '0');
                     const colorIdx = i * 2;
-                    if (lc > 0) { combinedLabels.push(nameUp + ' – Last Click'); combinedValues.push(lc); combinedColors.push(combinedSliceColors[colorIdx % combinedSliceColors.length]); }
-                    if (as > 0) { combinedLabels.push(nameUp + ' – Assisted'); combinedValues.push(as); combinedColors.push(combinedSliceColors[(colorIdx + 1) % combinedSliceColors.length]); }
+                    if (lc > 0) { combinedLabels.push(nameUp + ' (LC)'); combinedValues.push(lc); combinedColors.push(combinedSliceColors[colorIdx % combinedSliceColors.length]); }
+                    if (as > 0) { combinedLabels.push(nameUp + ' (AS)'); combinedValues.push(as); combinedColors.push(combinedSliceColors[(colorIdx + 1) % combinedSliceColors.length]); }
                 });
                 const combinedTotal = combinedValues.reduce((s, v) => s + v, 0);
                 if (combinedLabels.length > 0 && combinedTotal > 0) {
@@ -21892,17 +21894,18 @@
                         plugins: [ChartDataLabels],
                         options: {
                             responsive: true,
-                            maintainAspectRatio: false,
-                            layout: { padding: 10 },
+                            maintainAspectRatio: true,
+                            aspectRatio: 1.4,
+                            layout: { padding: 18 },
                             plugins: {
-                                title: { display: true, text: 'Combined by Talent', color: '#94a3b8', font: { size: 13 } },
+                                title: { display: true, text: 'Combined by Talent', color: '#94a3b8', font: { size: 12 } },
                                 legend: {
-                                    position: 'right',
-                                    labels: { color: '#94a3b8', boxWidth: 10, padding: 4, font: { size: 9 } }
+                                    position: 'bottom',
+                                    labels: { color: '#94a3b8', boxWidth: 12, padding: 5, font: { size: 9 } }
                                 },
                                 tooltip: {
                                     callbacks: {
-                                        label: (c) => { const pct = combinedTotal > 0 ? ((c.raw / combinedTotal) * 100).toFixed(1) : 0; return ` ${c.label}: ${fmtVal(c.raw)} (${pct}%)`; }
+                                        label: (c) => { const pct = combinedTotal > 0 ? ((c.raw / combinedTotal) * 100).toFixed(1) : 0; const full = (c.label || '').replace(' (LC)', ' – Last Click').replace(' (AS)', ' – Assisted'); return ` ${full}: ${fmtVal(c.raw)} (${pct}%)`; }
                                     }
                                 },
                                 datalabels: {
@@ -21936,11 +21939,12 @@
                         plugins: [ChartDataLabels],
                         options: {
                             responsive: true,
-                            maintainAspectRatio: false,
-                            layout: { padding: 10 },
+                            maintainAspectRatio: true,
+                            aspectRatio: 1.4,
+                            layout: { padding: 18 },
                             plugins: {
-                                title: { display: true, text: title, color: '#94a3b8', font: { size: 13 } },
-                                legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 14, padding: 6, font: { size: 10 } } },
+                                title: { display: true, text: title, color: '#94a3b8', font: { size: 12 } },
+                                legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12, padding: 5, font: { size: 10 } } },
                                 tooltip: {
                                     callbacks: {
                                         label: (c) => { const pct = total > 0 ? ((c.raw / total) * 100).toFixed(1) : 0; return ` ${c.label}: ${fmtVal(c.raw)} (${pct}%)`; }
