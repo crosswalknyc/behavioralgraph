@@ -11215,10 +11215,10 @@
         </div>
     </div>
     
-    <!-- Profile Released Modal - Shown when a purgatory profile is released -->
+    <!-- Profile/Subscriber Released Modal - Shown when a purgatory item is released -->
     <div class="credits-modal" id="profileReleasedModal" style="display: none;" onclick="if(event.target === this) closeProfileReleasedModal()">
         <div class="credits-modal-content" style="max-width: 460px;" onclick="event.stopPropagation()">
-            <h2>✅ Profile IQ Ready</h2>
+            <h2 id="profileReleasedTitle">✅ Profile IQ Ready</h2>
             <p id="profileReleasedMessage" style="margin: 0 0 1.25rem 0; color: var(--text-secondary); line-height: 1.5;">Your Profile IQ of <strong id="profileReleasedName"></strong> has been loaded into your dashboard.</p>
             <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                 <button id="profileReleasedViewBtn" class="btn btn-primary" onclick="handleProfileReleasedView()">View in Profile IQ</button>
@@ -26169,7 +26169,13 @@
                 if (notifications.length > 0) {
                     const n = notifications[0];
                     currentProfileReleasedNotification = n;
-                    document.getElementById('profileReleasedName').textContent = n.profile_name || 'Unknown';
+                    const isSvod = (n.source_type || '') === 'svod_acquisition';
+                    const name = (n.profile_name || 'Unknown').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                    document.getElementById('profileReleasedTitle').textContent = isSvod ? '✅ Subscriber Acquisition report ready' : '✅ Profile IQ Ready';
+                    document.getElementById('profileReleasedMessage').innerHTML = isSvod
+                        ? 'Your Subscriber Acquisition report for <strong>' + name + '</strong> has been loaded into your dashboard.'
+                        : 'Your Profile IQ of <strong>' + name + '</strong> has been loaded into your dashboard.';
+                    document.getElementById('profileReleasedViewBtn').textContent = isSvod ? 'View Subscriber Acquisition report' : 'View in Profile IQ';
                     document.getElementById('profileReleasedModal').style.display = 'flex';
                 }
             } catch (e) { console.warn('Profile-released check failed:', e); }
@@ -26193,7 +26199,21 @@
         async function handleProfileReleasedView() {
             const n = currentProfileReleasedNotification;
             if (!n || !n.s3_key) { closeProfileReleasedModal(); return; }
+            const isSvod = (n.source_type || '') === 'svod_acquisition';
             closeProfileReleasedModal();
+            try {
+                await fetch('/api/notifications/profile-released/dismiss', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: [n.id] })
+                });
+            } catch (_) {}
+            if (isSvod) {
+                if (typeof showSubscriberIQ === 'function') showSubscriberIQ();
+                await loadSubscriberProfiles();
+                if (typeof selectSubscriberProfile === 'function') selectSubscriberProfile(n.s3_key);
+                return;
+            }
             if (typeof showProfileIQ === 'function') showProfileIQ();
             clearSessionJobsCache();
             const container = document.getElementById('dashProfileTree');
@@ -26204,13 +26224,6 @@
                 if (data.jobs) { setSessionJobsCache(data); dashboardProfiles = data.jobs; renderDashboardProfileTree(dashboardProfiles); }
             }
             if (typeof selectDashboardProfile === 'function') selectDashboardProfile(n.s3_key);
-            try {
-                await fetch('/api/notifications/profile-released/dismiss', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ids: [n.id] })
-                });
-            } catch (_) {}
         }
 
         async function selectDashboardProfile(profileId) {

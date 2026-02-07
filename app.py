@@ -9916,8 +9916,8 @@ def save_profile_released_notifications(data):
         print(f"Error saving profile released notifications: {e}")
         return False
 
-def add_profile_released_notification(username, profile_name, s3_key):
-    """Add a notification for a user when their profile is released from purgatory."""
+def add_profile_released_notification(username, profile_name, s3_key, source_type='profile_analysis'):
+    """Add a notification when a purgatory item is released. source_type: profile_analysis -> Profile IQ, svod_acquisition -> Subscriber IQ."""
     data = load_profile_released_notifications()
     if username not in data:
         data[username] = []
@@ -9925,6 +9925,7 @@ def add_profile_released_notification(username, profile_name, s3_key):
         'id': str(uuid.uuid4()),
         'profile_name': profile_name,
         's3_key': s3_key,
+        'source_type': source_type,
         'created_at': datetime.now().isoformat(),
         'read': False
     })
@@ -9945,6 +9946,24 @@ def send_profile_released_email(created_by, profile_name, released_s3_key):
 <p><a href="{profile_url}" style="background:#007bff;color:white;padding:8px 16px;text-decoration:none;border-radius:6px;">View in Profile IQ</a></p>
 <p>— Behavioral Graph Team</p>"""
     text = f"Your Profile IQ analysis for {profile_name} has been released and is now available. View it at: {profile_url}"
+    return send_email_via_gmail(email, subject, html, text)
+
+
+def send_svod_released_email(created_by, profile_name, released_s3_key):
+    """Send email when an SVOD Acquisition result is released from purgatory (Subscriber Acquisition report)."""
+    data = load_users()
+    user = data.get('users', {}).get(created_by, {})
+    email = user.get('email')
+    if not email:
+        print(f"⚠️ No email for user {created_by}, skipping SVOD released email")
+        return False, "No email for user"
+    base_url = os.environ.get('APP_BASE_URL', 'https://behavioral-graph.onrender.com')
+    subscriber_url = f"{base_url}/#subscriberiq"
+    subject = f"Your Subscriber Acquisition report: {profile_name} is now available"
+    html = f"""<p>Good news! Your Subscriber Acquisition report for <strong>{profile_name}</strong> has been released from review and is now available in your dashboard.</p>
+<p><a href="{subscriber_url}" style="background:#007bff;color:white;padding:8px 16px;text-decoration:none;border-radius:6px;">View Subscriber Acquisition report</a></p>
+<p>— Behavioral Graph Team</p>"""
+    text = f"Your Subscriber Acquisition report for {profile_name} has been released and is now available. View it at: {subscriber_url}"
     return send_email_via_gmail(email, subject, html, text)
 
 def load_purgatory_metadata():
@@ -10330,12 +10349,16 @@ def release_purgatory_item():
                         save_persisted_cache()
                         break
             
-            # Notify the creator: email + in-dashboard notification
+            # Notify the creator: in-dashboard notification (with source_type); email only for Profile IQ
             created_by = item.get('created_by')
+            source_type = item.get('source_type', 'profile_analysis')
             if created_by:
                 profile_name = display_name or item.get('project_name', 'Unknown Profile')
-                send_profile_released_email(created_by, profile_name, result)
-                add_profile_released_notification(created_by, profile_name, result)
+                add_profile_released_notification(created_by, profile_name, result, source_type=source_type)
+                if source_type == 'profile_analysis':
+                    send_profile_released_email(created_by, profile_name, result)
+                elif source_type == 'svod_acquisition':
+                    send_svod_released_email(created_by, profile_name, result)
             
             return jsonify({
                 'success': True,
