@@ -1659,6 +1659,49 @@ def send_email_via_gmail(to_email, subject, html_content, text_content=None):
         print(f"❌ Gmail send error: {e}")
         return False, str(e)
 
+
+# Shared email design (dashboard-style) and signature for all notification emails
+EMAIL_SIGNATURE = "— Crosswalk IQ Team"
+
+def _email_base_styles():
+    """CSS matching dashboard: dark bg, card, accent cyan/blue."""
+    return """
+    body { font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: #0a1929; color: #e6f1ff; padding: 20px; margin: 0; }
+    .email-container { max-width: 600px; margin: 0 auto; background: #0d2137; border-radius: 12px; padding: 30px; }
+    .email-header { color: #66d9ef; font-size: 20px; margin-bottom: 20px; font-weight: 600; }
+    .email-body { line-height: 1.7; color: #e6f1ff; }
+    .email-body p { margin: 0 0 1rem 0; }
+    .email-btn { display: inline-block; background: linear-gradient(135deg, #66d9ef, #5a9ad9); color: #0a1929 !important; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 16px; }
+    .email-card { background: #132f4c; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #66d9ef; }
+    .email-card-title { font-size: 18px; font-weight: bold; color: #c8ff00; margin-bottom: 8px; }
+    .email-label { color: #8892b0; font-size: 12px; text-transform: uppercase; }
+    .email-value { font-size: 16px; font-weight: bold; color: #e6f1ff; font-family: monospace; }
+    .email-footer { margin-top: 28px; padding-top: 20px; border-top: 1px solid #132f4c; font-size: 12px; color: #8892b0; }
+    """
+
+def _wrap_email_html(body_content, title=None):
+    """Wrap body HTML in dashboard-style layout and Crosswalk IQ Team signature."""
+    header = f'<div class="email-header">{title}</div>' if title else ''
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>{_email_base_styles()}</style>
+</head>
+<body>
+    <div class="email-container">
+        {header}
+        <div class="email-body">
+            {body_content}
+        </div>
+        <div class="email-footer">
+            <p>{EMAIL_SIGNATURE}</p>
+        </div>
+    </div>
+</body>
+</html>"""
+
+
 @app.route('/api/admin/ai-cache/status')
 @requires_admin
 def ai_cache_status():
@@ -1891,57 +1934,23 @@ You can change your password after logging in by going to your profile settings.
 If you have any questions, please contact your administrator.
 
 Best regards,
-Crosswalk Team
+Crosswalk IQ Team
     """
     
-    html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }}
-        .container {{ max-width: 600px; margin: 0 auto; background: #16213e; border-radius: 12px; padding: 30px; }}
-        h1 {{ color: #00d9ff; margin-bottom: 20px; }}
-        .credentials {{ background: #0f3460; border-radius: 8px; padding: 20px; margin: 20px 0; }}
-        .field {{ margin: 10px 0; }}
-        .label {{ color: #888; font-size: 12px; text-transform: uppercase; }}
-        .value {{ font-size: 18px; font-weight: bold; color: #fff; font-family: monospace; }}
-        .btn {{ display: inline-block; background: linear-gradient(135deg, #00d9ff, #0099cc); color: #000; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px; }}
-        .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🎉 Welcome to Crosswalk!</h1>
+    body = f"""
+        <div class="email-header">🎉 Welcome to Crosswalk IQ</div>
         <p>Your account has been created. Here are your login details:</p>
-        
-        <div class="credentials">
-            <div class="field">
-                <div class="label">Username</div>
-                <div class="value">{username}</div>
-            </div>
-            <div class="field">
-                <div class="label">Password</div>
-                <div class="value">{password}</div>
-            </div>
-            <div class="field">
-                <div class="label">Role</div>
-                <div class="value">{role.upper()}</div>
-            </div>
+        <div class="email-card">
+            <div class="email-card-title">Login details</div>
+            <div style="margin: 10px 0;"><span class="email-label">Username</span><br><span class="email-value">{username}</span></div>
+            <div style="margin: 10px 0;"><span class="email-label">Password</span><br><span class="email-value">{password}</span></div>
+            <div style="margin: 10px 0;"><span class="email-label">Role</span><br><span class="email-value">{role.upper()}</span></div>
         </div>
-        
-        <a href="{app_url}/login" class="btn">Login Now →</a>
-        
-        <p style="margin-top: 20px;">You can change your password after logging in if you'd like.</p>
-        
-        <div class="footer">
-            <p>If you have any questions, please contact your administrator.</p>
-            <p>— Crosswalk Team</p>
-        </div>
-    </div>
-</body>
-</html>
+        <p><a href="{app_url}/login" class="email-btn">Login Now →</a></p>
+        <p>You can change your password after logging in if you'd like.</p>
+        <p style="font-size: 12px; color: #8892b0;">If you have any questions, please contact your administrator.</p>
     """
+    html = _wrap_email_html(body)
     
     # Try Gmail API first (if connected)
     tokens = load_gmail_tokens()
@@ -2295,52 +2304,21 @@ Login URL: {app_url}/login
 
 You can change your password after logging in if you'd like.
 
-— Crosswalk Team
+— Crosswalk IQ Team
     """
     
-    html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }}
-        .container {{ max-width: 600px; margin: 0 auto; background: #16213e; border-radius: 12px; padding: 30px; }}
-        h1 {{ color: #f59e0b; margin-bottom: 20px; }}
-        .credentials {{ background: #0f3460; border-radius: 8px; padding: 20px; margin: 20px 0; }}
-        .field {{ margin: 10px 0; }}
-        .label {{ color: #888; font-size: 12px; text-transform: uppercase; }}
-        .value {{ font-size: 18px; font-weight: bold; color: #fff; font-family: monospace; }}
-        .btn {{ display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px; }}
-        .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🔐 Password Reset</h1>
+    body = f"""
+        <div class="email-header">🔐 Password Reset</div>
         <p>Your password has been reset by an administrator. Here are your new login details:</p>
-        
-        <div class="credentials">
-            <div class="field">
-                <div class="label">Username</div>
-                <div class="value">{username}</div>
-            </div>
-            <div class="field">
-                <div class="label">New Password</div>
-                <div class="value">{password}</div>
-            </div>
+        <div class="email-card">
+            <div class="email-card-title">Login details</div>
+            <div style="margin: 10px 0;"><span class="email-label">Username</span><br><span class="email-value">{username}</span></div>
+            <div style="margin: 10px 0;"><span class="email-label">New Password</span><br><span class="email-value">{password}</span></div>
         </div>
-        
-        <a href="{app_url}/login" class="btn">Login Now →</a>
-        
-        <p style="margin-top: 20px;">You can change your password after logging in if you'd like.</p>
-        
-        <div class="footer">
-            <p>— Crosswalk Team</p>
-        </div>
-    </div>
-</body>
-</html>
+        <p><a href="{app_url}/login" class="email-btn">Login Now →</a></p>
+        <p>You can change your password after logging in if you'd like.</p>
     """
+    html = _wrap_email_html(body)
     
     # Try Gmail API first
     tokens = load_gmail_tokens()
@@ -3494,18 +3472,18 @@ def request_credits():
         # Build email content
         subject = "NEEDS MORE CREDITS"
         
-        html_content = f"""
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2 style="color: #c8e600;">Credit Request from Crosswalk IQ</h2>
+        body = f"""
             <p><strong>{first_name} {last_name}</strong> would like to buy more credits.</p>
-            <p><strong>Username:</strong> {username}</p>
-            <p><strong>Email:</strong> {user_email}</p>
-            <p><strong>Current Credits:</strong> {user.get('credits', 0)}</p>
-            <p><strong>Credits Used:</strong> {user.get('credits_used', 0)}</p>
-            <hr style="border: 1px solid #333;">
-            <p style="color: #888; font-size: 12px;">This request was sent from the Crosswalk IQ dashboard.</p>
-        </div>
+            <div class="email-card">
+                <div class="email-card-title">Credit request</div>
+                <div style="margin: 10px 0;"><span class="email-label">Username</span><br><span class="email-value">{username}</span></div>
+                <div style="margin: 10px 0;"><span class="email-label">Email</span><br><span class="email-value">{user_email}</span></div>
+                <div style="margin: 10px 0;"><span class="email-label">Current Credits</span><br><span class="email-value">{user.get('credits', 0)}</span></div>
+                <div style="margin: 10px 0;"><span class="email-label">Credits Used</span><br><span class="email-value">{user.get('credits_used', 0)}</span></div>
+            </div>
+            <p style="font-size: 12px; color: #8892b0;">This request was sent from the Crosswalk IQ dashboard.</p>
         """
+        html_content = _wrap_email_html(body, title="Credit Request from Crosswalk IQ")
         
         text_content = f"""Credit Request from Crosswalk IQ
 
@@ -3577,37 +3555,13 @@ def send_workspace_invite():
             
             subject = f"📁 {invited_by} added you to a workspace - {workspace_name}"
             
-            html_content = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }}
-        .container {{ max-width: 600px; margin: 0 auto; background: #16213e; border-radius: 12px; padding: 30px; }}
-        .header {{ text-align: center; margin-bottom: 30px; }}
-        .header h1 {{ color: #00d9ff; margin: 0; font-size: 24px; }}
-        .content {{ line-height: 1.8; }}
-        .workspace-card {{ background: #1a1a2e; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #a6e22e; }}
-        .workspace-name {{ font-size: 20px; font-weight: bold; color: #a6e22e; margin-bottom: 10px; }}
-        .workspace-desc {{ color: #888; font-size: 14px; }}
-        .btn {{ display: inline-block; background: #a6e22e; color: #000; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px; }}
-        .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #333; text-align: center; color: #666; font-size: 12px; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>📁 You've been added to a workspace!</h1>
-        </div>
-        <div class="content">
+            body = f"""
             <p>Hi {username},</p>
             <p><strong>{invited_by}</strong> has added you to a new collaborative workspace in Crosswalk IQ:</p>
-            
-            <div class="workspace-card">
-                <div class="workspace-name">{workspace_name}</div>
-                {f'<div class="workspace-desc">{description}</div>' if description else ''}
+            <div class="email-card">
+                <div class="email-card-title">{workspace_name}</div>
+                {f'<div class="email-label" style="margin-top:8px;">{description}</div>' if description else ''}
             </div>
-            
             <p>In this workspace, you can:</p>
             <ul>
                 <li>Share and view audience profiles</li>
@@ -3615,20 +3569,9 @@ def send_workspace_invite():
                 <li>Leave comments and feedback</li>
                 <li>Build presentations together</li>
             </ul>
-            
-            <center>
-                <a href="{app_url}" class="btn">Open Crosswalk IQ</a>
-            </center>
-        </div>
-        <div class="footer">
-            <p>This email was sent from Crosswalk IQ</p>
-            <p>© Crosswalk NYC</p>
-        </div>
-    </div>
-</body>
-</html>
-"""
-            
+            <p><a href="{app_url}" class="email-btn">Open Crosswalk IQ</a></p>
+        """
+            html_content = _wrap_email_html(body, title="📁 You've been added to a workspace!")
             text_content = f"""
 You've been added to a workspace!
 
@@ -3648,8 +3591,7 @@ In this workspace, you can:
 Open Crosswalk IQ: {app_url}
 
 ---
-This email was sent from Crosswalk IQ
-© Crosswalk NYC
+{EMAIL_SIGNATURE}
 """
             
             try:
@@ -3680,47 +3622,16 @@ def _send_deck_collaboration_invite(to_email, deck_name, inviter_display, app_ur
     """Send email when someone is invited to collaborate on a deck. Content: asked to collaborate on PROFILE NAME deck by FIRST LAST, link to log in."""
     subject = f"You've been asked to collaborate on {deck_name} deck"
     login_url = app_url.rstrip('/') + '/login'
-    html_content = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }}
-        .container {{ max-width: 600px; margin: 0 auto; background: #16213e; border-radius: 12px; padding: 30px; }}
-        .header {{ text-align: center; margin-bottom: 30px; }}
-        .header h1 {{ color: #00d9ff; margin: 0; font-size: 24px; }}
-        .content {{ line-height: 1.8; }}
-        .deck-card {{ background: #1a1a2e; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #a6e22e; }}
-        .deck-name {{ font-size: 20px; font-weight: bold; color: #a6e22e; margin-bottom: 10px; }}
-        .inviter {{ color: #888; font-size: 14px; }}
-        .btn {{ display: inline-block; background: #a6e22e; color: #000; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px; }}
-        .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #333; text-align: center; color: #666; font-size: 12px; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>You've been asked to collaborate on a deck</h1>
-        </div>
-        <div class="content">
+    body = f"""
             <p><strong>{inviter_display}</strong> has invited you to collaborate on their presentation deck in Crosswalk IQ.</p>
-            <div class="deck-card">
-                <div class="deck-name">{deck_name}</div>
-                <div class="inviter">Invited by {inviter_display}</div>
+            <div class="email-card">
+                <div class="email-card-title">{deck_name}</div>
+                <div class="email-label" style="margin-top:8px;">Invited by {inviter_display}</div>
             </div>
             <p>You have full access to view and edit this deck. Log in to the dashboard to get started.</p>
-            <center>
-                <a href="{login_url}" class="btn">Log in to Crosswalk IQ</a>
-            </center>
-        </div>
-        <div class="footer">
-            <p>This email was sent from Crosswalk IQ</p>
-            <p>© Crosswalk NYC</p>
-        </div>
-    </div>
-</body>
-</html>
-"""
+            <p><a href="{login_url}" class="email-btn">Log in to Crosswalk IQ</a></p>
+        """
+    html_content = _wrap_email_html(body, title="You've been asked to collaborate on a deck")
     text_content = f"""
 You've been asked to collaborate on a deck
 
@@ -3734,8 +3645,7 @@ You have full access to view and edit this deck.
 Log in to the dashboard: {login_url}
 
 ---
-This email was sent from Crosswalk IQ
-© Crosswalk NYC
+{EMAIL_SIGNATURE}
 """
     try:
         success, message = send_email_via_gmail(to_email, subject, html_content, text_content)
@@ -9942,9 +9852,9 @@ def send_profile_released_email(created_by, profile_name, released_s3_key):
     base_url = os.environ.get('APP_BASE_URL', 'https://behavioral-graph.onrender.com')
     profile_url = f"{base_url}/#profileiq"
     subject = f"Your Profile IQ: {profile_name} is now available"
-    html = f"""<p>Good news! Your Profile IQ analysis for <strong>{profile_name}</strong> has been released from review and is now available in your dashboard.</p>
-<p><a href="{profile_url}" style="background:#007bff;color:white;padding:8px 16px;text-decoration:none;border-radius:6px;">View in Profile IQ</a></p>
-<p>— Behavioral Graph Team</p>"""
+    body = f"""<p>Good news! Your Profile IQ analysis for <strong>{profile_name}</strong> has been released from review and is now available in your dashboard.</p>
+<p><a href="{profile_url}" class="email-btn">View in Profile IQ</a></p>"""
+    html = _wrap_email_html(body, title="Profile IQ ready")
     text = f"Your Profile IQ analysis for {profile_name} has been released and is now available. View it at: {profile_url}"
     return send_email_via_gmail(email, subject, html, text)
 
@@ -9960,9 +9870,9 @@ def send_svod_released_email(created_by, profile_name, released_s3_key):
     base_url = os.environ.get('APP_BASE_URL', 'https://behavioral-graph.onrender.com')
     subscriber_url = f"{base_url}/#subscriberiq"
     subject = f"Your Subscriber Acquisition report: {profile_name} is now available"
-    html = f"""<p>Good news! Your Subscriber Acquisition report for <strong>{profile_name}</strong> has been released from review and is now available in your dashboard.</p>
-<p><a href="{subscriber_url}" style="background:#007bff;color:white;padding:8px 16px;text-decoration:none;border-radius:6px;">View Subscriber Acquisition report</a></p>
-<p>— Behavioral Graph Team</p>"""
+    body = f"""<p>Good news! Your Subscriber Acquisition report for <strong>{profile_name}</strong> has been released from review and is now available in your dashboard.</p>
+<p><a href="{subscriber_url}" class="email-btn">View Subscriber Acquisition report</a></p>"""
+    html = _wrap_email_html(body, title="Subscriber Acquisition report ready")
     text = f"Your Subscriber Acquisition report for {profile_name} has been released and is now available. View it at: {subscriber_url}"
     return send_email_via_gmail(email, subject, html, text)
 
@@ -10050,37 +9960,15 @@ def send_purgatory_notification(created_by, project_name, purgatory_id):
     
     subject = f"Purgatory: {project_name}"
     
-    html_content = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; background-color: #1a1a1a; color: #ffffff; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #2a2a2a; border-radius: 12px; padding: 30px;">
-            <h2 style="color: #00d4ff; margin-top: 0;">New Profile Awaiting Review</h2>
-            
-            <p style="font-size: 16px; line-height: 1.6;">
-                <strong>{creator_display}</strong> has pulled a profile for:
-            </p>
-            
-            <div style="background-color: #3a3a3a; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                <h3 style="color: #c8ff00; margin: 0 0 10px 0;">{project_name}</h3>
-            </div>
-            
-            <p style="font-size: 14px; color: #aaaaaa;">
-                Please review and release this profile from purgatory.
-            </p>
-            
-            <a href="{purgatory_url}" style="display: inline-block; background-color: #00d4ff; color: #1a1a1a; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; margin-top: 15px;">
-                Review in Purgatory
-            </a>
-            
-            <hr style="border: none; border-top: 1px solid #444; margin: 30px 0;">
-            
-            <p style="font-size: 12px; color: #666;">
-                This is an automated notification from Behavioral Graph.
-            </p>
+    body = f"""
+        <p><strong>{creator_display}</strong> has pulled a profile for:</p>
+        <div class="email-card">
+            <div class="email-card-title">{project_name}</div>
         </div>
-    </body>
-    </html>
+        <p style="color: #8892b0;">Please review and release this profile from purgatory.</p>
+        <p><a href="{purgatory_url}" class="email-btn">Review in Purgatory</a></p>
     """
+    html_content = _wrap_email_html(body, title="New Profile Awaiting Review")
     
     text_content = f"""
 New Profile Awaiting Review
