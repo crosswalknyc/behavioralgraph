@@ -23431,9 +23431,12 @@
             function getDaysFromTiming(t) {
                 const s = (t.timing || '').toString().trim();
                 if (s === 'Same Day') return 0;
-                if (s === 'Day 1') return 1;
-                const m = s.match(/^(\d+)/);
-                return m ? parseInt(m[1], 10) : 999;
+                const dayN = s.match(/^Day\s*(\d+)$/i);
+                if (dayN) return parseInt(dayN[1], 10);
+                const daysLater = s.match(/^(\d+)\s*Days?\s*Later/i);
+                if (daysLater) return parseInt(daysLater[1], 10);
+                const leadingNum = s.match(/^(\d+)/);
+                return leadingNum ? parseInt(leadingNum[1], 10) : 999;
             }
             let timingData = data.signup_timing || [];
             if (timingData.length === 0 && data.episode_signup_timing && typeof data.episode_signup_timing === 'object') {
@@ -23449,17 +23452,24 @@
                 timingData = Object.entries(aggregated).map(([timing, signups]) => ({ timing, signups: String(signups) }));
                 timingData.sort((a, b) => getDaysFromTiming(a) - getDaysFromTiming(b));
             }
-            let avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
-            if (avgDaysToSignup === 'N/A' && timingData.length > 0) {
+            let avgDaysToSignup = metrics.avg_days_to_signup;
+            const parsedAvg = avgDaysToSignup != null && avgDaysToSignup !== '' ? parseFloat(String(avgDaysToSignup).replace(/\s*days?$/i, '')) : NaN;
+            if (!Number.isFinite(parsedAvg) && timingData.length > 0) {
                 const total = timingData.reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
                 if (total > 0) {
-                    const weightedSum = timingData.reduce((sum, t) => {
+                    let weightedSum = 0;
+                    for (const t of timingData) {
                         const days = getDaysFromTiming(t);
-                        if (days >= 999) return sum;
-                        return sum + days * (parseNumber(t.signups) || 0);
-                    }, 0);
+                        if (days < 999) weightedSum += days * (parseNumber(t.signups) || 0);
+                    }
                     avgDaysToSignup = (weightedSum / total).toFixed(1);
+                } else {
+                    avgDaysToSignup = 'N/A';
                 }
+            } else if (Number.isFinite(parsedAvg)) {
+                avgDaysToSignup = String(parsedAvg);
+            } else {
+                avgDaysToSignup = 'N/A';
             }
             const show = data.metadata?.show || 'this show';
             
