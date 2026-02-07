@@ -23449,7 +23449,18 @@
                 timingData = Object.entries(aggregated).map(([timing, signups]) => ({ timing, signups: String(signups) }));
                 timingData.sort((a, b) => getDaysFromTiming(a) - getDaysFromTiming(b));
             }
-            const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
+            let avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
+            if (avgDaysToSignup === 'N/A' && timingData.length > 0) {
+                const total = timingData.reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                if (total > 0) {
+                    const weightedSum = timingData.reduce((sum, t) => {
+                        const days = getDaysFromTiming(t);
+                        if (days >= 999) return sum;
+                        return sum + days * (parseNumber(t.signups) || 0);
+                    }, 0);
+                    avgDaysToSignup = (weightedSum / total).toFixed(1);
+                }
+            }
             const show = data.metadata?.show || 'this show';
             
             // Render Insights
