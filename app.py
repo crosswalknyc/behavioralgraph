@@ -10349,6 +10349,19 @@ def release_purgatory_item():
                         save_persisted_cache()
                         break
             
+            # For SVOD: persist category to SVOD metadata so Subscriber IQ list and content list show the selected category
+            source_type = item.get('source_type', 'profile_analysis')
+            if source_type == 'svod_acquisition' and result:
+                try:
+                    svod_meta = load_svod_metadata()
+                    if result not in svod_meta:
+                        svod_meta[result] = {}
+                    svod_meta[result]['category'] = item.get('category') or 'SVOD Acquisition'
+                    save_svod_metadata(svod_meta)
+                    print(f"✅ Saved SVOD category for {result} -> {svod_meta[result]['category']}")
+                except Exception as e:
+                    print(f"⚠️ Failed to save SVOD category: {e}")
+            
             # Notify the creator: in-dashboard notification (with source_type); email only for Profile IQ
             created_by = item.get('created_by')
             source_type = item.get('source_type', 'profile_analysis')
@@ -11276,9 +11289,11 @@ def list_jobs():
                 if cat:
                     categories.add(cat)
         
-        # Include purgatory items in the list so they appear in the dashboard and can be viewed
+        # Include purgatory items in the list so they appear in the dashboard and can be viewed (exclude SVOD — those go to Subscriber IQ only)
         existing_keys = {e.get('s3_key') for e in job_list if e.get('s3_key')}
         for purgatory_id, item in purgatory_meta.items():
+            if purgatory_id.startswith(SUBSCRIBER_S3_BUCKET + ':'):
+                continue  # SVOD purgatory: only show in Subscriber IQ, not Profile IQ
             if item.get('status') == 'approved' and item.get('released_key'):
                 continue  # Already released; may be in cache under released_key
             s3_key = item.get('s3_key')
@@ -11299,6 +11314,10 @@ def list_jobs():
             cat = item.get('category')
             if cat:
                 categories.add(cat)
+        
+        # Profile IQ must not show SVOD Acquisition — only Subscriber IQ shows those
+        job_list = [e for e in job_list if not e.get('is_svod') and not (e.get('s3_key') or '').startswith('svod-acquisition/') and not (e.get('job_id') or '').startswith('svod-acquisition/')]
+        categories = {e.get('category') for e in job_list if e.get('category')}
         
         # Sort by created_at descending (safe key for missing/None values)
         sorted_jobs = sorted(job_list, key=lambda x: x.get('created_at') or '', reverse=True)
