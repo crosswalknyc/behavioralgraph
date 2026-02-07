@@ -15004,7 +15004,7 @@
                         </div>
                         <div id="ticketSalesAttributionSection" style="margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: var(--text-secondary);">Attribution</h3>
-                            <div id="ticketSalesAttributionGrid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1rem; aspect-ratio: 1; max-height: 420px;"></div>
+                            <div id="ticketSalesAttributionGrid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1rem; min-height: 360px; height: min(580px, 50vh);"></div>
                         </div>
                         <div id="ticketSalesTalentAttributionSection" style="margin-bottom: 1.5rem;"></div>
                         <div id="ticketSalesPerTalentChart" style="height: 260px; margin-bottom: 1.5rem; display: none;"></div>
@@ -21847,6 +21847,56 @@
                         }
                     }
                 });
+                const combinedLabels = [];
+                const combinedValues = [];
+                const combinedColors = [];
+                const combinedSliceColors = ['rgba(147, 51, 234, 0.9)', 'rgba(219, 39, 119, 0.9)', 'rgba(245, 158, 11, 0.9)', 'rgba(163, 230, 53, 0.9)'];
+                ta.forEach((t, i) => {
+                    const nameUp = (t.name || '').toUpperCase();
+                    const lc = _parseGenPop(t.convGenPop || '0');
+                    const as = _parseGenPop(t.hitsGenPop || '0');
+                    const colorIdx = i * 2;
+                    if (lc > 0) { combinedLabels.push(nameUp + ' – Last Click'); combinedValues.push(lc); combinedColors.push(combinedSliceColors[colorIdx % combinedSliceColors.length]); }
+                    if (as > 0) { combinedLabels.push(nameUp + ' – Assisted'); combinedValues.push(as); combinedColors.push(combinedSliceColors[(colorIdx + 1) % combinedSliceColors.length]); }
+                });
+                const combinedTotal = combinedValues.reduce((s, v) => s + v, 0);
+                if (combinedLabels.length > 0 && combinedTotal > 0) {
+                    const combinedDiv = document.createElement('div');
+                    combinedDiv.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 100%; min-height: 0; position: relative; display: flex; flex-direction: column;';
+                    const combinedCanvas = document.createElement('canvas');
+                    combinedCanvas.style.flex = '1';
+                    combinedDiv.appendChild(combinedCanvas);
+                    gridContainer.appendChild(combinedDiv);
+                    if (ticketSalesCharts.pieCombined) ticketSalesCharts.pieCombined.destroy();
+                    ticketSalesCharts.pieCombined = new Chart(combinedCanvas, {
+                        type: 'pie',
+                        data: {
+                            labels: combinedLabels,
+                            datasets: [{ data: combinedValues, backgroundColor: combinedColors }]
+                        },
+                        plugins: [ChartDataLabels],
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            layout: { padding: 8 },
+                            plugins: {
+                                title: { display: true, text: 'Combined by Talent', color: '#94a3b8', font: { size: 14 } },
+                                legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12, padding: 8, font: { size: 10 } } },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (c) => { const pct = combinedTotal > 0 ? ((c.raw / combinedTotal) * 100).toFixed(1) : 0; return ` ${c.label}: ${fmtVal(c.raw)} (${pct}%)`; }
+                                    }
+                                },
+                                datalabels: {
+                                    color: '#e2e8f0',
+                                    font: { size: 10 },
+                                    formatter: (v) => combinedTotal > 0 ? ((v / combinedTotal) * 100).toFixed(0) + '%' : '',
+                                    display: (ctx) => ctx.dataset.data[ctx.dataIndex] / combinedTotal >= 0.06
+                                }
+                            }
+                        }
+                    });
+                }
                 ['Last Click Attribution', 'Assisted Conversion'].forEach((title, idx) => {
                     const data = idx === 0 ? lastClickData : assistedData;
                     const total = data.reduce((s, x) => s + x.value, 0);
@@ -21888,56 +21938,6 @@
                         }
                     });
                 });
-                const combinedLabels = [];
-                const combinedValues = [];
-                const combinedColors = [];
-                const combinedSliceColors = ['rgba(147, 51, 234, 0.9)', 'rgba(219, 39, 119, 0.9)', 'rgba(245, 158, 11, 0.9)', 'rgba(163, 230, 53, 0.9)'];
-                ta.forEach((t, i) => {
-                    const nameUp = (t.name || '').toUpperCase();
-                    const lc = _parseGenPop(t.convGenPop || '0');
-                    const as = _parseGenPop(t.hitsGenPop || '0');
-                    const colorIdx = i * 2;
-                    if (lc > 0) { combinedLabels.push(nameUp + ' – Last Click'); combinedValues.push(lc); combinedColors.push(combinedSliceColors[colorIdx % combinedSliceColors.length]); }
-                    if (as > 0) { combinedLabels.push(nameUp + ' – Assisted'); combinedValues.push(as); combinedColors.push(combinedSliceColors[(colorIdx + 1) % combinedSliceColors.length]); }
-                });
-                const combinedTotal = combinedValues.reduce((s, v) => s + v, 0);
-                if (combinedLabels.length > 0 && combinedTotal > 0) {
-                    const div = document.createElement('div');
-                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 100%; min-height: 0; position: relative; display: flex; flex-direction: column;';
-                    const canvas = document.createElement('canvas');
-                    canvas.style.flex = '1';
-                    div.appendChild(canvas);
-                    gridContainer.appendChild(div);
-                    if (ticketSalesCharts.pieCombined) ticketSalesCharts.pieCombined.destroy();
-                    ticketSalesCharts.pieCombined = new Chart(canvas, {
-                        type: 'pie',
-                        data: {
-                            labels: combinedLabels,
-                            datasets: [{ data: combinedValues, backgroundColor: combinedColors }]
-                        },
-                        plugins: [ChartDataLabels],
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            layout: { padding: 8 },
-                            plugins: {
-                                title: { display: true, text: 'Combined by Talent', color: '#94a3b8', font: { size: 14 } },
-                                legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12, padding: 8, font: { size: 10 } } },
-                                tooltip: {
-                                    callbacks: {
-                                        label: (c) => { const pct = combinedTotal > 0 ? ((c.raw / combinedTotal) * 100).toFixed(1) : 0; return ` ${c.label}: ${fmtVal(c.raw)} (${pct}%)`; }
-                                    }
-                                },
-                                datalabels: {
-                                    color: '#e2e8f0',
-                                    font: { size: 10 },
-                                    formatter: (v) => combinedTotal > 0 ? ((v / combinedTotal) * 100).toFixed(0) + '%' : '',
-                                    display: (ctx) => ctx.dataset.data[ctx.dataIndex] / combinedTotal >= 0.06
-                                }
-                            }
-                        }
-                    });
-                }
             }
         }
         
