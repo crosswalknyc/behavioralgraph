@@ -6664,34 +6664,6 @@ def parse_subscriber_iq_csv(csv_content):
             parsed['key_metrics']['avg_days_to_signup'] = f"{(weighted / total):.1f}"
             print(f"   📊 Computed avg_days_to_signup from signup_timing: {parsed['key_metrics']['avg_days_to_signup']}")
 
-    # Compute avg_days_to_signup from signup_timing when missing from key_metrics
-    if not parsed['key_metrics'].get('avg_days_to_signup') and parsed['signup_timing']:
-        def _days_from_timing(t):
-            s = (t.get('timing') or '').strip()
-            if s == 'Same Day': return 0
-            if s == 'Day 1': return 1
-            m = re.match(r'^(\d+)', s)
-            return int(m.group(1), 10) if m else 999
-        total = sum(parse_number(t.get('signups') or 0) for t in parsed['signup_timing'])
-        if total > 0:
-            weighted = sum(_days_from_timing(t) * (parse_number(t.get('signups') or 0) or 0)
-                          for t in parsed['signup_timing'] if _days_from_timing(t) < 999)
-            parsed['key_metrics']['avg_days_to_signup'] = f"{(weighted / total):.1f}"
-            print(f"   📊 Computed avg_days_to_signup from signup_timing: {parsed['key_metrics']['avg_days_to_signup']}")
-
-    # Compute avg_days_to_signup from signup_timing when missing from key_metrics
-    if not parsed['key_metrics'].get('avg_days_to_signup') and parsed['signup_timing']:
-        def _days_from_timing(t):
-            s = (t.get('timing') or '').strip()
-            if s == 'Same Day': return 0
-            if s == 'Day 1': return 1
-            m = re.search(r'^(\d+)', s)
-            return int(m.group(1)) if m else 999
-        total = sum(parse_number(t.get('signups')) or 0 for t in parsed['signup_timing'])
-        if total > 0:
-            weighted = sum(_days_from_timing(t) * (parse_number(t.get('signups')) or 0) for t in parsed['signup_timing'] if _days_from_timing(t) < 999)
-            parsed['key_metrics']['avg_days_to_signup'] = f"{(weighted / total):.1f}"
-    
     # Log parsing summary
     print(f"📊 Parsing complete:")
     print(f"   Key metrics: {len(parsed['key_metrics'])} items")
