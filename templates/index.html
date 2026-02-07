@@ -12372,18 +12372,10 @@
                                     </div>
                                     
                                     <div class="form-actions">
-                                        <button type="submit" class="btn-primary">Run Analysis</button>
+                                        <button type="submit" class="btn btn-primary btn-run-analysis">🚀 RUN ANALYSIS</button>
                                     </div>
                                 </div>
                             </form>
-                            
-                            <!-- Job Status Display -->
-                            <div id="customSVODAcquisitionJobStatus" style="display: none; margin-top: 2rem;">
-                                <div class="card">
-                                    <h3>Job Status</h3>
-                                    <div id="customSVODAcquisitionJobStatusContent"></div>
-                                </div>
-                            </div>
                         </div>
                         <div class="card">
                             <h2>📈 Status & Results</h2>
@@ -17162,7 +17154,6 @@
                 
                 const data = await response.json();
                 if (response.ok) {
-                    document.getElementById('customSVODAcquisitionJobStatus').style.display = 'block';
                     showAnalysisStatusModal();
                     pollCustomSVODAcquisitionJobStatus(data.job_id, projectName || data.project_name || 'SVOD Acquisition');
                 } else {
