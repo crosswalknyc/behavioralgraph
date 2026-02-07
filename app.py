@@ -6454,6 +6454,13 @@ def parse_subscriber_iq_csv(csv_content):
                     parsed['metadata']['platform'] = platform_val
                     print(f"   ✅ Fallback: Found platform in second column: '{platform_val}'")
     
+    # Platform from column D (index 3), row 5 (index 4)
+    if len(rows) > 4 and len(rows[4]) > 3:
+        platform_from_d5 = rows[4][3].strip()
+        if platform_from_d5:
+            parsed['metadata']['platform'] = platform_from_d5
+            print(f"   📺 Platform from column D row 5: '{platform_from_d5}'")
+    
     # Fallback: If key metrics weren't found, try to find them anyway
     if not parsed['key_metrics'].get('total_watchers'):
         print("   ⚠️ Key metrics not found via section detection, trying fallback parsing...")
