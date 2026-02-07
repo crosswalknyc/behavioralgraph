@@ -1259,14 +1259,17 @@ def run_query(conn, p):
     # Store raw values before boosting (TOTAL_SHOW_WATCHERS already multiplied by 4 earlier)
     raw_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
     raw_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if ('NEW_SIGNUPS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS'])) else 0
+    # Save raw Clean Sample before we overwrite it (needed so Clean Conversion Rate uses denominator * 4)
+    raw_clean_sample = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if ('CLEAN_SAMPLE_SIZE' in df_summary.columns and not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE'])) else 0
     
     # Boost TOTAL_SHOW_WATCHERS first, then use that boosted value for calculations
+    total_watchers_multiplier = None
     if 'TOTAL_SHOW_WATCHERS' in df_summary.columns and raw_total_watchers > 0:
         total_watchers_multiplier = calculate_boost_multiplier(raw_total_watchers)
         boosted_total_watchers = int(raw_total_watchers * total_watchers_multiplier)
         df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = boosted_total_watchers
         
-        # Recalculate TOTAL_SHOW_CONVERSION_RATE and CLEAN_CONVERSION_RATE from boosted Total Show Watchers (raw*4*dynamic)
+        # Recalculate TOTAL_SHOW_CONVERSION_RATE from boosted Total Show Watchers (raw*4*dynamic)
         if 'NEW_SIGNUPS' in df_summary.columns:
             raw_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
             if raw_new_signups > 0:
@@ -1275,7 +1278,6 @@ def run_query(conn, p):
                 df_summary.loc[0, 'NEW_SIGNUPS'] = boosted_new_signups
             else:
                 boosted_new_signups = 0
-            # Total Show Conversion Rate uses boosted Total Show Watchers (raw*4*dynamic) as denominator
             if boosted_total_watchers > 0:
                 current_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
                 df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((current_signups * 100.0) / boosted_total_watchers, 2)
@@ -1289,12 +1291,13 @@ def run_query(conn, p):
                     multiplier = calculate_boost_multiplier(raw_val)
                     df_summary.loc[idx, col] = int(raw_val * multiplier)
     
-    # Clean Conversion Rate = (boosted New Signups) / (boosted Clean Sample) — different from Total Show Conversion Rate
-    if 'CLEAN_SAMPLE_SIZE' in df_summary.columns and 'NEW_SIGNUPS' in df_summary.columns:
-        boosted_clean_sample = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) else 0
-        boosted_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
-        if boosted_clean_sample > 0:
-            df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((boosted_new_signups * 100.0) / boosted_clean_sample, 2)
+    # Clean Conversion Rate = (boosted New Signups) / (Clean Sample * 4 * same dynamic mult as Total Show Watchers)
+    # So the denominator uses the "number multiplied by 4" like Total Show Watchers, not the un-multiplied Clean Sample.
+    if raw_clean_sample > 0 and total_watchers_multiplier is not None and 'NEW_SIGNUPS' in df_summary.columns:
+        denominator_clean_4x = (raw_clean_sample * 4) * total_watchers_multiplier
+        if denominator_clean_4x > 0:
+            current_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
+            df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((current_signups * 100.0) / denominator_clean_4x, 2)
     
     # Boost demographic counts (using dynamic per-value multipliers)
     if 'COUNT' in df_demo.columns:
