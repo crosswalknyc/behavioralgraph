@@ -6145,8 +6145,8 @@ def parse_subscriber_iq_csv(csv_content):
             elif 'Total Show Conversion Rate' in first_col:
                 parsed['key_metrics']['total_conversion_rate'] = (row[8].strip() if len(row) > 8 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Average Days' in first_col:
-                # Value can be in col 3 (e.g. "7.2"); strip trailing "days" if present
-                val = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '')
+                # Value can be in col 2, 3, or 4 (SVOD CSV: "Average Days from Show Available to Signup", "", "", "", "7.2", "days")
+                val = (row[4].strip() if len(row) > 4 else '') or (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '')
                 if val and val.lower().endswith('days'):
                     val = val[:-4].strip()
                 parsed['key_metrics']['avg_days_to_signup'] = val
@@ -6640,6 +6640,44 @@ def parse_subscriber_iq_csv(csv_content):
                     parsed['demographics']['gender'].append({'gender': first_col, 'count': _c, 'percentage': _p, 'gen_pop': _g})
         if parsed['demographics']['age'] or parsed['demographics']['gender']:
             print(f"   ✅ Fallback: Found demographics (age: {len(parsed['demographics']['age'])}, gender: {len(parsed['demographics']['gender'])})")
+
+    # Compute avg_days_to_signup from signup_timing when missing from key_metrics
+    if not parsed['key_metrics'].get('avg_days_to_signup') and parsed['signup_timing']:
+        def _days_from_timing(label):
+            s = (label or '').strip()
+            if s == 'Same Day': return 0
+            m = re.match(r'^Day\s*(\d+)$', s, re.I)
+            if m: return int(m.group(1))
+            m = re.match(r'^(\d+)\s*Days?\s*Later', s, re.I)
+            if m: return int(m.group(1))
+            m = re.match(r'^(\d+)', s)
+            return int(m.group(1)) if m else None
+        total = 0
+        weighted = 0
+        for t in parsed['signup_timing']:
+            days = _days_from_timing(t.get('timing', ''))
+            if days is not None:
+                cnt = parse_number(t.get('signups', 0)) or 0
+                total += cnt
+                weighted += days * cnt
+        if total > 0:
+            parsed['key_metrics']['avg_days_to_signup'] = f"{(weighted / total):.1f}"
+            print(f"   📊 Computed avg_days_to_signup from signup_timing: {parsed['key_metrics']['avg_days_to_signup']}")
+
+    # Compute avg_days_to_signup from signup_timing when missing from key_metrics
+    if not parsed['key_metrics'].get('avg_days_to_signup') and parsed['signup_timing']:
+        def _days_from_timing(t):
+            s = (t.get('timing') or '').strip()
+            if s == 'Same Day': return 0
+            if s == 'Day 1': return 1
+            m = re.match(r'^(\d+)', s)
+            return int(m.group(1), 10) if m else 999
+        total = sum(parse_number(t.get('signups') or 0) for t in parsed['signup_timing'])
+        if total > 0:
+            weighted = sum(_days_from_timing(t) * (parse_number(t.get('signups') or 0) or 0)
+                          for t in parsed['signup_timing'] if _days_from_timing(t) < 999)
+            parsed['key_metrics']['avg_days_to_signup'] = f"{(weighted / total):.1f}"
+            print(f"   📊 Computed avg_days_to_signup from signup_timing: {parsed['key_metrics']['avg_days_to_signup']}")
 
     # Log parsing summary
     print(f"📊 Parsing complete:")
