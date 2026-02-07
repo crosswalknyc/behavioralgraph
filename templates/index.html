@@ -1159,6 +1159,31 @@
         }
 
         /* Timing Metrics Grid */
+        .attribution-charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 1rem;
+            min-height: 380px;
+            height: min(520px, 55vh);
+            margin-bottom: 1.5rem;
+        }
+        .attribution-charts-grid .attribution-chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .attribution-charts-grid .attribution-chart-card canvas {
+            flex: 1;
+            min-height: 0;
+            min-width: 0;
+        }
+
         .timing-metrics-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -14996,7 +15021,7 @@
                         </div>
                         <div id="ticketSalesAttributionSection" style="margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; color: var(--text-secondary);">Attribution</h3>
-                            <div id="ticketSalesAttributionGrid" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1rem; min-height: 360px; height: min(580px, 50vh);"></div>
+                            <div id="ticketSalesAttributionGrid" class="attribution-charts-grid"></div>
                         </div>
                         <div id="ticketSalesTalentAttributionSection" style="margin-bottom: 1.5rem;"></div>
                         <div id="ticketSalesPerTalentChart" style="height: 260px; margin-bottom: 1.5rem; display: none;"></div>
@@ -21817,7 +21842,7 @@
                 const attMetricValues = showPctBar ? [pctLc, pctAs] : [d.totalTicketsDueToTalent, d.totalHitsAssisted];
                 const attMetricTotal = attMetricValues.reduce((s, v) => s + v, 0);
                 const attMetricDiv = document.createElement('div');
-                attMetricDiv.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 100%; min-height: 0; position: relative; display: flex; flex-direction: column;';
+                attMetricDiv.className = 'attribution-chart-card';
                 const attMetricCanvas = document.createElement('canvas');
                 attMetricDiv.appendChild(attMetricCanvas);
                 gridContainer.appendChild(attMetricDiv);
@@ -21827,12 +21852,14 @@
                     data: { labels: attMetricLabels, datasets: [{ data: attMetricValues, backgroundColor: ['rgba(147, 51, 234, 0.85)', 'rgba(163, 230, 53, 0.85)'] }] },
                     plugins: [ChartDataLabels],
                     options: {
-                        responsive: true, maintainAspectRatio: true, layout: { padding: 8 },
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: 10 },
                         plugins: {
-                            title: { display: true, text: 'Attribution Metrics', color: '#94a3b8', font: { size: 14 } },
-                            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } },
+                            title: { display: true, text: 'Attribution Metrics', color: '#94a3b8', font: { size: 13 } },
+                            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 14, padding: 6 } },
                             tooltip: { callbacks: { label: (c) => { const pct = attMetricTotal > 0 ? ((c.raw / attMetricTotal) * 100).toFixed(1) : 0; return ` ${c.label}: ${showPctBar ? c.raw.toFixed(2) + '%' : _fmtGenPopInt(String(c.raw))} (${pct}% of total)`; } } },
-                            datalabels: { color: '#e2e8f0', font: { size: 11 }, formatter: (v) => attMetricTotal > 0 ? ((v / attMetricTotal) * 100).toFixed(0) + '%' : '' }
+                            datalabels: { color: '#e2e8f0', font: { size: 12 }, formatter: (v) => attMetricTotal > 0 ? ((v / attMetricTotal) * 100).toFixed(0) + '%' : '' }
                         }
                     }
                 });
@@ -21851,9 +21878,8 @@
                 const combinedTotal = combinedValues.reduce((s, v) => s + v, 0);
                 if (combinedLabels.length > 0 && combinedTotal > 0) {
                     const combinedDiv = document.createElement('div');
-                    combinedDiv.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 100%; min-height: 0; position: relative; display: flex; flex-direction: column;';
+                    combinedDiv.className = 'attribution-chart-card';
                     const combinedCanvas = document.createElement('canvas');
-                    combinedCanvas.style.flex = '1';
                     combinedDiv.appendChild(combinedCanvas);
                     gridContainer.appendChild(combinedDiv);
                     if (ticketSalesCharts.pieCombined) ticketSalesCharts.pieCombined.destroy();
@@ -21867,10 +21893,13 @@
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
-                            layout: { padding: 8 },
+                            layout: { padding: 10 },
                             plugins: {
-                                title: { display: true, text: 'Combined by Talent', color: '#94a3b8', font: { size: 14 } },
-                                legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12, padding: 8, font: { size: 10 } } },
+                                title: { display: true, text: 'Combined by Talent', color: '#94a3b8', font: { size: 13 } },
+                                legend: {
+                                    position: 'right',
+                                    labels: { color: '#94a3b8', boxWidth: 10, padding: 4, font: { size: 9 } }
+                                },
                                 tooltip: {
                                     callbacks: {
                                         label: (c) => { const pct = combinedTotal > 0 ? ((c.raw / combinedTotal) * 100).toFixed(1) : 0; return ` ${c.label}: ${fmtVal(c.raw)} (${pct}%)`; }
@@ -21891,7 +21920,7 @@
                     const total = data.reduce((s, x) => s + x.value, 0);
                     if (data.length === 0 || total === 0) return;
                     const div = document.createElement('div');
-                    div.style.cssText = 'background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); max-height: 100%; min-height: 0; position: relative; display: flex; flex-direction: column;';
+                    div.className = 'attribution-chart-card';
                     const canvas = document.createElement('canvas');
                     div.appendChild(canvas);
                     gridContainer.appendChild(div);
@@ -21907,11 +21936,11 @@
                         plugins: [ChartDataLabels],
                         options: {
                             responsive: true,
-                            maintainAspectRatio: true,
-                            layout: { padding: 8 },
+                            maintainAspectRatio: false,
+                            layout: { padding: 10 },
                             plugins: {
-                                title: { display: true, text: title, color: '#94a3b8', font: { size: 14 } },
-                                legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12, padding: 8, font: { size: 11 } } },
+                                title: { display: true, text: title, color: '#94a3b8', font: { size: 13 } },
+                                legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 14, padding: 6, font: { size: 10 } } },
                                 tooltip: {
                                     callbacks: {
                                         label: (c) => { const pct = total > 0 ? ((c.raw / total) * 100).toFixed(1) : 0; return ` ${c.label}: ${fmtVal(c.raw)} (${pct}%)`; }
