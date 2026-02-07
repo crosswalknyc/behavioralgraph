@@ -22533,11 +22533,6 @@
                             <div class="exec-metric-desc">Viewers to subscribers</div>
                         </div>
                     </div>
-                    <div class="exec-summary-insight">
-                        <strong>${show}</strong> demonstrated ${totalSignups > 10000 ? 'exceptional' : totalSignups > 5000 ? 'strong' : 'moderate'} platform value, 
-                        ${isStrongNewViewerAppeal ? 'strongly appealing to new audiences' : 'engaging both new and existing viewers'} 
-                        with ${isFastConversion ? 'immediate' : 'sustained'} conversion patterns.
-                    </div>
                 </div>
             `;
             
@@ -22587,12 +22582,6 @@
                             </div>
                         </div>
                     </div>
-                    <div class="value-insight-box">
-                        <strong>Strategic Value:</strong> ${show} delivered ${valueStrength}-value subscriber growth for ${platformLabel}, 
-                        with ${attributionPct}% direct attribution demonstrating clear ROI. 
-                        ${isStrongReactivation ? `Strong reactivation (${reactivationPct}%) indicated retention value beyond new acquisition.` : 
-                        'Focus on new subscriber acquisition with opportunity to improve reactivation.'}
-                    </div>
                 </div>
             `;
             
@@ -22608,7 +22597,10 @@
                         <div class="episode-performance-grid">
                             ${topEpisodes.map((ep, idx) => {
                                 const episodePct = totalSignups > 0 ? ((ep.signups / totalSignups) * 100).toFixed(2) : 0;
-                                const epLabel = (ep.episode || '').includes('/') ? ep.episode : `Episode ${ep.episode}`;
+                                const epStr = String(ep.episode || '');
+                                const isDateEpisode = epStr.includes('/');
+                                const hasNoValue = !(ep.signups && Number(ep.signups) > 0);
+                                const epLabel = (isDateEpisode && hasNoValue) ? 'Single Drop Day' : (isDateEpisode ? epStr : `Episode ${epStr}`);
                                 return `
                                     <div class="episode-performance-card ${idx === 0 ? 'top-performer' : ''} has-tooltip" data-tooltip="${epLabel}: Drove ${formatNumber(ep.signups)} platform signups (${episodePct}% of total). ${ep.days_avg ? `Average ${ep.days_avg} days from release to signup.` : ''}">
                                         <div class="episode-rank">#${idx + 1}</div>
@@ -23362,11 +23354,19 @@
             } else {
                 const totalSignups = episodes.reduce((s, e) => s + (Number(e.signups) || 0), 0);
                 const pct = (ep) => (ep.percentage && ep.percentage !== 'N/A' ? ep.percentage : (totalSignups ? ((Number(ep.signups) || 0) / totalSignups * 100).toFixed(1) + '%' : 'N/A'));
+                const getEpLabel = (ep) => {
+                    const epStr = String(ep.episode || '');
+                    const isDateEpisode = epStr.includes('/');
+                    const hasNoValue = !(ep.signups && Number(ep.signups) > 0);
+                    return (isDateEpisode && hasNoValue) ? 'Single Drop Day' : (isDateEpisode ? epStr : `Episode ${epStr}`);
+                };
                 container.innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
-                        ${episodes.map(ep => `
-                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="Episode ${ep.episode}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${formatNumber(ep.signups)} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
-                                <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">Episode ${ep.episode}</h4>
+                        ${episodes.map(ep => {
+                            const epLabel = getEpLabel(ep);
+                            return `
+                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="${epLabel}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${formatNumber(ep.signups)} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
+                                <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">${epLabel}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                                     ${ep.episode_date ? `
                                     <div class="has-tooltip" data-tooltip="Date this episode became available" style="display: flex; justify-content: space-between;">
@@ -23396,7 +23396,8 @@
                                     ` : ''}
                                 </div>
                             </div>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </div>
                 `;
             }
