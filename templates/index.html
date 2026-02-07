@@ -14692,7 +14692,7 @@
                             
                             <!-- Key Metrics Overview -->
                             <div id="subscriberKeyMetrics" class="strategic-section"></div>
-                            <!-- Subscription Revenue (from SVOD pricing × total signups) -->
+                            <!-- Revenue from new subscribers: monthly/yearly, premium & ad-supported (SVOD pricing) -->
                             <div id="subscriberSubscriptionRevenue" class="strategic-section"></div>
                         </div>
 
@@ -22818,7 +22818,7 @@
                 `;
             }
             
-            // 7. SUBSCRIPTION REVENUE (from SVOD pricing × total signups)
+            // 7. REVENUE FROM NEW SUBSCRIBERS (monthly & yearly; premium and ad-supported from SVOD pricing)
             const subscriberPlatformName = data.platform || data.metadata?.platform || '';
             const pricing = data.svod_pricing || {};
             const signupsForRevenue = (subscriberGenPopMode && totalSignupsGenPop)
@@ -22832,46 +22832,47 @@
                     const fmt = (n) => (n >= 1e9 ? (n/1e9).toFixed(2) + 'B' : n >= 1e6 ? (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? (n/1e3).toFixed(2) + 'K' : n.toFixed(2));
                     const monthlyAd = signupsForRevenue * ad;
                     const monthlyPrem = signupsForRevenue * prem;
-                    const weeklyAd = monthlyAd / (52/12);
-                    const weeklyPrem = monthlyPrem / (52/12);
                     const yearlyAd = monthlyAd * 12;
                     const yearlyPrem = monthlyPrem * 12;
+                    const revenueBlurb = `Estimated revenue from new subscribers attributed to this show. Uses platform <strong>${subscriberPlatformName || '—'}</strong> and monthly price from <strong>Admin → Settings → SVOD Pricing</strong>. Based on ${formatNumber(signupsForRevenue)} signups.`;
                     subscriptionRevenueContainer.innerHTML = `
-                        <div class="strategic-card">
-                            <h3>💰 Subscription Revenue (from this show)</h3>
-                            <p class="section-description" style="margin-bottom: 1rem;">Estimated subscription revenue the streaming platform generates from signups attributed to this show. Uses total signups × <strong>monthly price per subscriber</strong> (configured in Admin → Settings → SVOD Pricing). Weekly and yearly are derived from monthly.</p>
-                            <div class="value-assessment-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-                                <div class="value-metric-card">
-                                    <div class="value-metric-header"><span class="value-icon">📅</span><span class="value-label">Weekly</span></div>
-                                    ${ad > 0 ? `<div class="value-metric-desc">Ad-supported: $${fmt(weeklyAd)}</div>` : ''}
-                                    ${prem > 0 ? `<div class="value-metric-desc">Premium: $${fmt(weeklyPrem)}</div>` : ''}
-                                    ${ad === 0 && prem === 0 ? '<div class="value-metric-desc">—</div>' : ''}
-                                </div>
-                                <div class="value-metric-card">
-                                    <div class="value-metric-header"><span class="value-icon">📆</span><span class="value-label">Monthly</span></div>
-                                    ${ad > 0 ? `<div class="value-metric-desc">Ad-supported: $${fmt(monthlyAd)}</div>` : ''}
-                                    ${prem > 0 ? `<div class="value-metric-desc">Premium: $${fmt(monthlyPrem)}</div>` : ''}
-                                    ${ad === 0 && prem === 0 ? '<div class="value-metric-desc">—</div>' : ''}
-                                </div>
-                                <div class="value-metric-card">
-                                    <div class="value-metric-header"><span class="value-icon">📈</span><span class="value-label">Yearly</span></div>
-                                    ${ad > 0 ? `<div class="value-metric-desc">Ad-supported: $${fmt(yearlyAd)}</div>` : ''}
-                                    ${prem > 0 ? `<div class="value-metric-desc">Premium: $${fmt(yearlyPrem)}</div>` : ''}
-                                    ${ad === 0 && prem === 0 ? '<div class="value-metric-desc">—</div>' : ''}
+                        <p class="section-description" style="margin-bottom: 1rem;">${revenueBlurb}</p>
+                        <div class="value-assessment-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+                            <div class="strategic-card" style="margin-bottom: 0;">
+                                <h3 style="font-size: 1rem;">💰 Revenue from new subscribers — Premium</h3>
+                                <p class="section-description" style="margin-bottom: 0.75rem; font-size: 0.85rem;">Modeled at $${prem}/mo per subscriber.</p>
+                                <div class="value-assessment-grid" style="grid-template-columns: 1fr 1fr;">
+                                    <div class="value-metric-card">
+                                        <div class="value-metric-header"><span class="value-icon">📆</span><span class="value-label">Monthly</span></div>
+                                        <div class="value-metric-desc">$${fmt(monthlyPrem)}</div>
+                                    </div>
+                                    <div class="value-metric-card">
+                                        <div class="value-metric-header"><span class="value-icon">📈</span><span class="value-label">Yearly</span></div>
+                                        <div class="value-metric-desc">$${fmt(yearlyPrem)}</div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="value-metric-breakdown" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
-                                Based on ${formatNumber(signupsForRevenue)} signups
-                                ${ad > 0 || prem > 0 ? ' × $' + (ad > 0 ? ad + ' (ad-supported)' : '') + (prem > 0 ? (ad > 0 ? ', $' : '$') + prem + ' (premium)' : '') + ' per month' : ''}.
-                                ${subscriberPlatformName ? ' Platform: ' + subscriberPlatformName + '.' : ''}
+                            <div class="strategic-card" style="margin-bottom: 0;">
+                                <h3 style="font-size: 1rem;">💰 Revenue from new subscribers — Ad-supported</h3>
+                                <p class="section-description" style="margin-bottom: 0.75rem; font-size: 0.85rem;">Modeled at $${ad}/mo per subscriber.</p>
+                                <div class="value-assessment-grid" style="grid-template-columns: 1fr 1fr;">
+                                    <div class="value-metric-card">
+                                        <div class="value-metric-header"><span class="value-icon">📆</span><span class="value-label">Monthly</span></div>
+                                        <div class="value-metric-desc">$${fmt(monthlyAd)}</div>
+                                    </div>
+                                    <div class="value-metric-card">
+                                        <div class="value-metric-header"><span class="value-icon">📈</span><span class="value-label">Yearly</span></div>
+                                        <div class="value-metric-desc">$${fmt(yearlyAd)}</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     `;
                 } else {
                     subscriptionRevenueContainer.innerHTML = `
                         <div class="strategic-card">
-                            <h3>💰 Subscription Revenue</h3>
-                            <p class="section-description">To see estimated subscription revenue here, add pricing for this show's platform in <strong>Admin → Settings → SVOD Pricing</strong>. Platform from CSV: <strong>${subscriberPlatformName || '—'}</strong></p>
+                            <h3>💰 Revenue from new subscribers</h3>
+                            <p class="section-description">To see monthly and yearly revenue (premium and ad-supported) here, add pricing for this show's platform in <strong>Admin → Settings → SVOD Pricing</strong>. Platform from CSV: <strong>${subscriberPlatformName || '—'}</strong></p>
                         </div>
                     `;
                 }
