@@ -14794,9 +14794,6 @@
                             <!-- Audience Acquisition Insights -->
                             <div id="subscriberAudienceAcquisition" class="strategic-section"></div>
                             
-                            <!-- Strategic Recommendations -->
-                            <div id="subscriberRecommendations" class="strategic-section"></div>
-                            
                             <!-- Key Metrics Overview -->
                             <div id="subscriberKeyMetrics" class="strategic-section"></div>
                             <!-- Revenue from new subscribers: monthly/yearly, premium & ad-supported (SVOD pricing) -->
@@ -22671,12 +22668,11 @@
             const platformValueContainer = document.getElementById('subscriberPlatformValue');
             const contentPerformanceContainer = document.getElementById('subscriberContentPerformance');
             const audienceAcquisitionContainer = document.getElementById('subscriberAudienceAcquisition');
-            const recommendationsContainer = document.getElementById('subscriberRecommendations');
             const keyMetricsContainer = document.getElementById('subscriberKeyMetrics');
             const subscriptionRevenueContainer = document.getElementById('subscriberSubscriptionRevenue');
             
             if (!execSummaryContainer || !platformValueContainer || !contentPerformanceContainer || 
-                !audienceAcquisitionContainer || !recommendationsContainer || !keyMetricsContainer) {
+                !audienceAcquisitionContainer || !keyMetricsContainer) {
                 console.error('❌ Containers not found');
                 return;
             }
@@ -22967,23 +22963,6 @@
                     insight: `Continue tracking performance metrics to identify optimization opportunities as more data becomes available.`
                 });
             }
-            
-            recommendationsContainer.innerHTML = `
-                <div class="strategic-card">
-                    <h3>💡 Strategic Recommendations</h3>
-                    <div class="recommendations-list">
-                        ${recommendations.map(rec => `
-                            <div class="recommendation-item">
-                                <div class="recommendation-icon">${rec.icon}</div>
-                                <div class="recommendation-content">
-                                    <div class="recommendation-title">${rec.title}</div>
-                                    <div class="recommendation-insight">${rec.insight}</div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
             
             // 6. KEY METRICS OVERVIEW
             if (keyMetricsContainer) {
