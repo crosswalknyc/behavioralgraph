@@ -14151,6 +14151,9 @@ def submit_svod_acquisition():
         # Create job
         job_id = str(uuid.uuid4())
         
+        track_episodes = data.get('track_episodes', False)
+        tracking_mode = data.get('tracking_mode')  # 'episode', 'date', or None
+        raw_episode_dates = data.get('episode_dates', [])
         jobs[job_id] = {
             'job_id': job_id,
             'username': username,
@@ -14171,7 +14174,10 @@ def submit_svod_acquisition():
                 'show_search_terms': show_search_terms,
                 'is_new_show': data.get('is_new_show', False),
                 'platform_name': platform_name,
-                'genre': genre if genre else ''
+                'genre': genre if genre else '',
+                'track_episodes': track_episodes,
+                'tracking_mode': tracking_mode,
+                'episode_dates': raw_episode_dates
             }
         }
         
@@ -14316,7 +14322,33 @@ def run_svod_acquisition(job_id):
         campaign_start = datetime.strptime(params['campaign_start'], '%Y-%m-%d')
         campaign_end = datetime.strptime(params['campaign_end'], '%Y-%m-%d')
         
-        # Build script parameters dict (matching get_user_input from SVOD_Churn_Attribution.py exactly)
+        # Build episode_dates: script expects list of {episode_num, air_date (datetime), date_str, display_label}
+        episode_dates = []
+        for raw in params.get('episode_dates') or []:
+            date_str = raw.get('date_str') or raw.get('air_date')
+            if not date_str:
+                continue
+            try:
+                if isinstance(date_str, str) and '-' in date_str:
+                    # Support MM-DD-YYYY from form
+                    if len(date_str) == 10 and date_str[2] == '-' and date_str[5] == '-':
+                        air_date = datetime.strptime(date_str, '%m-%d-%Y')
+                    else:
+                        air_date = datetime.strptime(date_str, '%Y-%m-%d')
+                else:
+                    continue
+            except ValueError:
+                continue
+            episode_dates.append({
+                'episode_num': int(raw.get('episode_num', len(episode_dates) + 1)),
+                'air_date': air_date,
+                'date_str': air_date.strftime('%m-%d-%Y'),
+                'display_label': raw.get('display_label') or (f"Episode {raw.get('episode_num', len(episode_dates) + 1)}" if params.get('tracking_mode') == 'episode' else air_date.strftime('%m/%d/%y'))
+            })
+        if episode_dates and params.get('track_episodes'):
+            campaign_start = episode_dates[0]['air_date']
+            campaign_end = episode_dates[-1]['air_date']
+        
         competitive_brands = module.get_competitive_platforms(params['platform_name']) if hasattr(module, 'get_competitive_platforms') else []
         script_params = {
             'project_name': params['project_name'],
@@ -14327,9 +14359,9 @@ def run_svod_acquisition(job_id):
             'attribution_window': int(params['attribution_window']),
             'show_search_terms': params['show_search_terms'],
             'is_new_show': params.get('is_new_show', False),
-            'track_episodes': False,  # Simplified - can be enhanced later
-            'tracking_mode': None,
-            'episode_dates': [],
+            'track_episodes': bool(params.get('track_episodes', False)),
+            'tracking_mode': params.get('tracking_mode'),
+            'episode_dates': episode_dates,
             'platform_name': params['platform_name'],
             'competitive_brands': competitive_brands,
             'genre': params.get('genre', '') or ''

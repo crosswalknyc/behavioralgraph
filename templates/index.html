@@ -12273,6 +12273,79 @@
                                         </div>
                                     </div>
                                     
+                                    <div class="form-row" style="grid-template-columns: 1fr;">
+                                        <div class="form-group">
+                                            <label>Track attribution per episode or by date?</label>
+                                            <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.35rem;">
+                                                <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; text-transform: none;">
+                                                    <input type="radio" name="customSVODTrackingMode" value="episode" id="customSVODTrackingEpisode" style="margin: 0;">
+                                                    <span>By episode (enter each episode air date)</span>
+                                                </label>
+                                                <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; text-transform: none;">
+                                                    <input type="radio" name="customSVODTrackingMode" value="date" id="customSVODTrackingDate" style="margin: 0;">
+                                                    <span>By date (date range or single dates)</span>
+                                                </label>
+                                                <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; text-transform: none;">
+                                                    <input type="radio" name="customSVODTrackingMode" value="none" id="customSVODTrackingNone" checked style="margin: 0;">
+                                                    <span>No (campaign date range only)</span>
+                                                </label>
+                                            </div>
+                                            <small>Matches the script: EPISODE = per-episode air dates; DATE = date range or single dates; N = no episode/date tracking.</small>
+                                        </div>
+                                    </div>
+                                    <div id="customSVODEpisodeSection" style="display: none;">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Number of episodes</label>
+                                                <input type="number" id="customSVODNumEpisodes" min="1" placeholder="e.g., 5" style="max-width: 120px;">
+                                                <small>Then enter each episode air date below (one per line, MM-DD-YYYY).</small>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Episode air dates (one per line, MM-DD-YYYY)</label>
+                                                <textarea id="customSVODEpisodeDates" rows="4" placeholder="03-04-2023&#10;03-11-2023&#10;03-18-2023" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: inherit;"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="customSVODDateSection" style="display: none;">
+                                        <div class="form-row" style="grid-template-columns: 1fr;">
+                                            <div class="form-group">
+                                                <label>Date input type</label>
+                                                <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.35rem;">
+                                                    <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; text-transform: none;">
+                                                        <input type="radio" name="customSVODDateType" value="range" id="customSVODDateRange" style="margin: 0;">
+                                                        <span>Date range (generates every day)</span>
+                                                    </label>
+                                                    <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; text-transform: none;">
+                                                        <input type="radio" name="customSVODDateType" value="singular" id="customSVODDateSingular" style="margin: 0;">
+                                                        <span>Single dates (one per line)</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div id="customSVODDateRangeInputs" style="display: none;">
+                                            <div class="form-row">
+                                                <div class="form-group">
+                                                    <label>Track date range start (MM-DD-YYYY)</label>
+                                                    <input type="text" id="customSVODTrackStartDate" placeholder="03-04-2023" maxlength="10">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Track date range end (MM-DD-YYYY)</label>
+                                                    <input type="text" id="customSVODTrackEndDate" placeholder="04-04-2023" maxlength="10">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div id="customSVODDateSingularInputs" style="display: none;">
+                                            <div class="form-row">
+                                                <div class="form-group">
+                                                    <label>Dates to track (one per line, MM-DD-YYYY)</label>
+                                                    <textarea id="customSVODSingleDates" rows="4" placeholder="03-04-2023&#10;04-04-2023" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: inherit;"></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
                                     <div class="form-row">
                                         <div class="form-group">
                                             <label>Platform Name</label>
@@ -16948,6 +17021,80 @@
             }
         });
         
+        // SVOD tracking mode UI toggles
+        function updateSvodTrackingUI() {
+            const episode = document.getElementById('customSVODTrackingEpisode')?.checked;
+            const date = document.getElementById('customSVODTrackingDate')?.checked;
+            document.getElementById('customSVODEpisodeSection').style.display = episode ? 'block' : 'none';
+            document.getElementById('customSVODDateSection').style.display = date ? 'block' : 'none';
+            if (date) {
+                const range = document.getElementById('customSVODDateRange')?.checked;
+                document.getElementById('customSVODDateRangeInputs').style.display = range ? 'block' : 'none';
+                document.getElementById('customSVODDateSingularInputs').style.display = range ? 'none' : 'block';
+            }
+        }
+        document.querySelectorAll('input[name="customSVODTrackingMode"]').forEach(el => {
+            el.addEventListener('change', updateSvodTrackingUI);
+        });
+        document.querySelectorAll('input[name="customSVODDateType"]').forEach(el => {
+            el.addEventListener('change', updateSvodTrackingUI);
+        });
+        
+        // Parse MM-DD-YYYY lines into episode_dates for API (date_str only; backend adds air_date)
+        function parseSvodEpisodeDates(trackingMode, episodeLines, dateType, rangeStart, rangeEnd, singularLines) {
+            const episode_dates = [];
+            if (trackingMode === 'episode' && episodeLines && episodeLines.length > 0) {
+                const re = /^\s*(\d{1,2})-(\d{1,2})-(\d{4})\s*$/;
+                episodeLines.forEach((line, idx) => {
+                    const m = line.match(re);
+                    if (m) {
+                        const date_str = `${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}-${m[3]}`;
+                        episode_dates.push({
+                            episode_num: idx + 1,
+                            date_str: date_str,
+                            display_label: `Episode ${idx + 1}`
+                        });
+                    }
+                });
+            } else if (trackingMode === 'date' && dateType === 'range' && rangeStart && rangeEnd) {
+                const parse = (s) => {
+                    const m = s.match(/^\s*(\d{1,2})-(\d{1,2})-(\d{4})\s*$/);
+                    if (!m) return null;
+                    return new Date(parseInt(m[3],10), parseInt(m[1],10)-1, parseInt(m[2],10));
+                };
+                const start = parse(rangeStart);
+                const end = parse(rangeEnd);
+                if (start && end && start <= end) {
+                    let i = 1;
+                    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                        const m = d.getMonth() + 1, day = d.getDate(), y = d.getFullYear();
+                        const date_str = `${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}-${y}`;
+                        episode_dates.push({
+                            episode_num: i++,
+                            date_str: date_str,
+                            display_label: `${m}/${day}/${String(y).slice(-2)}`
+                        });
+                    }
+                }
+            } else if (trackingMode === 'date' && dateType === 'singular' && singularLines && singularLines.length > 0) {
+                const re = /^\s*(\d{1,2})-(\d{1,2})-(\d{4})\s*$/;
+                singularLines.forEach((line, idx) => {
+                    const m = line.match(re);
+                    if (m) {
+                        const date_str = `${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}-${m[3]}`;
+                        const d = new Date(parseInt(m[3],10), parseInt(m[1],10)-1, parseInt(m[2],10));
+                        const display_label = `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+                        episode_dates.push({
+                            episode_num: idx + 1,
+                            date_str: date_str,
+                            display_label: display_label
+                        });
+                    }
+                });
+            }
+            return episode_dates;
+        }
+        
         // Custom SVOD Acquisition Form Handler
         document.getElementById('customSVODAcquisitionForm')?.addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -16962,6 +17109,26 @@
             const platformName = document.getElementById('customSVODPlatformName').value;
             const genreEl = document.getElementById('customSVODGenre');
             const genre = genreEl ? genreEl.value : '';
+            
+            const trackingEpisode = document.getElementById('customSVODTrackingEpisode')?.checked;
+            const trackingDate = document.getElementById('customSVODTrackingDate')?.checked;
+            const trackingMode = trackingEpisode ? 'episode' : (trackingDate ? 'date' : null);
+            const track_episodes = !!(trackingEpisode || trackingDate);
+            
+            const episodeLines = (document.getElementById('customSVODEpisodeDates')?.value || '').split(/\n/).map(s => s.trim()).filter(Boolean);
+            const dateType = document.getElementById('customSVODDateRange')?.checked ? 'range' : 'singular';
+            const rangeStart = document.getElementById('customSVODTrackStartDate')?.value?.trim();
+            const rangeEnd = document.getElementById('customSVODTrackEndDate')?.value?.trim();
+            const singularLines = (document.getElementById('customSVODSingleDates')?.value || '').split(/\n/).map(s => s.trim()).filter(Boolean);
+            
+            const episode_dates = parseSvodEpisodeDates(trackingMode, episodeLines, dateType, rangeStart, rangeEnd, singularLines);
+            
+            if (track_episodes && episode_dates.length === 0) {
+                alert(trackingMode === 'episode'
+                    ? 'Please enter at least one episode air date (one per line, MM-DD-YYYY).'
+                    : 'Please enter a date range (start and end) or at least one date (one per line, MM-DD-YYYY).');
+                return;
+            }
             
             const showTerms = showTermsInput.split(',').map(t => t.trim()).filter(t => t);
             
@@ -16979,7 +17146,10 @@
                 show_search_terms: showTerms,
                 is_new_show: isNewShow,
                 platform_name: platformName,
-                genre: genre || ''
+                genre: genre || '',
+                track_episodes: track_episodes,
+                tracking_mode: trackingMode,
+                episode_dates: episode_dates
             };
             
             try {
