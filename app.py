@@ -11316,7 +11316,19 @@ def list_jobs():
                 categories.add(cat)
         
         # Profile IQ must not show SVOD Acquisition — only Subscriber IQ shows those
-        job_list = [e for e in job_list if not e.get('is_svod') and not (e.get('s3_key') or '').startswith('svod-acquisition/') and not (e.get('job_id') or '').startswith('svod-acquisition/')]
+        def is_svod_entry(e):
+            if e.get('is_svod'):
+                return True
+            sk = (e.get('s3_key') or '')
+            jid = (e.get('job_id') or '')
+            if sk.startswith('svod-acquisition/') or jid.startswith('svod-acquisition/'):
+                return True
+            # Catch legacy cache entries that lack is_svod (e.g. old purgatory-released or migrated cache)
+            cat = (e.get('category') or '').strip().upper()
+            if cat == 'SVOD ACQUISITION':
+                return True
+            return False
+        job_list = [e for e in job_list if not is_svod_entry(e)]
         categories = {e.get('category') for e in job_list if e.get('category')}
         
         # Sort by created_at descending (safe key for missing/None values)
