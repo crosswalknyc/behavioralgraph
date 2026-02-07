@@ -2569,10 +2569,14 @@
         // PURGATORY FUNCTIONS
         // ============================================================================
         
-        /** Same category options as Change Category modal (brand/CMS categories). */
-        function getPurgatoryCategoryOptions(selectedCategory) {
+        /** Same category options as Change Category modal (brand/CMS categories). When source is SVOD, only SVOD categories. */
+        function getPurgatoryCategoryOptions(selectedCategory, sourceType) {
             const sel = String(selectedCategory || 'Uncategorized').trim() || 'Uncategorized';
             const isSel = (v) => (v === sel || String(v).toUpperCase() === sel.toUpperCase());
+            if (sourceType === 'svod_acquisition') {
+                const svodCats = ['Uncategorized', 'SERIES - APPLE', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'];
+                return svodCats.map(c => `<option value="${c}" ${isSel(c) ? 'selected' : ''}>${c}</option>`).join('');
+            }
             return `
                 <option value="Uncategorized" ${isSel('Uncategorized') ? 'selected' : ''}>Uncategorized</option>
                 <optgroup label="📺 CONTENT">
@@ -2710,7 +2714,7 @@
                         </td>
                         <td>
                             <select class="purgatory-category-select" data-field="category" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; color: var(--text-primary); width: 100%; font-size: 0.85rem;">
-                                ${getPurgatoryCategoryOptions(item.category || 'Uncategorized')}
+                                ${getPurgatoryCategoryOptions(item.category || 'Uncategorized', item.source_type)}
                             </select>
                         </td>
                         <td><span class="badge ${item.source_type === 'svod_acquisition' ? 'badge-admin' : 'badge-user'}">${sourceLabel}</span></td>
@@ -5987,35 +5991,21 @@
                 const label = select.previousElementSibling;
                 if (label) label.innerHTML = 'Select Ticket Sales Category';
             } else if (isSvod) {
-                // For SVOD files, show all categories as subcategories under SVOD ACQUISITION
-                // Get all unique categories from SVOD files
-                const svodCategories = new Set();
-                contentFiles.forEach(f => {
-                    if (f.is_svod || (f.key && f.key.startsWith('svod-acquisition/')) || (f.bucket === 'svod-acquisition')) {
-                        if (f.category && f.category !== 'SVOD Acquisition') {
-                            svodCategories.add(f.category);
-                        }
-                    }
-                });
-                
-                // Also include common categories that might be used
-                const commonCategories = [
-                    'TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'SPORT',
+                // When source is SVOD, show only SVOD categories (SERIES - ...)
+                const svodCategoriesOnly = [
+                    'Uncategorized',
                     'SERIES - APPLE', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT',
                     'SERIES - HBO MAX', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS',
                     'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'
                 ];
-                commonCategories.forEach(cat => svodCategories.add(cat));
-                
-                select.innerHTML = '<option value="">Select a subcategory...</option>';
-                Array.from(svodCategories).sort().forEach(cat => {
-                    select.innerHTML += `<option value="${cat}">${cat}</option>`;
+                select.innerHTML = '<option value="">Select SVOD category...</option>';
+                svodCategoriesOnly.forEach(cat => {
+                    const sel = (currentCategory || '') === cat ? ' selected' : '';
+                    select.innerHTML += `<option value="${cat}"${sel}>${cat}</option>`;
                 });
-                
-                // Add note that this is for SVOD subcategories
                 const label = select.previousElementSibling;
                 if (label) {
-                    label.innerHTML = 'Select SVOD Subcategory (under SVOD ACQUISITION master)';
+                    label.innerHTML = 'Select SVOD Category';
                 }
             } else {
                 // For regular files, show master category groups

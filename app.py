@@ -2855,8 +2855,8 @@ def get_admin_content():
             for page in svod_paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET, Prefix=''):
                 for obj in page.get('Contents', []):
                     key = obj['Key']
-                    # Skip historic folder and non-CSV files
-                    if key.startswith('historic/') or not key.endswith('.csv'):
+                    # Skip historic folder, purgatory (unreleased), and non-CSV files
+                    if key.startswith('historic/') or key.startswith(S3_PURGATORY_PREFIX) or not key.endswith('.csv'):
                         continue
                     
                     filename = key.split('/')[-1]
@@ -6695,8 +6695,8 @@ def list_subscriber_iq_files():
         for page in paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                # Skip historic folder and non-CSV files
-                if key.startswith('historic/') or not key.endswith('.csv'):
+                # Skip historic folder, purgatory (unreleased), and non-CSV files
+                if key.startswith('historic/') or key.startswith(S3_PURGATORY_PREFIX) or not key.endswith('.csv'):
                     continue
                 
                 # Extract show name from filename (format: ShowName_MM_DD_YYYY_HH_MM.csv)
