@@ -12262,11 +12262,11 @@
                                     </div>
                                 </div>
                                 
-                                <div class="form-row" style="grid-template-columns: 1fr;">
-                                    <div class="form-group" style="justify-self: start;">
-                                        <label class="checkbox-group" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer; text-align: left; margin-bottom: 0;">
-                                            <input type="checkbox" id="customSVODIsNewShow" style="margin: 0; width: 16px; height: 16px;">
-                                            <span>Click if this is a New Show or One Time Special</span>
+                                <div class="form-row" style="grid-template-columns: 1fr; justify-items: start;">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="checkbox-group" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer; text-align: left; margin-bottom: 0; text-transform: none;">
+                                            <input type="checkbox" id="customSVODIsNewShow" style="margin: 0; width: 16px; height: 16px; flex-shrink: 0;">
+                                            <span style="text-align: left; text-transform: none;">Click if this is a New Show or One Time Special</span>
                                         </label>
                                     </div>
                                 </div>
@@ -22632,12 +22632,6 @@
                                     </div>
                                 `;
                             }).join('')}
-                        </div>
-                        <div class="performance-insight">
-                            <strong>Content Strategy Insight:</strong> 
-                            ${topEpisodes[0] ? `${(topEpisodes[0].episode || '').includes('/') ? 'Date ' + topEpisodes[0].episode : 'Episode ' + topEpisodes[0].episode} drove the highest subscriber acquisition (${formatNumber(topEpisodes[0].signups)} signups, ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(2)}% of total). ` : ''}
-                            ${topEpisodes.length > 1 ? `Top 3 episodes accounted for ${((topEpisodes.slice(0, 3).reduce((sum, ep) => sum + (ep.signups || 0), 0) / totalSignups) * 100).toFixed(2)}% of all signups, ` : ''}
-                            indicating ${topEpisodes.length > 0 && topEpisodes[0].signups > (totalSignups / topEpisodes.length) ? 'strong episode-level performance' : 'distributed engagement'}.
                         </div>
                     ` : '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode performance data available</p>'}
                 </div>
