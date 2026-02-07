@@ -11256,13 +11256,13 @@
         </div>
     </div>
     
-    <!-- Analysis Complete Modal - Download Popup -->
+    <!-- Analysis Complete Modal - Pending (no download) -->
     <div class="credits-modal" id="analysisCompleteModal" onclick="if(event.target === this) closeAnalysisCompleteModal()">
         <div class="credits-modal-content" style="max-width: 500px;">
             <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
-            <h2 style="color: var(--accent-lime); margin-bottom: 1rem;">Data Analysis Complete!</h2>
+            <h2 style="color: var(--accent-lime); margin-bottom: 1rem;">It's finished</h2>
             <p id="analysisCompleteMessage" style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.95rem;">
-                Download your data now and it will be populated into your dashboard shortly.
+                It is pending and will appear in your dashboard shortly.
             </p>
             
             <div style="background: var(--bg-dark); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
@@ -11272,25 +11272,9 @@
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: var(--text-secondary);">Status:</span>
-                    <span id="analysisCompleteStatus" style="color: var(--accent-lime); font-weight: 600;">✅ Ready for Download</span>
+                    <span id="analysisCompleteStatus" style="color: var(--accent-lime); font-weight: 600;">⏳ Pending</span>
                 </div>
             </div>
-            
-            <button id="downloadAnalysisBtn" onclick="downloadAnalysisFile()" style="
-                background: linear-gradient(135deg, var(--accent-lime), #9acd32);
-                color: #000;
-                border: none;
-                padding: 1rem 2rem;
-                border-radius: 8px;
-                font-weight: 700;
-                font-size: 1.1rem;
-                cursor: pointer;
-                width: 100%;
-                margin-bottom: 1rem;
-                transition: all 0.2s;
-            ">
-                ⬇️ Download CSV File
-            </button>
             
             <p id="analysisCompleteFootnote" style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">
                 📋 Your data has been submitted for admin review and will appear in the dashboard once approved.
@@ -57273,17 +57257,10 @@
             };
             document.getElementById('analysisCompleteType').textContent = typeLabels[analysisType] || '🎯 Profile Analysis';
             
-            const isProfile = analysisType === 'profile_analysis';
-            const downloadBtn = document.getElementById('downloadAnalysisBtn');
             const statusEl = document.getElementById('analysisCompleteStatus');
             const messageEl = document.getElementById('analysisCompleteMessage');
-            const footnoteEl = document.getElementById('analysisCompleteFootnote');
-            if (downloadBtn) downloadBtn.style.display = isProfile ? 'none' : 'block';
-            if (statusEl) statusEl.textContent = isProfile ? '⏳ Pending review' : '✅ Ready for Download';
-            if (messageEl) messageEl.textContent = isProfile
-                ? 'Your analysis has been submitted for review. It will appear in the dashboard once approved. Check the Results Library for status.'
-                : 'Download your data now and it will be populated into your dashboard shortly.';
-            if (footnoteEl) footnoteEl.style.display = isProfile ? 'none' : 'block';
+            if (statusEl) statusEl.textContent = '⏳ Pending';
+            if (messageEl) messageEl.textContent = 'It is pending and will appear in your dashboard shortly.';
             
             document.getElementById('analysisCompleteModal').classList.add('active');
             if (typeof refreshDashboardProfiles === 'function') refreshDashboardProfiles();
