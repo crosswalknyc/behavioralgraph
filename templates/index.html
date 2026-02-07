@@ -22603,8 +22603,10 @@
                 </div>
             `;
             
-            // 3. CONTENT PERFORMANCE ANALYSIS
-            const topEpisodes = (data.episode_attribution || []).slice().sort((a, b) => {
+            // 3. CONTENT PERFORMANCE ANALYSIS (exclude days/episodes with 0 signups)
+            const topEpisodes = (data.episode_attribution || []).slice()
+                .filter(ep => (Number(ep.signups) || 0) > 0)
+                .sort((a, b) => {
                 return (b.signups || 0) - (a.signups || 0);
             }).slice(0, 5);
             
@@ -23356,7 +23358,9 @@
             }
             
             const container = document.getElementById('subscriberEpisodeAttribution');
-            const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
+            const episodes = (data.episode_attribution || []).slice()
+                .filter(ep => (Number(ep.signups) || 0) > 0)
+                .sort((a, b) => {
                 const aSignups = a.signups || 0;
                 const bSignups = b.signups || 0;
                 return bSignups - aSignups;
