@@ -17425,7 +17425,7 @@
         }
         
         async function pollCustomSVODAcquisitionJobStatus(jobId, projectName) {
-            const maxAttempts = 120;
+            const maxAttempts = 600;
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
@@ -17460,7 +17460,7 @@
                         if (typeof loadMyResults === 'function') loadMyResults();
                     } else if (attempts >= maxAttempts) {
                         clearInterval(pollInterval);
-                        showAnalysisStatusModalError('Analysis timed out. Check the Results Library for status.');
+                        showAnalysisStatusModalError('Polling stopped after 20 minutes. The job may still be running—check the Results Library for status and refresh.');
                     }
                 } catch (error) {
                     console.error('Error polling job status:', error);
