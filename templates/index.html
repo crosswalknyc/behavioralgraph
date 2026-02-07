@@ -12216,99 +12216,139 @@
                     </div>
                 </div>
 
-                <!-- SVOD Acquisition IQ Tab Content -->
+                <!-- SVOD Acquisition IQ Tab Content (two-column: form + Status & Results sidebar) -->
                 <div id="customAnalysisTabContentSVODAcquisition" class="custom-analysis-tab-content">
-                    <div class="card">
-                        <h2>📺 SVOD Acquisition IQ</h2>
-                        <p class="section-description">Track show-to-platform attribution with episode tracking</p>
-                        
-                        <form id="customSVODAcquisitionForm">
-                            <div class="form-section">
-                                <div class="form-section-title">Analysis Parameters</div>
-                                
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label>Project Name</label>
-                                        <input type="text" id="customSVODProjectName" placeholder="e.g., Reacher_Acquisition" required>
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>📺 SVOD Acquisition IQ</h2>
+                            <p class="section-description">Track show-to-platform attribution with episode tracking</p>
+                            
+                            <form id="customSVODAcquisitionForm">
+                                <div class="form-section">
+                                    <div class="form-section-title">Analysis Parameters</div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Project Name</label>
+                                            <input type="text" id="customSVODProjectName" placeholder="e.g., Reacher_Acquisition" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Campaign Start Date</label>
+                                            <input type="date" id="customSVODCampaignStart" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Campaign End Date</label>
+                                            <input type="date" id="customSVODCampaignEnd" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Exclusion Window (days before campaign to filter existing users)</label>
+                                            <input type="number" id="customSVODExclusionDays" placeholder="e.g., 30" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Attribution Window (days after episode watch to track signups)</label>
+                                            <input type="number" id="customSVODAttributionWindow" placeholder="e.g., 30" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Show/Content Name(s) (comma-separated)</label>
+                                            <input type="text" id="customSVODShowTerms" placeholder="e.g., Reacher, The Boys" required>
+                                            <small>Enter show names separated by commas</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-row" style="grid-template-columns: 1fr; justify-items: start;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label class="checkbox-group" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer; text-align: left; margin-bottom: 0; text-transform: none;">
+                                                <input type="checkbox" id="customSVODIsNewShow" style="margin: 0; width: 16px; height: 16px; flex-shrink: 0;">
+                                                <span style="text-align: left; text-transform: none;">Click if this is a New Show or One Time Special</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Platform Name</label>
+                                            <input type="text" id="customSVODPlatformName" placeholder="e.g., Amazon Prime Video" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Genre</label>
+                                            <select id="customSVODGenre" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; min-width: 200px;">
+                                                <option value="">Select genre...</option>
+                                                <option value="Serialized Drama">Serialized Drama</option>
+                                                <option value="Non-Scripted Competition">Non-Scripted Competition</option>
+                                                <option value="Adult Animation">Adult Animation</option>
+                                                <option value="Stand Up Comedy">Stand Up Comedy</option>
+                                                <option value="Single Camera Sitcom">Single Camera Sitcom</option>
+                                                <option value="Procedural Drama">Procedural Drama</option>
+                                                <option value="Multi Camera Sitcom">Multi Camera Sitcom</option>
+                                                <option value="Live Sports">Live Sports</option>
+                                            </select>
+                                            <small>Content genre for the report</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn-primary">Run Analysis</button>
                                     </div>
                                 </div>
-                                
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label>Campaign Start Date</label>
-                                        <input type="date" id="customSVODCampaignStart" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Campaign End Date</label>
-                                        <input type="date" id="customSVODCampaignEnd" required>
-                                    </div>
-                                </div>
-                                
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label>Exclusion Window (days before campaign to filter existing users)</label>
-                                        <input type="number" id="customSVODExclusionDays" placeholder="e.g., 30" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Attribution Window (days after episode watch to track signups)</label>
-                                        <input type="number" id="customSVODAttributionWindow" placeholder="e.g., 30" required>
-                                    </div>
-                                </div>
-                                
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label>Show/Content Name(s) (comma-separated)</label>
-                                        <input type="text" id="customSVODShowTerms" placeholder="e.g., Reacher, The Boys" required>
-                                        <small>Enter show names separated by commas</small>
-                                    </div>
-                                </div>
-                                
-                                <div class="form-row" style="grid-template-columns: 1fr; justify-items: start;">
-                                    <div class="form-group" style="margin-bottom: 0;">
-                                        <label class="checkbox-group" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer; text-align: left; margin-bottom: 0; text-transform: none;">
-                                            <input type="checkbox" id="customSVODIsNewShow" style="margin: 0; width: 16px; height: 16px; flex-shrink: 0;">
-                                            <span style="text-align: left; text-transform: none;">Click if this is a New Show or One Time Special</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label>Platform Name</label>
-                                        <input type="text" id="customSVODPlatformName" placeholder="e.g., Amazon Prime Video" required>
-                                    </div>
-                                </div>
-                                
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label>Genre</label>
-                                        <select id="customSVODGenre" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; min-width: 200px;">
-                                            <option value="">Select genre...</option>
-                                            <option value="Serialized Drama">Serialized Drama</option>
-                                            <option value="Non-Scripted Competition">Non-Scripted Competition</option>
-                                            <option value="Adult Animation">Adult Animation</option>
-                                            <option value="Stand Up Comedy">Stand Up Comedy</option>
-                                            <option value="Single Camera Sitcom">Single Camera Sitcom</option>
-                                            <option value="Procedural Drama">Procedural Drama</option>
-                                            <option value="Multi Camera Sitcom">Multi Camera Sitcom</option>
-                                            <option value="Live Sports">Live Sports</option>
-                                        </select>
-                                        <small>Content genre for the report</small>
-                                    </div>
-                                </div>
-                                
-                                <div class="form-actions">
-                                    <button type="submit" class="btn-primary">Run Analysis</button>
+                            </form>
+                            
+                            <!-- Job Status Display -->
+                            <div id="customSVODAcquisitionJobStatus" style="display: none; margin-top: 2rem;">
+                                <div class="card">
+                                    <h3>Job Status</h3>
+                                    <div id="customSVODAcquisitionJobStatusContent"></div>
                                 </div>
                             </div>
-                        </form>
-                        
-                        <!-- Job Status Display -->
-                        <div id="customSVODAcquisitionJobStatus" style="display: none; margin-top: 2rem;">
-                            <div class="card">
-                                <h3>Job Status</h3>
-                                <div id="customSVODAcquisitionJobStatusContent"></div>
+                        </div>
+                        <div class="card">
+                            <h2>📈 Status & Results</h2>
+                            <div id="svodAcquisitionCurrentJob" style="display: none;">
+                                <div class="status-panel">
+                                    <div id="svodAcquisitionStatusRunning">
+                                        <div class="spinner"></div>
+                                        <div class="pulse" id="svodAcquisitionStatusText">Processing...</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);" id="svodAcquisitionStatusMessage">Analysis in progress</div>
+                                        <div class="progress-bar"><div class="progress-fill" id="svodAcquisitionProgressFill" style="width: 0%"></div></div>
+                                    </div>
+                                    <div id="svodAcquisitionStatusComplete" style="display: none;">
+                                        <div style="font-size: 2.5rem;">✅</div>
+                                        <div style="margin: 0.5rem 0;">Complete!</div>
+                                    </div>
+                                    <div id="svodAcquisitionStatusError" style="display: none;">
+                                        <div style="font-size: 2.5rem;">❌</div>
+                                        <div style="color: var(--accent-red);" id="svodAcquisitionErrorMessage"></div>
+                                    </div>
+                                </div>
                             </div>
+                            <div id="svodAcquisitionNoCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
+                            <div style="margin-top: 1.5rem; margin-bottom: 0.5rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                                    <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="loadMyResults()" title="Refresh">🔄</button>
+                                </div>
+                                <div id="svodAcquisitionResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
+                            </div>
+                            <div style="margin-bottom: 0.75rem;">
+                                <input type="text" id="svodAcquisitionResultsSearchInput" placeholder="🔍 Search your results..." oninput="filterSvodAcquisitionResults()" style="margin-bottom: 0.5rem;">
+                                <select id="svodAcquisitionResultsStatusFilter" onchange="filterSvodAcquisitionResults()" style="font-size: 0.8rem;">
+                                    <option value="">All Status</option>
+                                    <option value="pending">⏳ Pending Review</option>
+                                    <option value="released">📊 In Dashboard</option>
+                                </select>
+                            </div>
+                            <div id="svodAcquisitionResultsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
                         </div>
                     </div>
                 </div>
@@ -16782,6 +16822,9 @@
                 const content = document.getElementById('customAnalysisTabContentSVODAcquisition');
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
+                svodAcquisitionResults = (myResults || []).filter(r => (r.source_type || '') === 'svod_acquisition');
+                if (typeof renderSvodAcquisitionResultsList === 'function') renderSvodAcquisitionResultsList();
+                if (typeof loadMyResults === 'function') loadMyResults();
             } else if (tabName === 'campaign-roi') {
                 const tab = document.getElementById('customAnalysisTabCampaignROI');
                 const content = document.getElementById('customAnalysisTabContentCampaignROI');
@@ -16950,7 +16993,8 @@
                 const data = await response.json();
                 if (response.ok) {
                     document.getElementById('customSVODAcquisitionJobStatus').style.display = 'block';
-                    pollCustomSVODAcquisitionJobStatus(data.job_id);
+                    showAnalysisStatusModal();
+                    pollCustomSVODAcquisitionJobStatus(data.job_id, projectName || data.project_name || 'SVOD Acquisition');
                 } else {
                     alert('Error: ' + (data.error || 'Failed to submit job'));
                 }
@@ -17210,7 +17254,7 @@
             }, 2000);
         }
         
-        async function pollCustomSVODAcquisitionJobStatus(jobId) {
+        async function pollCustomSVODAcquisitionJobStatus(jobId, projectName) {
             const maxAttempts = 120;
             let attempts = 0;
             const pollInterval = setInterval(async () => {
@@ -17228,18 +17272,31 @@
                             ${data.error ? `<div style="color: var(--accent-red);"><strong>Error:</strong> ${data.error}</div>` : ''}
                         `;
                     }
-                    
+                    if (document.getElementById('analysisStatusModal')?.classList.contains('active')) {
+                        updateAnalysisStatusModal({
+                            project_name: projectName || data.project_name || 'SVOD Acquisition IQ',
+                            message: data.message || 'Processing...',
+                            progress: data.progress || 0
+                        });
+                    }
                     if (data.status === 'completed') {
                         clearInterval(pollInterval);
-                        // Show the download popup
+                        closeAnalysisStatusModal();
                         showAnalysisCompletePopup(jobId, data.s3_key, 'svod_acquisition');
-                    } else if (data.status === 'failed' || attempts >= maxAttempts) {
+                        if (typeof loadMyResults === 'function') loadMyResults();
+                    } else if (data.status === 'failed') {
                         clearInterval(pollInterval);
+                        showAnalysisStatusModalError(data.error || data.message || 'Analysis failed');
+                        if (typeof loadMyResults === 'function') loadMyResults();
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        showAnalysisStatusModalError('Analysis timed out. Check the Results Library for status.');
                     }
                 } catch (error) {
                     console.error('Error polling job status:', error);
                     if (attempts >= maxAttempts) {
                         clearInterval(pollInterval);
+                        showAnalysisStatusModalError(error.message || 'Polling failed');
                     }
                 }
             }, 2000);
@@ -42934,6 +42991,7 @@
         
         // User's own results (from Analysis IQ)
         let myResults = [];
+        let svodAcquisitionResults = [];
         
         async function loadMyResults() {
             const container = document.getElementById('myResultsList');
@@ -42977,6 +43035,10 @@
                 }
                 renderMyResults(profileOnly);
                 renderSvodResults(myResults);
+                if (typeof renderSvodAcquisitionResultsList === 'function') {
+                    svodAcquisitionResults = (myResults || []).filter(r => (r.source_type || '') === 'svod_acquisition');
+                    renderSvodAcquisitionResultsList();
+                }
                 
             } catch (error) {
                 console.error('Failed to load my results:', error);
@@ -43134,6 +43196,68 @@
                 `;
             }).join('');
             
+            container.innerHTML = html;
+        }
+        
+        // SVOD Acquisition IQ tab: Results Library (only svod_acquisition source_type)
+        function filterSvodAcquisitionResults() {
+            renderSvodAcquisitionResultsList();
+        }
+        
+        function renderSvodAcquisitionResultsList() {
+            const container = document.getElementById('svodAcquisitionResultsList');
+            const statusEl = document.getElementById('svodAcquisitionResultsStatus');
+            if (!container) return;
+            const searchTerm = (document.getElementById('svodAcquisitionResultsSearchInput')?.value || '').toLowerCase().trim();
+            const statusFilter = document.getElementById('svodAcquisitionResultsStatusFilter')?.value || '';
+            let list = (svodAcquisitionResults || []).slice();
+            if (searchTerm) {
+                list = list.filter(r =>
+                    (r.project_name || '').toLowerCase().includes(searchTerm) ||
+                    (r.category || '').toLowerCase().includes(searchTerm)
+                );
+            }
+            if (statusFilter) {
+                list = list.filter(r => r.status === statusFilter);
+            }
+            const pending = (svodAcquisitionResults || []).filter(r => r.status === 'pending' || r.in_purgatory).length;
+            const released = (svodAcquisitionResults || []).filter(r => r.status === 'released').length;
+            if (statusEl) statusEl.textContent = `${pending} pending • ${released} in dashboard`;
+            if (!list || list.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results yet. Run an analysis to get started.</div>';
+                return;
+            }
+            const html = list.map(result => {
+                const isPending = result.status === 'pending' || result.in_purgatory;
+                const statusBadge = isPending
+                    ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
+                    : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
+                const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
+                const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                let buttons = '';
+                if (isPending) {
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${(result.purgatory_id || '').replace(/'/g, "\\'")}')" title="Download CSV">📥</button>`;
+                } else {
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
+                }
+                const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
+                const categoryLabel = capitalizeFirstLetters(result.category || '');
+                const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
+                const rowStyle = isPending ? 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' : 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;';
+                return `
+                    <div class="job-item" style="${rowStyle}" ${rowClick} ${rowClick ? 'title="Click to open in Subscriber IQ"' : ''}>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${categoryLabel} • ${dateStr}</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
+                            ${statusBadge}
+                            ${buttons}
+                        </div>
+                    </div>
+                `;
+            }).join('');
             container.innerHTML = html;
         }
         

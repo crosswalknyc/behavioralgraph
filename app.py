@@ -14288,10 +14288,14 @@ def run_svod_acquisition(job_id):
     try:
         update_job_status(job_id, progress=10, message='Initializing...')
         
-        # Import the script module
-        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'SVOD_Churn_Attribution.py')
+        # Try script in repo root (parent of app dir), then same dir as app (e.g. bg-webapp on Render)
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        repo_root = os.path.dirname(app_dir)
+        script_path = os.path.join(repo_root, 'SVOD_Churn_Attribution.py')
         if not os.path.exists(script_path):
-            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            script_path = os.path.join(app_dir, 'SVOD_Churn_Attribution.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found. Tried: {repo_root!r} and {app_dir!r}')
             return
         
         # Get job parameters
