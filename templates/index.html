@@ -12271,14 +12271,6 @@
                                     </div>
                                 </div>
                                 
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label>Platform URL Patterns (comma-separated)</label>
-                                        <input type="text" id="customSVODPlatformURLs" placeholder="e.g., primevideo.com, amazon.com/prime" required>
-                                        <small>Enter URL patterns separated by commas</small>
-                                    </div>
-                                </div>
-                                
                                 <div class="form-actions">
                                     <button type="submit" class="btn-primary">Run Analysis</button>
                                 </div>
@@ -16901,12 +16893,10 @@
             const platformName = document.getElementById('customSVODPlatformName').value;
             const genreEl = document.getElementById('customSVODGenre');
             const genre = genreEl ? genreEl.value : '';
-            const platformURLsInput = document.getElementById('customSVODPlatformURLs').value;
             
             const showTerms = showTermsInput.split(',').map(t => t.trim()).filter(t => t);
-            const platformURLs = platformURLsInput.split(',').map(u => u.trim()).filter(u => u);
             
-            if (!projectName || !campaignStart || !campaignEnd || !exclusionDays || !attributionWindow || !showTerms.length || !platformName || !platformURLs.length) {
+            if (!projectName || !campaignStart || !campaignEnd || !exclusionDays || !attributionWindow || !showTerms.length || !platformName) {
                 alert('Please fill in all required fields');
                 return;
             }
@@ -16920,8 +16910,7 @@
                 show_search_terms: showTerms,
                 is_new_show: isNewShow,
                 platform_name: platformName,
-                genre: genre || '',
-                platform_url_patterns: platformURLs
+                genre: genre || ''
             };
             
             try {

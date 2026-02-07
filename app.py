@@ -14092,7 +14092,6 @@ def submit_svod_acquisition():
         attribution_window = data.get('attribution_window')
         show_search_terms = data.get('show_search_terms', [])
         platform_name = data.get('platform_name')
-        platform_url_patterns = data.get('platform_url_patterns', [])
         
         if not project_name:
             return jsonify({'error': 'Project name is required'}), 400
@@ -14104,8 +14103,6 @@ def submit_svod_acquisition():
             return jsonify({'error': 'At least one show search term is required'}), 400
         if not platform_name:
             return jsonify({'error': 'Platform name is required'}), 400
-        if not platform_url_patterns:
-            return jsonify({'error': 'At least one platform URL pattern is required'}), 400
         
         # Genre: optional; if provided must be one of the allowed SVOD genres
         SVOD_ALLOWED_GENRES = [
@@ -14147,7 +14144,6 @@ def submit_svod_acquisition():
                 'show_search_terms': show_search_terms,
                 'is_new_show': data.get('is_new_show', False),
                 'platform_name': platform_name,
-                'platform_url_patterns': platform_url_patterns,
                 'genre': genre if genre else ''
             }
         }
@@ -14289,7 +14285,8 @@ def run_svod_acquisition(job_id):
         campaign_start = datetime.strptime(params['campaign_start'], '%Y-%m-%d')
         campaign_end = datetime.strptime(params['campaign_end'], '%Y-%m-%d')
         
-        # Build script parameters dict (matching what get_user_input returns)
+        # Build script parameters dict (matching get_user_input from SVOD_Churn_Attribution.py exactly)
+        competitive_brands = module.get_competitive_platforms(params['platform_name']) if hasattr(module, 'get_competitive_platforms') else []
         script_params = {
             'project_name': params['project_name'],
             'auto_format': True,
@@ -14303,7 +14300,7 @@ def run_svod_acquisition(job_id):
             'tracking_mode': None,
             'episode_dates': [],
             'platform_name': params['platform_name'],
-            'platform_url_patterns': params['platform_url_patterns'],
+            'competitive_brands': competitive_brands,
             'genre': params.get('genre', '') or ''
         }
         
