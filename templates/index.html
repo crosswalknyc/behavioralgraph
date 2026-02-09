@@ -2706,6 +2706,17 @@
             color: white;
         }
 
+        /* Subscriber IQ: show names wrap so they fit and look nice */
+        .subscriber-shows-tree .profile-select-item.subscriber-show-item,
+        .subscriber-shows-tree .subscriber-show-item {
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            text-overflow: unset;
+            overflow: visible;
+            line-height: 1.3;
+        }
+
         .sidebar-item {
             padding: 0.5rem;
             cursor: pointer;
@@ -22272,7 +22283,7 @@
                     const isActive = activeSubscriberTabId === file.s3_key;
                     const name = escAttr(file.show_name || 'Unknown');
                     html += `
-                        <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectSubscriberProfile('${idEsc}')" title="${name}">
+                        <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="selectSubscriberProfile('${idEsc}')" title="${name}">
                             ${name}
                         </div>
                     `;
@@ -22281,7 +22292,7 @@
                 return;
             }
             
-            // Hierarchical view (match Profile IQ): master category + sub-categories with counts and expand/collapse
+            // Hierarchical view: categories as top-level (no SVOD ACQUISITION parent), with counts and expand/collapse
             const byCategory = {};
             subscriberProfiles.forEach(file => {
                 const category = file.category || 'SVOD Acquisition';
@@ -22292,18 +22303,7 @@
             });
             
             const sortedCategories = Object.keys(byCategory).sort();
-            const totalCount = subscriberProfiles.length;
-            const masterId = 'subscriber_svod_master';
-            const isMasterExpanded = expandedSubscriberCategories.has(masterId);
-            
-            let html = `
-                <div class="profile-cat-item master-cat ${isMasterExpanded ? 'open' : ''}" onclick="toggleSubscriberCategory('${masterId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
-                    <span class="cat-arrow">▸</span>
-                    <span class="profile-cat-label">📺 SVOD ACQUISITION</span>
-                    <span class="profile-cat-count">(${totalCount})</span>
-                </div>
-                <div class="profile-cat-children ${isMasterExpanded ? 'open' : ''}" id="cat-${masterId}" style="padding-left: 0.5rem;">
-            `;
+            let html = '';
             
             sortedCategories.forEach(category => {
                 const shows = byCategory[category];
@@ -22313,12 +22313,12 @@
                 const isExpanded = expandedSubscriberCategories.has(catId);
                 
                 html += `
-                    <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleSubscriberCategory('${catId}')">
+                    <div class="profile-cat-item master-cat ${isExpanded ? 'open' : ''}" onclick="toggleSubscriberCategory('${catId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
                         <span class="cat-arrow">▸</span>
                         <span class="profile-cat-label">${escAttr(category)}</span>
                         <span class="profile-cat-count">(${catCount})</span>
                     </div>
-                    <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
+                    <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}" style="padding-left: 0.5rem;">
                         ${showNames.map(showName => {
                             const files = shows[showName];
                             const latestFile = files[0];
@@ -22326,7 +22326,7 @@
                             const isActive = activeSubscriberTabId === latestFile.s3_key;
                             const name = escAttr(showName);
                             return `
-                                <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${name}">
+                                <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${name}">
                                     ${name}
                                 </div>
                             `;
@@ -22335,7 +22335,6 @@
                 `;
             });
             
-            html += '</div>';
             container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
         }
         
