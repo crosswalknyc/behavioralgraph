@@ -5968,6 +5968,10 @@ def parse_subscriber_iq_csv(csv_content):
             current_section = 'signup_timing'
             print(f"   ✅ Entered SIGNUP TIMING section at row {i}")
             continue
+        if 'POST-SIGNUP' in combined_check and 'TOUCHPOINT' in combined_check:
+            current_section = 'post_signup_touchpoints'
+            print(f"   ✅ Entered POST-SIGNUP TOUCHPOINT ANALYSIS section at row {i}")
+            continue
         
         # Metadata section (also enter when we see metadata rows before any section header)
         if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in second_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in third_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in combined_check:
@@ -6207,22 +6211,22 @@ def parse_subscriber_iq_csv(csv_content):
                 current_section = 'post_signup_touchpoints'
                 continue
         
-        # Post-signup touchpoints
+        # Post-signup touchpoints (CSV: 0=label, 2=Count, 8=Percentage, 9=Gen Pop Projection)
         elif current_section == 'post_signup_touchpoints':
             if first_col and first_col.endswith('Touchpoint'):
                 touchpoint_num = first_col.replace('Touchpoint', '').strip()
                 parsed['post_signup_touchpoints'].append({
                     'touchpoint': touchpoint_num,
-                    'users': row[1].strip() if len(row) > 1 else '',
-                    'percentage': row[7].strip() if len(row) > 7 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'users': row[2].strip() if len(row) > 2 else '',
+                    'percentage': row[8].strip() if len(row) > 8 else '',
+                    'gen_pop': row[9].strip() if len(row) > 9 else ''
                 })
             elif 'Total Platform Signups' in first_col:
                 parsed['post_signup_touchpoints'].append({
                     'touchpoint': 'Total',
-                    'users': row[1].strip() if len(row) > 1 else '',
-                    'percentage': row[7].strip() if len(row) > 7 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'users': row[2].strip() if len(row) > 2 else '',
+                    'percentage': row[8].strip() if len(row) > 8 else '',
+                    'gen_pop': row[9].strip() if len(row) > 9 else ''
                 })
             elif 'COMPETITIVE PLATFORMS' in first_col or 'COMPETITIVE PLATFORMS' in second_col:
                 current_section = 'competitive_platforms'
@@ -6674,6 +6678,7 @@ def get_subscriber_iq_data(s3_key):
         print(f"   Signup timing count: {len(parsed.get('signup_timing', []))}")
         print(f"   Attribution summary keys: {list(parsed.get('attribution_summary', {}).keys())}")
         print(f"   Attribution summary: {parsed.get('attribution_summary', {})}")
+        print(f"   Post-signup touchpoints (view numbers) count: {len(parsed.get('post_signup_touchpoints', []))}")
         
         # Check if data is actually empty
         has_data = any([

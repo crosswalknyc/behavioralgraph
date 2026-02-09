@@ -14744,11 +14744,14 @@
         <!-- SUBSCRIBER IQ VIEW -->
         <div id="subscriberIQView">
             <div class="dashboard-layout">
-                <!-- Persistent Sidebar - Left Side -->
+                <!-- Persistent Sidebar - Left Side (matches Profile IQ Select Profile) -->
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
-                        <h3>📺 Shows</h3>
-                        <input type="text" id="subscriberProfileSearchInput" class="sidebar-search" placeholder="🔍 Search shows..." onkeyup="filterSubscriberProfiles()">
+                        <h3>Select Profile</h3>
+                        <div style="display: flex; gap: 0.25rem; align-items: center;">
+                            <input type="text" id="subscriberProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search shows by name or category." onkeyup="filterSubscriberProfiles()" style="flex: 1;">
+                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh show list from S3" onclick="refreshSubscriberProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                        </div>
                     </div>
                     <div id="subscriberProfileTree" class="profile-select-tree subscriber-shows-tree"></div>
                 </div>
@@ -15827,6 +15830,7 @@
         let currentSubscriberData = null;
         let openSubscriberTabs = []; // Array of { id, name, dateRange, data }
         let activeSubscriberTabId = null;
+        const expandedSubscriberCategories = new Set(); // For hierarchical tree (match Profile IQ)
         
         // Live Features - controls which Analysis Tools are visible to non-admin users
         const userRole = '{{ role }}';
@@ -22242,91 +22246,110 @@
             
             const searchTerm = (document.getElementById('subscriberProfileSearchInput')?.value || '').toLowerCase();
             
-            let html = '';
+            // Escape for onclick/attributes (same as Profile IQ)
+            function escKey(k) { return (k || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+            function escAttr(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
             
             if (searchTerm) {
-                // Flat list of matches (no icons for SVOD)
                 const matches = subscriberProfiles.filter(p => 
-                    p.show_name.toLowerCase().includes(searchTerm) ||
-                    (p.category && p.category.toLowerCase().includes(searchTerm))
+                    (p.show_name || '').toLowerCase().includes(searchTerm) ||
+                    ((p.category || '').toLowerCase().includes(searchTerm))
                 );
-                
+                if (matches.length === 0) {
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
+                    return;
+                }
+                matches.sort((a, b) => (a.show_name || '').toLowerCase().localeCompare((b.show_name || '').toLowerCase()));
+                let html = '';
                 matches.forEach(file => {
+                    const idEsc = escKey(file.s3_key);
+                    const isActive = activeSubscriberTabId === file.s3_key;
+                    const name = escAttr(file.show_name || 'Unknown');
                     html += `
-                        <div class="sidebar-item" onclick="selectSubscriberProfile('${file.s3_key}')">
-                            <span class="sidebar-item-name">${file.show_name}</span>
+                        <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectSubscriberProfile('${idEsc}')" title="${name}">
+                            ${name}
                         </div>
                     `;
                 });
-            } else {
-                // Group by category, then by show name
-                const byCategory = {};
-                subscriberProfiles.forEach(file => {
-                    const category = file.category || 'SVOD Acquisition';
-                    if (!byCategory[category]) {
-                        byCategory[category] = {};
-                    }
-                    const showName = file.show_name;
-                    if (!byCategory[category][showName]) {
-                        byCategory[category][showName] = [];
-                    }
-                    byCategory[category][showName].push(file);
-                });
-                
-                // Sort categories
-                const sortedCategories = Object.keys(byCategory).sort();
-                
-                sortedCategories.forEach(category => {
-                    const shows = byCategory[category];
-                    const showNames = Object.keys(shows).sort();
-                    
-                    // Only show category header if there are multiple categories
-                    if (sortedCategories.length > 1) {
-                        const categoryId = `subscriber-category-${category.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
-                        html += `
-                            <div class="category-item" onclick="toggleSubscriberCategory(this)">
-                                <span class="arrow">▶</span>
-                                <span class="sidebar-category-name">${category}</span>
-                            </div>
-                            <div class="category-children" id="${categoryId}">
-                                ${showNames.map(showName => {
-                                    const files = shows[showName];
-                                    const latestFile = files[0]; // Already sorted by date
-                                    return `
-                                        <div class="sidebar-item" onclick="selectSubscriberProfile('${latestFile.s3_key}')">
-                                            <span class="sidebar-item-name">${showName}</span>
-                                            ${files.length > 1 ? `<span class="sidebar-item-count">${files.length}</span>` : ''}
-                                        </div>
-                                    `;
-                                }).join('')}
-                            </div>
-                        `;
-                    } else {
-                        // Single category - no collapsible header needed
-                        showNames.forEach(showName => {
-                            const files = shows[showName];
-                            const latestFile = files[0]; // Already sorted by date
-                            html += `
-                                <div class="sidebar-item" onclick="selectSubscriberProfile('${latestFile.s3_key}')">
-                                    <span class="sidebar-item-name">${showName}</span>
-                                    ${files.length > 1 ? `<span class="sidebar-item-count">${files.length}</span>` : ''}
-                                </div>
-                            `;
-                        });
-                    }
-                });
+                container.innerHTML = html;
+                return;
             }
             
-            container.innerHTML = html || '<div class="sidebar-item">No shows found</div>';
+            // Hierarchical view (match Profile IQ): master category + sub-categories with counts and expand/collapse
+            const byCategory = {};
+            subscriberProfiles.forEach(file => {
+                const category = file.category || 'SVOD Acquisition';
+                if (!byCategory[category]) byCategory[category] = {};
+                const showName = file.show_name || 'Unknown';
+                if (!byCategory[category][showName]) byCategory[category][showName] = [];
+                byCategory[category][showName].push(file);
+            });
+            
+            const sortedCategories = Object.keys(byCategory).sort();
+            const totalCount = subscriberProfiles.length;
+            const masterId = 'subscriber_svod_master';
+            const isMasterExpanded = expandedSubscriberCategories.has(masterId);
+            
+            let html = `
+                <div class="profile-cat-item master-cat ${isMasterExpanded ? 'open' : ''}" onclick="toggleSubscriberCategory('${masterId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
+                    <span class="cat-arrow">▸</span>
+                    <span class="profile-cat-label">📺 SVOD ACQUISITION</span>
+                    <span class="profile-cat-count">(${totalCount})</span>
+                </div>
+                <div class="profile-cat-children ${isMasterExpanded ? 'open' : ''}" id="cat-${masterId}" style="padding-left: 0.5rem;">
+            `;
+            
+            sortedCategories.forEach(category => {
+                const shows = byCategory[category];
+                const showNames = Object.keys(shows).sort();
+                const catCount = showNames.reduce((sum, sn) => sum + shows[sn].length, 0);
+                const catId = 'subscriber_cat_' + category.replace(/[^a-zA-Z0-9]/g, '_');
+                const isExpanded = expandedSubscriberCategories.has(catId);
+                
+                html += `
+                    <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleSubscriberCategory('${catId}')">
+                        <span class="cat-arrow">▸</span>
+                        <span class="profile-cat-label">${escAttr(category)}</span>
+                        <span class="profile-cat-count">(${catCount})</span>
+                    </div>
+                    <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
+                        ${showNames.map(showName => {
+                            const files = shows[showName];
+                            const latestFile = files[0];
+                            const idEsc = escKey(latestFile.s3_key);
+                            const isActive = activeSubscriberTabId === latestFile.s3_key;
+                            const name = escAttr(showName);
+                            return `
+                                <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${name}">
+                                    ${name}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
         }
         
         function filterSubscriberProfiles() {
             renderSubscriberProfileTree();
         }
         
-        function toggleSubscriberCategory(el) {
-            el.classList.toggle('open');
-            el.nextElementSibling.classList.toggle('open');
+        function toggleSubscriberCategory(catId) {
+            if (expandedSubscriberCategories.has(catId)) {
+                expandedSubscriberCategories.delete(catId);
+            } else {
+                expandedSubscriberCategories.add(catId);
+            }
+            renderSubscriberProfileTree();
+        }
+        
+        async function refreshSubscriberProfiles() {
+            const container = document.getElementById('subscriberProfileTree');
+            if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Refreshing...</div>';
+            await loadSubscriberProfiles();
         }
         
         async function selectSubscriberProfile(s3Key) {
@@ -22374,6 +22397,7 @@
                     
                     // Display the profile data
                     displaySubscriberTabData(newTab);
+                    renderSubscriberProfileTree(); // Update sidebar active state
                 } else {
                     console.error('❌ Failed to load subscriber data:', data.error);
                     alert('Failed to load data: ' + (data.error || 'Unknown error'));
@@ -22590,6 +22614,7 @@
             
             // Display the tab's data
             displaySubscriberTabData(tab);
+            renderSubscriberProfileTree(); // Update sidebar active state
         }
         
         // Close a subscriber tab
@@ -22614,6 +22639,7 @@
                 const emptyState = document.getElementById('subscriberEmptyState');
                 if (fixedHeader) fixedHeader.style.display = 'none';
                 if (emptyState) emptyState.style.display = 'flex';
+                renderSubscriberProfileTree(); // Clear active state in sidebar
             } else {
                 // Switch to another tab
                 const newActiveTab = openSubscriberTabs[Math.max(0, tabIndex - 1)];
