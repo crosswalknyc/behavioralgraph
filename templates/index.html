@@ -808,6 +808,15 @@
             background: rgba(255, 255, 255, 0.05);
         }
 
+        .performance-badge.ranker-badge {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 217, 255, 0.08);
+        }
+
+        .performance-badge.ranker-badge .performance-score {
+            font-size: 1.5rem;
+        }
+
         .performance-score {
             font-size: 2rem;
             font-weight: 700;
@@ -14809,6 +14818,7 @@
 
                         <!-- Action Buttons Row -->
                         <div class="dash-action-row" id="subscriberActionRow" style="justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <button type="button" id="subscriberCompareAllBtn" class="btn btn-primary btn-small has-tooltip" data-tooltip="Compare all open shows side-by-side: see who wins in each category and gaps between shows." onclick="openSubscriberCompareAll()" style="display: none;">📊 Compare All</button>
                             <div class="display-mode-toggle" id="subscriberUSPercentToggle" onclick="toggleSubscriberUSPercent()" title="Toggle between US % and US #">
                                 <span id="subscriberDisplayModeLabel">US %</span>
                             </div>
@@ -14956,6 +14966,18 @@
                 </div>
             </div>
         </div><!-- End subscriberIQView -->
+
+        <!-- Subscriber IQ Compare All Modal -->
+        <div id="subscriberCompareAllModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10050; overflow-y: auto; align-items: flex-start; justify-content: center; padding: 2rem 1rem;">
+            <div style="max-width: 1200px; width: 100%; background: var(--bg-card); border-radius: 12px; padding: 1.5rem; position: relative; margin: 0 auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 style="margin: 0; color: var(--accent-cyan);">📊 Compare All Shows</h2>
+                    <button type="button" onclick="closeSubscriberCompareModal()" style="background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">×</button>
+                </div>
+                <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary);">Side-by-side comparison of all open tabs. <strong>Winner</strong> in each row is highlighted. Gaps show how much the leader is ahead.</p>
+                <div id="subscriberCompareAllContent" style="overflow-x: auto;"></div>
+            </div>
+        </div>
 
         <!-- RANKER IQ VIEW -->
         <div id="rankerIQView">
@@ -22357,6 +22379,111 @@
             await loadSubscriberProfiles();
         }
         
+        function getSubscriberTabMetrics(tab) {
+            const data = tab.data?.data || {};
+            const metrics = data.key_metrics || {};
+            const summary = data.attribution_summary || {};
+            const totalWatchers = Number(metrics.total_watchers?.count) || 0;
+            const newSignups = Number(metrics.new_signups?.count) || 0;
+            const totalSignups = Number(summary.total?.count) || Number(metrics.new_signups?.count) || 0;
+            const attributedSignups = Number(summary.attributed?.count) || 0;
+            const dormantReactive = Number(summary.dormant_reactive?.count) || 0;
+            const totalConversionRate = metrics.total_conversion_rate || '';
+            const conversionPct = (totalConversionRate && String(totalConversionRate).trim())
+                ? parseFloat(String(totalConversionRate).replace('%', ''))
+                : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
+            const avgDaysRaw = metrics.avg_days_to_signup;
+            const avgDaysToSignup = (avgDaysRaw !== undefined && avgDaysRaw !== null && String(avgDaysRaw).trim() && String(avgDaysRaw) !== 'N/A')
+                ? parseFloat(String(avgDaysRaw).replace(/[^0-9.-]/g, '')) : null;
+            const performanceScore = totalSignups > 0 ? Math.min(100, Math.round((totalSignups / 10000) * 100)) : 0;
+            return {
+                totalPlatformImpact: totalSignups,
+                newSubscriberAcquisition: attributedSignups,
+                audienceReach: totalWatchers,
+                conversionRate: conversionPct,
+                dormantReactive,
+                avgDaysToSignup: avgDaysToSignup,
+                performanceScore,
+                totalSignups,
+                attributedSignups,
+                totalWatchers
+            };
+        }
+        
+        function openSubscriberCompareAll() {
+            if (openSubscriberTabs.length < 2) return;
+            const modal = document.getElementById('subscriberCompareAllModal');
+            const content = document.getElementById('subscriberCompareAllContent');
+            if (!modal || !content) return;
+            
+            const tabs = openSubscriberTabs.map(t => ({ name: t.name || 'Unknown', ...getSubscriberTabMetrics(t) }));
+            const names = tabs.map(t => t.name);
+            
+            const rows = [
+                { key: 'totalPlatformImpact', label: 'Total Platform Impact', higherBetter: true, format: (v) => formatNumber(v) },
+                { key: 'newSubscriberAcquisition', label: 'New Subscriber Acquisition', higherBetter: true, format: (v) => formatNumber(v) },
+                { key: 'audienceReach', label: 'Audience Reach', higherBetter: true, format: (v) => formatNumber(v) },
+                { key: 'conversionRate', label: 'Conversion Rate (%)', higherBetter: true, format: (v) => (v != null ? v.toFixed(2) + '%' : '—') },
+                { key: 'dormantReactive', label: 'Dormant to Reactive', higherBetter: true, format: (v) => formatNumber(v) },
+                { key: 'avgDaysToSignup', label: 'Avg Days to Signup', higherBetter: false, format: (v) => (v != null ? v : 'N/A') },
+                { key: 'performanceScore', label: 'Performance Score (0–100)', higherBetter: true, format: (v) => String(v) }
+            ];
+            
+            let tableHtml = '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+            tableHtml += '<thead><tr><th style="text-align: left; padding: 0.75rem; border-bottom: 2px solid var(--border-color);">Metric</th>';
+            names.forEach(n => {
+                tableHtml += `<th style="text-align: center; padding: 0.75rem; border-bottom: 2px solid var(--border-color); max-width: 180px; word-wrap: break-word;">${(n || '').replace(/</g, '&lt;')}</th>`;
+            });
+            tableHtml += '<th style="text-align: left; padding: 0.75rem; border-bottom: 2px solid var(--border-color);">Winner / Gap</th></tr></thead><tbody>';
+            
+            rows.forEach(row => {
+                const values = tabs.map(t => t[row.key]);
+                const numericValues = values.map(v => (row.key === 'avgDaysToSignup' ? (v != null && v !== 'N/A' ? Number(v) : Infinity) : (Number(v) || 0)));
+                const finiteForMin = row.key === 'avgDaysToSignup' ? numericValues.filter(x => x !== Infinity && !isNaN(x)) : [];
+                const bestVal = row.higherBetter
+                    ? Math.max(...numericValues)
+                    : (finiteForMin.length ? Math.min(...finiteForMin) : null);
+                const bestIdx = bestVal == null || (row.key === 'avgDaysToSignup' && !isFinite(bestVal))
+                    ? -1
+                    : numericValues.indexOf(bestVal);
+                const winnerName = bestIdx >= 0 ? names[bestIdx] : null;
+                const gapParts = [];
+                if (winnerName && row.key !== 'performanceScore') {
+                    const bestVal = row.key === 'avgDaysToSignup' ? (tabs[bestIdx].avgDaysToSignup != null ? tabs[bestIdx].avgDaysToSignup : null) : (numericValues[bestIdx] || 0);
+                    tabs.forEach((t, i) => {
+                        if (i === bestIdx) return;
+                        const v = row.key === 'avgDaysToSignup' ? (t.avgDaysToSignup != null ? t.avgDaysToSignup : null) : (numericValues[i] || 0);
+                        if (v != null && bestVal != null && typeof v === 'number' && typeof bestVal === 'number') {
+                            const diff = row.higherBetter ? bestVal - v : (row.key === 'avgDaysToSignup' ? v - bestVal : 0);
+                            if (diff > 0) gapParts.push(`${(names[i] || '').replace(/</g, '&lt;')} by ${row.key === 'avgDaysToSignup' ? diff.toFixed(1) + ' days' : formatNumber(diff)}`);
+                        }
+                    });
+                }
+                
+                tableHtml += '<tr>';
+                tableHtml += `<td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${row.label}</td>`;
+                tabs.forEach((t, i) => {
+                    const val = t[row.key];
+                    const display = row.format(val);
+                    const isWinner = i === bestIdx;
+                    tableHtml += `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); ${isWinner ? 'background: rgba(16, 185, 129, 0.15); color: var(--accent-lime); font-weight: 600;' : ''}">${(display || '—').replace(/</g, '&lt;')}</td>`;
+                });
+                tableHtml += `<td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-secondary);">`;
+                if (winnerName) tableHtml += `<strong style="color: var(--accent-lime);">${(winnerName || '').replace(/</g, '&lt;')}</strong>`;
+                if (gapParts.length) tableHtml += ' <span style="opacity: 0.9;">leads ' + gapParts.slice(0, 2).join('; ') + (gapParts.length > 2 ? '...' : '') + '</span>';
+                tableHtml += '</td></tr>';
+            });
+            
+            tableHtml += '</tbody></table>';
+            content.innerHTML = tableHtml;
+            modal.style.display = 'flex';
+        }
+        
+        function closeSubscriberCompareModal() {
+            const modal = document.getElementById('subscriberCompareAllModal');
+            if (modal) modal.style.display = 'none';
+        }
+        
         async function selectSubscriberProfile(s3Key) {
             console.log('🔍 Selecting subscriber profile:', s3Key);
             
@@ -22584,6 +22711,8 @@
             if (openSubscriberTabs.length === 0) {
                 if (containerWrapper) containerWrapper.style.display = 'none';
                 if (container) container.innerHTML = '';
+                const compareBtn = document.getElementById('subscriberCompareAllBtn');
+                if (compareBtn) compareBtn.style.display = 'none';
                 return;
             }
             
@@ -22602,6 +22731,10 @@
             });
             
             if (container) container.innerHTML = html;
+            
+            // Show Compare All when 2+ tabs
+            const compareBtn = document.getElementById('subscriberCompareAllBtn');
+            if (compareBtn) compareBtn.style.display = openSubscriberTabs.length >= 2 ? 'inline-block' : 'none';
         }
         
         // Switch to a subscriber tab
@@ -22731,6 +22864,47 @@
             }
         }
         
+        async function loadSubscriberRankInGenre(showName, platformName, genreName, platformGenreLabel) {
+            const valEl = document.getElementById('subscriberRankerValue');
+            const lblEl = document.getElementById('subscriberRankerLabel');
+            if (!valEl || !lblEl) return;
+            valEl.textContent = '…';
+            lblEl.textContent = platformGenreLabel || 'Platform · Genre';
+            try {
+                const res = await fetch('/api/rankers/netflix/data', { credentials: 'same-origin' });
+                if (!res.ok) { valEl.textContent = '—'; return; }
+                const payload = await res.json();
+                const byDate = payload.by_date || {};
+                const datesSorted = payload.dates_sorted && payload.dates_sorted.length ? payload.dates_sorted : Object.keys(byDate).sort();
+                const latestDate = datesSorted.length ? datesSorted[datesSorted.length - 1] : null;
+                if (!latestDate) { valEl.textContent = '—'; return; }
+                const items = byDate[latestDate] || [];
+                const norm = (s) => (s || '').toLowerCase().trim().replace(/-/g, ' ').replace(/\s+/g, ' ');
+                const genreNorm = norm(genreName);
+                const showNorm = (showName || '').toLowerCase().trim();
+                const inGenre = items.filter(it => norm(it.genre || '') === genreNorm);
+                inGenre.sort((a, b) => (b.views || 0) - (a.views || 0));
+                let rankIdx = -1;
+                for (let i = 0; i < inGenre.length; i++) {
+                    const r = (inGenre[i].show_name || '').toLowerCase().trim();
+                    if (r === showNorm || r.includes(showNorm) || showNorm.includes(r)) {
+                        rankIdx = i;
+                        break;
+                    }
+                }
+                if (rankIdx >= 0) {
+                    valEl.textContent = `Rank #${rankIdx + 1}`;
+                    lblEl.textContent = `of ${inGenre.length} in ${platformGenreLabel}`;
+                } else {
+                    valEl.textContent = '—';
+                    lblEl.textContent = platformGenreLabel;
+                }
+            } catch (e) {
+                valEl.textContent = '—';
+                lblEl.textContent = platformGenreLabel;
+            }
+        }
+        
         function renderSubscriberInsights(data) {
             if (!data) {
                 console.error('❌ No data provided to renderSubscriberInsights');
@@ -22809,25 +22983,20 @@
             const isHighConversion = parseFloat(conversionPct) > 5;
             const isStrongReactivation = reactivationPct > 20;
             
-            // 1. EXECUTIVE SUMMARY
-            const performanceScore = totalSignups > 0 ? Math.min(100, Math.round((totalSignups / 10000) * 100)) : 0;
-            const performanceLabel = performanceScore >= 80 ? 'Exceptional' : performanceScore >= 60 ? 'Strong' : performanceScore >= 40 ? 'Good' : 'Developing';
-            const scoreTooltip = 'Subscriber Acquisition Score (0–100): Measures how much this show drove platform growth. The score is based on total subscribers acquired or reactivated; 10,000+ signups = 100. A score of 100 means maximum measured impact and peak platform value from this title.';
-            const labelTooltips = {
-                exceptional: 'Exceptional: This show is in the top tier for subscriber acquisition. It drove very high signups and reactivations, indicating strong platform value and content that consistently converts viewers into subscribers.',
-                strong: 'Strong: This show drove solid subscriber acquisition and reactivation. It demonstrates clear platform value and above-average ability to convert viewers into subscribers.',
-                good: 'Good: This show contributed meaningfully to subscriber acquisition. It shows positive platform value with room to grow compared to top performers.',
-                developing: 'Developing: This show has begun to drive subscriber acquisition. Lower volume or conversion suggests opportunity to improve through marketing, placement, or audience targeting.'
-            };
-            const badgeTooltip = 'Overall performance tier for this show in Subscriber Acquisition. Based on total signups and reactivations attributed to this title.';
+            // 1. EXECUTIVE SUMMARY — Ranker badge (where this show falls within platform + genre)
+            const platformName = (data.metadata?.platform || '').trim() || '';
+            const genreName = (data.metadata?.genre || '').trim() || '';
+            const showNameForRank = (data.metadata?.show || show || '').trim() || '';
+            const platformGenreLabel = [platformName, genreName].filter(Boolean).join(' · ') || 'Platform · Genre';
+            const rankerBadgeTooltip = 'Where this show ranks by views within this platform and genre. Based on Netflix ranker data. Only available for Netflix.';
             
             execSummaryContainer.innerHTML = `
                 <div class="executive-summary-card">
                     <div class="exec-summary-header">
                         <h2 class="has-tooltip" data-tooltip="High-level overview of how this show performed for the platform: subscriber growth, conversion, and strategic takeaways.">Executive Summary</h2>
-                        <div class="performance-badge ${performanceLabel.toLowerCase()} has-tooltip" data-tooltip="${badgeTooltip}">
-                            <span class="performance-score has-tooltip" data-tooltip="${scoreTooltip}">${performanceScore}</span>
-                            <span class="performance-label has-tooltip" data-tooltip="${labelTooltips[performanceLabel.toLowerCase()]}">${performanceLabel}</span>
+                        <div class="performance-badge ranker-badge has-tooltip" data-tooltip="${rankerBadgeTooltip}" id="subscriberRankerBadge">
+                            <span class="performance-score" id="subscriberRankerValue">—</span>
+                            <span class="performance-label" id="subscriberRankerLabel">${platformGenreLabel.replace(/</g, '&lt;')}</span>
                         </div>
                     </div>
                     <div class="exec-summary-grid">
@@ -22835,7 +23004,6 @@
                             <div class="exec-metric-label">Total Platform Impact</div>
                             <div class="exec-metric-value">${formatValue(totalSignups, totalSignupsGenPop)}</div>
                             <div class="exec-metric-desc">Subscribers acquired or reactivated</div>
-                            ${dormantReactive > 0 ? `<div class="exec-metric-reactivated">${formatNumber(dormantReactive)} reactivated</div>` : ''}
                         </div>
                         <div class="exec-summary-metric has-tooltip" data-tooltip="New Subscriber Acquisition: Confirmed new subscribers to the streaming platform who signed up specifically to watch this show.">
                             <div class="exec-metric-label">New Subscriber Acquisition</div>
@@ -22852,9 +23020,24 @@
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
                             <div class="exec-metric-desc">Viewers to subscribers</div>
                         </div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Reactivated: Dormant users who returned to the platform to watch this show after a period of inactivity.">
+                            <div class="exec-metric-label">Reactivated</div>
+                            <div class="exec-metric-value">${formatValue(dormantReactive, dormantReactiveGenPop)}</div>
+                            <div class="exec-metric-desc">Subscribers reactivated</div>
+                        </div>
                     </div>
                 </div>
             `;
+            
+            // Load rank-in-genre for Netflix and update badge
+            if (platformName && (platformName.toLowerCase().includes('netflix') || platformName.toLowerCase() === 'netflix') && genreName && showNameForRank) {
+                loadSubscriberRankInGenre(showNameForRank, platformName, genreName, platformGenreLabel);
+            } else {
+                const valEl = document.getElementById('subscriberRankerValue');
+                const lblEl = document.getElementById('subscriberRankerLabel');
+                if (valEl) valEl.textContent = '—';
+                if (lblEl) lblEl.textContent = platformGenreLabel || 'Platform · Genre';
+            }
             
             // 2. PLATFORM VALUE ASSESSMENT
             const valueStrength = totalSignups > 10000 ? 'high' : totalSignups > 5000 ? 'moderate' : 'developing';
