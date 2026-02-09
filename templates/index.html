@@ -2564,6 +2564,12 @@
 
         .category-children.open { display: block; }
 
+        /* Subscriber IQ Shows: single scroll for whole list (no per-category scroll) */
+        #subscriberProfileTree .category-children {
+            max-height: none;
+            overflow: visible;
+        }
+
         .category-child {
             padding: 0.25rem 0;
             font-size: 0.75rem;
@@ -14703,7 +14709,7 @@
                         <h3>📺 Shows</h3>
                         <input type="text" id="subscriberProfileSearchInput" class="sidebar-search" placeholder="🔍 Search shows..." onkeyup="filterSubscriberProfiles()">
                     </div>
-                    <div id="subscriberProfileTree" class="profile-select-tree"></div>
+                    <div id="subscriberProfileTree" class="profile-select-tree subscriber-shows-tree"></div>
                 </div>
                 
                 <!-- Tab Content Area -->
