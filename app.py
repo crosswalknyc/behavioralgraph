@@ -7117,14 +7117,19 @@ def list_hedge_fund_tickers():
         # Enrich tickers with metadata (allows admin overrides)
         for ticker in tickers:
             ticker_key = ticker['s3_key']
+            original_ticker = ticker['ticker']  # Keep for SEC actuals / API (keyed by file-derived symbol)
+            ticker['original_ticker'] = original_ticker
             if ticker_key in metadata:
                 ticker['display_name'] = metadata[ticker_key].get('display_name', ticker['ticker'])
                 ticker['kpi'] = metadata[ticker_key].get('kpi', ticker['kpi'])
                 ticker['parent_ticker'] = metadata[ticker_key].get('parent_ticker', None)
                 ticker['relevance_percentage'] = metadata[ticker_key].get('relevance_percentage', None)
+                # Editable ticker symbol (title) override
+                ticker['ticker'] = (metadata[ticker_key].get('ticker_symbol') or original_ticker).strip() or original_ticker
             else:
                 ticker['parent_ticker'] = None
                 ticker['relevance_percentage'] = None
+                ticker['original_ticker'] = original_ticker
         
         print(f"✅ Found {len(tickers)} tickers")
         return jsonify({'success': True, 'tickers': tickers})
@@ -7524,6 +7529,7 @@ def manage_ticker_metadata():
     elif request.method == 'POST':
         data = request.get_json()
         s3_key = data.get('s3_key')
+        ticker_symbol = (data.get('ticker_symbol') or '').strip()
         display_name = data.get('display_name')
         kpi = data.get('kpi')
         parent_ticker = data.get('parent_ticker')
@@ -7537,6 +7543,8 @@ def manage_ticker_metadata():
         if s3_key not in metadata:
             metadata[s3_key] = {}
         
+        if ticker_symbol is not None:
+            metadata[s3_key]['ticker_symbol'] = ticker_symbol if ticker_symbol else None
         if display_name:
             metadata[s3_key]['display_name'] = display_name
         if kpi:

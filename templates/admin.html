@@ -1282,7 +1282,7 @@
                                 <div class="form-section-title">ℹ️ Ticker Information</div>
                                 <div class="form-group" style="margin-bottom: 0.75rem;">
                                     <label style="font-size: 0.85rem;">Ticker Symbol</label>
-                                    <input type="text" id="tickerSymbol" readonly style="background: var(--bg-dark); cursor: not-allowed; font-size: 0.85rem;">
+                                    <input type="text" id="tickerSymbol" placeholder="e.g., ADT" style="font-size: 0.85rem;" title="Editable title/symbol shown in the app">
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0.75rem;">
                                     <label style="font-size: 0.85rem;">Display Name</label>
@@ -6977,16 +6977,17 @@
                     });
                 }
                 
-                // Load all SEC actuals
-                const actualsPromises = allTickers.map(t => 
-                    fetch(`/api/hedge-fund-iq/sec-actuals/${encodeURIComponent(t.ticker)}`)
+                // Load all SEC actuals (API is keyed by file-derived symbol)
+                const actualsPromises = allTickers.map(t => {
+                    const apiTicker = t.original_ticker || t.ticker;
+                    return fetch(`/api/hedge-fund-iq/sec-actuals/${encodeURIComponent(apiTicker)}`)
                         .then(r => r.json())
-                        .then(data => ({ ticker: t.ticker, display_name: t.display_name, actuals: data.actuals || {} }))
-                );
+                        .then(data => ({ ticker: t.ticker, display_name: t.display_name, actuals: data.actuals || {} }));
+                });
                 
                 const results = await Promise.all(actualsPromises);
                 
-                // Build combined actuals object
+                // Build combined actuals object (keyed by display ticker)
                 allSecActuals = {};
                 results.forEach(r => {
                     if (Object.keys(r.actuals).length > 0) {
@@ -7276,10 +7277,11 @@
                 const mappings = {};
                 for (const ticker of tickers) {
                     try {
-                        const response = await fetch(`/api/hedge-fund-iq/profile-mapping/${ticker.ticker}`);
+                        const apiTicker = ticker.original_ticker || ticker.ticker;
+                        const response = await fetch(`/api/hedge-fund-iq/profile-mapping/${encodeURIComponent(apiTicker)}`);
                         const data = await response.json();
-                        if (data.success && data.profile_filename !== ticker.ticker) {
-                            mappings[ticker.ticker] = data.profile_filename;
+                        if (data.success && data.profiles) {
+                            mappings[ticker.ticker] = Array.isArray(data.profiles) ? data.profiles : [data.profiles];
                         }
                     } catch (error) {
                         console.error(`Error loading mapping for ${ticker.ticker}:`, error);
@@ -7308,8 +7310,9 @@
                 `;
                 
                 for (const ticker of tickers) {
-                    const profileFilename = mappings[ticker.ticker] || ticker.ticker;
-                    const isCustom = mappings[ticker.ticker] ? true : false;
+                    const raw = mappings[ticker.ticker];
+                    const profileFilename = Array.isArray(raw) ? raw.join(', ') : (raw || ticker.ticker);
+                    const isCustom = raw && (Array.isArray(raw) ? raw.length > 0 : true);
                     
                     html += `
                         <tr>
@@ -7321,11 +7324,11 @@
                                 </span>
                             </td>
                             <td>
-                                <button class="btn btn-small btn-primary" onclick="editProfileMapping('${ticker.ticker}', '${ticker.display_name}', '${profileFilename}')">
-                                    ${isCustom ? '✏️ Edit' : '➕ Set'}
+<button class="btn btn-small btn-primary" onclick="editProfileMapping('${(ticker.original_ticker || ticker.ticker).replace(/'/g, "\\'")}', '${(ticker.display_name || '').replace(/'/g, "\\'")}', '${(profileFilename || '').replace(/'/g, "\\'")}')">
+                                ${isCustom ? '✏️ Edit' : '➕ Set'}
                                 </button>
                                 ${isCustom ? `
-                                    <button class="btn btn-small btn-danger" onclick="removeProfileMapping('${ticker.ticker}')">
+                                    <button class="btn btn-small btn-danger" onclick="removeProfileMapping('${(ticker.original_ticker || ticker.ticker).replace(/'/g, "\\'")}')">
                                         🗑️ Remove
                                     </button>
                                 ` : ''}
@@ -7633,8 +7636,8 @@
                 addProfileInputElement('', 0);
             }
             
-            // Load SEC actuals for this ticker
-            await loadSecActualsForTicker(ticker.ticker);
+            // Load SEC actuals (keyed by file-derived symbol, not display override)
+            await loadSecActualsForTicker(ticker.original_ticker || ticker.ticker);
             
             // Show modal
             document.getElementById('tickerDetailModal').style.display = 'flex';
@@ -7685,6 +7688,7 @@
         async function saveTickerMetadataFromModal() {
             if (!currentTickerInModal) return;
             
+            const tickerSymbol = document.getElementById('tickerSymbol').value.trim();
             const displayName = document.getElementById('tickerDisplayName').value.trim();
             const kpi = document.getElementById('tickerKPI').value.trim();
             const relevanceInput = document.getElementById('tickerRelevance').value.trim();
@@ -7713,6 +7717,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         s3_key: currentTickerInModal.s3_key,
+                        ticker_symbol: tickerSymbol || null,
                         display_name: displayName,
                         kpi: kpi,
                         relevance_percentage: relevance_percentage
@@ -7721,14 +7726,16 @@
                 
                 const data = await response.json();
                 if (data.success) {
-                    // Update the ticker object with saved relevance
                     if (currentTickerInModal) {
                         currentTickerInModal.relevance_percentage = data.relevance_percentage;
+                        currentTickerInModal.ticker = tickerSymbol || currentTickerInModal.original_ticker || currentTickerInModal.ticker;
                     }
                     showToast('✅ Ticker metadata saved!');
                     invalidateTickersCache();
                     await loadTickers();
-                    showTickerDetail(currentTickerInModal.ticker);
+                    const s3Key = currentTickerInModal.s3_key;
+                    const reopened = allTickersData.find(t => t.s3_key === s3Key);
+                    if (reopened) showTickerDetail(reopened.ticker);
                 } else {
                     showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
                 }
@@ -7851,11 +7858,12 @@
                 .filter(val => val !== ''); // Remove empty values
             
             try {
+                const apiTicker = currentTickerInModal.original_ticker || currentTickerInModal.ticker;
                 const response = await fetch('/api/hedge-fund-iq/profile-mapping', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        ticker: currentTickerInModal.ticker,
+                        ticker: apiTicker,
                         profiles: profiles
                     })
                 });
@@ -7956,11 +7964,12 @@
             if (!currentTickerInModal) return;
             
             try {
+                const apiTicker = currentTickerInModal.original_ticker || currentTickerInModal.ticker;
                 const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        ticker: currentTickerInModal.ticker,
+                        ticker: apiTicker,
                         quarter: quarter,
                         actual_value: value
                     })
@@ -7970,7 +7979,7 @@
                 
                 if (data.success) {
                     showToast('✅ SEC actual saved!');
-                    loadSecActualsForTicker(currentTickerInModal.ticker);
+                    loadSecActualsForTicker(apiTicker);
                 } else {
                     showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
                 }
@@ -7987,11 +7996,12 @@
             }
             
             try {
+                const apiTicker = currentTickerInModal.original_ticker || currentTickerInModal.ticker;
                 const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        ticker: currentTickerInModal.ticker,
+                        ticker: apiTicker,
                         quarter: quarter,
                         actual_value: null
                     })
@@ -8001,7 +8011,7 @@
                 
                 if (data.success) {
                     showToast('✅ SEC actual deleted!');
-                    loadSecActualsForTicker(currentTickerInModal.ticker);
+                    loadSecActualsForTicker(apiTicker);
                 } else {
                     showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
                 }

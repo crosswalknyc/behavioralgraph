@@ -1190,6 +1190,44 @@
             gap: 1rem;
             margin-bottom: 2rem;
         }
+        .view-numbers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .view-number-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .view-number-card.view-number-total {
+            border-color: var(--accent-cyan);
+            background: rgba(102, 217, 239, 0.08);
+        }
+        .view-number-label {
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .view-number-users {
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+        }
+        .view-number-pct {
+            font-size: 0.95rem;
+            color: var(--accent-lime);
+            margin-bottom: 0.25rem;
+        }
+        .view-number-value {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
 
         .timing-metric-card {
             background: var(--bg-input);
@@ -11237,11 +11275,14 @@
     <div class="credits-modal" id="analysisStatusModal">
         <div class="credits-modal-content" style="max-width: 480px;">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-                <div class="spinner" style="width: 28px; height: 28px; border-width: 2px;"></div>
+                <span style="font-size: 1.75rem;" title="Working on it">👷</span>
                 <h2 style="margin: 0; color: var(--accent-cyan); font-size: 1.1rem;">Analysis In Progress</h2>
             </div>
-            <div style="background: rgba(66, 217, 239, 0.12); border: 1px solid rgba(66, 217, 239, 0.35); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+            <div style="background: rgba(66, 217, 239, 0.12); border: 1px solid rgba(66, 217, 239, 0.35); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0; color: var(--accent-cyan); font-size: 0.9rem;">Your analysis is processing. You can navigate away from this page and we will notify you when it finishes processing and is live in your dashboard.</p>
+            </div>
+            <div style="margin-bottom: 1.5rem;">
+                <button type="button" onclick="closeAnalysisStatusModal(); if(typeof showProfileIQ === 'function') showProfileIQ();" style="width: 100%; background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">🏠 Home</button>
             </div>
             <div id="analysisStatusModalRunning">
                 <div id="statusModalText" style="font-weight: 600; margin-bottom: 0.35rem;">Processing...</div>
@@ -14764,6 +14805,7 @@
                             <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
+                            <button class="tab-btn" onclick="showSubscriberTab('viewnumbers')"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
                         </div>
@@ -14842,6 +14884,15 @@
                                 <h3>📺 Episode-Level Signup Timing</h3>
                                 <p class="section-description">Signup timing broken down by individual episode</p>
                                 <div id="subscriberEpisodeTiming" class="episode-timing-grid"></div>
+                            </div>
+                        </div>
+
+                        <!-- View Numbers Tab (1st–5th view attribution) -->
+                        <div id="subscriber-tab-viewnumbers" class="tab-content">
+                            <div class="tab-section">
+                                <h3>🔢 View Numbers</h3>
+                                <p class="section-description">When people signed up for the platform, was this show their 1st, 2nd, 3rd, 4th, or 5th view? These numbers show how many users watched this show at each position in their viewing sequence after signup.</p>
+                                <div id="subscriberViewNumbers" class="view-numbers-grid"></div>
                             </div>
                         </div>
 
@@ -22423,6 +22474,9 @@
                 renderSubscriberTiming(data);
             } catch (e) { console.error('Error rendering timing:', e); }
             try {
+                renderSubscriberViewNumbers(data);
+            } catch (e) { console.error('Error rendering view numbers:', e); }
+            try {
                 renderSubscriberPlatforms(data);
             } catch (e) { console.error('Error rendering platforms:', e); }
             try {
@@ -24030,6 +24084,44 @@
                 });
                 container.innerHTML = html;
             }
+        }
+        
+        function renderSubscriberViewNumbers(data) {
+            const container = document.getElementById('subscriberViewNumbers');
+            if (!container) return;
+            const touchpoints = data.post_signup_touchpoints || [];
+            const order = ['1st', '2nd', '3rd', '4th', '5th', 'Total'];
+            const labels = {
+                '1st': 'First View Attribution',
+                '2nd': 'Second View Attribution',
+                '3rd': 'Third View Attribution',
+                '4th': 'Fourth View Attribution',
+                '5th': 'Fifth View Attribution',
+                'Total': 'Total Platform Signups'
+            };
+            const sorted = order.map(key => touchpoints.find(t => (t.touchpoint || '').replace(/\s/g,'') === key || t.touchpoint === key)).filter(Boolean);
+            if (sorted.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-secondary);">No view numbers (post-signup touchpoint) data available for this show.</p>';
+                return;
+            }
+            container.innerHTML = sorted.map(t => {
+                const label = labels[t.touchpoint] || (t.touchpoint + ' View');
+                const usersRaw = t.users || '';
+                const usersNum = parseNumber(usersRaw);
+                const usersDisplay = usersNum != null ? formatNumber(usersNum) + ' users watched show' : (usersRaw || '—');
+                const pct = (t.percentage || '').trim() || '—';
+                const value = (t.gen_pop || '').trim() || '—';
+                const isTotal = t.touchpoint === 'Total';
+                const tooltip = isTotal ? 'Total users who watched this show as one of their first 5 views after signup' : 'Users who watched this show as their ' + (t.touchpoint || '') + ' view after signing up';
+                return `
+                    <div class="view-number-card has-tooltip ${isTotal ? 'view-number-total' : ''}" data-tooltip="${tooltip.replace(/"/g, '&quot;')}">
+                        <div class="view-number-label">${label}</div>
+                        <div class="view-number-users">${usersDisplay}</div>
+                        <div class="view-number-pct">${pct}</div>
+                        <div class="view-number-value">${value}</div>
+                    </div>
+                `;
+            }).join('');
         }
         
         function renderSubscriberPlatforms(data) {
