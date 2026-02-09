@@ -857,6 +857,12 @@
             color: var(--text-secondary);
         }
 
+        .exec-metric-reactivated {
+            font-size: 0.75rem;
+            color: var(--accent-cyan);
+            margin-top: 0.35rem;
+        }
+
         .exec-summary-insight {
             background: var(--bg-card);
             border-left: 4px solid var(--accent-cyan);
@@ -22807,14 +22813,22 @@
             // 1. EXECUTIVE SUMMARY
             const performanceScore = totalSignups > 0 ? Math.min(100, Math.round((totalSignups / 10000) * 100)) : 0;
             const performanceLabel = performanceScore >= 80 ? 'Exceptional' : performanceScore >= 60 ? 'Strong' : performanceScore >= 40 ? 'Good' : 'Developing';
+            const scoreTooltip = 'Subscriber Acquisition Score (0–100): Measures how much this show drove platform growth. The score is based on total subscribers acquired or reactivated; 10,000+ signups = 100. A score of 100 means maximum measured impact and peak platform value from this title.';
+            const labelTooltips = {
+                exceptional: 'Exceptional: This show is in the top tier for subscriber acquisition. It drove very high signups and reactivations, indicating strong platform value and content that consistently converts viewers into subscribers.',
+                strong: 'Strong: This show drove solid subscriber acquisition and reactivation. It demonstrates clear platform value and above-average ability to convert viewers into subscribers.',
+                good: 'Good: This show contributed meaningfully to subscriber acquisition. It shows positive platform value with room to grow compared to top performers.',
+                developing: 'Developing: This show has begun to drive subscriber acquisition. Lower volume or conversion suggests opportunity to improve through marketing, placement, or audience targeting.'
+            };
+            const badgeTooltip = 'Overall performance tier for this show in Subscriber Acquisition. Based on total signups and reactivations attributed to this title.';
             
             execSummaryContainer.innerHTML = `
                 <div class="executive-summary-card">
                     <div class="exec-summary-header">
-                        <h2>Executive Summary</h2>
-                        <div class="performance-badge ${performanceLabel.toLowerCase()} has-tooltip" data-tooltip="Performance Score: ${performanceScore}/100 - ${performanceLabel} performance. Based on total subscriber acquisition and reactivation metrics. Higher scores indicate stronger platform value.">
-                            <span class="performance-score">${performanceScore}</span>
-                            <span class="performance-label">${performanceLabel}</span>
+                        <h2 class="has-tooltip" data-tooltip="High-level overview of how this show performed for the platform: subscriber growth, conversion, and strategic takeaways.">Executive Summary</h2>
+                        <div class="performance-badge ${performanceLabel.toLowerCase()} has-tooltip" data-tooltip="${badgeTooltip}">
+                            <span class="performance-score has-tooltip" data-tooltip="${scoreTooltip}">${performanceScore}</span>
+                            <span class="performance-label has-tooltip" data-tooltip="${labelTooltips[performanceLabel.toLowerCase()]}">${performanceLabel}</span>
                         </div>
                     </div>
                     <div class="exec-summary-grid">
@@ -22822,6 +22836,7 @@
                             <div class="exec-metric-label">Total Platform Impact</div>
                             <div class="exec-metric-value">${formatValue(totalSignups, totalSignupsGenPop)}</div>
                             <div class="exec-metric-desc">Subscribers acquired or reactivated</div>
+                            ${dormantReactive > 0 ? `<div class="exec-metric-reactivated">${formatNumber(dormantReactive)} reactivated</div>` : ''}
                         </div>
                         <div class="exec-summary-metric has-tooltip" data-tooltip="New Subscriber Acquisition: Confirmed new subscribers to the streaming platform who signed up specifically to watch this show.">
                             <div class="exec-metric-label">New Subscriber Acquisition</div>
@@ -22846,7 +22861,7 @@
             const valueStrength = totalSignups > 10000 ? 'high' : totalSignups > 5000 ? 'moderate' : 'developing';
             platformValueContainer.innerHTML = `
                 <div class="strategic-card">
-                    <h3>💰 Platform Value Assessment</h3>
+                    <h3 class="has-tooltip" data-tooltip="Summarizes how much value this show delivers to the platform: subscriber growth, attribution rate, and how quickly viewers convert to subscribers.">💰 Platform Value Assessment</h3>
                     <div class="value-assessment-grid">
                         <div class="value-metric-card has-tooltip" data-tooltip="Subscriber Growth: Total number of subscribers acquired or reactivated. New Signups are confirmed new platform subscribers. Reactivations are dormant users who returned to watch this show.">
                             <div class="value-metric-header">
@@ -22900,7 +22915,7 @@
             
             contentPerformanceContainer.innerHTML = `
                 <div class="strategic-card">
-                    <h3>🎬 Content Performance Analysis</h3>
+                    <h3 class="has-tooltip" data-tooltip="Which episodes or release dates drove the most signups. Use this to focus marketing and promotion on the highest-impact content.">🎬 Content Performance Analysis</h3>
                     ${topEpisodes.length > 0 ? `
                         <div class="episode-performance-grid">
                             ${topEpisodes.map((ep, idx) => {
@@ -22930,7 +22945,7 @@
             // 4. AUDIENCE ACQUISITION INSIGHTS
             audienceAcquisitionContainer.innerHTML = `
                 <div class="strategic-card">
-                    <h3>👥 Audience Acquisition Insights</h3>
+                    <h3 class="has-tooltip" data-tooltip="How this show attracts new vs. returning viewers and converts them to subscribers. Key for understanding acquisition and retention mix.">👥 Audience Acquisition Insights</h3>
                     <div class="acquisition-grid">
                         <div class="acquisition-metric has-tooltip" data-tooltip="New Audience Appeal: Percentage of viewers who had not watched this show before. Higher percentages indicate strong appeal to new audiences and platform acquisition potential.">
                             <div class="acquisition-header">
@@ -23037,7 +23052,7 @@
             if (keyMetricsContainer) {
                 keyMetricsContainer.innerHTML = `
                     <div class="strategic-card">
-                        <h3>📊 Key Metrics Overview</h3>
+                        <h3 class="has-tooltip" data-tooltip="Core numbers for this show: audience size, conversion rates, signups, and reactivations. Hover each metric for a short description.">📊 Key Metrics Overview</h3>
                         <div class="key-stats-grid">
                             <div class="key-stat-item has-tooltip" data-tooltip="How many people total watched the series">
                                 <div class="key-stat-label">Total Show Watchers</div>
@@ -23111,10 +23126,11 @@
                     const yearlyPrem = monthlyPrem * 12;
                     const revenueBlurb = `Estimated revenue from new subscribers attributed to this show. Uses platform <strong>${subscriberPlatformName || '—'}</strong> and monthly price from <strong>Admin → Settings → SVOD Pricing</strong>. Based on ${formatNumber(signupsForRevenue)} signups.`;
                     subscriptionRevenueContainer.innerHTML = `
+                        <h3 class="has-tooltip" data-tooltip="Estimated revenue from subscribers attributed to this show, using platform pricing. Premium and ad-supported tiers shown separately." style="margin-bottom: 0.5rem;">💰 Revenue from new subscribers</h3>
                         <p class="section-description" style="margin-bottom: 1rem;">${revenueBlurb}</p>
                         <div class="value-assessment-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
                             <div class="strategic-card" style="margin-bottom: 0;">
-                                <h3 style="font-size: 1rem;">💰 Revenue from new subscribers — Premium</h3>
+                                <h3 class="has-tooltip" data-tooltip="Revenue from premium-tier subscribers attributed to this show." style="font-size: 1rem;">💰 Revenue from new subscribers — Premium</h3>
                                 <p class="section-description" style="margin-bottom: 0.75rem; font-size: 0.85rem;">Modeled at $${prem}/mo per subscriber.</p>
                                 <div class="value-assessment-grid" style="grid-template-columns: 1fr 1fr;">
                                     <div class="value-metric-card">
@@ -23128,7 +23144,7 @@
                                 </div>
                             </div>
                             <div class="strategic-card" style="margin-bottom: 0;">
-                                <h3 style="font-size: 1rem;">💰 Revenue from new subscribers — Ad-supported</h3>
+                                <h3 class="has-tooltip" data-tooltip="Revenue from ad-supported-tier subscribers attributed to this show." style="font-size: 1rem;">💰 Revenue from new subscribers — Ad-supported</h3>
                                 <p class="section-description" style="margin-bottom: 0.75rem; font-size: 0.85rem;">Modeled at $${ad}/mo per subscriber.</p>
                                 <div class="value-assessment-grid" style="grid-template-columns: 1fr 1fr;">
                                     <div class="value-metric-card">
@@ -23198,7 +23214,7 @@
                 } else {
                     subscriptionRevenueContainer.innerHTML = `
                         <div class="strategic-card">
-                            <h3>💰 Revenue from new subscribers</h3>
+                            <h3 class="has-tooltip" data-tooltip="Estimated revenue from subscribers attributed to this show. Requires platform pricing in Admin → Settings → SVOD Pricing.">💰 Revenue from new subscribers</h3>
                             <p class="section-description">To see monthly and yearly revenue (premium and ad-supported) here, add pricing for this show's platform in <strong>Admin → Settings → SVOD Pricing</strong>. Platform from CSV: <strong>${subscriberPlatformName || '—'}</strong></p>
                         </div>
                     `;
