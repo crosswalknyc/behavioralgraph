@@ -2154,9 +2154,10 @@ def update_user(username):
         if 'hedge_fund_iq_tickers' in req_data:
             user['hedge_fund_iq_tickers'] = req_data['hedge_fund_iq_tickers']
         if 'has_analysis_iq_access' in req_data:
-            user['has_analysis_iq_access'] = req_data['has_analysis_iq_access']
+            user['has_analysis_iq_access'] = bool(req_data['has_analysis_iq_access'])
         if 'analysis_iq_modules' in req_data:
-            user['analysis_iq_modules'] = req_data['analysis_iq_modules']
+            raw = req_data['analysis_iq_modules']
+            user['analysis_iq_modules'] = list(raw) if isinstance(raw, list) else []
         if 'has_rankers_iq_access' in req_data:
             user['has_rankers_iq_access'] = req_data['has_rankers_iq_access']
         if 'rankers_iq_options' in req_data:
@@ -13681,8 +13682,26 @@ def post_comment():
 
 
 # ============================================================================
-# ATTRIBUTION IQ ENDPOINTS
+# ATTRIBUTION IQ / ANALYSIS IQ ENDPOINTS
 # ============================================================================
+
+def user_can_run_analysis_module(user, module_key):
+    """True if user can run the given Analysis IQ module (talent_search, svod, campaign, etc.)."""
+    if not user:
+        return False
+    role = user.get('role', 'user')
+    if role in ('admin', 'super_admin'):
+        return True
+    # New: Analysis IQ access + module list (saved by admin checkboxes)
+    if user.get('has_analysis_iq_access'):
+        modules = user.get('analysis_iq_modules') or []
+        if module_key in modules:
+            return True
+    # Backward compat: legacy flag
+    if user.get('has_attribution_iq_access'):
+        return True
+    return False
+
 
 @app.route('/api/attribution/talent-search', methods=['POST'], strict_slashes=False)
 @requires_auth
@@ -13693,10 +13712,9 @@ def submit_talent_search():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         
-        # Check access
-        role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
-            return jsonify({'error': 'Attribution IQ access required'}), 403
+        # Check access (Analysis IQ + Talent Search module)
+        if not user_can_run_analysis_module(user, 'talent_search'):
+            return jsonify({'error': 'Analysis IQ access with Talent Search module required'}), 403
         
         data = request.json
         if not data:
@@ -13763,10 +13781,9 @@ def submit_talent_theater():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         
-        # Check access
-        role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
-            return jsonify({'error': 'Attribution IQ access required'}), 403
+        # Check access (Analysis IQ + Ticket Sales / Talent Theater module)
+        if not user_can_run_analysis_module(user, 'talent_theater'):
+            return jsonify({'error': 'Analysis IQ access with Ticket Sales module required'}), 403
         
         data = request.json
         if not data:
@@ -14052,10 +14069,9 @@ def submit_svod_acquisition():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         
-        # Check access
-        role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
-            return jsonify({'error': 'Attribution IQ access required'}), 403
+        # Check access (Analysis IQ + SVOD module; run uses 7 credits)
+        if not user_can_run_analysis_module(user, 'svod'):
+            return jsonify({'error': 'Analysis IQ access with SVOD module required'}), 403
         
         data = request.json
         if not data:
@@ -14157,10 +14173,9 @@ def submit_campaign_roi():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         
-        # Check access
-        role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
-            return jsonify({'error': 'Attribution IQ access required'}), 403
+        # Check access (Analysis IQ + Campaign module)
+        if not user_can_run_analysis_module(user, 'campaign'):
+            return jsonify({'error': 'Analysis IQ access with Campaign module required'}), 403
         
         data = request.json
         if not data:
@@ -14496,10 +14511,9 @@ def submit_cross_show():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         
-        # Check access
-        role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
-            return jsonify({'error': 'Attribution IQ access required'}), 403
+        # Check access (Analysis IQ + Cross Show module)
+        if not user_can_run_analysis_module(user, 'cross_show'):
+            return jsonify({'error': 'Analysis IQ access with Cross Show module required'}), 403
         
         data = request.json
         if not data:
@@ -14566,10 +14580,9 @@ def submit_watch_time():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         
-        # Check access
-        role = user.get('role', 'user')
-        if role != 'admin' and role != 'super_admin' and not user.get('has_attribution_iq_access', False):
-            return jsonify({'error': 'Attribution IQ access required'}), 403
+        # Check access (Analysis IQ + Watch Time module)
+        if not user_can_run_analysis_module(user, 'watch_time'):
+            return jsonify({'error': 'Analysis IQ access with Watch Time module required'}), 403
         
         data = request.json
         if not data:
