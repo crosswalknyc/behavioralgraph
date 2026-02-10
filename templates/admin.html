@@ -1952,6 +1952,16 @@
                         </div>
                     </div>
                     
+                    <!-- Ticket Sales IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasTicketSalesIQAccess" checked>
+                                <span style="font-weight: 600;">🎟️ TICKET SALES IQ</span>
+                            </label>
+                        </div>
+                    </div>
+                    
                     <!-- Hedge Fund IQ Access -->
                     <div class="dashboard-access-item">
                         <div class="dashboard-access-header" onclick="toggleDashboardSection('hedgeFundIQ')">
@@ -4391,6 +4401,7 @@
             document.getElementById('allBehavioralCategories').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
+            document.getElementById('hasTicketSalesIQAccess').checked = true;
             document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('hasAnalysisIQAccess').checked = false;
             
@@ -4488,6 +4499,7 @@
             document.getElementById('allBehavioralCategories').checked = user.allowed_behavioral_categories?.includes('*') ?? true; // Default true
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
+            document.getElementById('hasTicketSalesIQAccess').checked = user.has_ticket_sales_iq_access !== false; // Default true
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
             
@@ -5716,6 +5728,7 @@
                     Array.from(document.querySelectorAll('#behavioralCategoryCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
+                has_ticket_sales_iq_access: document.getElementById('hasTicketSalesIQAccess').checked,
                 has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
                 hedge_fund_iq_tabs: getHedgeFundIQTabs(),
                 hedge_fund_iq_tickers: document.getElementById('allHedgeFundTickers').checked ? ['*'] : getHedgeFundIQTickers(),

@@ -2062,6 +2062,7 @@ def create_user():
             'allowed_behavioral_categories': req_data.get('allowed_behavioral_categories', ['*']),
             'has_profile_iq_access': req_data.get('has_profile_iq_access', True),
             'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', False),
+            'has_ticket_sales_iq_access': req_data.get('has_ticket_sales_iq_access', True),
             'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', False),
             'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
             'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
@@ -2147,6 +2148,8 @@ def update_user(username):
             user['has_profile_iq_access'] = req_data['has_profile_iq_access']
         if 'has_subscriber_iq_access' in req_data:
             user['has_subscriber_iq_access'] = req_data['has_subscriber_iq_access']
+        if 'has_ticket_sales_iq_access' in req_data:
+            user['has_ticket_sales_iq_access'] = req_data['has_ticket_sales_iq_access']
         if 'has_hedge_fund_iq_access' in req_data:
             user['has_hedge_fund_iq_access'] = req_data['has_hedge_fund_iq_access']
         if 'hedge_fund_iq_tabs' in req_data:
@@ -2233,6 +2236,7 @@ def restore_defaults_all_users():
             user['allowed_behavioral_categories'] = list(allowed_behavioral_categories) if isinstance(allowed_behavioral_categories, list) else ['*']
             user['has_profile_iq_access'] = True
             user['has_subscriber_iq_access'] = False
+            user['has_ticket_sales_iq_access'] = True
             user['has_hedge_fund_iq_access'] = False
             user['hedge_fund_iq_tabs'] = user.get('hedge_fund_iq_tabs', [])
             user['hedge_fund_iq_tickers'] = user.get('hedge_fund_iq_tickers', [])
