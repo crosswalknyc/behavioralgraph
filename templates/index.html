@@ -23373,36 +23373,37 @@
                     const monthlyPrem = signupsForRevenue * prem;
                     const yearlyAd = monthlyAd * 12;
                     const yearlyPrem = monthlyPrem * 12;
-                    const revenueBlurb = `Estimated revenue from new subscribers attributed to this show. Uses platform <strong>${subscriberPlatformName || '—'}</strong> and monthly price from <strong>Admin → Settings → SVOD Pricing</strong>. Based on <strong>${formatNumber(signupsForRevenue)}</strong> signups (US projected). Revenue = signups × price.`;
+                    const signupsStr = formatNumber(signupsForRevenue);
                     subscriptionRevenueContainer.innerHTML = `
-                        <h3 class="has-tooltip" data-tooltip="Estimated revenue from subscribers attributed to this show, using platform pricing. Premium and ad-supported tiers shown separately. Uses US projected gen pop signup count × price." style="margin-bottom: 0.5rem;">💰 Revenue from new subscribers</h3>
-                        <p class="section-description" style="margin-bottom: 1rem;">${revenueBlurb}</p>
+                        <h3 class="has-tooltip" data-tooltip="Estimated revenue from subscribers attributed to this show, using platform pricing. Premium and ad-supported tiers shown separately. Uses US projected gen pop signup count × price." style="margin-bottom: 1rem;">💰 Revenue from new subscribers</h3>
                         <div class="value-assessment-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
                             <div class="strategic-card" style="margin-bottom: 0;">
-                                <h3 class="has-tooltip" data-tooltip="Revenue from premium-tier subscribers attributed to this show. New accounts (US projected) × price." style="font-size: 1rem;">💰 Revenue from new subscribers — Premium</h3>
-                                <p class="section-description" style="margin-bottom: 0.75rem; font-size: 0.85rem;">Modeled at $${prem}/mo per subscriber.</p>
+                                <h3 class="has-tooltip" data-tooltip="Revenue from premium-tier subscribers. New accounts (US projected) × price." style="font-size: 1rem;">💰 Revenue from new subscribers — Premium</h3>
                                 <div class="value-assessment-grid revenue-exec-grid" style="grid-template-columns: 1fr 1fr;">
                                     <div class="exec-summary-metric revenue-metric-box">
                                         <div class="exec-metric-label">Monthly</div>
                                         <div class="exec-metric-value">$${fmt(monthlyPrem)}</div>
+                                        <div class="exec-metric-formula" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${signupsStr} × $${prem}/mo</div>
                                     </div>
                                     <div class="exec-summary-metric revenue-metric-box">
                                         <div class="exec-metric-label">Yearly</div>
                                         <div class="exec-metric-value">$${fmt(yearlyPrem)}</div>
+                                        <div class="exec-metric-formula" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${signupsStr} × $${prem} × 12</div>
                                     </div>
                                 </div>
                             </div>
                             <div class="strategic-card" style="margin-bottom: 0;">
-                                <h3 class="has-tooltip" data-tooltip="Revenue from ad-supported-tier subscribers attributed to this show. New accounts (US projected) × price." style="font-size: 1rem;">💰 Revenue from new subscribers — Ad-supported</h3>
-                                <p class="section-description" style="margin-bottom: 0.75rem; font-size: 0.85rem;">Modeled at $${ad}/mo per subscriber.</p>
+                                <h3 class="has-tooltip" data-tooltip="Revenue from ad-supported-tier subscribers. New accounts (US projected) × price." style="font-size: 1rem;">💰 Revenue from new subscribers — Ad-supported</h3>
                                 <div class="value-assessment-grid revenue-exec-grid" style="grid-template-columns: 1fr 1fr;">
                                     <div class="exec-summary-metric revenue-metric-box">
                                         <div class="exec-metric-label">Monthly</div>
                                         <div class="exec-metric-value">$${fmt(monthlyAd)}</div>
+                                        <div class="exec-metric-formula" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${signupsStr} × $${ad}/mo</div>
                                     </div>
                                     <div class="exec-summary-metric revenue-metric-box">
                                         <div class="exec-metric-label">Yearly</div>
                                         <div class="exec-metric-value">$${fmt(yearlyAd)}</div>
+                                        <div class="exec-metric-formula" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${signupsStr} × $${ad} × 12</div>
                                     </div>
                                 </div>
                             </div>
