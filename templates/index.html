@@ -906,6 +906,16 @@
             margin-bottom: 1.5rem;
         }
 
+        .revenue-exec-grid { gap: 1rem; }
+        .revenue-metric-box.exec-summary-metric {
+            border-color: rgba(200, 255, 0, 0.35);
+            background: rgba(200, 255, 0, 0.06);
+        }
+        .revenue-metric-box .exec-metric-value {
+            font-size: 2.25rem;
+            color: var(--accent-lime);
+        }
+
         .value-metric-card,
         .acquisition-metric {
             background: var(--bg-input);
@@ -23355,8 +23365,9 @@
             // 7. REVENUE FROM NEW SUBSCRIBERS (monthly & yearly; premium and ad-supported from SVOD pricing)
             const subscriberPlatformName = data.platform || data.metadata?.platform || '';
             const pricing = data.svod_pricing || {};
-            const signupsForRevenue = (subscriberGenPopMode && totalSignupsGenPop)
-                ? (parse_number(totalSignupsGenPop) || totalSignups)
+            // Always use US projected gen pop signup count when available (not raw)
+            const signupsForRevenue = (totalSignupsGenPop != null && String(totalSignupsGenPop).trim() !== '')
+                ? (parse_number(totalSignupsGenPop) ?? totalSignups)
                 : totalSignups;
             const hasPricing = (pricing.ad_supported != null && pricing.ad_supported !== '') || (pricing.premium != null && pricing.premium !== '');
             if (subscriptionRevenueContainer) {
@@ -23364,42 +23375,43 @@
                     const ad = Number(pricing.ad_supported) || 0;
                     const prem = Number(pricing.premium) || 0;
                     const fmt = (n) => (n >= 1e9 ? (n/1e9).toFixed(2) + 'B' : n >= 1e6 ? (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? (n/1e3).toFixed(2) + 'K' : n.toFixed(2));
+                    // Revenue = (number of new accounts, US projected) × (price per subscriber on the box)
                     const monthlyAd = signupsForRevenue * ad;
                     const monthlyPrem = signupsForRevenue * prem;
                     const weeklyAd = monthlyAd / (52/12);
                     const weeklyPrem = monthlyPrem / (52/12);
                     const yearlyAd = monthlyAd * 12;
                     const yearlyPrem = monthlyPrem * 12;
-                    const revenueBlurb = `Estimated revenue from new subscribers attributed to this show. Uses platform <strong>${subscriberPlatformName || '—'}</strong> and monthly price from <strong>Admin → Settings → SVOD Pricing</strong>. Based on ${formatNumber(signupsForRevenue)} signups.`;
+                    const revenueBlurb = `Estimated revenue from new subscribers attributed to this show. Uses platform <strong>${subscriberPlatformName || '—'}</strong> and monthly price from <strong>Admin → Settings → SVOD Pricing</strong>. Based on <strong>${formatNumber(signupsForRevenue)}</strong> signups (US projected). Revenue = signups × price.`;
                     subscriptionRevenueContainer.innerHTML = `
-                        <h3 class="has-tooltip" data-tooltip="Estimated revenue from subscribers attributed to this show, using platform pricing. Premium and ad-supported tiers shown separately." style="margin-bottom: 0.5rem;">💰 Revenue from new subscribers</h3>
+                        <h3 class="has-tooltip" data-tooltip="Estimated revenue from subscribers attributed to this show, using platform pricing. Premium and ad-supported tiers shown separately. Uses US projected gen pop signup count × price." style="margin-bottom: 0.5rem;">💰 Revenue from new subscribers</h3>
                         <p class="section-description" style="margin-bottom: 1rem;">${revenueBlurb}</p>
                         <div class="value-assessment-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
                             <div class="strategic-card" style="margin-bottom: 0;">
-                                <h3 class="has-tooltip" data-tooltip="Revenue from premium-tier subscribers attributed to this show." style="font-size: 1rem;">💰 Revenue from new subscribers — Premium</h3>
+                                <h3 class="has-tooltip" data-tooltip="Revenue from premium-tier subscribers attributed to this show. New accounts (US projected) × price." style="font-size: 1rem;">💰 Revenue from new subscribers — Premium</h3>
                                 <p class="section-description" style="margin-bottom: 0.75rem; font-size: 0.85rem;">Modeled at $${prem}/mo per subscriber.</p>
-                                <div class="value-assessment-grid" style="grid-template-columns: 1fr 1fr;">
-                                    <div class="value-metric-card">
-                                        <div class="value-metric-header"><span class="value-icon">📆</span><span class="value-label">Monthly</span></div>
-                                        <div class="value-metric-desc">$${fmt(monthlyPrem)}</div>
+                                <div class="value-assessment-grid revenue-exec-grid" style="grid-template-columns: 1fr 1fr;">
+                                    <div class="exec-summary-metric revenue-metric-box">
+                                        <div class="exec-metric-label">Monthly</div>
+                                        <div class="exec-metric-value">$${fmt(monthlyPrem)}</div>
                                     </div>
-                                    <div class="value-metric-card">
-                                        <div class="value-metric-header"><span class="value-icon">📈</span><span class="value-label">Yearly</span></div>
-                                        <div class="value-metric-desc">$${fmt(yearlyPrem)}</div>
+                                    <div class="exec-summary-metric revenue-metric-box">
+                                        <div class="exec-metric-label">Yearly</div>
+                                        <div class="exec-metric-value">$${fmt(yearlyPrem)}</div>
                                     </div>
                                 </div>
                             </div>
                             <div class="strategic-card" style="margin-bottom: 0;">
-                                <h3 class="has-tooltip" data-tooltip="Revenue from ad-supported-tier subscribers attributed to this show." style="font-size: 1rem;">💰 Revenue from new subscribers — Ad-supported</h3>
+                                <h3 class="has-tooltip" data-tooltip="Revenue from ad-supported-tier subscribers attributed to this show. New accounts (US projected) × price." style="font-size: 1rem;">💰 Revenue from new subscribers — Ad-supported</h3>
                                 <p class="section-description" style="margin-bottom: 0.75rem; font-size: 0.85rem;">Modeled at $${ad}/mo per subscriber.</p>
-                                <div class="value-assessment-grid" style="grid-template-columns: 1fr 1fr;">
-                                    <div class="value-metric-card">
-                                        <div class="value-metric-header"><span class="value-icon">📆</span><span class="value-label">Monthly</span></div>
-                                        <div class="value-metric-desc">$${fmt(monthlyAd)}</div>
+                                <div class="value-assessment-grid revenue-exec-grid" style="grid-template-columns: 1fr 1fr;">
+                                    <div class="exec-summary-metric revenue-metric-box">
+                                        <div class="exec-metric-label">Monthly</div>
+                                        <div class="exec-metric-value">$${fmt(monthlyAd)}</div>
                                     </div>
-                                    <div class="value-metric-card">
-                                        <div class="value-metric-header"><span class="value-icon">📈</span><span class="value-label">Yearly</span></div>
-                                        <div class="value-metric-desc">$${fmt(yearlyAd)}</div>
+                                    <div class="exec-summary-metric revenue-metric-box">
+                                        <div class="exec-metric-label">Yearly</div>
+                                        <div class="exec-metric-value">$${fmt(yearlyAd)}</div>
                                     </div>
                                 </div>
                             </div>
