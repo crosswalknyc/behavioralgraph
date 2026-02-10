@@ -14275,7 +14275,6 @@
                                         <span>👤 Audience Snapshot</span>
                                     </h3>
                                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <span class="data-quality-badge has-tooltip" id="dataQualityBadge" data-tooltip="Data Quality: Based on sample size. High Confidence (10,000+) = statistically reliable. Moderate (1,000-10,000) = directionally accurate. Low (<1,000) = indicative only.">High Confidence</span>
                                         <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('audience-snapshot')" data-tooltip="Add to Deck">➕</button>
                                     </div>
                                 </div>
@@ -38408,27 +38407,6 @@
             const categoryCount = Object.keys(data.behavioral).length;
             const over100Count = allItems.filter(i => i.index > 100).length;
             const under100Count = allItems.filter(i => i.index < 100).length;
-            
-            // Data quality badge
-            const sampleSize = data.sampleSize || 0;
-            let qualityClass = '', qualityText = 'High Confidence', qualityTooltip = '';
-            if (sampleSize < 1000) { 
-                qualityClass = 'low'; 
-                qualityText = 'Low Sample';
-                qualityTooltip = `Low Sample Size: With only ${sampleSize.toLocaleString()} respondents, results are indicative but not statistically reliable. Use for directional insights only.`;
-            } else if (sampleSize < 10000) { 
-                qualityClass = 'medium'; 
-                qualityText = 'Moderate';
-                qualityTooltip = `Moderate Confidence: ${sampleSize.toLocaleString()} respondents provides directionally accurate data. Good for planning, but consider margin of error for precise targeting.`;
-            } else {
-                qualityTooltip = `High Confidence: ${sampleSize.toLocaleString()} respondents provides statistically reliable data. Results are robust for strategic decisions and precise audience targeting.`;
-            }
-            const badge = document.getElementById('dataQualityBadge');
-            if (badge) {
-                badge.className = 'data-quality-badge has-tooltip ' + qualityClass;
-                badge.textContent = qualityText;
-                badge.setAttribute('data-tooltip', qualityTooltip);
-            }
             
             // ===== SUMMARY TAB =====
             
