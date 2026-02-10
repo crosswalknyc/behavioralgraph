@@ -13188,6 +13188,7 @@
                         <option value="">📌 See All Categories</option>
                     </select>
                     <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
+                    <button class="btn btn-small btn-primary has-tooltip" data-tooltip="Export all behavioral cards on this page to a single CSV file." onclick="exportAllBehavioralCardsCSV()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">Export All CSV</button>
                 </div>
                 
                 <div class="behavioral-grid" id="behavioralGrid"></div>
@@ -30505,7 +30506,6 @@
             const borderColor = segmentColors[quintileIndex];
             const stat = heatmapQuintileStats[quintileIndex];
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
             
             function buildItemTooltip(item) {
                 let genPopPct = item.genPopPct ?? 0;
@@ -30616,7 +30616,6 @@
         function renderInterestsCategoryCards(items) {
             const container = document.getElementById('interestsCategoryCards');
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
             
             // Group by category
             const categories = {};
@@ -30684,7 +30683,6 @@
             if (!container) return;
             
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
             
             // Get filters
             const categorySelect = document.getElementById('interestsCategorySelect');
@@ -32174,7 +32172,6 @@
         
         function renderBehavioralItems(items, maxPct, sortMode) {
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
             sortMode = sortMode || 'pct';
             const gpVal = (i) => (i.genPopPct ?? 0);
             return items.map((item, idx) => {
@@ -35594,7 +35591,6 @@
             } else if (type === 'behavioral') {
                 const items = currentDashboardData.behavioral[category] || [];
                 const isProjection = document.getElementById('displayModeToggle')?.checked || false;
-                const US_POP = 324700000;
                 
                 csvContent = `${profileName} - ${category}\n`;
                 csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index\n`;
@@ -35647,6 +35643,38 @@
             link.click();
         }
         
+        // Export all behavioral cards on this page to one CSV
+        function exportAllBehavioralCardsCSV() {
+            if (!currentDashboardData || !currentProfileData) {
+                if (typeof alert === 'function') alert('Please select a profile first');
+                return;
+            }
+            const behavioral = currentDashboardData.behavioral || {};
+            const profileName = (currentProfileData && currentProfileData.name) ? currentProfileData.name : 'Profile';
+            if (typeof trackActivity === 'function') trackActivity('export_all_behavioral_csv', Object.keys(currentDashboardData.behavioral || {}).length);
+            let csvContent = "Category,Item,Profile %,Gen Pop %,Index\n";
+            Object.keys(behavioral).sort().forEach(function(cat) {
+                const items = behavioral[cat] || [];
+                items.forEach(function(item) {
+                    const pct = (item.pct != null ? parseFloat(item.pct) : 0).toFixed(2);
+                    const genPopPct = (item.genPopPct != null ? parseFloat(item.genPopPct) : 0).toFixed(2);
+                    const index = item.index != null ? item.index : 0;
+                    const name = (item.name || "").replace(/"/g, '""');
+                    csvContent += '"' + cat + '","' + name + '",' + pct + '%,' + genPopPct + '%,' + index + '\n';
+                });
+            });
+            if (csvContent === "Category,Item,Profile %,Gen Pop %,Index\n") {
+                if (typeof alert === 'function') alert('No behavioral data to export');
+                return;
+            }
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = (profileName.replace(/[^a-zA-Z0-9]/g, '_') || 'Profile') + '_all_behavioral.csv';
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+
         // Export module as PNG
         function exportModulePNG(type, category) {
             if (!currentDashboardData || !currentProfileData) {
@@ -40413,7 +40441,6 @@
             if (!items.length) return '<p style="color: var(--text-secondary); padding: 0.5rem;">No data available</p>';
             
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
             
             return items.map(item => {
                 const index = item.index || 0;
@@ -40690,7 +40717,6 @@
             if (!item) return;
             
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
             
             let genPopPct = item.genPopPct || 0;
             const profilePct = item.pct || 0;
@@ -42775,7 +42801,6 @@
             const maxVal = Math.max(...values);
             
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
             
             // Render state boxes with gen pop comparison
             const sortedStates = Object.entries(stateData).sort((a, b) => b[1].pct - a[1].pct);
