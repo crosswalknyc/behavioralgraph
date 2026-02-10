@@ -22937,22 +22937,39 @@
             lblEl.textContent = platformGenreLabel || 'Platform · Genre';
             try {
                 const res = await fetch('/api/rankers/netflix/data', { credentials: 'same-origin' });
-                if (!res.ok) { valEl.textContent = '—'; return; }
+                if (!res.ok) { valEl.textContent = '—'; lblEl.textContent = platformGenreLabel; return; }
                 const payload = await res.json();
                 const byDate = payload.by_date || {};
                 const datesSorted = payload.dates_sorted && payload.dates_sorted.length ? payload.dates_sorted : Object.keys(byDate).sort();
                 const latestDate = datesSorted.length ? datesSorted[datesSorted.length - 1] : null;
-                if (!latestDate) { valEl.textContent = '—'; return; }
+                if (!latestDate) { valEl.textContent = '—'; lblEl.textContent = platformGenreLabel; return; }
                 const items = byDate[latestDate] || [];
                 const norm = (s) => (s || '').toLowerCase().trim().replace(/-/g, ' ').replace(/\s+/g, ' ');
-                const genreNorm = norm(genreName);
+                // Use genre only for filtering (strip "PLATFORM - " prefix if present so we match ranker genre)
+                let genreForFilter = (genreName || '').trim();
+                if (genreForFilter.includes(' - ')) {
+                    const parts = genreForFilter.split(' - ');
+                    if (parts.length >= 2) genreForFilter = parts.slice(1).join(' - ').trim();
+                }
+                const genreNorm = norm(genreForFilter);
                 const showNorm = (showName || '').toLowerCase().trim();
-                const inGenre = items.filter(it => norm(it.genre || '') === genreNorm);
+                const showNormBase = showNorm.split(':')[0].trim();
+                const normShow = (s) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+                const inGenre = items.filter(it => {
+                    const g = norm(it.genre || '');
+                    return g === genreNorm || (genreNorm && g.includes(genreNorm)) || (g && genreNorm.includes(g));
+                });
                 inGenre.sort((a, b) => (b.views || 0) - (a.views || 0));
                 let rankIdx = -1;
                 for (let i = 0; i < inGenre.length; i++) {
                     const r = (inGenre[i].show_name || '').toLowerCase().trim();
-                    if (r === showNorm || r.includes(showNorm) || showNorm.includes(r)) {
+                    const rBase = r.split(':')[0].trim();
+                    const rNorm = normShow(inGenre[i].show_name || '');
+                    const match = r === showNorm || showNorm === rNorm
+                        || r.includes(showNorm) || showNorm.includes(r)
+                        || rBase === showNormBase || showNormBase === rBase
+                        || r.includes(showNormBase) || showNormBase.includes(rBase);
+                    if (match) {
                         rankIdx = i;
                         break;
                     }
@@ -22962,7 +22979,7 @@
                     lblEl.textContent = `of ${inGenre.length} in ${platformGenreLabel}`;
                 } else {
                     valEl.textContent = '—';
-                    lblEl.textContent = platformGenreLabel;
+                    lblEl.textContent = inGenre.length > 0 ? `of ${inGenre.length} in ${platformGenreLabel}` : platformGenreLabel;
                 }
             } catch (e) {
                 valEl.textContent = '—';
@@ -23115,12 +23132,12 @@
             const valueStrength = totalSignups > 10000 ? 'high' : totalSignups > 5000 ? 'moderate' : 'developing';
             platformValueContainer.innerHTML = `
                 <div class="strategic-card">
-                    <h3 class="has-tooltip" data-tooltip="Summarizes how much value this show delivers to the platform: subscriber growth, attribution rate, and how quickly viewers convert to subscribers.">💰 Platform Value Assessment</h3>
+                    <h3 class="has-tooltip" data-tooltip="Summarizes how much value this show delivers to the platform: account subscriber growth and how quickly viewers convert to subscribers.">💰 Platform Value Assessment</h3>
                     <div class="value-assessment-grid">
-                        <div class="value-metric-card has-tooltip" data-tooltip="Subscriber Growth: Total number of subscribers acquired or reactivated. New Signups are confirmed new platform subscribers. Reactivations are dormant users who returned to watch this show.">
+                        <div class="value-metric-card has-tooltip" data-tooltip="Account Subscriber Growth: Total number of accounts acquired or reactivated. New Signups are confirmed new platform subscribers. Reactivations are dormant users who returned to watch this show.">
                             <div class="value-metric-header">
                                 <span class="value-icon">📈</span>
-                                <span class="value-label">Subscriber Growth</span>
+                                <span class="value-label">Account Subscriber Growth</span>
                             </div>
                             <div class="value-metric-value">${formatValue(totalSignups, totalSignupsGenPop)}</div>
                             <div class="value-metric-breakdown">
@@ -23132,17 +23149,6 @@
                                     <span>Reactivations:</span>
                                     <strong>${formatValue(dormantReactive, dormantReactiveGenPop)}</strong>
                                 </div>
-                            </div>
-                        </div>
-                        <div class="value-metric-card has-tooltip" data-tooltip="Attribution Rate: Percentage of total signups directly attributed to this show. Higher percentages indicate stronger platform value and ROI.">
-                            <div class="value-metric-header">
-                                <span class="value-icon">🎯</span>
-                                <span class="value-label">Attribution Rate</span>
-                            </div>
-                            <div class="value-metric-value">${attributionPct}%</div>
-                            <div class="value-metric-desc">Directly attributed to ${show}</div>
-                            <div class="value-indicator ${attributionPct > 70 ? 'strong' : attributionPct > 50 ? 'moderate' : 'developing'} has-tooltip" data-tooltip="${attributionPct > 70 ? 'Strong ROI: Over 70% attribution indicates exceptional platform value' : attributionPct > 50 ? 'Clear Value: 50-70% attribution shows strong platform value' : 'Developing: Under 50% attribution, opportunity to improve'}">
-                                ${attributionPct > 70 ? 'Strong ROI' : attributionPct > 50 ? 'Clear Value' : 'Developing'}
                             </div>
                         </div>
                         <div class="value-metric-card has-tooltip" data-tooltip="Speed to Conversion: Average number of days between when the show became available and when users signed up for the platform. Lower numbers indicate immediate platform value and urgency-driven acquisition.">
