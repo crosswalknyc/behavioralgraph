@@ -5467,13 +5467,13 @@
             color: var(--text-secondary);
         }
         
-        /* Highlight List (Interest Highlights) - grid so headers and rows align left-justified */
+        /* Highlight List (Highlights) - grid so headers and rows align left-justified */
         .highlight-list {
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
         }
-        [data-module="Interest Highlights"] .differentiator-header {
+        [data-module="Highlights"] .differentiator-header {
             display: grid;
             grid-template-columns: minmax(0, 1fr) minmax(0, 110px) 72px 68px;
             gap: 0.5rem;
@@ -5487,14 +5487,14 @@
             letter-spacing: 0.5px;
             border-bottom: 1px solid var(--border-color);
         }
-        [data-module="Interest Highlights"] .differentiator-header span {
+        [data-module="Highlights"] .differentiator-header span {
             text-align: left !important;
             white-space: normal;
             word-break: normal;
             overflow-wrap: normal;
             min-width: 0;
         }
-        [data-module="Interest Highlights"] .highlight-item {
+        [data-module="Highlights"] .highlight-item {
             display: grid;
             grid-template-columns: minmax(0, 1fr) minmax(0, 110px) 72px 68px;
             gap: 0.5rem;
@@ -5508,8 +5508,8 @@
         .highlight-item span {
             text-align: left !important;
         }
-        [data-module="Interest Highlights"] .highlight-item .label,
-        [data-module="Interest Highlights"] .highlight-item span {
+        [data-module="Highlights"] .highlight-item .label,
+        [data-module="Highlights"] .highlight-item span {
             white-space: normal;
             word-break: normal;
             overflow-wrap: normal;
@@ -5745,7 +5745,7 @@
         body.profile-is-genpop .insight-row-genpop { grid-template-columns: 1fr 70px !important; }
         /* When Gen Pop profile is selected: hide Demographics/Insights modules that compare to Gen Pop */
         body.profile-is-genpop .audience-takeaways,
-        body.profile-is-genpop [data-module="Interest Highlights"],
+        body.profile-is-genpop [data-module="Highlights"],
         body.profile-is-genpop [data-module="Top Differentiators"],
         body.profile-is-genpop [data-module="Key Differentiators"] { display: none !important; }
         /* Behavioral spotlight modal: hide Gen Pop and Index when profile is Gen Pop */
@@ -14306,20 +14306,20 @@
                                 </div>
                             </div>
                             
-                            <!-- Interest Highlights -->
-                            <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interest Highlights">
+                            <!-- Highlights -->
+                            <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Highlights">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <h3 class="has-tooltip" data-tooltip="Interest Highlights: Top interests and behaviors where this audience most over-indexes compared to the general population. Shows what this audience is passionate about." style="margin: 0;">
+                                    <h3 class="has-tooltip" data-tooltip="Highlights: Top highlights and behaviors by profile percentage. Shows what engages the highest share of this audience." style="margin: 0;">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>⭐ Interest Highlights</span>
+                                        <span>⭐ Highlights</span>
                                     </h3>
                                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                                         <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
                                         <select id="interestHighlightsSortSelect" onchange="sortInterestHighlights(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 100px;">
-                                            <option value="index-desc">Index ↓</option>
-                                            <option value="index-asc">Index ↑</option>
                                             <option value="profile-desc">Profile % ↓</option>
                                             <option value="profile-asc">Profile % ↑</option>
+                                            <option value="index-desc">Index ↓</option>
+                                            <option value="index-asc">Index ↑</option>
                                             <option value="genpop-desc">GP ↓</option>
                                             <option value="genpop-asc">GP ↑</option>
                                             <option value="name-asc">Name A-Z</option>
@@ -14329,9 +14329,9 @@
                                     </div>
                                 </div>
                                 <div class="differentiator-header">
-                                    <span>Interest</span>
+                                    <span>Highlights</span>
                                     <span>Category</span>
-                                    <span class="has-tooltip" data-tooltip="Profile %: The percentage of THIS audience that engages with this interest.">Profile %</span>
+                                    <span class="has-tooltip" data-tooltip="Profile %: The percentage of THIS audience that engages with this highlight.">Profile %</span>
                                     <span class="has-tooltip" data-tooltip="Index: How much more likely this audience is to engage vs Gen Pop. 2.0x = twice as likely.">Index</span>
                                 </div>
                                 <div id="interestHighlights" class="highlight-list"></div>
@@ -29391,8 +29391,8 @@
             if (dropdown) dropdown.value = sortValue;
         }
         
-        // Interest Highlights sort state
-        let interestHighlightsSortState = 'index-desc';
+        // Highlights sort state
+        let interestHighlightsSortState = 'profile-desc';
         
         // Sort and render interest highlights
         function sortInterestHighlights(sortValue) {
@@ -29453,7 +29453,7 @@
                     <span class="differentiator-index ${indexClass}">${formatIndex(item.index)}</span>
                 </div>
             `;
-            }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No interest data available</p>';
+            }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No highlights data available</p>';
             
             // Update dropdown to match current sort
             const dropdown = document.getElementById('interestHighlightsSortSelect');
@@ -35015,7 +35015,7 @@
                 'demographic-summary': 'Demographic Profile Summary',
                 'key-differentiators': 'Key Differentiators vs Gen Pop',
                 'targeting-recommendations': 'Targeting Recommendations',
-                'interest-highlights': 'Interest Highlights',
+                'interest-highlights': 'Highlights',
                 'top-differentiators': 'Top Differentiators',
                 'behavioral-summary': 'Behavioral Profile Summary'
             };
@@ -35317,7 +35317,7 @@
             } else if (insightType === 'interest-highlights') {
                 const highlightsEl = document.getElementById('interestHighlights');
                 item.data = { html: highlightsEl?.innerHTML || '' };
-                item.title = `Interest Highlights`;
+                item.title = `Highlights`;
             } else if (insightType === 'top-differentiators') {
                 const topDiffEl = document.getElementById('topDifferentiators');
                 item.data = { html: topDiffEl?.innerHTML || '' };
@@ -38508,10 +38508,10 @@
             // Render with default sort (index descending by deviation from 100)
             renderDemoHighlights('index-desc');
             
-            // Interest Highlights - top over-indexing interests/behaviors
+            // Highlights - top over-indexing interests/behaviors
             const interestHighlightsData = allItems
-                .filter(i => i.index >= 120 && i.pct < 99.99 && i.pct >= 50) // Over-indexing items, exclude 100% (entire sample), require profile % >= 50%, high index (120+)
-                .sort((a, b) => b.index - a.index)
+                .filter(i => i.pct < 99.99 && i.pct >= 30) // Exclude 100% (entire sample), require profile % >= 30%
+                .sort((a, b) => b.pct - a.pct)
                 .slice(0, 20) // Keep top 20 for sorting flexibility
                 .map(item => ({
                     name: item.name,
@@ -38525,7 +38525,7 @@
             window.interestHighlightsData = interestHighlightsData;
             
             // Render with default sort (index descending)
-            renderInterestHighlights('index-desc');
+            renderInterestHighlights('profile-desc');
             
             // Top differentiators - group by SMART category based on item name, show top 5 items per category
             const itemsBySmartCategory = {};
