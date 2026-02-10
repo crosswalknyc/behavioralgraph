@@ -7015,17 +7015,34 @@ def _hedge_fund_cache_key(s3_key_or_slug):
     """Create a safe S3 key from s3_key or slug (no slashes)."""
     return s3_key_or_slug.replace('/', '__').replace(' ', '_')
 
+# Cache considered fresh for this many seconds; after that next request refetches from S3 (keeps projections current).
+HEDGE_FUND_CACHE_MAX_AGE_SECONDS = 3600  # 1 hour
+
 def _load_hedge_fund_daily_cache(cache_slug):
-    """Load cached hedge fund data if valid for today."""
+    """Load cached hedge fund data if valid for today and within max age (1 hour).
+    First request of the day or first after 1 hour refetches from S3 so all users get current projections."""
     try:
         today = datetime.now().strftime('%Y-%m-%d')
         key = f"{HEDGE_FUND_CACHE_PREFIX}{today}/{_hedge_fund_cache_key(cache_slug)}.json"
         response = s3_client.get_object(Bucket=METADATA_BUCKET, Key=key)
         cached = json.loads(response['Body'].read().decode('utf-8'))
         cached_date = cached.get('cached_date', '')
-        if cached_date == today:
-            print(f"📦 Hedge Fund daily cache HIT: {cache_slug}")
-            return cached.get('data')
+        if cached_date != today:
+            return None
+        cached_at_str = cached.get('cached_at', '')
+        if cached_at_str:
+            try:
+                cached_at = datetime.fromisoformat(cached_at_str.replace('Z', '+00:00'))
+                if cached_at.tzinfo:
+                    cached_at = cached_at.replace(tzinfo=None)
+                age_seconds = (datetime.now() - cached_at).total_seconds()
+                if age_seconds > HEDGE_FUND_CACHE_MAX_AGE_SECONDS:
+                    print(f"🔄 Hedge Fund cache expired (age {int(age_seconds)}s): {cache_slug}")
+                    return None
+            except Exception:
+                pass
+        print(f"📦 Hedge Fund daily cache HIT: {cache_slug}")
+        return cached.get('data')
     except s3_client.exceptions.NoSuchKey:
         pass
     except Exception as e:
@@ -7226,8 +7243,9 @@ def delete_hedge_fund_ticker():
 @app.route('/api/hedge-fund-iq/data/<path:s3_key>')
 @requires_auth
 def get_hedge_fund_ticker_data(s3_key):
-    """Get ticker CSV data and calculate day-over-day metrics. Cached daily for all users.
-    Use ?refresh=1 to bypass cache and recalculate projection from latest S3 data."""
+    """Get ticker CSV data and calculate day-over-day metrics.
+    Cache: First request of the day (or first after 1h TTL) fetches from S3 and caches; others get cache.
+    So the first user each day/hour effectively refreshes data for everyone. Use ?refresh=1 to force fresh data anytime."""
     print(f"📥 get_hedge_fund_ticker_data called for: {s3_key}")
     
     # Check daily cache first unless refresh requested (so Refresh button gets newest quarterly data)
