@@ -14831,6 +14831,12 @@
                         <!-- Action Buttons Row -->
                         <div class="dash-action-row" id="subscriberActionRow" style="justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.5rem;">
                             <button type="button" id="subscriberCompareAllBtn" class="btn btn-primary btn-small has-tooltip" data-tooltip="Compare all open shows side-by-side: see who wins in each category and gaps between shows." onclick="openSubscriberCompareAll()" style="display: none;">📊 Compare All</button>
+                            <div class="display-mode-toggle" id="subscriberUSPercentToggle" onclick="toggleSubscriberUSPercent()" title="Toggle between US % and US #">
+                                <span id="subscriberDisplayModeLabel">US %</span>
+                            </div>
+                            <div class="display-mode-toggle" id="subscriberGenPopToggle" onclick="toggleSubscriberGenPop()" title="Toggle between actual numbers and Gen Pop projections">
+                                <span id="subscriberGenPopToggleLabel">ACTUAL</span>
+                            </div>
                             <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
                                 <span id="subscriberHoverToggleLabel">HOVER ON</span>
                             </div>
@@ -15874,27 +15880,6 @@
         let activeSubscriberTabId = null;
         const expandedSubscriberCategories = new Set(); // For hierarchical tree (match Profile IQ)
         
-        // Key Episode/Date Insights: call when displaying subscriber result. Uses "Date that drove" / "Top 3 dates" when tracking by date (no Episode X titles).
-        window.renderSubscriberEpisodesInsights = function(data) {
-            var el = document.getElementById('subscriberEpisodesInsights');
-            if (!el || !data) return;
-            var episodes = (data.episode_attribution || []).slice().sort(function(a, b) { return (parseNumber(b.signups) || 0) - (parseNumber(a.signups) || 0); });
-            if (episodes.length === 0) { el.innerHTML = ''; return; }
-            var top = episodes[0];
-            var topEp = String(top.episode || '').trim();
-            var isDateMode = data.tracking_mode === 'date' || (topEp && /\\d{1,2}\\/\\d{1,2}\\/\\d{2,4}/.test(topEp));
-            var unitLabel = isDateMode ? 'dates' : 'episodes';
-            var sectionTitle = isDateMode ? 'Key Date Insights' : 'Key Episode Insights';
-            var topDriverText = isDateMode ? (topEp ? topEp : 'Date') : ('Episode ' + topEp);
-            var totalSignups = episodes.reduce(function(s, e) { return s + (parseNumber(e.signups) || 0); }, 0);
-            var pct = totalSignups > 0 && top.signups ? ((parseNumber(top.signups) || 0) / totalSignups * 100).toFixed(2) : (top.percentage || 'N/A');
-            var top3Total = episodes.slice(0, 3).reduce(function(s, e) { return s + (parseNumber(e.signups) || 0); }, 0);
-            var top3Pct = totalSignups > 0 ? ((top3Total / totalSignups) * 100).toFixed(2) : '0';
-            var insight1 = '<strong>' + topDriverText + ' drove the most signups</strong> with ' + (typeof formatNumber !== 'undefined' ? formatNumber(top.signups) : (top.signups || 0)) + ' subscribers (' + pct + '% of total).';
-            var insight2 = '<strong>Top 3 ' + unitLabel + ' accounted for ' + top3Pct + '%</strong> of all signups, indicating concentrated performance in key ' + unitLabel + '.';
-            el.innerHTML = '<h4>💡 ' + sectionTitle + '</h4><div class="tab-insights-list"><div class="tab-insight-item"><span class="tab-insight-icon">🎬</span><div class="tab-insight-text">' + insight1 + '</div></div>' + (episodes.length >= 3 ? '<div class="tab-insight-item"><span class="tab-insight-icon">📊</span><div class="tab-insight-text">' + insight2 + '</div></div>' : '') + '</div>';
-        };
-
         // When true, user only has Hedge Fund IQ (no Profile IQ) — default to Hedge Fund IQ landing on load
         window.defaultViewHedgeFundIQ = {{ 'true' if default_view_hedge_fund_iq else 'false' }};
         
@@ -23065,24 +23050,10 @@
                 : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
             const conversionPctDisplay = (isNaN(conversionPctRaw) ? '0.00' : Number(conversionPctRaw).toFixed(2)) + '%';
             
-            // Format values: always use US projected gen pop when available (not raw). Expand K/M to full whole numbers (e.g. 86.208K -> 86,208).
+            // Format values: always use US projected gen pop when available (not raw)
             const formatValue = (value, genPop) => {
-                const raw = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
-                const s = String(raw).trim().toUpperCase();
-                let whole;
-                const matchK = /^([\d,.]+)\s*K\s*$/.exec(s);
-                const matchM = /^([\d,.]+)\s*M\s*$/.exec(s);
-                if (matchK) {
-                    const n = parseNumber(matchK[1]);
-                    whole = n !== null && !isNaN(n) ? Math.round(n * 1000) : 0;
-                } else if (matchM) {
-                    const n = parseNumber(matchM[1]);
-                    whole = n !== null && !isNaN(n) ? Math.round(n * 1e6) : 0;
-                } else {
-                    const n = typeof raw === 'number' ? raw : parseNumber(raw);
-                    whole = (n !== null && !isNaN(n)) ? Math.round(n) : 0;
-                }
-                return whole.toLocaleString(undefined, { maximumFractionDigits: 0 });
+                const use = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
+                return formatNumber(use);
             };
             // Executive Summary: whole numbers only; expand K (thousands) and M (millions) without rounding
             const formatExecSummaryNumber = (value, genPop) => {
@@ -23333,8 +23304,63 @@
                 });
             }
             
-            // 6. KEY METRICS OVERVIEW — removed (section hidden)
-            if (keyMetricsContainer) keyMetricsContainer.innerHTML = '';
+            // 6. KEY METRICS OVERVIEW
+            if (keyMetricsContainer) {
+                keyMetricsContainer.innerHTML = `
+                    <div class="strategic-card">
+                        <h3 class="has-tooltip" data-tooltip="Core numbers for this show: audience size, conversion rates, signups, and reactivations. Hover each metric for a short description.">📊 Key Metrics Overview</h3>
+                        <div class="key-stats-grid">
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many people total watched the series">
+                                <div class="key-stat-label">Total Show Watchers</div>
+                                <div class="key-stat-value neutral">${formatValue(totalWatchers, totalWatchersGenPop)}</div>
+                                ${totalWatchersGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalWatchersGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many people watched a previous season of the series">
+                                <div class="key-stat-label">Pre-Existing Series Viewers</div>
+                                <div class="key-stat-value neutral">${formatValue(preExisting, preExistingGenPop)}</div>
+                                ${preExistingGenPop ? `<div class="key-stat-genpop">${formatGenPop(preExistingGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="People who have not watched the show before">
+                                <div class="key-stat-label">New First Time Viewers</div>
+                                <div class="key-stat-value neutral">${formatValue(cleanSample, cleanSampleGenPop)}</div>
+                                ${cleanSampleGenPop ? `<div class="key-stat-genpop">${formatGenPop(cleanSampleGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many people signed up for the platform then their first watch was this show">
+                                <div class="key-stat-label">New Platform Signups</div>
+                                <div class="key-stat-value positive">${formatValue(newSignups, newSignupsGenPop)}</div>
+                                ${newSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(newSignupsGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="What percent of the total show watchers signed up for the platform to watch this show">
+                                <div class="key-stat-label">Total Show Conversion Rate</div>
+                                <div class="key-stat-value ${totalConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${totalConversionRate}</div>
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many first time viewers signed up for the platform to watch the show">
+                                <div class="key-stat-label">New Viewers Conversion Rate</div>
+                                <div class="key-stat-value ${cleanConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${cleanConversionRate}</div>
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How long on average it takes for a user to sign up for a platform to watch the show after the first episode has dropped">
+                                <div class="key-stat-label">Average Days from Show Available to Signup</div>
+                                <div class="key-stat-value neutral">${avgDaysToSignup}</div>
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="Confirmed new subscribers to the streaming platform">
+                                <div class="key-stat-label">Attributed Signups</div>
+                                <div class="key-stat-value positive">${formatValue(attributedSignups, attributedSignupsGenPop)}</div>
+                                ${attributedSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(attributedSignupsGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many dormant users logged back in to watch the show">
+                                <div class="key-stat-label">Dormant to Reactive</div>
+                                <div class="key-stat-value positive">${formatValue(dormantReactive, dormantReactiveGenPop)}</div>
+                                ${dormantReactiveGenPop ? `<div class="key-stat-genpop">${formatGenPop(dormantReactiveGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="Total number of signups and dormant to reactive">
+                                <div class="key-stat-label">Total Signups & Reactivated Users</div>
+                                <div class="key-stat-value positive">${formatValue(totalSignups, totalSignupsGenPop)}</div>
+                                ${totalSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalSignupsGenPop)}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
             
             // 7. REVENUE FROM NEW SUBSCRIBERS (monthly & yearly; premium and ad-supported from SVOD pricing)
             const subscriberPlatformName = data.platform || data.metadata?.platform || '';
@@ -23352,6 +23378,8 @@
                     // Revenue = (number of new accounts, US projected) × (price per subscriber on the box)
                     const monthlyAd = signupsForRevenue * ad;
                     const monthlyPrem = signupsForRevenue * prem;
+                    const weeklyAd = monthlyAd / (52/12);
+                    const weeklyPrem = monthlyPrem / (52/12);
                     const yearlyAd = monthlyAd * 12;
                     const yearlyPrem = monthlyPrem * 12;
                     const revenueBlurb = `Estimated revenue from new subscribers attributed to this show. Uses platform <strong>${subscriberPlatformName || '—'}</strong> and monthly price from <strong>Admin → Settings → SVOD Pricing</strong>. Based on <strong>${formatNumber(signupsForRevenue)}</strong> signups (US projected). Revenue = signups × price.`;
@@ -23388,7 +23416,59 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="strategic-card" style="margin-top: 1.25rem;">
+                            <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">📈 Estimated revenue by period</h3>
+                            <div class="chart-container" id="subscriberRevenueLineChart" style="height: 280px; position: relative;"></div>
+                        </div>
                     `;
+                    const revenueChartContainer = document.getElementById('subscriberRevenueLineChart');
+                    if (revenueChartContainer && typeof Chart !== 'undefined') {
+                        if (charts.subscriberRevenueLine) {
+                            charts.subscriberRevenueLine.destroy();
+                            charts.subscriberRevenueLine = null;
+                        }
+                        const canvas = document.createElement('canvas');
+                        revenueChartContainer.appendChild(canvas);
+                        const ctx = canvas.getContext('2d');
+                        const periods = ['Weekly', 'Monthly', 'Yearly'];
+                        const adValues = [weeklyAd, monthlyAd, yearlyAd];
+                        const premValues = [weeklyPrem, monthlyPrem, yearlyPrem];
+                        charts.subscriberRevenueLine = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: periods,
+                                datasets: [
+                                    { label: 'Ad-supported', data: adValues, borderColor: 'rgba(163, 230, 53, 0.9)', backgroundColor: 'rgba(163, 230, 53, 0.15)', fill: true, tension: 0.3 },
+                                    { label: 'Premium', data: premValues, borderColor: 'rgba(147, 51, 234, 0.9)', backgroundColor: 'rgba(147, 51, 234, 0.15)', fill: true, tension: 0.3 }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: {
+                                    legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 11 } } },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: (c) => {
+                                                const v = c.raw;
+                                                const s = v >= 1e6 ? (v/1e6).toFixed(2) + 'M' : v >= 1e3 ? (v/1e3).toFixed(2) + 'K' : v.toFixed(0);
+                                                return ' ' + c.dataset.label + ': $' + s;
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: { grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8', font: { size: 11 } } },
+                                    y: {
+                                        beginAtZero: true,
+                                        grid: { color: 'rgba(148,163,184,0.12)' },
+                                        ticks: { color: '#94a3b8', font: { size: 10 }, callback: function(v) { return v >= 1e6 ? (v/1e6) + 'M' : v >= 1e3 ? (v/1e3) + 'K' : v; } }
+                                    }
+                                }
+                            }
+                        });
+                    }
                 } else {
                     subscriptionRevenueContainer.innerHTML = `
                         <div class="strategic-card">
@@ -23877,44 +23957,31 @@
             }
             
             const container = document.getElementById('subscriberEpisodeAttribution');
-            const numVal = (ep) => {
-                const g = ep.gen_pop;
-                if (g != null && String(g).trim() !== '') { const n = parse_number(g); if (n != null && !isNaN(n)) return n; }
-                return parseNumber(ep.signups) || 0;
-            };
-            const formatEpisodeDisplay = (value, genPop) => {
-                const raw = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
-                const s = String(raw).trim().toUpperCase();
-                let whole;
-                const matchK = /^([\d,.]+)\s*K\s*$/.exec(s);
-                const matchM = /^([\d,.]+)\s*M\s*$/.exec(s);
-                if (matchK) { const n = parseNumber(matchK[1]); whole = n != null && !isNaN(n) ? Math.round(n * 1000) : 0; }
-                else if (matchM) { const n = parseNumber(matchM[1]); whole = n != null && !isNaN(n) ? Math.round(n * 1e6) : 0; }
-                else { const n = typeof raw === 'number' ? raw : parseNumber(raw); whole = (n != null && !isNaN(n)) ? Math.round(n) : 0; }
-                return whole.toLocaleString(undefined, { maximumFractionDigits: 0 });
-            };
             const episodes = (data.episode_attribution || []).slice()
-                .filter(ep => numVal(ep) > 0)
-                .sort((a, b) => numVal(b) - numVal(a));
+                .filter(ep => (Number(ep.signups) || 0) > 0)
+                .sort((a, b) => {
+                const aSignups = a.signups || 0;
+                const bSignups = b.signups || 0;
+                return bSignups - aSignups;
+            });
             
             if (episodes.length === 0) {
                 container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode data available</p>';
             } else {
-                const totalSignups = episodes.reduce((s, e) => s + numVal(e), 0);
-                const pct = (ep) => (ep.percentage && ep.percentage !== 'N/A' ? ep.percentage : (totalSignups ? ((numVal(ep) / totalSignups) * 100).toFixed(1) + '%' : 'N/A'));
+                const totalSignups = episodes.reduce((s, e) => s + (Number(e.signups) || 0), 0);
+                const pct = (ep) => (ep.percentage && ep.percentage !== 'N/A' ? ep.percentage : (totalSignups ? ((Number(ep.signups) || 0) / totalSignups * 100).toFixed(1) + '%' : 'N/A'));
                 const getEpLabel = (ep) => {
                     const epStr = String(ep.episode || '');
                     const isDateEpisode = epStr.includes('/');
-                    const hasNoValue = numVal(ep) <= 0;
+                    const hasNoValue = !(ep.signups && Number(ep.signups) > 0);
                     return (isDateEpisode && hasNoValue) ? 'Single Drop Day' : (isDateEpisode ? epStr : `Episode ${epStr}`);
                 };
                 container.innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
                         ${episodes.map(ep => {
                             const epLabel = getEpLabel(ep);
-                            const signupsDisplay = formatEpisodeDisplay(ep.signups, ep.gen_pop);
                             return `
-                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="${epLabel}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${signupsDisplay} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
+                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="${epLabel}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${formatNumber(ep.signups)} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
                                 <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">${epLabel}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                                     ${ep.episode_date ? `
@@ -23923,11 +23990,11 @@
                                         <span style="color: var(--text-primary);">${ep.episode_date}</span>
                                     </div>
                                     ` : ''}
-                                    <div class="has-tooltip" data-tooltip="Signups: US projected gen pop (number who signed up for the platform specifically to watch this episode)" style="display: flex; justify-content: space-between;">
+                                    <div class="has-tooltip" data-tooltip="Signups: Number of people who signed up for the platform specifically to watch this episode" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">Signups:</span>
-                                        <span style="font-weight: 700; color: var(--accent-lime);">${signupsDisplay}</span>
+                                        <span style="font-weight: 700; color: var(--accent-lime);">${formatNumber(ep.signups)}</span>
                                     </div>
-                                    <div class="has-tooltip" data-tooltip="% of Total: This episode's signups as a percentage of all signups across all episodes (US projected)" style="display: flex; justify-content: space-between;">
+                                    <div class="has-tooltip" data-tooltip="% of Total: This episode's signups as a percentage of all signups across all episodes" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">% of Total:</span>
                                         <span style="color: var(--text-primary);">${pct(ep)}</span>
                                     </div>
@@ -24729,24 +24796,10 @@
                 ` : '';
             }
             
-            // Format values: always use US projected gen pop when available (not raw). Expand K/M to full whole numbers (e.g. 86.208K -> 86,208).
+            // Format values: always use US projected gen pop when available (not raw)
             const formatValue = (value, genPop) => {
-                const raw = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
-                const s = String(raw).trim().toUpperCase();
-                let whole;
-                const matchK = /^([\d,.]+)\s*K\s*$/.exec(s);
-                const matchM = /^([\d,.]+)\s*M\s*$/.exec(s);
-                if (matchK) {
-                    const n = parseNumber(matchK[1]);
-                    whole = n !== null && !isNaN(n) ? Math.round(n * 1000) : 0;
-                } else if (matchM) {
-                    const n = parseNumber(matchM[1]);
-                    whole = n !== null && !isNaN(n) ? Math.round(n * 1e6) : 0;
-                } else {
-                    const n = typeof raw === 'number' ? raw : parseNumber(raw);
-                    whole = (n !== null && !isNaN(n)) ? Math.round(n) : 0;
-                }
-                return whole.toLocaleString(undefined, { maximumFractionDigits: 0 });
+                const use = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
+                return formatNumber(use);
             };
             
             // Get the value to display (actual or gen pop projection)
