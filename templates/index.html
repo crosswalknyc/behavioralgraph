@@ -23304,63 +23304,8 @@
                 });
             }
             
-            // 6. KEY METRICS OVERVIEW
-            if (keyMetricsContainer) {
-                keyMetricsContainer.innerHTML = `
-                    <div class="strategic-card">
-                        <h3 class="has-tooltip" data-tooltip="Core numbers for this show: audience size, conversion rates, signups, and reactivations. Hover each metric for a short description.">📊 Key Metrics Overview</h3>
-                        <div class="key-stats-grid">
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many people total watched the series">
-                                <div class="key-stat-label">Total Show Watchers</div>
-                                <div class="key-stat-value neutral">${formatValue(totalWatchers, totalWatchersGenPop)}</div>
-                                ${totalWatchersGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalWatchersGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many people watched a previous season of the series">
-                                <div class="key-stat-label">Pre-Existing Series Viewers</div>
-                                <div class="key-stat-value neutral">${formatValue(preExisting, preExistingGenPop)}</div>
-                                ${preExistingGenPop ? `<div class="key-stat-genpop">${formatGenPop(preExistingGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="People who have not watched the show before">
-                                <div class="key-stat-label">New First Time Viewers</div>
-                                <div class="key-stat-value neutral">${formatValue(cleanSample, cleanSampleGenPop)}</div>
-                                ${cleanSampleGenPop ? `<div class="key-stat-genpop">${formatGenPop(cleanSampleGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many people signed up for the platform then their first watch was this show">
-                                <div class="key-stat-label">New Platform Signups</div>
-                                <div class="key-stat-value positive">${formatValue(newSignups, newSignupsGenPop)}</div>
-                                ${newSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(newSignupsGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="What percent of the total show watchers signed up for the platform to watch this show">
-                                <div class="key-stat-label">Total Show Conversion Rate</div>
-                                <div class="key-stat-value ${totalConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${totalConversionRate}</div>
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many first time viewers signed up for the platform to watch the show">
-                                <div class="key-stat-label">New Viewers Conversion Rate</div>
-                                <div class="key-stat-value ${cleanConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${cleanConversionRate}</div>
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How long on average it takes for a user to sign up for a platform to watch the show after the first episode has dropped">
-                                <div class="key-stat-label">Average Days from Show Available to Signup</div>
-                                <div class="key-stat-value neutral">${avgDaysToSignup}</div>
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="Confirmed new subscribers to the streaming platform">
-                                <div class="key-stat-label">Attributed Signups</div>
-                                <div class="key-stat-value positive">${formatValue(attributedSignups, attributedSignupsGenPop)}</div>
-                                ${attributedSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(attributedSignupsGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many dormant users logged back in to watch the show">
-                                <div class="key-stat-label">Dormant to Reactive</div>
-                                <div class="key-stat-value positive">${formatValue(dormantReactive, dormantReactiveGenPop)}</div>
-                                ${dormantReactiveGenPop ? `<div class="key-stat-genpop">${formatGenPop(dormantReactiveGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="Total number of signups and dormant to reactive">
-                                <div class="key-stat-label">Total Signups & Reactivated Users</div>
-                                <div class="key-stat-value positive">${formatValue(totalSignups, totalSignupsGenPop)}</div>
-                                ${totalSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalSignupsGenPop)}</div>` : ''}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
+            // 6. KEY METRICS OVERVIEW — removed (section hidden)
+            if (keyMetricsContainer) keyMetricsContainer.innerHTML = '';
             
             // 7. REVENUE FROM NEW SUBSCRIBERS (monthly & yearly; premium and ad-supported from SVOD pricing)
             const subscriberPlatformName = data.platform || data.metadata?.platform || '';
