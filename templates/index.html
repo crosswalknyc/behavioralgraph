@@ -22626,6 +22626,7 @@
             currentSubscriberData = data;
             data.platform = response.platform || '';
             data.svod_pricing = response.svod_pricing || {};
+            data.show_from_filename = response.show || '';
             
             const metadata = data.metadata || {};
             const platformName = response.platform || metadata.platform || '';
@@ -22952,6 +22953,10 @@
                 const showNorm = (showName || '').toLowerCase().trim();
                 const showNormBase = showNorm.split(':')[0].trim();
                 const normShow = (s) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+                // Normalize for fuzzy match: collapse spaces, treat hyphens/colons as spaces, drop parentheticals
+                const normForMatch = (s) => (s || '').toLowerCase()
+                    .replace(/\s*[:\-–—]\s*/g, ' ').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+                const showNormFuzzy = normForMatch(showName || '');
                 const inGenre = items.filter(it => {
                     const g = norm(it.genre || '');
                     return g === genreNorm || (genreNorm && g.includes(genreNorm)) || (g && genreNorm.includes(g));
@@ -22962,10 +22967,12 @@
                     const r = (inGenre[i].show_name || '').toLowerCase().trim();
                     const rBase = r.split(':')[0].trim();
                     const rNorm = normShow(inGenre[i].show_name || '');
+                    const rFuzzy = normForMatch(inGenre[i].show_name || '');
                     const match = r === showNorm || showNorm === rNorm
                         || r.includes(showNorm) || showNorm.includes(r)
                         || rBase === showNormBase || showNormBase === rBase
-                        || r.includes(showNormBase) || showNormBase.includes(rBase);
+                        || r.includes(showNormBase) || showNormBase.includes(rBase)
+                        || rFuzzy === showNormFuzzy || rFuzzy.includes(showNormFuzzy) || showNormFuzzy.includes(rFuzzy);
                     if (match) {
                         rankIdx = i;
                         break;
@@ -23090,7 +23097,7 @@
             // 1. EXECUTIVE SUMMARY — Ranker badge (where this show falls within platform + genre)
             const platformName = (data.metadata?.platform || '').trim() || '';
             const genreName = (data.metadata?.genre || '').trim() || '';
-            const showNameForRank = (data.metadata?.show || show || '').trim() || '';
+            const showNameForRank = (data.metadata?.show || data.show_from_filename || show || '').trim() || '';
             const platformGenreLabel = [platformName, genreName].filter(Boolean).join(' · ') || 'Platform · Genre';
             const rankerBadgeTooltip = 'Where this show ranks by views within this platform and genre. Based on Netflix ranker data. Only available for Netflix.';
             
