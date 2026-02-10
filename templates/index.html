@@ -23883,31 +23883,44 @@
             }
             
             const container = document.getElementById('subscriberEpisodeAttribution');
+            const numVal = (ep) => {
+                const g = ep.gen_pop;
+                if (g != null && String(g).trim() !== '') { const n = parse_number(g); if (n != null && !isNaN(n)) return n; }
+                return parseNumber(ep.signups) || 0;
+            };
+            const formatEpisodeDisplay = (value, genPop) => {
+                const raw = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
+                const s = String(raw).trim().toUpperCase();
+                let whole;
+                const matchK = /^([\d,.]+)\s*K\s*$/.exec(s);
+                const matchM = /^([\d,.]+)\s*M\s*$/.exec(s);
+                if (matchK) { const n = parseNumber(matchK[1]); whole = n != null && !isNaN(n) ? Math.round(n * 1000) : 0; }
+                else if (matchM) { const n = parseNumber(matchM[1]); whole = n != null && !isNaN(n) ? Math.round(n * 1e6) : 0; }
+                else { const n = typeof raw === 'number' ? raw : parseNumber(raw); whole = (n != null && !isNaN(n)) ? Math.round(n) : 0; }
+                return whole.toLocaleString(undefined, { maximumFractionDigits: 0 });
+            };
             const episodes = (data.episode_attribution || []).slice()
-                .filter(ep => (Number(ep.signups) || 0) > 0)
-                .sort((a, b) => {
-                const aSignups = a.signups || 0;
-                const bSignups = b.signups || 0;
-                return bSignups - aSignups;
-            });
+                .filter(ep => numVal(ep) > 0)
+                .sort((a, b) => numVal(b) - numVal(a));
             
             if (episodes.length === 0) {
                 container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode data available</p>';
             } else {
-                const totalSignups = episodes.reduce((s, e) => s + (Number(e.signups) || 0), 0);
-                const pct = (ep) => (ep.percentage && ep.percentage !== 'N/A' ? ep.percentage : (totalSignups ? ((Number(ep.signups) || 0) / totalSignups * 100).toFixed(1) + '%' : 'N/A'));
+                const totalSignups = episodes.reduce((s, e) => s + numVal(e), 0);
+                const pct = (ep) => (ep.percentage && ep.percentage !== 'N/A' ? ep.percentage : (totalSignups ? ((numVal(ep) / totalSignups) * 100).toFixed(1) + '%' : 'N/A'));
                 const getEpLabel = (ep) => {
                     const epStr = String(ep.episode || '');
                     const isDateEpisode = epStr.includes('/');
-                    const hasNoValue = !(ep.signups && Number(ep.signups) > 0);
+                    const hasNoValue = numVal(ep) <= 0;
                     return (isDateEpisode && hasNoValue) ? 'Single Drop Day' : (isDateEpisode ? epStr : `Episode ${epStr}`);
                 };
                 container.innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
                         ${episodes.map(ep => {
                             const epLabel = getEpLabel(ep);
+                            const signupsDisplay = formatEpisodeDisplay(ep.signups, ep.gen_pop);
                             return `
-                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="${epLabel}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${formatNumber(ep.signups)} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
+                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="${epLabel}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${signupsDisplay} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
                                 <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">${epLabel}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                                     ${ep.episode_date ? `
@@ -23916,11 +23929,11 @@
                                         <span style="color: var(--text-primary);">${ep.episode_date}</span>
                                     </div>
                                     ` : ''}
-                                    <div class="has-tooltip" data-tooltip="Signups: Number of people who signed up for the platform specifically to watch this episode" style="display: flex; justify-content: space-between;">
+                                    <div class="has-tooltip" data-tooltip="Signups: US projected gen pop (number who signed up for the platform specifically to watch this episode)" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">Signups:</span>
-                                        <span style="font-weight: 700; color: var(--accent-lime);">${formatNumber(ep.signups)}</span>
+                                        <span style="font-weight: 700; color: var(--accent-lime);">${signupsDisplay}</span>
                                     </div>
-                                    <div class="has-tooltip" data-tooltip="% of Total: This episode's signups as a percentage of all signups across all episodes" style="display: flex; justify-content: space-between;">
+                                    <div class="has-tooltip" data-tooltip="% of Total: This episode's signups as a percentage of all signups across all episodes (US projected)" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">% of Total:</span>
                                         <span style="color: var(--text-primary);">${pct(ep)}</span>
                                     </div>
