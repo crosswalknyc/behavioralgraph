@@ -1548,14 +1548,14 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             pct = float(row["PERCENTAGE"]) if not pd.isna(row["PERCENTAGE"]) else 0.0
             genpop = format_gen_pop(gen_pop_projection(user_count))
             rank_label = f"{touchpoint_rank}{'st' if touchpoint_rank == 1 else 'nd' if touchpoint_rank == 2 else 'rd' if touchpoint_rank == 3 else 'th'} Touchpoint"
-            rows.append((rank_label, "", user_count, "users watched show", "", "", "", "", f"{pct:.2f}%", genpop))
+            rows.append((rank_label, "", user_count, "accounts activated", "", "", "", "", f"{pct:.2f}%", genpop))
             if 1 <= touchpoint_rank <= 5:
                 total_touchpoint_sum += user_count
         if total_touchpoint_sum > 0:
             total_watchers = int(df_summary['TOTAL_SHOW_WATCHERS'].iloc[0]) if not df_summary.empty and 'TOTAL_SHOW_WATCHERS' in df_summary.columns else 0
             total_pct = round((total_touchpoint_sum * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
             total_genpop = format_gen_pop(gen_pop_projection(total_touchpoint_sum))
-            rows.append(("Total Platform Signups", "", total_touchpoint_sum, "users watched show", "", "", "", "", f"{total_pct:.2f}%", total_genpop))
+            rows.append(("Total First 5 Platform Watches", "", total_touchpoint_sum, "accounts activated", "", "", "", "", f"{total_pct:.2f}%", total_genpop))
 
     # Competitive platforms
     if not df_comp.empty:

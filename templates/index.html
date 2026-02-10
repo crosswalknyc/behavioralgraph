@@ -14931,7 +14931,7 @@
                         <div id="subscriber-tab-viewnumbers" class="tab-content">
                             <div class="tab-section">
                                 <h3>🔢 View Numbers</h3>
-                                <p class="section-description">When people signed up for the platform, was this show their 1st, 2nd, 3rd, 4th, or 5th view? These numbers show how many users watched this show at each position in their viewing sequence after signup.</p>
+                                <p class="section-description">When people signed up for the platform, was this show their 1st, 2nd, 3rd, 4th, or 5th view? These numbers show how many accounts activated (watched this show) at each position in their viewing sequence after signup.</p>
                                 <div id="subscriberViewNumbers" class="view-numbers-grid"></div>
                             </div>
                         </div>
@@ -24339,6 +24339,19 @@
             }
         }
         
+        function formatGenPopFull(genPopStr) {
+            if (genPopStr == null || String(genPopStr).trim() === '') return '—';
+            const s = String(genPopStr).trim().replace(/,/g, '');
+            const m = s.match(/^([\d.]+)\s*([KkMmBb])?$/);
+            if (!m) return genPopStr;
+            let n = parseFloat(m[1]);
+            if (isNaN(n)) return genPopStr;
+            const suffix = (m[2] || '').toUpperCase();
+            if (suffix === 'B') n *= 1e9;
+            else if (suffix === 'M') n *= 1e6;
+            else if (suffix === 'K') n *= 1e3;
+            return Math.round(n).toLocaleString();
+        }
         function renderSubscriberViewNumbers(data) {
             const container = document.getElementById('subscriberViewNumbers');
             if (!container) return;
@@ -24350,22 +24363,23 @@
                 '3rd': 'Third View Attribution',
                 '4th': 'Fourth View Attribution',
                 '5th': 'Fifth View Attribution',
-                'Total': 'Total Platform Signups'
+                'Total': 'Total First 5 Platform Watches'
             };
             const sorted = order.map(key => touchpoints.find(t => (t.touchpoint || '').replace(/\s/g,'') === key || t.touchpoint === key)).filter(Boolean);
             if (sorted.length === 0) {
                 container.innerHTML = '<p style="color: var(--text-secondary);">No view numbers (post-signup touchpoint) data available for this show.</p>';
                 return;
             }
+            const totalFirst5 = sorted.filter(t => t.touchpoint !== 'Total').reduce((sum, t) => sum + (parseNumber(t.users) || 0), 0);
             container.innerHTML = sorted.map(t => {
                 const label = labels[t.touchpoint] || (t.touchpoint + ' View');
                 const usersRaw = t.users || '';
                 const usersNum = parseNumber(usersRaw);
-                const usersDisplay = usersNum != null ? formatNumber(usersNum) + ' users watched show' : (usersRaw || '—');
-                const pct = (t.percentage || '').trim() || '—';
-                const value = (t.gen_pop || '').trim() || '—';
+                const usersDisplay = usersNum != null ? formatNumber(usersNum) + ' accounts activated' : (usersRaw || '—');
                 const isTotal = t.touchpoint === 'Total';
-                const tooltip = isTotal ? 'Total users who watched this show as one of their first 5 views after signup' : 'Users who watched this show as their ' + (t.touchpoint || '') + ' view after signing up';
+                const pct = isTotal ? (totalFirst5 > 0 ? '100%' : '—') : (totalFirst5 > 0 && usersNum != null ? (usersNum / totalFirst5 * 100).toFixed(2) + '%' : '—');
+                const value = formatGenPopFull(t.gen_pop);
+                const tooltip = isTotal ? 'Total accounts that watched this show as one of their first 5 views after signup' : 'Accounts that watched this show as their ' + (t.touchpoint || '') + ' view after signing up';
                 return `
                     <div class="view-number-card has-tooltip ${isTotal ? 'view-number-total' : ''}" data-tooltip="${tooltip.replace(/"/g, '&quot;')}">
                         <div class="view-number-label">${label}</div>
@@ -28289,10 +28303,13 @@
             const ageChartEl = document.getElementById('ageChart');
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
+            const vh = typeof window !== 'undefined' ? (window.innerHeight || 700) : 700;
             const effectiveWidth = Math.max(chartContainerWidth, Math.floor(vw / 2));
-            const legendFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
-            const axisFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
-            const dataLabelFontSize = Math.max(10, Math.min(15, axisFontSize));
+            const sizeByWidth = Math.floor(effectiveWidth / 22);
+            const sizeByHeight = Math.floor(vh / 50);
+            const legendFontSize = Math.max(10, Math.min(16, Math.min(sizeByWidth, sizeByHeight)));
+            const axisFontSize = Math.max(10, Math.min(16, Math.min(sizeByWidth, sizeByHeight)));
+            const dataLabelFontSize = Math.max(9, Math.min(15, axisFontSize));
             // Legend width sized so "NON-BINARY 2.37% (GP: 2.09%)" and similar never cut off
             const legendAreaWidth = 240;
             const layoutPaddingCircular = { left: 6, right: legendAreaWidth, top: 6, bottom: 6 };
@@ -28618,7 +28635,7 @@
                                     return label;
                                 }
                             },
-                            afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
+                            afterFit: (scale) => { scale.width = Math.max(scale.width, Math.min(360, Math.max(180, (typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.17))); }
                         }
                     }
                 },
@@ -28754,7 +28771,7 @@
                     data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: educationIsCircular ? colors : '#a6e22e', borderRadius: educationIsCircular ? 0 : 4 }] },
                     options: { 
                         indexAxis: educationIsCircular ? 'x' : 'y', responsive: true, maintainAspectRatio: false,
-                        layout: { padding: educationIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        layout: { padding: educationIsCircular ? layoutPaddingCircular : { right: 50, left: Math.min(320, Math.max(140, Math.floor((typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.18))), top: 5, bottom: 5 } },
                         plugins: { 
                             legend: educationIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
                             datalabels: educationIsCircular ? { display: false } : { 
@@ -28787,6 +28804,7 @@
                                     color: '#e6f1ff', 
                                     font: { size: axisFontSize },
                                     autoSkip: false,
+                                    padding: 18,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
                                         // Split long labels into multiple lines at 20 characters
@@ -28809,7 +28827,7 @@
                                         return label;
                                     }
                                 },
-                                afterFit: (scale) => { scale.width = Math.max(scale.width, 180); }
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, Math.min(380, Math.max(200, (typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.18))); }
                             } 
                         } 
                     },
@@ -28839,7 +28857,7 @@
                         indexAxis: relationshipChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: relationshipIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        layout: { padding: relationshipIsCircular ? layoutPaddingCircular : { right: 50, left: Math.min(300, Math.max(120, Math.floor((typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.16))), top: 5, bottom: 5 } },
                         plugins: { 
                             legend: relationshipIsCircular ? {
                                 ...legendOptionsCircular,
@@ -28919,7 +28937,7 @@
                                         return label;
                                     }
                                 },
-                                afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, Math.min(360, Math.max(180, (typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.17))); }
                             }
                         }
                     },
@@ -28951,7 +28969,7 @@
                         indexAxis: soChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: soIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        layout: { padding: soIsCircular ? layoutPaddingCircular : { right: 50, left: Math.min(300, Math.max(120, Math.floor((typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.16))), top: 5, bottom: 5 } },
                         plugins: { 
                             legend: soIsCircular ? {
                                 ...legendOptionsCircular,
@@ -29031,7 +29049,7 @@
                                         return label;
                                     }
                                 },
-                                afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, Math.min(360, Math.max(180, (typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.17))); }
                             }
                         }
                     },
@@ -29059,7 +29077,7 @@
                         indexAxis: psChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: psIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        layout: { padding: psIsCircular ? layoutPaddingCircular : { right: 50, left: Math.min(300, Math.max(120, Math.floor((typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.16))), top: 5, bottom: 5 } },
                         plugins: { 
                             legend: psIsCircular ? {
                                 ...legendOptionsCircular,
@@ -29164,10 +29182,23 @@
                 const occCanvas = document.getElementById('occupationChart');
                 const occContainer = occCanvas ? occCanvas.closest('.occupation-chart-container') : null;
                 if (occChartType === 'bar' && occCanvas) {
-                    const barHeight = 58; // Taller bars and more vertical space so labels can wrap and be read
-                    const calculatedHeight = Math.max(occLabels.length * barHeight, 500);
-                    const vh = window.innerHeight || 600;
-                    const maxH = Math.min(1100, Math.floor(vh * 0.8)); // Allow more height so all text fits
+                    const maxChars = 32;
+                    const getOccLines = (label) => {
+                        const s = String(label || '');
+                        if (s.length <= maxChars) return 1;
+                        const words = s.split(' ');
+                        let lines = 0, current = '';
+                        words.forEach(word => {
+                            const next = current ? current + ' ' + word : word;
+                            if (next.length > maxChars && current) { lines++; current = word; } else { current = next; }
+                        });
+                        if (current) lines++;
+                        return Math.max(1, lines);
+                    };
+                    const maxLinesPerLabel = Math.max(1, ...occLabels.map(getOccLines));
+                    const barHeightPerRow = Math.max(32, maxLinesPerLabel * 22);
+                    const calculatedHeight = Math.max(occLabels.length * barHeightPerRow, 520);
+                    const maxH = Math.min(1400, Math.floor((typeof window !== 'undefined' ? window.innerHeight : 700) * 0.82));
                     occCanvas.style.height = Math.min(calculatedHeight, maxH) + 'px';
                 } else if (occCanvas) {
                     occCanvas.style.height = '400px'; // Default height for circular charts
@@ -29180,7 +29211,7 @@
                         indexAxis: occChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: occIsCircular ? { ...layoutPaddingCircular, top: 15, bottom: 15 } : { right: 50, top: 15, bottom: 15, left: 28 } },
+                        layout: { padding: occIsCircular ? { ...layoutPaddingCircular, top: 15, bottom: 15 } : { right: 50, top: 15, bottom: 15, left: Math.min(420, Math.max(220, Math.floor((typeof window !== 'undefined' ? window.innerWidth : 1200) * 0.22)) } } },
                         plugins: { 
                             legend: occIsCircular ? {
                                 ...legendOptionsCircular,
@@ -29231,9 +29262,9 @@
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: Math.max(10, axisFontSize - 1), weight: '500' },
+                                    font: { size: Math.max(9, axisFontSize - (occLabels.length > 10 ? 2 : 1)), weight: '500' },
                                     autoSkip: false,
-                                    padding: 14,
+                                    padding: 22,
                                     maxRotation: 0,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
@@ -29259,11 +29290,11 @@
                                     }
                                 },
                                 afterFit: (scale) => {
-                                    // Reserve enough width for wrapped occupation labels so nothing is cut off
                                     const maxLabelLen = occLabels.reduce((m, l) => Math.max(m, String(l).length), 0);
                                     const charsPerLine = 32;
                                     const lines = Math.ceil(maxLabelLen / charsPerLine) || 1;
-                                    const minWidth = Math.max(480, Math.min(720, lines * 240));
+                                    const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+                                    const minWidth = Math.max(280, Math.min(520, Math.max(lines * 200, vw * 0.2)));
                                     scale.width = Math.max(scale.width, minWidth);
                                 }
                             }
