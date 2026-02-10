@@ -2469,6 +2469,11 @@
             color: var(--text-primary);
         }
         
+        .dash-export-spacer {
+            min-width: 90px;
+            flex-shrink: 0;
+        }
+        
         .subscriber-fixed-header {
             flex-shrink: 0;
             background: var(--bg-dark);
@@ -12850,14 +12855,6 @@
             <!-- Action Buttons Row with Tab Title (grid aligns with sidebar | content below) -->
             <div class="action-buttons-row">
                 <div class="content-action-buttons" id="contentActionButtons">
-                    <div class="dash-dropdown">
-                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, or full report as PDF." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
-                        <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
-                            <a href="javascript:void(0)" onclick="exportToCSV(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📄 All Data (CSV)</a>
-                            <a href="javascript:void(0)" onclick="exportAllPNG(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">🖼️ All Charts (PNG)</a>
-                            <a href="javascript:void(0)" onclick="exportPDF(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📑 Full Report (PDF)</a>
-                        </div>
-                    </div>
                     <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
                         <span id="hoverToggleLabel">HOVER ON</span>
                     </div>
@@ -12868,6 +12865,7 @@
                         <span id="toolbarCollapseIcon" style="font-size: 0.5rem;">▲</span>
                         <span id="toolbarCollapseLabel" style="font-size: 0.6rem;">HIDE</span>
                     </div>
+                    <span class="dash-export-spacer" aria-hidden="true"></span>
                 </div>
                 <div class="inline-tab-header" id="inlineTabHeader" style="display: flex; align-items: center; gap: 0.75rem;">
                     <h2 class="has-tooltip" style="margin: 0; font-size: 1.1rem;" data-tooltip="Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.">🔬 Deep Insights</h2>
