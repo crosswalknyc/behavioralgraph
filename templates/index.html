@@ -13196,49 +13196,6 @@
 
             <!-- Interests Tab -->
             <div id="tab-interests" class="tab-content">
-                <!-- Interests Insights Summary -->
-                <div class="interests-insights-row" id="interestsInsightsRow" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interests Insights" style="position: relative;">
-                    <div style="position: absolute; top: 0.5rem; right: 0.5rem; display: flex; align-items: center; gap: 0.5rem; z-index: 10;">
-                        <span class="module-action-btns">
-                            <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('interests', 'Interests Insights')" data-tooltip="Export CSV">CSV</button>
-                            <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('interests', 'Interests Insights')" data-tooltip="Add to Deck">➕</button>
-                        </span>
-                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
-                    </div>
-                    <div class="insight-card highlight has-tooltip" data-tooltip="Top Over-Indexing Interest: The single interest where this audience most over-indexes compared to Gen Pop. A strong signal for content and campaign themes.">
-                        <div class="insight-icon">🔥</div>
-                        <div class="insight-content">
-                            <div class="insight-label">Top Over-Indexing</div>
-                            <div class="insight-value" id="topOverIndexInterest">--</div>
-                            <div class="insight-detail" id="topOverIndexDetail">Index: --</div>
-                        </div>
-                    </div>
-                    <div class="insight-card has-tooltip" data-tooltip="Average Interest Index: Mean index across all interest categories. 1.0x = same as Gen Pop. Shows the range from minimum to maximum index.">
-                        <div class="insight-icon">📊</div>
-                        <div class="insight-content">
-                            <div class="insight-label">Avg Interest Index</div>
-                            <div class="insight-value" id="avgInterestIndex">--</div>
-                            <div class="insight-detail" id="interestIndexRange">Range: --</div>
-                        </div>
-                    </div>
-                    <div class="insight-card has-tooltip" id="overIndexCard" data-tooltip="">
-                        <div class="insight-icon">⬆️</div>
-                        <div class="insight-content">
-                            <div class="insight-label">OVER-INDEXING</div>
-                            <div class="insight-value" id="overIndexCount">--</div>
-                            <div class="insight-detail">above median</div>
-                        </div>
-                    </div>
-                    <div class="insight-card has-tooltip" id="underIndexCard" data-tooltip="">
-                        <div class="insight-icon">⬇️</div>
-                        <div class="insight-content">
-                            <div class="insight-label">UNDER-INDEXING</div>
-                            <div class="insight-value" id="underIndexCount">--</div>
-                            <div class="insight-detail">below median</div>
-                        </div>
-                    </div>
-                </div>
-                
                 <!-- Top Interests by Category -->
                 <div class="interests-categories-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Interests by Category" style="position: relative;">
                     <h3 style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem;">
@@ -30246,6 +30203,7 @@
         function renderInterestsInsights(items) {
             items = (items || []).filter(i => Number(i.index) !== 0);
             if (items.length === 0) return;
+            if (!document.getElementById('avgInterestIndex')) return; // Insights blocks removed
             const avgIndex = Math.round(items.reduce((sum, i) => sum + i.index, 0) / items.length);
             const maxIndex = Math.max(...items.map(i => i.index));
             const minIndex = Math.min(...items.map(i => i.index));
