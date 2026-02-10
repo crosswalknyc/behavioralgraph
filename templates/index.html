@@ -23026,6 +23026,13 @@
                 }
                 return formatNumber(value);
             };
+            // Executive Summary always shows projected US (gen_pop) when available
+            const formatExecProjected = (value, genPop) => {
+                if (genPop != null && String(genPop).trim() !== '') {
+                    return formatNumber(genPop);
+                }
+                return formatNumber(value);
+            };
             
             const formatGenPop = (genPop) => {
                 if (!genPop) return '';
@@ -23065,30 +23072,30 @@
                         </div>
                     </div>
                     <div class="exec-summary-grid">
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Total Platform Impact: Total number of subscribers acquired or reactivated due to this show. This includes both new signups and dormant users who returned to watch.">
-                            <div class="exec-metric-label">Total Platform Impact</div>
-                            <div class="exec-metric-value">${formatValue(totalSignups, totalSignupsGenPop)}</div>
-                            <div class="exec-metric-desc">Subscribers acquired or reactivated</div>
-                        </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="New Subscriber Acquisition: Confirmed new subscribers to the streaming platform who signed up specifically to watch this show.">
-                            <div class="exec-metric-label">New Subscriber Acquisition</div>
-                            <div class="exec-metric-value">${formatValue(attributedSignups, attributedSignupsGenPop)}</div>
-                            <div class="exec-metric-desc">Attributed new signups</div>
-                        </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Audience Reach: Total number of people who watched the series during the tracking period.">
-                            <div class="exec-metric-label">Audience Reach</div>
-                            <div class="exec-metric-value">${formatValue(totalWatchers, totalWatchersGenPop)}</div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Total Accounts Viewed: Total number of people who watched the series during the tracking period (projected US).">
+                            <div class="exec-metric-label">Total Accounts Viewed</div>
+                            <div class="exec-metric-value">${formatExecProjected(totalWatchers, totalWatchersGenPop)}</div>
                             <div class="exec-metric-desc">Total show viewers</div>
                         </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Conversion Rate: Percentage of total show viewers who signed up for the platform to watch this show.">
-                            <div class="exec-metric-label">Conversion Rate</div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Accounts Acquired or Reactivated: Total number of accounts acquired or reactivated due to this show (projected US).">
+                            <div class="exec-metric-label">Accounts Acquired or Reactivated</div>
+                            <div class="exec-metric-value">${formatExecProjected(totalSignups, totalSignupsGenPop)}</div>
+                            <div class="exec-metric-desc">Accounts Acquired or Reactivated</div>
+                        </div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="New Accounts Acquisition: Confirmed new accounts who signed up specifically to watch this show (projected US).">
+                            <div class="exec-metric-label">New Accounts Acquisition</div>
+                            <div class="exec-metric-value">${formatExecProjected(attributedSignups, attributedSignupsGenPop)}</div>
+                            <div class="exec-metric-desc">Attributed new signups</div>
+                        </div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Reactivated Accounts: Dormant users who returned to the platform to watch this show after a period of inactivity (projected US).">
+                            <div class="exec-metric-label">Reactivated Accounts</div>
+                            <div class="exec-metric-value">${formatExecProjected(dormantReactive, dormantReactiveGenPop)}</div>
+                            <div class="exec-metric-desc">Accounts Reactivated</div>
+                        </div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Acquired and Reactivated Accounts: Percentage of total show viewers who signed up or reactivated for the platform to watch this show.">
+                            <div class="exec-metric-label">Acquired and Reactivated Accounts</div>
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
                             <div class="exec-metric-desc">Viewers to subscribers</div>
-                        </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Reactivated: Dormant users who returned to the platform to watch this show after a period of inactivity.">
-                            <div class="exec-metric-label">Reactivated</div>
-                            <div class="exec-metric-value">${formatValue(dormantReactive, dormantReactiveGenPop)}</div>
-                            <div class="exec-metric-desc">Subscribers reactivated</div>
                         </div>
                     </div>
                 </div>
