@@ -341,14 +341,18 @@
             }
         }
 
-        // Remember me functionality - load saved username on page load
+        // Remember me functionality - load saved username and password on page load
         document.addEventListener('DOMContentLoaded', function() {
             const savedUsername = localStorage.getItem('rememberedUsername');
+            const savedPassword = localStorage.getItem('rememberedPassword');
             const rememberMeChecked = localStorage.getItem('rememberMe') === 'true';
             
             if (rememberMeChecked && savedUsername) {
                 document.getElementById('username').value = savedUsername;
                 document.getElementById('rememberMe').checked = true;
+                if (savedPassword) {
+                    document.getElementById('password').value = savedPassword;
+                }
             }
         });
 
@@ -375,12 +379,14 @@
             const password = document.getElementById('password').value;
             const rememberMe = document.getElementById('rememberMe').checked;
 
-            // Save or clear remember me preference
+            // Save or clear remember me preference (username and password)
             if (rememberMe) {
                 localStorage.setItem('rememberedUsername', username);
+                localStorage.setItem('rememberedPassword', password);
                 localStorage.setItem('rememberMe', 'true');
             } else {
                 localStorage.removeItem('rememberedUsername');
+                localStorage.removeItem('rememberedPassword');
                 localStorage.removeItem('rememberMe');
             }
 
