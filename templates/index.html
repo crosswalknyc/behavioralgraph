@@ -32187,9 +32187,12 @@
             sortMode = sortMode || 'pct';
             const gpVal = (i) => (i.genPopPct ?? 0);
             return items.map((item, idx) => {
-                const index = item.index || 0;
                 const genPopPct = item.genPopPct ?? 0;
-                const profilePct = item.pct || 0;
+                const profilePct = item.pct ?? 0;
+                // Compute index from profile % and gen pop % so it is correct per item (profile/genPop * 100)
+                const index = (genPopPct > 0 && (profilePct !== null && profilePct !== undefined))
+                    ? Math.round((profilePct / genPopPct) * 100)
+                    : (item.index ?? 0);
                 // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
                 const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                 
