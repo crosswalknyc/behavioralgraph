@@ -3142,7 +3142,7 @@
         }
         .charts-grid .chart-card {
             padding-left: 1rem;
-            padding-right: 1rem;
+            padding-right: 1.5rem;
         }
         
         .chart-card.dragging {
@@ -3260,14 +3260,14 @@
             align-items: center;
         }
         .chart-container canvas { max-width: 100%; display: block; }
-        /* Demographics: fixed height, minimal padding so legend text fits */
+        /* Demographics: fixed height, extra right padding so donut legend text is not cut off */
         .charts-grid .chart-container {
             height: 300px;
             min-height: 300px;
             width: 100%;
             overflow: visible;
             flex: 1 1 auto;
-            padding: 0.2rem 0;
+            padding: 0.2rem 1rem 0.2rem 0;
         }
 
         /* Occupation chart: full width, room for larger bars and wrapped labels */
