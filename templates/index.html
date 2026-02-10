@@ -23378,8 +23378,6 @@
                     // Revenue = (number of new accounts, US projected) × (price per subscriber on the box)
                     const monthlyAd = signupsForRevenue * ad;
                     const monthlyPrem = signupsForRevenue * prem;
-                    const weeklyAd = monthlyAd / (52/12);
-                    const weeklyPrem = monthlyPrem / (52/12);
                     const yearlyAd = monthlyAd * 12;
                     const yearlyPrem = monthlyPrem * 12;
                     const revenueBlurb = `Estimated revenue from new subscribers attributed to this show. Uses platform <strong>${subscriberPlatformName || '—'}</strong> and monthly price from <strong>Admin → Settings → SVOD Pricing</strong>. Based on <strong>${formatNumber(signupsForRevenue)}</strong> signups (US projected). Revenue = signups × price.`;
@@ -23416,59 +23414,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="strategic-card" style="margin-top: 1.25rem;">
-                            <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">📈 Estimated revenue by period</h3>
-                            <div class="chart-container" id="subscriberRevenueLineChart" style="height: 280px; position: relative;"></div>
-                        </div>
                     `;
-                    const revenueChartContainer = document.getElementById('subscriberRevenueLineChart');
-                    if (revenueChartContainer && typeof Chart !== 'undefined') {
-                        if (charts.subscriberRevenueLine) {
-                            charts.subscriberRevenueLine.destroy();
-                            charts.subscriberRevenueLine = null;
-                        }
-                        const canvas = document.createElement('canvas');
-                        revenueChartContainer.appendChild(canvas);
-                        const ctx = canvas.getContext('2d');
-                        const periods = ['Weekly', 'Monthly', 'Yearly'];
-                        const adValues = [weeklyAd, monthlyAd, yearlyAd];
-                        const premValues = [weeklyPrem, monthlyPrem, yearlyPrem];
-                        charts.subscriberRevenueLine = new Chart(ctx, {
-                            type: 'line',
-                            data: {
-                                labels: periods,
-                                datasets: [
-                                    { label: 'Ad-supported', data: adValues, borderColor: 'rgba(163, 230, 53, 0.9)', backgroundColor: 'rgba(163, 230, 53, 0.15)', fill: true, tension: 0.3 },
-                                    { label: 'Premium', data: premValues, borderColor: 'rgba(147, 51, 234, 0.9)', backgroundColor: 'rgba(147, 51, 234, 0.15)', fill: true, tension: 0.3 }
-                                ]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                interaction: { mode: 'index', intersect: false },
-                                plugins: {
-                                    legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 11 } } },
-                                    tooltip: {
-                                        callbacks: {
-                                            label: (c) => {
-                                                const v = c.raw;
-                                                const s = v >= 1e6 ? (v/1e6).toFixed(2) + 'M' : v >= 1e3 ? (v/1e3).toFixed(2) + 'K' : v.toFixed(0);
-                                                return ' ' + c.dataset.label + ': $' + s;
-                                            }
-                                        }
-                                    }
-                                },
-                                scales: {
-                                    x: { grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8', font: { size: 11 } } },
-                                    y: {
-                                        beginAtZero: true,
-                                        grid: { color: 'rgba(148,163,184,0.12)' },
-                                        ticks: { color: '#94a3b8', font: { size: 10 }, callback: function(v) { return v >= 1e6 ? (v/1e6) + 'M' : v >= 1e3 ? (v/1e3) + 'K' : v; } }
-                                    }
-                                }
-                            }
-                        });
-                    }
                 } else {
                     subscriptionRevenueContainer.innerHTML = `
                         <div class="strategic-card">
