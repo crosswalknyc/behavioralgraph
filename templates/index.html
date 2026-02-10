@@ -4525,7 +4525,7 @@
         .behavioral-table {
             display: grid;
             grid-template-columns: 28px minmax(100px, 1fr) 78px 78px 64px;
-            grid-auto-rows: minmax(2rem, auto);
+            grid-auto-rows: minmax(2.5rem, min-content);
             gap: 0.4rem;
             align-items: start;
             padding: 0 0.15rem 0 0;
@@ -4587,7 +4587,7 @@
             border-bottom: 1px solid var(--border-color);
             position: relative;
             text-align: left;
-            min-height: 2rem;
+            min-height: min-content;
             overflow: visible;
             background: var(--bg-card);
             z-index: 0;
