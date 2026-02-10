@@ -23040,12 +23040,10 @@
                 : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
             const conversionPctDisplay = (isNaN(conversionPctRaw) ? '0.00' : Number(conversionPctRaw).toFixed(2)) + '%';
             
-            // Format values based on display mode
+            // Format values: always use US projected gen pop when available (not raw)
             const formatValue = (value, genPop) => {
-                if (subscriberDisplayMode === 'projection' && genPop) {
-                    return formatNumber(genPop);
-                }
-                return formatNumber(value);
+                const use = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
+                return formatNumber(use);
             };
             // Executive Summary: whole numbers only; expand K (thousands) and M (millions) without rounding
             const formatExecSummaryNumber = (value, genPop) => {
@@ -24786,12 +24784,10 @@
                 ` : '';
             }
             
-            // Format values based on display mode
+            // Format values: always use US projected gen pop when available (not raw)
             const formatValue = (value, genPop) => {
-                if (subscriberDisplayMode === 'projection' && genPop) {
-                    return formatNumber(genPop);
-                }
-                return formatNumber(value);
+                const use = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
+                return formatNumber(use);
             };
             
             // Get the value to display (actual or gen pop projection)
