@@ -14173,7 +14173,8 @@ def submit_svod_acquisition():
         # Genre: optional; if provided must be one of the allowed SVOD genres
         SVOD_ALLOWED_GENRES = [
             'Serialized Drama', 'Non-Scripted Competition', 'Adult Animation', 'Stand Up Comedy',
-            'Single Camera Sitcom', 'Procedural Drama', 'Multi Camera Sitcom', 'Live Sports'
+            'Single Camera Sitcom', 'Procedural Drama', 'Multi Camera Sitcom', 'Live Sports',
+            'Single Event Telecast'
         ]
         genre = (data.get('genre') or '').strip()
         if genre and genre not in SVOD_ALLOWED_GENRES:

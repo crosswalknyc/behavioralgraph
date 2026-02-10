@@ -151,6 +151,7 @@ ALLOWED_GENRES = [
     "Procedural Drama",
     "Multi Camera Sitcom",
     "Live Sports",
+    "Single Event Telecast",
 ]
 
 # List of all competitor streaming platforms

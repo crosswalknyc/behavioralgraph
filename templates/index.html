@@ -12436,6 +12436,7 @@
                                                 <option value="Procedural Drama">Procedural Drama</option>
                                                 <option value="Multi Camera Sitcom">Multi Camera Sitcom</option>
                                                 <option value="Live Sports">Live Sports</option>
+                                                <option value="Single Event Telecast">Single Event Telecast</option>
                                             </select>
                                             <small>Content genre for the report</small>
                                         </div>
@@ -14845,7 +14846,7 @@
                         <!-- Tabs (Insights first and default) -->
                         <div class="dashboard-tabs" id="subscriberTabs">
                             <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
-                            <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
+                            <button class="tab-btn" id="subscriberTabEpisodesBtn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('viewnumbers')"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
@@ -22670,6 +22671,13 @@
             console.log('📅 Date range check:', { dateRange, date_range, metadata_date_range: metadata.date_range, final: finalDateRange });
             console.log('📂 Platform/Genre:', { platform: platformName, genre });
             
+            // Hide EPISODES tab for Stand Up Comedy and Single Event Telecast (no per-episode meaning)
+            const hideEpisodesTab = (genre === 'Stand Up Comedy' || genre === 'Single Event Telecast');
+            const episodesBtn = document.getElementById('subscriberTabEpisodesBtn');
+            const episodesContent = document.getElementById('subscriber-tab-episodes');
+            if (episodesBtn) episodesBtn.style.display = hideEpisodesTab ? 'none' : '';
+            if (episodesContent) episodesContent.style.display = hideEpisodesTab ? 'none' : '';
+            
             if (showNameHeader) showNameHeader.textContent = finalShow.toUpperCase();
             
             if (platformHeader) {
@@ -22871,6 +22879,11 @@
                 const emptyState = document.getElementById('subscriberEmptyState');
                 if (fixedHeader) fixedHeader.style.display = 'none';
                 if (emptyState) emptyState.style.display = 'flex';
+                // Show EPISODES tab again when no result is open (next result will set visibility by genre)
+                const episodesBtn = document.getElementById('subscriberTabEpisodesBtn');
+                const episodesContent = document.getElementById('subscriber-tab-episodes');
+                if (episodesBtn) episodesBtn.style.display = '';
+                if (episodesContent) episodesContent.style.display = '';
                 renderSubscriberProfileTree(); // Clear active state in sidebar
             } else {
                 // Switch to another tab
