@@ -14853,9 +14853,6 @@
                             <!-- Platform Value Assessment -->
                             <div id="subscriberPlatformValue" class="strategic-section"></div>
                             
-                            <!-- Content Performance Analysis -->
-                            <div id="subscriberContentPerformance" class="strategic-section"></div>
-                            
                             <!-- Audience Acquisition Insights -->
                             <div id="subscriberAudienceAcquisition" class="strategic-section"></div>
                             
@@ -22996,12 +22993,11 @@
             // Get all containers
             const execSummaryContainer = document.getElementById('subscriberExecutiveSummary');
             const platformValueContainer = document.getElementById('subscriberPlatformValue');
-            const contentPerformanceContainer = document.getElementById('subscriberContentPerformance');
             const audienceAcquisitionContainer = document.getElementById('subscriberAudienceAcquisition');
             const keyMetricsContainer = document.getElementById('subscriberKeyMetrics');
             const subscriptionRevenueContainer = document.getElementById('subscriberSubscriptionRevenue');
             
-            if (!execSummaryContainer || !platformValueContainer || !contentPerformanceContainer || 
+            if (!execSummaryContainer || !platformValueContainer || 
                 !audienceAcquisitionContainer || !keyMetricsContainer) {
                 console.error('❌ Containers not found');
                 return;
@@ -23172,35 +23168,6 @@
                 .sort((a, b) => {
                 return (b.signups || 0) - (a.signups || 0);
             }).slice(0, 5);
-            
-            contentPerformanceContainer.innerHTML = `
-                <div class="strategic-card">
-                    <h3 class="has-tooltip" data-tooltip="Which episodes or release dates drove the most signups. Use this to focus marketing and promotion on the highest-impact content.">🎬 Content Performance Analysis</h3>
-                    ${topEpisodes.length > 0 ? `
-                        <div class="episode-performance-grid">
-                            ${topEpisodes.map((ep, idx) => {
-                                const episodePct = totalSignups > 0 ? ((ep.signups / totalSignups) * 100).toFixed(2) : 0;
-                                const epStr = String(ep.episode || '');
-                                const isDateEpisode = epStr.includes('/');
-                                const hasNoValue = !(ep.signups && Number(ep.signups) > 0);
-                                const epLabel = (isDateEpisode && hasNoValue) ? 'Single Drop Day' : (isDateEpisode ? epStr : `Episode ${epStr}`);
-                                return `
-                                    <div class="episode-performance-card ${idx === 0 ? 'top-performer' : ''} has-tooltip" data-tooltip="${epLabel}: Drove ${formatNumber(ep.signups)} platform signups (${episodePct}% of total). ${ep.days_avg ? `Average ${ep.days_avg} days from release to signup.` : ''}">
-                                        <div class="episode-rank">#${idx + 1}</div>
-                                        <div class="episode-title">${epLabel}</div>
-                                        <div class="episode-impact">
-                                            <div class="impact-value">${formatNumber(ep.signups)}</div>
-                                            <div class="impact-label">Signups</div>
-                                        </div>
-                                        <div class="episode-share">${episodePct}% of total</div>
-                                        ${ep.days_avg ? `<div class="episode-timing">Avg ${ep.days_avg} days to signup</div>` : ''}
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    ` : '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode performance data available</p>'}
-                </div>
-            `;
             
             // 4. AUDIENCE ACQUISITION INSIGHTS
             audienceAcquisitionContainer.innerHTML = `
