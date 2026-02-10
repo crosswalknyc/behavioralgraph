@@ -960,7 +960,7 @@ def run_query(conn, p):
             for _, row in df_episode_attribution.iterrows():
                 ep_num = int(row['EPISODE_NUM'])
                 signups = int(row['SIGNUPS_ATTRIBUTED'])
-                pct = float(row['PERCENTAGE'])
+                pct = float(row['PERCENTAGE']) if 'PERCENTAGE' in row and row['PERCENTAGE'] is not None and not pd.isna(row['PERCENTAGE']) else 0.0
                 duration = float(row['AVG_DURATION_MINUTES']) if 'AVG_DURATION_MINUTES' in row and not pd.isna(row['AVG_DURATION_MINUTES']) else 0
                 if signups > 0:
                     episodes_with_signups += 1
@@ -1467,7 +1467,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         for _, row in df_episode_sorted.iterrows():
             ep_num = int(row["EPISODE_NUM"])
             signups = int(row["SIGNUPS_ATTRIBUTED"])
-            pct = float(row["PERCENTAGE"])
+            pct = float(row["PERCENTAGE"]) if row.get("PERCENTAGE") is not None and not pd.isna(row["PERCENTAGE"]) else 0.0
             avg_days_val = float(row["AVG_DAYS_TO_SIGNUP"])
             genpop = format_gen_pop(gen_pop_projection(signups))
             ep_date_display = episode_date_display_lookup.get(ep_num, "")
@@ -1503,7 +1503,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         for _, row in df_timing.iterrows():
             days = int(row["DAYS_TO_SIGNUP"])
             count = int(row["SIGNUP_COUNT"])
-            pct = float(row["PERCENTAGE"])
+            pct = float(row["PERCENTAGE"]) if row.get("PERCENTAGE") is not None and not pd.isna(row["PERCENTAGE"]) else 0.0
             genpop = format_gen_pop(gen_pop_projection(count))
             day_label = "Same Day" if days == 0 else f"Day {days}" if days == 1 else f"{days} Days Later"
             rows.append((day_label, "", count, "signups", "", "", "", "", f"{pct:.2f}%", genpop))
@@ -1527,7 +1527,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             for _, row in ep_data.head(10).iterrows():
                 days = int(row["DAYS_TO_SIGNUP"])
                 count = int(row["SIGNUP_COUNT"])
-                pct = float(row["PERCENTAGE"])
+                pct = float(row["PERCENTAGE"]) if row.get("PERCENTAGE") is not None and not pd.isna(row["PERCENTAGE"]) else 0.0
                 genpop = format_gen_pop(gen_pop_projection(count))
                 day_label = "Same Day" if days == 0 else f"Day {days}" if days == 1 else f"{days} Days Later"
                 rows.append((f"  {day_label}", "", count, "signups", "", "", "", "", f"{pct:.2f}%", genpop))
@@ -1602,7 +1602,8 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                 for _, row in category_data.iterrows():
                     count = int(row['COUNT'])
                     genpop_demo = format_gen_pop(gen_pop_projection(count))
-                    rows.append((row["VALUE"], "", count, "people", "", "", "", "", f"{row['PERCENTAGE']:.1f}%", genpop_demo))
+                    pct_val = float(row['PERCENTAGE']) if row.get('PERCENTAGE') is not None and not pd.isna(row['PERCENTAGE']) else 0.0
+                    rows.append((row["VALUE"], "", count, "people", "", "", "", "", f"{pct_val:.1f}%", genpop_demo))
 
     df_out = pd.DataFrame(rows, columns=["Category", "Episode Date", "Count", "Count Label", "Secondary Count", "Secondary Label", "Tertiary Count", "Tertiary Label", "Percentage", "Gen Pop Projection"])
 
