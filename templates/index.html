@@ -17845,15 +17845,15 @@
                 name: t.name,
                 kpi: t.kpi
             }));
-            localStorage.setItem('openTickerTabs', JSON.stringify(tabsToSave));
-            localStorage.setItem('activeTickerTabId', activeTickerTabId || '');
+            localStorage.setItem('openTickerTabs_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest'), JSON.stringify(tabsToSave));
+            localStorage.setItem('activeTickerTabId_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest'), activeTickerTabId || '');
         }
         
         // Load saved ticker tabs from localStorage
         async function loadSavedTickerTabs() {
             try {
-                const savedTabs = JSON.parse(localStorage.getItem('openTickerTabs') || '[]');
-                const savedActiveId = localStorage.getItem('activeTickerTabId') || '';
+                const savedTabs = JSON.parse(localStorage.getItem('openTickerTabs_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest')) || '[]');
+                const savedActiveId = localStorage.getItem('activeTickerTabId_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest')) || '';
                 
                 for (const savedTab of savedTabs) {
                     try {
@@ -22726,15 +22726,15 @@
                 name: t.name,
                 dateRange: t.dateRange
             }));
-            localStorage.setItem('openSubscriberTabs', JSON.stringify(tabsToSave));
-            localStorage.setItem('activeSubscriberTabId', activeSubscriberTabId || '');
+            localStorage.setItem('openSubscriberTabs_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest'), JSON.stringify(tabsToSave));
+            localStorage.setItem('activeSubscriberTabId_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest'), activeSubscriberTabId || '');
         }
         
         // Load saved subscriber tabs from localStorage
         function loadSavedSubscriberTabs() {
             try {
-                const savedTabs = JSON.parse(localStorage.getItem('openSubscriberTabs') || '[]');
-                const savedActiveId = localStorage.getItem('activeSubscriberTabId') || '';
+                const savedTabs = JSON.parse(localStorage.getItem('openSubscriberTabs_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest')) || '[]');
+                const savedActiveId = localStorage.getItem('activeSubscriberTabId_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest')) || '';
                 return { savedTabs, savedActiveId };
             } catch (e) {
                 return { savedTabs: [], savedActiveId: '' };
@@ -26286,15 +26286,15 @@
                 name: t.name,
                 dateRange: t.dateRange
             }));
-            localStorage.setItem('openProfileTabs', JSON.stringify(tabsToSave));
-            localStorage.setItem('activeProfileTabId', activeProfileTabId || '');
+            localStorage.setItem('openProfileTabs_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest'), JSON.stringify(tabsToSave));
+            localStorage.setItem('activeProfileTabId_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest'), activeProfileTabId || '');
         }
         
         // Load saved tabs from localStorage
         function loadSavedTabs() {
             try {
-                const savedTabs = JSON.parse(localStorage.getItem('openProfileTabs') || '[]');
-                const savedActiveId = localStorage.getItem('activeProfileTabId') || '';
+                const savedTabs = JSON.parse(localStorage.getItem('openProfileTabs_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest')) || '[]');
+                const savedActiveId = localStorage.getItem('activeProfileTabId_' + (typeof currentUsername !== 'undefined' && currentUsername ? currentUsername : 'guest')) || '';
                 return { savedTabs, savedActiveId };
             } catch (e) {
                 return { savedTabs: [], savedActiveId: '' };
