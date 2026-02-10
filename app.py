@@ -7726,9 +7726,13 @@ def analyze_beat_miss():
         data = request.get_json()
         ticker = data.get('ticker')
         quarter = data.get('quarter')
-        
-        # Check daily cache first
-        cache_slug = f"beatmiss_{ticker}_{quarter}" if ticker and quarter else None
+        kpi = data.get('kpi') or ''
+        relevance_percentage = data.get('relevance_percentage')
+        # Cache key includes KPI and Stock Impact so we don't serve stale analysis when ticker profile changes
+        import hashlib
+        _kpi_relevance = f"{kpi}_{relevance_percentage}"
+        _h = hashlib.sha256(_kpi_relevance.encode()).hexdigest()[:12]
+        cache_slug = f"beatmiss_{ticker}_{quarter}_{_h}" if ticker and quarter else None
         if cache_slug:
             cached = _load_hedge_fund_daily_cache(cache_slug)
             if cached is not None:
@@ -7785,7 +7789,8 @@ OUR DATA (measured KPI, not a company projection):
 ANALYSIS:
 1. Research {ticker} guidance and consensus for {quarter} (SEC, earnings calls). Extract revenue growth numbers only.
 2. In the analysis text: State what company and consensus project for revenue growth (with numbers). State our metric ({projected_growth_pct}% for {kpi}). Then explain how our metric fits within that revenue outlook—using Stock Impact ({relevance_pct}%) and data quality—and the resulting likelihood of beat or miss. Do not ask for or reference KPI-specific company guidance; they project revenue.
-3. Output BEAT, MISS, or UNDECIDED.
+3. CRITICAL: When writing the analysis, you MUST refer to our measured metric ONLY as "{kpi}". Do NOT call it "Sales Revenue", "revenue", or any other name. We measure the KPI "{kpi}", not revenue. You MUST state Stock Impact as exactly {relevance_pct}% (use this number only; do not substitute a different percentage).
+4. Output BEAT, MISS, or UNDECIDED.
 
 JSON format. company_guidance and consensus_estimate: short phrase with exact % when available; else "Not specified" or "Not available".
 {{
@@ -7794,7 +7799,7 @@ JSON format. company_guidance and consensus_estimate: short phrase with exact % 
     "company_guidance": "<Revenue growth for the quarter the company is projecting. Exact % e.g. '2.4% net revenue growth'. If none: 'Not specified'.>",
     "consensus_estimate": "<Revenue growth for the quarter consensus is projecting. Exact % e.g. '3.3% revenue growth'. If none: 'Not available'.>",
     "our_projection": {projected_growth_pct},
-    "analysis": "<State company and consensus revenue growth for the quarter (with numbers). State our metric ({projected_growth_pct}% for {kpi}). Explain how our metric fits within that revenue picture based on Stock Impact ({relevance_pct}%) and the resulting likelihood of beat or miss.>"
+    "analysis": "<State company and consensus revenue growth (with numbers). State our metric: {projected_growth_pct}% for {kpi}. Use the exact KPI name '{kpi}' and Stock Impact {relevance_pct}%. Explain how our metric fits within that revenue picture and the resulting likelihood of beat or miss.>"
 }}
 
 Respond ONLY with valid JSON, no additional text."""
@@ -7802,7 +7807,7 @@ Respond ONLY with valid JSON, no additional text."""
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a financial analyst. Extract what the company and consensus project for revenue growth for the quarter (they do not project KPI-specific metrics). Then explain how the given KPI metric fits within that revenue picture based on relevance (Stock Impact) and the resulting beat/miss likelihood. Respond only with valid JSON."},
+                {"role": "system", "content": "You are a financial analyst. Extract what the company and consensus project for revenue growth for the quarter (they do not project KPI-specific metrics). In your analysis you MUST refer to our measured metric only by the exact KPI name provided (e.g. 'Total Customers at Period End')—never call it 'Sales Revenue' or 'revenue'. Use the exact Stock Impact percentage provided. Then explain how that KPI metric fits within the revenue picture and the resulting beat/miss likelihood. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,

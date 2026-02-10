@@ -18554,19 +18554,11 @@
         let availableProfiles = [];
         
         function extractDisplayName(filename) {
-            // Remove .csv extension if present
+            // Derive display name from filename only (no job metadata). Show as stored: no auto-capitalization
+            // so e.g. "FBI" stays "FBI", not "Fbi".
             let name = filename.replace(/\.csv$/i, '');
-            
-            // Remove timestamp pattern (e.g., _11_09_2025_17_26 or _MM_DD_YYYY_HH_MM)
-            // Pattern matches: _DD_MM_YYYY_HH_MM or similar timestamp formats at the end
             name = name.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
-            
-            // Replace underscores with spaces and title case
-            name = name.split('_')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                .join(' ');
-            
-            return name;
+            return name.replace(/_/g, ' ').trim();
         }
         
         function updateProfileSelector() {
@@ -20219,6 +20211,29 @@
             generateEarningsPrediction(data);
         }
         
+        function sanitizeBeatMissAnalysis(text, kpi, relevancePct) {
+            if (!text || typeof text !== 'string') return text;
+            let out = text;
+            const kpiSafe = (kpi || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const pct = relevancePct != null && relevancePct !== undefined ? Number(relevancePct) : null;
+            // Fix wrong "Our metric (Sales Revenue)" or similar: replace with actual KPI name when our metric is mislabeled
+            if (kpiSafe && (out.includes('Our metric (Sales Revenue)') || out.includes('our metric (Sales Revenue)') || out.includes('Our measured growth for Sales Revenue') || out.includes('our KPI metric (Sales Revenue)'))) {
+                out = out.replace(/Our metric \(Sales Revenue\)/gi, 'Our metric (' + kpiSafe + ')');
+                out = out.replace(/our metric \(Sales Revenue\)/g, 'our metric (' + kpiSafe + ')');
+                out = out.replace(/Our measured growth for Sales Revenue/g, 'Our measured growth for ' + kpiSafe);
+                out = out.replace(/our KPI metric \(Sales Revenue\)/g, 'our KPI metric (' + kpiSafe + ')');
+            }
+            // Fix wrong Stock Impact percentage: replace "X% Stock Impact" with actual when it looks like a different number
+            if (pct !== null && !isNaN(pct) && (out.includes('% Stock Impact') || out.includes('Stock Impact:'))) {
+                out = out.replace(/(\d+(?:\.\d+)?)\s*%\s*Stock Impact/gi, (match, num) => {
+                    const n = parseFloat(num);
+                    if (n !== pct && n >= 0 && n <= 100) return pct + '% Stock Impact';
+                    return match;
+                });
+            }
+            return out;
+        }
+        
         async function analyzeBeatMiss(data, stats) {
             const beatMissCard = document.getElementById('beatMissCard');
             const beatMissLoading = document.getElementById('beatMissLoading');
@@ -20307,7 +20322,7 @@
                                         </div>
                                         <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; flex: 1;">
                                             <div style="font-weight: 600; margin-bottom: 0.25rem;">Analysis:</div>
-                                            <div>${result.analysis || 'Analysis unavailable'}</div>
+                                            <div>${sanitizeBeatMissAnalysis(result.analysis || 'Analysis unavailable', data.kpi, data.relevance_percentage)}</div>
                                         </div>
                                     </div>
                                 `;
@@ -25475,7 +25490,8 @@
                     if (job.status === 'cached' || job.status === 'completed') {
                         const option = document.createElement('option');
                         option.value = job.s3_key || job.job_id;
-                        option.textContent = `${capitalizeFirstLetters(job.project_name || '')} (${capitalizeFirstLetters(job.category || 'Uncategorized')})`;
+                        const name = (job.display_name && job.display_name.trim()) ? job.display_name.trim() : (job.project_name || '').replace(/_/g, ' ').trim();
+                        option.textContent = `${name || 'Unknown'} (${capitalizeFirstLetters(job.category || 'Uncategorized')})`;
                         select.appendChild(option);
                     }
                 });
@@ -25801,7 +25817,7 @@
                     const statusTextElements = document.querySelectorAll('#statusText');
                     const statusMessageElements = document.querySelectorAll('#statusMessage');
                     const progressFillElements = document.querySelectorAll('#progressFill');
-                    statusTextElements.forEach(el => el.textContent = (capitalizeFirstLetters(data.project_name || '') || 'Processing...'));
+                    statusTextElements.forEach(el => el.textContent = (data.display_name && data.display_name.trim()) ? data.display_name.trim() : ((data.project_name || '').trim() ? (data.project_name || '').replace(/_/g, ' ').trim() : 'Processing...'));
                     statusMessageElements.forEach(el => { el.textContent = data.message || 'In progress'; el.style.color = ''; });
                     progressFillElements.forEach(el => el.style.width = (data.progress || 0) + '%');
 
@@ -43548,8 +43564,8 @@
                 const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
                 const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-                // Profile Analysis: no CSV download; released rows open in dashboard on click
-                const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
+                // Profile Analysis: no CSV download; released rows open in dashboard on click. Show display name as entered in admin.
+                const displayName = (result.display_name && result.display_name.trim()) ? result.display_name.trim() : (result.project_name || 'Unknown').replace(/_/g, ' ').trim();
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
                 const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
                 const rowStyle = isPending ? 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' : 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;';
@@ -43637,7 +43653,7 @@
                     buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
                 }
                 
-                const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
+                const displayName = (result.display_name && result.display_name.trim()) ? result.display_name.trim() : (result.project_name || 'Unknown').replace(/_/g, ' ').trim();
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
                 const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
                 const rowStyle = isPending ? 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' : 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;';
@@ -43700,7 +43716,7 @@
                 } else {
                     buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
                 }
-                const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
+                const displayName = (result.display_name && result.display_name.trim()) ? result.display_name.trim() : (result.project_name || 'Unknown').replace(/_/g, ' ').trim();
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
                 const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
                 const rowStyle = isPending ? 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' : 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;';
@@ -43798,7 +43814,7 @@
                 } else {
                     buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV (Ticket Sales IQ)">📥</button>`;
                 }
-                const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
+                const displayName = (result.display_name && result.display_name.trim()) ? result.display_name.trim() : (result.project_name || 'Unknown').replace(/_/g, ' ').trim();
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
                 const rowStyle = 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;';
                 return `
@@ -44142,20 +44158,20 @@
         }
 
         function getProfileFullName(profile) {
-            // Prefer admin-edited display name (same as "DISPLAY NAME (SHOWN IN DASHBOARD)" in admin)
-            let name = '';
+            // Prefer admin-edited display name (same as "DISPLAY NAME (SHOWN IN DASHBOARD)" in admin).
+            // Return it exactly as entered — no auto-capitalization (e.g. "FBI" stays "FBI").
             if (profile.display_name && profile.display_name.trim()) {
-                name = profile.display_name.trim();
-            } else if (profile.project_name && profile.project_name.trim()) {
-                name = profile.project_name.replace(/_/g, ' ');
-            } else if (profile.s3_key) {
-                let n = profile.s3_key.replace('.csv', '');
-                n = n.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
-                name = n.replace(/_/g, ' ');
-            } else {
-                return 'Unknown';
+                return profile.display_name.trim();
             }
-            return capitalizeFirstLetters(name);
+            if (profile.project_name && profile.project_name.trim()) {
+                return profile.project_name.replace(/_/g, ' ').trim();
+            }
+            if (profile.s3_key) {
+                let n = profile.s3_key.replace(/\.csv$/i, '');
+                n = n.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
+                return n.replace(/_/g, ' ').trim();
+            }
+            return 'Unknown';
         }
 
         function renderComparisonProfiles(profiles) {
@@ -57550,7 +57566,7 @@
             const textEl = document.getElementById('statusModalText');
             const msgEl = document.getElementById('statusModalMessage');
             const progEl = document.getElementById('statusModalProgress');
-            if (textEl) textEl.textContent = (capitalizeFirstLetters(data.project_name || '') || 'Processing...');
+            if (textEl) textEl.textContent = (data.display_name && data.display_name.trim()) ? data.display_name.trim() : ((data.project_name || '').trim() ? (data.project_name || '').replace(/_/g, ' ').trim() : 'Processing...');
             if (msgEl) msgEl.textContent = data.message || 'In progress';
             if (progEl) progEl.style.width = (data.progress || 0) + '%';
         }
