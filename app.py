@@ -3425,6 +3425,9 @@ def index():
         rankers_iq_options = user.get('rankers_iq_options', []) if user else []
         has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
     
+    # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
+    default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
+    
     # Get user info for credits request
     first_name = user.get('first_name', '') if user else ''
     last_name = user.get('last_name', '') if user else ''
@@ -3450,6 +3453,7 @@ def index():
                            has_rankers_iq_access=has_rankers_iq,
                            rankers_iq_options=rankers_iq_options,
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
+                           default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            first_name=first_name,
                            last_name=last_name,
                            company=company,
