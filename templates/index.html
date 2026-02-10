@@ -15880,6 +15880,27 @@
         let activeSubscriberTabId = null;
         const expandedSubscriberCategories = new Set(); // For hierarchical tree (match Profile IQ)
         
+        // Key Episode/Date Insights: call when displaying subscriber result. Uses "Date that drove" / "Top 3 dates" when tracking by date (no Episode X titles).
+        window.renderSubscriberEpisodesInsights = function(data) {
+            var el = document.getElementById('subscriberEpisodesInsights');
+            if (!el || !data) return;
+            var episodes = (data.episode_attribution || []).slice().sort(function(a, b) { return (parseNumber(b.signups) || 0) - (parseNumber(a.signups) || 0); });
+            if (episodes.length === 0) { el.innerHTML = ''; return; }
+            var top = episodes[0];
+            var topEp = String(top.episode || '').trim();
+            var isDateMode = data.tracking_mode === 'date' || (topEp && /\\d{1,2}\\/\\d{1,2}\\/\\d{2,4}/.test(topEp));
+            var unitLabel = isDateMode ? 'dates' : 'episodes';
+            var sectionTitle = isDateMode ? 'Key Date Insights' : 'Key Episode Insights';
+            var topDriverText = isDateMode ? (topEp ? topEp : 'Date') : ('Episode ' + topEp);
+            var totalSignups = episodes.reduce(function(s, e) { return s + (parseNumber(e.signups) || 0); }, 0);
+            var pct = totalSignups > 0 && top.signups ? ((parseNumber(top.signups) || 0) / totalSignups * 100).toFixed(2) : (top.percentage || 'N/A');
+            var top3Total = episodes.slice(0, 3).reduce(function(s, e) { return s + (parseNumber(e.signups) || 0); }, 0);
+            var top3Pct = totalSignups > 0 ? ((top3Total / totalSignups) * 100).toFixed(2) : '0';
+            var insight1 = '<strong>' + topDriverText + ' drove the most signups</strong> with ' + (typeof formatNumber !== 'undefined' ? formatNumber(top.signups) : (top.signups || 0)) + ' subscribers (' + pct + '% of total).';
+            var insight2 = '<strong>Top 3 ' + unitLabel + ' accounted for ' + top3Pct + '%</strong> of all signups, indicating concentrated performance in key ' + unitLabel + '.';
+            el.innerHTML = '<h4>💡 ' + sectionTitle + '</h4><div class="tab-insights-list"><div class="tab-insight-item"><span class="tab-insight-icon">🎬</span><div class="tab-insight-text">' + insight1 + '</div></div>' + (episodes.length >= 3 ? '<div class="tab-insight-item"><span class="tab-insight-icon">📊</span><div class="tab-insight-text">' + insight2 + '</div></div>' : '') + '</div>';
+        };
+
         // When true, user only has Hedge Fund IQ (no Profile IQ) — default to Hedge Fund IQ landing on load
         window.defaultViewHedgeFundIQ = {{ 'true' if default_view_hedge_fund_iq else 'false' }};
         
