@@ -23028,9 +23028,10 @@
             const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
             
             // Use CSV conversion rate when available, else compute from viewers/signups
-            const conversionPctDisplay = (totalConversionRate && String(totalConversionRate).trim()) 
-                ? (String(totalConversionRate).replace('%', '') + '%') 
-                : (totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) + '%' : '0%');
+            const conversionPctRaw = (totalConversionRate && String(totalConversionRate).trim()) 
+                ? parseFloat(String(totalConversionRate).replace('%', '')) 
+                : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
+            const conversionPctDisplay = (isNaN(conversionPctRaw) ? 0 : Math.round(conversionPctRaw)) + '%';
             
             // Format values based on display mode
             const formatValue = (value, genPop) => {
@@ -23039,13 +23040,31 @@
                 }
                 return formatNumber(value);
             };
-            // Executive Summary always shows projected US (gen_pop) when available
-            const formatExecProjected = (value, genPop) => {
-                if (genPop != null && String(genPop).trim() !== '') {
-                    return formatNumber(genPop);
+            // Executive Summary: whole numbers only; expand K (thousands) and M (millions) without rounding
+            const formatExecSummaryNumber = (value, genPop) => {
+                const raw = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
+                const s = String(raw).trim().toUpperCase();
+                let whole;
+                const matchK = /^([\d,.]+)\s*K\s*$/.exec(s);
+                const matchM = /^([\d,.]+)\s*M\s*$/.exec(s);
+                if (matchK) {
+                    const n = parseNumber(matchK[1]);
+                    whole = n !== null && !isNaN(n) ? Math.floor(n * 1000) : 0;
+                } else if (matchM) {
+                    const n = parseNumber(matchM[1]);
+                    whole = n !== null && !isNaN(n) ? Math.floor(n * 1e6) : 0;
+                } else {
+                    const n = parseNumber(raw);
+                    if (n === null || isNaN(n)) return '0';
+                    if (n > 0 && n < 10000 && n % 1 !== 0) {
+                        whole = Math.floor(n * 1e6);
+                    } else {
+                        whole = Math.floor(n);
+                    }
                 }
-                return formatNumber(value);
+                return whole.toLocaleString(undefined, { maximumFractionDigits: 0 });
             };
+            const formatExecProjected = (value, genPop) => formatExecSummaryNumber(value, genPop);
             
             const formatGenPop = (genPop) => {
                 if (!genPop) return '';
