@@ -4249,9 +4249,10 @@
         
         .interest-category-item .item-name {
             text-align: left;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            min-width: 0;
         }
         
         .interest-category-item .item-stats {
@@ -4524,11 +4525,12 @@
         .behavioral-table {
             display: grid;
             grid-template-columns: 28px minmax(100px, 1fr) 78px 78px 64px;
+            grid-auto-rows: minmax(2rem, auto);
             gap: 0.4rem;
             align-items: start;
             padding: 0 0.15rem 0 0;
             overflow-y: auto;
-            max-height: 500px;
+            max-height: min(500px, 60vh);
             scrollbar-gutter: stable;
         }
         .behavioral-table .behavioral-header-row {
@@ -4610,7 +4612,7 @@
             justify-self: end;
             padding-left: 0.2rem;
             padding-right: 0.1rem;
-            align-self: center;
+            align-self: start;
         }
         .behavioral-table .behavioral-item .behavioral-index {
             padding-right: 0.35rem;
@@ -4666,6 +4668,20 @@
             text-align: right !important;
             padding: 3px 6px;
             border-radius: 4px;
+        }
+
+        /* Behavioral table: row expands for wrapped text; responsive at all viewport sizes */
+        @media (max-width: 900px) {
+            .behavioral-table {
+                grid-template-columns: 24px minmax(80px, 1fr) 64px 64px 52px;
+                max-height: min(400px, 50vh);
+            }
+        }
+        @media (max-width: 600px) {
+            .behavioral-table {
+                grid-template-columns: 22px minmax(60px, 1fr) 56px 56px 48px;
+                font-size: 0.8rem;
+            }
         }
 
         /* AI Panel Styles */
