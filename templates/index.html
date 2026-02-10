@@ -20934,6 +20934,34 @@
             }
             const secActuals = (tickerKey && secActualsCache[tickerKey]) ? secActualsCache[tickerKey] : {};
             
+            // KPI change: different KPI in a date range (from ticker metadata)
+            const kpiChange = currentTickerData && currentTickerData.kpi_change_enabled && currentTickerData.kpi_change_quarter_start && currentTickerData.kpi_change_label
+                ? {
+                    start: currentTickerData.kpi_change_quarter_start.trim(),
+                    end: (currentTickerData.kpi_change_quarter_end || '').trim() || null,
+                    label: currentTickerData.kpi_change_label
+                }
+                : null;
+            function parseQuarter(qStr) {
+                if (!qStr || typeof qStr !== 'string') return null;
+                const parts = qStr.trim().split(/\s+/);
+                const qPart = (parts[0] || '').replace(/^Q/i, '');
+                const year = parseInt(parts[1], 10);
+                const qNum = parseInt(qPart, 10);
+                if (isNaN(year) || isNaN(qNum)) return null;
+                return { year, qNum };
+            }
+            function quarterInKpiChangeRange(qStr) {
+                if (!kpiChange) return false;
+                const q = parseQuarter(qStr);
+                const start = parseQuarter(kpiChange.start);
+                const end = kpiChange.end ? parseQuarter(kpiChange.end) : null;
+                if (!q || !start) return false;
+                const qGeStart = (q.year > start.year) || (q.year === start.year && q.qNum >= start.qNum);
+                const qLeEnd = !end || (q.year < end.year) || (q.year === end.year && q.qNum <= end.qNum);
+                return qGeStart && qLeEnd;
+            }
+            
             let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
             
             // Sort quarters based on mode
@@ -20970,7 +20998,16 @@
                 });
             }
             
+            let insertedKpiDivider = false;
             sortedQuarters.forEach(q => {
+                const inKpiRange = quarterInKpiChangeRange(q);
+                // Insert divider row before the first quarter in the KPI change range
+                if (kpiChange && inKpiRange && !insertedKpiDivider) {
+                    const dividerLabel = (kpiChange.label || 'Different KPI').replace(/</g, '&lt;');
+                    html += `<tr style="border-top: 2px solid var(--accent-cyan); border-bottom: 1px solid var(--border-color); background: var(--bg-input);"><td colspan="7" style="padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600;">KPI Below Denotes: ${dividerLabel}</td></tr>`;
+                    insertedKpiDivider = true;
+                }
+                
                 const data = quarters[q];
                 const netGrowth = data.subs - data.cancels;
                 const startConsumers = data.startConsumers != null ? Number(data.startConsumers) : 0;
@@ -20995,7 +21032,9 @@
                     varianceCell = `<td style="padding: 0.75rem; text-align: right; color: ${varianceColor};">${variancePct >= 0 ? '+' : ''}${variancePct.toFixed(2)}%</td>`;
                 }
                 
-                html += `<tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowth >= 0 ? '#10b981' : '#ef4444'};">${netGrowth.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
+                const rowStyle = inKpiRange ? 'border-bottom: 1px solid var(--border-color); background: rgba(0, 230, 230, 0.08);' : 'border-bottom: 1px solid var(--border-color);';
+                const titleAttr = inKpiRange ? ` title="KPI for this period: ${(kpiChange.label || '').replace(/"/g, '&quot;')}"` : '';
+                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowth >= 0 ? '#10b981' : '#ef4444'};">${netGrowth.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
             });
             
             html += '</tbody></table>';

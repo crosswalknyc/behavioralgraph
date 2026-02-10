@@ -1297,6 +1297,30 @@
                                     <input type="number" id="tickerRelevance" placeholder="0-100" min="0" max="100" step="0.1" style="font-size: 0.85rem;">
                                     <small style="font-size: 0.75rem;">What percentage does this KPI represent of the stock price movement?</small>
                                 </div>
+                                
+                                <!-- Tracked KPI Change (for Historic Performance) -->
+                                <div class="form-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                                    <div class="form-section-title">📊 Tracked KPI Change</div>
+                                    <label class="checkbox-group" style="margin-bottom: 0.75rem;">
+                                        <input type="checkbox" id="tickerKpiChangeEnabled" onchange="document.getElementById('tickerKpiChangeFields').style.display = this.checked ? 'block' : 'none';">
+                                        <span style="font-size: 0.85rem;">Track a period when a different KPI was used (show in Historic Performance)</span>
+                                    </label>
+                                    <div id="tickerKpiChangeFields" style="display: none; margin-top: 0.5rem;">
+                                        <div class="form-group" style="margin-bottom: 0.5rem;">
+                                            <label style="font-size: 0.85rem;">Quarter KPI change started</label>
+                                            <input type="text" id="tickerKpiChangeQuarterStart" placeholder="e.g., Q1 2025" style="font-size: 0.85rem;">
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0.5rem;">
+                                            <label style="font-size: 0.85rem;">Quarter KPI change ended (leave blank if current)</label>
+                                            <input type="text" id="tickerKpiChangeQuarterEnd" placeholder="e.g., Q3 2025 or leave blank" style="font-size: 0.85rem;">
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0.5rem;">
+                                            <label style="font-size: 0.85rem;">KPI for that period</label>
+                                            <input type="text" id="tickerKpiChangeLabel" placeholder="e.g., Total Subscribers" style="font-size: 0.85rem;">
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <button class="btn btn-small btn-success" onclick="saveTickerMetadataFromModal()">💾 Save Metadata</button>
                             </div>
                         </div>
@@ -7620,6 +7644,14 @@
             document.getElementById('tickerKPI').value = ticker.kpi;
             document.getElementById('tickerRelevance').value = ticker.relevance_percentage || '';
             
+            // Tracked KPI change
+            const kpiChangeEnabled = !!ticker.kpi_change_enabled;
+            document.getElementById('tickerKpiChangeEnabled').checked = kpiChangeEnabled;
+            document.getElementById('tickerKpiChangeFields').style.display = kpiChangeEnabled ? 'block' : 'none';
+            document.getElementById('tickerKpiChangeQuarterStart').value = ticker.kpi_change_quarter_start || '';
+            document.getElementById('tickerKpiChangeQuarterEnd').value = ticker.kpi_change_quarter_end || '';
+            document.getElementById('tickerKpiChangeLabel').value = ticker.kpi_change_label || '';
+            
             // Ensure s3_key is available (it should be from the ticker data)
             if (!ticker.s3_key) {
                 console.warn('Ticker missing s3_key:', ticker.ticker);
@@ -7725,6 +7757,7 @@
                     return;
                 }
                 
+                const kpiChangeEnabled = document.getElementById('tickerKpiChangeEnabled').checked;
                 const response = await fetch('/api/hedge-fund-iq/metadata', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -7733,7 +7766,11 @@
                         ticker_symbol: tickerSymbol || null,
                         display_name: displayName,
                         kpi: kpi,
-                        relevance_percentage: relevance_percentage
+                        relevance_percentage: relevance_percentage,
+                        kpi_change_enabled: kpiChangeEnabled,
+                        kpi_change_quarter_start: kpiChangeEnabled ? (document.getElementById('tickerKpiChangeQuarterStart').value || null) : null,
+                        kpi_change_quarter_end: kpiChangeEnabled ? (document.getElementById('tickerKpiChangeQuarterEnd').value || null) : null,
+                        kpi_change_label: kpiChangeEnabled ? (document.getElementById('tickerKpiChangeLabel').value || null) : null
                     })
                 });
                 

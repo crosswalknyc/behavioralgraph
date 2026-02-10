@@ -7154,11 +7154,19 @@ def list_hedge_fund_tickers():
                 ticker['kpi'] = metadata[ticker_key].get('kpi', ticker['kpi'])
                 ticker['parent_ticker'] = metadata[ticker_key].get('parent_ticker', None)
                 ticker['relevance_percentage'] = metadata[ticker_key].get('relevance_percentage', None)
+                ticker['kpi_change_enabled'] = metadata[ticker_key].get('kpi_change_enabled', False)
+                ticker['kpi_change_quarter_start'] = metadata[ticker_key].get('kpi_change_quarter_start')
+                ticker['kpi_change_quarter_end'] = metadata[ticker_key].get('kpi_change_quarter_end')
+                ticker['kpi_change_label'] = metadata[ticker_key].get('kpi_change_label')
                 # Editable ticker symbol (title) override
                 ticker['ticker'] = (metadata[ticker_key].get('ticker_symbol') or original_ticker).strip() or original_ticker
             else:
                 ticker['parent_ticker'] = None
                 ticker['relevance_percentage'] = None
+                ticker['kpi_change_enabled'] = False
+                ticker['kpi_change_quarter_start'] = None
+                ticker['kpi_change_quarter_end'] = None
+                ticker['kpi_change_label'] = None
                 ticker['original_ticker'] = original_ticker
         
         print(f"✅ Found {len(tickers)} tickers")
@@ -7525,6 +7533,10 @@ def get_hedge_fund_ticker_data(s3_key):
             'kpi': kpi,
             'parent_ticker': parent_ticker,
             'relevance_percentage': relevance_percentage,
+            'kpi_change_enabled': ticker_metadata.get('kpi_change_enabled', False),
+            'kpi_change_quarter_start': ticker_metadata.get('kpi_change_quarter_start'),
+            'kpi_change_quarter_end': ticker_metadata.get('kpi_change_quarter_end'),
+            'kpi_change_label': ticker_metadata.get('kpi_change_label'),
             's3_key': s3_key,
             'bucket': HEDGE_FUND_S3_BUCKET,
             'calculated_stats': calculated_stats  # Pre-calculated stats for instant display
@@ -7568,6 +7580,11 @@ def manage_ticker_metadata():
         kpi = data.get('kpi')
         parent_ticker = data.get('parent_ticker')
         relevance_percentage = data.get('relevance_percentage')
+        # Tracked KPI change (for Historic Performance: different KPI in a date range)
+        kpi_change_enabled = data.get('kpi_change_enabled', False)
+        kpi_change_quarter_start = (data.get('kpi_change_quarter_start') or '').strip() or None
+        kpi_change_quarter_end = (data.get('kpi_change_quarter_end') or '').strip() or None
+        kpi_change_label = (data.get('kpi_change_label') or '').strip() or None
         
         if not s3_key:
             return jsonify({'success': False, 'error': 's3_key is required'}), 400
@@ -7585,6 +7602,15 @@ def manage_ticker_metadata():
             metadata[s3_key]['kpi'] = kpi
         if parent_ticker is not None:  # Allow empty string to clear
             metadata[s3_key]['parent_ticker'] = parent_ticker
+        
+        if 'kpi_change_enabled' in data:
+            metadata[s3_key]['kpi_change_enabled'] = bool(kpi_change_enabled)
+        if 'kpi_change_quarter_start' in data:
+            metadata[s3_key]['kpi_change_quarter_start'] = kpi_change_quarter_start
+        if 'kpi_change_quarter_end' in data:
+            metadata[s3_key]['kpi_change_quarter_end'] = kpi_change_quarter_end
+        if 'kpi_change_label' in data:
+            metadata[s3_key]['kpi_change_label'] = kpi_change_label
         
         # Handle relevance_percentage - always process if key exists in request
         if 'relevance_percentage' in data:  # Check if key exists in request
