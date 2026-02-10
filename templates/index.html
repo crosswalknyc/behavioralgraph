@@ -29812,7 +29812,7 @@
             
             // Build top over-indexers from allItems for the API
             const topOverIndexers = allItems
-                .filter(i => i.pct < 99.5)
+                .filter(i => (i.pct || 0) >= 50 && (i.pct || 0) < 99.5 && (i.index || 0) >= 120)
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 15)
                 .map(i => ({
@@ -38372,7 +38372,7 @@
             
             // Calculate key metrics
             const sortedByIndex = [...allItems].sort((a, b) => b.index - a.index);
-            const topOverIndexers = sortedByIndex.filter(i => i.index > 100 && (i.pct || 0) < 99.99).slice(0, 25);
+            const topOverIndexers = sortedByIndex.filter(i => i.index >= 120 && (i.pct || 0) >= 50 && (i.pct || 0) < 99.99).slice(0, 25);
             const topUnderIndexers = sortedByIndex.filter(i => i.index < 100 && (i.pct || 0) < 99.99).sort((a, b) => a.index - b.index).slice(0, 25);
             const avgOverIndex = topOverIndexers.length > 0 ? Math.round(topOverIndexers.reduce((s,i) => s + i.index, 0) / topOverIndexers.length) : 0;
             const uniquenessScore = Math.min(100, Math.round((topOverIndexers.filter(i => i.index > 150).length / Math.max(1, topOverIndexers.length)) * 100));
@@ -38478,7 +38478,7 @@
             
             // Interest Highlights - top over-indexing interests/behaviors
             const interestHighlightsData = allItems
-                .filter(i => i.index >= 120 && i.pct < 99.99 && i.pct >= 30) // Over-indexing items, exclude 100% (entire sample), require profile % >= 30%
+                .filter(i => i.index >= 120 && i.pct < 99.99 && i.pct >= 50) // Over-indexing items, exclude 100% (entire sample), require profile % >= 50%, high index (120+)
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 20) // Keep top 20 for sorting flexibility
                 .map(item => ({
@@ -38497,7 +38497,7 @@
             
             // Top differentiators - group by SMART category based on item name, show top 5 items per category
             const itemsBySmartCategory = {};
-            allItems.filter(i => i.index > 120 && i.pct >= 30 && i.pct < 99.99).forEach(item => { // Require profile % >= 30%; exclude 100% (entire sample)
+            allItems.filter(i => i.index >= 120 && i.pct >= 50 && i.pct < 99.99).forEach(item => { // Require profile % >= 50%, high index (120+); exclude 100% (entire sample)
                 // Use smart categorization based on item name instead of raw data category
                 const smartCategory = categorizeInterest(item.name);
                 if (!itemsBySmartCategory[smartCategory]) {
