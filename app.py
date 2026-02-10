@@ -7226,13 +7226,18 @@ def delete_hedge_fund_ticker():
 @app.route('/api/hedge-fund-iq/data/<path:s3_key>')
 @requires_auth
 def get_hedge_fund_ticker_data(s3_key):
-    """Get ticker CSV data and calculate day-over-day metrics. Cached daily for all users."""
+    """Get ticker CSV data and calculate day-over-day metrics. Cached daily for all users.
+    Use ?refresh=1 to bypass cache and recalculate projection from latest S3 data."""
     print(f"📥 get_hedge_fund_ticker_data called for: {s3_key}")
     
-    # Check daily cache first (shared across all users)
-    cached = _load_hedge_fund_daily_cache(s3_key)
-    if cached is not None:
-        return jsonify(cached)
+    # Check daily cache first unless refresh requested (so Refresh button gets newest quarterly data)
+    skip_cache = request.args.get('refresh', '').strip() in ('1', 'true', 'yes')
+    if not skip_cache:
+        cached = _load_hedge_fund_daily_cache(s3_key)
+        if cached is not None:
+            return jsonify(cached)
+    elif skip_cache:
+        print(f"🔄 Refresh requested: bypassing cache for {s3_key}")
     
     if not hedge_fund_s3_client:
         print("❌ Hedge Fund S3 client not configured")
@@ -7358,15 +7363,13 @@ def get_hedge_fund_ticker_data(s3_key):
                 # QTD Net Growth % = actual growth so far in the quarter
                 net_growth_pct = (quarter_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
                 
-                # Calculate projected net growth rate using arithmetic (not compounding)
-                # Formula: average daily net growth rate * total days in quarter
+                # Projected net growth rate formula (linear extrapolation, not compounding):
+                # 1. Average daily net growth = (quarter_subs - quarter_cancels) / days_of_data_so_far
+                # 2. Projected net growth for full quarter = avg_daily_net_growth * total_days_in_quarter
+                # 3. Projected % = (projected_net_growth / quarter_start_consumers) * 100
                 days_in_quarter = len(current_quarter_data)
                 avg_daily_net_growth = quarter_net_growth / days_in_quarter if days_in_quarter > 0 else 0
-                
-                # Determine total days in quarter (Q4 = 92, others = 90)
                 total_days_in_quarter = 92 if 'Q4' in latest_quarter else 90
-                
-                # Projected net growth = average daily growth * total days (arithmetic, not compounding)
                 projected_net_growth = avg_daily_net_growth * total_days_in_quarter
                 projected_net_growth_pct = (projected_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
                 

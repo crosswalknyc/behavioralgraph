@@ -20149,7 +20149,7 @@
                 if (labelElement) {
                     labelElement.textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
                 }
-                projectedCard.setAttribute('data-tooltip', `Projected net growth rate for ${latestQuarter}`);
+                projectedCard.setAttribute('data-tooltip', `Projected net growth rate for ${latestQuarter}. Formula: (QTD net growth ÷ days of data) × total days in quarter, as % of quarter-start consumers. Linear extrapolation from quarter-to-date performance. Click Refresh to recalculate from the latest data.`);
             }
             
             // Set tooltips for QTD metric cards
@@ -21436,7 +21436,8 @@
             if (!tab) return;
             
             try {
-                const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(tab.s3Key)}`, { credentials: 'same-origin' });
+                // Bypass daily cache so projection and stats use newest quarterly data from S3
+                const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(tab.s3Key)}?refresh=1`, { credentials: 'same-origin' });
                 if (response.status === 401) {
                     window.location.href = '/login';
                     return;
