@@ -681,11 +681,12 @@ def run_query(conn, p):
     # Step 3: Create clean sample of NEW first time viewers
     print("✨ Step 3: Creating clean sample of new first time viewers...")
     if is_new_show:
-        # For new shows, all watchers are new first time viewers
+        # New show / one-time special: pre-existing = 0, clean sample = 0, clean conversion rate = 0%
         cur.execute("""
             CREATE OR REPLACE TEMP TABLE TEMP_CLEAN_SHOW_WATCHERS AS
             SELECT UID, FIRST_SHOW_WATCH, SHOW_WATCH_COUNT
             FROM TEMP_SHOW_WATCHERS
+            WHERE 1=0
         """)
     else:
         cur.execute("""
@@ -1410,6 +1411,9 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     avg_days = float(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) if not pd.isna(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) else 0
     clean_conversion = float(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) else 0
     total_show_conversion = float(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) else 0
+    if p.get('is_new_show', False):
+        clean_sample = 0
+        clean_conversion = 0.0
 
     # Get tracking mode and create lookup for display labels and episode dates (used for episode/date attribution)
     # Landman format: Category, Episode Date, Count, Count Label, Secondary Count, Secondary Label, Tertiary Count, Tertiary Label, Percentage, Gen Pop Projection
