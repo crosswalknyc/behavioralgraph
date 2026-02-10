@@ -23031,7 +23031,7 @@
             const conversionPctRaw = (totalConversionRate && String(totalConversionRate).trim()) 
                 ? parseFloat(String(totalConversionRate).replace('%', '')) 
                 : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
-            const conversionPctDisplay = (isNaN(conversionPctRaw) ? 0 : Math.round(conversionPctRaw)) + '%';
+            const conversionPctDisplay = (isNaN(conversionPctRaw) ? '0.00' : Number(conversionPctRaw).toFixed(2)) + '%';
             
             // Format values based on display mode
             const formatValue = (value, genPop) => {
