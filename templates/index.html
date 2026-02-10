@@ -23050,10 +23050,24 @@
                 : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
             const conversionPctDisplay = (isNaN(conversionPctRaw) ? '0.00' : Number(conversionPctRaw).toFixed(2)) + '%';
             
-            // Format values: always use US projected gen pop when available (not raw)
+            // Format values: always use US projected gen pop when available (not raw). Expand K/M to full whole numbers (e.g. 86.208K -> 86,208).
             const formatValue = (value, genPop) => {
-                const use = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
-                return formatNumber(use);
+                const raw = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
+                const s = String(raw).trim().toUpperCase();
+                let whole;
+                const matchK = /^([\d,.]+)\s*K\s*$/.exec(s);
+                const matchM = /^([\d,.]+)\s*M\s*$/.exec(s);
+                if (matchK) {
+                    const n = parseNumber(matchK[1]);
+                    whole = n !== null && !isNaN(n) ? Math.round(n * 1000) : 0;
+                } else if (matchM) {
+                    const n = parseNumber(matchM[1]);
+                    whole = n !== null && !isNaN(n) ? Math.round(n * 1e6) : 0;
+                } else {
+                    const n = typeof raw === 'number' ? raw : parseNumber(raw);
+                    whole = (n !== null && !isNaN(n)) ? Math.round(n) : 0;
+                }
+                return whole.toLocaleString(undefined, { maximumFractionDigits: 0 });
             };
             // Executive Summary: whole numbers only; expand K (thousands) and M (millions) without rounding
             const formatExecSummaryNumber = (value, genPop) => {
@@ -24687,10 +24701,24 @@
                 ` : '';
             }
             
-            // Format values: always use US projected gen pop when available (not raw)
+            // Format values: always use US projected gen pop when available (not raw). Expand K/M to full whole numbers (e.g. 86.208K -> 86,208).
             const formatValue = (value, genPop) => {
-                const use = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
-                return formatNumber(use);
+                const raw = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
+                const s = String(raw).trim().toUpperCase();
+                let whole;
+                const matchK = /^([\d,.]+)\s*K\s*$/.exec(s);
+                const matchM = /^([\d,.]+)\s*M\s*$/.exec(s);
+                if (matchK) {
+                    const n = parseNumber(matchK[1]);
+                    whole = n !== null && !isNaN(n) ? Math.round(n * 1000) : 0;
+                } else if (matchM) {
+                    const n = parseNumber(matchM[1]);
+                    whole = n !== null && !isNaN(n) ? Math.round(n * 1e6) : 0;
+                } else {
+                    const n = typeof raw === 'number' ? raw : parseNumber(raw);
+                    whole = (n !== null && !isNaN(n)) ? Math.round(n) : 0;
+                }
+                return whole.toLocaleString(undefined, { maximumFractionDigits: 0 });
             };
             
             // Get the value to display (actual or gen pop projection)
