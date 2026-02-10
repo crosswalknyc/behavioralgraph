@@ -5313,6 +5313,20 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .metrics-row .metric-card {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .metrics-row .metric-label.metric-label-top {
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+            order: -1;
+        }
+        .metrics-row .metric-content {
+            flex-direction: row;
+            align-items: center;
+            gap: 0.5rem;
+        }
         .metric-card.has-tooltip:hover {
             border-color: var(--accent);
             box-shadow: 0 4px 12px rgba(200, 230, 0, 0.2);
@@ -14202,24 +14216,24 @@
                             <!-- Key Metrics Row - FIRST -->
                             <div class="metrics-row">
                                 <div class="metric-card has-tooltip" data-tooltip="Crosswalk Respondents: The number of matched respondents in this audience profile. Larger samples (10,000+) provide higher statistical confidence. Calculated from unique user IDs that match the search criteria.">
-                                    <div class="metric-icon">📊</div>
+                                    <span class="metric-label metric-label-top">Crosswalk Respondents</span>
                                     <div class="metric-content">
+                                        <div class="metric-icon">📊</div>
                                         <span class="metric-value" id="insightsSampleSize">--</span>
-                                        <span class="metric-label">Crosswalk Respondents</span>
                                     </div>
                                 </div>
                                 <div class="metric-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented by this audience. Calculated by applying panel weighting factors to the sample size based on census data.">
-                                    <div class="metric-icon">🇺🇸</div>
+                                    <span class="metric-label metric-label-top">US Projection</span>
                                     <div class="metric-content">
+                                        <div class="metric-icon">🇺🇸</div>
                                         <span class="metric-value" id="insightsProjectedUS">--</span>
-                                        <span class="metric-label">US Projection</span>
                                     </div>
                                 </div>
                                 <div class="metric-card has-tooltip" data-tooltip="Total Data Points: The complete count of behavioral items tracked for this audience including brands, media, content, interests, and more.">
-                                    <div class="metric-icon">📋</div>
+                                    <span class="metric-label metric-label-top">Total Data Points</span>
                                     <div class="metric-content">
+                                        <div class="metric-icon">📋</div>
                                         <span class="metric-value" id="totalDataPoints">--</span>
-                                        <span class="metric-label">Total Data Points</span>
                                     </div>
                                 </div>
                             </div>
