@@ -14257,13 +14257,6 @@
                                         <span class="metric-label">US Projection</span>
                                     </div>
                                 </div>
-                                <div class="metric-card has-tooltip" data-tooltip="Average Over-Index: The mean index value of all items where this audience over-indexes vs. general population. Index of 100 = same as Gen Pop. Values above 100 indicate higher affinity. Calculated as: (Audience % ÷ Gen Pop %) × 100.">
-                                    <div class="metric-icon">📈</div>
-                                    <div class="metric-content">
-                                        <span class="metric-value" id="avgOverIndex">--</span>
-                                        <span class="metric-label">Avg Over-Index</span>
-                                    </div>
-                                </div>
                                 <div class="metric-card has-tooltip" data-tooltip="Total Data Points: The complete count of behavioral items tracked for this audience including brands, media, content, interests, and more.">
                                     <div class="metric-icon">📋</div>
                                     <div class="metric-content">
@@ -38471,7 +38464,6 @@
             // Metrics row
             document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
             document.getElementById('insightsProjectedUS').textContent = formatNumber(data.projectedUS || 0);
-            document.getElementById('avgOverIndex').textContent = avgOverIndex;
             document.getElementById('totalDataPoints').textContent = allItems.length.toLocaleString();
             
             // Demographic highlights - top over/under indexing demographics
