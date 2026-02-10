@@ -11749,17 +11749,17 @@
                     {% endif %}
                     {% if 'talent_theater' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
-                        🎟️ Ticket Sales IQ
+                        🎟️ Ticket Sales IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
                     </button>
                     {% endif %}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('svod-acquisition')" id="customAnalysisTabSVODAcquisition">
-                        📺 SVOD Acquisition IQ
+                        📺 SVOD Acquisition IQ <span style="font-size: 0.7em; opacity: 0.9;">(7 credits)</span>
                     </button>
                     {% endif %}
                     {% if 'campaign' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('campaign-roi')" id="customAnalysisTabCampaignROI">
-                        💰 Campaign ROI IQ
+                        💰 Campaign ROI IQ <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
                     </button>
                     {% endif %}
                     {% if 'cross_show' in analysis_iq_modules or role == 'super_admin' %}
@@ -12280,6 +12280,7 @@
                     <div class="main-grid">
                         <div class="card">
                             <h2>📺 SVOD Acquisition IQ</h2>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">7 Credits Per Analysis</div>
                             <p class="section-description">Track show-to-platform attribution with episode tracking</p>
                             
                             <form id="customSVODAcquisitionForm">
@@ -12481,6 +12482,7 @@
                 <div id="customAnalysisTabContentCampaignROI" class="custom-analysis-tab-content">
                     <div class="card">
                         <h2>💰 Campaign ROI IQ</h2>
+                        <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Analysis</div>
                         <p class="section-description">Track campaign attribution and ROI metrics</p>
                         
                         <form id="customCampaignROIForm">
