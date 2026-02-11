@@ -30208,7 +30208,7 @@
         // Match only when keyword is a standalone word (e.g. "art" in "arts & crafts", NOT "art" in "auto parts")
         function hasStandaloneWord(str, ...words) {
             for (const w of words) {
-                const escaped = w.replace(/[.*+?^${}()|[\]\]/g, '\$&');
+                const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 if (new RegExp('\b' + escaped + '[s]?\b', 'i').test(str)) return true;
             }
             return false;
