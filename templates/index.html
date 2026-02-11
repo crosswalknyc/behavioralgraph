@@ -11399,7 +11399,7 @@
                     <button class="view-btn {% if not default_view_hedge_fund_iq %}active{% endif %} {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
                     <button class="view-btn {% if not has_rankers_iq_access %}disabled{% endif %}" id="rankerIQTab" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</button>
-                    <button class="view-btn {% if not has_ticket_sales_iq_access %}disabled{% endif %}" id="ticketSalesIQTab" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎟️ Ticket Sales</button>
+                    <button class="view-btn {% if not has_ticket_sales_iq_access %}disabled{% endif %}" id="ticketSalesIQTab" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎟️ Impact</button>
                     <button class="view-btn {% if default_view_hedge_fund_iq %}active{% endif %} {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
@@ -11752,7 +11752,7 @@
                     {% endif %}
                     {% if 'talent_theater' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
-                        🎟️ Ticket Sales IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                        🎟️ Impact IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
                     </button>
                     {% endif %}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
@@ -12167,11 +12167,11 @@
                     </div>
                 </div>
 
-                <!-- Ticket Sales IQ Tab Content -->
+                <!-- Impact IQ Tab Content -->
                 <div id="customAnalysisTabContentTalentTheater" class="custom-analysis-tab-content">
                     <div class="main-grid">
                     <div class="card">
-                        <h2>🎟️ Ticket Sales IQ</h2>
+                        <h2>🎟️ Impact IQ</h2>
                         <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
                         <p class="section-description" style="margin-bottom: 2rem;">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
@@ -12230,7 +12230,7 @@
                         </div>
                     </div>
                     <div class="card">
-                        <h2>🎟️ Ticket Sales IQ</h2>
+                        <h2>🎟️ Impact IQ</h2>
                         <div id="ticketSalesCurrentJob" style="display: none;">
                             <div class="status-panel">
                                 <div id="ticketSalesStatusRunning">
@@ -15125,7 +15125,7 @@
             <div class="dashboard-layout">
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
-                        <h3>🎫 Ticket Sales IQ</h3>
+                        <h3>🎫 Impact IQ</h3>
                         <p style="font-style: italic; font-size: 0.8rem; color: var(--text-secondary); margin: 0.5rem 0 0.75rem 0; line-height: 1.4;">What percent of digital ticket sales came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent prior to purchasing tickets during your specified window.</p>
                         <input type="text" id="ticketSalesSearchInput" class="sidebar-search" placeholder="🔍 Search..." onkeyup="filterTicketSalesProfiles()">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
@@ -15763,7 +15763,7 @@
             <div class="dashboard-layout">
                 <div class="dashboard-tab-content" style="padding: 2rem;">
                     <div class="card">
-                        <h2>🎟️ Ticket Sales IQ</h2>
+                        <h2>🎟️ Impact IQ</h2>
                         <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
                         <p class="section-description" style="margin-bottom: 2rem;">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
@@ -17072,7 +17072,7 @@
                 const data = await response.json();
                 if (response.ok) {
                     showAnalysisStatusModal();
-                    document.getElementById('statusModalText').textContent = 'Ticket Sales IQ';
+                    document.getElementById('statusModalText').textContent = 'Impact IQ';
                     pollCustomTalentTheaterJobStatus(data.job_id);
                 } else {
                     alert('Error: ' + (data.error || 'Failed to submit job'));
@@ -17457,7 +17457,7 @@
                     const data = await response.json();
                     
                     updateAnalysisStatusModal({
-                        project_name: data.project_name || 'Ticket Sales IQ',
+                        project_name: data.project_name || 'Impact IQ',
                         message: data.message || 'Processing...',
                         progress: data.progress || 0
                     });
@@ -21921,7 +21921,7 @@
                 }
             }
             
-            // Ticket Sales by Outlet: build platform data
+            // Impact by Outlet: build platform data
             const platformSets = [
                 { talent: talentName || 'Primary Talent', rows: d.talent_by_platform || [] }
             ];
@@ -22060,7 +22060,7 @@
                 return '<tr><td>' + esc(d.getDisplayName(plat)) + '</td>' + cells.join('') + '</tr>';
             }).join('');
             const section = document.getElementById('ticketSalesByOutletSection');
-            if (section) section.innerHTML = '<h3 style="margin: 0 0 1rem 0;">Ticket Sales by Outlet</h3><p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Gen Pop projections by platform for each talent</p><div style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>';
+            if (section) section.innerHTML = '<h3 style="margin: 0 0 1rem 0;">Impact by Outlet</h3><p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Gen Pop projections by platform for each talent</p><div style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>';
             
             const outletChart = document.getElementById('ticketSalesOutletChart');
             if (outletChart && typeof Chart !== 'undefined' && ps.length > 0 && sorted.length > 0) {
@@ -22080,7 +22080,7 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { title: { display: true, text: 'Ticket Sales by Outlet (by Talent)', color: '#e2e8f0' }, legend: { labels: { color: '#e2e8f0' } } },
+                        plugins: { title: { display: true, text: 'Impact by Outlet (by Talent)', color: '#e2e8f0' }, legend: { labels: { color: '#e2e8f0' } } },
                         scales: { y: { beginAtZero: true, stacked: false, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } }, x: { ticks: { color: '#94a3b8', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.1)' } } }
                     }
                 });
@@ -43885,7 +43885,7 @@
             container.innerHTML = html;
         }
         
-        // Ticket Sales IQ Results Library (filtered from my-results by source_type)
+        // Impact IQ Results Library (filtered from my-results by source_type)
         let ticketSalesResults = [];
         
         async function loadTicketSalesResults() {
@@ -43914,7 +43914,7 @@
                 }
                 filterTicketSalesResults();
             } catch (err) {
-                console.error('Failed to load Ticket Sales results:', err);
+                console.error('Failed to load Impact results:', err);
                 if (container) {
                     container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Unable to load results.</div>';
                 }
@@ -43944,7 +43944,7 @@
             if (!container) return;
             if (headerEl) headerEl.style.display = 'none';
             if (!results || results.length === 0) {
-                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No Ticket Sales IQ results yet. Run an analysis to get started.</div>';
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No Impact IQ results yet. Run an analysis to get started.</div>';
                 return;
             }
             if (headerEl) headerEl.style.display = 'flex';
@@ -43959,9 +43959,9 @@
                 const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 let buttons = '';
                 if (isPending) {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${purgatoryIdEsc}')" title="Download CSV (Ticket Sales IQ)">📥</button>`;
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${purgatoryIdEsc}')" title="Download CSV (Impact IQ)">📥</button>`;
                 } else {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV (Ticket Sales IQ)">📥</button>`;
+                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV (Impact IQ)">📥</button>`;
                 }
                 const displayName = (result.display_name && result.display_name.trim()) ? result.display_name.trim() : (result.project_name || 'Unknown').replace(/_/g, ' ').trim();
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
@@ -57755,7 +57755,7 @@
             
             const typeLabels = {
                 'svod_acquisition': '📺 SVOD Acquisition IQ',
-                'talent_theater': '🎟️ Ticket Sales IQ',
+                'talent_theater': '🎟️ Impact IQ',
                 'profile_analysis': '🎯 Profile Analysis'
             };
             document.getElementById('analysisCompleteType').textContent = typeLabels[analysisType] || '🎯 Profile Analysis';
