@@ -31135,7 +31135,7 @@
                 // Format slice option display names (preserve slashes)
                 const formatSliceOption = (opt) => {
                     if (opt === 'all') return 'Show All';
-                    const acronyms = ['nfl', 'nba', 'mlb', 'mls'];
+                    const acronyms = ['nfl', 'nba', 'mlb', 'mls', 'cpg'];
                     if (acronyms.includes(opt.toLowerCase())) return opt.toUpperCase();
                     // Split by slash, capitalize each part, rejoin with slash
                     return opt.split('/').map(part => 
