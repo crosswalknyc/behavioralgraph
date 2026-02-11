@@ -24012,6 +24012,27 @@
                 const leadingNum = s.match(/^(\d+)/);
                 return leadingNum ? parseInt(leadingNum[1], 10) : 999;
             }
+            // Parse start date from metadata date_range (e.g. "2024-05-05 - 2024-06-05" or "2024-05-05 to 2024-06-05")
+            let premiereDate = null;
+            const dateRangeStr = (data.metadata?.date_range || '').trim();
+            if (dateRangeStr) {
+                const match = dateRangeStr.match(/^(\d{4}-\d{2}-\d{2})/);
+                if (match) {
+                    premiereDate = new Date(match[1]);
+                    if (!isNaN(premiereDate.getTime())) premiereDate = premiereDate;
+                    else premiereDate = null;
+                }
+            }
+            function timingToDateLabel(t) {
+                if (!premiereDate) return t.timing || '';
+                const days = getDaysFromTiming(t);
+                if (days === 999) return t.timing || '';
+                const d = new Date(premiereDate);
+                d.setDate(d.getDate() + days);
+                const mo = d.getMonth() + 1;
+                const day = d.getDate();
+                return `${mo}/${day}`;
+            }
             let timingData = data.signup_timing || [];
             if (timingData.length === 0 && data.episode_signup_timing && typeof data.episode_signup_timing === 'object') {
                 const aggregated = {};
@@ -24147,7 +24168,7 @@
                     chartContainer.innerHTML = '';
                     chartContainer.appendChild(ctx);
                     
-                    const labels = timingData.map(t => t.timing);
+                    const labels = timingData.map(t => timingToDateLabel(t));
                     const signups = timingData.map(t => parseNumber(t.signups) || 0);
                     
                     charts.subscriberSignupTiming = new Chart(ctx, {
@@ -24205,7 +24226,7 @@
                     timelineContainer.innerHTML = '';
                     timelineContainer.appendChild(ctx);
                     
-                    const labels = timingData.map(t => `Day ${t.timing}`);
+                    const labels = timingData.map(t => timingToDateLabel(t));
                     const signups = timingData.map(t => parseNumber(t.signups) || 0);
                     
                     charts.subscriberSignupTimeline = new Chart(ctx, {
@@ -24270,7 +24291,7 @@
                     percentileContainer.innerHTML = '';
                     percentileContainer.appendChild(ctx);
                     
-                    const labels = timingData.map(t => `Day ${t.timing}`);
+                    const labels = timingData.map(t => timingToDateLabel(t));
                     
                     charts.subscriberPercentile = new Chart(ctx, {
                         type: 'line',
