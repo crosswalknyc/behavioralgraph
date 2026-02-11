@@ -6750,6 +6750,9 @@ def get_subscriber_iq_data(s3_key):
         print(f"   Data structure check - key_metrics type: {type(parsed.get('key_metrics'))}")
         print(f"   Data structure check - key_metrics content: {parsed.get('key_metrics')}")
         
+        # Exclude Episode-Level Signup Timing section from dashboard (removed per request)
+        parsed.pop('episode_signup_timing', None)
+        
         response_data = {
             'success': True,
             'data': parsed,
