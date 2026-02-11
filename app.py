@@ -6784,13 +6784,7 @@ def get_subscriber_iq_data(s3_key):
                         pct = (float(users_val) / total_users) * 100
                         t['percentage'] = f'{pct:.2f}%'
 
-        # Exclude competitive platforms (KEY PLATFORM INSIGHTS + Other Platforms They Use) from dashboard
-        parsed.pop('competitive_platforms', None)
-        
-        # Exclude Engagement After Signup section (post_signup_touchpoints) from dashboard
-        parsed.pop('post_signup_touchpoints', None)
-        
-        # Exclude Episode-Level Signup Timing section from dashboard (removed per request)
+        # Episode-Level Signup Timing section removed from dashboard (but data still available)
         parsed.pop('episode_signup_timing', None)
         
         # Uppercase platform name in metadata for display
