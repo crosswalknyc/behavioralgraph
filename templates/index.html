@@ -22458,7 +22458,7 @@
                 { key: 'audienceReach', label: 'Audience Reach', higherBetter: true, format: (v) => formatNumber(v) },
                 { key: 'conversionRate', label: 'Conversion Rate (%)', higherBetter: true, format: (v) => (v != null ? v.toFixed(2) + '%' : '—') },
                 { key: 'dormantReactive', label: 'Dormant to Reactive', higherBetter: true, format: (v) => formatNumber(v) },
-                { key: 'avgDaysToSignup', label: 'Avg Days to Signup', higherBetter: false, format: (v) => (v != null ? v : 'N/A') },
+                { key: 'avgDaysToSignup', label: 'Avg Days to Signup', higherBetter: false, format: (v) => (v != null ? Math.round(v) : 'N/A') },
                 { key: 'performanceScore', label: 'Performance Score (0–100)', higherBetter: true, format: (v) => String(v) }
             ];
             
@@ -22488,7 +22488,7 @@
                         const v = row.key === 'avgDaysToSignup' ? (t.avgDaysToSignup != null ? t.avgDaysToSignup : null) : (numericValues[i] || 0);
                         if (v != null && bestVal != null && typeof v === 'number' && typeof bestVal === 'number') {
                             const diff = row.higherBetter ? bestVal - v : (row.key === 'avgDaysToSignup' ? v - bestVal : 0);
-                            if (diff > 0) gapParts.push(`${(names[i] || '').replace(/</g, '&lt;')} by ${row.key === 'avgDaysToSignup' ? diff.toFixed(1) + ' days' : formatNumber(diff)}`);
+                            if (diff > 0) gapParts.push(`${(names[i] || '').replace(/</g, '&lt;')} by ${row.key === 'avgDaysToSignup' ? Math.round(diff) + ' days' : formatNumber(diff)}`);
                         }
                     });
                 }
@@ -23102,7 +23102,7 @@
                                 <span class="value-icon">⚡</span>
                                 <span class="value-label">Speed to Conversion</span>
                             </div>
-                            <div class="value-metric-value">${avgDaysToSignup !== 'N/A' ? avgDaysToSignup : 'N/A'}</div>
+                            <div class="value-metric-value">${avgDaysToSignup !== 'N/A' ? Math.round(parseFloat(avgDaysToSignup)) : 'N/A'}</div>
                             <div class="value-metric-desc">Average days to signup</div>
                             <div class="value-indicator ${isFastConversion ? 'strong' : 'moderate'} has-tooltip" data-tooltip="${isFastConversion ? 'Immediate Impact: Average signup time under 7 days indicates urgent platform value and fast conversion' : 'Sustained Interest: Average signup time 7+ days shows viewers take time to evaluate before subscribing'}">
                                 ${isFastConversion ? 'Immediate Impact' : 'Sustained Interest'}
@@ -23897,7 +23897,7 @@
                 metricsContainer.innerHTML = `
                     <div class="timing-metric-card has-tooltip" data-tooltip="Average Days to Signup: Mean number of days between when the show became available and when users signed up for the platform. Lower numbers indicate faster conversion and immediate platform value.">
                         <div class="timing-metric-label">Average Days to Signup</div>
-                        <div class="timing-metric-value">${avgDaysToSignup}</div>
+                        <div class="timing-metric-value">${avgDaysToSignup !== 'N/A' ? Math.round(parseFloat(avgDaysToSignup)) : 'N/A'}</div>
                         <div class="timing-metric-desc">Mean conversion time</div>
                     </div>
                     <div class="timing-metric-card has-tooltip" data-tooltip="Early Signups (0-7 days): Percentage and count of subscribers who signed up within the first week after the show became available. High percentages indicate strong premiere impact and urgency-driven acquisition.">
@@ -27666,16 +27666,19 @@
                 });
             }
             
-            document.getElementById('demoProfileSummary').innerHTML = summaryItems.length > 0
-                ? summaryItems.map(i => `
-                    <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
-                        <span style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;"><span class="icon">${i.icon}</span>${i.text}</span>
-                        <span class="diff-col-pct" style="text-align: left; font-size: 0.85rem;">${i.profilePct}</span>
-                        <span class="genpop-col diff-col-gp" style="text-align: left; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
-                        <span class="index-col value ${i.valueClass}" style="text-align: left;">${i.value}</span>
-                    </div>
-                `).join('')
-                : '<p style="color: var(--text-secondary);">No data available</p>';
+            var profileSummaryEl = document.getElementById('demoProfileSummary');
+            if (profileSummaryEl) {
+                profileSummaryEl.innerHTML = summaryItems.length > 0
+                    ? summaryItems.map(i => `
+                        <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
+                            <span style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;"><span class="icon">${i.icon}</span>${i.text}</span>
+                            <span class="diff-col-pct" style="text-align: left; font-size: 0.85rem;">${i.profilePct}</span>
+                            <span class="genpop-col diff-col-gp" style="text-align: left; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
+                            <span class="index-col value ${i.valueClass}" style="text-align: left;">${i.value}</span>
+                        </div>
+                    `).join('')
+                    : '<p style="color: var(--text-secondary);">No data available</p>';
+            }
             
             // === KEY DIFFERENTIATORS ===
             const differentiators = [];
