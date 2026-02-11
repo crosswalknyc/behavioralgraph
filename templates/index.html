@@ -14892,6 +14892,7 @@
                                 <h3>🔢 View Numbers</h3>
                                 <p class="section-description" style="margin-bottom: 1.5rem;">When people signed up for the platform, was this show their 1st, 2nd, 3rd, 4th, or 5th view? These numbers show how many users watched this show at each position in their viewing sequence after signup.</p>
                                 <div id="subscriberViewNumbers" class="view-numbers-grid"></div>
+                                <div id="subscriberViewNumbersChart" class="chart-container" style="max-width: 350px; height: 250px; margin: 1.5rem auto 0;"></div>
                             </div>
                         </div>
 
@@ -24154,6 +24155,71 @@
                     </div>
                 `;
             }).join('');
+            
+            // Render pie chart for view attribution (excluding Total)
+            const chartContainer = document.getElementById('subscriberViewNumbersChart');
+            if (chartContainer) {
+                const chartData = sorted.filter(t => t.touchpoint !== 'Total');
+                if (chartData.length > 0) {
+                    if (charts.subscriberViewNumbers) {
+                        charts.subscriberViewNumbers.destroy();
+                    }
+                    const ctx = document.createElement('canvas');
+                    chartContainer.innerHTML = '';
+                    chartContainer.appendChild(ctx);
+                    
+                    const chartLabels = chartData.map(t => labels[t.touchpoint] || t.touchpoint);
+                    const chartValues = chartData.map(t => parseNumber(t.users) || 0);
+                    
+                    charts.subscriberViewNumbers = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: chartLabels,
+                            datasets: [{
+                                data: chartValues,
+                                backgroundColor: [
+                                    'rgba(74, 222, 128, 0.8)',
+                                    'rgba(59, 130, 246, 0.8)',
+                                    'rgba(168, 85, 247, 0.8)',
+                                    'rgba(251, 146, 60, 0.8)',
+                                    'rgba(236, 72, 153, 0.8)'
+                                ],
+                                borderWidth: 1,
+                                borderColor: 'rgba(255,255,255,0.2)'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    position: 'bottom',
+                                    labels: {
+                                        color: '#e6f1ff',
+                                        font: { size: 11 },
+                                        boxWidth: 12,
+                                        padding: 8,
+                                        usePointStyle: true,
+                                        pointStyle: 'circle'
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const total = chartValues.reduce((a, b) => a + b, 0);
+                                            const pct = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
+                                            return context.label + ': ' + formatNumber(context.raw) + ' (' + pct + '%)';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    chartContainer.innerHTML = '';
+                }
+            }
         }
         
         function renderSubscriberPlatforms(data) {
