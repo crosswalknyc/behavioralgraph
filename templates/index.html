@@ -30273,12 +30273,12 @@
             
             document.getElementById('topOverIndexInterest').textContent = topInterest?.name || '--';
             document.getElementById('topOverIndexDetail').textContent = topInterest?.index ? formatIndex(topInterest.index) : '--';
-            document.getElementById('avgInterestIndex').textContent = formatIndex(avgIndex);
-            document.getElementById('interestIndexRange').textContent = `Range: ${formatIndex(minIndex)} - ${formatIndex(maxIndex)}`;
+            const avgInterestIndexEl = document.getElementById('avgInterestIndex'); if (avgInterestIndexEl) avgInterestIndexEl.textContent = formatIndex(avgIndex);
+            const interestIndexRangeEl = document.getElementById('interestIndexRange'); if (interestIndexRangeEl) interestIndexRangeEl.textContent = `Range: ${formatIndex(minIndex)} - ${formatIndex(maxIndex)}`;
             
             // Show relative counts (above/below median) with absolute in parentheses if different
-            document.getElementById('overIndexCount').textContent = overIndexing.length;
-            document.getElementById('underIndexCount').textContent = underIndexing.length;
+            const overIndexCountEl = document.getElementById('overIndexCount'); if (overIndexCountEl) overIndexCountEl.textContent = overIndexing.length;
+            const underIndexCountEl = document.getElementById('underIndexCount'); if (underIndexCountEl) underIndexCountEl.textContent = underIndexing.length;
             
             // Populate hover tooltips with top 5 items using data-tooltip attribute
             const topOverItems = overIndexing.slice(0, 5);
@@ -30288,13 +30288,13 @@
             const overTooltipText = topOverItems.length > 0 
                 ? 'Top 5 Over-Indexing Interests:\n' + topOverItems.map(item => `• ${item.name}: ${formatIndex(item.index)}`).join('\n')
                 : 'Over-Indexing: Interests above the median index value for this audience.';
-            document.getElementById('overIndexCard').setAttribute('data-tooltip', overTooltipText);
+            const overIndexCardEl = document.getElementById('overIndexCard'); if (overIndexCardEl) overIndexCardEl.setAttribute('data-tooltip', overTooltipText);
             
             // Build tooltip text for under-indexing
             const underTooltipText = topUnderItems.length > 0 
                 ? 'Top 5 Under-Indexing Interests:\n' + topUnderItems.map(item => `• ${item.name}: ${formatIndex(item.index)}`).join('\n')
                 : 'Under-Indexing: Interests below the median index value for this audience.';
-            document.getElementById('underIndexCard').setAttribute('data-tooltip', underTooltipText);
+            const underIndexCardEl = document.getElementById('underIndexCard'); if (underIndexCardEl) underIndexCardEl.setAttribute('data-tooltip', underTooltipText);
         }
         
         // Quintile state for interactive heatmap (used by bar click handler)
