@@ -14813,6 +14813,7 @@
                         <!-- Tabs (Insights first and default) -->
                         <div class="dashboard-tabs" id="subscriberTabs">
                             <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                            <button class="tab-btn" onclick="showSubscriberTab('revenue')"><span class="tab-icon">💰</span><span class="tab-label">REVENUE</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('viewnumbers')"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
@@ -14830,15 +14831,11 @@
                             
                             <!-- Platform Value Assessment -->
                             <div id="subscriberPlatformValue" class="strategic-section"></div>
-                            
-                            <!-- Audience Acquisition Insights -->
-                            <div id="subscriberAudienceAcquisition" class="strategic-section"></div>
-                            
-                            <!-- Revenue from new subscribers: monthly/yearly, premium & ad-supported (SVOD pricing) -->
+                        </div>
+
+                        <!-- Revenue Tab (after Insights) -->
+                        <div id="subscriber-tab-revenue" class="tab-content">
                             <div id="subscriberSubscriptionRevenue" class="strategic-section"></div>
-                            
-                            <!-- Key Metrics Overview (at bottom) -->
-                            <div id="subscriberKeyMetrics" class="strategic-section"></div>
                         </div>
 
                         <!-- Episodes Tab -->
@@ -22975,12 +22972,9 @@
             // Get all containers
             const execSummaryContainer = document.getElementById('subscriberExecutiveSummary');
             const platformValueContainer = document.getElementById('subscriberPlatformValue');
-            const audienceAcquisitionContainer = document.getElementById('subscriberAudienceAcquisition');
-            const keyMetricsContainer = document.getElementById('subscriberKeyMetrics');
             const subscriptionRevenueContainer = document.getElementById('subscriberSubscriptionRevenue');
             
-            if (!execSummaryContainer || !platformValueContainer || 
-                !audienceAcquisitionContainer || !keyMetricsContainer) {
+            if (!execSummaryContainer || !platformValueContainer) {
                 console.error('❌ Containers not found');
                 return;
             }
@@ -23147,61 +23141,6 @@
                 return (b.signups || 0) - (a.signups || 0);
             }).slice(0, 5);
             
-            // 4. AUDIENCE ACQUISITION INSIGHTS
-            audienceAcquisitionContainer.innerHTML = `
-                <div class="strategic-card">
-                    <h3 class="has-tooltip" data-tooltip="How this show attracts new vs. returning viewers and converts them to subscribers. Key for understanding acquisition and retention mix.">👥 Audience Acquisition Insights</h3>
-                    <div class="acquisition-grid">
-                        <div class="acquisition-metric has-tooltip" data-tooltip="New Audience Appeal: Percentage of viewers who had not watched this show before. Higher percentages indicate strong appeal to new audiences and platform acquisition potential.">
-                            <div class="acquisition-header">
-                                <span class="acquisition-icon">🆕</span>
-                                <span class="acquisition-label">New Audience Appeal</span>
-                            </div>
-                            <div class="acquisition-value">${newViewerPct}%</div>
-                            <div class="acquisition-desc">First-time viewers</div>
-                            <div class="acquisition-indicator ${isStrongNewViewerAppeal ? 'strong' : 'moderate'} has-tooltip" data-tooltip="${isStrongNewViewerAppeal ? 'Strong New Audience Draw: Over 50% first-time viewers indicates exceptional appeal to new audiences and platform acquisition potential' : 'Balanced Audience: Mix of new and returning viewers shows broad appeal'}">
-                                ${isStrongNewViewerAppeal ? 'Strong New Audience Draw' : 'Balanced Audience'}
-                            </div>
-                        </div>
-                        <div class="acquisition-metric has-tooltip" data-tooltip="Returning Viewers: Number of people who watched a previous season of the series before watching this season. Shows retention value and existing fan base engagement.">
-                            <div class="acquisition-header">
-                                <span class="acquisition-icon">🔄</span>
-                                <span class="acquisition-label">Returning Viewers</span>
-                            </div>
-                            <div class="acquisition-value">${formatValue(preExisting, preExistingGenPop)}</div>
-                            <div class="acquisition-desc">Pre-existing series viewers</div>
-                        </div>
-                        <div class="acquisition-metric has-tooltip" data-tooltip="New Viewer Conversion: Percentage of first-time viewers who signed up for the platform to watch the show. Higher rates indicate strong appeal to platform newcomers.">
-                            <div class="acquisition-header">
-                                <span class="acquisition-icon">📊</span>
-                                <span class="acquisition-label">New Viewer Conversion</span>
-                            </div>
-                            <div class="acquisition-value">${newViewerConversionPct}%</div>
-                            <div class="acquisition-desc">First-time viewers to subscribers</div>
-                            <div class="acquisition-indicator ${parseFloat(newViewerConversionPct) > 5 ? 'strong' : 'moderate'} has-tooltip" data-tooltip="${parseFloat(newViewerConversionPct) > 5 ? 'High Conversion: Over 5% conversion rate for first-time viewers indicates strong appeal to platform newcomers' : 'Moderate Conversion: 5% or lower conversion rate shows room for improvement in new viewer acquisition'}">
-                                ${parseFloat(newViewerConversionPct) > 5 ? 'High Conversion' : 'Moderate Conversion'}
-                            </div>
-                        </div>
-                        <div class="acquisition-metric has-tooltip" data-tooltip="Overall Conversion: Percentage of total show viewers (both new and returning) who signed up for the platform to watch this show.">
-                            <div class="acquisition-header">
-                                <span class="acquisition-icon">🎯</span>
-                                <span class="acquisition-label">Overall Conversion</span>
-                            </div>
-                            <div class="acquisition-value">${conversionPct}%</div>
-                            <div class="acquisition-desc">Total viewers to subscribers</div>
-                        </div>
-                    </div>
-                    <div class="acquisition-insight">
-                        <strong>Audience Strategy:</strong> 
-                        ${show} ${isStrongNewViewerAppeal ? 'strongly appealed to new audiences' : 'engaged a mix of new and returning viewers'}, 
-                        with ${newViewerPct}% first-time viewers demonstrating ${isStrongNewViewerAppeal ? 'exceptional' : 'solid'} new audience acquisition capability. 
-                        ${parseFloat(newViewerConversionPct) > parseFloat(conversionPct) ? 
-                        `New viewers converted at a higher rate (${newViewerConversionPct}% vs ${conversionPct}%), indicating strong appeal to platform newcomers.` :
-                        `Conversion rates were consistent across viewer types, showing broad appeal.`}
-                    </div>
-                </div>
-            `;
-            
             // 5. STRATEGIC RECOMMENDATIONS
             const recommendations = [];
             
@@ -23251,64 +23190,6 @@
                     title: 'Continue Monitoring',
                     insight: `Continue tracking performance metrics to identify optimization opportunities as more data becomes available.`
                 });
-            }
-            
-            // 6. KEY METRICS OVERVIEW
-            if (keyMetricsContainer) {
-                keyMetricsContainer.innerHTML = `
-                    <div class="strategic-card">
-                        <h3 class="has-tooltip" data-tooltip="Core numbers for this show: audience size, conversion rates, signups, and reactivations. Hover each metric for a short description.">📊 Key Metrics Overview</h3>
-                        <div class="key-stats-grid">
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many people total watched the series">
-                                <div class="key-stat-label">Total Show Watchers</div>
-                                <div class="key-stat-value neutral">${formatValue(totalWatchers, totalWatchersGenPop)}</div>
-                                ${totalWatchersGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalWatchersGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many people watched a previous season of the series">
-                                <div class="key-stat-label">Pre-Existing Series Viewers</div>
-                                <div class="key-stat-value neutral">${formatValue(preExisting, preExistingGenPop)}</div>
-                                ${preExistingGenPop ? `<div class="key-stat-genpop">${formatGenPop(preExistingGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="People who have not watched the show before">
-                                <div class="key-stat-label">New First Time Viewers</div>
-                                <div class="key-stat-value neutral">${formatValue(cleanSample, cleanSampleGenPop)}</div>
-                                ${cleanSampleGenPop ? `<div class="key-stat-genpop">${formatGenPop(cleanSampleGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many people signed up for the platform then their first watch was this show">
-                                <div class="key-stat-label">New Platform Signups</div>
-                                <div class="key-stat-value positive">${formatValue(newSignups, newSignupsGenPop)}</div>
-                                ${newSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(newSignupsGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="What percent of the total show watchers signed up for the platform to watch this show">
-                                <div class="key-stat-label">Total Show Conversion Rate</div>
-                                <div class="key-stat-value ${totalConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${totalConversionRate}</div>
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many first time viewers signed up for the platform to watch the show">
-                                <div class="key-stat-label">New Viewers Conversion Rate</div>
-                                <div class="key-stat-value ${cleanConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${cleanConversionRate}</div>
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How long on average it takes for a user to sign up for a platform to watch the show after the first episode has dropped">
-                                <div class="key-stat-label">Average Days from Show Available to Signup</div>
-                                <div class="key-stat-value neutral">${avgDaysToSignup}</div>
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="Confirmed new subscribers to the streaming platform">
-                                <div class="key-stat-label">Attributed Signups</div>
-                                <div class="key-stat-value positive">${formatValue(attributedSignups, attributedSignupsGenPop)}</div>
-                                ${attributedSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(attributedSignupsGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="How many dormant users logged back in to watch the show">
-                                <div class="key-stat-label">Dormant to Reactive</div>
-                                <div class="key-stat-value positive">${formatValue(dormantReactive, dormantReactiveGenPop)}</div>
-                                ${dormantReactiveGenPop ? `<div class="key-stat-genpop">${formatGenPop(dormantReactiveGenPop)}</div>` : ''}
-                            </div>
-                            <div class="key-stat-item has-tooltip" data-tooltip="Total number of signups and dormant to reactive">
-                                <div class="key-stat-label">Total Signups & Reactivated Users</div>
-                                <div class="key-stat-value positive">${formatValue(totalSignups, totalSignupsGenPop)}</div>
-                                ${totalSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalSignupsGenPop)}</div>` : ''}
-                            </div>
-                        </div>
-                    </div>
-                `;
             }
             
             // 7. REVENUE FROM NEW SUBSCRIBERS (monthly & yearly; premium and ad-supported from SVOD pricing)
