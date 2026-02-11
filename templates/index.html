@@ -28076,13 +28076,15 @@
                 padding: { top: 10 }, 
                 labels: { 
                     color: '#e6f1ff', 
-                    font: { size: 10 }, 
-                    boxWidth: 12, 
-                    padding: 8,
+                    font: { size: 13 }, 
+                    boxWidth: 14, 
+                    padding: 10,
                     usePointStyle: true,
                     pointStyle: 'circle'
                 } 
             };
+            // Cutout percentage for donut charts (higher = smaller donut, more hole)
+            const doughnutCutout = '65%';
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
@@ -28136,6 +28138,7 @@
                     indexAxis: ageIndexAxis,
                     responsive: true, 
                     maintainAspectRatio: false,
+                    cutout: ageIsCircular ? doughnutCutout : 0,
                     layout: { padding: ageIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
                         legend: ageIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
@@ -28196,6 +28199,7 @@
                     indexAxis: genderIndexAxis,
                     responsive: true, 
                     maintainAspectRatio: false,
+                    cutout: genderIsCircular ? doughnutCutout : 0,
                     layout: { padding: genderIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
                         legend: genderIsCircular ? {
@@ -28311,6 +28315,7 @@
                     indexAxis: ethnicityChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
                     maintainAspectRatio: false,
+                    cutout: ethnicityIsCircular ? doughnutCutout : 0,
                     layout: { padding: ethnicityIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
                         legend: ethnicityIsCircular ? {
@@ -28447,6 +28452,7 @@
                     indexAxis: incomeIsCircular || incomeChartType === 'line' ? 'x' : 'y',
                     responsive: true, 
                     maintainAspectRatio: false,
+                        cutout: incomeIsCircular ? doughnutCutout : 0,
                         layout: { padding: incomeIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: incomeIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
@@ -28527,6 +28533,7 @@
                     data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: educationIsCircular ? colors : '#a6e22e', borderRadius: educationIsCircular ? 0 : 4 }] },
                     options: { 
                         indexAxis: educationIsCircular ? 'x' : 'y', responsive: true, maintainAspectRatio: false,
+                        cutout: educationIsCircular ? doughnutCutout : 0,
                         layout: { padding: educationIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: educationIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
@@ -28612,6 +28619,7 @@
                         indexAxis: relationshipChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
+                        cutout: relationshipIsCircular ? doughnutCutout : 0,
                         layout: { padding: relationshipIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: relationshipIsCircular ? {
@@ -28724,6 +28732,7 @@
                         indexAxis: soChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
+                        cutout: soIsCircular ? doughnutCutout : 0,
                         layout: { padding: soIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: soIsCircular ? {
@@ -28832,6 +28841,7 @@
                         indexAxis: psChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
+                        cutout: psIsCircular ? doughnutCutout : 0,
                         layout: { padding: psIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: psIsCircular ? {
