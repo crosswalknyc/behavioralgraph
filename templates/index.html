@@ -13218,6 +13218,18 @@
 
             <!-- Interests Tab -->
             <div id="tab-interests" class="tab-content">
+                <div class="interests-top-boxes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div class="stat-card" style="border: 1px solid var(--border-color); padding: 1rem;">
+                        <div class="stat-label" style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Top Interest by %</div>
+                        <div id="interestsTopByPct" style="font-size: 1.1rem; font-weight: 600; color: var(--accent-cyan);">—</div>
+                        <div id="interestsTopByPctVal" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.2rem;">—</div>
+                    </div>
+                    <div class="stat-card" style="border: 1px solid var(--border-color); padding: 1rem;">
+                        <div class="stat-label" style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Top Interest by Index</div>
+                        <div id="interestsTopByIndex" style="font-size: 1.1rem; font-weight: 600; color: var(--accent-lime);">—</div>
+                        <div id="interestsTopByIndexVal" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.2rem;">—</div>
+                    </div>
+                </div>
                 <!-- Top Interests by Category -->
                 <div class="interests-categories-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Interests by Category" style="position: relative;">
                     <h3 style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem;">
@@ -30082,6 +30094,14 @@
                 const barEl = document.getElementById('interestsHeatmapBar');
                 if (barEl) barEl.innerHTML = '';
                 document.getElementById('interestsCategoryCards').innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No data</div>';
+                const topByPctEl = document.getElementById('interestsTopByPct');
+                const topByPctValEl = document.getElementById('interestsTopByPctVal');
+                const topByIndexEl = document.getElementById('interestsTopByIndex');
+                const topByIndexValEl = document.getElementById('interestsTopByIndexVal');
+                if (topByPctEl) topByPctEl.textContent = '—';
+                if (topByPctValEl) topByPctValEl.textContent = '—';
+                if (topByIndexEl) topByIndexEl.textContent = '—';
+                if (topByIndexValEl) topByIndexValEl.textContent = '—';
                 return;
             }
             
@@ -30095,6 +30115,19 @@
                     projection: data.projection || 0,
                     category: categorizeInterest(name)
                 }));
+            
+            // Populate top interest boxes (by % and by index)
+            const validForIndex = allInterestsData.filter(i => Number(i.index) > 0);
+            const topByPct = allInterestsData.length > 0 ? allInterestsData.reduce((a, b) => (a.pct || 0) >= (b.pct || 0) ? a : b) : null;
+            const topByIndex = validForIndex.length > 0 ? validForIndex.reduce((a, b) => (a.index || 0) >= (b.index || 0) ? a : b) : null;
+            const topByPctEl = document.getElementById('interestsTopByPct');
+            const topByPctValEl = document.getElementById('interestsTopByPctVal');
+            const topByIndexEl = document.getElementById('interestsTopByIndex');
+            const topByIndexValEl = document.getElementById('interestsTopByIndexVal');
+            if (topByPctEl) topByPctEl.textContent = topByPct ? topByPct.name : '—';
+            if (topByPctValEl) topByPctValEl.textContent = topByPct ? (topByPct.pct ? topByPct.pct.toFixed(2) + '%' : '—') : '—';
+            if (topByIndexEl) topByIndexEl.textContent = topByIndex ? topByIndex.name : '—';
+            if (topByIndexValEl) topByIndexValEl.textContent = topByIndex ? ('Index: ' + Math.round(topByIndex.index)) : '—';
             
             // Render insights
             renderInterestsInsights(allInterestsData);
