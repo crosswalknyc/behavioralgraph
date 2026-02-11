@@ -30255,8 +30255,17 @@
             const absoluteOver = items.filter(i => i.index >= 100).length;
             const absoluteUnder = items.filter(i => i.index < 100).length;
             
-            document.getElementById('topOverIndexInterest').textContent = overIndexing[0]?.name || sortedItems[sortedItems.length - 1]?.name || '--';
-            document.getElementById('topOverIndexDetail').textContent = overIndexing[0]?.index ? formatIndex(overIndexing[0].index) : (sortedItems[sortedItems.length - 1]?.index ? formatIndex(sortedItems[sortedItems.length - 1].index) : '--');
+            // Find top over-indexing interest: must have pct >= 50% and not be a header name like "Category"
+            const headerNames = ['category', 'item', 'name', 'interest', 'label', 'type'];
+            const validTopInterests = overIndexing.filter(i => {
+                const nameLower = (i.name || '').toLowerCase().trim();
+                const pct = parseFloat(i.pct) || 0;
+                return pct >= 50 && !headerNames.includes(nameLower) && nameLower.length > 0;
+            });
+            const topInterest = validTopInterests[0] || null;
+            
+            document.getElementById('topOverIndexInterest').textContent = topInterest?.name || '--';
+            document.getElementById('topOverIndexDetail').textContent = topInterest?.index ? formatIndex(topInterest.index) : '--';
             document.getElementById('avgInterestIndex').textContent = formatIndex(avgIndex);
             document.getElementById('interestIndexRange').textContent = `Range: ${formatIndex(minIndex)} - ${formatIndex(maxIndex)}`;
             
