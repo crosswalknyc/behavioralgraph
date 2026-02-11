@@ -6302,10 +6302,10 @@ def parse_subscriber_iq_csv(csv_content):
                 first_col_upper = first_col.upper().strip()
                 gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER']
                 
-                # Count/percentage/gen_pop: try col C/E/F (indices 2,4,5) then col B/H/I (1,7,8)
+                # Count/percentage/gen_pop: CSV format is col C (2) for count, col I (8) for percentage, col J (9) for gen_pop
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
-                _pct = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
-                _gen = (row[5].strip() if len(row) > 5 else '') or (row[8].strip() if len(row) > 8 else '')
+                _pct = (row[8].strip() if len(row) > 8 else '') or (row[7].strip() if len(row) > 7 else '')
+                _gen = (row[9].strip() if len(row) > 9 else '') or (row[5].strip() if len(row) > 5 else '')
                 
                 # Only add if it's not a gender entry and looks like an age range
                 if not any(keyword in first_col_upper for keyword in gender_keywords):
@@ -6332,8 +6332,8 @@ def parse_subscriber_iq_csv(csv_content):
         elif current_section == 'demographics_gender':
             if first_col and first_col not in ['', 'GENDER']:
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
-                _pct = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
-                _gen = (row[5].strip() if len(row) > 5 else '') or (row[8].strip() if len(row) > 8 else '')
+                _pct = (row[8].strip() if len(row) > 8 else '') or (row[7].strip() if len(row) > 7 else '')
+                _gen = (row[9].strip() if len(row) > 9 else '') or (row[5].strip() if len(row) > 5 else '')
                 parsed['demographics']['gender'].append({
                     'gender': first_col,
                     'count': _count,
