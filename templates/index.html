@@ -12825,7 +12825,7 @@
                     <div class="dash-dropdown">
                         <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, or full report as PDF." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
                         <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
-                            <a href="javascript:void(0)" onclick="exportToCSV(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📄 All Data (CSV)</a>
+                            <a href="javascript:void(0)" onclick="exportToCSV(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📄 Current Page (CSV)</a>
                             <a href="javascript:void(0)" onclick="exportAllPNG(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">🖼️ All Charts (PNG)</a>
                             <a href="javascript:void(0)" onclick="exportPDF(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📑 Full Report (PDF)</a>
                         </div>
@@ -42918,16 +42918,140 @@
         // ============================================================================
         
         function exportToCSV() {
-            if (!currentProfileData) {
+            if (!currentProfileData || !currentDashboardData) {
                 alert('Please select a profile first');
                 return;
             }
-            // Profile Analysis: CSV download is not available; view data in dashboard only
-            if (typeof showNotification === 'function') {
-                showNotification('CSV download is not available for profile analysis. View and export insights from the dashboard modules.', 'info');
-            } else {
-                alert('CSV download is not available for profile analysis. View and export insights from the dashboard modules.');
+            
+            // Determine current active tab
+            const activeTabBtn = document.querySelector('.tab-btn.active');
+            if (!activeTabBtn) {
+                alert('No active tab found');
+                return;
             }
+            
+            const tabLabel = activeTabBtn.querySelector('.tab-label')?.textContent?.trim()?.toLowerCase() || '';
+            const profileName = currentProfileData.name || 'Profile';
+            const US_POP = 324700000;
+            let csvContent = '';
+            let filename = '';
+            
+            trackActivity('export_page_csv', tabLabel);
+            
+            if (tabLabel === 'demographics') {
+                // Export all demographics data
+                csvContent = `${profileName} - Demographics\n\n`;
+                const demoCategories = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship status', 'sexual orientation', 'parental status', 'occupation'];
+                
+                demoCategories.forEach(cat => {
+                    const catKey = cat.toLowerCase().replace(/ /g, '');
+                    const catKeyAlt = cat.toLowerCase();
+                    const data = currentDashboardData.demographics[catKey] || currentDashboardData.demographics[catKeyAlt] || currentDashboardData.demographics[cat] || {};
+                    const index = currentDashboardData.demographicsIndex[catKey] || currentDashboardData.demographicsIndex[catKeyAlt] || currentDashboardData.demographicsIndex[cat] || {};
+                    const genPop = currentDashboardData.demographicsGenPop[catKey] || currentDashboardData.demographicsGenPop[catKeyAlt] || currentDashboardData.demographicsGenPop[cat] || {};
+                    
+                    if (Object.keys(data).length > 0) {
+                        csvContent += `${cat.toUpperCase()}\n`;
+                        csvContent += `Label,Profile %,Gen Pop %,Index\n`;
+                        Object.keys(data).forEach(label => {
+                            const val = (parseFloat(data[label]) || 0).toFixed(2);
+                            const gp = (parseFloat(genPop[label]) || 0).toFixed(2);
+                            const idx = Math.round(parseFloat(index[label]) || 100);
+                            csvContent += `"${label}",${val}%,${gp}%,${idx}\n`;
+                        });
+                        csvContent += `\n`;
+                    }
+                });
+                filename = `${profileName}_Demographics.csv`;
+                
+            } else if (tabLabel === 'behavioral') {
+                // Export all visible behavioral categories
+                csvContent = `${profileName} - Behavioral\n\n`;
+                const behavioral = currentDashboardData.behavioral || {};
+                
+                Object.keys(behavioral).forEach(category => {
+                    const items = behavioral[category] || [];
+                    if (items.length > 0) {
+                        csvContent += `${category.toUpperCase()}\n`;
+                        csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index\n`;
+                        items.forEach(item => {
+                            const audiencePct = (item.pct || 0).toFixed(2);
+                            const audienceNumbers = Math.round((item.pct / 100) * US_POP);
+                            const genPopPct = item.genPopPct || 0;
+                            const genPopNumbers = Math.round((genPopPct / 100) * US_POP);
+                            const index = item.index || 0;
+                            csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}\n`;
+                        });
+                        csvContent += `\n`;
+                    }
+                });
+                filename = `${profileName}_Behavioral.csv`;
+                
+            } else if (tabLabel === 'interests') {
+                // Export interests data
+                csvContent = `${profileName} - Interests\n\n`;
+                const interests = currentDashboardData.interests || {};
+                
+                Object.keys(interests).forEach(category => {
+                    const items = interests[category] || [];
+                    if (items.length > 0) {
+                        csvContent += `${category.toUpperCase()}\n`;
+                        csvContent += `Name,Profile %,Gen Pop %,Index\n`;
+                        items.forEach(item => {
+                            const pct = (item.pct || item.percentage || 0).toFixed(2);
+                            const genPopPct = (item.genPopPct || item.genPop || 0).toFixed(2);
+                            const index = item.index || 0;
+                            csvContent += `"${item.name || item.label}",${pct}%,${genPopPct}%,${index}\n`;
+                        });
+                        csvContent += `\n`;
+                    }
+                });
+                filename = `${profileName}_Interests.csv`;
+                
+            } else if (tabLabel === 'location') {
+                // Export location data
+                csvContent = `${profileName} - Location\n\n`;
+                const locations = currentDashboardData.locations || [];
+                
+                csvContent += `DMA,Audience %,Gen Pop %,Index\n`;
+                locations.forEach(loc => {
+                    csvContent += `"${loc.name}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}\n`;
+                });
+                filename = `${profileName}_Location.csv`;
+                
+            } else if (tabLabel === 'insights') {
+                // Export insights summary
+                csvContent = `${profileName} - Insights Summary\n\n`;
+                csvContent += `Metric,Value\n`;
+                csvContent += `"Sample Size",${currentProfileData.sampleSize || currentDashboardData.sampleSize || 'N/A'}\n`;
+                csvContent += `"Projected US",${currentProfileData.projectedUS || currentDashboardData.projectedUS || 'N/A'}\n`;
+                
+                // Add top demographics
+                csvContent += `\nTOP DEMOGRAPHICS\n`;
+                const demoCategories = ['age', 'gender', 'ethnicity', 'income'];
+                demoCategories.forEach(cat => {
+                    const data = currentDashboardData.demographics[cat] || {};
+                    const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
+                    if (sorted.length > 0) {
+                        csvContent += `"Top ${cat}","${sorted[0][0]} (${parseFloat(sorted[0][1]).toFixed(1)}%)"\n`;
+                    }
+                });
+                filename = `${profileName}_Insights.csv`;
+                
+            } else {
+                // Generic export for other tabs - export what's visible
+                showNotification(`CSV export for ${tabLabel} tab - use individual module CSV buttons for detailed data.`, 'info');
+                return;
+            }
+            
+            // Download the CSV
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+            link.click();
+            
+            showNotification(`✅ Exported ${tabLabel} data to CSV`, 'success');
         }
         
         function exportAllPNG() {
