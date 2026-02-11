@@ -45711,11 +45711,12 @@
                         });
                     });
                 }
-                // Apply admin quick-select exclusions (hidden for all users)
-                if (typeof quickSelectBehaviorsExclusions !== 'undefined' && quickSelectBehaviorsExclusions && quickSelectBehaviorsExclusions.length > 0) {
-                    const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => (c || '').toUpperCase()));
-                    availableCategories.behavioral = availableCategories.behavioral.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
-                }
+            }
+            
+            // Apply admin quick-select exclusions (hidden for ALL users, including admins)
+            if (typeof quickSelectBehaviorsExclusions !== 'undefined' && quickSelectBehaviorsExclusions && quickSelectBehaviorsExclusions.length > 0) {
+                const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => (c || '').toUpperCase()));
+                availableCategories.behavioral = availableCategories.behavioral.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
             }
 
             // Restore previous selections or select all by default
@@ -46203,12 +46204,14 @@
                         });
                     });
                 }
-                // Apply admin quick-select exclusions (hidden for all users)
-                if (typeof quickSelectBehaviorsExclusions !== 'undefined' && quickSelectBehaviorsExclusions && quickSelectBehaviorsExclusions.length > 0) {
-                    const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => (c || '').toUpperCase()));
-                    sortedBehavioralCats = sortedBehavioralCats.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
-                }
             }
+            
+            // Apply admin quick-select exclusions (hidden for ALL users, including admins)
+            if (typeof quickSelectBehaviorsExclusions !== 'undefined' && quickSelectBehaviorsExclusions && quickSelectBehaviorsExclusions.length > 0) {
+                const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => (c || '').toUpperCase()));
+                sortedBehavioralCats = sortedBehavioralCats.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
+            }
+            
             const displayedBehavioralCats = []; // Track which categories are displayed for Jump To dropdown
             sortedBehavioralCats.forEach(cat => {
                 const catKey = 'beh_' + cat;
