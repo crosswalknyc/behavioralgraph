@@ -27843,12 +27843,15 @@
                 });
             }
             
-            document.getElementById('demoTargetingRecs').innerHTML = recommendations.map(r => `
-                <div class="demo-insight-item">
-                    <span class="icon">${r.icon}</span>
-                    <span class="text">${r.text}</span>
-                </div>
-            `).join('');
+            var targetingRecsEl = document.getElementById('demoTargetingRecs');
+            if (targetingRecsEl) {
+                targetingRecsEl.innerHTML = recommendations.map(r => `
+                    <div class="demo-insight-item">
+                        <span class="icon">${r.icon}</span>
+                        <span class="text">${r.text}</span>
+                    </div>
+                `).join('');
+            }
         }
         
         // Helper function to capitalize first letter of each word
