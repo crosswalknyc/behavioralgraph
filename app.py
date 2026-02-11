@@ -6779,6 +6779,9 @@ def get_subscriber_iq_data(s3_key):
         # Exclude competitive platforms (KEY PLATFORM INSIGHTS + Other Platforms They Use) from dashboard
         parsed.pop('competitive_platforms', None)
         
+        # Exclude Engagement After Signup section (post_signup_touchpoints) from dashboard
+        parsed.pop('post_signup_touchpoints', None)
+        
         # Exclude Episode-Level Signup Timing section from dashboard (removed per request)
         parsed.pop('episode_signup_timing', None)
         
