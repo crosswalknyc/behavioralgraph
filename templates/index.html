@@ -7,6 +7,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Poppins:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script>
+(function(){var p={id:'shrinkOccupationLabels',beforeInit:function(chart){var o=chart.options,d=chart.data,l=d.labels||[],n=Array.isArray(l)?l.length:0,t=(chart.config&&chart.config.type)||o.type||'bar',ax=o.indexAxis||'x';if(t==='bar'&&ax==='y'&&n>8){o.scales=o.scales||{};o.scales.y=o.scales.y||{};o.scales.y.ticks=o.scales.y.ticks||{};o.scales.y.ticks.font=Object.assign(o.scales.y.ticks.font||{},{size:9});o.scales.y.ticks.maxRotation=0;o.scales.y.ticks.autoSkip=false;}}};if(typeof Chart!=='undefined')Chart.register(p);})();
+    </script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <style>
         :root {
@@ -11380,7 +11383,7 @@
         <header>
             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem;">
                 <img src="/static/crosswalk-logo-stacked.svg" alt="Crosswalk Logo" class="logo" style="height: 80px; width: auto;">
-                <div style="font-style: italic; color: var(--text-secondary); font-size: 0.75rem; margin-left: 0.25rem;">the intersection of culture, commerce & content</div>
+                <div style="font-style: italic; color: var(--text-secondary); font-size: 0.75rem; margin-left: 0.25rem;">Signal Logic for Outcome-Driven Audience Navigation & Emergence</div>
             </div>
             <div class="header-right-section">
                 <div class="user-info-bar">
