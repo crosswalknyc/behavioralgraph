@@ -6731,6 +6731,14 @@ def get_subscriber_iq_data(s3_key):
         else:
             show_name = name_without_ext.replace('_', ' ')
         
+        # Add percentage_label and set percentage for display: "X% of {show_name} watchers" (e.g. "12.84% of Reacher watchers")
+        for ep in (parsed.get('episode_attribution') or []):
+            pct = ep.get('percentage') or ''
+            display_str = f'{pct} of {show_name} watchers' if pct else ''
+            ep['percentage_label'] = display_str
+            if pct:
+                ep['percentage'] = display_str  # Display uses profile title instead of generic "show watchers"
+        
         # Get date range and platform from metadata
         date_range = parsed['metadata'].get('date_range', '')
         platform_key = (parsed['metadata'].get('platform') or '').strip().lower().replace(' ', '')
