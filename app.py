@@ -3438,9 +3438,14 @@ def index():
     email = user.get('email', '') if user else ''
     company = user.get('company', '') if user else ''
     company_logo = user.get('company_logo', '') if user else ''
-    
+    insights_quick_snapshot_icon = '📊'
+    insights_quick_snapshot_title = 'Quick Snapshot'
+    insights_quick_snapshot_desc = 'A snapshot across all categories.'
     return render_template('index.html', 
                            username=session.get('username'),
+                           insights_quick_snapshot_icon=insights_quick_snapshot_icon,
+                           insights_quick_snapshot_title=insights_quick_snapshot_title,
+                           insights_quick_snapshot_desc=insights_quick_snapshot_desc,
                            role=role,
                            credits=user.get('credits', 0) if user else 0,
                            credits_used=user.get('credits_used', 0) if user else 0,
