@@ -56815,6 +56815,17 @@
         
         // Render slide to canvas for image capture
         async function renderSlideToCanvas(slideHTML) {
+            // Load html2canvas if not available
+            if (typeof html2canvas === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                document.head.appendChild(script);
+                await new Promise((resolve, reject) => {
+                    script.onload = resolve;
+                    script.onerror = () => reject(new Error('Failed to load html2canvas'));
+                });
+            }
+            
             return new Promise((resolve, reject) => {
                 // Create offscreen container
                 const container = document.createElement('div');
@@ -56830,13 +56841,6 @@
                 });
                 
                 Promise.all(imagePromises).then(() => {
-                    // Use html2canvas
-                    if (typeof html2canvas === 'undefined') {
-                        document.body.removeChild(container);
-                        reject(new Error('html2canvas not loaded'));
-                        return;
-                    }
-                    
                     html2canvas(container.firstElementChild, {
                         backgroundColor: '#1a1a2e',
                         scale: 2,
