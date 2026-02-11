@@ -24161,8 +24161,11 @@
             const chartContainer = document.getElementById('subscriberSignupTimingChart');
             if (chartContainer && timingData.length > 0) {
                 if (typeof Chart === 'undefined') {
-                    chartContainer.innerHTML = '<p style="color: var(--text-secondary);">Chart.js not loaded. Please refresh the page.</p>';
-                } else {
+                    chartContainer.innerHTML = '<p style="color: var(--text-secondary);">Chart.js loading...</p>';
+                    setTimeout(function() { renderSubscriberTiming(data); }, 300);
+                    return;
+                }
+                {
                     if (charts.subscriberSignupTiming) {
                         charts.subscriberSignupTiming.destroy();
                     }
@@ -24608,6 +24611,15 @@
         function renderSubscriberDemographics(data) {
             if (!data) {
                 console.error('❌ No data provided to renderSubscriberDemographics');
+                return;
+            }
+            if (typeof Chart === 'undefined') {
+                console.warn('Chart.js not yet loaded; retrying in 300ms');
+                ['subscriberAgeChart','subscriberGenderChart','subscriberMonthlySignupsChart','subscriberMonthlyChurnChart'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.innerHTML = '<p style="color: var(--text-secondary);">Chart.js loading...</p>';
+                });
+                setTimeout(function() { renderSubscriberDemographics(data); }, 300);
                 return;
             }
             
