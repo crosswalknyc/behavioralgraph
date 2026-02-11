@@ -4479,7 +4479,12 @@
             align-items: center;
             margin-bottom: 0.5rem;
             flex-shrink: 0;
-            padding: 0.25rem 0;
+            padding: 0.5rem 0.5rem;
+            background: var(--accent-blue);
+            border-radius: 4px;
+            position: sticky;
+            top: 0;
+            z-index: 2;
         }
         .behavioral-filter input {
             flex: 2;
@@ -4562,6 +4567,16 @@
         }
         .behavioral-table .behavioral-header-row span.index-col {
             padding-right: 0.35rem;
+        }
+        /* Hide GP column when in projection mode */
+        .behavioral-card.hide-gp .behavioral-table {
+            grid-template-columns: 28px minmax(100px, 1fr) 78px 64px;
+        }
+        .behavioral-card.hide-gp .genpop-col {
+            display: none !important;
+        }
+        .behavioral-card.hide-gp .behavioral-item .genpop-col {
+            display: none !important;
         }
         .behavioral-table .behavioral-list {
             display: contents;
@@ -31312,7 +31327,7 @@
                 const hasSlicers = isMostPurchased || isWhereTheyShop || isSports || isTalent || isAppPlatform || isSearchAI || isQSR || isWhereTheyDine || isTravel || isPets || isPharmacy || isTechDevice || isWorkoutFacility || isGames || isAutomobile || isInvestments || isInsurance || isEducation || isFranchise || isNonProfit;
                 
                 return `
-                    <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}${has100Pct ? ' has-100-pct' : ''}" 
+                    <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}${has100Pct ? ' has-100-pct' : ''}${dashDisplayMode === 'projection' ? ' hide-gp' : ''}" 
                          data-category="${cat}" 
                          data-index="${idx}"
                          draggable="true"
