@@ -769,10 +769,10 @@ def run_query(conn, p):
         , 2) FROM TEMP_NEW_PLATFORM_SIGNUPS) AS TOTAL_SHOW_CONVERSION_RATE
     """
     df_summary = pd.read_sql(summary_sql, conn)
-    # Multiply Total Show Watchers by 4 before any other calculations (percentages use this as denominator)
+    # Multiply Total Show Watchers by 4, then by another 4x (16x total) before any other calculations (percentages use this as denominator)
     if 'TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']):
         raw_show_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])
-        df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = raw_show_watchers * 4
+        df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = raw_show_watchers * 4 * 4
     print("   ✅ Summary stats calculated\n")
 
     # Step 6: Demographics for show watchers who signed up
