@@ -17802,23 +17802,25 @@
         let openTickerTabs = []; // Array of { id, s3Key, name, kpi, data }
         let activeTickerTabId = null;
         
-        // Save ticker tabs to localStorage
+        // Save ticker tabs to localStorage (user-specific)
         function saveTickerTabs() {
+            const userKey = currentUsername ? `_${currentUsername}` : '';
             const tabsToSave = openTickerTabs.map(t => ({
                 id: t.id,
                 s3Key: t.s3Key,
                 name: t.name,
                 kpi: t.kpi
             }));
-            localStorage.setItem('openTickerTabs', JSON.stringify(tabsToSave));
-            localStorage.setItem('activeTickerTabId', activeTickerTabId || '');
+            localStorage.setItem(`openTickerTabs${userKey}`, JSON.stringify(tabsToSave));
+            localStorage.setItem(`activeTickerTabId${userKey}`, activeTickerTabId || '');
         }
         
         // Load saved ticker tabs from localStorage
         async function loadSavedTickerTabs() {
             try {
-                const savedTabs = JSON.parse(localStorage.getItem('openTickerTabs') || '[]');
-                const savedActiveId = localStorage.getItem('activeTickerTabId') || '';
+                const userKey = currentUsername ? `_${currentUsername}` : '';
+                const savedTabs = JSON.parse(localStorage.getItem(`openTickerTabs${userKey}`) || '[]');
+                const savedActiveId = localStorage.getItem(`activeTickerTabId${userKey}`) || '';
                 
                 for (const savedTab of savedTabs) {
                     try {
@@ -22683,22 +22685,24 @@
             showSubscriberTab('insights');
         }
         
-        // Save open subscriber tabs to localStorage
+        // Save open subscriber tabs to localStorage (user-specific)
         function saveSubscriberTabs() {
+            const userKey = currentUsername ? `_${currentUsername}` : '';
             const tabsToSave = openSubscriberTabs.map(t => ({
                 id: t.id,
                 name: t.name,
                 dateRange: t.dateRange
             }));
-            localStorage.setItem('openSubscriberTabs', JSON.stringify(tabsToSave));
-            localStorage.setItem('activeSubscriberTabId', activeSubscriberTabId || '');
+            localStorage.setItem(`openSubscriberTabs${userKey}`, JSON.stringify(tabsToSave));
+            localStorage.setItem(`activeSubscriberTabId${userKey}`, activeSubscriberTabId || '');
         }
         
-        // Load saved subscriber tabs from localStorage
+        // Load saved subscriber tabs from localStorage (user-specific)
         function loadSavedSubscriberTabs() {
             try {
-                const savedTabs = JSON.parse(localStorage.getItem('openSubscriberTabs') || '[]');
-                const savedActiveId = localStorage.getItem('activeSubscriberTabId') || '';
+                const userKey = currentUsername ? `_${currentUsername}` : '';
+                const savedTabs = JSON.parse(localStorage.getItem(`openSubscriberTabs${userKey}`) || '[]');
+                const savedActiveId = localStorage.getItem(`activeSubscriberTabId${userKey}`) || '';
                 return { savedTabs, savedActiveId };
             } catch (e) {
                 return { savedTabs: [], savedActiveId: '' };
@@ -26280,21 +26284,24 @@
         let activeProfileTabId = null;
         
         // Save open tabs to localStorage (only save id, name, dateRange - not full data)
+        // Uses currentUsername to make tabs user-specific
         function saveOpenTabs() {
+            const userKey = currentUsername ? `_${currentUsername}` : '';
             const tabsToSave = openProfileTabs.map(t => ({
                 id: t.id,
                 name: t.name,
                 dateRange: t.dateRange
             }));
-            localStorage.setItem('openProfileTabs', JSON.stringify(tabsToSave));
-            localStorage.setItem('activeProfileTabId', activeProfileTabId || '');
+            localStorage.setItem(`openProfileTabs${userKey}`, JSON.stringify(tabsToSave));
+            localStorage.setItem(`activeProfileTabId${userKey}`, activeProfileTabId || '');
         }
         
-        // Load saved tabs from localStorage
+        // Load saved tabs from localStorage (user-specific)
         function loadSavedTabs() {
             try {
-                const savedTabs = JSON.parse(localStorage.getItem('openProfileTabs') || '[]');
-                const savedActiveId = localStorage.getItem('activeProfileTabId') || '';
+                const userKey = currentUsername ? `_${currentUsername}` : '';
+                const savedTabs = JSON.parse(localStorage.getItem(`openProfileTabs${userKey}`) || '[]');
+                const savedActiveId = localStorage.getItem(`activeProfileTabId${userKey}`) || '';
                 return { savedTabs, savedActiveId };
             } catch (e) {
                 return { savedTabs: [], savedActiveId: '' };
