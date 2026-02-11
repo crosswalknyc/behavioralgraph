@@ -6750,6 +6750,32 @@ def get_subscriber_iq_data(s3_key):
         print(f"   Data structure check - key_metrics type: {type(parsed.get('key_metrics'))}")
         print(f"   Data structure check - key_metrics content: {parsed.get('key_metrics')}")
         
+        # Post-process post_signup_touchpoints: Total=100%, each 1st-5th = % of Total Platform Signups
+        touchpoints = parsed.get('post_signup_touchpoints') or []
+        if touchpoints:
+            def _tp_users_num(t):
+                v = t.get('users')
+                if isinstance(v, (int, float)):
+                    return int(v)
+                if isinstance(v, str):
+                    return parse_number(v) or 0
+                return 0
+            total_users = None
+            for t in touchpoints:
+                if (t.get('touchpoint') or '').strip().lower() == 'total':
+                    total_users = _tp_users_num(t)
+                    break
+            if total_users is None:
+                total_users = sum(_tp_users_num(t) for t in touchpoints if str(t.get('touchpoint', '')).strip() not in ('Total', ''))
+            if total_users and total_users > 0:
+                for t in touchpoints:
+                    users_val = _tp_users_num(t)
+                    if (t.get('touchpoint') or '').strip().lower() == 'total':
+                        t['percentage'] = '100.00%'
+                    else:
+                        pct = (float(users_val) / total_users) * 100
+                        t['percentage'] = f'{pct:.2f}%'
+
         # Exclude Episode-Level Signup Timing section from dashboard (removed per request)
         parsed.pop('episode_signup_timing', None)
         
