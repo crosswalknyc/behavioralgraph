@@ -14868,6 +14868,7 @@
                             <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
                                 <span id="subscriberHoverToggleLabel">HOVER ON</span>
                             </div>
+                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh this profile: reload data from server" onclick="refreshCurrentSubscriberProfile()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻ Refresh</button>
                         </div>
 
                         <!-- Tabs (Insights first and default) -->
@@ -22480,6 +22481,12 @@
             await loadSubscriberProfiles();
         }
         
+        async function refreshCurrentSubscriberProfile() {
+            const s3Key = activeSubscriberTabId;
+            if (!s3Key) return;
+            await selectSubscriberProfile(s3Key);
+        }
+        
         function getSubscriberTabMetrics(tab) {
             const data = tab.data?.data || {};
             const metrics = data.key_metrics || {};
@@ -23079,34 +23086,20 @@
                 : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
             const conversionPctDisplay = (isNaN(conversionPctRaw) ? '0.00' : Number(conversionPctRaw).toFixed(2)) + '%';
             
-            // Format values: always use US projected gen pop when available (not raw)
+            // Format values: respect ACTUAL vs GEN POP toggle; show actual numbers (no K/M conversion)
             const formatValue = (value, genPop) => {
-                const use = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
-                return formatNumber(use);
+                const use = subscriberGenPopMode && (genPop != null && String(genPop).trim() !== '')
+                    ? genPop : value;
+                const n = parseNumber(use);
+                return (n !== null && !isNaN(n)) ? Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0';
             };
-            // Executive Summary: whole numbers only; expand K (thousands) and M (millions) without rounding
+            // Executive Summary: actual numbers only, no conversion - use value or gen_pop per toggle
             const formatExecSummaryNumber = (value, genPop) => {
-                const raw = (genPop != null && String(genPop).trim() !== '') ? genPop : value;
-                const s = String(raw).trim().toUpperCase();
-                let whole;
-                const matchK = /^([\d,.]+)\s*K\s*$/.exec(s);
-                const matchM = /^([\d,.]+)\s*M\s*$/.exec(s);
-                if (matchK) {
-                    const n = parseNumber(matchK[1]);
-                    whole = n !== null && !isNaN(n) ? Math.floor(n * 1000) : 0;
-                } else if (matchM) {
-                    const n = parseNumber(matchM[1]);
-                    whole = n !== null && !isNaN(n) ? Math.floor(n * 1e6) : 0;
-                } else {
-                    const n = parseNumber(raw);
-                    if (n === null || isNaN(n)) return '0';
-                    if (n > 0 && n < 10000 && n % 1 !== 0) {
-                        whole = Math.floor(n * 1e6);
-                    } else {
-                        whole = Math.floor(n);
-                    }
-                }
-                return whole.toLocaleString(undefined, { maximumFractionDigits: 0 });
+                const raw = subscriberGenPopMode && (genPop != null && String(genPop).trim() !== '')
+                    ? genPop : value;
+                const n = parseNumber(raw);
+                if (n === null || isNaN(n)) return '0';
+                return Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
             };
             const formatExecProjected = (value, genPop) => formatExecSummaryNumber(value, genPop);
             
