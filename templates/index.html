@@ -11154,31 +11154,6 @@
     </style>
 </head>
 <body>
-    <script>
-    window.INSIGHTS_QUICK_SNAPSHOT = {
-        icon: '{{ insights_quick_snapshot_icon | default("📊") }}',
-        title: '{{ insights_quick_snapshot_title | default("Quick Snapshot") }}',
-        desc: '{{ insights_quick_snapshot_desc | default("A snapshot across all categories.") }}'
-    };
-    (function applyQuickSnapshotConfig() {
-        function patch() {
-            document.querySelectorAll('.insights-header h2, [class*="insights-header"] h2, .inline-tab-header h2').forEach(function(h2) {
-                if (h2.textContent && h2.textContent.includes('Quick Snapshot')) {
-                    h2.innerHTML = (window.INSIGHTS_QUICK_SNAPSHOT.icon || '📊') + ' ' + (window.INSIGHTS_QUICK_SNAPSHOT.title || 'Quick Snapshot');
-                }
-            });
-            document.querySelectorAll('.insights-header p, [class*="insights-header"] p').forEach(function(p) {
-                if (p.textContent && (p.textContent.includes('Deep-dive') || p.textContent.includes('behavioral patterns') || p.textContent.includes('activation opportunities'))) {
-                    p.textContent = window.INSIGHTS_QUICK_SNAPSHOT.desc || 'A snapshot across all categories.';
-                }
-            });
-        }
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', patch);
-        else patch();
-        setTimeout(patch, 500);
-        setTimeout(patch, 2000);
-    })();
-    </script>
     <!-- Chart Editor Panel Container - Always in DOM -->
     <div id="chartEditorOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2147483646;" onclick="closeChartEditor()">
     </div>
@@ -11431,7 +11406,7 @@
                     <button class="view-btn {% if not default_view_hedge_fund_iq %}active{% endif %} {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
                     <button class="view-btn {% if not has_rankers_iq_access %}disabled{% endif %}" id="rankerIQTab" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</button>
-                    <button class="view-btn {% if not has_ticket_sales_iq_access %}disabled{% endif %}" id="ticketSalesIQTab" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎟️ Ticket Sales</button>
+                    <button class="view-btn {% if not has_ticket_sales_iq_access %}disabled{% endif %}" id="ticketSalesIQTab" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎟️ Impact IQ</button>
                     <button class="view-btn {% if default_view_hedge_fund_iq %}active{% endif %} {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
