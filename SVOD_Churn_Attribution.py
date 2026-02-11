@@ -1561,7 +1561,8 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         rows.append(("", "", "", "", "", "", "", "", "", ""))
         rows.append(("", "", "COMPETITIVE PLATFORMS (% of Show Watchers)", "", "", "", "", "", "", ""))
         for _, row in df_comp.iterrows():
-            rows.append((row["COMMON_NAME"], "", "", "", "", "", "", "", f"{row['PERCENT']:.2f}%", ""))
+            platform_name = (str(row["COMMON_NAME"]) if pd.notna(row["COMMON_NAME"]) else "").upper()
+            rows.append((platform_name, "", "", "", "", "", "", "", f"{row['PERCENT']:.2f}%", ""))
 
     # Monthly platform signups (clean UIDs only)
     if not df_monthly_signups.empty:
