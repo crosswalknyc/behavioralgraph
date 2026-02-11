@@ -25811,6 +25811,7 @@
                 // For LOCATION: Use hardcoded Gen Pop DMA percentages  
                 // For BEHAVIORAL: Use loaded Gen Pop baseline
                 let genPopPct = 0;
+                let genPopProjection = 0;
                 if (demoCategories.includes(category)) {
                     // Try to get from loaded Gen Pop baseline first
                     const demoKey = category.toLowerCase().replace('_', '_');
@@ -25853,11 +25854,12 @@
                         if (genPopPct === 0) genPopPct = 0.2;
                     }
                 } else {
-                    // For behavioral items, try to get Gen Pop percentage from loaded baseline data
+                    // For behavioral items, try to get Gen Pop percentage and projection from loaded baseline data
                     if (genPopBaselineData && genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
                         const genPopItem = genPopBaselineData.behavioral[category].find(item => item.name === value);
                         if (genPopItem) {
                             genPopPct = genPopItem.pct || 0;
+                            genPopProjection = genPopItem.projection || 0;
                         }
                     }
                     
@@ -26006,6 +26008,7 @@
                         pct: pct, 
                         index: index, 
                         genPopPct: genPopPct, 
+                        genPopProjection: genPopProjection,
                         projection: usProjection,
                         subcategory: subcategory || '',
                         originalColumn: originalColumn // Keep for debugging
@@ -30274,11 +30277,12 @@
             
             function buildItemTooltip(item) {
                 let genPopPct = item.genPopPct ?? 0;
+                let genPopProjection = item.genPopProjection ?? 0;
                 const profileDisplay = isProjection
-                    ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
+                    ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || 0)))
                     : formatValueOrNA(item.pct, true);
                 const genPopDisplay = isProjection
-                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                    ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                     : formatValueOrNA(genPopPct, true);
                 return (item.name || '') + ' · ' + profileDisplay + ' (' + genPopDisplay + ') · ' + formatIndex(item.index) + ' index';
             }
@@ -30422,13 +30426,14 @@
                                 const idxColor = isOverIndex ? '#10b981' : '#ef4444';
                                 
                                 let genPopPct = item.genPopPct ?? 0;
+                                let genPopProjection = item.genPopProjection ?? 0;
                                 // Format profile and gen pop percentages
                                 const profileDisplay = isProjection 
-                                    ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
+                                    ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || 0)))
                                     : formatValueOrNA(item.pct, true);
                                 
                                 const genPopDisplay = isProjection 
-                                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                                    ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                                     : formatValueOrNA(genPopPct, true);
                                 
                                 return `<div class="interest-category-item" style="display: flex; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border-color); align-items: center;">
@@ -30501,8 +30506,9 @@
                 const profileDisplay = isProjection 
                     ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
                     : formatValueOrNA(item.pct, true);
+                const genPopProjection = item.genPopProjection ?? 0;
                 const genPopDisplay = isProjection 
-                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                    ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                     : formatValueOrNA(genPopPct, true);
                 
                 return `
@@ -31953,8 +31959,9 @@
                 const profileDisplay = isProjection 
                     ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || 0)))
                     : formatValueOrNA(profilePct, true);
+                const genPopProjection = item.genPopProjection ?? 0;
                 const genPopDisplay = isProjection 
-                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                    ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                     : formatValueOrNA(genPopPct, true);
                 
                 return `
@@ -40192,8 +40199,9 @@
                     ? (profilePct === 0 || profilePct === null ? 'N/A' : formatNumber(Math.round((profilePct / 100) * US_POP)))
                     : formatValueOrNA(profilePct, true);
                 
+                const genPopProjection = item.genPopProjection ?? 0;
                 const genPopDisplay = isProjection 
-                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                    ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                     : formatValueOrNA(genPopPct, true);
                 
                 // Color profile % based on comparison to gen pop
@@ -40456,16 +40464,17 @@
             const US_POP = 324700000;
             
             let genPopPct = item.genPopPct || 0;
+            let genPopProjection = item.genPopProjection || 0;
             const profilePct = item.pct || 0;
             
             
             // Format displays
             const profileDisplay = isProjection 
-                ? (profilePct === 0 || profilePct === null ? 'N/A' : formatNumber(Math.round((profilePct / 100) * US_POP)))
+                ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || 0)))
                 : formatValueOrNA(profilePct, true);
             
             const genPopDisplay = isProjection 
-                ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                 : formatValueOrNA(genPopPct, true);
             
             // Color profile % based on comparison to gen pop
