@@ -14874,7 +14874,7 @@
                         <!-- Tabs (Insights first and default) -->
                         <div class="dashboard-tabs" id="subscriberTabs">
                             <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
-                            <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
+                            <button class="tab-btn" id="subscriberEpisodesTabBtn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('viewnumbers')"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
@@ -22722,6 +22722,14 @@
             if (profileInfo) profileInfo.style.display = 'flex';
             if (tabs) tabs.style.display = 'flex';
             if (actionRow) actionRow.style.display = 'flex';
+            
+            // Hide EPISODES tab when Genre is Stand Up Comedy
+            const episodesTabBtn = document.getElementById('subscriberEpisodesTabBtn');
+            if (episodesTabBtn) {
+                const genreNorm = (genre || '').toLowerCase().trim();
+                const isStandUpComedy = genreNorm === 'stand up comedy';
+                episodesTabBtn.style.display = isStandUpComedy ? 'none' : '';
+            }
             
             // Load profile image if available
             if (finalShow && finalShow !== 'UNKNOWN SHOW') {
