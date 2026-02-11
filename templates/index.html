@@ -22416,7 +22416,8 @@
             // Hierarchical view: categories as top-level (no SVOD ACQUISITION parent), with counts and expand/collapse
             const byCategory = {};
             subscriberProfiles.forEach(file => {
-                const category = file.category || 'SVOD Acquisition';
+                let category = file.category || 'SVOD Acquisition';
+                if (category === 'SVOD Acquisition') category = 'Other';
                 if (!byCategory[category]) byCategory[category] = {};
                 const showName = file.show_name || 'Unknown';
                 if (!byCategory[category][showName]) byCategory[category][showName] = [];
