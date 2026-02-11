@@ -4279,18 +4279,19 @@
         }
 
         .behavioral-controls {
-            display: inline-flex;
+            display: flex;
             align-items: center;
             gap: 0.5rem;
             margin-bottom: 1rem;
             padding: 0.5rem 0.75rem;
-            background: var(--bg-card);
+            background: var(--accent-blue);
             border-radius: 6px;
-            border: 1px solid var(--border-color);
+            border: none;
             position: sticky;
             top: 0;
             z-index: 100;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            width: 100%;
         }
         
         .reorder-control {
@@ -4479,12 +4480,7 @@
             align-items: center;
             margin-bottom: 0.5rem;
             flex-shrink: 0;
-            padding: 0.5rem 0.5rem;
-            background: var(--accent-blue);
-            border-radius: 4px;
-            position: sticky;
-            top: 0;
-            z-index: 2;
+            padding: 0.25rem 0;
         }
         .behavioral-filter input {
             flex: 2;
