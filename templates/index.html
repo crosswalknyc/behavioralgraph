@@ -16180,7 +16180,7 @@
         function formatNumber(num) { 
             if (num === null || num === undefined || num === '') return '0';
             const n = typeof num === 'number' ? num : parseFloat(num);
-            return isNaN(n) ? '0' : n.toLocaleString();
+            return isNaN(n) ? '0' : Math.round(n).toLocaleString();
         }
         
         // Update profile methodology tooltip with profile name
