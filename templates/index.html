@@ -14898,7 +14898,7 @@
                             <div id="subscriberPlatformsInsights" class="tab-insights-section"></div>
                             <div class="tab-section">
                                 <h3>📱 Other Platforms They Use</h3>
-                                <p class="section-description">What percentage of show watchers also use competing streaming platforms</p>
+                                <p class="section-description">What percentage of watchers also use competing streaming platforms</p>
                                 <div id="subscriberCompetitivePlatforms" class="platform-list"></div>
                             </div>
                             <div class="tab-section">
@@ -24160,13 +24160,14 @@
             if (insightsContainer) {
                 const platforms = data.competitive_platforms || [];
                 const touchpoints = data.post_signup_touchpoints || [];
+                const showName = data.metadata?.show || 'this show';
                 const insights = [];
                 
                 if (platforms.length > 0) {
                     const topPlatform = platforms[0];
                     insights.push({
                         icon: '📱',
-                        text: `<strong>${topPlatform.platform}</strong> was used by ${topPlatform.percentage} of show watchers, indicating strong cross-platform engagement.`
+                        text: `<strong>${topPlatform.platform.toUpperCase()}</strong> was used by ${topPlatform.percentage} of ${showName} watchers, indicating strong cross-platform engagement.`
                     });
                 }
                 
@@ -24199,14 +24200,15 @@
             
             const platformsContainer = document.getElementById('subscriberCompetitivePlatforms');
             const platforms = data.competitive_platforms || [];
+            const showTitle = data.metadata?.show || 'show';
             
             if (platforms.length === 0) {
                 platformsContainer.innerHTML = '<p style="color: var(--text-secondary);">No competitive platform data available</p>';
             } else {
                 platformsContainer.innerHTML = platforms.map(p => `
-                    <div class="platform-item has-tooltip" data-tooltip="${p.platform}: ${p.percentage} of people who watched this show also use this platform. Shows cross-platform engagement and audience overlap.">
-                        <span class="platform-name">${p.platform}</span>
-                        <span class="platform-pct">${p.percentage} of show watchers</span>
+                    <div class="platform-item has-tooltip" data-tooltip="${p.platform.toUpperCase()}: ${p.percentage} of people who watched ${showTitle} also use this platform. Shows cross-platform engagement and audience overlap.">
+                        <span class="platform-name">${p.platform.toUpperCase()}</span>
+                        <span class="platform-pct">${p.percentage} of ${showTitle} watchers</span>
                     </div>
                 `).join('');
             }
