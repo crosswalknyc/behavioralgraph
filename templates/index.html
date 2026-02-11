@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crosswalk IQ+</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Poppins:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script>
     (function(){var p={id:'shrinkOccupationLabels',beforeInit:function(chart){var o=chart.options,d=chart.data,l=d.labels||[],n=Array.isArray(l)?l.length:0,t=(chart.config&&chart.config.type)||o.type||'bar',ax=o.indexAxis||'x';if(t==='bar'&&ax==='y'&&n>8){o.scales=o.scales||{};o.scales.y=o.scales.y||{};o.scales.y.ticks=o.scales.y.ticks||{};o.scales.y.ticks.font=Object.assign(o.scales.y.ticks.font||{},{size:9});o.scales.y.ticks.maxRotation=0;o.scales.y.ticks.autoSkip=false;}}};if(typeof Chart!=='undefined')Chart.register(p);})();
@@ -19042,7 +19042,7 @@
                     tickerCharts.age = new Chart(ctx, {
                         type: 'bar',
                         data: {
-                            labels: ageLabels,
+                            labels: ageLabels.map(l => String(l ?? '')),
                             datasets: [{
                                 data: ageData,
                                 backgroundColor: colors,
@@ -19072,7 +19072,7 @@
                     tickerCharts.gender = new Chart(ctx, {
                         type: 'doughnut',
                         data: {
-                            labels: genderLabels,
+                            labels: genderLabels.map(l => String(l ?? '')),
                             datasets: [{ data: genderData, backgroundColor: colors }]
                         },
                         options: {
@@ -19094,7 +19094,7 @@
                     tickerCharts.ethnicity = new Chart(ctx, {
                         type: 'doughnut',
                         data: {
-                            labels: ethnicityDisplayLabels,
+                            labels: ethnicityDisplayLabels.map(l => String(l ?? '')),
                             datasets: [{ data: ethnicityData, backgroundColor: colors }]
                         },
                         options: {
@@ -19115,7 +19115,7 @@
                     tickerCharts.income = new Chart(ctx, {
                         type: 'bar',
                         data: {
-                            labels: incomeLabels,
+                            labels: incomeLabels.map(l => String(l ?? '')),
                             datasets: [{ data: incomeData, backgroundColor: colors, borderRadius: 4 }]
                         },
                         options: {
@@ -19141,7 +19141,7 @@
                     tickerCharts.education = new Chart(ctx, {
                         type: 'bar',
                         data: {
-                            labels: educationLabels,
+                            labels: educationLabels.map(l => String(l ?? '')),
                             datasets: [{ data: educationData, backgroundColor: colors, borderRadius: 4 }]
                         },
                         options: {
@@ -19167,7 +19167,7 @@
                     tickerCharts.relationship = new Chart(ctx, {
                         type: 'doughnut',
                         data: {
-                            labels: relationshipLabels,
+                            labels: relationshipLabels.map(l => String(l ?? '')),
                             datasets: [{ data: relationshipData, backgroundColor: colors }]
                         },
                         options: {
@@ -19190,7 +19190,7 @@
                     tickerCharts.sexualOrientation = new Chart(ctx, {
                         type: 'doughnut',
                         data: {
-                            labels: soDisplayLabels,
+                            labels: soDisplayLabels.map(l => String(l ?? '')),
                             datasets: [{ data: soData, backgroundColor: colors }]
                         },
                         options: {
@@ -19211,7 +19211,7 @@
                     tickerCharts.parentalStatus = new Chart(ctx, {
                         type: 'doughnut',
                         data: {
-                            labels: psLabels,
+                            labels: psLabels.map(l => String(l ?? '')),
                             datasets: [{ data: psData, backgroundColor: colors }]
                         },
                         options: {
@@ -19232,7 +19232,7 @@
                     tickerCharts.occupation = new Chart(ctx, {
                         type: 'bar',
                         data: {
-                            labels: occLabels,
+                            labels: occLabels.map(l => String(l ?? '')),
                             datasets: [{ data: occData, backgroundColor: colors, borderRadius: 4 }]
                         },
                         options: {
@@ -22133,7 +22133,7 @@
                 if (ticketSalesCharts.outletBar) ticketSalesCharts.outletBar.destroy();
                 ticketSalesCharts.outletBar = new Chart(canvas, {
                     type: 'bar',
-                    data: { labels: outletLabels, datasets: datasets },
+                    data: { labels: outletLabels.map(l => String(l ?? '')), datasets: datasets },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
@@ -22289,7 +22289,7 @@
                     ticketSalesCharts.pieCombined = new Chart(combinedCanvas, {
                         type: 'pie',
                         data: {
-                            labels: combinedLabels,
+                            labels: combinedLabels.map(l => String(l ?? '')),
                             datasets: [{ data: combinedValues, backgroundColor: combinedColors }]
                         },
                         plugins: [ChartDataLabels],
@@ -28357,7 +28357,7 @@
             charts.age = new Chart(document.getElementById('ageChart'), {
                 type: ageChartTypeEffective,
                 data: { 
-                    labels: ageLabels, 
+                    labels: ageLabels.map(l => String(l ?? '')), 
                     datasets: [{ 
                         data: ageData, 
                         backgroundColor: ageIsCircular ? colors : '#5a9ad9', 
@@ -28426,7 +28426,7 @@
             
             charts.gender = new Chart(document.getElementById('genderChart'), {
                 type: genderChartTypeEffective,
-                data: { labels: genderLabels, datasets: [{ data: genderData, backgroundColor: colors, borderRadius: genderIsBarLike ? 4 : 0 }] },
+                data: { labels: genderLabels.map(l => String(l ?? '')), datasets: [{ data: genderData, backgroundColor: colors, borderRadius: genderIsBarLike ? 4 : 0 }] },
                 options: { 
                     indexAxis: genderIndexAxis,
                     responsive: true, 
@@ -28541,7 +28541,7 @@
             
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
                 type: ethnicityChartType,
-                data: { labels: ethDisplayLabels, datasets: [{ data: ethData, backgroundColor: colors, borderRadius: ethnicityChartType === 'bar' ? 4 : 0 }] },
+                data: { labels: ethDisplayLabels.map(l => String(l ?? '')), datasets: [{ data: ethData, backgroundColor: colors, borderRadius: ethnicityChartType === 'bar' ? 4 : 0 }] },
                 options: { 
                     indexAxis: ethnicityChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
@@ -28668,7 +28668,7 @@
             charts.income = new Chart(document.getElementById('incomeChart'), {
                 type: incomeChartType,
                 data: { 
-                    labels: incomeLabels, 
+                    labels: incomeLabels.map(l => String(l ?? '')), 
                     datasets: [{ 
                         data: incomeData, 
                         backgroundColor: incomeIsCircular ? colors : '#66d9ef', 
@@ -28759,7 +28759,7 @@
                 
                 charts.education = new Chart(document.getElementById('educationChart'), {
                     type: educationChartType,
-                    data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: educationIsCircular ? colors : '#a6e22e', borderRadius: educationIsCircular ? 0 : 4 }] },
+                    data: { labels: eduLabels.map(l => String(l ?? '')), datasets: [{ data: eduData, backgroundColor: educationIsCircular ? colors : '#a6e22e', borderRadius: educationIsCircular ? 0 : 4 }] },
                     options: { 
                         indexAxis: educationIsCircular ? 'x' : 'y', responsive: true, maintainAspectRatio: false,
                         layout: { padding: educationIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
@@ -28842,7 +28842,7 @@
                 
                 charts.relationship = new Chart(document.getElementById('relationshipChart'), {
                     type: relationshipChartType,
-                    data: { labels: relLabels, datasets: [{ data: relData, backgroundColor: colors, borderRadius: relationshipChartType === 'bar' ? 4 : 0 }] },
+                    data: { labels: relLabels.map(l => String(l ?? '')), datasets: [{ data: relData, backgroundColor: colors, borderRadius: relationshipChartType === 'bar' ? 4 : 0 }] },
                     options: { 
                         indexAxis: relationshipChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
@@ -28954,7 +28954,7 @@
                 
                 charts.sexualOrientation = new Chart(document.getElementById('sexualOrientationChart'), {
                     type: soChartType,
-                    data: { labels: soDisplayLabels, datasets: [{ data: soData, backgroundColor: colors, borderRadius: soChartType === 'bar' ? 4 : 0 }] },
+                    data: { labels: soDisplayLabels.map(l => String(l ?? '')), datasets: [{ data: soData, backgroundColor: colors, borderRadius: soChartType === 'bar' ? 4 : 0 }] },
                     options: { 
                         indexAxis: soChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
@@ -29062,7 +29062,7 @@
                 
                 charts.parentalStatus = new Chart(document.getElementById('parentalStatusChart'), {
                     type: psChartType,
-                    data: { labels: psLabels, datasets: [{ data: psData, backgroundColor: colors, borderRadius: psChartType === 'bar' ? 4 : 0 }] },
+                    data: { labels: psLabels.map(l => String(l ?? '')), datasets: [{ data: psData, backgroundColor: colors, borderRadius: psChartType === 'bar' ? 4 : 0 }] },
                     options: { 
                         indexAxis: psChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
@@ -29183,7 +29183,7 @@
                 
                 charts.occupation = new Chart(occCanvas, {
                     type: occChartType,
-                    data: { labels: occLabels, datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 6 : 0, barPercentage: 0.72, categoryPercentage: 0.82 }] },
+                    data: { labels: occLabels.map(l => String(l ?? '')), datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 6 : 0, barPercentage: 0.72, categoryPercentage: 0.82 }] },
                     options: { 
                         indexAxis: occChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
@@ -44903,7 +44903,7 @@
             profileReportCharts.age = new Chart(document.getElementById('profileAgeChart'), {
                 type: 'bar',
                 data: { 
-                    labels: ageLabels, 
+                    labels: ageLabels.map(l => String(l ?? '')), 
                     datasets: [{ data: ageData, backgroundColor: '#5a9ad9', borderRadius: 4 }] 
                 },
                 options: { 
@@ -44932,7 +44932,7 @@
             profileReportCharts.gender = new Chart(document.getElementById('profileGenderChart'), {
                 type: 'doughnut',
                 data: { 
-                    labels: genderLabels, 
+                    labels: genderLabels.map(l => String(l ?? '')), 
                     datasets: [{ data: genderData, backgroundColor: doughnutColors }] 
                 },
                 options: { 
@@ -44966,7 +44966,7 @@
             profileReportCharts.income = new Chart(document.getElementById('profileIncomeChart'), {
                 type: 'bar',
                 data: { 
-                    labels: incomeLabels, 
+                    labels: incomeLabels.map(l => String(l ?? '')), 
                     datasets: [{ data: incomeData, backgroundColor: '#5a9ad9', borderRadius: 4 }] 
                 },
                 options: { 
