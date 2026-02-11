@@ -25713,7 +25713,7 @@
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
-            const US_POPULATION = 324700000;
+            const US_POPULATION = 329900000;
             
             // HARDCODED GEN POP DMA PERCENTAGES (Nielsen DMA household distribution)
             const GENPOP_DMA = {
@@ -25801,8 +25801,13 @@
                 const value = row.Value || '';
                 const pct = parseFloat(row['Brand Penetration (Row)'] || 0);
                 const catShare = parseFloat(row['Category Share'] || 0);
-                const rawNumbers = parseInt(row['Original Raw Numbers'] || 0);
-                const usProjection = parseInt(String(row['US Gen Pop Projection'] || row['Gen Pop Projection'] || '0').replace(/,/g, '')) || 0;
+                const rawNumbers = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, '')) || 0;
+                // US Gen Pop Projection should be (rawNumbers / 10,000,000) * 329,900,000
+                // If the CSV value is much smaller than expected, calculate it ourselves
+                const csvProjection = parseInt(String(row['US Gen Pop Projection'] || row['Gen Pop Projection'] || '0').replace(/,/g, '')) || 0;
+                const calculatedProjection = rawNumbers > 0 ? Math.round((rawNumbers / 10000000) * 329900000) : 0;
+                // Use calculated projection if CSV value seems wrong (less than 1/1000th of what it should be)
+                const usProjection = (csvProjection > 0 && csvProjection > calculatedProjection / 1000) ? csvProjection : calculatedProjection;
                 
                 // For DEMOGRAPHICS: Try to use loaded Gen Pop baseline, fallback to hardcoded
                 // For LOCATION: Use hardcoded Gen Pop DMA percentages  
@@ -25863,6 +25868,11 @@
                     // Fallback: Use Category Share if Gen Pop baseline not available
                     if (genPopPct === 0) {
                         genPopPct = catShare > 0 ? catShare : 0;
+                    }
+                    
+                    // Fallback for genPopProjection: calculate from genPopPct if not available
+                    if (genPopProjection === 0 && genPopPct > 0) {
+                        genPopProjection = Math.round((genPopPct / 100) * 329900000);
                     }
                     
                     // If this IS the Gen Pop profile, use profile pct as gen pop pct (they should be the same)
@@ -27065,7 +27075,7 @@
                 return (sb.avgIndex || 0) - (sa.avgIndex || 0);
             }).slice(0, 6);
             
-            const US_POP_CATS = 324700000;
+            const US_POP_CATS = 329900000;
             const isProjectionCats = dashDisplayMode === 'projection';
             const topCatContainer = document.getElementById('behavioralTopCategories');
             if (topCatContainer) {
@@ -27121,7 +27131,7 @@
                 const gpDisplay = item.genPop < 0.01 ? 'N/A' : item.genPop.toFixed(2) + '%';
                 return `${item.name} (${item.pct.toFixed(2)}% vs GP ${gpDisplay}, ${formatIndex(item.index)})`;
             };
-            const US_POP_ACT = 324700000;
+            const US_POP_ACT = 329900000;
             const isProjectionAct = dashDisplayMode === 'projection';
             
             // Helper to format profile/GP values based on display mode
@@ -27558,7 +27568,7 @@
                 return;
             }
             
-            const US_POP_DEMO_INSIGHTS = 324700000;
+            const US_POP_DEMO_INSIGHTS = 329900000;
             const isProjection = dashDisplayMode === 'projection';
             const sampleSize = currentDashboardData?.sampleSize || 0;
             
@@ -28027,7 +28037,7 @@
             const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
             const isProjection = dashDisplayMode === 'projection';
             const isGenPop = isSelectedProfileGenPop();
-            const US_POPULATION = 324700000;
+            const US_POPULATION = 329900000;
             const ageChartEl = document.getElementById('ageChart');
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
@@ -28127,7 +28137,7 @@
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
                                 if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                 if (isProjection) {
-                                    const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                    const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                     return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
                                 return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
@@ -28184,7 +28194,8 @@
                                         const genPop = genderGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
-                                        const gpStr = (isGenPop || genPop <= 0.05) ? '' : ` (GP: ${formatPct(genPop)})`;
+                                        const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
+                                        const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
                                         const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
@@ -28300,7 +28311,8 @@
                                         const genPop = ethGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
-                                        const gpStr = (isGenPop || genPop <= 0.05) ? '' : ` (GP: ${formatPct(genPop)})`;
+                                        const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
+                                        const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
                                         const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
@@ -28441,7 +28453,7 @@
                                 if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
                                 if (isProjection) {
-                                    const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                    const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                     return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
                                 return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
@@ -28522,7 +28534,7 @@
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(v)) : formatPct(pct);
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
-                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                         return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                     }
                                     return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
@@ -28606,7 +28618,7 @@
                                                 ? formatNumber(Math.round(data.datasets[0].data[i])) 
                                                 : pct.toFixed(2) + '%';
                                             const gpStr = isGenPop ? '' : (isProjection
-                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 324700000))})` : '')
+                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
                                             const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
@@ -28629,7 +28641,7 @@
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                     const genPop = relGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
-                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                         return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                     }
                                     return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
@@ -28719,7 +28731,7 @@
                                                 ? formatNumber(Math.round(data.datasets[0].data[i])) 
                                                 : pct.toFixed(2) + '%';
                                             const gpStr = isGenPop ? '' : (isProjection
-                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 324700000))})` : '')
+                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
                                             const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
@@ -28742,7 +28754,7 @@
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                     const genPop = soGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
-                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                         return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                     }
                                     return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
@@ -28828,7 +28840,7 @@
                                                 ? formatNumber(Math.round(data.datasets[0].data[i])) 
                                                 : pct.toFixed(2) + '%';
                                             const gpStr = isGenPop ? '' : (isProjection
-                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 324700000))})` : '')
+                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
                                             const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
@@ -28851,7 +28863,7 @@
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                     const genPop = psGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
-                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                         return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                     }
                                     return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
@@ -28946,8 +28958,11 @@
                                             const pct = occPcts[i] || 0;
                                             const genPop = occGenPop[i] || 0;
                                             const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(2) + '%';
+                                            const gpStr = isGenPop ? '' : (isProjection
+                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
+                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
                                             const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
-                                            return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
+                                            return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
                                 }
@@ -28967,7 +28982,7 @@
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                     const genPop = occGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
-                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                         return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                     }
                                     return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
@@ -29101,7 +29116,7 @@
             const container = document.getElementById('demoHighlights');
             if (!container || !window.demoHighlightsData) return;
             
-            const US_POP_DEMO = 324700000;
+            const US_POP_DEMO = 329900000;
             const isProjectionDemo = dashDisplayMode === 'projection';
             const sampleSize = window.demoHighlightsSampleSize || 0;
             
@@ -29239,7 +29254,7 @@
                 if (window.topCategoriesSortBy === 'hot') return (sb.highCount || 0) - (sa.highCount || 0);
                 return (sb.avgIndex || 0) - (sa.avgIndex || 0);
             }).slice(0, 6);
-            const US_POP_CATS = 324700000;
+            const US_POP_CATS = 329900000;
             const isProjectionCats = dashDisplayMode === 'projection';
             const isGenPopCat = isSelectedProfileGenPop();
             container.innerHTML = sorted.map(([cat, stats]) => {
@@ -29279,7 +29294,7 @@
             const container = document.getElementById('topDifferentiators');
             if (!container || !window.topDifferentiatorsData) return;
             
-            const US_POP_DIFF = 324700000;
+            const US_POP_DIFF = 329900000;
             const isProjectionDiff = dashDisplayMode === 'projection';
             const [column, direction] = sortValue.split('-');
             
@@ -30279,7 +30294,7 @@
             const borderColor = segmentColors[quintileIndex];
             const stat = heatmapQuintileStats[quintileIndex];
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
+            const US_POP = 329900000;
             
             function buildItemTooltip(item) {
                 let genPopPct = item.genPopPct ?? 0;
@@ -30391,7 +30406,7 @@
         function renderInterestsCategoryCards(items) {
             const container = document.getElementById('interestsCategoryCards');
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
+            const US_POP = 329900000;
             
             // Group by category
             const categories = {};
@@ -30460,7 +30475,7 @@
             if (!container) return;
             
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
+            const US_POP = 329900000;
             
             // Get filters
             const categorySelect = document.getElementById('interestsCategorySelect');
@@ -31951,7 +31966,7 @@
         
         function renderBehavioralItems(items, maxPct, sortMode) {
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
+            const US_POP = 329900000;
             sortMode = sortMode || 'pct';
             const gpVal = (i) => (i.genPopPct ?? 0);
             return items.map((item, idx) => {
@@ -35369,7 +35384,7 @@
             } else if (type === 'behavioral') {
                 const items = currentDashboardData.behavioral[category] || [];
                 const isProjection = document.getElementById('displayModeToggle')?.checked || false;
-                const US_POP = 324700000;
+                const US_POP = 329900000;
                 
                 csvContent = `${profileName} - ${category}\n`;
                 csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index\n`;
@@ -38321,7 +38336,7 @@
             // ===== BEHAVIORAL DNA TAB =====
             
             // Render top over-indexers with Profile % and Gen Pop %
-            const US_POP_INSIGHTS = 324700000;
+            const US_POP_INSIGHTS = 329900000;
             const isProjectionInsights = dashDisplayMode === 'projection';
             
             const topOverEl = document.getElementById('topOverIndexers');
@@ -38369,7 +38384,7 @@
                     categoryChampions[item.category] = item;
                 }
             });
-            const US_POP_CHAMP = 324700000;
+            const US_POP_CHAMP = 329900000;
             const isProjectionChamp = dashDisplayMode === 'projection';
             const categoryChampEl = document.getElementById('categoryChampions');
             if (categoryChampEl) categoryChampEl.innerHTML = Object.entries(categoryChampions)
@@ -38405,7 +38420,7 @@
                 .filter(i => (i.pct || 0) < 99.99 && i.index > 130 && (i.pct < 5 || nicheCategories.some(n => i.category.toUpperCase().includes(n))))
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 12);
-            const US_POP_HIDDEN = 324700000;
+            const US_POP_HIDDEN = 329900000;
             const isProjectionHidden = dashDisplayMode === 'projection';
             const hiddenGemsEl = document.getElementById('hiddenGems');
             if (hiddenGemsEl) hiddenGemsEl.innerHTML = hiddenGems.map((item, i) => {
@@ -38430,7 +38445,7 @@
                 .filter(i => (i.pct || 0) < 99.99 && i.index > 110 && emergingCats.some(e => i.category.toUpperCase().includes(e)))
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 12);
-            const US_POP_RISING = 324700000;
+            const US_POP_RISING = 329900000;
             const isProjectionRising = dashDisplayMode === 'projection';
             const risingBehaviorsEl = document.getElementById('risingBehaviors');
             if (risingBehaviorsEl) risingBehaviorsEl.innerHTML = risingBehaviors.map((item, i) => {
@@ -38464,7 +38479,7 @@
                 return STREAMING_CATEGORIES.some(c => cat.includes(c)) || cat.includes('STREAMING');
             }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxStreamPct = Math.max(...streamingItems.map(i => i.pct), 1);
-            const US_POP_STREAM = 324700000;
+            const US_POP_STREAM = 329900000;
             const isProjectionStream = dashDisplayMode === 'projection';
             const streamingEl = document.getElementById('streamingPreferences');
             if (streamingEl) streamingEl.innerHTML = streamingItems.map(item => {
@@ -38498,7 +38513,7 @@
                 return SOCIAL_CATEGORIES.some(c => cat.includes(c)) || cat === 'SOCIAL MEDIA';
             }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxSocialPct = Math.max(...socialItems.map(i => i.pct), 1);
-            const US_POP_SOCIAL = 324700000;
+            const US_POP_SOCIAL = 329900000;
             const isProjectionSocial = dashDisplayMode === 'projection';
             const socialEl = document.getElementById('socialMediaUsage');
             if (socialEl) socialEl.innerHTML = socialItems.map(item => {
@@ -38532,7 +38547,7 @@
                 return AUDIO_CATEGORIES.some(c => cat.includes(c)) || cat.includes('MUSIC') || cat.includes('PODCAST');
             }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxAudioPct = Math.max(...audioItems.map(i => i.pct), 1);
-            const US_POP_AUDIO = 324700000;
+            const US_POP_AUDIO = 329900000;
             const isProjectionAudio = dashDisplayMode === 'projection';
             const audioEl = document.getElementById('audioPreferences');
             if (audioEl) audioEl.innerHTML = audioItems.map(item => {
@@ -38566,7 +38581,7 @@
                 return GAMING_CATEGORIES.some(c => cat.includes(c)) || cat.includes('GAME');
             }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxGamingPct = Math.max(...gamingItems.map(i => i.pct), 1);
-            const US_POP_GAMING = 324700000;
+            const US_POP_GAMING = 329900000;
             const isProjectionGaming = dashDisplayMode === 'projection';
             const gamingEl = document.getElementById('gamingAffinity');
             if (gamingEl) gamingEl.innerHTML = gamingItems.map(item => {
@@ -38613,7 +38628,7 @@
                 const avgGenPopPct = catItems.length ? catItems.reduce((s,i) => s + (i.genPopPct || 0), 0) / catItems.length : 0;
                 return { category: cfg.label, avgIndex: avgIdx, avgProfilePct: avgProfilePct, avgGenPopPct: avgGenPopPct, icon: cfg.icon, count: catItems.length };
             }).filter(m => m.avgIndex > 0 && m.count > 0);
-            const US_POP_MEDIA = 324700000;
+            const US_POP_MEDIA = 329900000;
             const isProjectionMedia = dashDisplayMode === 'projection';
             const mediaSummaryEl = document.getElementById('mediaConsumptionSummary');
             if (mediaSummaryEl) mediaSummaryEl.innerHTML = mediaSummary.map(m => {
@@ -38653,7 +38668,7 @@
             const brandItems = allItems.filter(i => 
                 i.category.toUpperCase().includes('BRAND') || i.category.toUpperCase().includes('SHOP') || i.category.toUpperCase().includes('APPAREL')
             ).sort((a, b) => b.index - a.index).slice(0, 10);
-            const US_POP_BRAND = 324700000;
+            const US_POP_BRAND = 329900000;
             const isProjectionBrand = dashDisplayMode === 'projection';
             const brandOppEl = document.getElementById('brandOpportunities');
             if (brandOppEl) brandOppEl.innerHTML = brandItems.map((item, i) => {
@@ -38705,7 +38720,7 @@
                 .filter(c => c.avgIndex > 110 && c.count < 20)
                 .sort((a, b) => b.avgIndex - a.avgIndex)
                 .slice(0, 10);
-            const US_POP_UNTAPPED = 324700000;
+            const US_POP_UNTAPPED = 329900000;
             const isProjectionUntapped = dashDisplayMode === 'projection';
             const untappedEl = document.getElementById('untappedCategories');
             if (untappedEl) untappedEl.innerHTML = untappedCats.map((cat, i) => {
@@ -38741,7 +38756,7 @@
                 .filter(i => shoppingCategories.some(sc => i.category.toUpperCase().includes(sc)))
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 12);
-            const US_POP_SHOP = 324700000;
+            const US_POP_SHOP = 329900000;
             const isProjectionShop = dashDisplayMode === 'projection';
             const shoppingEl = document.getElementById('shoppingAffinity');
             if (shoppingEl) shoppingEl.innerHTML = shoppingItems.map((item, i) => {
@@ -38768,7 +38783,7 @@
             const contentItems = allItems.filter(i => 
                 i.category.toUpperCase().includes('BROADCAST') || i.category.toUpperCase().includes('SERIES') || i.category.toUpperCase().includes('MOVIE') || i.category.toUpperCase().includes('CHANNEL')
             ).sort((a, b) => b.index - a.index).slice(0, 10);
-            const US_POP_CONTENT = 324700000;
+            const US_POP_CONTENT = 329900000;
             const isProjectionContent = dashDisplayMode === 'projection';
             const contentPartEl = document.getElementById('contentPartnerships');
             if (contentPartEl) contentPartEl.innerHTML = contentItems.map((item, i) => {
@@ -38802,7 +38817,7 @@
             
             // Geographic opportunities
             const topLocations = (data.locations || []).filter(l => l.index > 100).sort((a, b) => b.index - a.index).slice(0, 10);
-            const US_POP_GEO = 324700000;
+            const US_POP_GEO = 329900000;
             const isProjectionGeo = dashDisplayMode === 'projection';
             const geoOppEl = document.getElementById('geoOpportunities');
             if (geoOppEl) geoOppEl.innerHTML = topLocations.map(loc => {
@@ -40189,7 +40204,7 @@
             if (!items.length) return '<p style="color: var(--text-secondary); padding: 0.5rem;">No data available</p>';
             
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
+            const US_POP = 329900000;
             
             return items.map(item => {
                 const index = item.index || 0;
@@ -40467,7 +40482,7 @@
             if (!item) return;
             
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
+            const US_POP = 329900000;
             
             let genPopPct = item.genPopPct || 0;
             let genPopProjection = item.genPopProjection || 0;
@@ -42553,7 +42568,7 @@
             const maxVal = Math.max(...values);
             
             const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
+            const US_POP = 329900000;
             
             // Render state boxes with gen pop comparison
             const sortedStates = Object.entries(stateData).sort((a, b) => b[1].pct - a[1].pct);
@@ -42696,7 +42711,7 @@
             
             const tabLabel = activeTabBtn.querySelector('.tab-label')?.textContent?.trim()?.toLowerCase() || '';
             const profileName = currentProfileData.name || 'Profile';
-            const US_POP = 324700000;
+            const US_POP = 329900000;
             let csvContent = '';
             let filename = '';
             
@@ -44840,7 +44855,7 @@
         }
 
         function parseComparisonData(csvData) {
-            const US_POPULATION = 324700000;
+            const US_POPULATION = 329900000;
             const demoKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
             const result = {
                 sampleSize: 0,
@@ -44906,7 +44921,7 @@
                     if (!result.behavioralProjection[category]) result.behavioralProjection[category] = [];
                     // Calculate Gen Pop % from US Gen Pop Projection (projection / 324.7M US pop * 100)
                     // Also check catShare as fallback and normalize if < 1
-                    let genPopPct = usGenPop > 0 ? (usGenPop / 324700000) * 100 : 0;
+                    let genPopPct = usGenPop > 0 ? (usGenPop / 329900000) * 100 : 0;
                     if (genPopPct === 0 && catShare > 0) {
                         genPopPct = catShare;
                     }
