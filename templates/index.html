@@ -23814,8 +23814,98 @@
                 const leadingNum = s.match(/^(\d+)/);
                 return leadingNum ? parseInt(leadingNum[1], 10) : 999;
             }
+            
+            // Helper to parse episode date string (MM-DD-YYYY or YYYY-MM-DD or M/D/YY etc.)
+            function parseEpisodeDate(dateStr) {
+                if (!dateStr) return null;
+                const s = String(dateStr).trim();
+                // Try MM-DD-YYYY
+                let m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+                if (m) return new Date(parseInt(m[3]), parseInt(m[1]) - 1, parseInt(m[2]));
+                // Try YYYY-MM-DD
+                m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+                if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+                // Try M/D/YY or M/D/YYYY
+                m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                if (m) {
+                    let year = parseInt(m[3]);
+                    if (year < 100) year += 2000;
+                    return new Date(year, parseInt(m[1]) - 1, parseInt(m[2]));
+                }
+                return null;
+            }
+            
+            // Helper to format date as M/D/YY
+            function formatDateLabel(d) {
+                if (!d || !(d instanceof Date) || isNaN(d.getTime())) return '';
+                return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+            }
+            
+            // Helper to add days to a date
+            function addDays(date, days) {
+                const result = new Date(date);
+                result.setDate(result.getDate() + days);
+                return result;
+            }
+            
+            // Build episode date map from episode_attribution
+            const episodeDateMap = {};
+            const episodes = data.episode_attribution || [];
+            for (const ep of episodes) {
+                const epNum = parseInt(ep.episode) || 0;
+                const epKey = `Episode ${epNum}`;
+                const epDate = parseEpisodeDate(ep.episode_date);
+                if (epDate) {
+                    episodeDateMap[epKey] = epDate;
+                    episodeDateMap[`episode ${epNum}`] = epDate;
+                    episodeDateMap[`Ep ${epNum}`] = epDate;
+                    episodeDateMap[epNum] = epDate;
+                }
+            }
+            
+            // Aggregate timing data by actual date
             let timingData = data.signup_timing || [];
-            if (timingData.length === 0 && data.episode_signup_timing && typeof data.episode_signup_timing === 'object') {
+            let timingByDate = {}; // { 'M/D/YY': signups }
+            let hasActualDates = false;
+            
+            if (data.episode_signup_timing && typeof data.episode_signup_timing === 'object' && Object.keys(episodeDateMap).length > 0) {
+                // We have episode-specific timing data and episode dates - convert to actual dates
+                for (const epKey of Object.keys(data.episode_signup_timing)) {
+                    const epDate = episodeDateMap[epKey] || episodeDateMap[epKey.toLowerCase()];
+                    if (!epDate) continue;
+                    
+                    const items = data.episode_signup_timing[epKey] || [];
+                    for (const t of items) {
+                        const days = getDaysFromTiming(t);
+                        if (days >= 999) continue;
+                        const actualDate = addDays(epDate, days);
+                        const dateLabel = formatDateLabel(actualDate);
+                        if (dateLabel) {
+                            timingByDate[dateLabel] = (timingByDate[dateLabel] || 0) + (parseNumber(t.signups) || 0);
+                            hasActualDates = true;
+                        }
+                    }
+                }
+            }
+            
+            // If we have actual dates, use them; otherwise fall back to relative labels
+            if (hasActualDates && Object.keys(timingByDate).length > 0) {
+                // Sort by actual date
+                const sortedDates = Object.keys(timingByDate).sort((a, b) => {
+                    const parseLabel = (lbl) => {
+                        const m = lbl.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+                        if (m) {
+                            let year = parseInt(m[3]);
+                            if (year < 100) year += 2000;
+                            return new Date(year, parseInt(m[1]) - 1, parseInt(m[2]));
+                        }
+                        return new Date(0);
+                    };
+                    return parseLabel(a) - parseLabel(b);
+                });
+                timingData = sortedDates.map(dateLabel => ({ timing: dateLabel, signups: String(timingByDate[dateLabel]) }));
+            } else if (timingData.length === 0 && data.episode_signup_timing && typeof data.episode_signup_timing === 'object') {
+                // Fallback: aggregate by relative timing labels
                 const aggregated = {};
                 for (const epKey of Object.keys(data.episode_signup_timing)) {
                     const items = data.episode_signup_timing[epKey] || [];
@@ -23952,6 +24042,9 @@
                     const labels = timingData.map(t => t.timing);
                     const signups = timingData.map(t => parseNumber(t.signups) || 0);
                     
+                    // Check if labels are actual dates (M/D/YY format) or relative timing
+                    const isActualDates = labels.length > 0 && /^\d{1,2}\/\d{1,2}\/\d{2}$/.test(labels[0]);
+                    
                     charts.subscriberSignupTiming = new Chart(ctx, {
                         type: 'bar',
                         data: {
@@ -23970,7 +24063,7 @@
                             plugins: {
                                 title: {
                                     display: true,
-                                    text: 'Signups by Days After Show Available',
+                                    text: isActualDates ? 'Signups by Date' : 'Signups by Days After Show Available',
                                     color: '#fff'
                                 },
                                 legend: {
@@ -23984,7 +24077,7 @@
                                     grid: { color: 'rgba(255,255,255,0.1)' }
                                 },
                                 x: {
-                                    ticks: { color: '#fff' },
+                                    ticks: { color: '#fff', maxRotation: 45, minRotation: 45 },
                                     grid: { color: 'rgba(255,255,255,0.1)' }
                                 }
                             }
@@ -24010,6 +24103,9 @@
                     const labels = timingData.map(t => t.timing);
                     const signups = timingData.map(t => parseNumber(t.signups) || 0);
                     
+                    // Check if labels are actual dates (M/D/YY format) or relative timing
+                    const isActualDatesTimeline = labels.length > 0 && /^\d{1,2}\/\d{1,2}\/\d{2}$/.test(labels[0]);
+                    
                     charts.subscriberSignupTimeline = new Chart(ctx, {
                         type: 'line',
                         data: {
@@ -24029,7 +24125,7 @@
                             plugins: {
                                 title: {
                                     display: true,
-                                    text: 'Signup Volume Over Time',
+                                    text: isActualDatesTimeline ? 'Signup Volume by Date' : 'Signup Volume Over Time',
                                     color: '#fff'
                                 },
                                 legend: {
