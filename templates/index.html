@@ -56848,6 +56848,9 @@
                 return;
             }
             
+            // Store original slide index to restore later
+            const originalSlideIndex = currentEditingSlide;
+            
             showNotification('📄 Generating PDF... (0/' + allSlides.length + ')', 'info');
             
             try {
@@ -56859,25 +56862,62 @@
                     await new Promise(r => script.onload = r);
                 }
                 
+                // Load html2canvas if needed
+                if (typeof html2canvas === 'undefined') {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                    document.head.appendChild(script);
+                    await new Promise(r => script.onload = r);
+                }
+                
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF({ orientation: 'landscape', unit: 'px', format: [960, 540] });
                 
                 for (let i = 0; i < allSlides.length; i++) {
                     showNotification('📄 Generating PDF... (' + (i+1) + '/' + allSlides.length + ')', 'info');
                     
-                    const slideHTML = generateSlideHTML(allSlides[i], i, deck);
-                    const canvas = await renderSlideToCanvas(slideHTML);
+                    // Navigate to this slide and render it
+                    currentEditingSlide = i;
+                    renderSlideEditor();
+                    
+                    // Wait for render to complete
+                    await new Promise(r => setTimeout(r, 300));
+                    
+                    // Capture the actual slide canvas
+                    const slideCanvas = document.getElementById('slideCanvas');
+                    if (!slideCanvas) {
+                        console.error('Slide canvas not found for slide', i);
+                        continue;
+                    }
+                    
+                    const canvas = await html2canvas(slideCanvas, {
+                        backgroundColor: '#1a1a2e',
+                        scale: 2,
+                        logging: false,
+                        useCORS: true,
+                        allowTaint: true,
+                        width: 960,
+                        height: 540
+                    });
+                    
                     const imgData = canvas.toDataURL('image/png');
                     
                     if (i > 0) doc.addPage([960, 540], 'landscape');
                     doc.addImage(imgData, 'PNG', 0, 0, 960, 540);
                 }
                 
+                // Restore original slide
+                currentEditingSlide = originalSlideIndex;
+                renderSlideEditor();
+                
                 doc.save(`${deck.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
                 showNotification('✅ PDF downloaded!', 'success');
             } catch (e) {
                 console.error('PDF export error:', e);
                 showNotification('❌ PDF export failed: ' + e.message, 'error');
+                // Restore original slide on error
+                currentEditingSlide = originalSlideIndex;
+                renderSlideEditor();
             }
         }
         
@@ -56899,6 +56939,9 @@
                 return;
             }
             
+            // Store original slide index to restore later
+            const originalSlideIndex = currentEditingSlide;
+            
             showNotification('📊 Generating PowerPoint... (0/' + allSlides.length + ')', 'info');
             
             try {
@@ -56913,6 +56956,14 @@
                     });
                 }
                 
+                // Load html2canvas if needed
+                if (typeof html2canvas === 'undefined') {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                    document.head.appendChild(script);
+                    await new Promise(r => script.onload = r);
+                }
+                
                 const pptx = new PptxGenJS();
                 pptx.defineLayout({ name: 'CUSTOM', width: 10, height: 5.625 });
                 pptx.layout = 'CUSTOM';
@@ -56922,8 +56973,30 @@
                 for (let i = 0; i < allSlides.length; i++) {
                     showNotification('📊 Generating PowerPoint... (' + (i+1) + '/' + allSlides.length + ')', 'info');
                     
-                    const slideHTML = generateSlideHTML(allSlides[i], i, deck);
-                    const canvas = await renderSlideToCanvas(slideHTML);
+                    // Navigate to this slide and render it
+                    currentEditingSlide = i;
+                    renderSlideEditor();
+                    
+                    // Wait for render to complete
+                    await new Promise(r => setTimeout(r, 300));
+                    
+                    // Capture the actual slide canvas
+                    const slideCanvas = document.getElementById('slideCanvas');
+                    if (!slideCanvas) {
+                        console.error('Slide canvas not found for slide', i);
+                        continue;
+                    }
+                    
+                    const canvas = await html2canvas(slideCanvas, {
+                        backgroundColor: '#1a1a2e',
+                        scale: 2,
+                        logging: false,
+                        useCORS: true,
+                        allowTaint: true,
+                        width: 960,
+                        height: 540
+                    });
+                    
                     const imgData = canvas.toDataURL('image/png');
                     
                     const slide = pptx.addSlide();
@@ -56931,11 +57004,18 @@
                     slide.addImage({ data: imgData, x: 0, y: 0, w: '100%', h: '100%' });
                 }
                 
+                // Restore original slide
+                currentEditingSlide = originalSlideIndex;
+                renderSlideEditor();
+                
                 await pptx.writeFile({ fileName: `${deck.name.replace(/[^a-z0-9]/gi, '_')}.pptx` });
                 showNotification('✅ PowerPoint downloaded!', 'success');
             } catch (e) {
                 console.error('PPT export error:', e);
                 showNotification('❌ PowerPoint export failed: ' + e.message, 'error');
+                // Restore original slide on error
+                currentEditingSlide = originalSlideIndex;
+                renderSlideEditor();
             }
         }
         
