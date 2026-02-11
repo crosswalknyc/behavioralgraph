@@ -14919,7 +14919,7 @@
                                 <h3>👥 Age of New Signups</h3>
                                 <p class="section-description">Age distribution of people who signed up for the platform to watch this show</p>
                                 <div id="subscriberAgeTable" class="demographics-table-container"></div>
-                                <div id="subscriberAgeChart" class="chart-container" style="margin-top: 2rem;"></div>
+
                             </div>
                             
                             <!-- Gender Section - Separate Box -->
@@ -14927,7 +14927,7 @@
                                 <h3>👥 Gender of New Signups</h3>
                                 <p class="section-description">Gender distribution of people who signed up for the platform to watch this show</p>
                                 <div id="subscriberGenderTable" class="demographics-table-container"></div>
-                                <div id="subscriberGenderChart" class="chart-container" style="margin-top: 2rem;"></div>
+
                             </div>
                         </div>
 
@@ -24610,62 +24610,7 @@
                 }
             }
             
-            // Age Chart
-            const ageContainer = document.getElementById('subscriberAgeChart');
-            if (validAgeData.length > 0 && ageContainer) {
-                if (charts.subscriberAge) {
-                    charts.subscriberAge.destroy();
-                }
-                
-                const ctx = document.createElement('canvas');
-                ageContainer.innerHTML = '';
-                ageContainer.appendChild(ctx);
-                
-                const labels = validAgeData.map(a => getAgeDisplayLabel(a.age_range || a.age || 'N/A'));
-                const counts = validAgeData.map(a => getDisplayValue(a.count, a.gen_pop));
-                const percentages = validAgeData.map(a => parseFloat(a.percentage) || 0);
-                
-                charts.subscriberAge = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: subscriberGenPopMode ? 'Gen Pop Projection by Age' : 'New Signups by Age',
-                            data: counts,
-                            backgroundColor: 'rgba(74, 222, 128, 0.6)',
-                            borderColor: 'rgba(74, 222, 128, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: subscriberGenPopMode ? 'Gen Pop Projection: Age Distribution' : 'Age Distribution of New Platform Signups',
-                                color: '#fff'
-                            },
-                            legend: {
-                                display: false
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: { color: '#fff' },
-                                grid: { color: 'rgba(255,255,255,0.1)' }
-                            },
-                            x: {
-                                ticks: { color: '#fff' },
-                                grid: { color: 'rgba(255,255,255,0.1)' }
-                            }
-                        }
-                    }
-                });
-            } else if (ageContainer) {
-                ageContainer.innerHTML = '<p style="color: var(--text-secondary);">No age data available</p>';
-            }
+
             
             // Gender Table (uses validGenderData created earlier)
             const genderTableContainer = document.getElementById('subscriberGenderTable');
@@ -24710,57 +24655,7 @@
                 }
             }
             
-            // Gender Chart
-            const genderContainer = document.getElementById('subscriberGenderChart');
-            if (validGenderData.length > 0 && genderContainer) {
-                if (charts.subscriberGender) {
-                    charts.subscriberGender.destroy();
-                }
-                
-                const ctx = document.createElement('canvas');
-                genderContainer.innerHTML = '';
-                genderContainer.appendChild(ctx);
-                
-                // Use the already-combined gender data
-                const labels = validGenderData.map(g => g.gender);
-                const counts = validGenderData.map(g => getDisplayValue(g.count, g.genPop));
-                
-                charts.subscriberGender = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: subscriberGenPopMode ? 'Gen Pop Projection by Gender' : 'New Signups by Gender',
-                            data: counts,
-                            backgroundColor: [
-                                'rgba(74, 222, 128, 0.8)',
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(168, 85, 247, 0.8)',
-                                'rgba(236, 72, 153, 0.8)',
-                                'rgba(251, 146, 60, 0.8)'
-                            ]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: subscriberGenPopMode ? 'Gen Pop Projection: Gender Distribution' : 'Gender Distribution of New Platform Signups',
-                                color: '#fff'
-                            },
-                            legend: {
-                                display: true,
-                                position: 'right',
-                                labels: { color: '#fff' }
-                            }
-                        }
-                    }
-                });
-            } else if (genderContainer) {
-                genderContainer.innerHTML = '<p style="color: var(--text-secondary);">No gender data available</p>';
-            }
+
         }
         
         function renderSubscriberTrends(data) {
