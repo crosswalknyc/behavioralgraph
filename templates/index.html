@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crosswalk IQ+</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Poppins:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.umd.min.js?v=3.9.1"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js?v=2.2.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+    <script>(function(){var p={id:'shrinkOccupationLabels',beforeInit:function(chart){var o=chart.options,d=chart.data,l=d.labels||[],n=Array.isArray(l)?l.length:0,t=(chart.config&&chart.config.type)||o.type||'bar',ax=o.indexAxis||'x';if(t==='bar'&&ax==='y'&&n>8){o.scales=o.scales||{};o.scales.y=o.scales.y||{};o.scales.y.ticks=o.scales.y.ticks||{};o.scales.y.ticks.font=Object.assign(o.scales.y.ticks.font||{},{size:9});o.scales.y.ticks.maxRotation=0;o.scales.y.ticks.autoSkip=false;}}};if(typeof Chart!=='undefined')Chart.register(p);})();</script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <style>
         :root {
