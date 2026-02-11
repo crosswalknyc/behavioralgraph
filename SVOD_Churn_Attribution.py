@@ -30,17 +30,15 @@ def gen_pop_projection(raw_number):
         return 0.0
 
 def format_gen_pop(number):
-    """Format gen pop projection with 8 decimal places, with commas and 'M'/'K' suffix for millions/thousands."""
+    """Format gen pop projection as actual number with commas (no K/M). Saves and displays the full projected value."""
     try:
         n = float(number)
-        if n >= 1_000_000:
-            return f"{n / 1_000_000:.8f}M"
-        elif n >= 1_000:
-            return f"{n / 1_000:.8f}K"
-        else:
-            return f"{n:.8f}"
+        if n <= 0:
+            return "0"
+        # Round to integer for display; store as actual number with commas
+        return f"{int(round(n)):,}"
     except (ValueError, TypeError):
-        return "0.00000000"
+        return "0"
 
 def calculate_boost_multiplier(raw_value):
     """
