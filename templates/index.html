@@ -3103,39 +3103,33 @@
 
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(380px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 1rem;
             width: 100%;
             max-width: 100%;
-            min-width: 0;
         }
-        .charts-grid > * { min-width: 380px; max-width: 100%; overflow: visible; }
+        .charts-grid > * { width: 100%; }
         
-        @media (max-width: 800px) {
+        @media (max-width: 900px) {
             .charts-grid {
                 grid-template-columns: 1fr;
             }
-            .charts-grid > * { min-width: 0; }
         }
 
-        /* Demographics chart cards - fixed size, centered content */
+        /* Demographics chart cards - fixed internal size, scales as single unit */
         .chart-card {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 0.6rem 0.5rem;
+            padding: 1rem;
             position: relative;
-            min-width: 380px;
-            overflow: visible;
+            overflow: hidden;
             font-size: 0.85rem;
-            height: 380px;
-            min-height: 380px;
-            max-height: 380px;
+            aspect-ratio: 4 / 3;
             display: flex;
             flex-direction: column;
         }
         .charts-grid .chart-card {
-            padding-left: 0.5rem;
-            padding-right: 0.5rem;
+            padding: 1rem;
         }
         
         .chart-card.dragging {
@@ -3241,27 +3235,27 @@
 
         .chart-container { 
             width: 100%;
-            min-width: 0;
-            max-width: 100%;
-            height: 300px;
-            overflow: visible;
+            height: 100%;
+            overflow: hidden;
             position: relative;
             padding: 0;
             box-sizing: border-box;
             display: flex;
             justify-content: center;
             align-items: center;
-        }
-        .chart-container canvas { max-width: 100%; max-height: 100%; display: block; }
-        /* Demographics: fixed height, minimal padding so legend text fits */
-        .charts-grid .chart-container {
-            height: 300px;
-            min-height: 300px;
-            max-height: 300px;
-            width: 100%;
-            overflow: visible;
             flex: 1 1 auto;
-            padding: 0;
+        }
+        .chart-container canvas { 
+            max-width: 100%; 
+            max-height: 100%; 
+            display: block;
+        }
+        /* Demographics: fill available space */
+        .charts-grid .chart-container {
+            width: 100%;
+            height: 100%;
+            flex: 1 1 auto;
+            overflow: hidden;
         }
 
         /* Occupation chart: full width, room for larger bars and wrapped labels */
@@ -3278,15 +3272,13 @@
             .occupation-chart-container { min-height: min(600px, 65vh); }
         }
         
-        /* Demographics cards: fixed sizes that scale with container, not dynamic elements */
-        @media (max-width: 1600px) {
-            .charts-grid .chart-card { height: 380px; min-height: 380px; max-height: 380px; }
-            .charts-grid .chart-container { height: 300px; min-height: 300px; max-height: 300px; }
+        /* Demographics cards: aspect ratio maintains proportions at any size */
+        @media (max-width: 1400px) {
+            .charts-grid .chart-card { aspect-ratio: 4 / 3; }
         }
-        @media (max-width: 800px) {
+        @media (max-width: 900px) {
             .charts-grid { grid-template-columns: 1fr; }
-            .charts-grid .chart-card { height: 380px; min-height: 380px; max-height: 380px; min-width: 0; }
-            .charts-grid .chart-container { height: 300px; min-height: 300px; max-height: 300px; }
+            .charts-grid .chart-card { aspect-ratio: 16 / 10; max-height: 400px; }
             .chart-card h3 { font-size: 0.85rem; }
         }
         
@@ -28283,21 +28275,22 @@
             const legendFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
             const axisFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
             const dataLabelFontSize = Math.max(10, Math.min(15, axisFontSize));
-            // Legend width sized for donut charts - reduced to prevent cutoff
-            const legendAreaWidth = 180;
-            const layoutPaddingCircular = { left: 2, right: legendAreaWidth, top: 2, bottom: 2 };
+            // Legend for donut charts - positioned below for better fit
+            const legendAreaWidth = 200;
+            const layoutPaddingCircular = { left: 10, right: 10, top: 5, bottom: 5 };
             const legendOptionsCircular = { 
                 display: true, 
-                position: 'right', 
+                position: 'bottom', 
                 align: 'center', 
-                maxWidth: legendAreaWidth,
-                padding: { left: 2, right: 0 }, 
+                maxWidth: 400,
+                padding: { top: 10 }, 
                 labels: { 
                     color: '#e6f1ff', 
-                    font: { size: 9 }, 
-                    boxWidth: 10, 
-                    padding: 3,
-                    textAlign: 'left'
+                    font: { size: 10 }, 
+                    boxWidth: 12, 
+                    padding: 8,
+                    usePointStyle: true,
+                    pointStyle: 'circle'
                 } 
             };
 
@@ -29154,7 +29147,7 @@
                 const occCanvas = document.getElementById('occupationChart');
                 const occContainer = occCanvas ? occCanvas.closest('.occupation-chart-container') : null;
                 if (occChartType === 'bar' && occCanvas) {
-                    const barHeight = 42; // Smaller bars with smaller font
+                    const barHeight = 32; // Compact bars
                     const calculatedHeight = Math.max(occLabels.length * barHeight, 500);
                     const vh = window.innerHeight || 600;
                     const maxH = Math.min(1100, Math.floor(vh * 0.8)); // Allow more height so all text fits
@@ -29221,14 +29214,14 @@
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 8, weight: '500' },
+                                    font: { size: 10, weight: '500' },
                                     autoSkip: false,
                                     padding: 14,
                                     maxRotation: 0,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
-                                        // Wrap long occupation labels so full text is visible (max 32 chars per line)
-                                        const maxChars = 32;
+                                        // Wrap long occupation labels - shorter lines to prevent overlap
+                                        const maxChars = 22;
                                         if (label && label.length > maxChars) {
                                             const words = String(label).split(' ');
                                             const lines = [];
@@ -29251,9 +29244,9 @@
                                 afterFit: (scale) => {
                                     // Reserve enough width for wrapped occupation labels so nothing is cut off
                                     const maxLabelLen = occLabels.reduce((m, l) => Math.max(m, String(l).length), 0);
-                                    const charsPerLine = 32;
+                                    const charsPerLine = 22;
                                     const lines = Math.ceil(maxLabelLen / charsPerLine) || 1;
-                                    const minWidth = Math.max(480, Math.min(720, lines * 240));
+                                    const minWidth = Math.max(180, Math.min(280, lines * 90));
                                     scale.width = Math.max(scale.width, minWidth);
                                 }
                             }
