@@ -85,7 +85,7 @@
         }
         canvas { max-width: 100%; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -168,6 +168,10 @@
             const chartColors = ['#4a8ac9', '#10b981', '#f97316', '#ec4899', '#8b5cf6', '#06b6d4'];
             
             function createChart(id, labels, values) {
+                if (typeof Chart === 'undefined') {
+                    console.error('Chart.js not loaded');
+                    return;
+                }
                 new Chart(document.getElementById(id), {
                     type: 'doughnut',
                     data: {
