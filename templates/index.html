@@ -23057,7 +23057,7 @@
             execSummaryContainer.innerHTML = `
                 <div class="executive-summary-card">
                     <div class="exec-summary-header">
-                        <h2 class="has-tooltip" data-tooltip="High-level overview of how this show performed for the platform: subscriber growth, conversion, and strategic takeaways.">Executive Summary</h2>
+                        <h2 class="has-tooltip" data-tooltip="Key performance metrics showing subscriber growth, conversion rates, and platform value.">Performance Metrics</h2>
                     </div>
                     <div class="exec-summary-grid">
                         <div class="exec-summary-metric has-tooltip" data-tooltip="Total Accounts Viewed: Total account views during the tracking period (projected US).">
@@ -23081,25 +23081,7 @@
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
                         </div>
                     </div>
-                </div>
-            `;
-            
-            // Load rank-in-genre for Netflix and update badge
-            if (platformName && (platformName.toLowerCase().includes('netflix') || platformName.toLowerCase() === 'netflix') && genreName && showNameForRank) {
-                loadSubscriberRankInGenre(showNameForRank, platformName, genreName, platformGenreLabel);
-            } else {
-                const valEl = document.getElementById('subscriberRankerValue');
-                const lblEl = document.getElementById('subscriberRankerLabel');
-                if (valEl) valEl.textContent = '—';
-                if (lblEl) lblEl.textContent = platformGenreLabel || 'Platform · Genre';
-            }
-            
-            // 2. PLATFORM VALUE ASSESSMENT
-            const valueStrength = totalSignups > 10000 ? 'high' : totalSignups > 5000 ? 'moderate' : 'developing';
-            platformValueContainer.innerHTML = `
-                <div class="strategic-card">
-                    <h3 class="has-tooltip" data-tooltip="Summarizes how much value this show delivers to the platform: account subscriber growth and how quickly viewers convert to subscribers.">💰 Platform Value Assessment</h3>
-                    <div class="value-assessment-grid">
+                    <div class="value-assessment-grid" style="margin-top: 1.5rem;">
                         <div class="value-metric-card has-tooltip" data-tooltip="Account Subscriber Growth: Total number of accounts acquired or reactivated. New Signups are confirmed new platform subscribers. Reactivations are dormant users who returned to watch this show.">
                             <div class="value-metric-header">
                                 <span class="value-icon">📈</span>
@@ -23131,6 +23113,20 @@
                     </div>
                 </div>
             `;
+            
+            // Load rank-in-genre for Netflix and update badge
+            if (platformName && (platformName.toLowerCase().includes('netflix') || platformName.toLowerCase() === 'netflix') && genreName && showNameForRank) {
+                loadSubscriberRankInGenre(showNameForRank, platformName, genreName, platformGenreLabel);
+            } else {
+                const valEl = document.getElementById('subscriberRankerValue');
+                const lblEl = document.getElementById('subscriberRankerLabel');
+                if (valEl) valEl.textContent = '—';
+                if (lblEl) lblEl.textContent = platformGenreLabel || 'Platform · Genre';
+            }
+            
+            // 2. PLATFORM VALUE ASSESSMENT - now integrated into Performance Metrics above
+            const valueStrength = totalSignups > 10000 ? 'high' : totalSignups > 5000 ? 'moderate' : 'developing';
+            platformValueContainer.innerHTML = '';
             
             // 3. CONTENT PERFORMANCE ANALYSIS (exclude days/episodes with 0 signups)
             const topEpisodes = (data.episode_attribution || []).slice()
