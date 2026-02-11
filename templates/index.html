@@ -14663,10 +14663,7 @@
                                     <button class="btn btn-small btn-primary" onclick="toggleDeckExportMenu(event)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem;">EXPORT ▾</button>
                                     <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: left;">
                                         <a href="javascript:void(0)" onclick="exportDeckToPDF(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">📄 PDF</a>
-                                        <a href="javascript:void(0)" onclick="exportDeckToGoogleSlides(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">📑 Google Slides</a>
                                         <a href="javascript:void(0)" onclick="exportDeckToPPT(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">📊 PowerPoint</a>
-                                        <a href="javascript:void(0)" onclick="exportDeckToKeynote(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">🍎 Keynote</a>
-                                        <a href="javascript:void(0)" onclick="commitDeckToGitHub(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">🐙 Commit to GitHub</a>
                                     </div>
                                 </div>
                                 <button class="btn btn-small deck-action-with-title" onclick="archiveCurrentDeck()" title="Archive deck" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: rgba(147, 51, 234, 0.2); color: #a78bfa;">📦</button>
@@ -56833,7 +56830,117 @@
             }
         });
         
-        // Export functions
+        // Export functions - render slides exactly as they appear in the builder
+        
+        // Helper: Generate HTML for a slide that matches the deck builder appearance
+        function generateSlideHTML(slide, idx, deck) {
+            const isTitle = idx === 0 || slide.type === 'title';
+            const bgColor = '#1a1a2e';
+            const textColor = '#ffffff';
+            const accentLime = '#a6e22e';
+            
+            if (isTitle) {
+                const title = slide.title || deck.titleSlide?.title || deck.name || 'Presentation';
+                const subtitle = slide.subtitle || deck.titleSlide?.subtitle || 'Powered by Crosswalk IQ';
+                const image = slide.image || deck.titleSlide?.image || '';
+                return `
+                    <div style="width: 960px; height: 540px; background: ${bgColor}; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; box-sizing: border-box;">
+                        ${image ? `<img src="${image}" style="max-width: 150px; max-height: 150px; border-radius: 8px; margin-bottom: 20px;">` : ''}
+                        <h1 style="color: ${textColor}; font-size: 48px; margin: 0 0 16px 0; text-align: center;">${title.replace(/</g,'&lt;')}</h1>
+                        <p style="color: rgba(255,255,255,0.7); font-size: 24px; margin: 0; text-align: center;">${subtitle.replace(/</g,'&lt;')}</p>
+                    </div>
+                `;
+            }
+            
+            // Content slide
+            const slideTitle = slide.customTitle || slide.title || slide.category || 'Slide';
+            let contentHTML = '';
+            
+            if (slide.data) {
+                const slideType = (slide.type || '').toLowerCase();
+                
+                if (slideType === 'demographic' && slide.data.values) {
+                    const entries = Object.entries(slide.data.values).sort((a,b) => b[1] - a[1]).slice(0, 8);
+                    contentHTML = `<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; width: 100%;">`;
+                    entries.forEach(([k, v]) => {
+                        const pct = parseFloat(v) || 0;
+                        contentHTML += `
+                            <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; text-align: center;">
+                                <div style="font-size: 32px; font-weight: 700; color: ${accentLime};">${pct.toFixed(1)}%</div>
+                                <div style="font-size: 14px; color: rgba(255,255,255,0.8); margin-top: 8px;">${String(k).replace(/</g,'&lt;')}</div>
+                            </div>
+                        `;
+                    });
+                    contentHTML += '</div>';
+                } else if (slide.data.items) {
+                    // Behavioral data
+                    const items = Array.isArray(slide.data.items) ? slide.data.items : Object.entries(slide.data.items).map(([k,v]) => ({name: k, pct: v}));
+                    const topItems = items.slice(0, 8);
+                    contentHTML = `<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; width: 100%;">`;
+                    topItems.forEach(item => {
+                        const name = item.name || item;
+                        const pct = parseFloat(item.pct || item) || 0;
+                        contentHTML += `
+                            <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; text-align: center;">
+                                <div style="font-size: 32px; font-weight: 700; color: ${accentLime};">${pct.toFixed(1)}%</div>
+                                <div style="font-size: 14px; color: rgba(255,255,255,0.8); margin-top: 8px;">${String(name).replace(/</g,'&lt;')}</div>
+                            </div>
+                        `;
+                    });
+                    contentHTML += '</div>';
+                }
+            }
+            
+            return `
+                <div style="width: 960px; height: 540px; background: ${bgColor}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; box-sizing: border-box; display: flex; flex-direction: column;">
+                    <h2 style="color: ${accentLime}; font-size: 28px; margin: 0 0 24px 0;">${slideTitle.replace(/</g,'&lt;')}</h2>
+                    <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                        ${contentHTML || '<p style="color: rgba(255,255,255,0.5);">No data</p>'}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Render slide to canvas for image capture
+        async function renderSlideToCanvas(slideHTML) {
+            return new Promise((resolve, reject) => {
+                // Create offscreen container
+                const container = document.createElement('div');
+                container.style.cssText = 'position: fixed; left: -9999px; top: 0; z-index: -1;';
+                container.innerHTML = slideHTML;
+                document.body.appendChild(container);
+                
+                // Wait for any images to load
+                const images = container.querySelectorAll('img');
+                const imagePromises = Array.from(images).map(img => {
+                    if (img.complete) return Promise.resolve();
+                    return new Promise(r => { img.onload = r; img.onerror = r; });
+                });
+                
+                Promise.all(imagePromises).then(() => {
+                    // Use html2canvas
+                    if (typeof html2canvas === 'undefined') {
+                        document.body.removeChild(container);
+                        reject(new Error('html2canvas not loaded'));
+                        return;
+                    }
+                    
+                    html2canvas(container.firstElementChild, {
+                        backgroundColor: '#1a1a2e',
+                        scale: 2,
+                        logging: false,
+                        useCORS: true
+                    }).then(canvas => {
+                        document.body.removeChild(container);
+                        resolve(canvas);
+                    }).catch(err => {
+                        document.body.removeChild(container);
+                        reject(err);
+                    });
+                });
+            });
+        }
+        
         async function exportDeckToPDF() {
             toggleDeckExportMenu();
             if (!currentEditingDeck) {
@@ -56841,88 +56948,48 @@
                 return;
             }
             
-            showNotification('📄 Generating PDF...', 'info');
+            const deck = currentEditingDeck;
+            const allSlides = [
+                { ...deck.titleSlide, type: 'title' },
+                ...(deck.slides || [])
+            ];
             
-            // Use jsPDF if available, otherwise create a printable version
-            try {
-                const { jsPDF } = window.jspdf || {};
-                if (jsPDF) {
-                    const doc = new jsPDF('landscape', 'pt', 'letter');
-                    const deck = currentEditingDeck;
-                    
-                    // Title slide
-                    doc.setFontSize(32);
-                    doc.text(deck.titleSlide?.title || 'Presentation', 400, 250, { align: 'center' });
-                    doc.setFontSize(16);
-                    doc.text(deck.titleSlide?.subtitle || '', 400, 300, { align: 'center' });
-                    
-                    // Content slides
-                    (deck.slides || []).forEach((slide, i) => {
-                        doc.addPage();
-                        doc.setFontSize(24);
-                        doc.text(slide.customTitle || slide.title || slide.category || `Slide ${i + 2}`, 50, 50);
-                        
-                        // Add basic content
-                        doc.setFontSize(12);
-                        if (slide.data) {
-                            let y = 100;
-                            if (slide.type === 'demographic' && slide.data.values) {
-                                Object.entries(slide.data.values).slice(0, 10).forEach(([k, v]) => {
-                                    doc.text(`${k}: ${parseFloat(v).toFixed(1)}%`, 50, y);
-                                    y += 20;
-                                });
-                            } else if (slide.type === 'behavioral' && slide.data.items) {
-                                Object.entries(slide.data.items).slice(0, 10).forEach(([k, v]) => {
-                                    doc.text(`${k}: ${parseFloat(v).toFixed(1)}%`, 50, y);
-                                    y += 20;
-                                });
-                            }
-                        }
-                    });
-                    
-                    doc.save(`${deck.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
-                    showNotification('✅ PDF downloaded!', 'success');
-                } else {
-                    // Fallback: open print dialog
-                    window.print();
-                }
-            } catch (e) {
-                console.error('PDF export error:', e);
-                showNotification('❌ PDF export failed', 'error');
-            }
-        }
-        
-        async function exportDeckToGoogleSlides() {
-            toggleDeckExportMenu();
-            if (!currentEditingDeck) {
-                showNotification('⚠️ Please select or create a deck first, then add slides.', 'warning');
+            if (allSlides.length === 0) {
+                showNotification('⚠️ No slides to export', 'warning');
                 return;
             }
             
-            // Generate Google Slides compatible format
-            const deck = currentEditingDeck;
-            const slidesData = {
-                title: deck.name,
-                slides: [
-                    { title: deck.titleSlide?.title, subtitle: deck.titleSlide?.subtitle, type: 'title' },
-                    ...(deck.slides || []).map(s => ({
-                        title: s.customTitle || s.title || s.category,
-                        content: s.data,
-                        type: s.type
-                    }))
-                ]
-            };
+            showNotification('📄 Generating PDF... (0/' + allSlides.length + ')', 'info');
             
-            // Create a download link for the data
-            const blob = new Blob([JSON.stringify(slidesData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${deck.name.replace(/[^a-z0-9]/gi, '_')}_google_slides.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            
-            showNotification('📑 Google Slides data exported! Import into Google Slides using Add-ons.', 'success');
+            try {
+                // Load jsPDF if needed
+                if (!window.jspdf) {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                    document.head.appendChild(script);
+                    await new Promise(r => script.onload = r);
+                }
+                
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'landscape', unit: 'px', format: [960, 540] });
+                
+                for (let i = 0; i < allSlides.length; i++) {
+                    showNotification('📄 Generating PDF... (' + (i+1) + '/' + allSlides.length + ')', 'info');
+                    
+                    const slideHTML = generateSlideHTML(allSlides[i], i, deck);
+                    const canvas = await renderSlideToCanvas(slideHTML);
+                    const imgData = canvas.toDataURL('image/png');
+                    
+                    if (i > 0) doc.addPage([960, 540], 'landscape');
+                    doc.addImage(imgData, 'PNG', 0, 0, 960, 540);
+                }
+                
+                doc.save(`${deck.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+                showNotification('✅ PDF downloaded!', 'success');
+            } catch (e) {
+                console.error('PDF export error:', e);
+                showNotification('❌ PDF export failed: ' + e.message, 'error');
+            }
         }
         
         async function exportDeckToPPT() {
@@ -56932,158 +56999,54 @@
                 return;
             }
             
-            showNotification('📊 Generating PowerPoint...', 'info');
+            const deck = currentEditingDeck;
+            const allSlides = [
+                { ...deck.titleSlide, type: 'title' },
+                ...(deck.slides || [])
+            ];
             
-            try {
-                // Use PptxGenJS if available
-                if (typeof PptxGenJS !== 'undefined') {
-                    const pptx = new PptxGenJS();
-                    const deck = currentEditingDeck;
-                    
-                    pptx.title = deck.name;
-                    pptx.author = currentUsername;
-                    
-                    // Title slide
-                    let slide = pptx.addSlide();
-                    slide.addText(deck.titleSlide?.title || 'Presentation', { x: 0.5, y: 2, w: '90%', fontSize: 44, bold: true, align: 'center' });
-                    slide.addText(deck.titleSlide?.subtitle || '', { x: 0.5, y: 3, w: '90%', fontSize: 20, align: 'center', color: '666666' });
-                    
-                    // Content slides
-                    (deck.slides || []).forEach(s => {
-                        slide = pptx.addSlide();
-                        slide.addText(s.customTitle || s.title || s.category || 'Slide', { x: 0.5, y: 0.5, fontSize: 28, bold: true, color: 'A6E22E' });
-                        
-                        if (s.data) {
-                            let rows = [];
-                            if (s.type === 'demographic' && s.data.values) {
-                                rows = Object.entries(s.data.values).slice(0, 10).map(([k, v]) => [k, `${parseFloat(v).toFixed(1)}%`]);
-                            } else if (s.type === 'behavioral' && s.data.items) {
-                                rows = Object.entries(s.data.items).slice(0, 10).map(([k, v]) => [k, `${parseFloat(v).toFixed(1)}%`]);
-                            }
-                            if (rows.length > 0) {
-                                slide.addTable(rows, { x: 0.5, y: 1.5, w: 9, fontSize: 14 });
-                            }
-                        }
-                    });
-                    
-                    pptx.writeFile({ fileName: `${deck.name.replace(/[^a-z0-9]/gi, '_')}.pptx` });
-                    showNotification('✅ PowerPoint downloaded!', 'success');
-                } else {
-                    // Fallback: export as HTML that PowerPoint can open (File > Open)
-                    const deck = currentEditingDeck;
-                    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Calibri,Arial,sans-serif;margin:0;padding:0;}.slide{page-break-after:always;padding:50px;min-height:500px;}.slide h1{font-size:32px;color:#2c3e50;}.slide h2{font-size:24px;color:#34495e;}.slide table{width:100%;border-collapse:collapse;}.slide th{background:#3498db;color:white;padding:12px;text-align:left;}.slide td{padding:10px;border-bottom:1px solid #ecf0f1;}</style></head><body>`;
-                    html += `<div class="slide"><h1>${(deck.titleSlide?.title || deck.name || 'Presentation').replace(/</g,'&lt;')}</h1><h2>${(deck.titleSlide?.subtitle || '').replace(/</g,'&lt;')}</h2><p>${(deck.slides || []).length} slides</p></div>`;
-                    (deck.slides || []).forEach((s, i) => {
-                        html += `<div class="slide"><h1>${(s.customTitle || s.title || s.category || 'Slide ' + (i+1)).replace(/</g,'&lt;')}</h1>`;
-                        if (s.data) {
-                            html += '<table><tr><th>Item</th><th>Value</th></tr>';
-                            if (s.type === 'demographic' && s.data.values) {
-                                Object.entries(s.data.values).slice(0, 10).forEach(([k, v]) => {
-                                    html += `<tr><td>${String(k).replace(/</g,'&lt;')}</td><td>${typeof v === 'number' ? v.toFixed(1) + '%' : v}</td></tr>`;
-                                });
-                            } else if (s.data.items) {
-                                (s.data.items || []).slice(0, 10).forEach(it => {
-                                    html += `<tr><td>${String(it.name || it).replace(/</g,'&lt;')}</td><td>${(it.pct || 0).toFixed(1)}%</td></tr>`;
-                                });
-                            }
-                            html += '</table>';
-                        }
-                        html += '</div>';
-                    });
-                    html += '</body></html>';
-                    const blob = new Blob([html], { type: 'text/html' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${deck.name.replace(/[^a-z0-9]/gi, '_')}.htm`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    showNotification('✅ HTML exported! Open in PowerPoint (File > Open) to use.', 'success');
-                }
-            } catch (e) {
-                console.error('PPT export error:', e);
-                showNotification('❌ PowerPoint export failed', 'error');
-            }
-        }
-        
-        async function exportDeckToKeynote() {
-            toggleDeckExportMenu();
-            if (!currentEditingDeck) {
-                showNotification('⚠️ Please select or create a deck first, then add slides.', 'warning');
+            if (allSlides.length === 0) {
+                showNotification('⚠️ No slides to export', 'warning');
                 return;
             }
             
-            // Keynote uses the same format as PowerPoint essentially
-            // Export as JSON that can be imported
-            const deck = currentEditingDeck;
-            const keynoteData = {
-                format: 'keynote',
-                title: deck.name,
-                slides: [
-                    { type: 'title', title: deck.titleSlide?.title, subtitle: deck.titleSlide?.subtitle },
-                    ...(deck.slides || []).map(s => ({
-                        type: s.type,
-                        title: s.customTitle || s.title || s.category,
-                        data: s.data,
-                        notes: s.notes
-                    }))
-                ]
-            };
-            
-            const blob = new Blob([JSON.stringify(keynoteData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${deck.name.replace(/[^a-z0-9]/gi, '_')}_keynote.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            
-            showNotification('🍎 Keynote data exported!', 'success');
-        }
-        
-        async function commitDeckToGitHub() {
-            toggleDeckExportMenu();
-            if (!currentEditingDeck) return;
-            
-            const deckId = currentEditingDeck.serverDeckId || currentEditingDeck.id;
-            
-            // Deck must be synced to cloud first (happens when you share it)
-            if (!currentEditingDeck.serverDeckId) {
-                showNotification('📤 Syncing deck to cloud first...', 'info');
-                try {
-                    const syncRes = await fetch('/api/decks/sync', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ deck: currentEditingDeck }),
-                        credentials: 'same-origin'
-                    });
-                    const syncData = await syncRes.json();
-                    if (syncData.success && syncData.serverDeckId) {
-                        currentEditingDeck.serverDeckId = syncData.serverDeckId;
-                        saveDeckChanges();
-                    }
-                } catch (e) {
-                    showNotification('❌ Sync failed. Please share the deck first.', 'error');
-                    return;
-                }
-            }
+            showNotification('📊 Generating PowerPoint... (0/' + allSlides.length + ')', 'info');
             
             try {
-                showNotification('🐙 Committing to GitHub...', 'info');
-                const res = await fetch(`/api/decks/${currentEditingDeck.serverDeckId}/commit-github`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
-                    credentials: 'same-origin'
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showNotification(`✅ ${data.message}`, 'success');
-                } else {
-                    showNotification(data.error || 'Commit failed', 'error');
+                // Load PptxGenJS if needed
+                if (typeof PptxGenJS === 'undefined') {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@3.12.0/dist/pptxgen.bundle.js';
+                    document.head.appendChild(script);
+                    await new Promise((resolve, reject) => {
+                        script.onload = resolve;
+                        script.onerror = () => reject(new Error('Failed to load PptxGenJS'));
+                    });
                 }
+                
+                const pptx = new PptxGenJS();
+                pptx.defineLayout({ name: 'CUSTOM', width: 10, height: 5.625 });
+                pptx.layout = 'CUSTOM';
+                pptx.title = deck.name;
+                pptx.author = currentUsername || 'Crosswalk IQ';
+                
+                for (let i = 0; i < allSlides.length; i++) {
+                    showNotification('📊 Generating PowerPoint... (' + (i+1) + '/' + allSlides.length + ')', 'info');
+                    
+                    const slideHTML = generateSlideHTML(allSlides[i], i, deck);
+                    const canvas = await renderSlideToCanvas(slideHTML);
+                    const imgData = canvas.toDataURL('image/png');
+                    
+                    const slide = pptx.addSlide();
+                    slide.background = { color: '1a1a2e' };
+                    slide.addImage({ data: imgData, x: 0, y: 0, w: '100%', h: '100%' });
+                }
+                
+                await pptx.writeFile({ fileName: `${deck.name.replace(/[^a-z0-9]/gi, '_')}.pptx` });
+                showNotification('✅ PowerPoint downloaded!', 'success');
             } catch (e) {
-                showNotification('❌ GitHub commit failed: ' + (e.message || 'Unknown error'), 'error');
+                console.error('PPT export error:', e);
+                showNotification('❌ PowerPoint export failed: ' + e.message, 'error');
             }
         }
         
