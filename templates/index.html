@@ -3103,36 +3103,39 @@
 
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(380px, 1fr));
             gap: 1rem;
             width: 100%;
             max-width: 100%;
             min-width: 0;
         }
-        .charts-grid > * { min-width: 0; max-width: 100%; overflow: visible; }
+        .charts-grid > * { min-width: 380px; max-width: 100%; overflow: visible; }
         
         @media (max-width: 800px) {
             .charts-grid {
                 grid-template-columns: 1fr;
             }
+            .charts-grid > * { min-width: 0; }
         }
 
-        /* Demographics chart cards - symmetric padding so legend text isn't cut off */
+        /* Demographics chart cards - fixed size, centered content */
         .chart-card {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 0.6rem 0.75rem;
+            padding: 0.6rem 0.5rem;
             position: relative;
-            min-width: 0;
+            min-width: 380px;
             overflow: visible;
             font-size: 0.85rem;
-            min-height: 340px;
+            height: 380px;
+            min-height: 380px;
+            max-height: 380px;
             display: flex;
             flex-direction: column;
         }
         .charts-grid .chart-card {
-            padding-left: 1rem;
-            padding-right: 1rem;
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
         }
         
         .chart-card.dragging {
@@ -3240,24 +3243,25 @@
             width: 100%;
             min-width: 0;
             max-width: 100%;
-            height: clamp(260px, 26vw + 120px, 360px);
+            height: 300px;
             overflow: visible;
             position: relative;
-            padding: 0.25rem 0;
+            padding: 0;
             box-sizing: border-box;
             display: flex;
             justify-content: center;
             align-items: center;
         }
-        .chart-container canvas { max-width: 100%; display: block; }
+        .chart-container canvas { max-width: 100%; max-height: 100%; display: block; }
         /* Demographics: fixed height, minimal padding so legend text fits */
         .charts-grid .chart-container {
             height: 300px;
             min-height: 300px;
+            max-height: 300px;
             width: 100%;
             overflow: visible;
             flex: 1 1 auto;
-            padding: 0.2rem 0;
+            padding: 0;
         }
 
         /* Occupation chart: full width, room for larger bars and wrapped labels */
@@ -3274,15 +3278,15 @@
             .occupation-chart-container { min-height: min(600px, 65vh); }
         }
         
-        /* Demographics cards: keep fixed sizes on smaller screens so layout stays consistent */
+        /* Demographics cards: fixed sizes that scale with container, not dynamic elements */
         @media (max-width: 1600px) {
-            .charts-grid .chart-card { min-height: 340px; }
-            .charts-grid .chart-container { height: 300px; min-height: 300px; }
+            .charts-grid .chart-card { height: 380px; min-height: 380px; max-height: 380px; }
+            .charts-grid .chart-container { height: 300px; min-height: 300px; max-height: 300px; }
         }
         @media (max-width: 800px) {
             .charts-grid { grid-template-columns: 1fr; }
-            .charts-grid .chart-card { min-height: 340px; }
-            .charts-grid .chart-container { height: 300px; min-height: 300px; }
+            .charts-grid .chart-card { height: 380px; min-height: 380px; max-height: 380px; min-width: 0; }
+            .charts-grid .chart-container { height: 300px; min-height: 300px; max-height: 300px; }
             .chart-card h3 { font-size: 0.85rem; }
         }
         
@@ -28279,20 +28283,20 @@
             const legendFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
             const axisFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
             const dataLabelFontSize = Math.max(10, Math.min(15, axisFontSize));
-            // Legend width sized so "NON-BINARY 2.37% (GP: 2.09%)" and similar never cut off
-            const legendAreaWidth = 240;
-            const layoutPaddingCircular = { left: 6, right: legendAreaWidth, top: 6, bottom: 6 };
+            // Legend width sized for donut charts - reduced to prevent cutoff
+            const legendAreaWidth = 180;
+            const layoutPaddingCircular = { left: 2, right: legendAreaWidth, top: 2, bottom: 2 };
             const legendOptionsCircular = { 
                 display: true, 
                 position: 'right', 
                 align: 'center', 
                 maxWidth: legendAreaWidth,
-                padding: { left: 4, right: 2 }, 
+                padding: { left: 2, right: 0 }, 
                 labels: { 
                     color: '#e6f1ff', 
-                    font: { size: 11 }, 
-                    boxWidth: 12, 
-                    padding: 5,
+                    font: { size: 9 }, 
+                    boxWidth: 10, 
+                    padding: 3,
                     textAlign: 'left'
                 } 
             };
@@ -29150,7 +29154,7 @@
                 const occCanvas = document.getElementById('occupationChart');
                 const occContainer = occCanvas ? occCanvas.closest('.occupation-chart-container') : null;
                 if (occChartType === 'bar' && occCanvas) {
-                    const barHeight = 58; // Taller bars and more vertical space so labels can wrap and be read
+                    const barHeight = 42; // Smaller bars with smaller font
                     const calculatedHeight = Math.max(occLabels.length * barHeight, 500);
                     const vh = window.innerHeight || 600;
                     const maxH = Math.min(1100, Math.floor(vh * 0.8)); // Allow more height so all text fits
@@ -29217,7 +29221,7 @@
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: Math.max(10, axisFontSize - 1), weight: '500' },
+                                    font: { size: 8, weight: '500' },
                                     autoSkip: false,
                                     padding: 14,
                                     maxRotation: 0,
