@@ -14881,11 +14881,7 @@
                                 <div class="chart-container" id="subscriberPercentileChart"></div>
                             </div>
                             
-                            <div class="tab-section">
-                                <h3>📺 Episode-Level Signup Timing</h3>
-                                <p class="section-description">Signup timing broken down by individual episode</p>
-                                <div id="subscriberEpisodeTiming" class="episode-timing-grid"></div>
-                            </div>
+
                         </div>
 
                         <!-- View Numbers Tab (1st–5th view attribution) -->
@@ -23997,7 +23993,7 @@
                     timelineContainer.innerHTML = '';
                     timelineContainer.appendChild(ctx);
                     
-                    const labels = timingData.map(t => `Day ${t.timing}`);
+                    const labels = timingData.map(t => t.timing);
                     const signups = timingData.map(t => parseNumber(t.signups) || 0);
                     
                     charts.subscriberSignupTimeline = new Chart(ctx, {
@@ -24062,7 +24058,7 @@
                     percentileContainer.innerHTML = '';
                     percentileContainer.appendChild(ctx);
                     
-                    const labels = timingData.map(t => `Day ${t.timing}`);
+                    const labels = timingData.map(t => t.timing);
                     
                     charts.subscriberPercentile = new Chart(ctx, {
                         type: 'line',
@@ -24117,41 +24113,7 @@
                 }
             }
             
-            // Episode timing
-            const container = document.getElementById('subscriberEpisodeTiming');
-            if (!container) {
-                console.error('❌ Container subscriberEpisodeTiming not found');
-                return;
-            }
-            
-            const episodeTiming = data.episode_signup_timing || {};
-            
-            let html = '';
-            const episodeKeys = Object.keys(episodeTiming).sort((a, b) => parseInt(a) - parseInt(b));
-            
-            if (episodeKeys.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode timing data available</p>';
-            } else {
-                episodeKeys.forEach(epNum => {
-                    const timings = episodeTiming[epNum];
-                    if (timings && timings.length > 0) {
-                        html += `
-                            <div class="episode-timing-card has-tooltip" data-tooltip="Episode ${epNum} Signup Timing: Breakdown of when users signed up relative to when this episode became available.">
-                                <h4>Episode ${epNum}</h4>
-                                <div class="timing-list">
-                                    ${timings.map(t => `
-                                        <div class="timing-item has-tooltip" data-tooltip="${t.timing}: ${formatNumber(t.signups)} people signed up ${t.timing.toLowerCase()} after Episode ${epNum} became available (${t.percentage} of Episode ${epNum} signups)">
-                                            <span>${t.timing}:</span>
-                                            <span>${formatNumber(t.signups)} people (${t.percentage})</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `;
-                    }
-                });
-                container.innerHTML = html;
-            }
+
         }
         
         function renderSubscriberViewNumbers(data) {
