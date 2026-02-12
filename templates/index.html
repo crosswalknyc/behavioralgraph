@@ -55995,7 +55995,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td>Respondents</td>${profiles.map(p => `<td>n=${formatNumber(compareProjectedN(p.sampleSize))}</td>`).join('')}</tr>
+                                <tr><td>Respondents</td>${profiles.map(p => `<td>n=${formatNumber(p.sampleSize)}</td>`).join('')}</tr>
                                 <tr><td>Projected US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
                                 <tr><td>Median Age</td>${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '-'}</td>`).join('')}</tr>
                             </tbody>
