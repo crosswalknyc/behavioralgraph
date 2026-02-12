@@ -22881,10 +22881,12 @@
                 label.textContent = subscriberGenPopMode ? 'GEN POP' : 'ACTUAL';
             }
             
-            // Re-render insights (revenue uses signups) and demographics
+            // Re-render all sections that use gen pop projections
             if (currentSubscriberData) {
                 console.log('📊 Re-rendering with Gen Pop mode:', subscriberGenPopMode);
                 renderSubscriberInsights(currentSubscriberData);
+                renderSubscriberTiming(currentSubscriberData);
+                renderSubscriberViewNumbers(currentSubscriberData);
                 renderSubscriberDemographics(currentSubscriberData);
             } else {
                 console.warn('⚠️ No currentSubscriberData available to re-render');
@@ -23971,26 +23973,36 @@
                 const lateSignups = timingData.filter(t => getDaysFromTiming(t) > 30).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
                 const latePct = totalSignups > 0 ? ((lateSignups / totalSignups) * 100).toFixed(2) : 0;
                 
+                // Get gen_pop total for projection ratio
+                const summary = data.attribution_summary || {};
+                const totalSignupsGenPop = parseNumber(summary.total?.gen_pop || metrics.new_signups?.gen_pop || '') || 0;
+                const projectionRatio = (totalSignupsGenPop > 0 && totalSignups > 0) ? (totalSignupsGenPop / totalSignups) : 1;
+                
+                // Apply gen_pop projection when in gen pop mode
+                const earlyDisplay = subscriberGenPopMode && totalSignupsGenPop > 0 ? Math.round(earlySignups * projectionRatio) : earlySignups;
+                const midDisplay = subscriberGenPopMode && totalSignupsGenPop > 0 ? Math.round(midSignups * projectionRatio) : midSignups;
+                const lateDisplay = subscriberGenPopMode && totalSignupsGenPop > 0 ? Math.round(lateSignups * projectionRatio) : lateSignups;
+                
                 metricsContainer.innerHTML = `
                     <div class="timing-metric-card has-tooltip" data-tooltip="Average Days to Signup: Mean number of days between when the show became available and when users signed up for the platform. Lower numbers indicate faster conversion and immediate platform value.">
                         <div class="timing-metric-label">Average Days to Signup</div>
                         <div class="timing-metric-value">${avgDaysToSignup !== 'N/A' ? Math.round(parseFloat(avgDaysToSignup)) : 'N/A'}</div>
                         <div class="timing-metric-desc">Mean conversion time</div>
                     </div>
-                    <div class="timing-metric-card has-tooltip" data-tooltip="Early Signups (0-7 days): Percentage and count of subscribers who signed up within the first week after the show became available. High percentages indicate strong premiere impact and urgency-driven acquisition.">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Early Signups (0-7 days): Percentage and count of subscribers who signed up within the first week after the show became available. High percentages indicate strong premiere impact and urgency-driven acquisition.${subscriberGenPopMode && totalSignupsGenPop > 0 ? ' (Gen Pop projected)' : ''}">
                         <div class="timing-metric-label">Early Signups (0-7 days)</div>
                         <div class="timing-metric-value">${earlyPct}%</div>
-                        <div class="timing-metric-desc">${formatNumber(earlySignups)} subscribers</div>
+                        <div class="timing-metric-desc">${formatNumber(earlyDisplay)} subscribers</div>
                     </div>
-                    <div class="timing-metric-card has-tooltip" data-tooltip="Mid-Term (8-30 days): Percentage and count of subscribers who signed up between 8-30 days after the show became available. Shows sustained interest and consideration-driven acquisition.">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Mid-Term (8-30 days): Percentage and count of subscribers who signed up between 8-30 days after the show became available. Shows sustained interest and consideration-driven acquisition.${subscriberGenPopMode && totalSignupsGenPop > 0 ? ' (Gen Pop projected)' : ''}">
                         <div class="timing-metric-label">Mid-Term (8-30 days)</div>
                         <div class="timing-metric-value">${midPct}%</div>
-                        <div class="timing-metric-desc">${formatNumber(midSignups)} subscribers</div>
+                        <div class="timing-metric-desc">${formatNumber(midDisplay)} subscribers</div>
                     </div>
-                    <div class="timing-metric-card has-tooltip" data-tooltip="Late Signups (30+ days): Percentage and count of subscribers who signed up more than 30 days after the show became available. Shows long-term discovery and word-of-mouth growth.">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Late Signups (30+ days): Percentage and count of subscribers who signed up more than 30 days after the show became available. Shows long-term discovery and word-of-mouth growth.${subscriberGenPopMode && totalSignupsGenPop > 0 ? ' (Gen Pop projected)' : ''}">
                         <div class="timing-metric-label">Late Signups (30+ days)</div>
                         <div class="timing-metric-value">${latePct}%</div>
-                        <div class="timing-metric-desc">${formatNumber(lateSignups)} subscribers</div>
+                        <div class="timing-metric-desc">${formatNumber(lateDisplay)} subscribers</div>
                     </div>
                 `;
             }
@@ -24218,17 +24230,29 @@
                 const label = labels[t.touchpoint] || (t.touchpoint + ' View');
                 const usersRaw = t.users || '';
                 const usersNum = parseNumber(usersRaw);
-                const usersDisplay = usersNum != null ? formatNumber(usersNum) + ' users watched show' : (usersRaw || '—');
+                const genPopNum = parseNumber(t.gen_pop || '');
+                
+                // Show gen_pop projected value when in gen pop mode, otherwise show actual
+                const displayNum = subscriberGenPopMode && genPopNum != null && genPopNum > 0 ? genPopNum : usersNum;
+                const usersDisplay = displayNum != null ? formatNumber(Math.round(displayNum)) + ' users watched show' : (usersRaw || '—');
+                
                 const pct = (t.percentage || '').trim() || '—';
-                const value = (t.gen_pop || '').trim() || '—';
+                
+                // Show the alternate value (actual when in gen pop mode, gen pop when in actual mode)
+                const alternateValue = subscriberGenPopMode 
+                    ? (usersNum != null ? formatNumber(usersNum) : '—')
+                    : (genPopNum != null && genPopNum > 0 ? formatNumber(Math.round(genPopNum)) : '—');
+                
                 const isTotal = t.touchpoint === 'Total';
-                const tooltip = isTotal ? 'Total users who watched this show as one of their first 5 views after signup' : 'Users who watched this show as their ' + (t.touchpoint || '') + ' view after signing up';
+                const tooltip = isTotal 
+                    ? 'Total users who watched this show as one of their first 5 views after signup' + (subscriberGenPopMode ? ' (Gen Pop projected)' : '')
+                    : 'Users who watched this show as their ' + (t.touchpoint || '') + ' view after signing up' + (subscriberGenPopMode ? ' (Gen Pop projected)' : '');
                 return `
                     <div class="view-number-card has-tooltip ${isTotal ? 'view-number-total' : ''}" data-tooltip="${tooltip.replace(/"/g, '&quot;')}">
                         <div class="view-number-label">${label}</div>
                         <div class="view-number-users">${usersDisplay}</div>
                         <div class="view-number-pct">${pct}</div>
-                        <div class="view-number-value">${value}</div>
+                        <div class="view-number-value">${alternateValue}</div>
                     </div>
                 `;
             }).join('');
