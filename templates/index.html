@@ -14270,62 +14270,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Interest Highlights -->
-                            <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interest Highlights">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <h3 class="has-tooltip" data-tooltip="Interest Highlights: Top interests and behaviors where this audience most over-indexes compared to the general population. Shows what this audience is passionate about." style="margin: 0;">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>⭐ Interest Highlights</span>
-                                    </h3>
-                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                                        <select id="interestHighlightsSortSelect" onchange="sortInterestHighlights(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 100px;">
-                                            <option value="index-desc">Index ↓</option>
-                                            <option value="index-asc">Index ↑</option>
-                                            <option value="profile-desc">Profile % ↓</option>
-                                            <option value="profile-asc">Profile % ↑</option>
-                                            <option value="genpop-desc">GP ↓</option>
-                                            <option value="genpop-asc">GP ↑</option>
-                                            <option value="name-asc">Name A-Z</option>
-                                            <option value="name-desc">Name Z-A</option>
-                                        </select>
-                                        <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('interest-highlights')" data-tooltip="Add to Deck">➕</button>
-                                    </div>
-                                </div>
-                                <div class="differentiator-header">
-                                    <span>Interest</span>
-                                    <span>Category</span>
-                                    <span class="has-tooltip" data-tooltip="Profile %: The percentage of THIS audience that engages with this interest.">Profile %</span>
-                                    <span class="has-tooltip" data-tooltip="Index: How much more likely this audience is to engage vs Gen Pop. 2.0x = twice as likely.">Index</span>
-                                </div>
-                                <div id="interestHighlights" class="highlight-list"></div>
-                            </div>
-                            
-                            <!-- Top Differentiators -->
-                            <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Differentiators">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <h3 class="has-tooltip" data-tooltip="Top Differentiators: The highest-indexing items grouped by category. Shows what truly sets this audience apart from the general population across diverse interests." style="margin: 0;">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>🔥 Top Differentiators</span>
-                                    </h3>
-                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                                        <select id="topDifferentiatorsSortSelect" onchange="sortTopDifferentiators(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 100px;">
-                                            <option value="index-desc">Index ↓</option>
-                                            <option value="index-asc">Index ↑</option>
-                                            <option value="profile-desc">Profile % ↓</option>
-                                            <option value="profile-asc">Profile % ↑</option>
-                                            <option value="genpop-desc">GP ↓</option>
-                                            <option value="genpop-asc">GP ↑</option>
-                                            <option value="name-asc">Name A-Z</option>
-                                            <option value="name-desc">Name Z-A</option>
-                                        </select>
-                                        <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('top-differentiators')" data-tooltip="Add to Deck">➕</button>
-                                    </div>
-                                </div>
-                                <p class="card-desc">What makes this audience unique</p>
-                                <div id="topDifferentiators" class="differentiator-list-grouped"></div>
-                            </div>
                         </div>
                     </div>
                 </div>
