@@ -24313,28 +24313,22 @@
                                 <thead>
                                     <tr>
                                         <th class="has-tooltip" data-tooltip="Age Range: Demographic age groups of people who signed up for the platform to watch this show">Age Range</th>
-                                        <th class="has-tooltip" data-tooltip="${subscriberGenPopMode ? 'Gen Pop Projection: Projected number of signups for this age group based on general population demographics' : 'Count: Actual number of new signups in this age group'}">${subscriberGenPopMode ? 'Gen Pop Projection' : 'Count'}</th>
+                                        <th class="has-tooltip" data-tooltip="Accounts: Projected number of accounts for this age group">Accounts</th>
                                         <th class="has-tooltip" data-tooltip="Percentage: This age group's share of total new signups">Percentage</th>
-                                        ${!subscriberGenPopMode ? '<th class="has-tooltip" data-tooltip="Gen Pop Projection: Projected number of signups for this age group based on general population demographics">Gen Pop Projection</th>' : '<th class="has-tooltip" data-tooltip="Actual Count: Actual number of new signups in this age group">Actual Count</th>'}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${validAgeData.map(item => {
                                         const ageRange = item.age_range || item.age || 'N/A';
                                         const displayAgeRange = getAgeDisplayLabel(ageRange);
-                                        const count = parseNumber(item.count) || 0;
                                         const percentage = item.percentage || 'N/A';
                                         const genPop = item.gen_pop || item.genPop || '';
                                         const displayValue = getDisplayValue(item.count, genPop);
-                                        const comparisonValue = subscriberGenPopMode ? count : (genPop ? parseNumber(genPop) : 0);
-                                        const actualCount = parseNumber(item.count) || 0;
-                                        const genPopCount = genPop ? parseNumber(genPop) : 0;
                                         return `
-                                            <tr class="has-tooltip" data-tooltip="Age ${displayAgeRange}: ${formatNumber(actualCount)} new signups (${percentage} of total). Gen Pop projection: ${genPopCount > 0 ? formatNumber(genPopCount) : 'N/A'}. ${subscriberGenPopMode ? 'Currently showing Gen Pop projection.' : 'Currently showing actual count.'}">
+                                            <tr>
                                                 <td><strong>${displayAgeRange}</strong></td>
                                                 <td>${formatNumber(displayValue)}</td>
                                                 <td>${percentage}</td>
-                                                <td>${comparisonValue > 0 ? formatNumber(comparisonValue) : 'N/A'}</td>
                                             </tr>
                                         `;
                                     }).join('')}
@@ -24360,9 +24354,8 @@
                                 <thead>
                                     <tr>
                                         <th class="has-tooltip" data-tooltip="Gender: Gender identity of people who signed up for the platform to watch this show">Gender</th>
-                                        <th class="has-tooltip" data-tooltip="${subscriberGenPopMode ? 'Gen Pop Projection: Projected number of signups for this gender based on general population demographics' : 'Count: Actual number of new signups for this gender'}">${subscriberGenPopMode ? 'Gen Pop Projection' : 'Count'}</th>
+                                        <th class="has-tooltip" data-tooltip="Accounts: Projected number of accounts for this gender">Accounts</th>
                                         <th class="has-tooltip" data-tooltip="Percentage: This gender's share of total new signups">Percentage</th>
-                                        ${!subscriberGenPopMode ? '<th class="has-tooltip" data-tooltip="Gen Pop Projection: Projected number of signups for this gender based on general population demographics">Gen Pop Projection</th>' : '<th class="has-tooltip" data-tooltip="Actual Count: Actual number of new signups for this gender">Actual Count</th>'}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -24372,13 +24365,11 @@
                                         const percentage = item.percentage; // Already calculated earlier
                                         const genPop = item.genPop;
                                         const displayValue = getDisplayValue(count, genPop);
-                                        const comparisonValue = subscriberGenPopMode ? count : (genPop > 0 ? genPop : 0);
                                         return `
-                                            <tr class="has-tooltip" data-tooltip="${gender}: ${formatNumber(count)} new signups (${percentage} of total). Gen Pop projection: ${genPop > 0 ? formatNumber(genPop) : 'N/A'}. ${subscriberGenPopMode ? 'Currently showing Gen Pop projection.' : 'Currently showing actual count.'}">
+                                            <tr>
                                                 <td><strong>${gender}</strong></td>
                                                 <td>${formatNumber(displayValue)}</td>
                                                 <td>${percentage}</td>
-                                                <td>${comparisonValue > 0 ? formatNumber(comparisonValue) : 'N/A'}</td>
                                             </tr>
                                         `;
                                     }).join('')}
