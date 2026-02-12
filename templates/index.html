@@ -16168,7 +16168,9 @@
         function formatDate(date) { return date.toISOString().split('T')[0]; }
         function formatNumber(num) { 
             if (num === null || num === undefined || num === '') return '0';
-            const n = typeof num === 'number' ? num : parseFloat(num);
+            // Remove commas from string numbers before parsing (e.g., "187,133,702" -> "187133702")
+            const cleanNum = typeof num === 'string' ? num.replace(/,/g, '') : num;
+            const n = typeof cleanNum === 'number' ? cleanNum : parseFloat(cleanNum);
             return isNaN(n) ? '0' : Math.round(n).toLocaleString();
         }
         
