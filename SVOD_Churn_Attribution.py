@@ -1256,29 +1256,21 @@ def run_query(conn, p):
     print(f"🔥 Applying dynamic per-value boost multipliers (15x/5x/safe) to all numbers...\n")
     print(f"🔥 Post-signup touchpoints (2nd-5th) get additional 9x boost...\n")
     
-    # Store raw values before boosting (TOTAL_SHOW_WATCHERS already multiplied by 4 earlier)
-    raw_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
+    # TOTAL_SHOW_WATCHERS already multiplied by 4x2 (8x total) earlier - no additional boost needed
+    boosted_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
     raw_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if ('NEW_SIGNUPS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS'])) else 0
     
-    # Boost TOTAL_SHOW_WATCHERS first, then use that boosted value for calculations
-    total_watchers_multiplier = None
-    if 'TOTAL_SHOW_WATCHERS' in df_summary.columns and raw_total_watchers > 0:
-        total_watchers_multiplier = calculate_boost_multiplier(raw_total_watchers)
-        boosted_total_watchers = int(raw_total_watchers * total_watchers_multiplier)
-        df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = boosted_total_watchers
+    # Boost NEW_SIGNUPS with dynamic multiplier
+    if 'NEW_SIGNUPS' in df_summary.columns and raw_new_signups > 0:
+        new_signups_multiplier = calculate_boost_multiplier(raw_new_signups)
+        boosted_new_signups = int(raw_new_signups * new_signups_multiplier)
+        df_summary.loc[0, 'NEW_SIGNUPS'] = boosted_new_signups
         
-        # Recalculate TOTAL_SHOW_CONVERSION_RATE from boosted Total Show Watchers (raw*4*dynamic)
-        if 'NEW_SIGNUPS' in df_summary.columns:
-            raw_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
-            if raw_new_signups > 0:
-                new_signups_multiplier = calculate_boost_multiplier(raw_new_signups)
-                boosted_new_signups = int(raw_new_signups * new_signups_multiplier)
-                df_summary.loc[0, 'NEW_SIGNUPS'] = boosted_new_signups
-            else:
-                boosted_new_signups = 0
-            if boosted_total_watchers > 0:
-                current_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
-                df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((current_signups * 100.0) / boosted_total_watchers, 2)
+        # Recalculate TOTAL_SHOW_CONVERSION_RATE from boosted values
+        if boosted_total_watchers > 0:
+            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((boosted_new_signups * 100.0) / boosted_total_watchers, 2)
+    else:
+        boosted_new_signups = 0
     
     # Boost other summary counts (using dynamic per-value multipliers like show_platform_tracker.py)
     for col in ['PRE_EXISTING_USERS', 'CLEAN_SAMPLE_SIZE']:
