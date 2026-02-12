@@ -10237,6 +10237,35 @@
             opacity: 0.6;
         }
         
+        .slide-image-placeholder .placeholder-delete-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(239, 68, 68, 0.8);
+            border: none;
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+        
+        .slide-image-placeholder:hover .placeholder-delete-btn {
+            opacity: 1;
+        }
+        
+        .slide-image-placeholder .placeholder-delete-btn:hover {
+            background: rgba(239, 68, 68, 1);
+            transform: scale(1.1);
+        }
+        
         /* Draggable slide sections */
         .slide-draggable-section {
             cursor: move;
@@ -53497,8 +53526,8 @@
                         ? slide.elements.map(el => renderSingleElement(el)).join('') 
                         : '';
                     
-                    // Check if slide has any image elements
-                    const hasImage = slide.elements && slide.elements.some(el => el.type === 'image');
+                    // Check if slide has any image elements or if placeholder is hidden
+                    const hasImage = (slide.elements && slide.elements.some(el => el.type === 'image')) || slide.hideImagePlaceholder;
                     
                     // Layout A: Image left, Title + Description + Data right - Default
                     if (layoutIndex === 1) {
@@ -53523,6 +53552,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -53617,6 +53647,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -53651,6 +53682,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -53715,6 +53747,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -53779,6 +53812,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
@@ -53842,6 +53876,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
@@ -53915,6 +53950,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -54036,6 +54072,18 @@
                 `;
             }
             return html + footerHtml;
+        }
+        
+        function hideSlideImagePlaceholder(slideIdx, event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            // Mark the slide as having no image placeholder
+            if (deckSlides[slideIdx]) {
+                deckSlides[slideIdx].hideImagePlaceholder = true;
+                renderDeckSlides();
+            }
         }
         
         function uploadSlideImage(slideIdx) {
