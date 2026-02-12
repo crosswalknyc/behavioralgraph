@@ -28125,14 +28125,18 @@
             const doughnutDataLabels = {
                 display: true,
                 color: '#fff',
-                font: { size: 10, weight: 'bold' },
+                font: { size: 12, weight: 'bold' },
+                textStrokeColor: 'rgba(0,0,0,0.5)',
+                textStrokeWidth: 2,
                 anchor: 'center',
                 align: 'center',
                 formatter: (value, ctx) => {
                     const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                     const pct = total > 0 ? ((value / total) * 100) : 0;
                     if (pct < 5) return ''; // Hide labels for very small slices
-                    return isProjection ? formatNumber(Math.round(value)) : pct.toFixed(1) + '%';
+                    const label = ctx.chart.data.labels[ctx.dataIndex] || '';
+                    const pctStr = isProjection ? formatNumber(Math.round(value)) : pct.toFixed(1) + '%';
+                    return pctStr + '\n' + label;
                 }
             };
 
