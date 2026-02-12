@@ -30485,18 +30485,18 @@
                 categories[item.category].push(item);
             });
             
-            // Sort and take top 5 per category; exclude index 0
+            // Sort and take top 5 per category; exclude index 0; sort by percentage descending
             const categoryCards = Object.entries(categories)
                 .map(([name, catItems]) => {
                     const nonZero = catItems.filter(i => Number(i.index) !== 0);
-                    const sorted = nonZero.sort((a, b) => b.index - a.index);
+                    const sorted = nonZero.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                     if (sorted.length === 0) return null;
                     const avgIndex = Math.round(sorted.reduce((sum, i) => sum + i.index, 0) / sorted.length);
                     const avgPct = sorted.reduce((sum, i) => sum + (i.pct || 0), 0) / sorted.length;
                     return { name, items: sorted.slice(0, 5), avgIndex, avgPct };
                 })
                 .filter(c => c !== null)
-                .sort((a, b) => b.avgIndex - a.avgIndex)
+                .sort((a, b) => b.avgPct - a.avgPct)
                 .slice(0, 6);
             
             container.innerHTML = categoryCards.map(cat => {
