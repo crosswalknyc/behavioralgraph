@@ -28449,7 +28449,7 @@
                                 }
                             }
                         } : { display: false },
-                        datalabels: ethnicityChartType === 'bar' ? {
+                        datalabels: ethnicityIsCircular ? doughnutDataLabels : {
                             anchor: 'end', align: 'end', font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
@@ -28467,7 +28467,7 @@
                                 }
                                 return formatPct(pct) + (!isGenPop && genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
                             }
-                        } : { display: false }
+                        }
                     },
                     scales: ethnicityIsCircular ? {} : {
                         x: { 
@@ -28751,7 +28751,7 @@
                                     }
                                 }
                             } : { display: false },
-                            datalabels: relationshipChartType === 'bar' ? {
+                            datalabels: relationshipIsCircular ? doughnutDataLabels : {
                                 anchor: 'end',
                                 align: 'end',
                                 font: { size: dataLabelFontSize, weight: 'bold' },
@@ -28771,7 +28771,7 @@
                                     }
                                     return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
                                 }
-                            } : { display: false }
+                            }
                         },
                         scales: relationshipIsCircular ? {} : {
                             x: { 
@@ -28864,7 +28864,7 @@
                                     }
                                 }
                             } : { display: false },
-                            datalabels: soChartType === 'bar' ? {
+                            datalabels: soIsCircular ? doughnutDataLabels : {
                                 anchor: 'end',
                                 align: 'end',
                                 font: { size: dataLabelFontSize, weight: 'bold' },
@@ -28884,7 +28884,7 @@
                                     }
                                     return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
                                 }
-                            } : { display: false }
+                            }
                         },
                         scales: soIsCircular ? {} : {
                             x: { 
@@ -28973,7 +28973,7 @@
                                     }
                                 }
                             } : { display: false },
-                            datalabels: psChartType === 'bar' ? {
+                            datalabels: psIsCircular ? doughnutDataLabels : {
                                 anchor: 'end',
                                 align: 'end',
                                 font: { size: dataLabelFontSize, weight: 'bold' },
@@ -28993,7 +28993,7 @@
                                     }
                                     return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
                                 }
-                            } : { display: false }
+                            }
                         },
                         scales: psIsCircular ? {} : {
                             x: { 
@@ -29092,7 +29092,7 @@
                                     }
                                 }
                             } : { display: false },
-                            datalabels: occChartType === 'bar' ? {
+                            datalabels: occIsCircular ? doughnutDataLabels : {
                                 anchor: 'end',
                                 align: 'end',
                                 font: { size: dataLabelFontSize, weight: 'bold' },
@@ -29112,7 +29112,7 @@
                                     }
                                     return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
                                 }
-                            } : { display: false }
+                            }
                         },
                         scales: occIsCircular ? {} : {
                             x: { 
