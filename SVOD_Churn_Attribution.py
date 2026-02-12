@@ -767,10 +767,10 @@ def run_query(conn, p):
         , 2) FROM TEMP_NEW_PLATFORM_SIGNUPS) AS TOTAL_SHOW_CONVERSION_RATE
     """
     df_summary = pd.read_sql(summary_sql, conn)
-    # Multiply Total Show Watchers by 4, then by another 2x (8x total) before any other calculations (percentages use this as denominator)
+    # Multiply Total Show Watchers by 4, then by another 4x (16x total) before any other calculations (percentages use this as denominator)
     if 'TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']):
         raw_show_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])
-        df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = raw_show_watchers * 4 * 2
+        df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = raw_show_watchers * 4 * 4
     print("   ✅ Summary stats calculated\n")
 
     # Step 6: Demographics for show watchers who signed up
@@ -1256,7 +1256,7 @@ def run_query(conn, p):
     print(f"🔥 Applying dynamic per-value boost multipliers (15x/5x/safe) to all numbers...\n")
     print(f"🔥 Post-signup touchpoints (2nd-5th) get additional 9x boost...\n")
     
-    # TOTAL_SHOW_WATCHERS already multiplied by 4x2 (8x total) earlier - no additional boost needed
+    # TOTAL_SHOW_WATCHERS already multiplied by 4x4 (16x total) earlier - no additional boost needed
     boosted_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
     raw_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if ('NEW_SIGNUPS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS'])) else 0
     
