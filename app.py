@@ -1422,7 +1422,9 @@ def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, u
     try:
         target_bucket = bucket or S3_BUCKET
         timestamp = datetime.now().strftime('%m_%d_%Y_%H_%M')
-        base_key = f"{brand_name}_{timestamp}.csv"
+        # Replace hyphens with underscores in filename for consistency
+        safe_brand_name = brand_name.replace('-', '_').replace(' ', '_')
+        base_key = f"{safe_brand_name}_{timestamp}.csv"
         s3_key = (S3_PURGATORY_PREFIX + base_key) if use_purgatory else base_key
         s3_client.upload_file(file_path, target_bucket, s3_key)
         
