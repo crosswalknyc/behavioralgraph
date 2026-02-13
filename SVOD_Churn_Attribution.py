@@ -40,29 +40,31 @@ def format_gen_pop(number):
     except (ValueError, TypeError):
         return "0"
 
-def calculate_boost_multiplier(raw_value):
+def calculate_inflation_factor(raw_value):
     """
-    Calculate the boost multiplier for a given raw value.
-    Uses logic from show_platform_tracker.py: 15x default, fallback to 5x, then calculated safe multiplier.
+    Calculate the inflation factor for a given raw value.
+    Uses same logic as bg.py: try 65x first, then scale down to 55x, 25x, 5x, 2.5x, or 1x
+    so the result never exceeds 10M (SAMPLE_REPRESENTS).
+    This ensures both Profile IQ and Subscriber IQ produce matching sample sizes.
     """
-    MAX_ALLOWED_VALUE = 10_000_000
+    MAX_ALLOWED_VALUE = SAMPLE_REPRESENTS  # 10,000,000
     
     if raw_value <= 0:
-        return 15
+        return 65  # Default to max inflation for zero/negative values
     
-    # Calculate the maximum multiplier that keeps values under 10M
-    max_safe_multiplier = MAX_ALLOWED_VALUE // raw_value
+    # Same inflation options as bg.py
+    INFLATION_OPTIONS = [65, 55, 25, 5, 2.5, 1]
     
-    # Use 15 if safe, otherwise use 5, otherwise calculate exact safe multiplier
-    if raw_value * 15 <= MAX_ALLOWED_VALUE:
-        boost_multiplier = 15
-    elif raw_value * 5 <= MAX_ALLOWED_VALUE:
-        boost_multiplier = 5
-    else:
-        # Even 5x would exceed 10M, use the max safe multiplier (minimum 1)
-        boost_multiplier = max(1, max_safe_multiplier)
+    for mult in INFLATION_OPTIONS:
+        if raw_value * mult <= MAX_ALLOWED_VALUE:
+            return mult
     
-    return boost_multiplier
+    return 1  # Fallback to no inflation if even 1x exceeds cap
+
+# Keep old function name as alias for backward compatibility
+def calculate_boost_multiplier(raw_value):
+    """Alias for calculate_inflation_factor for backward compatibility."""
+    return calculate_inflation_factor(raw_value)
 
 
 # =========================
@@ -766,10 +768,18 @@ def run_query(conn, p):
         , 2) FROM TEMP_NEW_PLATFORM_SIGNUPS) AS TOTAL_SHOW_CONVERSION_RATE
     """
     df_summary = pd.read_sql(summary_sql, conn)
-    # Multiply Total Show Watchers by 4, then by another 4x (16x total) before any other calculations (percentages use this as denominator)
+    # Apply same sample size inflation as bg.py: try 65x, 55x, 25x, 5x, 2.5x, or 1x (whichever keeps result ≤10M)
+    # This ensures both Profile IQ and Subscriber IQ produce matching sample sizes for the same search
     if 'TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']):
         raw_show_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])
-        df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = raw_show_watchers * 4 * 4
+        inflation_factor = calculate_inflation_factor(raw_show_watchers)
+        inflated_watchers = int(raw_show_watchers * inflation_factor)
+        # Round to nearest 10 and cap at 10M (same as bg.py)
+        inflated_watchers = min((inflated_watchers // 10) * 10, SAMPLE_REPRESENTS)
+        df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = inflated_watchers
+        print(f"   📊 Raw show watchers: {raw_show_watchers:,}")
+        print(f"   📊 Inflation factor: {inflation_factor}x (chosen so result ≤ 10M)")
+        print(f"   📊 Inflated show watchers: {inflated_watchers:,}")
     print("   ✅ Summary stats calculated\n")
 
     # Step 6: Demographics for show watchers who signed up
@@ -1249,138 +1259,130 @@ def run_query(conn, p):
     print("✅ Analysis Complete!")
     print("=" * 60 + "\n")
 
-    # Apply boost to all count-based numbers using dynamic per-value multipliers (like show_platform_tracker.py)
-    # Each value gets its own multiplier (15x, 5x, or calculated safe multiplier)
-    # Post-signup touchpoints get an additional 9x boost (except 1st touchpoint)
-    print(f"🔥 Applying dynamic per-value boost multipliers (15x/5x/safe) to all numbers...\n")
-    print(f"🔥 Post-signup touchpoints (2nd-5th) get additional 9x boost...\n")
+    # Apply same sample size inflation as bg.py to all count-based numbers
+    # Uses consistent inflation factor (65x, 55x, 25x, 5x, 2.5x, or 1x) calculated from base sample
+    # This ensures both Profile IQ and Subscriber IQ produce matching sample sizes
     
-    # TOTAL_SHOW_WATCHERS already multiplied by 4x4 (16x total) earlier - no additional boost needed
-    boosted_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
+    # TOTAL_SHOW_WATCHERS already inflated earlier - get the inflation factor that was used
+    inflated_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
     raw_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if ('NEW_SIGNUPS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS'])) else 0
     
-    # Boost NEW_SIGNUPS with dynamic multiplier
-    if 'NEW_SIGNUPS' in df_summary.columns and raw_new_signups > 0:
-        new_signups_multiplier = calculate_boost_multiplier(raw_new_signups)
-        boosted_new_signups = int(raw_new_signups * new_signups_multiplier)
-        df_summary.loc[0, 'NEW_SIGNUPS'] = boosted_new_signups
-        
-        # Recalculate TOTAL_SHOW_CONVERSION_RATE from boosted values
-        if boosted_total_watchers > 0:
-            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((boosted_new_signups * 100.0) / boosted_total_watchers, 2)
-    else:
-        boosted_new_signups = 0
+    # Calculate inflation factor for NEW_SIGNUPS (same logic as bg.py)
+    inflation_factor = calculate_inflation_factor(raw_new_signups) if raw_new_signups > 0 else 65
+    print(f"🔥 Applying {inflation_factor}x inflation factor to all count-based numbers (same as bg.py)...\n")
     
-    # Boost other summary counts (using dynamic per-value multipliers like show_platform_tracker.py)
+    # Inflate NEW_SIGNUPS with consistent inflation factor
+    if 'NEW_SIGNUPS' in df_summary.columns and raw_new_signups > 0:
+        inflated_new_signups = min(int(raw_new_signups * inflation_factor), SAMPLE_REPRESENTS)
+        df_summary.loc[0, 'NEW_SIGNUPS'] = inflated_new_signups
+        
+        # Recalculate TOTAL_SHOW_CONVERSION_RATE from inflated values
+        if inflated_total_watchers > 0:
+            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((inflated_new_signups * 100.0) / inflated_total_watchers, 2)
+    else:
+        inflated_new_signups = 0
+    
+    # Inflate other summary counts with same inflation factor
     for col in ['PRE_EXISTING_USERS', 'CLEAN_SAMPLE_SIZE']:
         if col in df_summary.columns:
             for idx in df_summary.index:
                 raw_val = int(df_summary.loc[idx, col]) if not pd.isna(df_summary.loc[idx, col]) else 0
                 if raw_val > 0:
-                    multiplier = calculate_boost_multiplier(raw_val)
-                    df_summary.loc[idx, col] = int(raw_val * multiplier)
+                    df_summary.loc[idx, col] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
     
-    # Clean Conversion Rate = 25% (New Signups / (4 * New Signups)); denominator is 4x New Signups so rate = 25%.
-    if 'NEW_SIGNUPS' in df_summary.columns:
+    # Clean Conversion Rate = New Signups / Clean Sample Size
+    if 'NEW_SIGNUPS' in df_summary.columns and 'CLEAN_SAMPLE_SIZE' in df_summary.columns:
         current_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
-        if current_signups > 0:
-            df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((current_signups * 100.0) / (4 * current_signups), 2)
+        clean_sample = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) else 0
+        if clean_sample > 0:
+            df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((current_signups * 100.0) / clean_sample, 2)
     
-    # Boost demographic counts (using dynamic per-value multipliers)
+    # Inflate demographic counts with same inflation factor
     if 'COUNT' in df_demo.columns:
         for idx in df_demo.index:
             raw_val = int(df_demo.loc[idx, 'COUNT']) if not pd.isna(df_demo.loc[idx, 'COUNT']) else 0
             if raw_val > 0:
-                multiplier = calculate_boost_multiplier(raw_val)
-                df_demo.loc[idx, 'COUNT'] = int(raw_val * multiplier)
+                df_demo.loc[idx, 'COUNT'] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
     
-    # Boost timing counts (using dynamic per-value multipliers)
+    # Inflate timing counts with same inflation factor
     if 'SIGNUP_COUNT' in df_timing.columns:
         for idx in df_timing.index:
             raw_val = int(df_timing.loc[idx, 'SIGNUP_COUNT']) if not pd.isna(df_timing.loc[idx, 'SIGNUP_COUNT']) else 0
             if raw_val > 0:
-                multiplier = calculate_boost_multiplier(raw_val)
-                df_timing.loc[idx, 'SIGNUP_COUNT'] = int(raw_val * multiplier)
+                df_timing.loc[idx, 'SIGNUP_COUNT'] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
     
-    # Boost episode attribution counts (using dynamic per-value multipliers)
+    # Inflate episode attribution counts with same inflation factor
     if not df_episode_attribution.empty:
         if 'SIGNUPS_ATTRIBUTED' in df_episode_attribution.columns:
             for idx in df_episode_attribution.index:
                 raw_val = int(df_episode_attribution.loc[idx, 'SIGNUPS_ATTRIBUTED']) if not pd.isna(df_episode_attribution.loc[idx, 'SIGNUPS_ATTRIBUTED']) else 0
                 if raw_val > 0:
-                    multiplier = calculate_boost_multiplier(raw_val)
-                    df_episode_attribution.loc[idx, 'SIGNUPS_ATTRIBUTED'] = int(raw_val * multiplier)
+                    df_episode_attribution.loc[idx, 'SIGNUPS_ATTRIBUTED'] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
         if 'TOTAL_VIEWS' in df_episode_attribution.columns:
             for idx in df_episode_attribution.index:
                 raw_val = int(df_episode_attribution.loc[idx, 'TOTAL_VIEWS']) if not pd.isna(df_episode_attribution.loc[idx, 'TOTAL_VIEWS']) else 0
                 if raw_val > 0:
-                    multiplier = calculate_boost_multiplier(raw_val)
-                    df_episode_attribution.loc[idx, 'TOTAL_VIEWS'] = int(raw_val * multiplier)
+                    df_episode_attribution.loc[idx, 'TOTAL_VIEWS'] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
     
-    # Boost monthly signup counts (using dynamic per-value multipliers)
+    # Inflate monthly signup counts with same inflation factor
     if not df_monthly_signups.empty:
         if 'UNIQUE_SIGNUPS' in df_monthly_signups.columns:
             for idx in df_monthly_signups.index:
                 raw_val = int(df_monthly_signups.loc[idx, 'UNIQUE_SIGNUPS']) if not pd.isna(df_monthly_signups.loc[idx, 'UNIQUE_SIGNUPS']) else 0
                 if raw_val > 0:
-                    multiplier = calculate_boost_multiplier(raw_val)
-                    df_monthly_signups.loc[idx, 'UNIQUE_SIGNUPS'] = int(raw_val * multiplier)
+                    df_monthly_signups.loc[idx, 'UNIQUE_SIGNUPS'] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
         if 'ENGAGED_WITH_SHOW' in df_monthly_signups.columns:
             for idx in df_monthly_signups.index:
                 raw_val = int(df_monthly_signups.loc[idx, 'ENGAGED_WITH_SHOW']) if not pd.isna(df_monthly_signups.loc[idx, 'ENGAGED_WITH_SHOW']) else 0
                 if raw_val > 0:
-                    multiplier = calculate_boost_multiplier(raw_val)
-                    df_monthly_signups.loc[idx, 'ENGAGED_WITH_SHOW'] = int(raw_val * multiplier)
+                    df_monthly_signups.loc[idx, 'ENGAGED_WITH_SHOW'] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
     
-    # Boost episode timing counts (using dynamic per-value multipliers)
+    # Inflate episode timing counts with same inflation factor
     if not df_episode_timing.empty:
         if 'SIGNUP_COUNT' in df_episode_timing.columns:
             for idx in df_episode_timing.index:
                 raw_val = int(df_episode_timing.loc[idx, 'SIGNUP_COUNT']) if not pd.isna(df_episode_timing.loc[idx, 'SIGNUP_COUNT']) else 0
                 if raw_val > 0:
-                    multiplier = calculate_boost_multiplier(raw_val)
-                    df_episode_timing.loc[idx, 'SIGNUP_COUNT'] = int(raw_val * multiplier)
+                    df_episode_timing.loc[idx, 'SIGNUP_COUNT'] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
     
-    # Boost monthly churn counts (using dynamic per-value multipliers)
+    # Inflate monthly churn counts with same inflation factor
     if not df_monthly_churn.empty:
         for col in ['ACTIVE_USERS', 'PREV_MONTH_ACTIVE', 'CHURNED_USERS']:
             if col in df_monthly_churn.columns:
                 for idx in df_monthly_churn.index:
                     raw_val = int(df_monthly_churn.loc[idx, col]) if not pd.isna(df_monthly_churn.loc[idx, col]) else 0
                     if raw_val > 0:
-                        multiplier = calculate_boost_multiplier(raw_val)
-                        df_monthly_churn.loc[idx, col] = int(raw_val * multiplier)
+                        df_monthly_churn.loc[idx, col] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
     
-    # Boost post-signup touchpoint counts
-    # 1st Touchpoint should equal boosted NEW_SIGNUPS (already set earlier, but ensure it's correct)
-    # 2nd-5th Touchpoints get dynamic multiplier * 9x boost
+    # Inflate post-signup touchpoint counts
+    # 1st Touchpoint should equal inflated NEW_SIGNUPS
+    # 2nd-5th Touchpoints get same inflation factor
     # Percentages are calculated as % of Total Show Watchers
     if not df_post_signup_touchpoints.empty:
         if 'USER_COUNT' in df_post_signup_touchpoints.columns:
-            # Get boosted values
-            boosted_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if ('NEW_SIGNUPS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS'])) else 0
-            boosted_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
+            # Get inflated values
+            inflated_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if ('NEW_SIGNUPS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS'])) else 0
+            inflated_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
             
             for idx in df_post_signup_touchpoints.index:
                 touchpoint_rank = int(df_post_signup_touchpoints.loc[idx, 'TOUCHPOINT_RANK']) if not pd.isna(df_post_signup_touchpoints.loc[idx, 'TOUCHPOINT_RANK']) else 0
                 raw_val = int(df_post_signup_touchpoints.loc[idx, 'USER_COUNT']) if not pd.isna(df_post_signup_touchpoints.loc[idx, 'USER_COUNT']) else 0
                 
                 if touchpoint_rank == 1:
-                    # 1st Touchpoint should equal boosted NEW_SIGNUPS
-                    df_post_signup_touchpoints.loc[idx, 'USER_COUNT'] = boosted_new_signups
+                    # 1st Touchpoint should equal inflated NEW_SIGNUPS
+                    df_post_signup_touchpoints.loc[idx, 'USER_COUNT'] = inflated_new_signups
                     # Calculate percentage as % of Total Show Watchers
-                    if boosted_total_watchers > 0:
-                        df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = round((boosted_new_signups * 100.0) / boosted_total_watchers, 2)
+                    if inflated_total_watchers > 0:
+                        df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = round((inflated_new_signups * 100.0) / inflated_total_watchers, 2)
                     else:
                         df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = 0.0
                 elif raw_val > 0:
-                    # 2nd-5th Touchpoints get dynamic multiplier * 9x boost
-                    multiplier = calculate_boost_multiplier(raw_val)
-                    boosted_val = int(raw_val * multiplier * 9)
-                    df_post_signup_touchpoints.loc[idx, 'USER_COUNT'] = boosted_val
+                    # 2nd-5th Touchpoints get same inflation factor
+                    inflated_val = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
+                    df_post_signup_touchpoints.loc[idx, 'USER_COUNT'] = inflated_val
                     # Calculate percentage as % of Total Show Watchers
-                    if boosted_total_watchers > 0:
-                        df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = round((boosted_val * 100.0) / boosted_total_watchers, 2)
+                    if inflated_total_watchers > 0:
+                        df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = round((inflated_val * 100.0) / inflated_total_watchers, 2)
                     else:
                         df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = 0.0
 
