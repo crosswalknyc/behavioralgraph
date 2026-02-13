@@ -24870,8 +24870,14 @@
         }
 
         function toggleListenerOptions() {
-            const isListener = document.getElementById('is_listener_watcher').checked;
-            document.getElementById('listenerOptions').style.display = isListener ? 'block' : 'none';
+            // Handle both forms (duplicate IDs) - find all checkboxes and their corresponding options divs
+            const checkboxes = document.querySelectorAll('#is_listener_watcher');
+            const optionsDivs = document.querySelectorAll('#listenerOptions');
+            checkboxes.forEach((checkbox, index) => {
+                if (optionsDivs[index]) {
+                    optionsDivs[index].style.display = checkbox.checked ? 'block' : 'none';
+                }
+            });
         }
 
         function toggleUpdateOptions() {
