@@ -22698,6 +22698,13 @@
             showSubscriberTab('insights');
         }
         
+        // Check if timing data exists for a show
+        function hasTimingData(data) {
+            const signupTiming = data.signup_timing || [];
+            const episodeSignupTiming = data.episode_signup_timing || {};
+            return signupTiming.length > 0 || Object.keys(episodeSignupTiming).length > 0;
+        }
+        
         // Hide/show subscriber tabs based on data availability
         function updateSubscriberTabVisibility(data) {
             // Episodes tab - hide if no episode_attribution data
@@ -23119,6 +23126,7 @@
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
                         </div>
                     </div>
+                    ${hasTimingData(data) ? `
                     <div class="value-assessment-grid" style="margin-top: 1.5rem;">
                         <div class="value-metric-card has-tooltip" data-tooltip="Speed to Conversion: Average number of days between when the show became available and when users signed up for the platform. Lower numbers indicate immediate platform value and urgency-driven acquisition.">
                             <div class="value-metric-header">
@@ -23134,6 +23142,7 @@
                         <!-- Spacer to maintain grid layout -->
                         <div class="value-metric-card" style="visibility: hidden;"></div>
                     </div>
+                    ` : ''}
                 </div>
             `;
             
