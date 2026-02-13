@@ -6608,6 +6608,80 @@ def parse_subscriber_iq_csv(csv_content):
     return parsed
 
 
+def scale_subscriber_iq_values(parsed, divisor=10):
+    """Divide all numeric count/signup values in Subscriber IQ parsed data by divisor (default 10)."""
+    if divisor is None or divisor == 0:
+        return
+    scale = 1.0 / float(divisor)
+
+    def _scale_num(v):
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            scaled = v * scale
+            return int(scaled) if scaled == int(scaled) else round(scaled, 2)
+        if isinstance(v, str):
+            n = parse_number(v)
+            if n is not None:
+                scaled = n * scale
+                return str(int(scaled)) if scaled == int(scaled) else f'{scaled:.2f}'
+        return v
+
+    # key_metrics: count and gen_pop (if numeric)
+    for key in list(parsed.get('key_metrics', {}).keys()):
+        m = parsed['key_metrics'][key]
+        if isinstance(m, dict):
+            if 'count' in m and m['count'] is not None:
+                m['count'] = _scale_num(m['count'])
+            if 'gen_pop' in m and isinstance(m['gen_pop'], (int, float)):
+                m['gen_pop'] = _scale_num(m['gen_pop'])
+
+    # episode_attribution: signups
+    for ep in parsed.get('episode_attribution', []):
+        if 'signups' in ep and ep['signups'] is not None:
+            ep['signups'] = _scale_num(ep['signups'])
+
+    # signup_timing: signups
+    for s in parsed.get('signup_timing', []):
+        if 'signups' in s and s['signups'] is not None:
+            s['signups'] = _scale_num(s['signups'])
+
+    # attribution_summary: count in each sub-dict
+    for key in list(parsed.get('attribution_summary', {}).keys()):
+        m = parsed['attribution_summary'][key]
+        if isinstance(m, dict) and 'count' in m and m['count'] is not None:
+            m['count'] = _scale_num(m['count'])
+
+    # post_signup_touchpoints: users
+    for t in parsed.get('post_signup_touchpoints', []):
+        if 'users' in t:
+            t['users'] = _scale_num(t['users']) if t['users'] is not None else t['users']
+
+    # monthly_signups, monthly_churn
+    for m in parsed.get('monthly_signups', []):
+        if 'signups' in m and m['signups'] is not None:
+            m['signups'] = _scale_num(m['signups'])
+        if 'watched_show' in m and m['watched_show'] is not None:
+            m['watched_show'] = _scale_num(m['watched_show'])
+    for m in parsed.get('monthly_churn', []):
+        for k in ('churn', 'signups', 'watched_show'):
+            if k in m and m[k] is not None:
+                m[k] = _scale_num(m[k])
+
+    # demographics: age/gender list of dicts with count-like keys
+    for key in ('age', 'gender'):
+        for item in parsed.get('demographics', {}).get(key, []):
+            for k in ('count', 'percentage_count', 'n'):
+                if k in item and item[k] is not None and isinstance(item[k], (int, float)):
+                    item[k] = _scale_num(item[k])
+
+    # episode_signup_timing nested
+    for ep_key, timings in list(parsed.get('episode_signup_timing', {}).items()):
+        for s in timings:
+            if 'signups' in s and s['signups'] is not None:
+                s['signups'] = _scale_num(s['signups'])
+
+
 @app.route('/api/subscriber-iq/list')
 @requires_auth
 def list_subscriber_iq_files():
@@ -6683,7 +6757,9 @@ def get_subscriber_iq_data(s3_key):
         # Parse subscriber IQ CSV
         print(f"📝 CSV content preview (first 500 chars): {csv_content[:500]}")
         parsed = parse_subscriber_iq_csv(csv_content)
-        
+        # Subscriber IQ: all values divided by 10 for display
+        scale_subscriber_iq_values(parsed, divisor=10)
+
         # Log what was parsed in detail
         print(f"📊 Parsed data summary:")
         print(f"   Metadata keys: {list(parsed.get('metadata', {}).keys())}")
@@ -11977,7 +12053,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 is_genpop=is_genpop,
                 purchasers_only=purchasers_only,
                 previous_file_path=actual_previous_file,
-                brand_category=brand_category
+                brand_category=brand_category,
+                is_listener_watcher=is_listener_watcher
             )
             
             update_job_status(job_id, progress=85, message='Processing results...')

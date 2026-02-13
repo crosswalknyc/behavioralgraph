@@ -2554,7 +2554,7 @@ def boost_netflix_3x_rob_lowe(df, project_name):
     
     return df
 
-def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, behavior_start, behavior_end, filters, skew_settings, is_genpop, purchasers_only=False, previous_file_path=None, brand_category=None):
+def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, behavior_start, behavior_end, filters, skew_settings, is_genpop, purchasers_only=False, previous_file_path=None, brand_category=None, is_listener_watcher=False):
     from datetime import datetime
     import time
     
@@ -3963,6 +3963,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         inflated_sample_size = bounded * INFLATION_FACTOR
         final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
         final_sample_size = (final_sample_size // 10) * 10
+        if is_listener_watcher:
+            final_sample_size = max(1, final_sample_size // 10)
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"📊 Listener/watcher/player profile: sample size divided by 10 → {final_sample_size:,}")
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"📊 Actual sampled UIDs: {actual_sample_size:,}")
             print(f"📊 Inflation factor: {INFLATION_FACTOR}x (chosen so result ≤ 10M)")
@@ -3988,6 +3992,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         inflated_sample_size = bounded * INFLATION_FACTOR
         final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
         final_sample_size = (final_sample_size // 10) * 10
+        if is_listener_watcher:
+            final_sample_size = max(1, final_sample_size // 10)
     
     df_sample = pd.DataFrame([
         {
@@ -8345,7 +8351,7 @@ def main():
     
     
     # Run the main pipeline and get the file path
-    final_file_path = run_full_pipeline(conn, project_name, brands, s1, e1, s2, e2, filters, skew_settings, is_genpop, purchasers_only, previous_file_path, brand_category)
+    final_file_path = run_full_pipeline(conn, project_name, brands, s1, e1, s2, e2, filters, skew_settings, is_genpop, purchasers_only, previous_file_path, brand_category, is_listener_watcher=is_listener_watcher_player)
     
     if include_frequency and not is_genpop:  # Only for non-GenPop runs
         try:
