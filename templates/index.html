@@ -11441,10 +11441,10 @@
                     </div>
                 </div>
                 <div class="view-toggle" id="iqTabsContainer">
-                    <button class="view-btn has-tooltip {% if not default_view_hedge_fund_iq %}active{% endif %} {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" {% if not has_profile_iq_access %}disabled{% endif %} data-tooltip="Detailed audience behavioral profiles showing who they are and what they do.">🎯 Profile IQ</button>
-                    <button class="view-btn has-tooltip {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %} data-tooltip="Understand the platform impact content had via first view metrics.">👥 Subscriber IQ</button>
+                    <button class="view-btn has-tooltip {% if not default_view_hedge_fund_iq %}active{% endif %} {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" {% if not has_profile_iq_access %}disabled{% endif %} data-tooltip="Who they are. What they do. Where attention compounds.">🎯 Profile IQ</button>
+                    <button class="view-btn has-tooltip {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %} data-tooltip="From first view to lifetime value.">👥 Subscriber IQ</button>
                     <button class="view-btn {% if not has_rankers_iq_access %}disabled{% endif %}" id="rankerIQTab" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</button>
-                    <button class="view-btn has-tooltip {% if not has_ticket_sales_iq_access %}disabled{% endif %}" id="ticketSalesIQTab" {% if not has_ticket_sales_iq_access %}disabled{% endif %} data-tooltip="See the impact talent had on ticket sales.">🎟️ Impact IQ</button>
+                    <button class="view-btn has-tooltip {% if not has_ticket_sales_iq_access %}disabled{% endif %}" id="ticketSalesIQTab" {% if not has_ticket_sales_iq_access %}disabled{% endif %} data-tooltip="Attribution grounded in real behavior.">🎟️ Impact IQ</button>
                     <button class="view-btn has-tooltip {% if default_view_hedge_fund_iq %}active{% endif %} {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %} data-tooltip="Detailed metrics across various ticker KPIs.">📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
