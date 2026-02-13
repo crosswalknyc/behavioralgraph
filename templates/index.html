@@ -25922,14 +25922,12 @@
             });
 
             // Define master category order
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
             
-            // Build HTML with master categories
+            // Build HTML with master categories (show all in order, including TRENDS after SPORT, even when empty)
             let html = '';
             masterOrder.forEach(master => {
-                const subcats = byMasterCategory[master];
-                if (!subcats) return;
-                
+                const subcats = byMasterCategory[master] || {};
                 const icon = MASTER_CATEGORY_ICONS[master] || '📁';
                 const masterId = 'master_' + master.replace(/[^a-zA-Z0-9]/g, '_');
                 const isMasterExpanded = expandedDashCategories.has(masterId);
@@ -43112,7 +43110,6 @@
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
             'TRENDS': ['TRENDS'],
-            'TRENDS': ['TRENDS'],
             'TALENT': ['ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'SVOD ACQUISITION': ['SVOD ACQUISITION']  // SVOD files are always in their own master category
         };
@@ -43124,6 +43121,7 @@
             'PLATFORMS': '📺',
             'SPORT': '⚽',
             'TALENT': '⭐',
+            'TRENDS': '📈',
             'SVOD ACQUISITION': '📺'  // TV icon for SVOD
         };
         
@@ -43552,7 +43550,7 @@
                     const categorySelect = document.getElementById('categoryFilter');
                     if (categorySelect) {
                         let categoryOptions = '<option value="">All Categories</option>';
-                        const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                        const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
                         const categoriesByMaster = {};
                         allCategories.forEach(cat => {
                             const master = getMasterCategory(cat);
@@ -43633,7 +43631,7 @@
                 let categoryOptions = '<option value="">All Categories</option>';
                 
                 // Group categories by master category
-                const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
                 const categoriesByMaster = {};
                 allCategories.forEach(cat => {
                     const master = getMasterCategory(cat);
@@ -43898,7 +43896,7 @@
             `;
 
             // Define master category order
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
             
             masterOrder.forEach(master => {
                 const subcats = byMasterCategory[master];
