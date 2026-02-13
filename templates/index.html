@@ -25794,6 +25794,18 @@
             const container = document.getElementById('dashProfileTree');
             if (!container) return;
             
+            // Filter out purgatory items and OTHER category - these should NEVER appear in profile selector
+            profiles = profiles.filter(p => {
+                const s3Key = p.s3_key || p.key || '';
+                const category = (p.category || '').toUpperCase();
+                // Exclude anything in purgatory (current or previously)
+                if (s3Key.includes('purgatory/') || s3Key.startsWith('purgatory/')) return false;
+                if (p.in_purgatory || p.status === 'pending') return false;
+                // Exclude OTHER category
+                if (category === 'OTHER' || category === 'UNCATEGORIZED') return false;
+                return true;
+            });
+            
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase();
             
             // If searching, show flat list of matches

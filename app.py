@@ -11297,31 +11297,13 @@ def list_jobs():
                 if cat:
                     categories.add(cat)
         
-        # Include purgatory items in the list so they appear in the dashboard and can be viewed (exclude SVOD — those go to Subscriber IQ only)
-        existing_keys = {e.get('s3_key') for e in job_list if e.get('s3_key')}
-        for purgatory_id, item in purgatory_meta.items():
-            if purgatory_id.startswith(SUBSCRIBER_S3_BUCKET + ':'):
-                continue  # SVOD purgatory: only show in Subscriber IQ, not Profile IQ
-            if item.get('status') == 'approved' and item.get('released_key'):
-                continue  # Already released; may be in cache under released_key
-            s3_key = item.get('s3_key')
-            if not s3_key or s3_key in existing_keys:
-                continue
-            existing_keys.add(s3_key)
-            job_list.append({
-                'job_id': s3_key,
-                'project_name': item.get('title') or item.get('project_name') or 'Unknown',
-                'status': 'cached',
-                'progress': 100,
-                'created_at': item.get('created_at') or '',
-                'source': 's3',
-                'category': item.get('category') or 'Uncategorized',
-                's3_key': s3_key,
-                'display_name': item.get('title') or item.get('project_name')
-            })
-            cat = item.get('category')
-            if cat:
-                categories.add(cat)
+        # DO NOT include purgatory items - they should NEVER appear in the profile selector
+        # Purgatory items are only visible in the Admin purgatory review section
+        
+        # Filter out any purgatory items that may have been added from cache
+        job_list = [e for e in job_list if not (e.get('s3_key') or '').startswith('purgatory/')]
+        job_list = [e for e in job_list if not (e.get('s3_key') or '').startswith(S3_PURGATORY_PREFIX)]
+        job_list = [e for e in job_list if e.get('status') != 'pending' and not e.get('in_purgatory')]
         
         # Profile IQ must not show SVOD Acquisition — only Subscriber IQ shows those
         def is_svod_entry(e):
@@ -11337,6 +11319,10 @@ def list_jobs():
                 return True
             return False
         job_list = [e for e in job_list if not is_svod_entry(e)]
+        
+        # Filter out OTHER and UNCATEGORIZED categories - these should never appear in profile selector
+        job_list = [e for e in job_list if (e.get('category') or '').upper() not in ('OTHER', 'UNCATEGORIZED', '')]
+        
         categories = {e.get('category') for e in job_list if e.get('category')}
         
         # Sort by created_at descending (safe key for missing/None values)
