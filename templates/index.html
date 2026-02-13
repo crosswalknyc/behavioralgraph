@@ -25921,8 +25921,8 @@
                 byMasterCategory[masterCat][cat].push(p);
             });
 
-            // Define master category order
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+            // Master categories allowed in profile selector (SVOD ACQUISITION, MUSIC, OTHER never shown)
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
             
             // Build HTML with master categories (show all in order, including TRENDS after SPORT, even when empty)
             let html = '';
@@ -43895,8 +43895,8 @@
                 </div>
             `;
 
-            // Define master category order
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+            // Master categories allowed in profile selector (SVOD ACQUISITION, MUSIC, OTHER never shown)
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
             
             masterOrder.forEach(master => {
                 const subcats = byMasterCategory[master];
