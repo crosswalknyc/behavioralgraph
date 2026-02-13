@@ -6609,7 +6609,7 @@ def parse_subscriber_iq_csv(csv_content):
 
 
 def scale_subscriber_iq_values(parsed, divisor=10):
-    """Divide all numeric count/signup values in Subscriber IQ parsed data by divisor (default 10)."""
+    """Only Total Show Watchers is scaled (divided by divisor). All other Subscriber IQ values stay raw from CSV."""
     if divisor is None or divisor == 0:
         return
     scale = 1.0 / float(divisor)
@@ -6627,59 +6627,17 @@ def scale_subscriber_iq_values(parsed, divisor=10):
                 return str(int(scaled)) if scaled == int(scaled) else f'{scaled:.2f}'
         return v
 
-    # key_metrics: count and gen_pop (if numeric)
-    for key in list(parsed.get('key_metrics', {}).keys()):
-        m = parsed['key_metrics'][key]
-        if isinstance(m, dict):
-            if 'count' in m and m['count'] is not None:
-                m['count'] = _scale_num(m['count'])
-            if 'gen_pop' in m and isinstance(m['gen_pop'], (int, float)):
-                m['gen_pop'] = _scale_num(m['gen_pop'])
-
-    # episode_attribution: signups
-    for ep in parsed.get('episode_attribution', []):
-        if 'signups' in ep and ep['signups'] is not None:
-            ep['signups'] = _scale_num(ep['signups'])
-
-    # signup_timing: signups
-    for s in parsed.get('signup_timing', []):
-        if 'signups' in s and s['signups'] is not None:
-            s['signups'] = _scale_num(s['signups'])
-
-    # attribution_summary: count in each sub-dict
-    for key in list(parsed.get('attribution_summary', {}).keys()):
-        m = parsed['attribution_summary'][key]
-        if isinstance(m, dict) and 'count' in m and m['count'] is not None:
+    # Only Total Show Watchers (key_metrics.total_watchers) is divided by 10; all other metrics stay raw
+    m = parsed.get('key_metrics', {}).get('total_watchers')
+    if isinstance(m, dict):
+        if 'count' in m and m['count'] is not None:
             m['count'] = _scale_num(m['count'])
-
-    # post_signup_touchpoints: users
-    for t in parsed.get('post_signup_touchpoints', []):
-        if 'users' in t:
-            t['users'] = _scale_num(t['users']) if t['users'] is not None else t['users']
-
-    # monthly_signups, monthly_churn
-    for m in parsed.get('monthly_signups', []):
-        if 'signups' in m and m['signups'] is not None:
-            m['signups'] = _scale_num(m['signups'])
-        if 'watched_show' in m and m['watched_show'] is not None:
-            m['watched_show'] = _scale_num(m['watched_show'])
-    for m in parsed.get('monthly_churn', []):
-        for k in ('churn', 'signups', 'watched_show'):
-            if k in m and m[k] is not None:
-                m[k] = _scale_num(m[k])
-
-    # demographics: age/gender list of dicts with count-like keys
-    for key in ('age', 'gender'):
-        for item in parsed.get('demographics', {}).get(key, []):
-            for k in ('count', 'percentage_count', 'n'):
-                if k in item and item[k] is not None and isinstance(item[k], (int, float)):
-                    item[k] = _scale_num(item[k])
-
-    # episode_signup_timing nested
-    for ep_key, timings in list(parsed.get('episode_signup_timing', {}).items()):
-        for s in timings:
-            if 'signups' in s and s['signups'] is not None:
-                s['signups'] = _scale_num(s['signups'])
+        if 'gen_pop' in m:
+            val = m['gen_pop']
+            if isinstance(val, (int, float)):
+                m['gen_pop'] = _scale_num(val)
+            elif isinstance(val, str) and parse_number(val) is not None:
+                m['gen_pop'] = _scale_num(val)
 
 
 @app.route('/api/subscriber-iq/list')
@@ -6757,7 +6715,7 @@ def get_subscriber_iq_data(s3_key):
         # Parse subscriber IQ CSV
         print(f"📝 CSV content preview (first 500 chars): {csv_content[:500]}")
         parsed = parse_subscriber_iq_csv(csv_content)
-        # Subscriber IQ: all values divided by 10 for display
+        # Subscriber IQ: only Total Show Watchers is divided by 10; other metrics stay raw from CSV
         scale_subscriber_iq_values(parsed, divisor=10)
 
         # Log what was parsed in detail
