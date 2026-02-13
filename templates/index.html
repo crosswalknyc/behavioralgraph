@@ -23221,9 +23221,9 @@
             // 7. REVENUE FROM NEW SUBSCRIBERS (monthly & yearly; premium and ad-supported from SVOD pricing)
             const subscriberPlatformName = data.platform || data.metadata?.platform || '';
             const pricing = data.svod_pricing || {};
-            const signupsForRevenue = (subscriberGenPopMode && totalSignupsGenPop)
-                ? (parse_number(totalSignupsGenPop) || totalSignups)
-                : totalSignups;
+            const signupsForRevenue = (subscriberGenPopMode && newSignupsGenPop)
+                ? (parse_number(newSignupsGenPop) || newSignups)
+                : newSignups;
             const hasPricing = (pricing.ad_supported != null && pricing.ad_supported !== '') || (pricing.premium != null && pricing.premium !== '');
             if (subscriptionRevenueContainer) {
                 if (hasPricing && signupsForRevenue > 0) {
