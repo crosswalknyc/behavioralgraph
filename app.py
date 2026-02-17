@@ -7249,7 +7249,35 @@ def parse_ticket_sales_tracker_csv(csv_content):
                     parsed['demographics_per_theater'][current_theater][demo_field] = []
             elif demo_field and val and proj and '%' in proj:
                 parsed['demographics_per_theater'][current_theater][demo_field].append({'value': val, 'percent': proj})
-    return parsed
+    # Filter demographics_per_theater to only the five allowed theater brands
+    ALLOWED_THEATERS = ['Fandango', 'AMC THEATRES', 'ALAMO DRAFTHOUSE', 'CINEMARK THEATRES', 'REGAL CINEMAS']
+    raw = parsed['demographics_per_theater']
+
+    def map_to_canonical(name):
+        n = (name or '').lower().strip()
+        for a in ALLOWED_THEATERS:
+            al = a.lower()
+            if n == al:
+                return a
+            if n.startswith(al + ' ') or n.startswith(al + '|'):
+                return a
+            if '|' in n:
+                first = n.split('|')[0].strip()
+                if first == al or first.startswith(al + ' '):
+                    return a
+        return None
+
+    candidates = {}  # canonical -> [(csv_name, demo_data), ...]
+    for csv_name, demo_data in raw.items():
+        canonical = map_to_canonical(csv_name)
+        if canonical:
+            candidates.setdefault(canonical, []).append((csv_name, demo_data))
+    result = {}
+    for canonical, items in candidates.items():
+        # Prefer exact match; else shortest csv_name (e.g. "cinemark theatres" over "cinemark theatres | google maps")
+        best = min(items, key=lambda x: (0 if (x[0] or '').lower() == canonical.lower() else 1, len(x[0] or '')))
+        result[canonical] = best[1]
+    parsed['demographics_per_theater'] = result
 
 
 @app.route('/api/ticket-sales-tracker/list')
