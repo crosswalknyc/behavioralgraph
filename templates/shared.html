@@ -135,7 +135,8 @@
                 const pct = parseFloat(row['Brand Penetration (Row)'] || 0);
                 
                 if (col === 'SAMPLE SIZE') {
-                    sampleSize = parseInt(row['Original Raw Numbers'] || row['Category Share'] || 0);
+                    // Sample size from column D (Category Share), not E (Original Raw Numbers)
+                    sampleSize = parseInt(row['Category Share'] || row['Original Raw Numbers'] || 0);
                 }
                 if (col === 'GENDER' && val) demographics.gender[val] = pct;
                 if (col === 'AGE' && val) demographics.age[val] = pct;

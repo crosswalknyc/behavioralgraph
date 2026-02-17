@@ -1259,14 +1259,23 @@ def extract_demographics_from_csv(csv_content):
         return {}
 
 def extract_sample_size_from_csv(csv_content):
-    """Extract sample size from CSV."""
+    """Extract sample size from CSV: column D (Category Share) on SAMPLE SIZE row, not E (Original Raw Numbers)."""
     try:
-        lines = csv_content.split('\n')
-        for line in lines:
-            if line.startswith('SAMPLE SIZE,'):
-                parts = line.split(',')
-                if len(parts) >= 4:
-                    return int(parts[3])
+        reader = csv.reader(io.StringIO(csv_content))
+        for row in reader:
+            if len(row) > 0 and str(row[0]).strip().upper() == 'SAMPLE SIZE':
+                # Column D = index 3 (Category Share); E = index 4 (Original Raw Numbers)
+                if len(row) > 3:
+                    val = row[3]
+                    n = int(float(str(val).replace(',', ''))) if val else None
+                    if n is not None:
+                        return n
+                if len(row) > 4:
+                    val = row[4]
+                    n = int(float(str(val).replace(',', ''))) if val else None
+                    if n is not None:
+                        return n
+                return None
         return None
     except Exception as e:
         print(f"Error extracting sample size: {e}")
@@ -11214,7 +11223,8 @@ def extract_demographics_summary(csv_content):
             pct = float(row.get('Brand Penetration (Row)', 0) or 0)
             
             if category == 'SAMPLE SIZE':
-                summary['sampleSize'] = int(row.get('Original Raw Numbers', 0) or row.get('Category Share', 0) or 0)
+                # Sample size from column D (Category Share), not E (Original Raw Numbers)
+                summary['sampleSize'] = int(row.get('Category Share', 0) or row.get('Original Raw Numbers', 0) or 0)
             elif category == 'BRAND INPUT':
                 summary['projectedUS'] = int(row.get('US Gen Pop Projection', 0) or 0)
             elif category == 'GENDER' and value:

@@ -24861,9 +24861,10 @@
                 const usPop = parseFloat(String(row['US Gen Pop Projection'] || row['Gen Pop Projection'] || row[5] || '0').replace(/,/g, '')) || 0;
 
                 if (col === 'SAMPLE SIZE') {
-                    sampleSize = rawNum || catShare || 0;
+                    // Sample size from column D (Category Share), not E (Original Raw Numbers)
+                    sampleSize = catShare || rawNum || 0;
                 }
-                // Projected sample size is in F4: column F (US Gen Pop Projection) on BRAND INPUT row (row 4)
+                // Projected US is in column F (US Gen Pop Projection) on BRAND INPUT row
                 if (col === 'BRAND INPUT' && usPop > 0) projectedUS = usPop;
 
                 if (col === 'MEDIAN AGE' || col.includes('MEDIAN') && col.includes('AGE')) {
@@ -25612,10 +25613,10 @@
                 }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 100;
 
-                // Original sample size: column D (Category Share) on SAMPLE SIZE row (row 5)
+                // Sample size from column D (Category Share) on SAMPLE SIZE row, not E (Original Raw Numbers)
                 if (category === 'SAMPLE SIZE') {
-                    const possibleSize = parseInt(row['Original Raw Numbers']) || 
-                                        parseInt(row['Category Share']) || 
+                    const possibleSize = parseInt(row['Category Share']) || 
+                                        parseInt(row['Original Raw Numbers']) || 
                                         parseInt(row['Brand Penetration (Row)']) || 0;
                     if (possibleSize > 0) result.sampleSize = possibleSize;
                 }
