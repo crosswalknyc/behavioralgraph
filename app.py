@@ -2929,13 +2929,50 @@ def get_admin_content():
         except Exception as ts_err:
             print(f"⚠️ Error loading Ticket Sales files: {ts_err}")
         
+        # Get Ticket Sales Tracker files from ticket-sales-tracker bucket
+        ticket_sales_tracker_files = []
+        try:
+            tst_metadata = load_ticket_sales_tracker_metadata()
+            tst_paginator = s3.get_paginator('list_objects_v2')
+            for page in tst_paginator.paginate(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Prefix=''):
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    if not key.endswith('.csv') or key.startswith(S3_PURGATORY_PREFIX):
+                        continue
+                    name_without_ext = key.replace('.csv', '')
+                    match = re.match(r'^Ticket_Sales_(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                    if match:
+                        default_display = match.group(1).replace('_', ' ')
+                    else:
+                        default_display = name_without_ext.replace('_', ' ')
+                    meta = tst_metadata.get(key, {})
+                    image_url = meta.get('image_url') or ''
+                    last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                    ticket_sales_tracker_files.append({
+                        'key': f'ticket-sales-tracker/{key}',
+                        'filename': key.split('/')[-1],
+                        'project_name': default_display.strip(),
+                        'category': 'Ticket Sales Tracker',
+                        'size': obj.get('Size', 0),
+                        'last_modified': last_modified,
+                        'created_at': last_modified,
+                        'bucket': TICKET_SALES_TRACKER_S3_BUCKET,
+                        's3_key': key,
+                        'is_ticket_sales_tracker': True,
+                        'custom_image': image_url if image_url else None
+                    })
+            print(f"✅ Found {len(ticket_sales_tracker_files)} Ticket Sales Tracker files")
+            active_files.extend(ticket_sales_tracker_files)
+        except Exception as tst_err:
+            print(f"⚠️ Error loading Ticket Sales Tracker files: {tst_err}")
+        
         # Load profile image cache to check for custom images
         if not profile_image_cache:
             load_profile_image_cache()
         
-        # Add custom image info to each file (skip ticket sales - they use ticket_sales_metadata)
+        # Add custom image info to each file (skip ticket sales and ticket sales tracker - they use their own metadata)
         for f in active_files:
-            if f.get('is_ticket_sales'):
+            if f.get('is_ticket_sales') or f.get('is_ticket_sales_tracker'):
                 continue
             cache_key = f.get('project_name', '').lower().strip()
             if cache_key in profile_image_cache:
@@ -7206,6 +7243,7 @@ def list_ticket_sales_tracker_files():
     if not s3_client:
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     try:
+        tst_meta = load_ticket_sales_tracker_metadata()
         files = []
         paginator = s3_client.get_paginator('list_objects_v2')
         for page in paginator.paginate(Bucket=TICKET_SALES_TRACKER_S3_BUCKET):
@@ -7219,9 +7257,12 @@ def list_ticket_sales_tracker_files():
                     default_display = match.group(1).replace('_', ' ')
                 else:
                     default_display = name_without_ext.replace('_', ' ')
+                meta = tst_meta.get(key, {})
+                image_url = meta.get('image_url') or ''
                 files.append({
                     's3_key': key,
                     'display_name': default_display.strip(),
+                    'image_url': image_url if image_url else None,
                     'size': obj['Size'],
                     'last_modified': obj['LastModified'].isoformat()
                 })
@@ -7263,10 +7304,14 @@ def get_ticket_sales_tracker_data(s3_key):
         name_without_ext = s3_key.replace('.csv', '')
         match = re.match(r'^Ticket_Sales_(.+)_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', name_without_ext)
         display_name = (match.group(1).replace('_', ' ') if match else name_without_ext.replace('_', ' ')).strip()
+        tst_meta = load_ticket_sales_tracker_metadata()
+        meta = tst_meta.get(s3_key, {})
+        image_url = meta.get('image_url') or ''
         return jsonify({
             'success': True,
             'data': parsed,
             'display_name': display_name,
+            'image_url': image_url if image_url else None,
             's3_key': s3_key
         })
     except Exception as e:
@@ -10124,6 +10169,7 @@ SVOD_METADATA_KEY = 'system/svod_metadata.json'
 
 # Ticket Sales IQ metadata storage key (display_name, category, image_url per s3_key)
 TICKET_SALES_METADATA_KEY = 'system/ticket_sales_metadata.json'
+TICKET_SALES_TRACKER_METADATA_KEY = 'system/ticket_sales_tracker_metadata.json'
 
 # SVOD pricing per platform (admin-configured): { "paramount+": { "ad_supported": 5.99, "premium": 11.99 }, ... }
 SVOD_PRICING_KEY = 'system/svod_pricing.json'
@@ -10574,8 +10620,19 @@ def release_purgatory_item():
                         save_persisted_cache()
                         break
             
-            # For SVOD: persist category to SVOD metadata so Subscriber IQ list and content list show the selected category
+            # For ticket_sales_tracker: persist image_url to metadata when released
             source_type = item.get('source_type', 'profile_analysis')
+            if source_type == 'ticket_sales_tracker' and result and item.get('image_url'):
+                try:
+                    tst_meta = load_ticket_sales_tracker_metadata()
+                    if result not in tst_meta:
+                        tst_meta[result] = {}
+                    tst_meta[result]['image_url'] = item['image_url']
+                    save_ticket_sales_tracker_metadata(tst_meta)
+                    print(f"✅ Saved Ticket Sales Tracker image for {result}")
+                except Exception as e:
+                    print(f"⚠️ Failed to save TST image: {e}")
+            # For SVOD: persist category to SVOD metadata so Subscriber IQ list and content list show the selected category
             if source_type == 'svod_acquisition' and result:
                 try:
                     svod_meta = load_svod_metadata()
@@ -10875,6 +10932,31 @@ def save_ticket_sales_metadata(metadata):
     except:
         return False
 
+def load_ticket_sales_tracker_metadata():
+    """Load Ticket Sales Tracker file metadata (image_url) from S3."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=TICKET_SALES_TRACKER_METADATA_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return {}
+
+def save_ticket_sales_tracker_metadata(metadata):
+    """Save Ticket Sales Tracker file metadata to S3."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=TICKET_SALES_TRACKER_METADATA_KEY,
+            Body=json.dumps(metadata, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except:
+        return False
+
 def load_svod_pricing():
     """Load SVOD pricing (ad_supported, premium per platform) from S3."""
     if not s3_client:
@@ -11050,6 +11132,50 @@ def set_ticket_sales_image():
             meta[s3_key] = {}
         meta[s3_key]['image_url'] = image_url
         save_ticket_sales_metadata(meta)
+        return jsonify({'success': True, 'image_url': image_url, 'message': 'Image saved'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/ticket-sales-tracker-image', methods=['POST'])
+@requires_admin
+def set_ticket_sales_tracker_image():
+    """Upload or set image for a Ticket Sales Tracker file (in admin CMS)."""
+    try:
+        if request.files and 'file' in request.files and request.files['file'].filename:
+            file = request.files['file']
+            s3_key = (request.form.get('ticket_sales_tracker_s3_key') or request.form.get('s3_key') or '').strip()
+            if not s3_key:
+                return jsonify({'success': False, 'error': 'ticket_sales_tracker_s3_key required'})
+            if s3_key.startswith('ticket-sales-tracker/'):
+                s3_key = s3_key.replace('ticket-sales-tracker/', '')
+            file_data = file.read()
+            if len(file_data) > 2 * 1024 * 1024:
+                return jsonify({'success': False, 'error': 'File too large (max 2MB)'}), 400
+            ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'jpg'
+            if ext == 'jpg':
+                ext = 'jpeg'
+            if ext not in ['jpeg', 'png', 'webp', 'gif']:
+                return jsonify({'success': False, 'error': 'Invalid image type'}), 400
+            content_type = f'image/{ext}'
+            if ext == 'jpg':
+                content_type = 'image/jpeg'
+            upload_key = f"ticket-sales-tracker-images/{uuid.uuid4().hex}.{ext}"
+            s3_client.put_object(Bucket=S3_BUCKET, Key=upload_key, Body=file_data, ContentType=content_type)
+            image_url = f"/api/profile-image-file/{upload_key}"
+        else:
+            data = request.get_json() or {}
+            s3_key = (data.get('ticket_sales_tracker_s3_key') or data.get('s3_key') or '').strip()
+            image_url = (data.get('image_url') or '').strip()
+            if not s3_key or not image_url:
+                return jsonify({'success': False, 'error': 'ticket_sales_tracker_s3_key and image_url required'})
+            if s3_key.startswith('ticket-sales-tracker/'):
+                s3_key = s3_key.replace('ticket-sales-tracker/', '')
+        meta = load_ticket_sales_tracker_metadata()
+        if s3_key not in meta:
+            meta[s3_key] = {}
+        meta[s3_key]['image_url'] = image_url
+        save_ticket_sales_tracker_metadata(meta)
         return jsonify({'success': True, 'image_url': image_url, 'message': 'Image saved'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})

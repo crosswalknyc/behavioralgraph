@@ -6204,10 +6204,11 @@
             const fileInput = document.getElementById('profileImageFile');
             const urlInput = document.getElementById('profileImageUrl').value.trim();
             const isTicketSales = fileKey && fileKey.startsWith('ticket-sales-iq/');
+            const isTicketSalesTracker = fileKey && fileKey.startsWith('ticket-sales-tracker/');
             
-            console.log('Saving profile image:', { profileName, fileKey, isTicketSales, hasFile: !!(fileInput.files && fileInput.files[0]), urlInput });
+            console.log('Saving profile image:', { profileName, fileKey, isTicketSales, isTicketSalesTracker, hasFile: !!(fileInput.files && fileInput.files[0]), urlInput });
             
-            if (!profileName && !isTicketSales) {
+            if (!profileName && !isTicketSales && !isTicketSalesTracker) {
                 showToast('No profile selected', true);
                 return;
             }
@@ -6238,6 +6239,28 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 ticket_sales_s3_key: fileKey,
+                                image_url: urlInput
+                            })
+                        });
+                    }
+                } else if (isTicketSalesTracker) {
+                    // Ticket Sales Tracker: use ticket-sales-tracker-image API
+                    if (fileInput.files && fileInput.files[0]) {
+                        const formData = new FormData();
+                        formData.append('file', fileInput.files[0]);
+                        formData.append('ticket_sales_tracker_s3_key', fileKey);
+                        response = await fetch('/api/admin/ticket-sales-tracker-image', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            body: formData
+                        });
+                    } else {
+                        response = await fetch('/api/admin/ticket-sales-tracker-image', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                ticket_sales_tracker_s3_key: fileKey,
                                 image_url: urlInput
                             })
                         });
@@ -6483,11 +6506,14 @@
             // Separate SVOD, Ticket Sales, and regular files
             const svodFiles = [];
             const ticketSalesFiles = [];
+            const ticketSalesTrackerFiles = [];
             const regularFiles = [];
             
             files.forEach(file => {
                 if (file.is_svod || (file.key && file.key.startsWith('svod-acquisition/')) || (file.bucket === 'svod-acquisition')) {
                     svodFiles.push(file);
+                } else if (file.is_ticket_sales_tracker || (file.key && file.key.startsWith('ticket-sales-tracker/'))) {
+                    ticketSalesTrackerFiles.push(file);
                 } else if (file.is_ticket_sales || (file.key && file.key.startsWith('ticket-sales-iq/'))) {
                     ticketSalesFiles.push(file);
                 } else {
@@ -6524,7 +6550,7 @@
             const sortedCategories = Object.keys(byCategory).sort();
             const sortedSvodSubcategories = Object.keys(svodBySubcategory).sort();
 
-            if (sortedCategories.length === 0 && sortedSvodSubcategories.length === 0 && sortedTicketSalesSubcategories.length === 0) {
+            if (sortedCategories.length === 0 && sortedSvodSubcategories.length === 0 && sortedTicketSalesSubcategories.length === 0 && ticketSalesTrackerFiles.length === 0) {
                 container.innerHTML = `<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem; text-align: center;">
                     ${showingArchived ? 'No archived files found.' : 'No content files found.'}
                 </p>`;
@@ -6631,6 +6657,38 @@
                 `;
             }
             
+            // Ticket Sales Tracker section
+            if (ticketSalesTrackerFiles.length > 0) {
+                html += `
+                    <div class="category-accordion" data-category="TICKET SALES TRACKER" data-master-category="true">
+                        <div class="category-accordion-header" onclick="toggleAccordion(this)">
+                            <div class="category-accordion-title">
+                                <span class="category-accordion-arrow">▼</span>
+                                <span>🎟️ TICKET SALES TRACKER</span>
+                                <span class="badge badge-user">${ticketSalesTrackerFiles.length} files</span>
+                            </div>
+                        </div>
+                        <div class="category-accordion-content">
+                            <table class="content-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"><input type="checkbox" onchange="toggleTicketSalesTrackerSelection(this.checked)"></th>
+                                        <th>File Name</th>
+                                        <th>Project</th>
+                                        <th>Date</th>
+                                        <th>Size</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${ticketSalesTrackerFiles.map(file => renderFileRow(file, true, true)).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+            
             // Then render regular files grouped by category
             html += sortedCategories.map(category => {
                 const catFiles = byCategory[category];
@@ -6682,7 +6740,7 @@
             return icons[category.toUpperCase()] || icons[category] || '📁';
         }
 
-        function renderFileRow(file, isTicketSales = false) {
+        function renderFileRow(file, isTicketSales = false, isTicketSalesTracker = false) {
             const isSelected = selectedFiles.has(file.key);
             const dateStr = file.last_modified ? formatDateTimePST(file.last_modified) : '--';
             const hasCustomImage = file.custom_image ? true : false;
@@ -6717,7 +6775,7 @@
                     <td style="font-size: 0.75rem;">${formatBytes(file.size)}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn btn-small btn-icon" onclick="openCategoryModal('${escapedKey}', '${escapedCategory}', ${isTicketSales})" title="Change Category">🏷️</button>
+                            ${!isTicketSalesTracker ? '<button class="btn btn-small btn-icon" onclick="openCategoryModal(\'' + escapedKey + '\', \'' + escapedCategory + '\', ' + isTicketSales + ')" title="Change Category">🏷️</button>' : ''}
                             <button class="btn btn-small btn-icon" onclick="openRenameModal('${escapedKey}', '${escapedName}')" title="Edit Display Name">✏️</button>
                             <button class="btn btn-small btn-icon" onclick="openProfileImageModal(${profileImageArgs})" title="Set Image" style="background: ${hasCustomImage ? 'var(--accent-lime)' : 'var(--bg-input)'}; color: ${hasCustomImage ? '#1a1a1a' : 'var(--text-primary)'};">🖼️</button>
                             ${archiveDeleteBtns}
@@ -6738,6 +6796,16 @@
             } else {
                 selectedFiles.add(key);
             }
+            updateSelectionBar();
+        }
+
+        function toggleTicketSalesTrackerSelection(checked) {
+            const files = showingArchived ? archivedFiles : contentFiles;
+            files.filter(f => f.is_ticket_sales_tracker || (f.key && f.key.startsWith('ticket-sales-tracker/')))
+                .forEach(file => {
+                    if (checked) selectedFiles.add(file.key);
+                    else selectedFiles.delete(file.key);
+                });
             updateSelectionBar();
         }
 
@@ -6911,10 +6979,10 @@
         async function bulkArchive() {
             const keys = Array.from(selectedFiles);
             if (keys.length === 0) return;
-            const tsKeys = keys.filter(k => k.startsWith('ticket-sales-iq/'));
-            const archiveKeys = keys.filter(k => !k.startsWith('ticket-sales-iq/'));
+            const tsKeys = keys.filter(k => k.startsWith('ticket-sales-iq/') || k.startsWith('ticket-sales-tracker/'));
+            const archiveKeys = keys.filter(k => !k.startsWith('ticket-sales-iq/') && !k.startsWith('ticket-sales-tracker/'));
             if (tsKeys.length > 0 && archiveKeys.length === 0) {
-                showToast('Ticket Sales files cannot be archived from here', true);
+                showToast('Ticket Sales / Ticket Sales Tracker files cannot be archived from here', true);
                 return;
             }
             if (archiveKeys.length === 0) return;
@@ -6945,10 +7013,10 @@
         async function bulkDelete() {
             const keys = Array.from(selectedFiles);
             if (keys.length === 0) return;
-            const tsKeys = keys.filter(k => k.startsWith('ticket-sales-iq/'));
-            const deleteKeys = keys.filter(k => !k.startsWith('ticket-sales-iq/'));
+            const tsKeys = keys.filter(k => k.startsWith('ticket-sales-iq/') || k.startsWith('ticket-sales-tracker/'));
+            const deleteKeys = keys.filter(k => !k.startsWith('ticket-sales-iq/') && !k.startsWith('ticket-sales-tracker/'));
             if (tsKeys.length > 0 && deleteKeys.length === 0) {
-                showToast('Ticket Sales files cannot be deleted from here', true);
+                showToast('Ticket Sales / Ticket Sales Tracker files cannot be deleted from here', true);
                 return;
             }
             if (deleteKeys.length === 0) return;

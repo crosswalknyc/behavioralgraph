@@ -11445,7 +11445,7 @@
                     <button class="view-btn has-tooltip {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %} data-tooltip="From first view to lifetime value.">👥 Subscriber IQ</button>
                     <button class="view-btn {% if not has_rankers_iq_access %}disabled{% endif %}" id="rankerIQTab" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</button>
                     <button class="view-btn has-tooltip {% if not has_ticket_sales_iq_access %}disabled{% endif %}" id="ticketSalesIQTab" {% if not has_ticket_sales_iq_access %}disabled{% endif %} data-tooltip="Attribution grounded in real behavior.">🎟️ Impact IQ</button>
-                    <button class="view-btn has-tooltip" id="ticketSalesTrackerTab" data-tooltip="Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms." style="color: #e74c3c;">🎟️ Ticket Sales Tracker</button>
+                    <button class="view-btn has-tooltip" id="ticketSalesTrackerTab" data-tooltip="Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.">🎟️ Ticket Sales Tracker</button>
                     <button class="view-btn has-tooltip {% if default_view_hedge_fund_iq %}active{% endif %} {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %} data-tooltip="Detailed metrics across various ticker KPIs.">📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
@@ -15270,7 +15270,7 @@
             <div class="dashboard-layout">
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
-                        <h3 class="has-tooltip" data-tooltip="Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms." style="color: #e74c3c;">🎟️ Ticket Sales Tracker</h3>
+                        <h3 class="has-tooltip" data-tooltip="Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.">🎟️ Ticket Sales Tracker</h3>
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
                             <span style="font-size: 0.7rem; color: var(--text-secondary);">Tooltips:</span>
                             <div class="display-mode-toggle" id="tstHoverToggle" onclick="toggleTSTHoverDescriptors()" title="Toggle detailed tooltip descriptions on/off">
@@ -15284,14 +15284,15 @@
                 <div class="dashboard-tab-content" id="tstDashboardContent" style="display: flex; flex-direction: column; overflow: hidden;">
                     <div id="tstEmptyState" class="dashboard-empty-state">
                         <div class="empty-state-content">
-                            <div class="empty-state-icon" style="color: #e74c3c;">🎟️</div>
+                            <div class="empty-state-icon">🎟️</div>
                             <h2>Select a Report</h2>
                             <p>Choose a ticket sales report from the sidebar to view US ticket sales by platform.</p>
                         </div>
                     </div>
                     <div id="tstContentArea" style="display: none; flex: 1; overflow-y: auto; padding: 1.5rem;">
                         <div id="tstHeader" class="dash-header-row" style="margin-bottom: 1.5rem;">
-                            <div class="dash-profile-info">
+                            <div class="dash-profile-info" style="display: flex; align-items: stretch; gap: 1rem; flex-wrap: wrap;">
+                                <div class="dash-profile-image" id="tstProfileImage" style="min-width: 80px; width: 120px; min-height: 100px; height: auto; align-self: stretch; flex-shrink: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; overflow: hidden;"><span id="tstProfileImagePlaceholder">🎬</span></div>
                                 <div class="dash-brand-container">
                                     <div class="dash-brand-box" id="tstMovieNameHeader"></div>
                                     <div class="dash-date-box" id="tstDateRangeHeader"></div>
@@ -22050,7 +22051,7 @@
                 const response = await fetch(`/api/ticket-sales-tracker/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
                 const resp = await response.json();
                 if (!resp.success) throw new Error(resp.error || 'Failed to load');
-                currentTSTData = { data: resp.data, display_name: resp.display_name, s3_key: s3Key };
+                currentTSTData = { data: resp.data, display_name: resp.display_name, s3_key: s3Key, image_url: resp.image_url || null };
                 document.getElementById('tstEmptyState').style.display = 'none';
                 document.getElementById('tstContentArea').style.display = 'block';
                 renderTSTDashboard();
@@ -22070,6 +22071,23 @@
             const meta = d.metadata || {};
             const titleTip = 'Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.';
             const projTip = d.is_family_animation ? '(Based on a $15 ticket price with a factor of 2x to account for ticket purchasers average ticket count purchased.)' : '(Based on a $15 ticket price.)';
+            const profileImg = document.getElementById('tstProfileImage');
+            const placeholder = document.getElementById('tstProfileImagePlaceholder');
+            if (currentTSTData.image_url) {
+                if (placeholder) placeholder.style.display = 'none';
+                let img = profileImg ? profileImg.querySelector('img') : null;
+                if (profileImg) {
+                    if (!img) { img = document.createElement('img'); img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:8px;'; profileImg.appendChild(img); }
+                    img.src = currentTSTData.image_url;
+                    img.style.display = 'block';
+                }
+            } else {
+                if (placeholder) { placeholder.style.display = ''; placeholder.textContent = '🎬'; }
+                if (profileImg) {
+                    const img = profileImg.querySelector('img');
+                    if (img) img.style.display = 'none';
+                }
+            }
             document.getElementById('tstMovieNameHeader').innerHTML = `<span class="has-tooltip" data-tooltip="${titleTip.replace(/"/g, '&quot;')}">${(meta.movie || currentTSTData.display_name || 'Unknown').replace(/</g, '&lt;')}</span>`;
             document.getElementById('tstDateRangeHeader').textContent = meta.date_range || '';
             document.getElementById('tstGenreHeader').textContent = d.genre ? 'Genre: ' + d.genre : '';
