@@ -21979,6 +21979,7 @@
             if (!s3Key) return;
             try {
                 const response = await fetch(`/api/ticket-sales-tracker/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
                 const resp = await response.json();
                 if (!resp.success) throw new Error(resp.error || 'Failed to load');
                 if (!resp.data) throw new Error('No data returned from server');
