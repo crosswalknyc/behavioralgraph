@@ -7216,7 +7216,7 @@ def parse_ticket_sales_tracker_csv(csv_content):
             parsed['projected_ticket_sales_us'] = proj or val
             current_section = None
         line_text = (cat + ' ' + val).upper()
-        if 'DEMOGRAPHICS (Overall' in line_text and 'DEMOGRAPHICS PER THEATER' not in line_text:
+        if 'DEMOGRAPHICS (OVERALL' in line_text and 'DEMOGRAPHICS PER THEATER' not in line_text:
             current_section = 'demo_overall'
             demo_field = None
             current_theater = None
