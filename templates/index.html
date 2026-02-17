@@ -22020,9 +22020,13 @@
             document.getElementById('tstDateRangeHeader').textContent = meta.date_range || '';
             document.getElementById('tstGenreHeader').textContent = d.genre ? 'Genre: ' + d.genre : '';
             const cards = [];
-            if (d.total_tickets_us) cards.push({ label: 'Total Tickets Sold (US Gen Pop)', value: d.total_tickets_us });
-            if (d.projected_ticket_sales_us) cards.push({ label: 'Projected Ticket Sales (US Gen Pop)', value: d.projected_ticket_sales_us });
-            document.getElementById('tstSummaryCards').innerHTML = cards.map(c => `<div class="stat-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="font-size: 0.75rem; color: var(--text-secondary);">${(c.label||'').replace(/</g,'&lt;')}</div><div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);">${(c.value||'').toString().replace(/</g,'&lt;')}</div></div>`).join('');
+            if (d.total_tickets_us) cards.push({ label: 'Total Tickets Sold (US Gen Pop)', value: d.total_tickets_us, isCurrency: false });
+            if (d.projected_ticket_sales_us) cards.push({ label: 'Projected Ticket Sales (US Gen Pop)', value: d.projected_ticket_sales_us, isCurrency: true });
+            document.getElementById('tstSummaryCards').innerHTML = cards.map(c => {
+                const num = _tstParseNum(c.value);
+                const display = isNaN(num) ? (c.value||'').toString() : (c.isCurrency ? '$' : '') + Math.round(num).toLocaleString();
+                return `<div class="stat-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="font-size: 0.75rem; color: var(--text-secondary);">${(c.label||'').replace(/</g,'&lt;')}</div><div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);">${display.replace(/</g,'&lt;')}</div></div>`;
+            }).join('');
             renderTSTAudienceSnapshot(d);
             renderTSTTheatersTab(d);
             showTSTTab(tstActiveTab);
