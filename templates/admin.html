@@ -2086,12 +2086,32 @@
                                         <span>⏱️ Watch Time</span>
                                     </label>
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleTicketSalesTracker" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
+                                        <input type="checkbox" id="moduleTicketSalesTracker" class="analysis-module-checkbox" onchange="syncTSTRunWithModule(); updateAllAnalysisModulesCheckbox()">
                                         <span>🎬 Ticket Sales Tracker</span>
                                     </label>
                                 </div>
                                 <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
                             </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Ticket Sales Tracker Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <span style="font-weight: 600;">🎬 TICKET SALES TRACKER</span>
+                        </div>
+                        <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem; margin-left: 0;">
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <label class="checkbox-group">
+                                    <input type="checkbox" id="hasTicketSalesTrackerView">
+                                    <span>View TST Dashboard</span>
+                                </label>
+                                <label class="checkbox-group">
+                                    <input type="checkbox" id="hasTicketSalesTrackerRun" class="analysis-module-checkbox" onchange="syncTSTRunWithModule(); updateAllAnalysisModulesCheckbox();">
+                                    <span>Run TST via Analysis IQ</span>
+                                </label>
+                            </div>
+                            <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">View: access released reports. Run: submit TST analysis (requires Analysis IQ access + this).</small>
                         </div>
                     </div>
                     
@@ -4451,6 +4471,8 @@
             document.getElementById('hasTicketSalesIQAccess').checked = true;
             document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('hasAnalysisIQAccess').checked = false;
+            document.getElementById('hasTicketSalesTrackerView').checked = false;
+            document.getElementById('hasTicketSalesTrackerRun').checked = false;
             
             // Reset Hedge Fund IQ section
             document.getElementById('hedgeFundIQSection').style.display = 'none';
@@ -4549,6 +4571,8 @@
             document.getElementById('hasTicketSalesIQAccess').checked = user.has_ticket_sales_iq_access !== false; // Default true
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
+            document.getElementById('hasTicketSalesTrackerView').checked = user.has_ticket_sales_tracker_access === true;
+            syncTSTRunWithModule();
             
             // Set Hedge Fund IQ access (tabs and tickers)
             setHedgeFundIQAccess(user);
@@ -5388,10 +5412,20 @@
             if (document.getElementById('moduleCampaign').checked) modules.push('campaign');
             if (document.getElementById('moduleCrossShow').checked) modules.push('cross_show');
             if (document.getElementById('moduleWatchTime').checked) modules.push('watch_time');
-            if (document.getElementById('moduleTicketSalesTracker')?.checked) modules.push('ticket_sales_tracker');
+            if (document.getElementById('moduleTicketSalesTracker')?.checked || document.getElementById('hasTicketSalesTrackerRun')?.checked) modules.push('ticket_sales_tracker');
             return modules;
         }
 
+        function syncTSTRunWithModule() {
+            const run = document.getElementById('hasTicketSalesTrackerRun');
+            const mod = document.getElementById('moduleTicketSalesTracker');
+            if (run && mod) {
+                const checked = run.checked || mod.checked;
+                run.checked = checked;
+                mod.checked = checked;
+            }
+        }
+        
         function setAnalysisIQModules(modules) {
             // Reset all checkboxes first
             document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
@@ -5410,7 +5444,12 @@
                     case 'campaign': document.getElementById('moduleCampaign').checked = true; break;
                     case 'cross_show': document.getElementById('moduleCrossShow').checked = true; break;
                     case 'watch_time': document.getElementById('moduleWatchTime').checked = true; break;
-                    case 'ticket_sales_tracker': if (document.getElementById('moduleTicketSalesTracker')) document.getElementById('moduleTicketSalesTracker').checked = true; break;
+                    case 'ticket_sales_tracker':
+                        const m = document.getElementById('moduleTicketSalesTracker');
+                        const r = document.getElementById('hasTicketSalesTrackerRun');
+                        if (m) m.checked = true;
+                        if (r) r.checked = true;
+                        break;
                 }
             });
             updateAllAnalysisModulesCheckbox();
@@ -5785,6 +5824,7 @@
                 hedge_fund_iq_tickers: document.getElementById('allHedgeFundTickers').checked ? ['*'] : getHedgeFundIQTickers(),
                 has_analysis_iq_access: !!document.getElementById('hasAnalysisIQAccess').checked,
                 analysis_iq_modules: getAnalysisIQModules() || [],
+                has_ticket_sales_tracker_access: document.getElementById('hasTicketSalesTrackerView').checked,
                 has_rankers_iq_access: document.getElementById('hasRankersIQAccess').checked,
                 rankers_iq_options: getRankersIQOptions(),
                 send_welcome_email: document.getElementById('sendWelcomeEmail').checked,

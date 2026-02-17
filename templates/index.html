@@ -11462,7 +11462,7 @@
                         <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                         <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
                         <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
-                        <option value="ticketSalesTracker">🎬 Ticket Sales Tracker</option>
+                        <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎬 Ticket Sales Tracker</option>
                         <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
                         {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                         <option value="customAnalysis">🔧 Analysis IQ</option>

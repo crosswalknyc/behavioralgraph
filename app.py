@@ -2081,6 +2081,7 @@ def create_user():
             'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
             'has_analysis_iq_access': req_data.get('has_analysis_iq_access', False),
             'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
+            'has_ticket_sales_tracker_access': req_data.get('has_ticket_sales_tracker_access', False),
             'has_rankers_iq_access': req_data.get('has_rankers_iq_access', False),
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
             'collab_team': req_data.get('collab_team', []),
@@ -2174,6 +2175,8 @@ def update_user(username):
         if 'analysis_iq_modules' in req_data:
             raw = req_data['analysis_iq_modules']
             user['analysis_iq_modules'] = list(raw) if isinstance(raw, list) else []
+        if 'has_ticket_sales_tracker_access' in req_data:
+            user['has_ticket_sales_tracker_access'] = bool(req_data['has_ticket_sales_tracker_access'])
         if 'has_rankers_iq_access' in req_data:
             user['has_rankers_iq_access'] = req_data['has_rankers_iq_access']
         if 'rankers_iq_options' in req_data:
@@ -3467,6 +3470,7 @@ def index():
         has_rankers_iq = True
         rankers_iq_options = ['*']
         has_ticket_sales_iq = True
+        has_ticket_sales_tracker = True
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
@@ -3478,6 +3482,7 @@ def index():
         has_rankers_iq = user.get('has_rankers_iq_access', False) if user else False
         rankers_iq_options = user.get('rankers_iq_options', []) if user else []
         has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
+        has_ticket_sales_tracker = user.get('has_ticket_sales_tracker_access', False) if user else False
     
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -3512,6 +3517,7 @@ def index():
                            has_rankers_iq_access=has_rankers_iq,
                            rankers_iq_options=rankers_iq_options,
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
+                           has_ticket_sales_tracker_access=has_ticket_sales_tracker,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            first_name=first_name,
                            last_name=last_name,
@@ -7285,6 +7291,9 @@ def parse_ticket_sales_tracker_csv(csv_content):
 @requires_auth
 def list_ticket_sales_tracker_files():
     """List non-purgatory Ticket Sales Tracker CSV files from S3 bucket ticket-sales-tracker."""
+    user = get_current_user()
+    if not user_can_view_ticket_sales_tracker(user):
+        return jsonify({'success': False, 'error': 'Ticket Sales Tracker dashboard access required'}), 403
     if not s3_client:
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     try:
@@ -7324,6 +7333,9 @@ def list_ticket_sales_tracker_files():
 @requires_auth
 def download_ticket_sales_tracker(s3_key):
     """Download a released Ticket Sales Tracker CSV from S3."""
+    user = get_current_user()
+    if not user_can_view_ticket_sales_tracker(user):
+        return jsonify({'error': 'Ticket Sales Tracker dashboard access required'}), 403
     if not s3_client or s3_key.startswith(S3_PURGATORY_PREFIX):
         return jsonify({'error': 'Download not available'}), 403
     try:
@@ -7338,6 +7350,9 @@ def download_ticket_sales_tracker(s3_key):
 @requires_auth
 def get_ticket_sales_tracker_data(s3_key):
     """Get Ticket Sales Tracker CSV data as JSON."""
+    user = get_current_user()
+    if not user_can_view_ticket_sales_tracker(user):
+        return jsonify({'success': False, 'error': 'Ticket Sales Tracker dashboard access required'}), 403
     if not s3_client:
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     if s3_key.startswith(S3_PURGATORY_PREFIX):
@@ -14179,6 +14194,15 @@ def post_comment():
 # ============================================================================
 # ATTRIBUTION IQ / ANALYSIS IQ ENDPOINTS
 # ============================================================================
+
+def user_can_view_ticket_sales_tracker(user):
+    """True if user can view the Ticket Sales Tracker dashboard (list and view reports)."""
+    if not user:
+        return False
+    if user.get('role') in ('admin', 'super_admin'):
+        return True
+    return user.get('has_ticket_sales_tracker_access', False) is True
+
 
 def user_can_run_analysis_module(user, module_key):
     """True if user can run the given Analysis IQ module (talent_search, svod, campaign, etc.)."""
