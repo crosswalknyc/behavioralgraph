@@ -15318,7 +15318,7 @@
                         </div>
                         <div id="tstTabContent" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
                             <div id="tstTabSummaryPanel" class="tst-tab-panel">
-                                <div id="tstSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
+                                <div id="tstSummaryCards" class="exec-summary-grid" style="margin-bottom: 1.5rem;"></div>
                                 <div id="tstAudienceSnapshot" class="insight-card-v2" style="margin-bottom: 1.5rem;">
                                     <h4 style="margin: 0 0 1rem 0; font-size: 0.95rem;">👤 Audience Snapshot</h4>
                                     <div id="tstAudienceSnapshotGrid" class="audience-snapshot" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;"></div>
@@ -22034,7 +22034,7 @@
             document.getElementById('tstSummaryCards').innerHTML = cards.map(c => {
                 const num = _tstParseNum(c.value);
                 const display = isNaN(num) ? (c.value||'').toString() : (c.isCurrency ? '$' : '') + Math.round(num).toLocaleString();
-                return `<div class="stat-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="font-size: 0.75rem; color: var(--text-secondary);">${(c.label||'').replace(/</g,'&lt;')}</div><div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);">${display.replace(/</g,'&lt;')}</div></div>`;
+                return `<div class="exec-summary-metric"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div></div>`;
             }).join('');
             renderTSTAudienceSnapshot(d);
             renderTSTTheatersTab(d);
