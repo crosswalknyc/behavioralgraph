@@ -15270,13 +15270,7 @@
             <div class="dashboard-layout">
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
-                        <h3 class="has-tooltip" data-tooltip="Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.">🎟️ Ticket Sales Tracker</h3>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
-                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Tooltips:</span>
-                            <div class="display-mode-toggle" id="tstHoverToggle" onclick="toggleTSTHoverDescriptors()" title="Toggle detailed tooltip descriptions on/off">
-                                <span id="tstHoverToggleLabel">HOVER ON</span>
-                            </div>
-                        </div>
+                        <h3>🎟️ Ticket Sales Tracker</h3>
                         <input type="text" id="tstSearchInput" class="sidebar-search" placeholder="🔍 Search..." onkeyup="filterTSTProfiles()" style="margin-top: 0.5rem;">
                     </div>
                     <div id="tstProfileTree" class="profile-select-tree"></div>
@@ -22035,7 +22029,6 @@
         
         // Ticket Sales Tracker (TST) dashboard
         let tstProfiles = [];
-        let tstHoverDescriptorsOn = true;
         let currentTSTData = null;
         let tstCharts = {};
         let tstActiveTab = 'summary';
@@ -22082,18 +22075,10 @@
                 console.error('selectTSTProfile error:', e);
             }
         }
-        function toggleTSTHoverDescriptors() {
-            tstHoverDescriptorsOn = !tstHoverDescriptorsOn;
-            document.body.classList.toggle('hover-disabled', !tstHoverDescriptorsOn);
-            const lbl = document.getElementById('tstHoverToggleLabel');
-            if (lbl) lbl.textContent = tstHoverDescriptorsOn ? 'HOVER ON' : 'HOVER OFF';
-        }
         function renderTSTDashboard() {
             if (!currentTSTData) return;
             const d = currentTSTData.data;
             const meta = d.metadata || {};
-            const titleTip = 'Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.';
-            const projTip = d.is_family_animation ? '(Based on a $15 ticket price with a factor of 2x to account for ticket purchasers average ticket count purchased.)' : '(Based on a $15 ticket price.)';
             const profileImg = document.getElementById('tstProfileImage');
             const placeholder = document.getElementById('tstProfileImagePlaceholder');
             if (currentTSTData.image_url) {
@@ -22111,16 +22096,13 @@
                     if (img) img.style.display = 'none';
                 }
             }
-            document.getElementById('tstMovieNameHeader').innerHTML = `<span class="has-tooltip" data-tooltip="${titleTip.replace(/"/g, '&quot;')}">${(meta.movie || currentTSTData.display_name || 'Unknown').replace(/</g, '&lt;')}</span>`;
+            document.getElementById('tstMovieNameHeader').textContent = meta.movie || currentTSTData.display_name || 'Unknown';
             document.getElementById('tstDateRangeHeader').textContent = meta.date_range || '';
             document.getElementById('tstGenreHeader').textContent = d.genre ? 'Genre: ' + d.genre : '';
             const cards = [];
             if (d.total_tickets_us) cards.push({ label: 'Total Tickets', value: d.total_tickets_us });
-            if (d.projected_ticket_sales_us) cards.push({ label: 'Ticket Sales', value: d.projected_ticket_sales_us, tip: projTip });
-            const cardsHtml = cards.map(c => {
-                const tip = c.tip ? ` class="has-tooltip" data-tooltip="${(c.tip||'').replace(/"/g,'&quot;')}"` : '';
-                return `<div class="stat-card"${tip} style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="font-size: 0.75rem; color: var(--text-secondary);">${(c.label||'').replace(/</g,'&lt;')}</div><div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);">${(c.value||'').toString().replace(/</g,'&lt;')}</div></div>`;
-            }).join('');
+            if (d.projected_ticket_sales_us) cards.push({ label: 'Ticket Sales', value: d.projected_ticket_sales_us });
+            const cardsHtml = cards.map(c => `<div class="stat-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="font-size: 0.75rem; color: var(--text-secondary);">${(c.label||'').replace(/</g,'&lt;')}</div><div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);">${(c.value||'').toString().replace(/</g,'&lt;')}</div></div>`).join('');
             document.getElementById('tstSummaryCards').innerHTML = cardsHtml;
             const platforms = d.platforms || [];
             const tableHtml = platforms.length ? `<table style="width:100%; border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="text-align:left;padding:0.75rem;">Platform</th><th style="text-align:right;padding:0.75rem;">US</th></tr></thead><tbody>${platforms.map(p => `<tr style="border-bottom:1px solid var(--border-color);"><td style="padding:0.75rem;">${(p.platform||'').replace(/</g,'&lt;')}</td><td style="text-align:right;padding:0.75rem;">${(p.us_value||'').toString().replace(/</g,'&lt;')}</td></tr>`).join('')}</tbody></table>` : '<div style="padding:1rem;">No platform data</div>';
@@ -22130,7 +22112,6 @@
             renderTSTDemographicsOverall(d);
             renderTSTTheaterSelect(d);
             renderTSTPerTheaterCharts();
-            initGlobalTooltip && initGlobalTooltip();
         }
         function showTSTTab(tab) {
             tstActiveTab = tab;
