@@ -472,6 +472,22 @@
             margin-left: auto;
         }
         .view-toggle { display: flex; gap: 0.5rem; }
+        .view-nav-dropdown {
+            padding: 0.5rem 2rem 0.5rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            min-width: 200px;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b949e' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+        }
+        .view-nav-dropdown:focus { outline: none; border-color: var(--accent-blue); }
+        .view-nav-dropdown option:disabled { color: var(--text-secondary); opacity: 0.6; }
         .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
             padding: 0.5rem 1rem;
@@ -11441,19 +11457,20 @@
                     </div>
                 </div>
                 <div class="view-toggle" id="iqTabsContainer">
-                    <button class="view-btn has-tooltip {% if not default_view_hedge_fund_iq %}active{% endif %} {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" {% if not has_profile_iq_access %}disabled{% endif %} data-tooltip="Who they are. What they do. Where attention compounds.">🎯 Profile IQ</button>
-                    <button class="view-btn has-tooltip {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %} data-tooltip="From first view to lifetime value.">👥 Subscriber IQ</button>
-                    <button class="view-btn {% if not has_rankers_iq_access %}disabled{% endif %}" id="rankerIQTab" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</button>
-                    <button class="view-btn has-tooltip {% if not has_ticket_sales_iq_access %}disabled{% endif %}" id="ticketSalesIQTab" {% if not has_ticket_sales_iq_access %}disabled{% endif %} data-tooltip="Attribution grounded in real behavior.">🎟️ Impact IQ</button>
-                    <button class="view-btn has-tooltip" id="ticketSalesTrackerTab" data-tooltip="Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.">🎟️ Ticket Sales Tracker</button>
-                    <button class="view-btn has-tooltip {% if default_view_hedge_fund_iq %}active{% endif %} {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %} data-tooltip="Detailed metrics across various ticker KPIs.">📈 Hedge Fund IQ</button>
-                    <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
-                    {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
-                    <button class="view-btn has-tooltip" id="customAnalysisBtn" data-tooltip="Create and run your own analysis">🔧 Analysis IQ</button>
-                    {% endif %}
-                    {% if role == 'super_admin' or role == 'admin' %}
-                    <a href="/admin" class="view-btn" id="adminViewBtn">🔐 Admin</a>
-                    {% endif %}
+                    <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate">
+                        <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
+                        <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
+                        <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
+                        <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎟️ Impact IQ</option>
+                        <option value="ticketSalesTracker">🎟️ Ticket Sales Tracker</option>
+                        <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
+                        {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
+                        <option value="customAnalysis">🔧 Analysis IQ</option>
+                        {% endif %}
+                        {% if role == 'super_admin' or role == 'admin' %}
+                        <option value="admin">🔐 Admin</option>
+                        {% endif %}
+                    </select>
                 </div>
             </div>
         </header>
@@ -16224,29 +16241,33 @@
             // Check for profile-released notifications (purgatory release)
             checkProfileReleasedNotifications();
             
-            // Attach event listeners to ALL navigation buttons
-            const navButtons = [
-                { id: 'profileIQTab', handler: showProfileIQ },
-                { id: 'subscriberIQTab', handler: showSubscriberIQ },
-                { id: 'rankerIQTab', handler: showRankerIQ },
-                { id: 'ticketSalesIQTab', handler: showTicketSalesIQ },
-                { id: 'ticketSalesTrackerTab', handler: showTicketSalesTracker },
-                { id: 'hedgeFundIQTab', handler: showHedgeFundIQ },
-                { id: 'dashboardViewBtn', handler: showDashboardView },
-                { id: 'customAnalysisBtn', handler: showCustomAnalysis }
-            ];
-            
-            navButtons.forEach(({ id, handler }) => {
-                const button = document.getElementById(id);
-                if (button && handler) {
-                    button.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        if (!this.classList.contains('disabled')) {
-                            handler();
-                        }
-                    });
+            // View navigation dropdown
+            const viewDropdown = document.getElementById('viewNavDropdown');
+            const navHandlers = {
+                profileIQ: showProfileIQ,
+                subscriberIQ: showSubscriberIQ,
+                rankerIQ: showRankerIQ,
+                ticketSalesIQ: showTicketSalesIQ,
+                ticketSalesTracker: showTicketSalesTracker,
+                hedgeFundIQ: showHedgeFundIQ,
+                dashboard: showDashboardView,
+                customAnalysis: showCustomAnalysis,
+                admin: function() { window.location.href = '/admin'; }
+            };
+            window.setViewNavDropdown = function(value) {
+                if (viewDropdown && value) {
+                    viewDropdown.value = value;
                 }
-            });
+            };
+            if (viewDropdown) {
+                viewDropdown.addEventListener('change', function() {
+                    const val = this.value;
+                    const opt = this.options[this.selectedIndex];
+                    if (opt && opt.disabled) return;
+                    const handler = navHandlers[val];
+                    if (handler) handler();
+                });
+            }
         });
         
         // Global tooltip system
@@ -16719,8 +16740,7 @@
             // Update button states
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.add('active');
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('profileIQ');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
             if (talentSearchTab) talentSearchTab.classList.remove('active');
             const talentTheaterTab = document.getElementById('talentTheaterIQTab');
@@ -16735,28 +16755,10 @@
         
         // Main IQ Tab Switching - Ensure functions are in global scope
         window.showProfileIQ = function() {
-            const profileTab = document.getElementById('profileIQTab');
-            if (profileTab.classList.contains('disabled')) return;
-            
-            // Update tab active states
-            document.getElementById('profileIQTab').classList.add('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
-            const rankerIQTab = document.getElementById('rankerIQTab');
-            if (rankerIQTab) rankerIQTab.classList.remove('active');
-            const ticketSalesTab = document.getElementById('ticketSalesIQTab');
-            if (ticketSalesTab) ticketSalesTab.classList.remove('active');
-            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
-            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.remove('active');
-            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
-            if (hedgeFundTab) hedgeFundTab.classList.remove('active');
-            const talentSearchTab = document.getElementById('talentSearchIQTab');
-            if (talentSearchTab) talentSearchTab.classList.remove('active');
-            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
-            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
-            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="profileIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('profileIQ');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'flex';
@@ -16785,28 +16787,10 @@
         }
         
         window.showSubscriberIQ = function() {
-            const subscriberTab = document.getElementById('subscriberIQTab');
-            if (subscriberTab.classList.contains('disabled')) return;
-            
-            // Update tab active states
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.add('active');
-            const rankerIQTab = document.getElementById('rankerIQTab');
-            if (rankerIQTab) rankerIQTab.classList.remove('active');
-            const ticketSalesTab = document.getElementById('ticketSalesIQTab');
-            if (ticketSalesTab) ticketSalesTab.classList.remove('active');
-            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
-            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.remove('active');
-            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
-            if (hedgeFundTab) hedgeFundTab.classList.remove('active');
-            const talentSearchTab = document.getElementById('talentSearchIQTab');
-            if (talentSearchTab) talentSearchTab.classList.remove('active');
-            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
-            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
-            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="subscriberIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('subscriberIQ');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
@@ -16838,25 +16822,10 @@
         }
         
         window.showRankerIQ = function() {
-            // Update tab active states
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
-            const rankerIQTab = document.getElementById('rankerIQTab');
-            if (rankerIQTab) rankerIQTab.classList.add('active');
-            const ticketSalesTab = document.getElementById('ticketSalesIQTab');
-            if (ticketSalesTab) ticketSalesTab.classList.remove('active');
-            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
-            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.remove('active');
-            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
-            if (hedgeFundTab) hedgeFundTab.classList.remove('active');
-            const talentSearchTab = document.getElementById('talentSearchIQTab');
-            if (talentSearchTab) talentSearchTab.classList.remove('active');
-            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
-            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
-            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="rankerIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('rankerIQ');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
@@ -16906,21 +16875,10 @@
         }
         
         window.showTicketSalesIQ = function() {
-            const ticketSalesTab = document.getElementById('ticketSalesIQTab');
-            if (ticketSalesTab && ticketSalesTab.classList.contains('disabled')) return;
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
-            const rankerIQTab = document.getElementById('rankerIQTab');
-            if (rankerIQTab) rankerIQTab.classList.remove('active');
-            if (ticketSalesTab) ticketSalesTab.classList.add('active');
-            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
-            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.remove('active');
-            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
-            if (hedgeFundTab) hedgeFundTab.classList.remove('active');
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
-            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="ticketSalesIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('ticketSalesIQ');
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
             const rankerIQView = document.getElementById('rankerIQView');
@@ -16943,20 +16901,10 @@
         }
         
         window.showTicketSalesTracker = function() {
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
-            const rankerIQTab = document.getElementById('rankerIQTab');
-            if (rankerIQTab) rankerIQTab.classList.remove('active');
-            const ticketSalesTab = document.getElementById('ticketSalesIQTab');
-            if (ticketSalesTab) ticketSalesTab.classList.remove('active');
-            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
-            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.add('active');
-            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
-            if (hedgeFundTab) hedgeFundTab.classList.remove('active');
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
-            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="ticketSalesTracker"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('ticketSalesTracker');
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
             const rankerIQView = document.getElementById('rankerIQView');
@@ -16980,25 +16928,10 @@
         }
         
         window.showHedgeFundIQ = function() {
-            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
-            if (hedgeFundTab.classList.contains('disabled')) return;
-            
-            // Update tab active states
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
-            const rankerIQTab = document.getElementById('rankerIQTab');
-            if (rankerIQTab) rankerIQTab.classList.remove('active');
-            const ticketSalesTab = document.getElementById('ticketSalesIQTab');
-            if (ticketSalesTab) ticketSalesTab.classList.remove('active');
-            if (hedgeFundTab) hedgeFundTab.classList.add('active');
-            const talentSearchTab = document.getElementById('talentSearchIQTab');
-            if (talentSearchTab) talentSearchTab.classList.remove('active');
-            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
-            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
-            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="hedgeFundIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('hedgeFundIQ');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
@@ -17035,17 +16968,10 @@
         window.showTalentSearchIQ = function() {
             const talentSearchTab = document.getElementById('talentSearchIQTab');
             if (talentSearchTab && talentSearchTab.classList.contains('disabled')) return;
-            
-            // Update tab active states
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('hedgeFundIQ');
             if (talentSearchTab) talentSearchTab.classList.add('active');
             const talentTheaterTab = document.getElementById('talentTheaterIQTab');
             if (talentTheaterTab) talentTheaterTab.classList.remove('active');
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
-            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
@@ -17063,17 +16989,10 @@
         window.showTalentTheaterIQ = function() {
             const talentTheaterTab = document.getElementById('talentTheaterIQTab');
             if (talentTheaterTab && talentTheaterTab.classList.contains('disabled')) return;
-            
-            // Update tab active states
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('hedgeFundIQ');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
             if (talentSearchTab) talentSearchTab.classList.remove('active');
             if (talentTheaterTab) talentTheaterTab.classList.add('active');
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
-            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
@@ -17089,19 +17008,10 @@
         }
         
         window.showCustomAnalysis = function() {
-            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
-            if (customAnalysisBtn && customAnalysisBtn.classList.contains('disabled')) return;
-            
-            // Update tab active states
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
-            const talentSearchTab = document.getElementById('talentSearchIQTab');
-            if (talentSearchTab) talentSearchTab.classList.remove('active');
-            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
-            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            if (customAnalysisBtn) customAnalysisBtn.classList.add('active');
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="customAnalysis"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('customAnalysis');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
