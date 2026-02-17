@@ -22260,7 +22260,7 @@
                             } } },
                             datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const gp=genPopVals[ctx.dataIndex]||0; return gp>0.05 ? fmtPct(p)+' (GP: '+fmtPct(gp)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
                         },
-                        layout: useBar && isLocation ? { padding: { left: 300 } } : {},
+                        layout: useBar ? { padding: { left: isLocation ? 300 : 20, right: 90 } } : {},
                         scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: isLocation && typeof getDMARank === 'function' ? (val) => { const s = val != null && typeof val === 'string' ? val : String(val || ''); if (!s) return val; const r = getDMARank(s); return r != null ? `#${r}  ${s}` : val; } : undefined } } } : {}
                     },
                     plugins: [ChartDataLabels]
@@ -22362,7 +22362,7 @@
                             } } },
                             datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const g=genPopVals[ctx.dataIndex]||0; return g>0.05 ? fmtPct(p)+' (GP: '+fmtPct(g)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
                         },
-                        layout: useBar && isLocation ? { padding: { left: 300 } } : {},
+                        layout: useBar ? { padding: { left: isLocation ? 300 : 20, right: 90 } } : {},
                         scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: isLocation && typeof getDMARank === 'function' ? (val) => { const s = val != null && typeof val === 'string' ? val : String(val || ''); if (!s) return val; const r = getDMARank(s); return r != null ? `#${r}  ${s}` : val; } : undefined } } } : {}
                     },
                     plugins: [ChartDataLabels]
