@@ -22120,11 +22120,62 @@
                 }
             });
         }
+        const TST_AGE_ORDER = ['<16','under 16','16-18','18-20','21-25','26-30','31-40','41-59','60+','65+','over 65'];
+        const TST_INCOME_ORDER = ['$40k-$60k','$40k - $60k','$60k-$75k','$60k - $75k','$75k-$100k','$75k - $100k','$100k-$150k','$100k - $150k','$150k-$250k','$150k - $250k','$250k+','$250k +'];
+        let tstDemoSort = { age:'value', income:'value', gender:'value', ethnicity:'value', location:'value' };
+        function _tstDemoArrToObj(arr) { const o={}; (arr||[]).forEach(r=>{ const v=(r.value||'').trim(); if(v) o[v]=_tstParsePct(r.percent); }); return o; }
+        function _tstGetGenPop(field, value) {
+            const key = (field||'').toUpperCase();
+            const keyLower = key.toLowerCase();
+            let v = (value||'').trim();
+            if(keyLower==='location') {
+                const dmaKey = (v||'').toUpperCase().trim();
+                if(genPopBaselineData?.locations?.length) {
+                    const loc = genPopBaselineData.locations.find(l=>(l.name||'').toUpperCase().trim()===dmaKey);
+                    if(loc && (loc.pct!=null||loc.percent!=null)) return parseFloat(loc.pct||loc.percent||0);
+                }
+                if(typeof GENPOP_DMA!=='undefined' && GENPOP_DMA[dmaKey]!=null) return GENPOP_DMA[dmaKey];
+                return 0;
+            }
+            if(genPopBaselineData?.demographics?.[keyLower]) {
+                const gp = genPopBaselineData.demographics[keyLower] || {};
+                let pct = gp[v]; if(pct!=null) return pct;
+                const ethKey = (v||'').toLowerCase()==='latinx'?'Latino':v;
+                pct = gp[ethKey]; if(pct!=null) return pct;
+                for(const k of Object.keys(gp)){ if((k||'').toLowerCase()===(v||'').toLowerCase()) return gp[k]; }
+            }
+            if(typeof GENPOP_DEMOGRAPHICS!=='undefined' && GENPOP_DEMOGRAPHICS[key]) {
+                const gp = GENPOP_DEMOGRAPHICS[key];
+                let pct = gp[v]; if(pct!=null) return pct;
+                const ethKey = (v||'').toLowerCase()==='latinx'?'Latino':v;
+                pct = gp[ethKey]; if(pct!=null) return pct;
+                for(const k of Object.keys(gp)){ if((k||'').toLowerCase()===(v||'').toLowerCase()) return gp[k]; }
+            }
+            return 0;
+        }
+        function _tstSortDemoArr(field, arr) {
+            const mode = tstDemoSort[field] || 'value';
+            let sorted = [...(arr||[])];
+            if(mode==='value') sorted.sort((a,b)=>_tstParsePct(b.percent)-_tstParsePct(a.percent));
+            else if(field==='AGE') sorted.sort((a,b)=>{
+                const getIdx=(x)=>{ const v=(x.value||'').toLowerCase(); let i=TST_AGE_ORDER.findIndex(o=>o.toLowerCase()===v); if(i>=0)return i; i=TST_AGE_ORDER.findIndex(o=>v.includes(o.toLowerCase())||o.toLowerCase().includes(v)); return i>=0?i:999; };
+                return getIdx(a)-getIdx(b);
+            });
+            else if(field==='INCOME') sorted.sort((a,b)=>{
+                const getIdx=(x)=>{ const v=(x.value||'').toLowerCase().replace(/[\s,]/g,''); let i=TST_INCOME_ORDER.findIndex(o=>v.includes((o||'').toLowerCase().replace(/[\s,]/g,''))); return i>=0?i:999; };
+                return getIdx(a)-getIdx(b);
+            });
+            else if(field==='LOCATION'||field==='GENDER'||field==='ETHNICITY') sorted.sort((a,b)=>(a.value||'').localeCompare(b.value||''));
+            return sorted;
+        }
+        function sortTSTDemoChart(field, mode) { tstDemoSort[field]=mode; if(currentTSTData?.data) renderTSTDemographicsOverall(currentTSTData.data); }
+        function sortTSTPerTheaterDemoChart(field, mode) { tstDemoSort[field]=mode; renderTSTPerTheaterCharts(); }
         function renderTSTDemographicsOverall(d) {
             const demo = d.demographics_overall || {};
             const container = document.getElementById('tstDemographicsOverall');
             if (!container) return;
             const keys = ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'];
+            const gp = genPopBaselineData?.demographics || {};
             let html = '';
             keys.forEach(field => {
                 const arr = demo[field] || [];
@@ -22132,9 +22183,14 @@
                 const id = 'tstChart' + field.replace(/\s/g,'');
                 const isLocation = field === 'LOCATION';
                 const maxItems = isLocation ? 25 : 20;
-                const sorted = [...arr].sort((a,b) => _tstParsePct(b.percent) - _tstParsePct(a.percent)).slice(0, maxItems);
                 const fullWidth = isLocation ? 'grid-column: 1 / -1;' : '';
-                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">${field}</h4><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
+                const showMedian = (field === 'AGE' || field === 'INCOME');
+                const sortId = 'tstSort' + field.replace(/\s/g,'');
+                const medianId = 'tstMedian' + field.replace(/\s/g,'');
+                const sortOpts = field === 'AGE' ? '<option value="age"'+(tstDemoSort.age==='age'?' selected':'')+'>Age↓</option><option value="value"'+(tstDemoSort.age==='value'?' selected':'')+'>Val↓</option>' :
+                    field === 'INCOME' ? '<option value="income"'+(tstDemoSort.income==='income'?' selected':'')+'>Inc↓</option><option value="value"'+(tstDemoSort.income==='value'?' selected':'')+'>Val↓</option>' :
+                    '<option value="value" selected>Val↓</option>';
+                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
             });
             container.innerHTML = html;
             keys.forEach(field => {
@@ -22145,12 +22201,28 @@
                 if (!canvas || typeof Chart === 'undefined') return;
                 const isLocation = field === 'LOCATION';
                 const maxItems = isLocation ? 25 : 20;
-                const sorted = [...arr].sort((a,b) => _tstParsePct(b.percent) - _tstParsePct(a.percent)).slice(0, maxItems);
+                const sorted = _tstSortDemoArr(field, arr).slice(0, maxItems);
                 const labels = sorted.map(r => r.value || '');
                 const data = sorted.map(r => _tstParsePct(r.percent));
+                const genPopVals = labels.map(v => _tstGetGenPop(field.toLowerCase(), v));
                 const useBar = isLocation || field === 'AGE' || field === 'INCOME';
                 const colors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672','#ae81ff','#e6db74','#75715e'];
                 if (tstCharts['demo_' + field]) tstCharts['demo_' + field].destroy();
+                const pcts = sorted.map(r=>_tstParsePct(r.percent));
+                const fmtPct = (n)=> (n||0).toFixed(1)+'%';
+                const medianSpan = document.getElementById('tstMedian'+field.replace(/\s/g,''));
+                if (medianSpan && (field==='AGE'||field==='INCOME')) {
+                    const obj = _tstDemoArrToObj(arr);
+                    const gpObj = gp[field.toLowerCase()] || {};
+                    if (field==='AGE') {
+                        const profMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(obj) : 0;
+                        const gpMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(gpObj) : 0;
+                        medianSpan.innerHTML = profMed>0 ? `<span style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
+                    } else {
+                        const med = typeof calculateDemographicMedian==='function' ? calculateDemographicMedian(obj, gpObj, 'income') : {profile:null,genPop:null};
+                        medianSpan.innerHTML = med.profile ? `<span style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
+                    }
+                }
                 tstCharts['demo_' + field] = new Chart(canvas, {
                     type: useBar ? 'bar' : 'doughnut',
                     data: { labels, datasets: [{ data, backgroundColor: colors.concat(Array(Math.max(0, data.length - colors.length)).fill('#4a5568')) }] },
@@ -22159,10 +22231,20 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         cutout: useBar ? 0 : '55%',
-                        plugins: { legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12 } } },
+                        plugins: {
+                            legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12, generateLabels: useBar ? undefined : (ch)=>{
+                                return (ch.data.labels||[]).map((l,i)=>{
+                                    const p = pcts[i]||0, gp = genPopVals[i]||0;
+                                    const txt = gp>0.05 ? `${l} ${fmtPct(p)} (GP: ${fmtPct(gp)})` : `${l} ${fmtPct(p)}`;
+                                    return { text: txt, fillStyle: ch.data.datasets[0].backgroundColor[i], fontColor: gp>0&&p>=gp?'#10b981':(gp>0?'#ef4444':'#e6f1ff') };
+                                });
+                            } } },
+                            datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const gp=genPopVals[ctx.dataIndex]||0; return gp>0.05 ? fmtPct(p)+' (GP: '+fmtPct(gp)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
+                        },
                         layout: useBar && isLocation ? { padding: { left: 260 } } : {},
                         scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false } } } : {}
-                    }
+                    },
+                    plugins: [ChartDataLabels]
                 });
             });
         }
@@ -22191,30 +22273,54 @@
                 return renderTSTPerTheaterCharts();
             }
             const keys = ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'];
+            const gp = genPopBaselineData?.demographics || {};
+            const safeTheater = (theater || '').replace(/[^a-zA-Z0-9]/g,'_');
             let html = '';
             keys.forEach(field => {
                 const arr = demo[field] || [];
                 if (!arr.length) return;
-                const id = 'tstPerChart' + field.replace(/\s/g,'') + (theater || '').replace(/[^a-zA-Z0-9]/g,'_');
+                const id = 'tstPerChart' + field.replace(/\s/g,'') + safeTheater;
                 const isLocation = field === 'LOCATION';
                 const fullWidth = isLocation ? 'grid-column: 1 / -1;' : '';
-                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">${field}</h4><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
+                const showMedian = (field === 'AGE' || field === 'INCOME');
+                const sortId = 'tstPerSort' + field.replace(/\s/g,'') + safeTheater;
+                const medianId = 'tstPerMedian' + field.replace(/\s/g,'') + safeTheater;
+                const sortOpts = field === 'AGE' ? '<option value="age"'+(tstDemoSort.age==='age'?' selected':'')+'>Age↓</option><option value="value"'+(tstDemoSort.age==='value'?' selected':'')+'>Val↓</option>' :
+                    field === 'INCOME' ? '<option value="income"'+(tstDemoSort.income==='income'?' selected':'')+'>Inc↓</option><option value="value"'+(tstDemoSort.income==='value'?' selected':'')+'>Val↓</option>' :
+                    '<option value="value" selected>Val↓</option>';
+                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTPerTheaterDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
             });
             container.innerHTML = html;
             ['demo_per_gender','demo_per_age','demo_per_income','demo_per_ethnicity','demo_per_location'].forEach(k => { if (tstCharts[k]) { tstCharts[k].destroy(); tstCharts[k] = null; } });
             keys.forEach(field => {
                 const arr = demo[field] || [];
                 if (!arr.length) return;
-                const id = 'tstPerChart' + field.replace(/\s/g,'') + (theater || '').replace(/[^a-zA-Z0-9]/g,'_');
+                const id = 'tstPerChart' + field.replace(/\s/g,'') + safeTheater;
                 const canvas = document.getElementById(id);
                 if (!canvas || typeof Chart === 'undefined') return;
                 const isLocation = field === 'LOCATION';
                 const maxItems = isLocation ? 25 : 20;
-                const sorted = [...arr].sort((a,b) => _tstParsePct(b.percent) - _tstParsePct(a.percent)).slice(0, maxItems);
+                const sorted = _tstSortDemoArr(field, arr).slice(0, maxItems);
                 const labels = sorted.map(r => r.value || '');
                 const data = sorted.map(r => _tstParsePct(r.percent));
+                const genPopVals = labels.map(v => _tstGetGenPop(field.toLowerCase(), v));
                 const useBar = isLocation || field === 'AGE' || field === 'INCOME';
                 const colors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672','#ae81ff','#e6db74','#75715e'];
+                const pcts = sorted.map(r=>_tstParsePct(r.percent));
+                const fmtPct = (n)=> (n||0).toFixed(1)+'%';
+                const medianSpan = document.getElementById('tstPerMedian'+field.replace(/\s/g,'')+safeTheater);
+                if (medianSpan && (field==='AGE'||field==='INCOME')) {
+                    const obj = _tstDemoArrToObj(arr);
+                    const gpObj = gp[field.toLowerCase()] || {};
+                    if (field==='AGE') {
+                        const profMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(obj) : 0;
+                        const gpMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(gpObj) : 0;
+                        medianSpan.innerHTML = profMed>0 ? `<span style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
+                    } else {
+                        const med = typeof calculateDemographicMedian==='function' ? calculateDemographicMedian(obj, gpObj, 'income') : {profile:null,genPop:null};
+                        medianSpan.innerHTML = med.profile ? `<span style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
+                    }
+                }
                 tstCharts['demo_per_' + field.toLowerCase()] = new Chart(canvas, {
                     type: useBar ? 'bar' : 'doughnut',
                     data: { labels, datasets: [{ data, backgroundColor: colors.concat(Array(Math.max(0, data.length - colors.length)).fill('#4a5568')) }] },
@@ -22223,10 +22329,20 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         cutout: useBar ? 0 : '55%',
-                        plugins: { legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12 } } },
+                        plugins: {
+                            legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12, generateLabels: useBar ? undefined : (ch)=>{
+                                return (ch.data.labels||[]).map((l,i)=>{
+                                    const p = pcts[i]||0, g = genPopVals[i]||0;
+                                    const txt = g>0.05 ? `${l} ${fmtPct(p)} (GP: ${fmtPct(g)})` : `${l} ${fmtPct(p)}`;
+                                    return { text: txt, fillStyle: ch.data.datasets[0].backgroundColor[i], fontColor: g>0&&p>=g?'#10b981':(g>0?'#ef4444':'#e6f1ff') };
+                                });
+                            } } },
+                            datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const g=genPopVals[ctx.dataIndex]||0; return g>0.05 ? fmtPct(p)+' (GP: '+fmtPct(g)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
+                        },
                         layout: useBar && isLocation ? { padding: { left: 260 } } : {},
                         scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false } } } : {}
-                    }
+                    },
+                    plugins: [ChartDataLabels]
                 });
             });
             if (!theater && Object.keys(perTheater).length > 0) {
