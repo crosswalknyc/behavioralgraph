@@ -15332,14 +15332,22 @@
                                 </div>
                             </div>
                             <div id="tstTabDemographicsPanel" class="tst-tab-panel" style="display: none;">
-                                <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Overall Demographics</h3>
-                                <div id="tstDemographicsOverall" class="demographics-charts-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;"></div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+                                    <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Overall Demographics</h3>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <div class="display-mode-toggle has-tooltip" id="tstDemographicsHoverToggle" onclick="toggleTSTDemographicsHover()" data-tooltip="Toggle chart tooltips on/off when hovering over data.">
+                                            <span id="tstDemographicsHoverToggleLabel">HOVER ON</span>
+                                        </div>
+                                        <button class="dash-action-btn" onclick="exportTSTDemographicsCSV()">📥 Export CSV</button>
+                                    </div>
+                                </div>
+                                <div id="tstDemographicsOverall" class="demographics-charts-grid" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; margin-bottom: 2rem;"></div>
                                 <h3 style="margin: 1.5rem 0 1rem 0; font-size: 1rem; font-weight: 600;">Demographics by Theater</h3>
                                 <div style="margin-bottom: 1rem;">
                                     <label style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 0.5rem;">Theater:</label>
                                     <select id="tstTheaterSelect" onchange="renderTSTPerTheaterCharts()" style="padding: 0.5rem 1rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); min-width: 260px;"></select>
                                 </div>
-                                <div id="tstDemographicsPerTheater" class="demographics-charts-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;"></div>
+                                <div id="tstDemographicsPerTheater" class="demographics-charts-grid" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem;"></div>
                             </div>
                         </div>
                     </div>
@@ -21946,6 +21954,7 @@
         let currentTSTData = null;
         let tstCharts = {};
         let tstActiveTab = 'summary';
+        let tstDemographicsHoverEnabled = localStorage.getItem('bg_tst_demographics_hover') !== 'false';
         async function loadTSTProfiles() {
             try {
                 const response = await fetch('/api/ticket-sales-tracker/list', { credentials: 'same-origin' });
@@ -22232,6 +22241,7 @@
                         maintainAspectRatio: false,
                         cutout: useBar ? 0 : '55%',
                         plugins: {
+                            tooltip: { enabled: tstDemographicsHoverEnabled },
                             legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12, generateLabels: useBar ? undefined : (ch)=>{
                                 return (ch.data.labels||[]).map((l,i)=>{
                                     const p = pcts[i]||0, gp = genPopVals[i]||0;
@@ -22330,6 +22340,7 @@
                         maintainAspectRatio: false,
                         cutout: useBar ? 0 : '55%',
                         plugins: {
+                            tooltip: { enabled: tstDemographicsHoverEnabled },
                             legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12, generateLabels: useBar ? undefined : (ch)=>{
                                 return (ch.data.labels||[]).map((l,i)=>{
                                     const p = pcts[i]||0, g = genPopVals[i]||0;
@@ -22349,6 +22360,44 @@
                 const first = Object.keys(perTheater)[0];
                 if (sel) { sel.value = first; renderTSTPerTheaterCharts(); }
             }
+        }
+        function toggleTSTDemographicsHover() {
+            tstDemographicsHoverEnabled = !tstDemographicsHoverEnabled;
+            localStorage.setItem('bg_tst_demographics_hover', tstDemographicsHoverEnabled ? 'true' : 'false');
+            const label = document.getElementById('tstDemographicsHoverToggleLabel');
+            if (label) label.textContent = tstDemographicsHoverEnabled ? 'HOVER ON' : 'HOVER OFF';
+            const toggle = document.getElementById('tstDemographicsHoverToggle');
+            if (toggle) toggle.classList.toggle('active', !tstDemographicsHoverEnabled);
+            Object.keys(tstCharts).forEach(k => {
+                if (tstCharts[k] && tstCharts[k].options?.plugins?.tooltip) {
+                    tstCharts[k].options.plugins.tooltip.enabled = tstDemographicsHoverEnabled;
+                    tstCharts[k].update();
+                }
+            });
+        }
+        function exportTSTDemographicsCSV() {
+            const d = currentTSTData?.data || {};
+            const sel = document.getElementById('tstTheaterSelect');
+            const theater = sel ? sel.value : '';
+            const perTheater = d.demographics_per_theater || {};
+            const demo = theater && perTheater[theater] ? perTheater[theater] : (d.demographics_overall || {});
+            const prefix = theater ? `Demographics by Theater - ${(theater||'').replace(/"/g,'""')}` : 'Overall Demographics';
+            const rows = [['Category','Value','Percent']];
+            ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'].forEach(field => {
+                (demo[field] || []).forEach(r => {
+                    const v = (r.value||'').toString().replace(/"/g,'""');
+                    const p = parseFloat(r.percent) || 0;
+                    rows.push([field, v, p.toFixed(2) + '%']);
+                });
+            });
+            const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `tst_demographics_${(theater || 'overall').replace(/[^a-zA-Z0-9]/g,'_')}.csv`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            if (typeof showNotification === 'function') showNotification('Demographics data exported to CSV', 'success');
         }
         
         function renderTicketSalesProfileTree() {
@@ -27376,6 +27425,10 @@
             }
             if (!subscriberOn && subLabel) subLabel.textContent = 'HOVER OFF';
             if (!hoverOn || !tickerOn) document.body.classList.add('hover-disabled');
+            const tstDemoLabel = document.getElementById('tstDemographicsHoverToggleLabel');
+            const tstDemoToggle = document.getElementById('tstDemographicsHoverToggle');
+            if (tstDemoLabel) tstDemoLabel.textContent = tstDemographicsHoverEnabled ? 'HOVER ON' : 'HOVER OFF';
+            if (tstDemoToggle) tstDemoToggle.classList.toggle('active', !tstDemographicsHoverEnabled);
         }
         document.addEventListener('DOMContentLoaded', applyPersistedHoverPreferences);
         
