@@ -7183,6 +7183,8 @@ def parse_ticket_sales_tracker_csv(csv_content):
     if not rows:
         return parsed
     current_section = None
+    current_theater = None
+    demo_field = None
     THEATER_PLATFORMS = ['Fandango', 'AMC THEATRES', 'ALAMO DRAFTHOUSE', 'CINEMARK THEATRES', 'REGAL CINEMAS']
     for row in rows:
         if len(row) < 2:
@@ -7213,13 +7215,25 @@ def parse_ticket_sales_tracker_csv(csv_content):
         elif 'Projected Ticket Sales' in cat:
             parsed['projected_ticket_sales_us'] = proj or val
             current_section = None
-        elif 'DEMOGRAPHICS (Overall' in cat.upper():
+        line_text = (cat + ' ' + val).upper()
+        if 'DEMOGRAPHICS (Overall' in line_text and 'DEMOGRAPHICS PER THEATER' not in line_text:
             current_section = 'demo_overall'
             demo_field = None
+            current_theater = None
             continue
-        elif 'DEMOGRAPHICS PER THEATER' in cat.upper() or '--- ' in cat:
+        elif 'DEMOGRAPHICS PER THEATER' in line_text:
             current_section = 'demo_theater'
             demo_field = None
+            current_theater = None
+            continue
+        elif current_section == 'demo_theater' and ('---' in cat or '---' in val):
+            # "--- theater name ---" sets current theater (can be in cat or val)
+            theater_raw = (cat or val).replace('---', '').strip().strip('|').strip()
+            if theater_raw:
+                current_theater = theater_raw
+                if current_theater not in parsed['demographics_per_theater']:
+                    parsed['demographics_per_theater'][current_theater] = {}
+                demo_field = None
             continue
         if current_section == 'demo_overall':
             if cat in ['GENDER', 'AGE', 'INCOME', 'ETHNICITY', 'LOCATION']:
@@ -7228,11 +7242,13 @@ def parse_ticket_sales_tracker_csv(csv_content):
                     parsed['demographics_overall'][demo_field] = []
             elif demo_field and val and proj and '%' in proj:
                 parsed['demographics_overall'][demo_field].append({'value': val, 'percent': proj})
-        if current_section == 'demo_theater' and cat and '--- ' not in cat:
+        if current_section == 'demo_theater' and current_theater:
             if cat in ['GENDER', 'AGE', 'INCOME', 'ETHNICITY', 'LOCATION']:
                 demo_field = cat
+                if demo_field not in parsed['demographics_per_theater'][current_theater]:
+                    parsed['demographics_per_theater'][current_theater][demo_field] = []
             elif demo_field and val and proj and '%' in proj:
-                pass  # per-theater demo rows; can extend if needed
+                parsed['demographics_per_theater'][current_theater][demo_field].append({'value': val, 'percent': proj})
     return parsed
 
 
