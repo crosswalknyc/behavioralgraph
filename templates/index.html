@@ -22116,7 +22116,8 @@
                 const isLocation = field === 'LOCATION';
                 const maxItems = isLocation ? 25 : 20;
                 const sorted = [...arr].sort((a,b) => _tstParsePct(b.percent) - _tstParsePct(a.percent)).slice(0, maxItems);
-                html += `<div class="demographics-chart-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">${field}</h4><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
+                const fullWidth = isLocation ? 'grid-column: 1 / -1;' : '';
+                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">${field}</h4><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
             });
             container.innerHTML = html;
             keys.forEach(field => {
@@ -22142,7 +22143,8 @@
                         maintainAspectRatio: false,
                         cutout: useBar ? 0 : '55%',
                         plugins: { legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12 } } },
-                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 } } } } : {}
+                        layout: useBar && isLocation ? { padding: { left: 260 } } : {},
+                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false } } } : {}
                     }
                 });
             });
@@ -22178,7 +22180,8 @@
                 if (!arr.length) return;
                 const id = 'tstPerChart' + field.replace(/\s/g,'') + (theater || '').replace(/[^a-zA-Z0-9]/g,'_');
                 const isLocation = field === 'LOCATION';
-                html += `<div class="demographics-chart-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">${field}</h4><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
+                const fullWidth = isLocation ? 'grid-column: 1 / -1;' : '';
+                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">${field}</h4><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
             });
             container.innerHTML = html;
             ['demo_per_gender','demo_per_age','demo_per_income','demo_per_ethnicity','demo_per_location'].forEach(k => { if (tstCharts[k]) { tstCharts[k].destroy(); tstCharts[k] = null; } });
@@ -22204,7 +22207,8 @@
                         maintainAspectRatio: false,
                         cutout: useBar ? 0 : '55%',
                         plugins: { legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12 } } },
-                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 } } } } : {}
+                        layout: useBar && isLocation ? { padding: { left: 260 } } : {},
+                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false } } } : {}
                     }
                 });
             });
