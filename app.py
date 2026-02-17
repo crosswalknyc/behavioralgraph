@@ -125,6 +125,7 @@ S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to mai
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
 TICKET_SALES_S3_BUCKET = 'ticket-sales-iq'  # Bucket for Ticket Sales IQ (talent-to-theater attribution)
+TICKET_SALES_TRACKER_S3_BUCKET = 'ticket-sales-tracker'  # Bucket for Ticket Sales Tracker (movie viewers → theater)
 # FORCE us-east-2 - all buckets are in this region, ignore AWS_REGION env var if set
 S3_REGION = 'us-east-2'
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
@@ -1073,6 +1074,7 @@ def get_current_user():
 # Credit cost per analysis type
 CREDITS_PROFILE_ANALYSIS = 5
 CREDITS_TICKET_SALES = 10
+CREDITS_TICKET_SALES_TRACKER = 10
 CREDITS_SVOD = 7
 CREDITS_CAMPAIGN_ROI = 5
 CREDITS_WATCH_TIME = 1
@@ -3423,7 +3425,7 @@ def index():
         has_hedge_fund_iq = True
         hedge_fund_iq_tickers = ['*']
         has_analysis_iq = True
-        analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time']
+        analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time', 'ticket_sales_tracker']
         allowed_behavioral_categories = ['*']
         has_rankers_iq = True
         rankers_iq_options = ['*']
@@ -7098,6 +7100,177 @@ def get_ticket_sales_iq_data(s3_key):
         })
     except Exception as e:
         print(f"❌ Error in get_ticket_sales_iq_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
+
+
+# ============================================================================
+# TICKET SALES TRACKER (movie viewers → theater platform hits, ticket projections)
+# ============================================================================
+def parse_ticket_sales_tracker_csv(csv_content):
+    """Parse Ticket Sales Tracker CSV into structured data.
+    Schema: Category, Value, Projection/Percent, Note, Col5, Col6
+    Returns US (gen pop) numbers only - used as primary display values.
+    """
+    import csv as csv_module
+    parsed = {
+        'metadata': {},
+        'platforms': [],  # {platform, us_value} - US Gen Pop only
+        'total_tickets_us': None,
+        'projected_ticket_sales_us': None,
+        'genre': '',
+        'is_family_animation': False,  # for tooltip on Projected Ticket Sales
+        'demographics_overall': {},
+        'demographics_per_theater': {}
+    }
+    def _fmt(s):
+        return str(s).strip() if s else ''
+    def _parse_num(s):
+        if s is None or str(s).strip() == '':
+            return None
+        s = str(s).strip()
+        for suffix, mult in [('M', 1e6), ('K', 1e3)]:
+            if suffix in s.upper():
+                try:
+                    return float(re.sub(r'[^\d.]', '', s)) * mult
+                except ValueError:
+                    return None
+        s = s.replace(',', '').replace('$', '')
+        try:
+            return float(s)
+        except ValueError:
+            return None
+    csv_content = csv_content.lstrip('\ufeff').strip()
+    rows = list(csv_module.reader(io.StringIO(csv_content)))
+    if not rows:
+        return parsed
+    current_section = None
+    THEATER_PLATFORMS = ['Fandango', 'AMC THEATRES', 'ALAMO DRAFTHOUSE', 'CINEMARK THEATRES', 'REGAL CINEMAS']
+    for row in rows:
+        if len(row) < 2:
+            continue
+        cat = _fmt(row[0])
+        val = _fmt(row[1])
+        proj = _fmt(row[2]) if len(row) > 2 else ''
+        note = _fmt(row[3]) if len(row) > 3 else ''
+        if cat == 'Movie':
+            parsed['metadata']['movie'] = val or (row[2] if len(row) > 2 else '')
+        elif cat == 'Genre':
+            parsed['genre'] = val or (row[2] if len(row) > 2 else '')
+            gl = (parsed['genre'] or '').lower()
+            parsed['is_family_animation'] = 'family' in gl or 'animation' in gl
+        elif cat == 'Date Range':
+            parsed['metadata']['date_range'] = val or (row[2] if len(row) > 2 else '')
+        elif 'TOTAL HITS' in cat or 'THEATER BY PLATFORM' in cat.upper():
+            current_section = 'platforms'
+            continue
+        elif cat == 'Platform' and 'Hits' in (val + proj):
+            continue
+        elif current_section == 'platforms' and cat and cat in THEATER_PLATFORMS:
+            us_val = proj if proj else val
+            parsed['platforms'].append({'platform': cat, 'us_value': us_val, 'us_number': _parse_num(us_val)})
+        elif 'Total Tickets Sold' in cat:
+            parsed['total_tickets_us'] = proj or val
+            current_section = None
+        elif 'Projected Ticket Sales' in cat:
+            parsed['projected_ticket_sales_us'] = proj or val
+            current_section = None
+        elif 'DEMOGRAPHICS (Overall' in cat.upper():
+            current_section = 'demo_overall'
+            demo_field = None
+            continue
+        elif 'DEMOGRAPHICS PER THEATER' in cat.upper() or '--- ' in cat:
+            current_section = 'demo_theater'
+            demo_field = None
+            continue
+        if current_section == 'demo_overall':
+            if cat in ['GENDER', 'AGE', 'INCOME', 'ETHNICITY', 'LOCATION']:
+                demo_field = cat
+                if demo_field not in parsed['demographics_overall']:
+                    parsed['demographics_overall'][demo_field] = []
+            elif demo_field and val and proj and '%' in proj:
+                parsed['demographics_overall'][demo_field].append({'value': val, 'percent': proj})
+        if current_section == 'demo_theater' and cat and '--- ' not in cat:
+            if cat in ['GENDER', 'AGE', 'INCOME', 'ETHNICITY', 'LOCATION']:
+                demo_field = cat
+            elif demo_field and val and proj and '%' in proj:
+                pass  # per-theater demo rows; can extend if needed
+    return parsed
+
+
+@app.route('/api/ticket-sales-tracker/list')
+@requires_auth
+def list_ticket_sales_tracker_files():
+    """List non-purgatory Ticket Sales Tracker CSV files from S3 bucket ticket-sales-tracker."""
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    try:
+        files = []
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=TICKET_SALES_TRACKER_S3_BUCKET):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.csv') or key.startswith(S3_PURGATORY_PREFIX):
+                    continue
+                name_without_ext = key.replace('.csv', '')
+                match = re.match(r'^Ticket_Sales_(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                if match:
+                    default_display = match.group(1).replace('_', ' ')
+                else:
+                    default_display = name_without_ext.replace('_', ' ')
+                files.append({
+                    's3_key': key,
+                    'display_name': default_display.strip(),
+                    'size': obj['Size'],
+                    'last_modified': obj['LastModified'].isoformat()
+                })
+        files.sort(key=lambda x: x['last_modified'], reverse=True)
+        return jsonify({'success': True, 'files': files})
+    except Exception as e:
+        print(f"❌ Error listing ticket sales tracker files: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ticket-sales-tracker/download/<path:s3_key>')
+@requires_auth
+def download_ticket_sales_tracker(s3_key):
+    """Download a released Ticket Sales Tracker CSV from S3."""
+    if not s3_client or s3_key.startswith(S3_PURGATORY_PREFIX):
+        return jsonify({'error': 'Download not available'}), 403
+    try:
+        response = s3_client.get_object(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read()
+        return Response(csv_content, mimetype='text/csv', headers={'Content-Disposition': f'attachment; filename={s3_key.split("/")[-1]}'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ticket-sales-tracker/data/<path:s3_key>')
+@requires_auth
+def get_ticket_sales_tracker_data(s3_key):
+    """Get Ticket Sales Tracker CSV data as JSON."""
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    if s3_key.startswith(S3_PURGATORY_PREFIX):
+        return jsonify({'success': False, 'error': 'Cannot load purgatory files'}), 403
+    try:
+        response = s3_client.get_object(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read().decode('utf-8')
+        parsed = parse_ticket_sales_tracker_csv(csv_content)
+        name_without_ext = s3_key.replace('.csv', '')
+        match = re.match(r'^Ticket_Sales_(.+)_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', name_without_ext)
+        display_name = (match.group(1).replace('_', ' ') if match else name_without_ext.replace('_', ' ')).strip()
+        return jsonify({
+            'success': True,
+            'data': parsed,
+            'display_name': display_name,
+            's3_key': s3_key
+        })
+    except Exception as e:
+        print(f"❌ Error in get_ticket_sales_tracker_data: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
@@ -14207,6 +14380,139 @@ def run_talent_theater(job_id):
     except Exception as e:
         import traceback
         error_msg = f"Error running talent theater: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+@app.route('/api/attribution/ticket-sales-tracker', methods=['POST'], strict_slashes=False)
+@requires_auth
+def submit_ticket_sales_tracker():
+    """Submit a Ticket Sales Tracker analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        if not user_can_run_analysis_module(user, 'ticket_sales_tracker'):
+            return jsonify({'error': 'Analysis IQ access with Ticket Sales Tracker module required'}), 403
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        movie_name = data.get('movie_name')
+        genre = data.get('genre')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        if not movie_name:
+            return jsonify({'error': 'Movie name is required'}), 400
+        if not genre:
+            return jsonify({'error': 'Genre is required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        username = session.get('username', 'unknown')
+        if not has_credits_for(username, CREDITS_TICKET_SALES_TRACKER):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'Ticket Sales Tracker requires {CREDITS_TICKET_SALES_TRACKER} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1
+            }), 403
+        job_id = str(uuid.uuid4())
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'ticket_sales_tracker',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'movie_name': movie_name,
+                'genre': genre,
+                'start_date': start_date,
+                'end_date': end_date
+            }
+        }
+        desc = f"{movie_name} / {genre} ({start_date}–{end_date})"
+        if not consume_credit(username, description=desc, job_id=job_id, pull_type='Ticket Sales Tracker', credits_used=CREDITS_TICKET_SALES_TRACKER):
+            return jsonify({'error': 'Insufficient credits.'}), 403
+        thread = threading.Thread(target=run_ticket_sales_tracker, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        return jsonify({'job_id': job_id, 'message': 'Ticket Sales Tracker job submitted successfully', 'status': 'queued'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def run_ticket_sales_tracker(job_id):
+    """Run the Ticket_Sales_Attribution.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        script_path = os.path.join(os.path.dirname(__file__), 'Ticket_Sales_Attribution.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        job = jobs[job_id]
+        params = job['params']
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("ticket_sales_attribution", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        from datetime import datetime
+        start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
+        conn = module.connect_snowflake()
+        try:
+            script_params = {
+                'movie_name': params['movie_name'],
+                'genre': params['genre'],
+                'start_date': start_date,
+                'end_date': end_date
+            }
+            results = module.run_query(conn, script_params)
+            update_job_status(job_id, progress=80, message='Writing output...')
+            from pathlib import Path
+            output_folder = Path(OUTPUT_DIR) / "attribution"
+            output_folder.mkdir(parents=True, exist_ok=True)
+            script_params['output_dir'] = str(output_folder)
+            module.write_output(results, script_params)
+            csv_files = list(output_folder.glob("Ticket_Sales_*.csv"))
+            if csv_files:
+                csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                output_file = str(csv_files[0])
+                if os.path.exists(output_file):
+                    jobs[job_id]['result_file'] = output_file
+                    created_by = jobs[job_id].get('username', '')
+                    movie_name = params.get('movie_name', '')
+                    project_name = movie_name if movie_name else csv_files[0].stem
+                    s3_key = upload_to_s3(
+                        output_file,
+                        project_name,
+                        params.get('start_date', ''),
+                        params.get('end_date', ''),
+                        created_by=created_by,
+                        use_purgatory=True,
+                        bucket=TICKET_SALES_TRACKER_S3_BUCKET,
+                        category='Ticket Sales Tracker',
+                        source_type='ticket_sales_tracker'
+                    )
+                    if s3_key:
+                        jobs[job_id]['s3_key'] = s3_key
+                    update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                else:
+                    update_job_status(job_id, status='failed', error='Output file not found')
+            else:
+                update_job_status(job_id, status='failed', error='No output file created')
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running Ticket Sales Tracker: {str(e)}\n{traceback.format_exc()}"
         print(error_msg)
         update_job_status(job_id, status='failed', error=error_msg)
 

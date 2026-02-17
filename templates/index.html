@@ -11445,6 +11445,7 @@
                     <button class="view-btn has-tooltip {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %} data-tooltip="From first view to lifetime value.">👥 Subscriber IQ</button>
                     <button class="view-btn {% if not has_rankers_iq_access %}disabled{% endif %}" id="rankerIQTab" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</button>
                     <button class="view-btn has-tooltip {% if not has_ticket_sales_iq_access %}disabled{% endif %}" id="ticketSalesIQTab" {% if not has_ticket_sales_iq_access %}disabled{% endif %} data-tooltip="Attribution grounded in real behavior.">🎟️ Impact IQ</button>
+                    <button class="view-btn has-tooltip" id="ticketSalesTrackerTab" data-tooltip="Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms." style="color: #e74c3c;">🎟️ Ticket Sales Tracker</button>
                     <button class="view-btn has-tooltip {% if default_view_hedge_fund_iq %}active{% endif %} {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %} data-tooltip="Detailed metrics across various ticker KPIs.">📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
@@ -11827,6 +11828,11 @@
                     {% if 'watch_time' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('watch-time')" id="customAnalysisTabWatchTime">
                         ⏱️ Watch Time IQ
+                    </button>
+                    {% endif %}
+                    {% if 'ticket_sales_tracker' in analysis_iq_modules or role == 'super_admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('ticket-sales-tracker')" id="customAnalysisTabTicketSalesTracker">
+                        🎟️ Ticket Sales Tracker <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
                     </button>
                     {% endif %}
                 </div>
@@ -12762,6 +12768,88 @@
                                 <h3>Job Status</h3>
                                 <div id="customWatchTimeJobStatusContent"></div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ticket Sales Tracker Tab Content (two-column: form + Status & Results sidebar) -->
+                <div id="customAnalysisTabContentTicketSalesTracker" class="custom-analysis-tab-content">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>🎟️ Ticket Sales Tracker</h2>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
+                            <p class="section-description">Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.</p>
+                            <form id="customTicketSalesTrackerForm">
+                                <div class="form-section">
+                                    <div class="form-section-title">Analysis Parameters</div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Movie Title</label>
+                                            <input type="text" id="customTSTMovieName" placeholder="e.g., Dune: Part Two" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Genre</label>
+                                            <select id="customTSTGenre" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                                <option value="Action">Action</option>
+                                                <option value="Adventure">Adventure</option>
+                                                <option value="Horror">Horror</option>
+                                                <option value="Comedy">Comedy</option>
+                                                <option value="Drama">Drama</option>
+                                                <option value="Thriller / Suspense">Thriller / Suspense</option>
+                                                <option value="Family & Animation">Family & Animation</option>
+                                                <option value="Musical">Musical</option>
+                                                <option value="Sci-Fi">Sci-Fi</option>
+                                                <option value="Documentary">Documentary</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Start Date</label>
+                                            <input type="date" id="customTSTStartDate" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>End Date</label>
+                                            <input type="date" id="customTSTEndDate" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn-primary">Run Analysis</button>
+                                    </div>
+                                </div>
+                            </form>
+                            <div id="customTicketSalesTrackerJobStatus" style="display: none; margin-top: 2rem;">
+                                <div class="status-panel">
+                                    <div id="tstStatusRunning">
+                                        <div class="spinner"></div>
+                                        <div class="pulse" id="tstStatusText">Processing...</div>
+                                        <div class="progress-bar"><div class="progress-fill" id="tstProgressFill" style="width: 0%"></div></div>
+                                    </div>
+                                    <div id="tstStatusComplete" style="display: none;">
+                                        <div style="font-size: 2.5rem;">✅</div>
+                                        <div style="margin: 0.5rem 0;">Complete! Your report is in purgatory and will appear in the dashboard after admin approval.</div>
+                                    </div>
+                                    <div id="tstStatusError" style="display: none;">
+                                        <div style="font-size: 2.5rem;">❌</div>
+                                        <div style="color: var(--accent-red);" id="tstErrorMessage"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                            <div id="ticketSalesTrackerResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
+                            <div style="margin: 0.5rem 0;">
+                                <input type="text" id="tstResultsSearchInput" placeholder="🔍 Search..." oninput="filterTicketSalesTrackerResults()" style="margin-bottom: 0.35rem;">
+                                <select id="tstResultsStatusFilter" onchange="filterTicketSalesTrackerResults()" style="font-size: 0.8rem;">
+                                    <option value="">All Status</option>
+                                    <option value="pending">⏳ Pending</option>
+                                    <option value="released">📊 In Dashboard</option>
+                                </select>
+                            </div>
+                            <div id="ticketSalesTrackerResultsList" style="max-height: 320px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">Loading...</div></div>
                         </div>
                     </div>
                 </div>
@@ -15177,6 +15265,51 @@
             </div>
         </div><!-- End ticketSalesIQView -->
 
+        <!-- TICKET SALES TRACKER VIEW -->
+        <div id="ticketSalesTrackerView" style="display: none;">
+            <div class="dashboard-layout">
+                <div class="persistent-sidebar">
+                    <div class="sidebar-header-section">
+                        <h3 class="has-tooltip" data-tooltip="Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms." style="color: #e74c3c;">🎟️ Ticket Sales Tracker</h3>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Tooltips:</span>
+                            <div class="display-mode-toggle" id="tstHoverToggle" onclick="toggleTSTHoverDescriptors()" title="Toggle detailed tooltip descriptions on/off">
+                                <span id="tstHoverToggleLabel">HOVER ON</span>
+                            </div>
+                        </div>
+                        <input type="text" id="tstSearchInput" class="sidebar-search" placeholder="🔍 Search..." onkeyup="filterTSTProfiles()" style="margin-top: 0.5rem;">
+                    </div>
+                    <div id="tstProfileTree" class="profile-select-tree"></div>
+                </div>
+                <div class="dashboard-tab-content" id="tstDashboardContent" style="display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="tstEmptyState" class="dashboard-empty-state">
+                        <div class="empty-state-content">
+                            <div class="empty-state-icon" style="color: #e74c3c;">🎟️</div>
+                            <h2>Select a Report</h2>
+                            <p>Choose a ticket sales report from the sidebar to view US ticket sales by platform.</p>
+                        </div>
+                    </div>
+                    <div id="tstContentArea" style="display: none; flex: 1; overflow-y: auto; padding: 1.5rem;">
+                        <div id="tstHeader" class="dash-header-row" style="margin-bottom: 1.5rem;">
+                            <div class="dash-profile-info">
+                                <div class="dash-brand-container">
+                                    <div class="dash-brand-box" id="tstMovieNameHeader"></div>
+                                    <div class="dash-date-box" id="tstDateRangeHeader"></div>
+                                    <div id="tstGenreHeader" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="tstSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
+                        <div id="tstPlatformSection">
+                            <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Theater by Platform</h3>
+                            <div id="tstPlatformTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);"></div>
+                        </div>
+                        <div id="tstDemographicsSection" style="margin-top: 1.5rem;"></div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End ticketSalesTrackerView -->
+
         <!-- HEDGE FUND IQ VIEW -->
         <div id="hedgeFundIQView"{% if default_view_hedge_fund_iq %} style="display: flex;"{% else %} style="display: none;"{% endif %}>
             <div class="dashboard-layout">
@@ -16077,6 +16210,7 @@
                 { id: 'subscriberIQTab', handler: showSubscriberIQ },
                 { id: 'rankerIQTab', handler: showRankerIQ },
                 { id: 'ticketSalesIQTab', handler: showTicketSalesIQ },
+                { id: 'ticketSalesTrackerTab', handler: showTicketSalesTracker },
                 { id: 'hedgeFundIQTab', handler: showHedgeFundIQ },
                 { id: 'dashboardViewBtn', handler: showDashboardView },
                 { id: 'customAnalysisBtn', handler: showCustomAnalysis }
@@ -16591,6 +16725,8 @@
             if (rankerIQTab) rankerIQTab.classList.remove('active');
             const ticketSalesTab = document.getElementById('ticketSalesIQTab');
             if (ticketSalesTab) ticketSalesTab.classList.remove('active');
+            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
+            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.remove('active');
             const hedgeFundTab = document.getElementById('hedgeFundIQTab');
             if (hedgeFundTab) hedgeFundTab.classList.remove('active');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
@@ -16609,6 +16745,8 @@
             if (rankerIQView) rankerIQView.style.display = 'none';
             const ticketSalesView = document.getElementById('ticketSalesIQView');
             if (ticketSalesView) ticketSalesView.style.display = 'none';
+            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
+            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
             const hedgeFundView = document.getElementById('hedgeFundIQView');
             if (hedgeFundView) hedgeFundView.style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
@@ -16637,6 +16775,8 @@
             if (rankerIQTab) rankerIQTab.classList.remove('active');
             const ticketSalesTab = document.getElementById('ticketSalesIQTab');
             if (ticketSalesTab) ticketSalesTab.classList.remove('active');
+            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
+            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.remove('active');
             const hedgeFundTab = document.getElementById('hedgeFundIQTab');
             if (hedgeFundTab) hedgeFundTab.classList.remove('active');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
@@ -16655,6 +16795,8 @@
             if (rankerIQView) rankerIQView.style.display = 'none';
             const ticketSalesView = document.getElementById('ticketSalesIQView');
             if (ticketSalesView) ticketSalesView.style.display = 'none';
+            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
+            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
             const hedgeFundView = document.getElementById('hedgeFundIQView');
             if (hedgeFundView) hedgeFundView.style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
@@ -16683,6 +16825,8 @@
             if (rankerIQTab) rankerIQTab.classList.add('active');
             const ticketSalesTab = document.getElementById('ticketSalesIQTab');
             if (ticketSalesTab) ticketSalesTab.classList.remove('active');
+            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
+            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.remove('active');
             const hedgeFundTab = document.getElementById('hedgeFundIQTab');
             if (hedgeFundTab) hedgeFundTab.classList.remove('active');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
@@ -16701,6 +16845,8 @@
             if (rankerIQView) rankerIQView.style.display = 'flex';
             const ticketSalesView = document.getElementById('ticketSalesIQView');
             if (ticketSalesView) ticketSalesView.style.display = 'none';
+            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
+            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
             const hedgeFundView = document.getElementById('hedgeFundIQView');
             if (hedgeFundView) hedgeFundView.style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
@@ -16747,6 +16893,8 @@
             const rankerIQTab = document.getElementById('rankerIQTab');
             if (rankerIQTab) rankerIQTab.classList.remove('active');
             if (ticketSalesTab) ticketSalesTab.classList.add('active');
+            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
+            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.remove('active');
             const hedgeFundTab = document.getElementById('hedgeFundIQTab');
             if (hedgeFundTab) hedgeFundTab.classList.remove('active');
             const formBtn = document.getElementById('formViewBtn');
@@ -16759,6 +16907,8 @@
             if (rankerIQView) rankerIQView.style.display = 'none';
             const ticketSalesView = document.getElementById('ticketSalesIQView');
             if (ticketSalesView) ticketSalesView.style.display = 'flex';
+            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
+            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
             const hedgeFundView = document.getElementById('hedgeFundIQView');
             if (hedgeFundView) hedgeFundView.style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
@@ -16770,6 +16920,43 @@
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
             loadTicketSalesProfiles();
+        }
+        
+        window.showTicketSalesTracker = function() {
+            document.getElementById('profileIQTab').classList.remove('active');
+            document.getElementById('subscriberIQTab').classList.remove('active');
+            const rankerIQTab = document.getElementById('rankerIQTab');
+            if (rankerIQTab) rankerIQTab.classList.remove('active');
+            const ticketSalesTab = document.getElementById('ticketSalesIQTab');
+            if (ticketSalesTab) ticketSalesTab.classList.remove('active');
+            const ticketSalesTrackerTab = document.getElementById('ticketSalesTrackerTab');
+            if (ticketSalesTrackerTab) ticketSalesTrackerTab.classList.add('active');
+            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
+            if (hedgeFundTab) hedgeFundTab.classList.remove('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.remove('active');
+            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
+            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            const rankerIQView = document.getElementById('rankerIQView');
+            if (rankerIQView) rankerIQView.style.display = 'none';
+            const ticketSalesView = document.getElementById('ticketSalesIQView');
+            if (ticketSalesView) ticketSalesView.style.display = 'none';
+            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
+            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'flex';
+            const hedgeFundView = document.getElementById('hedgeFundIQView');
+            if (hedgeFundView) hedgeFundView.style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
+            const customAnalysisView = document.getElementById('customAnalysisView');
+            if (customAnalysisView) customAnalysisView.style.display = 'none';
+            if (typeof loadTSTProfiles === 'function') loadTSTProfiles();
+            checkProfileReleasedNotifications();
         }
         
         window.showHedgeFundIQ = function() {
@@ -16800,6 +16987,8 @@
             if (rankerIQView) rankerIQView.style.display = 'none';
             const ticketSalesView = document.getElementById('ticketSalesIQView');
             if (ticketSalesView) ticketSalesView.style.display = 'none';
+            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
+            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
             const hedgeFundView = document.getElementById('hedgeFundIQView');
             if (hedgeFundView) hedgeFundView.style.display = 'flex';
             const talentSearchView = document.getElementById('talentSearchIQView');
@@ -16920,7 +17109,7 @@
             // Update tab buttons - use optional chaining for tabs that may not exist
             const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater', 
                            'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow', 
-                           'customAnalysisTabWatchTime'];
+                           'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -16930,7 +17119,7 @@
             const contentIds = ['customAnalysisTabContentProfileIQ', 'customAnalysisTabContentTalentSearch', 
                                'customAnalysisTabContentTalentTheater', 'customAnalysisTabContentSVODAcquisition',
                                'customAnalysisTabContentCampaignROI', 'customAnalysisTabContentCrossShow',
-                               'customAnalysisTabContentWatchTime'];
+                               'customAnalysisTabContentWatchTime', 'customAnalysisTabContentTicketSalesTracker'];
             contentIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -16972,6 +17161,12 @@
                 const content = document.getElementById('customAnalysisTabContentWatchTime');
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
+            } else if (tabName === 'ticket-sales-tracker') {
+                const tab = document.getElementById('customAnalysisTabTicketSalesTracker');
+                const content = document.getElementById('customAnalysisTabContentTicketSalesTracker');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                if (typeof loadTicketSalesTrackerResults === 'function') loadTicketSalesTrackerResults();
             }
         }
         
@@ -17409,6 +17604,39 @@
             }
         });
         
+        // Custom Ticket Sales Tracker Form Handler
+        document.getElementById('customTicketSalesTrackerForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const movieName = document.getElementById('customTSTMovieName')?.value?.trim();
+            const genre = document.getElementById('customTSTGenre')?.value;
+            const startDate = document.getElementById('customTSTStartDate')?.value;
+            const endDate = document.getElementById('customTSTEndDate')?.value;
+            if (!movieName || !genre || !startDate || !endDate) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            try {
+                const response = await fetch('/api/attribution/ticket-sales-tracker', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ movie_name: movieName, genre: genre, start_date: startDate, end_date: endDate })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('customTicketSalesTrackerJobStatus').style.display = 'block';
+                    document.getElementById('tstStatusRunning').style.display = 'flex';
+                    document.getElementById('tstStatusComplete').style.display = 'none';
+                    document.getElementById('tstStatusError').style.display = 'none';
+                    pollCustomTicketSalesTrackerJobStatus(data.job_id);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to submit job'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+        
         // Toggle show lengths row
         document.getElementById('customWatchTimeUseLengths')?.addEventListener('change', function(e) {
             const row = document.getElementById('customWatchTimeLengthsRow');
@@ -17622,6 +17850,45 @@
                     console.error('Error polling job status:', error);
                     if (attempts >= maxAttempts) {
                         clearInterval(pollInterval);
+                    }
+                }
+            }, 2000);
+        }
+        
+        async function pollCustomTicketSalesTrackerJobStatus(jobId) {
+            const maxAttempts = 120;
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    const data = await response.json();
+                    const fill = document.getElementById('tstProgressFill');
+                    if (fill) fill.style.width = (data.progress || 0) + '%';
+                    const txt = document.getElementById('tstStatusText');
+                    if (txt) txt.textContent = data.message || 'Processing...';
+                    if (data.status === 'completed') {
+                        clearInterval(pollInterval);
+                        document.getElementById('tstStatusRunning').style.display = 'none';
+                        document.getElementById('tstStatusComplete').style.display = 'block';
+                        if (typeof loadTicketSalesTrackerResults === 'function') loadTicketSalesTrackerResults();
+                    } else if (data.status === 'failed') {
+                        clearInterval(pollInterval);
+                        document.getElementById('tstStatusRunning').style.display = 'none';
+                        document.getElementById('tstStatusError').style.display = 'block';
+                        document.getElementById('tstErrorMessage').textContent = data.error || 'Analysis failed';
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        document.getElementById('tstStatusRunning').style.display = 'none';
+                        document.getElementById('tstStatusError').style.display = 'block';
+                        document.getElementById('tstErrorMessage').textContent = 'Analysis timed out.';
+                    }
+                } catch (error) {
+                    if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        document.getElementById('tstStatusRunning').style.display = 'none';
+                        document.getElementById('tstStatusError').style.display = 'block';
+                        document.getElementById('tstErrorMessage').textContent = error.message || 'Polling failed';
                     }
                 }
             }, 2000);
@@ -21742,6 +22009,83 @@
             } catch (error) {
                 console.error('Error loading ticket sales profiles:', error);
             }
+        }
+        
+        // Ticket Sales Tracker (TST) dashboard
+        let tstProfiles = [];
+        let tstHoverDescriptorsOn = true;
+        let currentTSTData = null;
+        async function loadTSTProfiles() {
+            try {
+                const response = await fetch('/api/ticket-sales-tracker/list', { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                const data = await response.json();
+                if (data.success) {
+                    tstProfiles = data.files || [];
+                    renderTSTProfileTree();
+                }
+            } catch (e) { console.error('loadTSTProfiles error:', e); }
+        }
+        function filterTSTProfiles() { renderTSTProfileTree(); }
+        function renderTSTProfileTree() {
+            const container = document.getElementById('tstProfileTree');
+            if (!container) return;
+            const search = (document.getElementById('tstSearchInput')?.value || '').toLowerCase();
+            let list = tstProfiles;
+            if (search) list = list.filter(p => (p.display_name || p.s3_key || '').toLowerCase().includes(search));
+            list = [...list].sort((a,b) => new Date(b.last_modified || 0) - new Date(a.last_modified || 0));
+            if (!list.length) {
+                container.innerHTML = '<div style="padding: 1rem; font-size: 0.85rem; color: var(--text-secondary);">No released reports yet. Run an analysis and wait for admin approval.</div>';
+                return;
+            }
+            container.innerHTML = list.map(p => {
+                const name = (p.display_name || p.s3_key || 'Unknown').replace(/</g, '&lt;');
+                const keyEsc = (p.s3_key || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                return `<div class="profile-select-item" onclick="selectTSTProfile('${keyEsc}')" style="cursor: pointer; padding: 0.6rem; border-radius: 6px; margin-bottom: 0.35rem; border: 1px solid var(--border-color); background: var(--bg-card);"><div style="font-weight: 600; font-size: 0.85rem;">${name}</div></div>`;
+            }).join('');
+        }
+        async function selectTSTProfile(s3Key) {
+            if (!s3Key) return;
+            try {
+                const response = await fetch(`/api/ticket-sales-tracker/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
+                const resp = await response.json();
+                if (!resp.success) throw new Error(resp.error || 'Failed to load');
+                currentTSTData = { data: resp.data, display_name: resp.display_name, s3_key: s3Key };
+                document.getElementById('tstEmptyState').style.display = 'none';
+                document.getElementById('tstContentArea').style.display = 'block';
+                renderTSTDashboard();
+            } catch (e) {
+                console.error('selectTSTProfile error:', e);
+            }
+        }
+        function toggleTSTHoverDescriptors() {
+            tstHoverDescriptorsOn = !tstHoverDescriptorsOn;
+            document.body.classList.toggle('hover-disabled', !tstHoverDescriptorsOn);
+            const lbl = document.getElementById('tstHoverToggleLabel');
+            if (lbl) lbl.textContent = tstHoverDescriptorsOn ? 'HOVER ON' : 'HOVER OFF';
+        }
+        function renderTSTDashboard() {
+            if (!currentTSTData) return;
+            const d = currentTSTData.data;
+            const meta = d.metadata || {};
+            const titleTip = 'Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.';
+            const projTip = d.is_family_animation ? '(Based on a $15 ticket price with a factor of 2x to account for ticket purchasers average ticket count purchased.)' : '(Based on a $15 ticket price.)';
+            document.getElementById('tstMovieNameHeader').innerHTML = `<span class="has-tooltip" data-tooltip="${titleTip.replace(/"/g, '&quot;')}">${(meta.movie || currentTSTData.display_name || 'Unknown').replace(/</g, '&lt;')}</span>`;
+            document.getElementById('tstDateRangeHeader').textContent = meta.date_range || '';
+            document.getElementById('tstGenreHeader').textContent = d.genre ? 'Genre: ' + d.genre : '';
+            const cards = [];
+            if (d.total_tickets_us) cards.push({ label: 'Total Tickets', value: d.total_tickets_us });
+            if (d.projected_ticket_sales_us) cards.push({ label: 'Ticket Sales', value: d.projected_ticket_sales_us, tip: projTip });
+            const cardsHtml = cards.map(c => {
+                const tip = c.tip ? ` class="has-tooltip" data-tooltip="${(c.tip||'').replace(/"/g,'&quot;')}"` : '';
+                return `<div class="stat-card"${tip} style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="font-size: 0.75rem; color: var(--text-secondary);">${(c.label||'').replace(/</g,'&lt;')}</div><div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);">${(c.value||'').toString().replace(/</g,'&lt;')}</div></div>`;
+            }).join('');
+            document.getElementById('tstSummaryCards').innerHTML = cardsHtml;
+            const platforms = d.platforms || [];
+            const tableHtml = platforms.length ? `<table style="width:100%; border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="text-align:left;padding:0.75rem;">Platform</th><th style="text-align:right;padding:0.75rem;">US</th></tr></thead><tbody>${platforms.map(p => `<tr style="border-bottom:1px solid var(--border-color);"><td style="padding:0.75rem;">${(p.platform||'').replace(/</g,'&lt;')}</td><td style="text-align:right;padding:0.75rem;">${(p.us_value||'').toString().replace(/</g,'&lt;')}</td></tr>`).join('')}</tbody></table>` : '<div style="padding:1rem;">No platform data</div>';
+            document.getElementById('tstPlatformTable').innerHTML = tableHtml;
+            document.getElementById('tstDemographicsSection').innerHTML = '';
+            initGlobalTooltip && initGlobalTooltip();
         }
         
         function renderTicketSalesProfileTree() {
@@ -26033,12 +26377,13 @@
                     const n = notifications[0];
                     currentProfileReleasedNotification = n;
                     const isSvod = (n.source_type || '') === 'svod_acquisition';
+                    const isTST = (n.source_type || '') === 'ticket_sales_tracker';
                     const name = (n.profile_name || 'Unknown').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-                    document.getElementById('profileReleasedTitle').textContent = isSvod ? '✅ Subscriber Acquisition report ready' : '✅ Profile IQ Ready';
+                    document.getElementById('profileReleasedTitle').textContent = isSvod ? '✅ Subscriber Acquisition report ready' : (isTST ? '✅ Ticket Sales Tracker Ready' : '✅ Profile IQ Ready');
                     document.getElementById('profileReleasedMessage').innerHTML = isSvod
                         ? 'Your Subscriber Acquisition report for <strong>' + name + '</strong> has been loaded into your dashboard.'
-                        : 'Your Profile IQ of <strong>' + name + '</strong> has been loaded into your dashboard.';
-                    document.getElementById('profileReleasedViewBtn').textContent = isSvod ? 'View Subscriber Acquisition report' : 'View in Profile IQ';
+                        : (isTST ? 'Your Ticket Sales Tracker report for <strong>' + name + '</strong> has been loaded into your dashboard.' : 'Your Profile IQ of <strong>' + name + '</strong> has been loaded into your dashboard.');
+                    document.getElementById('profileReleasedViewBtn').textContent = isSvod ? 'View Subscriber Acquisition report' : (isTST ? 'View in Ticket Sales Tracker' : 'View in Profile IQ');
                     document.getElementById('profileReleasedModal').style.display = 'flex';
                 }
             } catch (e) { console.warn('Profile-released check failed:', e); }
@@ -26063,6 +26408,7 @@
             const n = currentProfileReleasedNotification;
             if (!n || !n.s3_key) { closeProfileReleasedModal(); return; }
             const isSvod = (n.source_type || '') === 'svod_acquisition';
+            const isTST = (n.source_type || '') === 'ticket_sales_tracker';
             closeProfileReleasedModal();
             try {
                 await fetch('/api/notifications/profile-released/dismiss', {
@@ -26075,6 +26421,12 @@
                 if (typeof showSubscriberIQ === 'function') showSubscriberIQ();
                 await loadSubscriberProfiles();
                 if (typeof selectSubscriberProfile === 'function') selectSubscriberProfile(n.s3_key);
+                return;
+            }
+            if (isTST) {
+                if (typeof showTicketSalesTracker === 'function') showTicketSalesTracker();
+                await loadTSTProfiles();
+                if (typeof selectTSTProfile === 'function') selectTSTProfile(n.s3_key);
                 return;
             }
             if (typeof showProfileIQ === 'function') showProfileIQ();
@@ -43298,14 +43650,66 @@
             window.open(`/api/purgatory/download?purgatory_id=${encodeURIComponent(purgatoryId)}`, '_blank');
         }
         
+        // Ticket Sales Tracker Results Library
+        let ticketSalesTrackerResults = [];
+        async function loadTicketSalesTrackerResults() {
+            const container = document.getElementById('ticketSalesTrackerResultsList');
+            const statusEl = document.getElementById('ticketSalesTrackerResultsStatus');
+            if (container) container.innerHTML = '<div style="padding: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);"><span class="spinner"></span> Loading...</div>';
+            try {
+                const response = await fetch('/api/my-results', { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Failed to load');
+                ticketSalesTrackerResults = (data.results || []).filter(r => (r.source_type || '') === 'ticket_sales_tracker');
+                const pending = ticketSalesTrackerResults.filter(r => r.status === 'pending' || r.in_purgatory).length;
+                const released = ticketSalesTrackerResults.filter(r => r.status === 'released').length;
+                if (statusEl) statusEl.textContent = `${pending} pending • ${released} in dashboard`;
+                filterTicketSalesTrackerResults();
+            } catch (err) {
+                if (container) container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">Unable to load results.</div>';
+            }
+        }
+        function filterTicketSalesTrackerResults() {
+            const search = (document.getElementById('tstResultsSearchInput')?.value || '').toLowerCase().trim();
+            const status = document.getElementById('tstResultsStatusFilter')?.value || '';
+            let list = ticketSalesTrackerResults;
+            if (search) list = list.filter(r => (r.project_name || '').toLowerCase().includes(search) || (r.category || '').toLowerCase().includes(search));
+            if (status) list = list.filter(r => r.status === status);
+            renderTicketSalesTrackerResults(list);
+        }
+        function renderTicketSalesTrackerResults(results) {
+            const container = document.getElementById('ticketSalesTrackerResultsList');
+            if (!container) return;
+            if (!results || results.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No Ticket Sales Tracker results yet. Run an analysis to get started.</div>';
+                return;
+            }
+            const html = results.map(r => {
+                const isPending = r.status === 'pending' || r.in_purgatory;
+                const badge = isPending ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>' : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
+                const s3KeyEsc = (r.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const bucketEsc = (r.bucket || 'ticket-sales-tracker').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const name = (r.display_name && r.display_name.trim()) ? r.display_name.trim() : (r.project_name || 'Unknown').replace(/_/g, ' ').trim();
+                const dateStr = r.created_at ? formatDatePST(r.created_at) : '';
+                const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
+                const rowStyle = 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' + (isPending ? '' : ' cursor: pointer;');
+                let buttons = isPending ? `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${(r.purgatory_id||'').replace(/'/g,"\\'")}')">📥</button>` : `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); window.location.href='/api/ticket-sales-tracker/download/'+encodeURIComponent('${s3KeyEsc}')">📥</button>`;
+                return `<div class="job-item" style="${rowStyle}" ${rowClick} ${rowClick ? 'title="Click to open in Ticket Sales Tracker"' : ''}><div style="flex: 1; min-width: 0;"><div style="font-weight: 600; font-size: 0.8rem;">${name}</div><div style="font-size: 0.7rem; color: var(--text-secondary);">${dateStr}</div></div><div style="display: flex; align-items: center; gap: 0.35rem;">${badge} ${buttons}</div></div>`;
+            }).join('');
+            container.innerHTML = html;
+        }
+        
         function openReleasedResult(s3Key, bucket) {
-            // Load the result into Profile IQ
+            if (bucket === 'ticket-sales-tracker') {
+                if (typeof showTicketSalesTracker === 'function') showTicketSalesTracker();
+                if (typeof selectTSTProfile === 'function') selectTSTProfile(s3Key);
+                return;
+            }
             if (bucket === 'svod-acquisition' || s3Key.includes('svod')) {
-                // SVOD results - may need different handling
                 showNotification('Loading SVOD result...', 'info');
                 loadCachedResult(s3Key);
             } else {
-                // Regular profile result
                 loadCachedResult(s3Key);
             }
         }

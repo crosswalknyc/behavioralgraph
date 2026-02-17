@@ -2085,6 +2085,10 @@
                                         <input type="checkbox" id="moduleWatchTime" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>⏱️ Watch Time</span>
                                     </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleTicketSalesTracker" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
+                                        <span>🎟️ Ticket Sales Tracker</span>
+                                    </label>
                                 </div>
                                 <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
                             </div>
@@ -5384,6 +5388,7 @@
             if (document.getElementById('moduleCampaign').checked) modules.push('campaign');
             if (document.getElementById('moduleCrossShow').checked) modules.push('cross_show');
             if (document.getElementById('moduleWatchTime').checked) modules.push('watch_time');
+            if (document.getElementById('moduleTicketSalesTracker')?.checked) modules.push('ticket_sales_tracker');
             return modules;
         }
 
@@ -5405,6 +5410,7 @@
                     case 'campaign': document.getElementById('moduleCampaign').checked = true; break;
                     case 'cross_show': document.getElementById('moduleCrossShow').checked = true; break;
                     case 'watch_time': document.getElementById('moduleWatchTime').checked = true; break;
+                    case 'ticket_sales_tracker': if (document.getElementById('moduleTicketSalesTracker')) document.getElementById('moduleTicketSalesTracker').checked = true; break;
                 }
             });
             updateAllAnalysisModulesCheckbox();
