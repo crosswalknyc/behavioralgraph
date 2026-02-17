@@ -22069,15 +22069,22 @@
                 if (!arr.length) return;
                 const sorted = [...arr].sort((a,b) => _tstParsePct(b.percent) - _tstParsePct(a.percent));
                 const top = sorted[0];
-                if (top) insights.push({ label, value: top.value || '', pct: _tstParsePct(top.percent) });
+                if (!top) return;
+                const pct = _tstParsePct(top.percent);
+                const gp = typeof _tstGetGenPop === 'function' ? _tstGetGenPop(key.toLowerCase(), top.value) : 0;
+                const index = gp > 0.05 ? (pct / gp) * 100 : 100;
+                const overIndex = index >= 100;
+                insights.push({ label, value: top.value || '', pct, gp, overIndex });
             });
-            container.innerHTML = insights.map(i => `
-                <div class="snapshot-item" style="text-align:left;padding:0.75rem;background:rgba(255,255,255,0.03);border-radius:8px;">
+            container.innerHTML = insights.map(i => {
+                const pctColor = i.gp > 0.05 ? (i.overIndex ? '#10b981' : '#ef4444') : 'var(--text-primary)';
+                const pctHtml = i.gp > 0.05 ? `<span style="color:${pctColor};">${i.pct.toFixed(2)}%</span> (GP: ${i.gp.toFixed(2)}%)` : `${i.pct.toFixed(2)}%`;
+                return `<div class="snapshot-item" style="text-align:left;padding:0.75rem;background:rgba(255,255,255,0.03);border-radius:8px;">
                     <div class="snapshot-label" style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">${(i.label||'').replace(/</g,'&lt;')}</div>
                     <div class="snapshot-value" style="font-size:1.1rem;font-weight:700;color:var(--accent-lime);margin-top:0.25rem;">${(i.value||'').replace(/</g,'&lt;')}</div>
-                    <div class="snapshot-subtext" style="font-size:0.85rem;color:var(--text-primary);margin-top:0.25rem;">${i.pct.toFixed(2)}%</div>
-                </div>
-            `).join('') || '<div style="padding:1rem;color:var(--text-secondary);">No demographic data</div>';
+                    <div class="snapshot-subtext" style="font-size:0.85rem;color:var(--text-primary);margin-top:0.25rem;">${pctHtml}</div>
+                </div>`;
+            }).join('') || '<div style="padding:1rem;color:var(--text-secondary);">No demographic data</div>';
         }
         let tstTheatersSort = { col: 'sold', dir: 'desc' };
         function sortTSTTheaters(col) {
