@@ -22131,7 +22131,7 @@
         }
         const TST_AGE_ORDER = ['<16','under 16','16-18','18-20','21-25','26-30','31-40','41-59','60+','65+','over 65'];
         const TST_INCOME_ORDER = ['$40k-$60k','$40k - $60k','$60k-$75k','$60k - $75k','$75k-$100k','$75k - $100k','$100k-$150k','$100k - $150k','$150k-$250k','$150k - $250k','$250k+','$250k +'];
-        let tstDemoSort = { age:'value', income:'value', gender:'value', ethnicity:'value', location:'value' };
+        let tstDemoSort = { AGE:'value_desc', INCOME:'value_desc', LOCATION:'value_desc' };
         function _tstDemoArrToObj(arr) { const o={}; (arr||[]).forEach(r=>{ const v=(r.value||'').trim(); if(v) o[v]=_tstParsePct(r.percent); }); return o; }
         function _tstGetGenPop(field, value) {
             const key = (field||'').toUpperCase();
@@ -22163,18 +22163,17 @@
             return 0;
         }
         function _tstSortDemoArr(field, arr) {
-            const mode = tstDemoSort[field] || 'value';
+            const mode = tstDemoSort[field] || 'value_desc';
             let sorted = [...(arr||[])];
-            if(mode==='value') sorted.sort((a,b)=>_tstParsePct(b.percent)-_tstParsePct(a.percent));
-            else if(field==='AGE') sorted.sort((a,b)=>{
-                const getIdx=(x)=>{ const v=(x.value||'').toLowerCase(); let i=TST_AGE_ORDER.findIndex(o=>o.toLowerCase()===v); if(i>=0)return i; i=TST_AGE_ORDER.findIndex(o=>v.includes(o.toLowerCase())||o.toLowerCase().includes(v)); return i>=0?i:999; };
-                return getIdx(a)-getIdx(b);
-            });
-            else if(field==='INCOME') sorted.sort((a,b)=>{
-                const getIdx=(x)=>{ const v=(x.value||'').toLowerCase().replace(/[\s,]/g,''); let i=TST_INCOME_ORDER.findIndex(o=>v.includes((o||'').toLowerCase().replace(/[\s,]/g,''))); return i>=0?i:999; };
-                return getIdx(a)-getIdx(b);
-            });
-            else if(field==='LOCATION'||field==='GENDER'||field==='ETHNICITY') sorted.sort((a,b)=>(a.value||'').localeCompare(b.value||''));
+            if (mode === 'value_desc' || mode === 'value') sorted.sort((a,b) => _tstParsePct(b.percent) - _tstParsePct(a.percent));
+            else if (mode === 'value_asc') sorted.sort((a,b) => _tstParsePct(a.percent) - _tstParsePct(b.percent));
+            else if (field === 'LOCATION' && (mode === 'rank_asc' || mode === 'rank_desc')) {
+                sorted.sort((a,b) => {
+                    const ra = typeof getDMARank === 'function' ? (getDMARank(a.value) ?? 999) : 999;
+                    const rb = typeof getDMARank === 'function' ? (getDMARank(b.value) ?? 999) : 999;
+                    return mode === 'rank_asc' ? ra - rb : rb - ra;
+                });
+            }
             return sorted;
         }
         function sortTSTDemoChart(field, mode) { tstDemoSort[field]=mode; if(currentTSTData?.data) renderTSTDemographicsOverall(currentTSTData.data); }
@@ -22191,15 +22190,18 @@
                 if (!arr.length) return;
                 const id = 'tstChart' + field.replace(/\s/g,'');
                 const isLocation = field === 'LOCATION';
+                const useBar = isLocation || field === 'AGE' || field === 'INCOME';
                 const maxItems = isLocation ? 25 : 20;
                 const fullWidth = isLocation ? 'grid-column: 1 / -1;' : '';
                 const showMedian = (field === 'AGE' || field === 'INCOME');
                 const sortId = 'tstSort' + field.replace(/\s/g,'');
                 const medianId = 'tstMedian' + field.replace(/\s/g,'');
-                const sortOpts = field === 'AGE' ? '<option value="age"'+(tstDemoSort.age==='age'?' selected':'')+'>Age↓</option><option value="value"'+(tstDemoSort.age==='value'?' selected':'')+'>Val↓</option>' :
-                    field === 'INCOME' ? '<option value="income"'+(tstDemoSort.income==='income'?' selected':'')+'>Inc↓</option><option value="value"'+(tstDemoSort.income==='value'?' selected':'')+'>Val↓</option>' :
-                    '<option value="value" selected>Val↓</option>';
-                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
+                const m = tstDemoSort[field] || 'value_desc';
+                const sortOpts = useBar ? (field === 'LOCATION'
+                    ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="rank_asc"'+(m==='rank_asc'?' selected':'')+'>DMA Rank Ascending</option><option value="rank_desc"'+(m==='rank_desc'?' selected':'')+'>DMA Rank Descending</option>'
+                    : '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option>') : '';
+                const sortRow = useBar ? `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div>` : '';
+                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
             });
             container.innerHTML = html;
             keys.forEach(field => {
@@ -22251,8 +22253,8 @@
                             } } },
                             datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const gp=genPopVals[ctx.dataIndex]||0; return gp>0.05 ? fmtPct(p)+' (GP: '+fmtPct(gp)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
                         },
-                        layout: useBar && isLocation ? { padding: { left: 260 } } : {},
-                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false } } } : {}
+                        layout: useBar && isLocation ? { padding: { left: 300 } } : {},
+                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: isLocation && typeof getDMARank === 'function' ? (val) => { const r = getDMARank(val); return r != null ? `#${r}  ${val}` : val; } : undefined } } } : {}
                     },
                     plugins: [ChartDataLabels]
                 });
@@ -22291,14 +22293,17 @@
                 if (!arr.length) return;
                 const id = 'tstPerChart' + field.replace(/\s/g,'') + safeTheater;
                 const isLocation = field === 'LOCATION';
+                const useBar = isLocation || field === 'AGE' || field === 'INCOME';
                 const fullWidth = isLocation ? 'grid-column: 1 / -1;' : '';
                 const showMedian = (field === 'AGE' || field === 'INCOME');
                 const sortId = 'tstPerSort' + field.replace(/\s/g,'') + safeTheater;
                 const medianId = 'tstPerMedian' + field.replace(/\s/g,'') + safeTheater;
-                const sortOpts = field === 'AGE' ? '<option value="age"'+(tstDemoSort.age==='age'?' selected':'')+'>Age↓</option><option value="value"'+(tstDemoSort.age==='value'?' selected':'')+'>Val↓</option>' :
-                    field === 'INCOME' ? '<option value="income"'+(tstDemoSort.income==='income'?' selected':'')+'>Inc↓</option><option value="value"'+(tstDemoSort.income==='value'?' selected':'')+'>Val↓</option>' :
-                    '<option value="value" selected>Val↓</option>';
-                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTPerTheaterDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div><div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
+                const m = tstDemoSort[field] || 'value_desc';
+                const sortOpts = useBar ? (field === 'LOCATION'
+                    ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="rank_asc"'+(m==='rank_asc'?' selected':'')+'>DMA Rank Ascending</option><option value="rank_desc"'+(m==='rank_desc'?' selected':'')+'>DMA Rank Descending</option>'
+                    : '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option>') : '';
+                const sortRow = useBar ? `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTPerTheaterDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div>` : '';
+                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
             });
             container.innerHTML = html;
             ['demo_per_gender','demo_per_age','demo_per_income','demo_per_ethnicity','demo_per_location'].forEach(k => { if (tstCharts[k]) { tstCharts[k].destroy(); tstCharts[k] = null; } });
@@ -22350,8 +22355,8 @@
                             } } },
                             datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const g=genPopVals[ctx.dataIndex]||0; return g>0.05 ? fmtPct(p)+' (GP: '+fmtPct(g)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
                         },
-                        layout: useBar && isLocation ? { padding: { left: 260 } } : {},
-                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false } } } : {}
+                        layout: useBar && isLocation ? { padding: { left: 300 } } : {},
+                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: isLocation && typeof getDMARank === 'function' ? (val) => { const r = getDMARank(val); return r != null ? `#${r}  ${val}` : val; } : undefined } } } : {}
                     },
                     plugins: [ChartDataLabels]
                 });
