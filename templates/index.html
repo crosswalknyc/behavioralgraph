@@ -11461,8 +11461,8 @@
                         <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                         <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                         <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
-                        <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎟️ Impact IQ</option>
-                        <option value="ticketSalesTracker">🎟️ Ticket Sales Tracker</option>
+                        <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
+                        <option value="ticketSalesTracker">🎬 Ticket Sales Tracker</option>
                         <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
                         {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                         <option value="customAnalysis">🔧 Analysis IQ</option>
@@ -11824,7 +11824,7 @@
                     {% endif %}
                     {% if 'talent_theater' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
-                        🎟️ Impact IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                        🎬 Impact IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
                     </button>
                     {% endif %}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
@@ -11849,7 +11849,7 @@
                     {% endif %}
                     {% if 'ticket_sales_tracker' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('ticket-sales-tracker')" id="customAnalysisTabTicketSalesTracker">
-                        🎟️ Ticket Sales Tracker <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                        🎬 Ticket Sales Tracker <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
                     </button>
                     {% endif %}
                 </div>
@@ -12254,7 +12254,7 @@
                 <div id="customAnalysisTabContentTalentTheater" class="custom-analysis-tab-content">
                     <div class="main-grid">
                     <div class="card">
-                        <h2>🎟️ Impact IQ</h2>
+                        <h2>🎬 Impact IQ</h2>
                         <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
                         <p class="section-description" style="margin-bottom: 2rem;">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
@@ -12313,7 +12313,7 @@
                         </div>
                     </div>
                     <div class="card">
-                        <h2>🎟️ Impact IQ</h2>
+                        <h2>🎬 Impact IQ</h2>
                         <div id="ticketSalesCurrentJob" style="display: none;">
                             <div class="status-panel">
                                 <div id="ticketSalesStatusRunning">
@@ -12793,7 +12793,7 @@
                 <div id="customAnalysisTabContentTicketSalesTracker" class="custom-analysis-tab-content">
                     <div class="main-grid">
                         <div class="card">
-                            <h2>🎟️ Ticket Sales Tracker</h2>
+                            <h2>🎬 Ticket Sales Tracker</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
                             <p class="section-description">Profiles of verified digital ticket sales across FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS platforms.</p>
                             <form id="customTicketSalesTrackerForm">
@@ -15208,7 +15208,7 @@
             <div class="dashboard-layout">
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
-                        <h3>🎫 Impact IQ</h3>
+                        <h3>🎬 Impact IQ</h3>
                         <p style="font-style: italic; font-size: 0.8rem; color: var(--text-secondary); margin: 0.5rem 0 0.75rem 0; line-height: 1.4;">What percent of digital ticket sales came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent prior to purchasing tickets during your specified window.</p>
                         <input type="text" id="ticketSalesSearchInput" class="sidebar-search" placeholder="🔍 Search..." onkeyup="filterTicketSalesProfiles()">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
@@ -15287,7 +15287,7 @@
             <div class="dashboard-layout">
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
-                        <h3>🎟️ Ticket Sales Tracker</h3>
+                        <h3>🎬 Ticket Sales Tracker</h3>
                         <input type="text" id="tstSearchInput" class="sidebar-search" placeholder="🔍 Search..." onkeyup="filterTSTProfiles()" style="margin-top: 0.5rem;">
                     </div>
                     <div id="tstProfileTree" class="profile-select-tree"></div>
@@ -15313,7 +15313,7 @@
                         </div>
                         <div class="dashboard-tabs" id="tstTabsBar" style="margin: 1rem 1.5rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
                             <button class="tab-btn active" id="tstTabSummary" onclick="showTSTTab('summary')">📊 Summary</button>
-                            <button class="tab-btn" id="tstTabTheaters" onclick="showTSTTab('theaters')">🎭 Theaters</button>
+                            <button class="tab-btn" id="tstTabTheaters" onclick="showTSTTab('theaters')">🎬 Theaters</button>
                             <button class="tab-btn" id="tstTabDemographics" onclick="showTSTTab('demographics')">👥 Demographics</button>
                         </div>
                         <div id="tstTabContent" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
@@ -15911,7 +15911,7 @@
             <div class="dashboard-layout">
                 <div class="dashboard-tab-content" style="padding: 2rem;">
                     <div class="card">
-                        <h2>🎟️ Impact IQ</h2>
+                        <h2>🎬 Impact IQ</h2>
                         <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
                         <p class="section-description" style="margin-bottom: 2rem;">Track what percent of ticket sales at digital ticket retailers came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent (using our signature 5 touch point engagement method) prior to purchasing tickets during your specified window.</p>
                         
@@ -57935,7 +57935,7 @@
             
             const typeLabels = {
                 'svod_acquisition': '📺 SVOD Acquisition IQ',
-                'talent_theater': '🎟️ Impact IQ',
+                'talent_theater': '🎬 Impact IQ',
                 'profile_analysis': '🎯 Profile Analysis'
             };
             document.getElementById('analysisCompleteType').textContent = typeLabels[analysisType] || '🎯 Profile Analysis';
