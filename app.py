@@ -7278,6 +7278,7 @@ def parse_ticket_sales_tracker_csv(csv_content):
         best = min(items, key=lambda x: (0 if (x[0] or '').lower() == canonical.lower() else 1, len(x[0] or '')))
         result[canonical] = best[1]
     parsed['demographics_per_theater'] = result
+    return parsed
 
 
 @app.route('/api/ticket-sales-tracker/list')
