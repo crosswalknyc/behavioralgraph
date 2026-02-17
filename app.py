@@ -6724,8 +6724,7 @@ def get_subscriber_iq_data(s3_key):
         # Parse subscriber IQ CSV
         print(f"📝 CSV content preview (first 500 chars): {csv_content[:500]}")
         parsed = parse_subscriber_iq_csv(csv_content)
-        # Subscriber IQ: only Total Show Watchers is divided by 10; other metrics stay raw from CSV
-        scale_subscriber_iq_values(parsed, divisor=10)
+        # Subscriber IQ: use raw values from CSV so sample size (Total Show Watchers) is not cut off
 
         # Log what was parsed in detail
         print(f"📊 Parsed data summary:")
