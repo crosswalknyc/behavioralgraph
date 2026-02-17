@@ -22071,18 +22071,23 @@
                 const response = await fetch(`/api/ticket-sales-tracker/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
                 const resp = await response.json();
                 if (!resp.success) throw new Error(resp.error || 'Failed to load');
+                if (!resp.data) throw new Error('No data returned from server');
                 currentTSTData = { data: resp.data, display_name: resp.display_name, s3_key: s3Key, image_url: resp.image_url || null };
                 document.getElementById('tstEmptyState').style.display = 'none';
                 document.getElementById('tstContentArea').style.display = 'flex';
                 renderTSTDashboard();
             } catch (e) {
                 console.error('selectTSTProfile error:', e);
+                document.getElementById('tstEmptyState').style.display = 'flex';
+                document.getElementById('tstContentArea').style.display = 'none';
+                const msg = document.querySelector('#tstEmptyState .empty-state-content p');
+                if (msg) msg.textContent = 'Failed to load: ' + (e.message || 'Unknown error') + '. Try again or check the file.';
             }
         }
         function renderTSTDashboard() {
-            if (!currentTSTData) return;
+            if (!currentTSTData || !currentTSTData.data) return;
             const d = currentTSTData.data;
-            const meta = d.metadata || {};
+            const meta = (d.metadata || {});
             const profileImg = document.getElementById('tstProfileImage');
             const placeholder = document.getElementById('tstProfileImagePlaceholder');
             if (currentTSTData.image_url) {
