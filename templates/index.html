@@ -15295,25 +15295,29 @@
                             </div>
                         </div>
                         <div class="dashboard-tabs" id="tstTabsBar" style="margin: 1rem 1.5rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                            <button class="tab-btn active" id="tstTabSummary" onclick="showTSTTab('summary')">📊 Summary & Platform</button>
-                            <button class="tab-btn" id="tstTabDemographics" onclick="showTSTTab('demographics')">👥 Demographics Overall</button>
-                            <button class="tab-btn" id="tstTabPerTheater" onclick="showTSTTab('perTheater')">🎭 Demographics Per Theater</button>
+                            <button class="tab-btn active" id="tstTabSummary" onclick="showTSTTab('summary')">📊 Summary</button>
+                            <button class="tab-btn" id="tstTabTheaters" onclick="showTSTTab('theaters')">🎭 Theaters</button>
+                            <button class="tab-btn" id="tstTabDemographics" onclick="showTSTTab('demographics')">👥 Demographics</button>
                         </div>
                         <div id="tstTabContent" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
                             <div id="tstTabSummaryPanel" class="tst-tab-panel">
-                                <div id="tstSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
-                                <div id="tstPlatformSection">
-                                    <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Theater by Platform</h3>
-                                    <div id="tstPlatformChart" style="height: 280px; margin-bottom: 1rem; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
-                                        <canvas id="tstPlatformChartCanvas"></canvas>
-                                    </div>
-                                    <div id="tstPlatformTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);"></div>
+                                <div id="tstSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
+                                <div id="tstAudienceSnapshot" class="insight-card-v2" style="margin-bottom: 1.5rem;">
+                                    <h4 style="margin: 0 0 1rem 0; font-size: 0.95rem;">👤 Audience Snapshot</h4>
+                                    <div id="tstAudienceSnapshotGrid" class="audience-snapshot" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;"></div>
+                                </div>
+                            </div>
+                            <div id="tstTabTheatersPanel" class="tst-tab-panel" style="display: none;">
+                                <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Tickets Sold & Projected Sales by Theater (US Gen Pop)</h3>
+                                <div id="tstTheatersTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);"></div>
+                                <div id="tstTheatersChart" style="height: 300px; margin-top: 1rem; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
+                                    <canvas id="tstTheatersChartCanvas"></canvas>
                                 </div>
                             </div>
                             <div id="tstTabDemographicsPanel" class="tst-tab-panel" style="display: none;">
-                                <div id="tstDemographicsOverall" class="demographics-charts-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;"></div>
-                            </div>
-                            <div id="tstTabPerTheaterPanel" class="tst-tab-panel" style="display: none;">
+                                <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Overall Demographics</h3>
+                                <div id="tstDemographicsOverall" class="demographics-charts-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;"></div>
+                                <h3 style="margin: 1.5rem 0 1rem 0; font-size: 1rem; font-weight: 600;">Demographics by Theater</h3>
                                 <div style="margin-bottom: 1rem;">
                                     <label style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 0.5rem;">Theater:</label>
                                     <select id="tstTheaterSelect" onchange="renderTSTPerTheaterCharts()" style="padding: 0.5rem 1rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); min-width: 260px;"></select>
@@ -22100,14 +22104,11 @@
             document.getElementById('tstDateRangeHeader').textContent = meta.date_range || '';
             document.getElementById('tstGenreHeader').textContent = d.genre ? 'Genre: ' + d.genre : '';
             const cards = [];
-            if (d.total_tickets_us) cards.push({ label: 'Total Tickets', value: d.total_tickets_us });
-            if (d.projected_ticket_sales_us) cards.push({ label: 'Ticket Sales', value: d.projected_ticket_sales_us });
-            const cardsHtml = cards.map(c => `<div class="stat-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="font-size: 0.75rem; color: var(--text-secondary);">${(c.label||'').replace(/</g,'&lt;')}</div><div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);">${(c.value||'').toString().replace(/</g,'&lt;')}</div></div>`).join('');
-            document.getElementById('tstSummaryCards').innerHTML = cardsHtml;
-            const platforms = d.platforms || [];
-            const tableHtml = platforms.length ? `<table style="width:100%; border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="text-align:left;padding:0.75rem;">Platform</th><th style="text-align:right;padding:0.75rem;">US</th></tr></thead><tbody>${platforms.map(p => `<tr style="border-bottom:1px solid var(--border-color);"><td style="padding:0.75rem;">${(p.platform||'').replace(/</g,'&lt;')}</td><td style="text-align:right;padding:0.75rem;">${(p.us_value||'').toString().replace(/</g,'&lt;')}</td></tr>`).join('')}</tbody></table>` : '<div style="padding:1rem;">No platform data</div>';
-            document.getElementById('tstPlatformTable').innerHTML = tableHtml;
-            renderTSTPlatformChart(d);
+            if (d.total_tickets_us) cards.push({ label: 'Total Tickets Sold (US Gen Pop)', value: d.total_tickets_us });
+            if (d.projected_ticket_sales_us) cards.push({ label: 'Projected Ticket Sales (US Gen Pop)', value: d.projected_ticket_sales_us });
+            document.getElementById('tstSummaryCards').innerHTML = cards.map(c => `<div class="stat-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="font-size: 0.75rem; color: var(--text-secondary);">${(c.label||'').replace(/</g,'&lt;')}</div><div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);">${(c.value||'').toString().replace(/</g,'&lt;')}</div></div>`).join('');
+            renderTSTAudienceSnapshot(d);
+            renderTSTTheatersTab(d);
             showTSTTab(tstActiveTab);
             renderTSTDemographicsOverall(d);
             renderTSTTheaterSelect(d);
@@ -22115,37 +22116,70 @@
         }
         function showTSTTab(tab) {
             tstActiveTab = tab;
+            const tabMap = { summary: 'Summary', theaters: 'Theaters', demographics: 'Demographics' };
             document.querySelectorAll('#tstTabsBar .tab-btn').forEach(btn => btn.classList.remove('active'));
-            const tabBtn = document.getElementById('tstTab' + (tab === 'summary' ? 'Summary' : tab === 'demographics' ? 'Demographics' : 'PerTheater'));
+            const tabBtn = document.getElementById('tstTab' + (tabMap[tab] || 'Summary'));
             if (tabBtn) tabBtn.classList.add('active');
             document.querySelectorAll('.tst-tab-panel').forEach(p => p.style.display = 'none');
-            const panel = document.getElementById('tstTab' + (tab === 'summary' ? 'Summary' : tab === 'demographics' ? 'Demographics' : 'PerTheater') + 'Panel');
+            const panel = document.getElementById('tstTab' + (tabMap[tab] || 'Summary') + 'Panel');
             if (panel) panel.style.display = 'block';
-            if (tab === 'demographics') renderTSTDemographicsOverall(currentTSTData?.data || {});
-            if (tab === 'perTheater') renderTSTPerTheaterCharts();
+            if (tab === 'demographics') { renderTSTDemographicsOverall(currentTSTData?.data || {}); renderTSTPerTheaterCharts(); }
         }
         function _tstParsePct(s) { const m = String(s||'').match(/[\d.]+/); return m ? parseFloat(m[0]) : 0; }
         function _tstParseNum(s) { const v = String(s||'').replace(/,/g,'').replace(/\$/g,''); const m = v.match(/[\d.]+/); return m ? parseFloat(m[0]) : 0; }
-        function _tstDemoToObj(arr) { const o = {}; (arr || []).forEach(r => { if (r && r.value) o[r.value] = _tstParsePct(r.percent); }); return o; }
-        function renderTSTPlatformChart(d) {
-            Object.values(tstCharts).forEach(c => { if (c && c.destroy) c.destroy(); }); tstCharts = {};
+        function _tstFmtNum(n) { if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/, '') + 'M'; if (n >= 1e3) return (n/1e3).toFixed(0) + 'K'; return n.toLocaleString(); }
+        function _tstFmtDollar(n) { if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B'; if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K'; return '$' + Math.round(n).toLocaleString(); }
+        function renderTSTAudienceSnapshot(d) {
+            const demo = d.demographics_overall || {};
+            const container = document.getElementById('tstAudienceSnapshotGrid');
+            if (!container) return;
+            const insights = [];
+            const fieldMap = [['GENDER','Dominant Gender'],['AGE','Largest Age Group'],['ETHNICITY','Top Ethnicity'],['INCOME','Top Income']];
+            fieldMap.forEach(([key, label]) => {
+                const arr = demo[key] || [];
+                if (!arr.length) return;
+                const sorted = [...arr].sort((a,b) => _tstParsePct(b.percent) - _tstParsePct(a.percent));
+                const top = sorted[0];
+                if (top) insights.push({ label, value: top.value || '', pct: _tstParsePct(top.percent) });
+            });
+            container.innerHTML = insights.map(i => `
+                <div class="snapshot-item" style="text-align:left;padding:0.75rem;background:rgba(255,255,255,0.03);border-radius:8px;">
+                    <div class="snapshot-label" style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">${(i.label||'').replace(/</g,'&lt;')}</div>
+                    <div class="snapshot-value" style="font-size:1.1rem;font-weight:700;color:var(--accent-lime);margin-top:0.25rem;">${(i.value||'').replace(/</g,'&lt;')}</div>
+                    <div class="snapshot-subtext" style="font-size:0.85rem;color:var(--text-primary);margin-top:0.25rem;">${i.pct.toFixed(2)}%</div>
+                </div>
+            `).join('') || '<div style="padding:1rem;color:var(--text-secondary);">No demographic data</div>';
+        }
+        function renderTSTTheatersTab(d) {
             const platforms = d.platforms || [];
-            if (!platforms.length) return;
-            const canvas = document.getElementById('tstPlatformChartCanvas');
-            if (!canvas || typeof Chart === 'undefined') return;
-            const ctx = canvas.getContext('2d');
+            const totalTicketsNum = _tstParseNum(d.total_tickets_us) || 1;
+            const totalProjNum = _tstParseNum(d.projected_ticket_sales_us) || 0;
+            const tableEl = document.getElementById('tstTheatersTable');
+            if (tableEl) {
+                const rows = platforms.map(p => {
+                    const sold = p.us_number != null ? p.us_number : _tstParseNum(String(p.us_value||''));
+                    const proj = totalTicketsNum > 0 ? (sold / totalTicketsNum) * totalProjNum : 0;
+                    return { platform: p.platform, sold, soldFmt: _tstFmtNum(sold), projFmt: _tstFmtDollar(proj) };
+                });
+                tableEl.innerHTML = rows.length ? `<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="text-align:left;padding:0.75rem;">Theater</th><th style="text-align:right;padding:0.75rem;">Tickets Sold (US Gen Pop)</th><th style="text-align:right;padding:0.75rem;">Projected Ticket Sales (US Gen Pop)</th></tr></thead><tbody>${rows.map(r => `<tr style="border-bottom:1px solid var(--border-color);"><td style="padding:0.75rem;">${(r.platform||'').replace(/</g,'&lt;')}</td><td style="text-align:right;padding:0.75rem;">${r.soldFmt}</td><td style="text-align:right;padding:0.75rem;">${r.projFmt}</td></tr>`).join('')}</tbody></table>` : '<div style="padding:1rem;">No theater data</div>';
+            }
+            const canvas = document.getElementById('tstTheatersChartCanvas');
+            if (!canvas || !platforms.length || typeof Chart === 'undefined') return;
             const labels = platforms.map(p => p.platform || '');
-            const data = platforms.map(p => (p.us_number != null ? p.us_number : _tstParseNum(String(p.us_value||''))));
-            if (tstCharts.platform) tstCharts.platform.destroy();
+            const data = platforms.map(p => {
+                const sold = p.us_number != null ? p.us_number : _tstParseNum(String(p.us_value||''));
+                return totalTicketsNum > 0 ? (sold / totalTicketsNum) * totalProjNum : 0;
+            });
+            if (tstCharts.theaters) tstCharts.theaters.destroy();
             const colors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672'];
-            tstCharts.platform = new Chart(ctx, {
+            tstCharts.theaters = new Chart(canvas.getContext('2d'), {
                 type: 'bar',
-                data: { labels, datasets: [{ data, backgroundColor: colors.slice(0, labels.length), borderRadius: 4 }] },
+                data: { labels, datasets: [{ label: 'Projected Ticket Sales (US Gen Pop)', data, backgroundColor: colors.slice(0, labels.length), borderRadius: 4 }] },
                 options: {
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: { legend: { display: true, labels: { color: '#e6f1ff' } } },
                     scales: {
                         x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e', callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v } },
                         y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
