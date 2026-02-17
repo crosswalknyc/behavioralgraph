@@ -7201,7 +7201,7 @@ def parse_ticket_sales_tracker_csv(csv_content):
             parsed['is_family_animation'] = 'family' in gl or 'animation' in gl
         elif cat == 'Date Range':
             parsed['metadata']['date_range'] = val or (row[2] if len(row) > 2 else '')
-        elif 'TOTAL HITS' in cat or 'THEATER BY PLATFORM' in cat.upper():
+        elif 'TOTAL HITS' in (cat + ' ' + val) or 'THEATER BY PLATFORM' in (cat + ' ' + val).upper():
             current_section = 'platforms'
             continue
         elif cat == 'Platform' and 'Hits' in (val + proj):
