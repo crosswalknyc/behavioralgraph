@@ -22089,7 +22089,7 @@
                 </div>`;
             }).join('') || '<div style="padding:1rem;color:var(--text-secondary);">No demographic data</div>';
         }
-        let tstTheatersSort = { col: 'sold', dir: 'desc' };
+        let tstTheatersSort = { col: 'proj', dir: 'desc' };
         function sortTSTTheaters(col) {
             if (tstTheatersSort.col === col) tstTheatersSort.dir = tstTheatersSort.dir === 'asc' ? 'desc' : 'asc';
             else { tstTheatersSort.col = col; tstTheatersSort.dir = col === 'platform' ? 'asc' : 'desc'; }
@@ -22116,7 +22116,7 @@
             if (tableEl) {
                 const arrow = (c) => s.col === c ? (s.dir === 'asc' ? ' ▲' : ' ▼') : '';
                 const sortHint = `<div style="display:flex;gap:1rem;margin-bottom:1rem;font-size:0.75rem;color:var(--text-secondary);">Sort by: <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('platform')" title="Click to sort">Theater${arrow('platform')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('sold')" title="Click to sort">Tickets Sold${arrow('sold')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('proj')" title="Click to sort">Projected Sales${arrow('proj')}</span></div>`;
-                tableEl.innerHTML = rows.length ? sortHint + `<div class="exec-summary-grid" style="margin-bottom:0;">${rows.map(r => `<div class="exec-summary-metric"><div class="exec-metric-label">${(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
+                tableEl.innerHTML = rows.length ? sortHint + `<div class="exec-summary-grid" style="margin-bottom:0;">${rows.map(r => `<div class="exec-summary-metric"><div class="exec-metric-label">${(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
             }
             const canvas = document.getElementById('tstTheatersChartCanvas');
             if (!canvas || !platforms.length || typeof Chart === 'undefined') return;
