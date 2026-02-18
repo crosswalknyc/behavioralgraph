@@ -22296,7 +22296,7 @@
                 sorted.sort((a,b) => {
                     const ra = typeof getDMARank === 'function' ? (getDMARank(a.value) ?? 999) : 999;
                     const rb = typeof getDMARank === 'function' ? (getDMARank(b.value) ?? 999) : 999;
-                    return mode === 'rank_asc' ? ra - rb : rb - ra;
+                    return mode === 'rank_asc' ? rb - ra : ra - rb;
                 });
             }
             return sorted;
