@@ -15335,7 +15335,7 @@
                             </div>
                             <div id="tstTabTheatersPanel" class="tst-tab-panel" style="display: none;">
                                 <h3 style="margin: 0 0 0.25rem 0; font-size: 1rem; font-weight: 600;">US Gen Pop Projected Tickets Sold &amp; Box Office Sales by Theater</h3>
-                                <p id="tstTheatersFootnote" style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 0 0 1rem 0;"></p>
+                                <p id="tstTheatersFootnote" style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 0 0 1rem 0;">Ticket price is calculated at $15 per ticket against total number of tickets sold with a 2x factor to account for a single purchaser buying multiple tickets.</p>
                                 <div id="tstTheatersTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); padding: 1.25rem 1.5rem;"></div>
                                 <div id="tstTheatersChart" style="height: 300px; margin-top: 1rem; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
                                     <canvas id="tstTheatersChartCanvas"></canvas>
@@ -16288,7 +16288,7 @@
             }
         });
         
-        // Global tooltip system
+        // Global tooltip system - use event delegation so dynamically set data-tooltip (e.g. TST title, dates, genre) works
         function initGlobalTooltip() {
             const tooltip = document.getElementById('globalTooltip');
             if (!tooltip) {
@@ -16296,74 +16296,48 @@
                 return;
             }
             
-            // Attach tooltips to all elements with has-tooltip class
-            function attachTooltips() {
-                document.querySelectorAll('.has-tooltip[data-tooltip]').forEach(el => {
-                    // Skip if already has listeners
-                    if (el.dataset.tooltipAttached) return;
-                    el.dataset.tooltipAttached = 'true';
-                    
-                    el.addEventListener('mouseenter', function(e) {
-                        // Check if hover is disabled
-                        if (document.body.classList.contains('hover-disabled')) return;
-                        
-                        const text = this.getAttribute('data-tooltip');
-                        if (!text) return;
-                        
-                        tooltip.textContent = text;
-                        
-                        // Position below the mouse pointer
-                        let left = e.clientX - 150;
-                        let top = e.clientY + 20; // 20px below cursor
-                        
-                        // Keep in viewport horizontally
-                        if (left < 10) left = 10;
-                        if (left > window.innerWidth - 320) left = window.innerWidth - 320;
-                        
-                        // If tooltip would go below viewport, show above cursor instead
-                        if (top + 100 > window.innerHeight) {
-                            top = e.clientY - 80;
-                        }
-                        
-                        // Show tooltip with inline styles
-                        tooltip.style.left = left + 'px';
-                        tooltip.style.top = top + 'px';
-                        tooltip.style.opacity = '1';
-                        tooltip.style.visibility = 'visible';
-                    });
-                    
-                    el.addEventListener('mousemove', function(e) {
-                        // Update tooltip position as mouse moves
-                        if (tooltip.style.opacity !== '1') return;
-                        
-                        let left = e.clientX - 150;
-                        let top = e.clientY + 20;
-                        
-                        if (left < 10) left = 10;
-                        if (left > window.innerWidth - 320) left = window.innerWidth - 320;
-                        if (top + 100 > window.innerHeight) {
-                            top = e.clientY - 80;
-                        }
-                        
-                        tooltip.style.left = left + 'px';
-                        tooltip.style.top = top + 'px';
-                    });
-                    
-                    el.addEventListener('mouseleave', function() {
-                        tooltip.style.opacity = '0';
-                        tooltip.style.visibility = 'hidden';
-                        tooltip.style.left = '-9999px';
-                        tooltip.style.top = '-9999px';
-                    });
-                });
+            function showTooltip(el, e) {
+                const text = el.getAttribute('data-tooltip');
+                if (!text) return;
+                tooltip.textContent = text;
+                let left = e.clientX - 150;
+                let top = e.clientY + 20;
+                if (left < 10) left = 10;
+                if (left > window.innerWidth - 320) left = window.innerWidth - 320;
+                if (top + 100 > window.innerHeight) top = e.clientY - 80;
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+                tooltip.style.opacity = '1';
+                tooltip.style.visibility = 'visible';
+            }
+            function hideTooltip() {
+                tooltip.style.opacity = '0';
+                tooltip.style.visibility = 'hidden';
+                tooltip.style.left = '-9999px';
+                tooltip.style.top = '-9999px';
             }
             
-            // Attach now and watch for new elements
-            attachTooltips();
-            
-            // Re-attach when DOM changes (for dynamically added content)
-            const observer = new MutationObserver(attachTooltips);
-            observer.observe(document.body, { childList: true, subtree: true });
+            document.body.addEventListener('mouseenter', function(e) {
+                if (document.body.classList.contains('hover-disabled')) return;
+                const el = e.target.closest('.has-tooltip');
+                if (!el) return;
+                showTooltip(el, e);
+            }, true);
+            document.body.addEventListener('mousemove', function(e) {
+                const el = e.target.closest('.has-tooltip');
+                if (!el || tooltip.style.opacity !== '1') return;
+                let left = e.clientX - 150;
+                let top = e.clientY + 20;
+                if (left < 10) left = 10;
+                if (left > window.innerWidth - 320) left = window.innerWidth - 320;
+                if (top + 100 > window.innerHeight) top = e.clientY - 80;
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+            }, true);
+            document.body.addEventListener('mouseleave', function(e) {
+                const el = e.target.closest('.has-tooltip');
+                if (el && !el.contains(e.relatedTarget)) hideTooltip();
+            }, true);
         }
 
         function formatDate(date) { return date.toISOString().split('T')[0]; }
