@@ -16297,7 +16297,7 @@
             }
             
             function showTooltip(el, e) {
-                const text = el.getAttribute('data-tooltip');
+                const text = (el.getAttribute('data-tooltip') || el.getAttribute('title') || '').trim();
                 if (!text) return;
                 tooltip.textContent = text;
                 let left = e.clientX - 150;
@@ -16309,18 +16309,22 @@
                 tooltip.style.top = top + 'px';
                 tooltip.style.opacity = '1';
                 tooltip.style.visibility = 'visible';
+                tooltip.classList.add('visible');
             }
             function hideTooltip() {
                 tooltip.style.opacity = '0';
                 tooltip.style.visibility = 'hidden';
                 tooltip.style.left = '-9999px';
                 tooltip.style.top = '-9999px';
+                tooltip.classList.remove('visible');
             }
             
-            document.body.addEventListener('mouseenter', function(e) {
+            // Use mouseover so tooltips show when cursor is already over element (e.g. after TST panel opens)
+            document.body.addEventListener('mouseover', function(e) {
                 if (document.body.classList.contains('hover-disabled')) return;
                 const el = e.target.closest('.has-tooltip');
                 if (!el) return;
+                if (el.contains(e.relatedTarget)) return; // moving within same tooltip element, avoid flicker
                 showTooltip(el, e);
             }, true);
             document.body.addEventListener('mousemove', function(e) {
@@ -16334,7 +16338,7 @@
                 tooltip.style.left = left + 'px';
                 tooltip.style.top = top + 'px';
             }, true);
-            document.body.addEventListener('mouseleave', function(e) {
+            document.body.addEventListener('mouseout', function(e) {
                 const el = e.target.closest('.has-tooltip');
                 if (el && !el.contains(e.relatedTarget)) hideTooltip();
             }, true);
