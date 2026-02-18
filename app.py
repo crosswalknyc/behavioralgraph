@@ -1173,6 +1173,22 @@ def requires_admin(f):
         return f(*args, **kwargs)
     return decorated
 
+
+def requires_super_admin(f):
+    """Only super_admin can call this endpoint."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'username' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'error': 'Session expired. Please log in again.'}), 401
+            return redirect(url_for('login_page'))
+        user = get_current_user()
+        role = _normalize_role(user.get('role', 'user') if user else '')
+        if not user or role != 'super_admin':
+            return jsonify({'success': False, 'error': 'Super admin access required'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
 def requires_purgatory_access(f):
     """Decorator that allows admins, super_admins, and users with purgatory approval access."""
     @wraps(f)
@@ -1538,10 +1554,46 @@ def privacy_page():
 @app.route('/admin')
 @requires_admin
 def admin_portal():
-    # Get current user's role to pass to template
+    # Get current user's role and username to pass to template
     user = get_current_user()
     current_role = _normalize_role(user.get('role', 'user') if user else 'user')
-    return render_template('admin.html', current_user_role=current_role)
+    return render_template('admin.html', current_user_role=current_role, current_username=session.get('username', ''))
+
+# ============================================================================
+# ADMIN CLOAK (super_admin only): log in as another user to act as them
+# ============================================================================
+
+@app.route('/api/admin/cloak', methods=['POST'])
+@requires_super_admin
+def admin_cloak():
+    """Switch session to act as another user. Only super_admin. Log out or Uncloak to return."""
+    try:
+        data = request.get_json() or {}
+        target_username = (data.get('username') or '').strip()
+        if not target_username:
+            return jsonify({'success': False, 'error': 'Username required'}), 400
+        users_data = load_users()
+        if target_username not in users_data.get('users', {}):
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        original_username = session.get('username')
+        session['username'] = target_username
+        session['cloaked_from'] = original_username
+        return jsonify({'success': True, 'redirect': '/'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/uncloak', methods=['POST'])
+@requires_auth
+def admin_uncloak():
+    """Restore session to the admin who cloaked. Allowed when session has cloaked_from."""
+    if 'cloaked_from' not in session:
+        return jsonify({'success': False, 'error': 'Not cloaked'}), 400
+    original = session.pop('cloaked_from', None)
+    if original:
+        session['username'] = original
+    return jsonify({'success': True, 'redirect': '/admin'})
+
 
 # ============================================================================
 # ADMIN API ROUTES
@@ -3522,7 +3574,8 @@ def index():
                            first_name=first_name,
                            last_name=last_name,
                            company=company,
-                           user_email=email)
+                           user_email=email,
+                           cloaked_from=session.get('cloaked_from'))
 
 
 @app.route('/api/request-credits', methods=['POST'])

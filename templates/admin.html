@@ -2568,8 +2568,9 @@
         let selectedFiles = new Set();
         let showingArchived = false;
         
-        // Current user's role (passed from server)
+        // Current user's role and username (passed from server)
         const currentUserRole = '{{ current_user_role }}';
+        const currentUsername = '{{ current_username }}';
 
         // Profile image cache for admin
         const profileImageCache = {};
@@ -4406,6 +4407,7 @@
                     </td>
                     <td>
                         <div class="action-buttons">
+                            ${currentUserRole === 'super_admin' && username !== currentUsername ? `<button class="btn btn-small" style="background: rgba(102, 217, 239, 0.2); color: #66d9ef;" onclick="cloakAsUser('${String(username).replace(/'/g, "\\'")}')" title="Log in as this user and act as them">Cloak</button>` : ''}
                             <button class="btn btn-small btn-secondary" onclick="editUser('${username}')">Edit</button>
                             <button class="btn btn-small" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;" onclick="resetPassword('${username}')">🔐 Reset PW</button>
                             ${username !== 'admin' ? `<button class="btn btn-small btn-danger" onclick="deleteUser('${username}')">Delete</button>` : ''}
@@ -5990,6 +5992,26 @@
                 showToast('Network error', true);
             }
         });
+
+        async function cloakAsUser(username) {
+            if (!confirm(`Log in as "${username}"? You will see their dashboard and act as them (use their credits, their data). Log out or click Uncloak to return to your admin account.`)) return;
+            try {
+                const response = await fetch('/api/admin/cloak', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                });
+                const data = await response.json();
+                if (data.success && data.redirect) {
+                    window.location.href = data.redirect;
+                } else {
+                    showToast(data.error || 'Cloak failed', true);
+                }
+            } catch (e) {
+                showToast('Network error', true);
+            }
+        }
 
         async function deleteUser(username) {
             if (!confirm(`Are you sure you want to delete user "${username}"?`)) return;
