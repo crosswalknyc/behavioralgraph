@@ -4814,6 +4814,7 @@
         }
 
         function renderUserDetails(username, data) {
+            window._lastUserActivityExport = { username, data };
             const user = data.user;
             const activity = data.activity || {};
             const featureUsage = activity.feature_usage || {};
@@ -4964,11 +4965,83 @@
 
                 <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
                     <button class="btn btn-secondary" onclick="closeUserDetails()" style="flex: 1;">Close</button>
+                    <button class="btn btn-secondary" onclick="exportUserActivityAllToCSV()" style="flex: 1;">Export All</button>
                     <button class="btn btn-primary" onclick="closeUserDetails(); editUser('${username}');" style="flex: 1;">Edit User</button>
                 </div>
             `;
             
             document.getElementById('userDetailsContent').innerHTML = content;
+        }
+
+        function exportUserActivityAllToCSV() {
+            const payload = window._lastUserActivityExport;
+            if (!payload || !payload.data) {
+                if (typeof showToast === 'function') showToast('No user activity data to export', true);
+                return;
+            }
+            const { username, data } = payload;
+            const user = data.user;
+            const activity = data.activity || {};
+            const featureUsage = activity.feature_usage || {};
+            const featureList = Object.entries(featureUsage).sort((a, b) => b[1] - a[1]);
+            const profilesViewed = activity.profiles_viewed || [];
+            const recentActions = activity.recent_actions || [];
+            const totalActions = Object.values(featureUsage).reduce((a, b) => a + b, 0);
+            const escape = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+            const rows = [];
+            rows.push(['User Activity Export', username]);
+            rows.push([]);
+            rows.push(['[Overview]']);
+            rows.push(['Metric', 'Value']);
+            rows.push(['Credits Remaining', user.credits === -1 ? 'Unlimited' : String(user.credits)]);
+            rows.push(['Credits Used', String(user.credits_used || 0)]);
+            rows.push(['Profiles Viewed', String(profilesViewed.length)]);
+            rows.push(['Total Actions', String(totalActions)]);
+            rows.push(['Role', user.role || '']);
+            rows.push(['Last Login', user.last_login ? formatDateTimePST(user.last_login) : 'Never']);
+            rows.push(['Account Created', user.created_at ? formatDatePST(user.created_at) : '']);
+            rows.push(['Sessions', String(activity.total_sessions || 1)]);
+            rows.push([]);
+            rows.push(['[Credits Used]']);
+            rows.push(['Date', 'Description', 'Pull Type', 'Credits Used']);
+            (user.credit_usage_history || []).forEach(entry => {
+                rows.push([
+                    entry.used_at ? formatDateTimePST(entry.used_at) : '',
+                    entry.description || entry.pull_type || 'Analysis',
+                    entry.pull_type || '',
+                    String(entry.credits_used != null ? entry.credits_used : 1)
+                ]);
+            });
+            rows.push([]);
+            rows.push(['[Feature Usage]']);
+            rows.push(['Feature', 'Uses']);
+            featureList.forEach(([feature, count]) => {
+                rows.push([typeof formatFeatureName === 'function' ? formatFeatureName(feature) : feature, String(count)]);
+            });
+            rows.push([]);
+            rows.push(['[Profiles Viewed]']);
+            rows.push(['Profile', 'Viewed At']);
+            profilesViewed.forEach(p => {
+                rows.push([p.name || p.key || '', p.viewed_at ? formatDateTimePST(p.viewed_at) : '']);
+            });
+            rows.push([]);
+            rows.push(['[Recent Activity]']);
+            rows.push(['Action', 'Details', 'Timestamp']);
+            recentActions.forEach(a => {
+                rows.push([
+                    typeof formatActionName === 'function' ? formatActionName(a.action) : a.action,
+                    a.details || '',
+                    a.timestamp ? formatDateTimePST(a.timestamp) : ''
+                ]);
+            });
+            const csv = rows.map(r => r.map(escape).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `user_activity_${(username || 'export').replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            if (typeof showToast === 'function') showToast('User activity exported to CSV');
         }
 
         function showUserDetailTab(tabName, btn) {
