@@ -22021,17 +22021,14 @@
             movieEl.textContent = movieName;
             const movieTooltip = 'Panelists who have confirmed digital ticket purchases to ' + movieName + ' from Fandango, AMC Theaters, Cinemark Theaters, Regal Cinemas or Alamo Drafthouse during ' + dateRange + '.';
             movieEl.setAttribute('data-tooltip', movieTooltip);
-            movieEl.setAttribute('title', movieTooltip);
             const dateEl = document.getElementById('tstDateRangeHeader');
             dateEl.textContent = dateRange;
             const dateTooltip = 'Date range for confirmed digital ticket purchases from reporting theaters.';
             dateEl.setAttribute('data-tooltip', dateTooltip);
-            dateEl.setAttribute('title', dateTooltip);
             const genreEl = document.getElementById('tstGenreHeader');
             genreEl.textContent = d.genre ? 'Genre: ' + d.genre : '';
             const genreTooltip = 'Family & Animation ticket sales are factored by 2x to account for a single panelist purchasing multiple tickets.';
             genreEl.setAttribute('data-tooltip', genreTooltip);
-            genreEl.setAttribute('title', genreTooltip);
             const isFamilyAnimation = d.genre && String(d.genre).toLowerCase().includes('family') && String(d.genre).toLowerCase().includes('animation');
             const footnoteEl = document.getElementById('tstTheatersFootnote');
             if (footnoteEl) {
