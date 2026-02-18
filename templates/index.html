@@ -22140,7 +22140,8 @@
                 }
             });
         }
-        const TST_AGE_ORDER = ['<16','under 16','16-18','18-20','21-25','26-30','31-40','41-59','60+','65+','over 65'];
+        const TST_AGE_ORDER = ['<16','16-18','18-20','21-25','26-30','31-40','41-59','60+'];
+        const TST_AGE_ORDER_EXTRA = ['<16','under 16','16-18','18-20','21-25','26-30','31-40','41-59','60+','65+','over 65'];
         const TST_INCOME_ORDER = ['$40k-$60k','$40k - $60k','$60k-$75k','$60k - $75k','$75k-$100k','$75k - $100k','$100k-$150k','$100k - $150k','$150k-$250k','$150k - $250k','$250k+','$250k +'];
         const TST_ETHNICITY_ORDER = ['White','Black','Latinx','Asian','Other'];
         const TST_GENDER_ORDER = ['Female','Male','Trans Male','Trans Female','Non-Binary'];
@@ -22151,7 +22152,7 @@
             const fieldUpper = (field || '').toUpperCase();
             const isIndex = /^\d+$/.test(v);
             const idx = isIndex ? parseInt(v, 10) : -1;
-            if (fieldUpper === 'AGE' && isIndex && idx >= 0 && idx < TST_AGE_ORDER.length) return TST_AGE_ORDER[idx];
+            if (fieldUpper === 'AGE' && isIndex) return (idx >= 0 && idx < TST_AGE_ORDER.length) ? TST_AGE_ORDER[idx] : (idx >= 0 && idx < TST_AGE_ORDER_EXTRA.length ? TST_AGE_ORDER_EXTRA[idx] : v);
             if (fieldUpper === 'GENDER' && isIndex && idx >= 0 && idx < TST_GENDER_ORDER.length) return TST_GENDER_ORDER[idx];
             if (fieldUpper === 'ETHNICITY') {
                 const raw = isIndex && idx >= 0 && idx < TST_ETHNICITY_ORDER.length ? TST_ETHNICITY_ORDER[idx] : v;
@@ -22285,7 +22286,7 @@
                             datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const gp=genPopVals[ctx.dataIndex]||0; return gp>0.05 ? fmtPct(p)+' (GP: '+fmtPct(gp)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
                         },
                         layout: useBar ? { padding: { left: isLocation ? 300 : 20, right: 90 } } : {},
-                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: isLocation && typeof getDMARank === 'function' ? (val) => { const s = val != null && typeof val === 'string' ? val : String(val || ''); if (!s) return val; const r = getDMARank(s); return r != null ? `#${r}  ${s}` : val; } : undefined } } } : {}
+                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: function(val, index) { var L = this.chart.data.labels; if (L && index >= 0 && index < L.length) { var lab = L[index]; if (lab !== undefined && lab !== null && String(lab).trim() !== '') return lab; } if (isLocation && typeof getDMARank === 'function') { var s = val != null && typeof val === 'string' ? val : String(val || ''); if (!s) return val; var r = getDMARank(s); return r != null ? '#'+r+'  '+s : val; } if (field === 'AGE' && (typeof val === 'number' || (typeof val === 'string' && /^\d+$/.test(val)))) { var idx = typeof val === 'number' ? val : parseInt(val, 10); if (idx >= 0 && idx < TST_AGE_ORDER.length) return TST_AGE_ORDER[idx]; if (idx >= 0 && idx < TST_AGE_ORDER_EXTRA.length) return TST_AGE_ORDER_EXTRA[idx]; } if (field === 'INCOME' && (typeof val === 'number' || (typeof val === 'string' && /^\d+$/.test(val)))) { var idx = typeof val === 'number' ? val : parseInt(val, 10); if (idx >= 0 && idx < TST_INCOME_ORDER.length) return TST_INCOME_ORDER[idx]; } return val; } } } } : {}
                     },
                     plugins: [ChartDataLabels]
                 });
@@ -22388,7 +22389,7 @@
                             datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const g=genPopVals[ctx.dataIndex]||0; return g>0.05 ? fmtPct(p)+' (GP: '+fmtPct(g)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
                         },
                         layout: useBar ? { padding: { left: isLocation ? 300 : 20, right: 90 } } : {},
-                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: isLocation && typeof getDMARank === 'function' ? (val) => { const s = val != null && typeof val === 'string' ? val : String(val || ''); if (!s) return val; const r = getDMARank(s); return r != null ? `#${r}  ${s}` : val; } : undefined } } } : {}
+                        scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: function(val, index) { var L = this.chart.data.labels; if (L && index >= 0 && index < L.length) { var lab = L[index]; if (lab !== undefined && lab !== null && String(lab).trim() !== '') return lab; } if (isLocation && typeof getDMARank === 'function') { var s = val != null && typeof val === 'string' ? val : String(val || ''); if (!s) return val; var r = getDMARank(s); return r != null ? '#'+r+'  '+s : val; } if (field === 'AGE' && (typeof val === 'number' || (typeof val === 'string' && /^\d+$/.test(val)))) { var idx = typeof val === 'number' ? val : parseInt(val, 10); if (idx >= 0 && idx < TST_AGE_ORDER.length) return TST_AGE_ORDER[idx]; if (idx >= 0 && idx < TST_AGE_ORDER_EXTRA.length) return TST_AGE_ORDER_EXTRA[idx]; } if (field === 'INCOME' && (typeof val === 'number' || (typeof val === 'string' && /^\d+$/.test(val)))) { var idx = typeof val === 'number' ? val : parseInt(val, 10); if (idx >= 0 && idx < TST_INCOME_ORDER.length) return TST_INCOME_ORDER[idx]; } return val; } } } } : {}
                     },
                     plugins: [ChartDataLabels]
                 });
