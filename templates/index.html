@@ -15337,7 +15337,8 @@
                                 <h3 style="margin: 0 0 0.25rem 0; font-size: 1rem; font-weight: 600;">US Gen Pop Projected Tickets Sold &amp; Box Office Sales by Theater</h3>
                                 <p id="tstTheatersFootnote" style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 0 0 1rem 0;">Ticket price is calculated at $15 per ticket against total number of tickets sold with a 2x factor to account for a single purchaser buying multiple tickets.</p>
                                 <div id="tstTheatersTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); padding: 1.25rem 1.5rem;"></div>
-                                <div id="tstTheatersChart" style="height: 300px; margin-top: 1rem; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
+                                <div id="tstTheatersSortRow" style="margin-top: 1rem; margin-bottom: 0.5rem;"></div>
+                                <div id="tstTheatersChart" style="height: 300px; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
                                     <canvas id="tstTheatersChartCanvas"></canvas>
                                 </div>
                             </div>
@@ -22113,7 +22114,8 @@
                 return { platform: p.platform, sold, soldFmt: _tstFmtNum(sold), proj, projFmt: _tstFmtDollar(proj) };
             });
             const s = tstTheatersSort;
-            rows.sort((a, b) => {
+            const blocksRows = rows.length ? [...rows].sort((a, b) => b.proj - a.proj) : [];
+            const chartRows = [...rows].sort((a, b) => {
                 let cmp = 0;
                 if (s.col === 'platform') cmp = (a.platform || '').localeCompare(b.platform || '');
                 else if (s.col === 'sold') cmp = a.sold - b.sold;
@@ -22122,16 +22124,20 @@
             });
             const tableEl = document.getElementById('tstTheatersTable');
             if (tableEl) {
-                const arrow = (c) => s.col === c ? (s.dir === 'asc' ? ' ▲' : ' ▼') : '';
-                const sortHint = `<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;font-size:0.75rem;color:var(--text-secondary);padding-left:0.125rem;">Sort by: <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('platform')" title="Click to sort">Theater${arrow('platform')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('sold')" title="Click to sort">Tickets Sold${arrow('sold')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('proj')" title="Click to sort">Projected Sales${arrow('proj')}</span></div>`;
                 const isFamilyAnimation = d.genre && String(d.genre).toLowerCase().includes('family') && String(d.genre).toLowerCase().includes('animation');
                 const theaterCardTip = (platform) => (platform || 'Theater') + ': projected sales and tickets sold. Ticket sales calculated by taking the total number of confirmed digital tickets purchased and multiplying by a $15 ticket price.' + (isFamilyAnimation ? ' A 2x factor is applied to account for a single purchaser buying multiple tickets.' : '') + ' ' + TST_GENPOP_TOOLTIP;
-                tableEl.innerHTML = rows.length ? sortHint + `<div class="exec-summary-grid" style="margin-bottom:0;">${rows.map(r => `<div class="exec-summary-metric has-tooltip" data-tooltip="${(theaterCardTip(r.platform)||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
+                tableEl.innerHTML = blocksRows.length ? `<div class="exec-summary-grid" style="margin-bottom:0;">${blocksRows.map(r => `<div class="exec-summary-metric has-tooltip" data-tooltip="${(theaterCardTip(r.platform)||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
             }
+            const sortRowEl = document.getElementById('tstTheatersSortRow');
+            if (sortRowEl && rows.length) {
+                const arrow = (c) => s.col === c ? (s.dir === 'asc' ? ' ▲' : ' ▼') : '';
+                sortRowEl.innerHTML = `<div style="display:flex;align-items:center;gap:1rem;font-size:0.75rem;color:var(--text-secondary);padding-left:0.125rem;">Sort by: <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('platform')" title="Click to sort bar chart">Theater${arrow('platform')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('sold')" title="Click to sort bar chart">Tickets Sold${arrow('sold')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('proj')" title="Click to sort bar chart">Projected Sales${arrow('proj')}</span></div>`;
+                sortRowEl.style.display = '';
+            } else if (sortRowEl) sortRowEl.innerHTML = '';
             const canvas = document.getElementById('tstTheatersChartCanvas');
             if (!canvas || !platforms.length || typeof Chart === 'undefined') return;
-            const labels = rows.map(r => r.platform || '');
-            const data = rows.map(r => totalTicketsNum > 0 ? (r.sold / totalTicketsNum) * totalProjNum : 0);
+            const labels = chartRows.map(r => r.platform || '');
+            const data = chartRows.map(r => totalTicketsNum > 0 ? (r.sold / totalTicketsNum) * totalProjNum : 0);
             if (tstCharts.theaters) tstCharts.theaters.destroy();
             const colors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672'];
             tstCharts.theaters = new Chart(canvas.getContext('2d'), {
