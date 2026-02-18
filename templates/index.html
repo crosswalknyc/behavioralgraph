@@ -22514,6 +22514,18 @@
                 return fmt ? (t || '') + ' - ' + fmt : (t || '');
             };
             const gp = genPopBaselineData?.demographics || {};
+            const medianAgeByTheater = {};
+            const medianIncomeByTheater = {};
+            theaterNames.forEach(t => {
+                const ageObj = _tstDemoArrToObj((perTheater[t] || {}).AGE || []);
+                medianAgeByTheater[t] = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(ageObj) : 0;
+                const incomeObj = _tstDemoArrToObj((perTheater[t] || {}).INCOME || []);
+                const med = typeof calculateDemographicMedian === 'function' ? calculateDemographicMedian(incomeObj, gp.income || {}, 'income') : { profile: null };
+                medianIncomeByTheater[t] = med.profile && med.profile.value != null ? med.profile.value : null;
+            });
+            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(gp.age || {}) : 0;
+            const genPopMedIncome = typeof calculateDemographicMedian === 'function' ? calculateDemographicMedian(gp.income || {}, gp.income || {}, 'income') : { genPop: null };
+            const genPopMedianIncome = genPopMedIncome.genPop && genPopMedIncome.genPop.value != null ? genPopMedIncome.genPop.value : null;
             const keys = ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'];
             const fmtPct = (n) => (n == null || n === '' ? '—' : (typeof n === 'number' ? n : _tstParsePct(n)).toFixed(1) + '%');
             let html = '<div style="grid-column: 1 / -1;"><p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Side-by-side comparison across all theaters. Gen Pop column for reference.</p></div>';
@@ -22568,6 +22580,20 @@
                     <div class="comp-table-wrapper"><table class="comp-table" style="width: 100%; min-width: 400px;">
                     <thead><tr>${headerCategory}${headerDmaRank}${headerTheaters}${headerGenPop}</tr></thead>
                     <tbody>`;
+                if (field === 'AGE') {
+                    const ageMedCells = theaterNames.map(t => {
+                        const v = medianAgeByTheater[t];
+                        return `<td style="font-weight: 600; background: rgba(240,255,0,0.08);">${v != null && v > 0 ? v.toFixed(2) : '—'}</td>`;
+                    }).join('');
+                    const gpAgeCell = `<td style="font-weight: 600; background: rgba(102,217,239,0.12);">${genPopMedianAge > 0 ? genPopMedianAge.toFixed(2) : '—'}</td>`;
+                    html += `<tr><td style="font-weight: 600; background: rgba(240,255,0,0.08);">Median Age (yrs)</td>${isLocation ? '<td></td>' : ''}${ageMedCells}${gpAgeCell}</tr>`;
+                }
+                if (field === 'INCOME') {
+                    const fmtIncome = (x) => { if (x == null) return '—'; const n = typeof x === 'number' ? x : parseFloat(String(x).replace(/[^0-9.-]/g, '')); return isNaN(n) ? String(x) : '$' + Math.round(n).toLocaleString(); };
+                    const incomeMedCells = theaterNames.map(t => `<td style="font-weight: 600; background: rgba(240,255,0,0.08);">${fmtIncome(medianIncomeByTheater[t])}</td>`).join('');
+                    const gpIncomeCell = `<td style="font-weight: 600; background: rgba(102,217,239,0.12);">${fmtIncome(genPopMedianIncome)}</td>`;
+                    html += `<tr><td style="font-weight: 600; background: rgba(240,255,0,0.08);">Median Income</td>${isLocation ? '<td></td>' : ''}${incomeMedCells}${gpIncomeCell}</tr>`;
+                }
                 orderedValues.forEach(v => {
                     const displayLabel = _tstDisplayLabel(field, v);
                     const gpPct = typeof _tstGetGenPop === 'function' ? _tstGetGenPop(field.toLowerCase(), v) : (gpObj[v] != null ? gpObj[v] : null);
