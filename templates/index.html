@@ -22358,6 +22358,22 @@
             const container = document.getElementById('tstDemographicsPerTheater');
             if (!container) return;
             const theaterNames = Object.keys(perTheater).sort();
+            const platforms = currentTSTData?.data?.platforms || [];
+            const soldByTheater = {};
+            platforms.forEach(p => {
+                const sold = p.us_number != null ? p.us_number : _tstParseNum(String(p.us_value||''));
+                const name = (p.platform || '').trim();
+                if (name) soldByTheater[name] = _tstFmtNum(sold);
+            });
+            const headerLabel = (t) => {
+                let fmt = soldByTheater[t];
+                if (!fmt && t) {
+                    const tLower = t.toLowerCase();
+                    const match = platforms.find(p => (p.platform || '').toLowerCase() === tLower);
+                    if (match) fmt = _tstFmtNum(match.us_number != null ? match.us_number : _tstParseNum(String(match.us_value||'')));
+                }
+                return fmt ? (t || '') + ' - ' + fmt : (t || '');
+            };
             const gp = genPopBaselineData?.demographics || {};
             const keys = ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'];
             const fmtPct = (n) => (n == null || n === '' ? '—' : (typeof n === 'number' ? n : _tstParsePct(n)).toFixed(1) + '%');
@@ -22383,7 +22399,7 @@
                 html += `<div class="demographics-chart-card" style="grid-column: 1 / -1; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); overflow-x: auto;">
                     <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">${field}</h4>
                     <div class="comp-table-wrapper"><table class="comp-table" style="width: 100%; min-width: 400px;">
-                    <thead><tr><th style="text-align: left;">Category</th>${theaterNames.map(t => `<th>${(t||'').replace(/</g,'&lt;')}</th>`).join('')}<th style="background: rgba(102,217,239,0.15);">Gen Pop</th></tr></thead>
+                    <thead><tr><th style="text-align: left;">Category</th>${theaterNames.map(t => `<th>${(headerLabel(t)||'').replace(/</g,'&lt;')}</th>`).join('')}<th style="background: rgba(102,217,239,0.15);">Gen Pop</th></tr></thead>
                     <tbody>`;
                 orderedValues.forEach(v => {
                     const displayLabel = _tstDisplayLabel(field, v);
