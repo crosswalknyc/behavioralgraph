@@ -17796,6 +17796,7 @@
                         document.getElementById('tstStatusRunning').style.display = 'none';
                         document.getElementById('tstStatusComplete').style.display = 'block';
                         if (typeof loadTicketSalesTrackerResults === 'function') loadTicketSalesTrackerResults();
+                        showAnalysisCompletePopup(jobId, data.s3_key || null, 'ticket_sales_tracker');
                     } else if (data.status === 'failed') {
                         clearInterval(pollInterval);
                         document.getElementById('tstStatusRunning').style.display = 'none';
@@ -58364,7 +58365,8 @@
             const typeLabels = {
                 'svod_acquisition': '📺 SVOD Acquisition IQ',
                 'talent_theater': '🎬 Impact IQ',
-                'profile_analysis': '🎯 Profile Analysis'
+                'profile_analysis': '🎯 Profile Analysis',
+                'ticket_sales_tracker': '🎫 Ticket Sales Tracker'
             };
             document.getElementById('analysisCompleteType').textContent = typeLabels[analysisType] || '🎯 Profile Analysis';
             
