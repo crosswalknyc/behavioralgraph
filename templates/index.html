@@ -22344,20 +22344,66 @@
             const names = Object.keys(perTheater).sort();
             const sel = document.getElementById('tstTheaterSelect');
             if (!sel) return;
-            sel.innerHTML = names.length ? names.map(n => `<option value="${(n||'').replace(/"/g,'&quot;')}">${(n||'').replace(/</g,'&lt;')}</option>`).join('') : '<option value="">No theater data</option>';
+            const opts = names.length ? '<option value="__compare_all__">Compare all</option>' + names.map(n => `<option value="${(n||'').replace(/"/g,'&quot;')}">${(n||'').replace(/</g,'&lt;')}</option>`).join('') : '';
+            sel.innerHTML = opts || '<option value="">No theater data</option>';
+        }
+        function renderTSTCompareAllView(perTheater) {
+            ['demo_per_gender','demo_per_age','demo_per_income','demo_per_ethnicity','demo_per_location'].forEach(k => { if (tstCharts[k]) { tstCharts[k].destroy(); tstCharts[k] = null; } });
+            const container = document.getElementById('tstDemographicsPerTheater');
+            if (!container) return;
+            const theaterNames = Object.keys(perTheater).sort();
+            const gp = genPopBaselineData?.demographics || {};
+            const keys = ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'];
+            const fmtPct = (n) => (n == null || n === '' ? '—' : (typeof n === 'number' ? n : _tstParsePct(n)).toFixed(1) + '%');
+            let html = '<div style="grid-column: 1 / -1;"><p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Side-by-side comparison across all theaters. Gen Pop column for reference.</p></div>';
+            keys.forEach(field => {
+                const fieldKey = (field || '').toLowerCase();
+                const gpObj = gp[fieldKey] || {};
+                const valueToPct = {};
+                theaterNames.forEach(tName => {
+                    const arr = (perTheater[tName] || {})[field] || [];
+                    arr.forEach(r => {
+                        const v = (r.value != null && r.value !== '' ? r.value : '').toString().trim();
+                        if (!v) return;
+                        if (!valueToPct[v]) valueToPct[v] = {};
+                        valueToPct[v][tName] = r.percent;
+                    });
+                });
+                let orderedValues = Object.keys(valueToPct);
+                if (field === 'AGE') orderedValues.sort((a,b) => _tstAgeOrderIndex(a) - _tstAgeOrderIndex(b));
+                else if (field === 'INCOME') orderedValues.sort((a,b) => _tstIncomeOrderIndex(a) - _tstIncomeOrderIndex(b));
+                else orderedValues.sort((a,b) => a.localeCompare(b));
+                if (orderedValues.length === 0) return;
+                html += `<div class="demographics-chart-card" style="grid-column: 1 / -1; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); overflow-x: auto;">
+                    <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">${field}</h4>
+                    <div class="comp-table-wrapper"><table class="comp-table" style="width: 100%; min-width: 400px;">
+                    <thead><tr><th style="text-align: left;">Category</th>${theaterNames.map(t => `<th>${(t||'').replace(/</g,'&lt;')}</th>`).join('')}<th style="background: rgba(102,217,239,0.15);">Gen Pop</th></tr></thead>
+                    <tbody>`;
+                orderedValues.forEach(v => {
+                    const displayLabel = _tstDisplayLabel(field, v);
+                    const gpPct = typeof _tstGetGenPop === 'function' ? _tstGetGenPop(field.toLowerCase(), v) : (gpObj[v] != null ? gpObj[v] : null);
+                    html += `<tr><td style="font-weight: 500;">${(displayLabel||v).replace(/</g,'&lt;')}</td>${theaterNames.map(t => `<td>${fmtPct(valueToPct[v][t])}</td>`).join('')}<td style="background: rgba(102,217,239,0.08);">${fmtPct(gpPct)}</td></tr>`;
+                });
+                html += '</tbody></table></div></div>';
+            });
+            container.innerHTML = html;
         }
         function renderTSTPerTheaterCharts() {
             const d = currentTSTData?.data || {};
             const perTheater = d.demographics_per_theater || {};
             const sel = document.getElementById('tstTheaterSelect');
             const theater = sel ? sel.value : '';
-            const demo = theater ? (perTheater[theater] || {}) : {};
             const container = document.getElementById('tstDemographicsPerTheater');
             if (!container) return;
             if (Object.keys(perTheater).length === 0) {
                 container.innerHTML = '<div style="padding: 2rem; color: var(--text-secondary); text-align: center;">No per-theater demographics data available.</div>';
                 return;
             }
+            if (theater === '__compare_all__') {
+                renderTSTCompareAllView(perTheater);
+                return;
+            }
+            const demo = theater ? (perTheater[theater] || {}) : {};
             if (!theater && sel) {
                 const first = Object.keys(perTheater).sort()[0];
                 sel.value = first;
