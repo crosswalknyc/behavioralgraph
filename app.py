@@ -7376,18 +7376,20 @@ def list_ticket_sales_tracker_files():
                 key = obj['Key']
                 if not key.endswith('.csv') or key.startswith(S3_PURGATORY_PREFIX):
                     continue
-                name_without_ext = key.replace('.csv', '')
-                match = re.match(r'^Ticket_Sales_(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
-                if match:
-                    default_display = match.group(1).replace('_', ' ')
-                else:
-                    default_display = name_without_ext.replace('_', ' ')
+                # Basename only (in case key has prefix like released/)
+                base = key.split('/')[-1].replace('.csv', '')
+                # Strip trailing date/time _MM_DD_YYYY_HH_MM so selector shows only title
+                base = re.sub(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', base)
+                if base.startswith('Ticket_Sales_'):
+                    base = base[len('Ticket_Sales_'):]
+                default_display = base.replace('_', ' ').strip()
                 meta = tst_meta.get(key, {})
                 image_url = meta.get('image_url') or ''
                 genre = meta.get('genre') or _get_tst_genre_from_s3(key)
+                display_name = (meta.get('display_name') or default_display or 'Unknown').strip()
                 files.append({
                     's3_key': key,
-                    'display_name': default_display.strip(),
+                    'display_name': display_name,
                     'genre': genre,
                     'image_url': image_url if image_url else None,
                     'size': obj['Size'],
@@ -7434,9 +7436,11 @@ def get_ticket_sales_tracker_data(s3_key):
         response = s3_client.get_object(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Key=s3_key)
         csv_content = response['Body'].read().decode('utf-8')
         parsed = parse_ticket_sales_tracker_csv(csv_content)
-        name_without_ext = s3_key.replace('.csv', '')
-        match = re.match(r'^Ticket_Sales_(.+)_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', name_without_ext)
-        display_name = (match.group(1).replace('_', ' ') if match else name_without_ext.replace('_', ' ')).strip()
+        base = s3_key.split('/')[-1].replace('.csv', '')
+        base = re.sub(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', base)
+        if base.startswith('Ticket_Sales_'):
+            base = base[len('Ticket_Sales_'):]
+        default_display = base.replace('_', ' ').strip()
         tst_meta = load_ticket_sales_tracker_metadata()
         meta = tst_meta.get(s3_key, {})
         if parsed.get('genre'):
@@ -7446,6 +7450,7 @@ def get_ticket_sales_tracker_data(s3_key):
             save_ticket_sales_tracker_metadata(tst_meta)
             meta = tst_meta.get(s3_key, {})
         image_url = meta.get('image_url') or ''
+        display_name = (meta.get('display_name') or default_display or 'Unknown').strip()
         return jsonify({
             'success': True,
             'data': parsed,
