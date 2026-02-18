@@ -22426,8 +22426,8 @@
                         return sortState.dir * (cmp < 0 ? -1 : cmp > 0 ? 1 : 0);
                     });
                 }
-                const sortIndicator = (col) => (sortState.col === col ? (sortState.dir === 1 ? ' &#9660;' : ' &#9650;') : '');
-                const thClick = (f, col) => ` onclick="sortTSTCompareAllColumn('${f}', ${col})" style="cursor:pointer;" title="Sort by this column"`;
+                const sortIndicator = (col) => sortState.col === col ? (sortState.dir === 1 ? ' &#9660;' : ' &#9650;') : ' &#8645;';
+                const thClick = (f, col) => ` onclick="sortTSTCompareAllColumn('${f}', ${col})" style="cursor:pointer;" title="Click to sort by this column"`;
                 const headerCategory = `<th style="text-align: left;"${thClick(field, 0)}>Category${sortIndicator(0)}</th>`;
                 const headerDmaRank = isLocation ? `<th${thClick(field, 1)}>DMA Rank${sortIndicator(1)}</th>` : '';
                 const headerTheaters = theaterNames.map((t, i) => { const c = isLocation ? i + 2 : i + 1; return `<th${thClick(field, c)}>${(headerLabel(t)||'').replace(/</g,'&lt;')}${sortIndicator(c)}</th>`; }).join('');
