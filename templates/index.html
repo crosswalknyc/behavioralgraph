@@ -22205,11 +22205,42 @@
             }
             return 0;
         }
+        function _tstAgeOrderIndex(val) {
+            if (val == null) return 999;
+            if (typeof val === 'number' || /^\d+$/.test(String(val))) return Math.min(parseInt(val, 10), TST_AGE_ORDER.length - 1);
+            const v = String(val).trim();
+            let i = TST_AGE_ORDER.indexOf(v);
+            if (i >= 0) return i;
+            i = TST_AGE_ORDER_EXTRA.indexOf(v);
+            return i >= 0 ? i : 999;
+        }
+        function _tstIncomeOrderIndex(val) {
+            if (val == null) return 999;
+            const v = String(val).trim().toLowerCase().replace(/\s/g, '');
+            for (let i = 0; i < TST_INCOME_ORDER.length; i++) {
+                if (String(TST_INCOME_ORDER[i]).toLowerCase().replace(/\s/g, '') === v) return i;
+            }
+            return 999;
+        }
         function _tstSortDemoArr(field, arr) {
             const mode = tstDemoSort[field] || 'value_desc';
             let sorted = [...(arr||[])];
             if (mode === 'value_desc' || mode === 'value') sorted.sort((a,b) => _tstParsePct(b.percent) - _tstParsePct(a.percent));
             else if (mode === 'value_asc') sorted.sort((a,b) => _tstParsePct(a.percent) - _tstParsePct(b.percent));
+            else if (field === 'AGE' && (mode === 'age_asc' || mode === 'age_desc')) {
+                sorted.sort((a,b) => {
+                    const ia = _tstAgeOrderIndex(a.value);
+                    const ib = _tstAgeOrderIndex(b.value);
+                    return mode === 'age_asc' ? ia - ib : ib - ia;
+                });
+            }
+            else if (field === 'INCOME' && (mode === 'income_asc' || mode === 'income_desc')) {
+                sorted.sort((a,b) => {
+                    const ia = _tstIncomeOrderIndex(a.value);
+                    const ib = _tstIncomeOrderIndex(b.value);
+                    return mode === 'income_asc' ? ia - ib : ib - ia;
+                });
+            }
             else if (field === 'LOCATION' && (mode === 'rank_asc' || mode === 'rank_desc')) {
                 sorted.sort((a,b) => {
                     const ra = typeof getDMARank === 'function' ? (getDMARank(a.value) ?? 999) : 999;
@@ -22242,6 +22273,10 @@
                 const m = tstDemoSort[field] || 'value_desc';
                 const sortOpts = useBar ? (field === 'LOCATION'
                     ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="rank_asc"'+(m==='rank_asc'?' selected':'')+'>DMA Rank Ascending</option><option value="rank_desc"'+(m==='rank_desc'?' selected':'')+'>DMA Rank Descending</option>'
+                    : field === 'AGE'
+                    ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="age_asc"'+(m==='age_asc'?' selected':'')+'>Age: Youngest to Oldest</option><option value="age_desc"'+(m==='age_desc'?' selected':'')+'>Age: Oldest to Youngest</option>'
+                    : field === 'INCOME'
+                    ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="income_asc"'+(m==='income_asc'?' selected':'')+'>Income: Low to High</option><option value="income_desc"'+(m==='income_desc'?' selected':'')+'>Income: High to Low</option>'
                     : '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option>') : '';
                 const sortRow = useBar ? `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div>` : '';
                 html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
@@ -22345,6 +22380,10 @@
                 const m = tstDemoSort[field] || 'value_desc';
                 const sortOpts = useBar ? (field === 'LOCATION'
                     ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="rank_asc"'+(m==='rank_asc'?' selected':'')+'>DMA Rank Ascending</option><option value="rank_desc"'+(m==='rank_desc'?' selected':'')+'>DMA Rank Descending</option>'
+                    : field === 'AGE'
+                    ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="age_asc"'+(m==='age_asc'?' selected':'')+'>Age: Youngest to Oldest</option><option value="age_desc"'+(m==='age_desc'?' selected':'')+'>Age: Oldest to Youngest</option>'
+                    : field === 'INCOME'
+                    ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="income_asc"'+(m==='income_asc'?' selected':'')+'>Income: Low to High</option><option value="income_desc"'+(m==='income_desc'?' selected':'')+'>Income: High to Low</option>'
                     : '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option>') : '';
                 const sortRow = useBar ? `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTPerTheaterDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div>` : '';
                 html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
