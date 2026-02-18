@@ -22032,8 +22032,8 @@
             document.getElementById('tstDateRangeHeader').textContent = meta.date_range || '';
             document.getElementById('tstGenreHeader').textContent = d.genre ? 'Genre: ' + d.genre : '';
             const cards = [];
-            if (d.total_tickets_us) cards.push({ label: 'Total Tickets Sold (US Gen Pop)', value: d.total_tickets_us, isCurrency: false });
-            if (d.projected_ticket_sales_us) cards.push({ label: 'Projected Ticket Sales (US Gen Pop)', value: d.projected_ticket_sales_us, isCurrency: true });
+            if (d.total_tickets_us) cards.push({ label: 'Projected US Gen Pop Total Tickets Sold', value: d.total_tickets_us, isCurrency: false });
+            if (d.projected_ticket_sales_us) cards.push({ label: 'Projected US Gen Pop Ticket Sales', value: d.projected_ticket_sales_us, isCurrency: true });
             document.getElementById('tstSummaryCards').innerHTML = cards.map(c => {
                 const num = _tstParseNum(c.value);
                 const display = isNaN(num) ? (c.value||'').toString() : (c.isCurrency ? '$' : '') + Math.round(num).toLocaleString();
@@ -22127,7 +22127,7 @@
             const colors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672'];
             tstCharts.theaters = new Chart(canvas.getContext('2d'), {
                 type: 'bar',
-                data: { labels, datasets: [{ label: 'Projected Ticket Sales (US Gen Pop)', data, backgroundColor: colors.slice(0, labels.length), borderRadius: 4 }] },
+                data: { labels, datasets: [{ label: 'Projected US Gen Pop Ticket Sales', data, backgroundColor: colors.slice(0, labels.length), borderRadius: 4 }] },
                 options: {
                     indexAxis: 'y',
                     responsive: true,
