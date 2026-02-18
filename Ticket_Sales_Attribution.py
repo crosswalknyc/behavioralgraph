@@ -486,9 +486,9 @@ def write_output(results, p):
     total_tickets = sum(platform_totals.values())
     total_tickets_gen_pop = gen_pop_projection(total_tickets)
 
-    # 2x factor applied, then 75% of that as final projected ticket sales
+    # 15x factor applied, then 75% of that as final projected ticket sales
     TICKET_PRICE = 15.0
-    PROJECTION_FACTOR = 2
+    PROJECTION_FACTOR = 15
     FINAL_PCT = 0.75
     after_factor_base = total_tickets * TICKET_PRICE * PROJECTION_FACTOR
     after_factor_gen_pop = total_tickets_gen_pop * TICKET_PRICE * PROJECTION_FACTOR
@@ -499,7 +499,7 @@ def write_output(results, p):
         ("", "TICKET SALES ATTRIBUTION RESULTS", "", "", "", ""),
         ("", "", "", "", "", ""),
         ("Movie", "", p["movie_name"], "", "", ""),
-        ("Genre", "", p.get("genre", ""), "(2x factor, then 75% as final projection)", "", ""),
+        ("Genre", "", p.get("genre", ""), "(15x factor, then 75% as final projection)", "", ""),
         ("Date Range", "", f"{p['start_date'].date()} to {p['end_date'].date()}", "", "", ""),
         ("", "", "", "", "", ""),
         ("", "TOTAL HITS (MOVIE VIEWERS) → THEATER BY PLATFORM", "", "", "", ""),
@@ -514,7 +514,7 @@ def write_output(results, p):
     rows.extend([
         ("", "", "", "", "", ""),
         ("Total Tickets Sold (sum of theater hits)", total_tickets, format_gen_pop_full(total_tickets_gen_pop), "", "", ""),
-        ("Projected Ticket Sales (Total × $15 × 2 × 75%)", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
+        ("Projected Ticket Sales (Total × $15 × 15 × 75%)", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
         ("", "", "", "", "", ""),
     ])
 
