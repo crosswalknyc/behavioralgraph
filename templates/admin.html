@@ -982,9 +982,15 @@
                 <div class="card" style="grid-column: span 2;">
                     <div class="card-header">
                         <h2>👥 User Management</h2>
-                        <div style="display: flex; gap: 0.5rem;">
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
                             <button class="btn btn-small btn-secondary" onclick="loadUsers()">↻ Refresh</button>
                             <button class="btn btn-small btn-secondary" onclick="exportUserDetailsCSV()" title="Download CSV of all users with credits used and what for">📥 Export User Details</button>
+                            <button class="btn btn-small btn-secondary" onclick="exportUserDetailsByCompanyCSV()" title="Download CSV of all users sorted by company">📥 Export by Company</button>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary); margin-left: 0.25rem;">Single company:</span>
+                            <select id="exportCompanySelect" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 140px;">
+                                <option value="">-- Select company --</option>
+                            </select>
+                            <button class="btn btn-small btn-secondary" onclick="exportUserDetailsForSelectedCompany()" title="Export only users from the selected company">Export</button>
                             <button class="btn btn-small btn-success" onclick="showAddUserModal()">+ Add User</button>
                             <button class="btn btn-small btn-primary" onclick="restoreDefaultValuesForAllUsers()">Restore Default Values For All Users</button>
                         </div>
@@ -4258,6 +4264,7 @@
                     allUsers = data.users;
                     renderUsersTable(data.users);
                     updateStats(data.users);
+                    populateExportCompanySelect(data.users);
                 }
             } catch (error) {
                 showToast('Failed to load users', true);
@@ -4488,6 +4495,95 @@
             a.click();
             URL.revokeObjectURL(a.href);
             if (typeof showToast === 'function') showToast('User details exported to CSV');
+        }
+
+        function populateExportCompanySelect(users) {
+            const sel = document.getElementById('exportCompanySelect');
+            if (!sel) return;
+            const companies = new Set();
+            Object.values(users || {}).forEach(u => {
+                const c = (u.company || '').trim();
+                if (c) companies.add(c);
+            });
+            const sorted = [...companies].sort((a, b) => a.localeCompare(b));
+            sel.innerHTML = '<option value="">-- Select company --</option>' + sorted.map(c => `<option value="${(c || '').replace(/"/g, '&quot;')}">${(c || '').replace(/</g, '&lt;')}</option>`).join('');
+        }
+
+        function exportUserDetailsByCompanyCSV() {
+            const users = allUsers || {};
+            const rows = [['Company', 'Username', 'Email', 'Department', 'Role', 'Credits Remaining', 'Credits Used', 'Last Login', 'Created At', 'Credit Usage (What For)']];
+            const sorted = Object.entries(users).sort((a, b) => {
+                const ca = (a[1].company || '').trim() || '\uFFFF';
+                const cb = (b[1].company || '').trim() || '\uFFFF';
+                if (ca !== cb) return ca.localeCompare(cb);
+                return (a[0] || '').localeCompare(b[0] || '');
+            });
+            sorted.forEach(([username, user]) => {
+                const creditsRem = user.credits === -1 ? 'Unlimited' : String(user.credits);
+                const creditsUsed = String(user.credits_used || 0);
+                const lastLogin = user.last_login ? user.last_login.replace('T', ' ').substring(0, 19) : '';
+                const created = user.created_at ? user.created_at.replace('T', ' ').substring(0, 19) : '';
+                const usageSummary = formatCreditUsageSummary(user.credit_usage_history || []);
+                rows.push([
+                    user.company || '',
+                    username,
+                    user.email || '',
+                    user.department || '',
+                    user.role || 'user',
+                    creditsRem,
+                    creditsUsed,
+                    lastLogin,
+                    created,
+                    usageSummary
+                ]);
+            });
+            const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'user_details_by_company.csv';
+            a.click();
+            URL.revokeObjectURL(a.href);
+            if (typeof showToast === 'function') showToast('User data by company exported to CSV');
+        }
+
+        function exportUserDetailsForSelectedCompany() {
+            const sel = document.getElementById('exportCompanySelect');
+            const company = sel ? (sel.value || '').trim() : '';
+            if (!company) {
+                if (typeof showToast === 'function') showToast('Select a company first', true);
+                return;
+            }
+            const users = allUsers || {};
+            const filtered = Object.entries(users).filter(([, u]) => (u.company || '').trim() === company);
+            const rows = [['Company', 'Username', 'Email', 'Department', 'Role', 'Credits Remaining', 'Credits Used', 'Last Login', 'Created At', 'Credit Usage (What For)']];
+            filtered.forEach(([username, user]) => {
+                const creditsRem = user.credits === -1 ? 'Unlimited' : String(user.credits);
+                const creditsUsed = String(user.credits_used || 0);
+                const lastLogin = user.last_login ? user.last_login.replace('T', ' ').substring(0, 19) : '';
+                const created = user.created_at ? user.created_at.replace('T', ' ').substring(0, 19) : '';
+                const usageSummary = formatCreditUsageSummary(user.credit_usage_history || []);
+                rows.push([
+                    user.company || '',
+                    username,
+                    user.email || '',
+                    user.department || '',
+                    user.role || 'user',
+                    creditsRem,
+                    creditsUsed,
+                    lastLogin,
+                    created,
+                    usageSummary
+                ]);
+            });
+            const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `user_details_${company.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            if (typeof showToast === 'function') showToast(`Exported ${filtered.length} user(s) for ${company}`);
         }
 
         async function showAddUserModal() {
