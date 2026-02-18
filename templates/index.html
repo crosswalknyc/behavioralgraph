@@ -22173,7 +22173,7 @@
             const sortRowEl = document.getElementById('tstTheatersSortRow');
             if (sortRowEl && rows.length) {
                 const arrow = (c) => s.col === c ? (s.dir === 'asc' ? ' ▲' : ' ▼') : '';
-                sortRowEl.innerHTML = `<div style="display:flex;align-items:center;gap:1rem;font-size:0.75rem;color:var(--text-secondary);padding-left:0.125rem;">Sort by: <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('platform')" title="Click to sort bar chart">Theater${arrow('platform')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('sold')" title="Click to sort bar chart">Tickets Sold${arrow('sold')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('proj')" title="Click to sort bar chart">Projected Sales${arrow('proj')}</span></div>`;
+                sortRowEl.innerHTML = `<div style="display:flex;align-items:center;gap:1rem;font-size:0.75rem;color:var(--text-secondary);padding-left:0.125rem;">Sort by: <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('platform')" title="Click to sort bar chart">A-Z${arrow('platform')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('sold')" title="Click to sort bar chart">Tickets Sold${arrow('sold')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('proj')" title="Click to sort bar chart">Projected Sales${arrow('proj')}</span></div>`;
                 sortRowEl.style.display = '';
             } else if (sortRowEl) sortRowEl.innerHTML = '';
             const canvas = document.getElementById('tstTheatersChartCanvas');
