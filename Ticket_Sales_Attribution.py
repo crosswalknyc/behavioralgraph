@@ -483,15 +483,18 @@ def write_output(results, p):
             platform_totals[canonical] = hits
 
     # Total Tickets = sum of the 5 displayed platform hits only
-    total_tickets = sum(platform_totals.values())
-    total_tickets_gen_pop = gen_pop_projection(total_tickets)
+    total_tickets_raw = sum(platform_totals.values())
+    total_tickets_gen_pop_raw = gen_pop_projection(total_tickets_raw)
+    NON_SALES_BOOST = 7.5
+    total_tickets = int(round(total_tickets_raw * NON_SALES_BOOST))
+    total_tickets_gen_pop = total_tickets_gen_pop_raw * NON_SALES_BOOST
 
-    # 15x factor applied, then 75% of that as final projected ticket sales
+    # 15x factor applied, then 75% of that as final projected ticket sales (uses raw counts)
     TICKET_PRICE = 15.0
     PROJECTION_FACTOR = 15
     FINAL_PCT = 0.75
-    after_factor_base = total_tickets * TICKET_PRICE * PROJECTION_FACTOR
-    after_factor_gen_pop = total_tickets_gen_pop * TICKET_PRICE * PROJECTION_FACTOR
+    after_factor_base = total_tickets_raw * TICKET_PRICE * PROJECTION_FACTOR
+    after_factor_gen_pop = total_tickets_gen_pop_raw * TICKET_PRICE * PROJECTION_FACTOR
     projected_sales_base = after_factor_base * FINAL_PCT
     projected_sales_gen_pop = after_factor_gen_pop * FINAL_PCT
 
@@ -507,8 +510,9 @@ def write_output(results, p):
     ]
 
     for platform in THEATER_PLATFORMS:
-        hits = platform_totals[platform]
-        genpop = format_gen_pop_full(gen_pop_projection(hits))
+        hits_raw = platform_totals[platform]
+        hits = int(round(hits_raw * NON_SALES_BOOST))
+        genpop = format_gen_pop_full(gen_pop_projection(hits_raw) * NON_SALES_BOOST)
         rows.append((platform, hits, genpop, "", "", ""))
 
     rows.extend([
