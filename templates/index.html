@@ -22166,7 +22166,7 @@
         function _tstGetGenPop(field, value) {
             const key = (field||'').toUpperCase();
             const keyLower = key.toLowerCase();
-            let v = (value||'').trim();
+            let v = (value != null && value !== '' ? String(value).trim() : '');
             if(keyLower==='location') {
                 const dmaKey = (v||'').toUpperCase().trim();
                 if(genPopBaselineData?.locations?.length) {
@@ -22243,7 +22243,7 @@
                 const isLocation = field === 'LOCATION';
                 const maxItems = isLocation ? 25 : 20;
                 const sorted = _tstSortDemoArr(field, arr).slice(0, maxItems);
-                const rawValues = sorted.map(r => r.value || '');
+                const rawValues = sorted.map(r => (r.value != null && r.value !== '' ? r.value : ''));
                 const labels = rawValues.map(v => _tstDisplayLabel(field, v));
                 const data = sorted.map(r => _tstParsePct(r.percent));
                 const genPopVals = rawValues.map(v => _tstGetGenPop(field.toLowerCase(), v));
@@ -22347,7 +22347,7 @@
                 const isLocation = field === 'LOCATION';
                 const maxItems = isLocation ? 25 : 20;
                 const sorted = _tstSortDemoArr(field, arr).slice(0, maxItems);
-                const rawValues = sorted.map(r => r.value || '');
+                const rawValues = sorted.map(r => (r.value != null && r.value !== '' ? r.value : ''));
                 const labels = rawValues.map(v => _tstDisplayLabel(field, v));
                 const data = sorted.map(r => _tstParsePct(r.percent));
                 const genPopVals = rawValues.map(v => _tstGetGenPop(field.toLowerCase(), v));
