@@ -15334,11 +15334,12 @@
                                 </div>
                             </div>
                             <div id="tstTabTheatersPanel" class="tst-tab-panel" style="display: none;">
-                                <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Tickets Sold & Projected Sales by Theater (US Gen Pop)</h3>
+                                <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">US Gen Pop Projected Tickets Sold &amp; Box Office Sales by Theater</h3>
                                 <div id="tstTheatersTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);"></div>
                                 <div id="tstTheatersChart" style="height: 300px; margin-top: 1rem; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
                                     <canvas id="tstTheatersChartCanvas"></canvas>
                                 </div>
+                                <p id="tstTheatersFootnote" style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.75rem;"></p>
                             </div>
                             <div id="tstTabDemographicsPanel" class="tst-tab-panel" style="display: none;">
                                 <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
@@ -22034,9 +22035,22 @@
                     if (img) img.style.display = 'none';
                 }
             }
-            document.getElementById('tstMovieNameHeader').textContent = meta.movie || currentTSTData.display_name || 'Unknown';
-            document.getElementById('tstDateRangeHeader').textContent = meta.date_range || '';
-            document.getElementById('tstGenreHeader').textContent = d.genre ? 'Genre: ' + d.genre : '';
+            const movieName = meta.movie || currentTSTData.display_name || 'Unknown';
+            const dateRange = meta.date_range || '';
+            const movieEl = document.getElementById('tstMovieNameHeader');
+            movieEl.textContent = movieName;
+            movieEl.title = 'Panelists who have confirmed digital ticket purchases to ' + movieName + ' from Fandango, AMC Theaters, Cinemark Theaters, Regal Cinemas or Alamo Drafthouse during ' + dateRange + '.';
+            const genreEl = document.getElementById('tstGenreHeader');
+            genreEl.textContent = d.genre ? 'Genre: ' + d.genre : '';
+            genreEl.title = 'Family & Animation ticket sales are factored by 2x to account for a single panelist purchasing multiple tickets.';
+            document.getElementById('tstDateRangeHeader').textContent = dateRange;
+            const isFamilyAnimation = d.genre && String(d.genre).toLowerCase().includes('family') && String(d.genre).toLowerCase().includes('animation');
+            const footnoteEl = document.getElementById('tstTheatersFootnote');
+            if (footnoteEl) {
+                footnoteEl.textContent = isFamilyAnimation
+                    ? 'Ticket price is calculated at $15 per ticket against total number of tickets sold with a 2x factor to account for a single purchaser buying multiple tickets.'
+                    : 'Ticket price is calculated at $15 per ticket against total number of tickets sold.';
+            }
             const cards = [];
             if (d.total_tickets_us) cards.push({ label: 'Projected US Gen Pop Total Tickets Sold', value: d.total_tickets_us, isCurrency: false });
             if (d.projected_ticket_sales_us) cards.push({ label: 'Projected US Gen Pop Ticket Sales', value: d.projected_ticket_sales_us, isCurrency: true });
