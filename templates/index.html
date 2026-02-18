@@ -22146,9 +22146,11 @@
             }).join('') || '<div style="padding:1rem;color:var(--text-secondary);">No demographic data</div>';
         }
         let tstTheatersSort = { col: 'proj', dir: 'desc' };
+        let tstTheatersChartMetric = 'proj'; // 'sold' = show ticket counts; 'proj' = show projected sales
         function sortTSTTheaters(col) {
             if (tstTheatersSort.col === col) tstTheatersSort.dir = tstTheatersSort.dir === 'asc' ? 'desc' : 'asc';
             else { tstTheatersSort.col = col; tstTheatersSort.dir = col === 'platform' ? 'asc' : 'desc'; }
+            if (col === 'sold' || col === 'proj') tstTheatersChartMetric = col;
             if (currentTSTData?.data) renderTSTTheatersTab(currentTSTData.data);
         }
         function renderTSTTheatersTab(d) {
@@ -22183,12 +22185,16 @@
             const canvas = document.getElementById('tstTheatersChartCanvas');
             if (!canvas || !platforms.length || typeof Chart === 'undefined') return;
             const labels = chartRows.map(r => r.platform || '');
-            const data = chartRows.map(r => totalTicketsNum > 0 ? (r.sold / totalTicketsNum) * totalProjNum : 0);
+            const showSold = tstTheatersChartMetric === 'sold';
+            const data = showSold
+                ? chartRows.map(r => r.sold)
+                : chartRows.map(r => totalTicketsNum > 0 ? (r.sold / totalTicketsNum) * totalProjNum : 0);
+            const chartLabel = showSold ? 'Tickets Sold' : 'Projected US Gen Pop Ticket Sales';
             if (tstCharts.theaters) tstCharts.theaters.destroy();
             const colors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672'];
             tstCharts.theaters = new Chart(canvas.getContext('2d'), {
                 type: 'bar',
-                data: { labels, datasets: [{ label: 'Projected US Gen Pop Ticket Sales', data, backgroundColor: colors.slice(0, labels.length), borderRadius: 4 }] },
+                data: { labels, datasets: [{ label: chartLabel, data, backgroundColor: colors.slice(0, labels.length), borderRadius: 4 }] },
                 options: {
                     indexAxis: 'y',
                     responsive: true,
