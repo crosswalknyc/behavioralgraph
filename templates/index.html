@@ -22469,7 +22469,7 @@
                 }
                 tstCharts['demo_' + field] = new Chart(canvas, {
                     type: useBar ? 'bar' : 'doughnut',
-                    data: { labels, datasets: [{ data, backgroundColor: colors.concat(Array(Math.max(0, data.length - colors.length)).fill('#4a5568')) }] },
+                    data: { labels, datasets: [{ data, backgroundColor: (useBar && isLocation) ? Array(data.length).fill('#5a9ad9') : colors.concat(Array(Math.max(0, data.length - colors.length)).fill('#4a5568')) }] },
                     options: {
                         indexAxis: useBar ? 'y' : undefined,
                         responsive: true,
@@ -22710,7 +22710,7 @@
                 }
                 tstCharts['demo_per_' + field.toLowerCase()] = new Chart(canvas, {
                     type: useBar ? 'bar' : 'doughnut',
-                    data: { labels, datasets: [{ data, backgroundColor: colors.concat(Array(Math.max(0, data.length - colors.length)).fill('#4a5568')) }] },
+                    data: { labels, datasets: [{ data, backgroundColor: (useBar && isLocation) ? Array(data.length).fill('#5a9ad9') : colors.concat(Array(Math.max(0, data.length - colors.length)).fill('#4a5568')) }] },
                     options: {
                         indexAxis: useBar ? 'y' : undefined,
                         responsive: true,
