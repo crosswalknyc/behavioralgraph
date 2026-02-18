@@ -2098,21 +2098,24 @@
                     
                     <!-- Ticket Sales Tracker Access -->
                     <div class="dashboard-access-item">
-                        <div class="dashboard-access-header">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('ticketSalesTracker')">
                             <span style="font-weight: 600;">🎬 TICKET SALES TRACKER</span>
+                            <span class="collapse-icon rotated" id="ticketSalesTrackerIcon">▼</span>
                         </div>
-                        <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem; margin-left: 0;">
-                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="hasTicketSalesTrackerView">
-                                    <span>View TST Dashboard</span>
-                                </label>
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="hasTicketSalesTrackerRun" class="analysis-module-checkbox" onchange="syncTSTRunWithModule(); updateAllAnalysisModulesCheckbox();">
-                                    <span>Run TST via Analysis IQ</span>
-                                </label>
+                        <div id="ticketSalesTrackerSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem; margin-left: 0;">
+                                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="hasTicketSalesTrackerView">
+                                        <span>View TST Dashboard</span>
+                                    </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="hasTicketSalesTrackerRun" class="analysis-module-checkbox" onchange="syncTSTRunWithModule(); updateAllAnalysisModulesCheckbox();">
+                                        <span>Run TST via Analysis IQ</span>
+                                    </label>
+                                </div>
+                                <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">View: access released reports. Run: submit TST analysis (requires Analysis IQ access + this).</small>
                             </div>
-                            <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">View: access released reports. Run: submit TST analysis (requires Analysis IQ access + this).</small>
                         </div>
                     </div>
                     
