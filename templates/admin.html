@@ -198,6 +198,16 @@
             text-transform: uppercase;
             font-weight: 600;
         }
+        .user-table th.sortable-th {
+            cursor: pointer;
+            user-select: none;
+        }
+        .user-table th.sortable-th:hover {
+            color: var(--text-primary);
+        }
+        .user-table th .sort-arrow {
+            opacity: 0.8;
+        }
 
         .user-table td {
             font-size: 0.85rem;
@@ -995,13 +1005,13 @@
                         <thead>
                             <tr>
                                 <th style="width: 50px;"></th>
-                                <th>Username</th>
-                                <th>Company</th>
-                                <th>Department</th>
-                                <th>Role</th>
-                                <th>Credits</th>
-                                <th>Last Login</th>
-                                <th>Usage</th>
+                                <th class="sortable-th" data-sort="username" onclick="sortUserTable('username')" title="Sort by username">Username <span class="sort-arrow" id="sortArrow-username"></span></th>
+                                <th class="sortable-th" data-sort="company" onclick="sortUserTable('company')" title="Sort by company">Company <span class="sort-arrow" id="sortArrow-company"></span></th>
+                                <th class="sortable-th" data-sort="department" onclick="sortUserTable('department')" title="Sort by department">Department <span class="sort-arrow" id="sortArrow-department"></span></th>
+                                <th class="sortable-th" data-sort="role" onclick="sortUserTable('role')" title="Sort by role">Role <span class="sort-arrow" id="sortArrow-role"></span></th>
+                                <th class="sortable-th" data-sort="credits" onclick="sortUserTable('credits')" title="Sort by credits">Credits <span class="sort-arrow" id="sortArrow-credits"></span></th>
+                                <th class="sortable-th" data-sort="last_login" onclick="sortUserTable('last_login')" title="Sort by last login">Last Login <span class="sort-arrow" id="sortArrow-last_login"></span></th>
+                                <th class="sortable-th" data-sort="usage" onclick="sortUserTable('usage')" title="Sort by usage">Usage <span class="sort-arrow" id="sortArrow-usage"></span></th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -2611,6 +2621,7 @@
 
     <script>
         let allUsers = {};
+        let userTableSort = { column: 'username', dir: 1 };
         let allCategories = [];
         let allRuns = [];
         let contentFiles = [];
@@ -4380,11 +4391,49 @@
             }
         }
 
+        function sortUserTable(column) {
+            if (userTableSort.column === column) userTableSort.dir = -userTableSort.dir;
+            else { userTableSort.column = column; userTableSort.dir = 1; }
+            document.querySelectorAll('.sort-arrow').forEach(el => { el.textContent = ''; });
+            const arrow = document.getElementById('sortArrow-' + column);
+            if (arrow) arrow.textContent = userTableSort.dir === 1 ? ' ↑' : ' ↓';
+            renderUsersTable(allUsers);
+        }
+
         function renderUsersTable(users) {
             const tbody = document.getElementById('usersTableBody');
             tbody.innerHTML = '';
 
-            Object.entries(users).forEach(([username, user]) => {
+            const entries = Object.entries(users);
+            const col = userTableSort.column;
+            const dir = userTableSort.dir;
+            const getVal = (u, key) => {
+                const user = u[1];
+                if (key === 'username') return (u[0] || '').toLowerCase();
+                if (key === 'company') return (user.company || '').toLowerCase();
+                if (key === 'department') return (user.department || '').toLowerCase();
+                if (key === 'role') return (user.role || '').toLowerCase();
+                if (key === 'credits') return user.credits === -1 ? 1e9 : (user.credits || 0);
+                if (key === 'last_login') return user.last_login || '';
+                if (key === 'usage') return user.credits === -1 ? 0 : ((user.credits_used || 0) / (user.credits + (user.credits_used || 0)) * 100) || 0;
+                return '';
+            };
+            entries.sort((a, b) => {
+                let va = getVal(a, col), vb = getVal(b, col);
+                if (col === 'last_login') {
+                    if (!va && !vb) return 0;
+                    if (!va) return 1;
+                    if (!vb) return -1;
+                }
+                const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+                return dir * cmp;
+            });
+
+            document.querySelectorAll('.sort-arrow').forEach(el => { el.textContent = ''; });
+            const arrowEl = document.getElementById('sortArrow-' + userTableSort.column);
+            if (arrowEl) arrowEl.textContent = userTableSort.dir === 1 ? ' ↑' : ' ↓';
+
+            entries.forEach(([username, user]) => {
                 const creditsLeft = user.credits === -1 ? '∞' : user.credits;
                 const creditsClass = user.credits === -1 ? 'unlimited' : (user.credits <= 1 ? 'low' : (user.credits === 0 ? 'empty' : ''));
                 const usagePercent = user.credits === -1 ? 0 : (user.credits_used / (user.credits + user.credits_used) * 100) || 0;
