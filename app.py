@@ -7340,6 +7340,24 @@ def parse_ticket_sales_tracker_csv(csv_content):
     return parsed
 
 
+def _get_tst_genre_from_s3(key):
+    """Read first 8KB of TST CSV from S3 and return genre (Category=Genre row). Returns 'Other' on failure."""
+    if not s3_client:
+        return 'Other'
+    try:
+        resp = s3_client.get_object(Bucket=TICKET_SALES_TRACKER_S3_BUCKET, Key=key)
+        head = resp['Body'].read(8192).decode('utf-8', errors='replace')
+        import csv as csv_module
+        rows = list(csv_module.reader(io.StringIO(head)))
+        for row in rows:
+            if len(row) >= 1 and str(row[0]).strip() == 'Genre':
+                val = (row[2] if len(row) > 2 else row[1] if len(row) > 1 else '').strip()
+                return val or 'Other'
+        return 'Other'
+    except Exception:
+        return 'Other'
+
+
 @app.route('/api/ticket-sales-tracker/list')
 @requires_auth
 def list_ticket_sales_tracker_files():
@@ -7366,9 +7384,11 @@ def list_ticket_sales_tracker_files():
                     default_display = name_without_ext.replace('_', ' ')
                 meta = tst_meta.get(key, {})
                 image_url = meta.get('image_url') or ''
+                genre = meta.get('genre') or _get_tst_genre_from_s3(key)
                 files.append({
                     's3_key': key,
                     'display_name': default_display.strip(),
+                    'genre': genre,
                     'image_url': image_url if image_url else None,
                     'size': obj['Size'],
                     'last_modified': obj['LastModified'].isoformat()
@@ -7419,6 +7439,12 @@ def get_ticket_sales_tracker_data(s3_key):
         display_name = (match.group(1).replace('_', ' ') if match else name_without_ext.replace('_', ' ')).strip()
         tst_meta = load_ticket_sales_tracker_metadata()
         meta = tst_meta.get(s3_key, {})
+        if parsed.get('genre'):
+            if s3_key not in tst_meta:
+                tst_meta[s3_key] = {}
+            tst_meta[s3_key]['genre'] = parsed['genre']
+            save_ticket_sales_tracker_metadata(tst_meta)
+            meta = tst_meta.get(s3_key, {})
         image_url = meta.get('image_url') or ''
         return jsonify({
             'success': True,

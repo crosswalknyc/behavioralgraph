@@ -21956,22 +21956,54 @@
             } catch (e) { console.error('loadTSTProfiles error:', e); }
         }
         function filterTSTProfiles() { renderTSTProfileTree(); }
+        let expandedTSTCategories = new Set();
+        function toggleTSTCategory(catId) {
+            if (expandedTSTCategories.has(catId)) expandedTSTCategories.delete(catId);
+            else expandedTSTCategories.add(catId);
+            renderTSTProfileTree();
+        }
         function renderTSTProfileTree() {
             const container = document.getElementById('tstProfileTree');
             if (!container) return;
             const search = (document.getElementById('tstSearchInput')?.value || '').toLowerCase();
             let list = tstProfiles;
-            if (search) list = list.filter(p => (p.display_name || p.s3_key || '').toLowerCase().includes(search));
+            if (search) list = list.filter(p => (p.display_name || p.s3_key || '').toLowerCase().includes(search) || ((p.genre || '').toLowerCase().includes(search)));
             list = [...list].sort((a,b) => new Date(b.last_modified || 0) - new Date(a.last_modified || 0));
             if (!list.length) {
                 container.innerHTML = '<div style="padding: 1rem; font-size: 0.85rem; color: var(--text-secondary);">No released reports yet. Run an analysis and wait for admin approval.</div>';
                 return;
             }
-            container.innerHTML = list.map(p => {
-                const name = (p.display_name || p.s3_key || 'Unknown').replace(/</g, '&lt;');
-                const keyEsc = (p.s3_key || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                return `<div class="profile-select-item" onclick="selectTSTProfile('${keyEsc}')" style="cursor: pointer; padding: 0.6rem; border-radius: 6px; margin-bottom: 0.35rem; border: 1px solid var(--border-color); background: var(--bg-card);"><div style="font-weight: 600; font-size: 0.85rem;">${name}</div></div>`;
-            }).join('');
+            if (search) {
+                container.innerHTML = list.map(p => {
+                    const name = (p.display_name || p.s3_key || 'Unknown').replace(/</g, '&lt;');
+                    const keyEsc = (p.s3_key || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    return `<div class="profile-select-item" onclick="selectTSTProfile('${keyEsc}')" style="cursor: pointer; padding: 0.6rem; border-radius: 6px; margin-bottom: 0.35rem; border: 1px solid var(--border-color); background: var(--bg-card);"><div style="font-weight: 600; font-size: 0.85rem;">${name}</div></div>`;
+                }).join('');
+                return;
+            }
+            const byGenre = {};
+            list.forEach(p => {
+                const genre = (p.genre || '').trim() || 'Other';
+                if (!byGenre[genre]) byGenre[genre] = [];
+                byGenre[genre].push(p);
+            });
+            const sortedGenres = Object.keys(byGenre).sort((a, b) => a.localeCompare(b));
+            if (sortedGenres.length && !expandedTSTCategories.size) expandedTSTCategories.add('tst_cat_' + sortedGenres[0].replace(/[^a-zA-Z0-9]/g, '_'));
+            let html = '';
+            sortedGenres.forEach(genre => {
+                const items = byGenre[genre];
+                const catId = 'tst_cat_' + genre.replace(/[^a-zA-Z0-9]/g, '_');
+                const isExpanded = expandedTSTCategories.has(catId);
+                const genreEsc = (genre || '').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                html += `<div class="profile-cat-item master-cat ${isExpanded ? 'open' : ''}" onclick="toggleTSTCategory('${catId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;"><span class="cat-arrow">▸</span><span class="profile-cat-label">${genreEsc}</span><span class="profile-cat-count">(${items.length})</span></div><div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}" style="padding-left: 0.5rem;">`;
+                items.forEach(p => {
+                    const name = (p.display_name || p.s3_key || 'Unknown').replace(/</g, '&lt;');
+                    const keyEsc = (p.s3_key || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    html += `<div class="profile-select-item" onclick="event.stopPropagation(); selectTSTProfile('${keyEsc}')" style="cursor: pointer; padding: 0.6rem; border-radius: 6px; margin-bottom: 0.35rem; border: 1px solid var(--border-color); background: var(--bg-card);"><div style="font-weight: 600; font-size: 0.85rem;">${name}</div></div>`;
+                });
+                html += '</div>';
+            });
+            container.innerHTML = html || '<div style="padding: 1rem; font-size: 0.85rem; color: var(--text-secondary);">No released reports yet.</div>';
         }
         async function selectTSTProfile(s3Key) {
             if (!s3Key) return;
