@@ -15344,7 +15344,7 @@
                             </div>
                             <div id="tstTabTheatersPanel" class="tst-tab-panel" style="display: none;">
                                 <h3 style="margin: 0 0 0.25rem 0; font-size: 1rem; font-weight: 600;">US Gen Pop Projected Tickets Sold &amp; Box Office Sales by Theater</h3>
-                                <p id="tstTheatersFootnote" style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 0 0 1rem 0;">Ticket price is calculated at $15 per ticket. A 15x factor is applied, then 75% of that value is used as the final projected ticket sales.</p>
+                                <p id="tstTheatersFootnote" style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 0 0 1rem 0;">Applies a factor of 2x * 75%.</p>
                                 <div data-tst-export="tst-theater-cards" style="margin-bottom: 1rem;">
                                     <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.35rem;"><span class="module-action-btns"><button class="module-btn png-btn has-tooltip" data-tooltip="Export as PNG" onclick="tstExportPNG('tst-theater-cards')">PNG</button><button class="module-btn csv-btn has-tooltip" data-tooltip="Export as CSV" onclick="tstExportCSV('tst-theater-cards')">CSV</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to deck" onclick="tstAddToDeck('tst-theater-cards', 'TST Theater Cards')">➕</button></span></div>
                                     <div id="tstTheatersTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); padding: 1.25rem 1.5rem;"></div>
@@ -22073,11 +22073,11 @@
             dateEl.setAttribute('data-tooltip', dateTooltip);
             const genreEl = document.getElementById('tstGenreHeader');
             genreEl.textContent = d.genre ? 'Genre: ' + d.genre : '';
-            const genreTooltip = 'Projected ticket sales: 15x factor applied to tickets × $15, then 75% of that value is used as the final projection.';
+            const genreTooltip = 'Applies a factor of 2x * 75%.';
             genreEl.setAttribute('data-tooltip', genreTooltip);
             const footnoteEl = document.getElementById('tstTheatersFootnote');
             if (footnoteEl) {
-                footnoteEl.textContent = 'Ticket price is calculated at $15 per ticket. A 15x factor is applied, then 75% of that value is used as the final projected ticket sales.';
+                footnoteEl.textContent = 'Applies a factor of 2x * 75%.';
             }
             const cards = [];
             if (d.total_tickets_us) cards.push({ label: 'Projected US Gen Pop Total Tickets Sold', value: d.total_tickets_us, isCurrency: false });
@@ -22087,7 +22087,7 @@
                 const display = isNaN(num) ? (c.value||'').toString() : (c.isCurrency ? '$' : '') + Math.round(num).toLocaleString();
                 let tip = (c.label || '') + '. ' + TST_GENPOP_TOOLTIP;
                 if (c.label === 'Projected US Gen Pop Ticket Sales') {
-                    tip = 'Ticket sales: total confirmed digital tickets × $15 × 15x factor, then 75% of that value is the final projected ticket sales. ' + TST_GENPOP_TOOLTIP;
+                    tip = 'Applies a factor of 2x * 75%. ' + TST_GENPOP_TOOLTIP;
                 }
                 return `<div class="exec-summary-metric has-tooltip" data-tooltip="${(tip||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div></div>`;
             }).join('');
@@ -22169,7 +22169,7 @@
             });
             const tableEl = document.getElementById('tstTheatersTable');
             if (tableEl) {
-                const theaterCardTip = (platform) => (platform || 'Theater') + ': projected sales and tickets sold. Projected ticket sales: tickets × $15 × 15x factor, then 75% of that value. ' + TST_GENPOP_TOOLTIP;
+                const theaterCardTip = (platform) => (platform || 'Theater') + ': projected sales and tickets sold. Applies a factor of 2x * 75%. ' + TST_GENPOP_TOOLTIP;
                 tableEl.innerHTML = blocksRows.length ? `<div class="exec-summary-grid" style="margin-bottom:0;">${blocksRows.map(r => `<div class="exec-summary-metric has-tooltip" data-tooltip="${(theaterCardTip(r.platform)||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
             }
             const sortRowEl = document.getElementById('tstTheatersSortRow');
