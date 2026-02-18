@@ -486,18 +486,20 @@ def write_output(results, p):
     total_tickets = sum(platform_totals.values())
     total_tickets_gen_pop = gen_pop_projection(total_tickets)
 
-    # 1.5x multiplier applied to all genres (accounts for single purchaser buying multiple tickets)
-    ticket_multiplier = 1.5
-
-    # Projected ticket sales: total * $15 * 15
-    projected_sales_base = total_tickets * 15.0 * ticket_multiplier
-    projected_sales_gen_pop = total_tickets_gen_pop * 15.0 * ticket_multiplier
+    # 15x factor applied, then 75% of that as final projected ticket sales
+    TICKET_PRICE = 15.0
+    PROJECTION_FACTOR = 15
+    FINAL_PCT = 0.75
+    after_15x_base = total_tickets * TICKET_PRICE * PROJECTION_FACTOR
+    after_15x_gen_pop = total_tickets_gen_pop * TICKET_PRICE * PROJECTION_FACTOR
+    projected_sales_base = after_15x_base * FINAL_PCT
+    projected_sales_gen_pop = after_15x_gen_pop * FINAL_PCT
 
     rows = [
         ("", "TICKET SALES ATTRIBUTION RESULTS", "", "", "", ""),
         ("", "", "", "", "", ""),
         ("Movie", "", p["movie_name"], "", "", ""),
-        ("Genre", "", p.get("genre", ""), "(1.5x factor applied)", "", ""),
+        ("Genre", "", p.get("genre", ""), "(15x factor, then 75% as final projection)", "", ""),
         ("Date Range", "", f"{p['start_date'].date()} to {p['end_date'].date()}", "", "", ""),
         ("", "", "", "", "", ""),
         ("", "TOTAL HITS (MOVIE VIEWERS) → THEATER BY PLATFORM", "", "", "", ""),
@@ -512,7 +514,7 @@ def write_output(results, p):
     rows.extend([
         ("", "", "", "", "", ""),
         ("Total Tickets Sold (sum of theater hits)", total_tickets, format_gen_pop_full(total_tickets_gen_pop), "", "", ""),
-        ("Projected Ticket Sales (Total × $15 × 1.5)", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
+        ("Projected Ticket Sales (Total × $15 × 15 × 75%)", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
         ("", "", "", "", "", ""),
     ])
 
