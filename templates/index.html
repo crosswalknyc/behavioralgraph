@@ -22042,7 +22042,10 @@
             document.getElementById('tstSummaryCards').innerHTML = cards.map(c => {
                 const num = _tstParseNum(c.value);
                 const display = isNaN(num) ? (c.value||'').toString() : (c.isCurrency ? '$' : '') + Math.round(num).toLocaleString();
-                const tip = (c.label || '') + '. ' + TST_GENPOP_TOOLTIP;
+                let tip = (c.label || '') + '. ' + TST_GENPOP_TOOLTIP;
+                if (c.label === 'Projected US Gen Pop Ticket Sales') {
+                    tip = 'Ticket sales calculated by taking the total number of confirmed digital tickets purchased and multiplying it out by a $15 ticket price.' + (isFamilyAnimation ? ' A 2x factor is applied to account for a single purchaser buying multiple tickets.' : '') + ' ' + TST_GENPOP_TOOLTIP;
+                }
                 return `<div class="exec-summary-metric has-tooltip" data-tooltip="${(tip||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div></div>`;
             }).join('');
             renderTSTAudienceSnapshot(d);
