@@ -984,6 +984,7 @@
                         <h2>👥 User Management</h2>
                         <div style="display: flex; gap: 0.5rem;">
                             <button class="btn btn-small btn-secondary" onclick="loadUsers()">↻ Refresh</button>
+                            <button class="btn btn-small btn-secondary" onclick="exportUserDetailsCSV()" title="Download CSV of all users with credits used and what for">📥 Export User Details</button>
                             <button class="btn btn-small btn-success" onclick="showAddUserModal()">+ Add User</button>
                             <button class="btn btn-small btn-primary" onclick="restoreDefaultValuesForAllUsers()">Restore Default Values For All Users</button>
                         </div>
@@ -4441,6 +4442,49 @@
             document.getElementById('totalCreditsUsed').textContent = userList.reduce((sum, u) => sum + (u.credits_used || 0), 0);
         }
 
+        function formatCreditUsageSummary(history) {
+            if (!Array.isArray(history) || history.length === 0) return '';
+            return history.slice(0, 100).map(entry => {
+                const date = entry.used_at ? (entry.used_at.replace('T', ' ').substring(0, 19)) : '';
+                const desc = entry.description || entry.pull_type || 'Analysis';
+                const pull = entry.pull_type ? ` (${entry.pull_type})` : '';
+                const n = entry.credits_used != null ? entry.credits_used : 1;
+                return `${date}: ${desc}${pull} - ${n} credit(s)`;
+            }).join('; ');
+        }
+
+        function exportUserDetailsCSV() {
+            const users = allUsers || {};
+            const rows = [['Username', 'Email', 'Company', 'Department', 'Role', 'Credits Remaining', 'Credits Used', 'Last Login', 'Created At', 'Credit Usage (What For)']];
+            Object.entries(users).forEach(([username, user]) => {
+                const creditsRem = user.credits === -1 ? 'Unlimited' : String(user.credits);
+                const creditsUsed = String(user.credits_used || 0);
+                const lastLogin = user.last_login ? user.last_login.replace('T', ' ').substring(0, 19) : '';
+                const created = user.created_at ? user.created_at.replace('T', ' ').substring(0, 19) : '';
+                const usageSummary = formatCreditUsageSummary(user.credit_usage_history || []);
+                rows.push([
+                    username,
+                    user.email || '',
+                    user.company || '',
+                    user.department || '',
+                    user.role || 'user',
+                    creditsRem,
+                    creditsUsed,
+                    lastLogin,
+                    created,
+                    usageSummary
+                ]);
+            });
+            const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'user_details_export.csv';
+            a.click();
+            URL.revokeObjectURL(a.href);
+            if (typeof showToast === 'function') showToast('User details exported to CSV');
+        }
+
         async function showAddUserModal() {
             document.getElementById('modalTitle').textContent = 'Add New User';
             document.getElementById('editUsername').value = '';
@@ -4787,7 +4831,7 @@
                     </div>
                     <div class="user-stat-card">
                         <div class="stat-value">${user.credits_used || 0}</div>
-                        <div class="stat-label">Runs Executed</div>
+                        <div class="stat-label">Credits Used</div>
                     </div>
                     <div class="user-stat-card">
                         <div class="stat-value">${profilesViewed.length}</div>
@@ -4801,6 +4845,7 @@
 
                 <div class="user-details-tabs">
                     <button class="user-detail-tab active" onclick="showUserDetailTab('overview', this)">📊 Overview</button>
+                    <button class="user-detail-tab" onclick="showUserDetailTab('credits', this)">💳 Credits Used</button>
                     <button class="user-detail-tab" onclick="showUserDetailTab('features', this)">⚡ Features</button>
                     <button class="user-detail-tab" onclick="showUserDetailTab('profiles', this)">👁️ Profiles</button>
                     <button class="user-detail-tab" onclick="showUserDetailTab('activity', this)">🕐 Activity</button>
@@ -4850,6 +4895,22 @@
                                 <span>Sessions</span>
                                 <span>${activity.total_sessions || 1}</span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="userDetailTab-credits" class="user-detail-content" style="display: none;">
+                    <div class="activity-section">
+                        <h4>💳 Credits Used and What For</h4>
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Total credits used: <strong>${user.credits_used || 0}</strong></p>
+                        <div class="recent-activity-list">
+                            ${(user.credit_usage_history && user.credit_usage_history.length > 0) ? user.credit_usage_history.slice(0, 100).map(entry => {
+                                const dateStr = entry.used_at ? formatDateTimePST(entry.used_at) : '';
+                                const desc = entry.description || entry.pull_type || 'Analysis';
+                                const pull = entry.pull_type ? ` (${entry.pull_type})` : '';
+                                const n = entry.credits_used != null ? entry.credits_used : 1;
+                                return `<div class="activity-item"><span>${desc}${pull} — ${n} credit(s)</span><span class="time">${dateStr}</span></div>`;
+                            }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No credit usage recorded yet</div>'}
                         </div>
                     </div>
                 </div>
