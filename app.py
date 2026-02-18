@@ -2734,13 +2734,48 @@ def get_user_stats(username):
         return jsonify({'success': False, 'error': str(e)})
 
 
+def _filter_activity_by_date_range(activity, date_from, date_to):
+    """Filter activity recent_actions and profiles_viewed to only include items within date range."""
+    if not date_from and not date_to:
+        return activity
+    out = dict(activity)
+    if date_from or date_to:
+        recent = out.get('recent_actions') or []
+        filtered_actions = []
+        for r in recent:
+            ts = (r.get('timestamp') or '')[:10]
+            if not ts:
+                continue
+            if date_from and ts < date_from:
+                continue
+            if date_to and ts > date_to:
+                continue
+            filtered_actions.append(r)
+        out['recent_actions'] = filtered_actions
+        profiles = out.get('profiles_viewed') or []
+        filtered_profiles = []
+        for p in profiles:
+            ts = (p.get('viewed_at') or '')[:10]
+            if not ts:
+                continue
+            if date_from and ts < date_from:
+                continue
+            if date_to and ts > date_to:
+                continue
+            filtered_profiles.append(p)
+        out['profiles_viewed'] = filtered_profiles
+    return out
+
+
 @app.route('/api/admin/export-user-activity', methods=['GET'])
 @requires_admin
 def export_user_activity():
-    """Export user activity data: by username (single user) or by company (all users in company)."""
+    """Export user activity data: by username (single user) or by company (all users in company). Optional date_from, date_to (YYYY-MM-DD) filter activity and profiles viewed."""
     try:
         username = request.args.get('username')
         company = request.args.get('company')
+        date_from = (request.args.get('date_from') or '').strip() or None
+        date_to = (request.args.get('date_to') or '').strip() or None
         if not username and not company:
             return jsonify({'success': False, 'error': 'Provide username= or company='}), 400
         if username and company:
@@ -2754,6 +2789,7 @@ def export_user_activity():
             activity = user.get('activity') or {
                 'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0
             }
+            activity = _filter_activity_by_date_range(activity, date_from, date_to)
             safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
             return jsonify({
                 'success': True,
@@ -2771,6 +2807,7 @@ def export_user_activity():
                 activity = user.get('activity') or {
                     'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0
                 }
+                activity = _filter_activity_by_date_range(activity, date_from, date_to)
                 safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
                 results.append({'username': u, 'user': safe_user, 'activity': activity})
         return jsonify({

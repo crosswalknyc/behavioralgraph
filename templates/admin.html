@@ -2278,6 +2278,15 @@
                         <!-- filled by JS -->
                     </select>
                 </div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Date range (optional)</label>
+                    <div style="display: flex; gap: 0.75rem; align-items: center;">
+                        <input type="date" id="exportUserInfoDateFrom" style="flex: 1; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                        <span style="color: var(--text-secondary);">to</span>
+                        <input type="date" id="exportUserInfoDateTo" style="flex: 1; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                    </div>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.35rem;">Leave blank to export all dates. Activity and profiles viewed are filtered by this range.</p>
+                </div>
                 <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem;">
                     <button class="btn btn-secondary" onclick="closeExportUserInfoModal()" style="flex: 1;">Cancel</button>
                     <button class="btn btn-primary" id="exportUserInfoBtn" onclick="doExportUserInfo()" style="flex: 1;">Export</button>
@@ -5193,6 +5202,10 @@
                     }
                     url = `/api/admin/export-user-activity?company=${encodeURIComponent(company)}`;
                 }
+                const dateFrom = (document.getElementById('exportUserInfoDateFrom').value || '').trim();
+                const dateTo = (document.getElementById('exportUserInfoDateTo').value || '').trim();
+                if (dateFrom) url += '&date_from=' + encodeURIComponent(dateFrom);
+                if (dateTo) url += '&date_to=' + encodeURIComponent(dateTo);
                 const response = await fetch(url, { credentials: 'same-origin' });
                 const data = await response.json();
                 if (!data.success) {
