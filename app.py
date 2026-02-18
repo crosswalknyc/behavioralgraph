@@ -2734,6 +2734,123 @@ def get_user_stats(username):
         return jsonify({'success': False, 'error': str(e)})
 
 
+# Inactive user alert: email these when a user hasn't logged in for 7+ days
+INACTIVE_ALERT_RECIPIENTS = [
+    'liz@crosswalknyc.com',
+    'jessie@crosswalknyc.com',
+    'alexia@crosswalknyc.com',
+    'jenna@crosswalknyc.com',
+]
+INACTIVE_DAYS_THRESHOLD = 7
+INACTIVE_EMAIL_COOLDOWN_DAYS = 7  # don't send again for same user within this many days
+
+
+def _build_usage_snapshot_html(user, activity):
+    """Build HTML snippet for dashboard usage snapshot (feature usage, profiles viewed, sessions)."""
+    activity = activity or {}
+    feature_usage = activity.get('feature_usage') or {}
+    profiles_viewed = activity.get('profiles_viewed') or []
+    total_sessions = activity.get('total_sessions', 0)
+    recent_actions = activity.get('recent_actions') or []
+    rows = []
+    if feature_usage:
+        sorted_features = sorted(feature_usage.items(), key=lambda x: -x[1])[:15]
+        for name, count in sorted_features:
+            rows.append(f'<tr><td>{name}</td><td style="text-align:right;">{count}</td></tr>')
+    feature_table = ''
+    if rows:
+        feature_table = '<div class="email-card"><div class="email-card-title">Feature usage</div><table style="width:100%; border-collapse:collapse;"><thead><tr><th style="text-align:left;">Action</th><th style="text-align:right;">Count</th></tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div>'
+    profile_rows = []
+    for p in profiles_viewed[:10]:
+        name = (p.get('name') or p.get('key') or '—')
+        view_count = p.get('view_count', 1)
+        viewed_at = (p.get('viewed_at') or '')[:10]
+        profile_rows.append(f'<tr><td>{name}</td><td>{view_count}</td><td>{viewed_at}</td></tr>')
+    profile_table = ''
+    if profile_rows:
+        profile_table = '<div class="email-card"><div class="email-card-title">Profiles viewed (recent)</div><table style="width:100%; border-collapse:collapse;"><thead><tr><th style="text-align:left;">Profile</th><th>Views</th><th>Last viewed</th></tr></thead><tbody>' + ''.join(profile_rows) + '</tbody></table></div>'
+    return f'<p><strong>Sessions:</strong> {total_sessions} &nbsp;|&nbsp; <strong>Recent actions (logged):</strong> {len(recent_actions)}</p>{feature_table}{profile_table}'
+
+
+def _check_and_send_inactive_user_emails():
+    """Find users inactive 7+ days, send one email per user to INACTIVE_ALERT_RECIPIENTS. Returns (count_emails_sent, list_inactive_usernames)."""
+    now = datetime.now()
+    cutoff = now - timedelta(days=INACTIVE_DAYS_THRESHOLD)
+    cooldown_cutoff = now - timedelta(days=INACTIVE_EMAIL_COOLDOWN_DAYS)
+    data = load_users()
+    users_data = data.get('users', {})
+    sent_count = 0
+    inactive_usernames = []
+    for username, user in users_data.items():
+        if user.get('is_super_admin') or user.get('cloaked_as'):
+            continue
+        last_login = user.get('last_login')
+        try:
+            last_login_dt = datetime.fromisoformat(last_login.replace('Z', '+00:00')) if last_login else None
+        except Exception:
+            last_login_dt = None
+        if last_login_dt and last_login_dt.tzinfo:
+            last_login_dt = last_login_dt.replace(tzinfo=None)
+        if last_login_dt and last_login_dt >= cutoff:
+            continue
+        last_sent = user.get('last_inactive_email_sent')
+        if last_sent:
+            try:
+                sent_dt = datetime.fromisoformat(last_sent.replace('Z', '+00:00'))
+                if sent_dt.tzinfo:
+                    sent_dt = sent_dt.replace(tzinfo=None)
+                if sent_dt > cooldown_cutoff:
+                    continue
+            except Exception:
+                pass
+        inactive_usernames.append(username)
+        first_name = (user.get('first_name') or '').strip() or username
+        last_name = (user.get('last_name') or '').strip()
+        full_name = f'{first_name} {last_name}'.strip() or username
+        last_login_display = last_login[:19].replace('T', ' ') if last_login else 'Never'
+        activity = user.get('activity') or {}
+        usage_html = _build_usage_snapshot_html(user, activity)
+        subject = f"Crosswalk IQ: {full_name} has been inactive for over a week"
+        body_content = f"""
+        <p>This user has not logged in for at least {INACTIVE_DAYS_THRESHOLD} days.</p>
+        <div class="email-card">
+            <div class="email-card-title">User</div>
+            <p><span class="email-label">Name</span><br><span class="email-value">{full_name}</span></p>
+            <p><span class="email-label">Username</span><br><span class="email-value">{username}</span></p>
+            <p><span class="email-label">Last login</span><br><span class="email-value">{last_login_display}</span></p>
+        </div>
+        <p><strong>Dashboard usage snapshot (before inactivity):</strong></p>
+        {usage_html}
+        """
+        html = _wrap_email_html(body_content, title='Inactive user alert')
+        text_content = f"User {full_name} ({username}) has been inactive for over a week. Last login: {last_login_display}.\n\nDashboard usage snapshot: see HTML version."
+        for to_email in INACTIVE_ALERT_RECIPIENTS:
+            ok, _ = send_email_via_gmail(to_email, subject, html, text_content=text_content)
+            if ok:
+                sent_count += 1
+        user['last_inactive_email_sent'] = now.isoformat()
+    if inactive_usernames:
+        save_users(data)
+    return sent_count, inactive_usernames
+
+
+@app.route('/api/admin/check-inactive-users', methods=['POST'])
+@requires_admin
+def check_inactive_users():
+    """Check for users inactive 7+ days and send alert emails to Crosswalk team. Call daily via cron or manually."""
+    try:
+        sent_count, inactive_usernames = _check_and_send_inactive_user_emails()
+        return jsonify({
+            'success': True,
+            'emails_sent': sent_count,
+            'inactive_users': inactive_usernames,
+            'message': f'Emails sent to {len(INACTIVE_ALERT_RECIPIENTS)} recipients for {len(inactive_usernames)} inactive user(s).'
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def _filter_activity_by_date_range(activity, date_from, date_to):
     """Filter activity recent_actions and profiles_viewed to only include items within date range."""
     if not date_from and not date_to:
