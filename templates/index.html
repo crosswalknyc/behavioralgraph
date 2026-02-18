@@ -28817,6 +28817,23 @@
             return { profile: null, genPop: null };
         }
 
+        const PROFILE_IQ_DEMO_TOOLTIP = {
+                'Age': 'The age distribution of all represented panelists.',
+                'Gender': 'The self-identified gender of all represented panelists.',
+                'Ethnicity': 'The self-identified ethnicity of all represented panelists.',
+                'Income': 'The household income distribution of all represented panelists.',
+                'Education': 'The education level of all represented panelists.',
+                'Relationship Status': 'The relationship status of all represented panelists.',
+                'Sexual Orientation': 'The self-identified sexual orientation of all represented panelists.',
+                'Parental Status': 'The parental status of all represented panelists.',
+                'Occupation': 'The occupation of all represented panelists.'
+            };
+            const profileIqDemoTooltipLines = (category) => {
+                const desc = PROFILE_IQ_DEMO_TOOLTIP[category] || category + ' distribution of all represented panelists.';
+                const gpTip = typeof TST_GENPOP_TOOLTIP !== 'undefined' ? TST_GENPOP_TOOLTIP : 'US Gen Pop projections use the 2026 base of 329,900,000.';
+                return [desc, 'GP = General Population.', gpTip];
+            };
+
         function renderCharts(demographics, demographicsIndex = {}, demographicsProjection = {}, demographicsGenPop = {}) {
             Object.values(charts).forEach(c => c.destroy());
             charts = {};
@@ -28927,6 +28944,7 @@
                     cutout: ageIsCircular ? doughnutCutout : 0,
                     layout: { padding: ageIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
+                        tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Age') } },
                         legend: ageIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
                         datalabels: ageIsCircular ? doughnutDataLabels : {
                             anchor: 'end',
@@ -28988,6 +29006,7 @@
                     cutout: genderIsCircular ? doughnutCutout : 0,
                     layout: { padding: genderIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
+                        tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Gender') } },
                         legend: genderIsCircular ? {
                             ...legendOptionsCircular,
                             display: true,
@@ -29105,6 +29124,7 @@
                     cutout: ethnicityIsCircular ? doughnutCutout : 0,
                     layout: { padding: ethnicityIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
+                        tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Ethnicity') } },
                         legend: ethnicityIsCircular ? {
                             ...legendOptionsCircular,
                             display: true,
@@ -29243,6 +29263,7 @@
                         cutout: incomeIsCircular ? doughnutCutout : 0,
                         layout: { padding: incomeIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
+                            tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Income') } },
                             legend: incomeIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
                         datalabels: incomeIsCircular ? doughnutDataLabels : {
                             anchor: 'end',
@@ -29324,6 +29345,7 @@
                         cutout: educationIsCircular ? doughnutCutout : 0,
                         layout: { padding: educationIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
+                            tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Education') } },
                             legend: educationIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
                             datalabels: educationIsCircular ? doughnutDataLabels : { 
                                 anchor: 'end', 
@@ -29410,6 +29432,7 @@
                         cutout: relationshipIsCircular ? doughnutCutout : 0,
                         layout: { padding: relationshipIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
+                            tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Relationship Status') } },
                             legend: relationshipIsCircular ? {
                                 ...legendOptionsCircular,
                                 display: true,
@@ -29523,6 +29546,7 @@
                         cutout: soIsCircular ? doughnutCutout : 0,
                         layout: { padding: soIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
+                            tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Sexual Orientation') } },
                             legend: soIsCircular ? {
                                 ...legendOptionsCircular,
                                 display: true,
@@ -29632,6 +29656,7 @@
                         cutout: psIsCircular ? doughnutCutout : 0,
                         layout: { padding: psIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
+                            tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Parental Status') } },
                             legend: psIsCircular ? {
                                 ...legendOptionsCircular,
                                 display: true,
@@ -29753,6 +29778,7 @@
                         maintainAspectRatio: false,
                         layout: { padding: occIsCircular ? { ...layoutPaddingCircular, top: 15, bottom: 15 } : { right: 50, top: 15, bottom: 15, left: 28 } },
                         plugins: { 
+                            tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Occupation') } },
                             legend: occIsCircular ? {
                                 ...legendOptionsCircular,
                                 display: true,
