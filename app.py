@@ -1913,11 +1913,23 @@ def gmail_callback():
         profile = service.users().getProfile(userId='me').execute()
         
         # Save tokens
-        save_gmail_tokens({
+        tokens = {
             'access_token': credentials.token,
             'refresh_token': credentials.refresh_token,
             'email': profile.get('emailAddress')
-        })
+        }
+        # Automatically share Gmail with all admins and super_admins
+        try:
+            data = load_users()
+            admin_usernames = [
+                u for u, user in data.get('users', {}).items()
+                if user.get('role') in ('admin', 'super_admin')
+            ]
+            if admin_usernames:
+                tokens['shared_with'] = sorted(admin_usernames)
+        except Exception as e:
+            print(f"⚠️ Could not auto-share Gmail with admins: {e}")
+        save_gmail_tokens(tokens)
         
         # Redirect back to admin with success
         return redirect('/admin?gmail=connected')
@@ -2484,15 +2496,23 @@ def share_gmail_integration():
 @app.route('/api/admin/gmail/shared-users')
 @requires_admin
 def get_gmail_shared_users():
-    """Get list of users Gmail is shared with."""
+    """Get list of users Gmail is shared with. Defaults to all admins and super_admins if not set."""
     try:
         tokens = load_gmail_tokens()
         if not tokens:
             return jsonify({'success': True, 'shared_with': []})
         
+        shared_with = tokens.get('shared_with', [])
+        if not shared_with:
+            # Backfill: treat as shared with all admins/super_admins
+            data = load_users()
+            shared_with = sorted([
+                u for u, user in data.get('users', {}).items()
+                if user.get('role') in ('admin', 'super_admin')
+            ])
         return jsonify({
             'success': True,
-            'shared_with': tokens.get('shared_with', []),
+            'shared_with': shared_with,
             'owner': 'admin'
         })
     except Exception as e:

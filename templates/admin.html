@@ -1419,7 +1419,7 @@
                     <div id="gmailSharingSection" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: none;">
                         <h4 style="margin-bottom: 0.75rem; color: var(--accent-cyan);">👥 Share Gmail with Other Admins</h4>
                         <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                            As the super admin, you can share this Gmail integration with other admin users.
+                            Gmail is automatically shared with all admins and super admins when connected. You can adjust who has access below.
                         </p>
                         <div id="adminUserCheckboxes" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;">
                             <!-- Admin checkboxes will be populated here -->
@@ -4247,7 +4247,7 @@
                 
                 if (usersData.success) {
                     const adminUsers = Object.entries(usersData.users)
-                        .filter(([name, user]) => user.role === 'admin' && name !== 'admin')
+                        .filter(([name, user]) => (user.role === 'admin' || user.role === 'super_admin') && name !== 'admin')
                         .map(([name, user]) => ({ name, email: user.email }));
                     
                     // Get current sharing
