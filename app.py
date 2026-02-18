@@ -2496,23 +2496,20 @@ def share_gmail_integration():
 @app.route('/api/admin/gmail/shared-users')
 @requires_admin
 def get_gmail_shared_users():
-    """Get list of users Gmail is shared with. Defaults to all admins and super_admins if not set."""
+    """Get list of users Gmail is shared with. Always sync to all current admins and super_admins so the integration is automatically shared with every admin."""
     try:
+        data = load_users()
+        admin_usernames = sorted([
+            u for u, user in data.get('users', {}).items()
+            if user.get('role') in ('admin', 'super_admin')
+        ])
         tokens = load_gmail_tokens()
-        if not tokens:
-            return jsonify({'success': True, 'shared_with': []})
-        
-        shared_with = tokens.get('shared_with', [])
-        if not shared_with:
-            # Backfill: treat as shared with all admins/super_admins
-            data = load_users()
-            shared_with = sorted([
-                u for u, user in data.get('users', {}).items()
-                if user.get('role') in ('admin', 'super_admin')
-            ])
+        if tokens:
+            tokens['shared_with'] = admin_usernames
+            save_gmail_tokens(tokens)
         return jsonify({
             'success': True,
-            'shared_with': shared_with,
+            'shared_with': admin_usernames,
             'owner': 'admin'
         })
     except Exception as e:
