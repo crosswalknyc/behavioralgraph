@@ -2733,6 +2733,57 @@ def get_user_stats(username):
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
+
+@app.route('/api/admin/export-user-activity', methods=['GET'])
+@requires_admin
+def export_user_activity():
+    """Export user activity data: by username (single user) or by company (all users in company)."""
+    try:
+        username = request.args.get('username')
+        company = request.args.get('company')
+        if not username and not company:
+            return jsonify({'success': False, 'error': 'Provide username= or company='}), 400
+        if username and company:
+            return jsonify({'success': False, 'error': 'Provide only username= or company='}), 400
+        data = load_users()
+        users_data = data.get('users', {})
+        if username:
+            if username not in users_data:
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+            user = users_data[username]
+            activity = user.get('activity') or {
+                'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0
+            }
+            safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
+            return jsonify({
+                'success': True,
+                'by': 'user',
+                'users': [{'username': username, 'user': safe_user, 'activity': activity}]
+            })
+        company_trim = (company or '').strip()
+        if not company_trim:
+            return jsonify({'success': False, 'error': 'Company name is required'}), 400
+        company_lower = company_trim.lower()
+        results = []
+        for u, user in users_data.items():
+            u_company = (user.get('company') or '').strip()
+            if u_company.lower() == company_lower:
+                activity = user.get('activity') or {
+                    'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0
+                }
+                safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
+                results.append({'username': u, 'user': safe_user, 'activity': activity})
+        return jsonify({
+            'success': True,
+            'by': 'company',
+            'company': company_trim,
+            'users': results
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/track-activity', methods=['POST'])
 @requires_auth
 def track_user_activity():

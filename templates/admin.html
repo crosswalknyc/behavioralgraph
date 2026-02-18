@@ -982,15 +982,10 @@
                 <div class="card" style="grid-column: span 2;">
                     <div class="card-header">
                         <h2>👥 User Management</h2>
-                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
+                        <div style="display: flex; gap: 0.5rem;">
                             <button class="btn btn-small btn-secondary" onclick="loadUsers()">↻ Refresh</button>
                             <button class="btn btn-small btn-secondary" onclick="exportUserDetailsCSV()" title="Download CSV of all users with credits used and what for">📥 Export User Details</button>
-                            <button class="btn btn-small btn-secondary" onclick="exportUserDetailsByCompanyCSV()" title="Download CSV of all users sorted by company">📥 Export by Company</button>
-                            <span style="font-size: 0.8rem; color: var(--text-secondary); margin-left: 0.25rem;">Single company:</span>
-                            <select id="exportCompanySelect" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 140px;">
-                                <option value="">-- Select company --</option>
-                            </select>
-                            <button class="btn btn-small btn-secondary" onclick="exportUserDetailsForSelectedCompany()" title="Export only users from the selected company">Export</button>
+                            <button class="btn btn-small btn-secondary" onclick="showExportUserInfoModal()" title="Export full user activity by user or by company">📥 Export User Info</button>
                             <button class="btn btn-small btn-success" onclick="showAddUserModal()">+ Add User</button>
                             <button class="btn btn-small btn-primary" onclick="restoreDefaultValuesForAllUsers()">Restore Default Values For All Users</button>
                         </div>
@@ -2251,6 +2246,42 @@
             </div>
             <div id="userDetailsContent">
                 <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export User Info Modal -->
+    <div class="modal" id="exportUserInfoModal">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2>📥 Export User Info</h2>
+                <button class="modal-close" onclick="closeExportUserInfoModal()">&times;</button>
+            </div>
+            <div style="padding: 1rem;">
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Export full user activity data (Overview, Credits Used, Features, Profiles, Activity) for a single user or all users in a company.</p>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Export by</label>
+                    <select id="exportUserInfoBy" onchange="toggleExportUserInfoFields()" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                        <option value="user">Single user</option>
+                        <option value="company">Company (all users)</option>
+                    </select>
+                </div>
+                <div id="exportUserInfoUserWrap" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem;">User</label>
+                    <select id="exportUserInfoUsername" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                        <!-- filled by JS -->
+                    </select>
+                </div>
+                <div id="exportUserInfoCompanyWrap" style="margin-bottom: 1rem; display: none;">
+                    <label style="display: block; margin-bottom: 0.5rem;">Company</label>
+                    <select id="exportUserInfoCompany" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                        <!-- filled by JS -->
+                    </select>
+                </div>
+                <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem;">
+                    <button class="btn btn-secondary" onclick="closeExportUserInfoModal()" style="flex: 1;">Cancel</button>
+                    <button class="btn btn-primary" id="exportUserInfoBtn" onclick="doExportUserInfo()" style="flex: 1;">Export</button>
+                </div>
             </div>
         </div>
     </div>
@@ -4264,7 +4295,6 @@
                     allUsers = data.users;
                     renderUsersTable(data.users);
                     updateStats(data.users);
-                    populateExportCompanySelect(data.users);
                 }
             } catch (error) {
                 showToast('Failed to load users', true);
@@ -4495,95 +4525,6 @@
             a.click();
             URL.revokeObjectURL(a.href);
             if (typeof showToast === 'function') showToast('User details exported to CSV');
-        }
-
-        function populateExportCompanySelect(users) {
-            const sel = document.getElementById('exportCompanySelect');
-            if (!sel) return;
-            const companies = new Set();
-            Object.values(users || {}).forEach(u => {
-                const c = (u.company || '').trim();
-                if (c) companies.add(c);
-            });
-            const sorted = [...companies].sort((a, b) => a.localeCompare(b));
-            sel.innerHTML = '<option value="">-- Select company --</option>' + sorted.map(c => `<option value="${(c || '').replace(/"/g, '&quot;')}">${(c || '').replace(/</g, '&lt;')}</option>`).join('');
-        }
-
-        function exportUserDetailsByCompanyCSV() {
-            const users = allUsers || {};
-            const rows = [['Company', 'Username', 'Email', 'Department', 'Role', 'Credits Remaining', 'Credits Used', 'Last Login', 'Created At', 'Credit Usage (What For)']];
-            const sorted = Object.entries(users).sort((a, b) => {
-                const ca = (a[1].company || '').trim() || '\uFFFF';
-                const cb = (b[1].company || '').trim() || '\uFFFF';
-                if (ca !== cb) return ca.localeCompare(cb);
-                return (a[0] || '').localeCompare(b[0] || '');
-            });
-            sorted.forEach(([username, user]) => {
-                const creditsRem = user.credits === -1 ? 'Unlimited' : String(user.credits);
-                const creditsUsed = String(user.credits_used || 0);
-                const lastLogin = user.last_login ? user.last_login.replace('T', ' ').substring(0, 19) : '';
-                const created = user.created_at ? user.created_at.replace('T', ' ').substring(0, 19) : '';
-                const usageSummary = formatCreditUsageSummary(user.credit_usage_history || []);
-                rows.push([
-                    user.company || '',
-                    username,
-                    user.email || '',
-                    user.department || '',
-                    user.role || 'user',
-                    creditsRem,
-                    creditsUsed,
-                    lastLogin,
-                    created,
-                    usageSummary
-                ]);
-            });
-            const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'user_details_by_company.csv';
-            a.click();
-            URL.revokeObjectURL(a.href);
-            if (typeof showToast === 'function') showToast('User data by company exported to CSV');
-        }
-
-        function exportUserDetailsForSelectedCompany() {
-            const sel = document.getElementById('exportCompanySelect');
-            const company = sel ? (sel.value || '').trim() : '';
-            if (!company) {
-                if (typeof showToast === 'function') showToast('Select a company first', true);
-                return;
-            }
-            const users = allUsers || {};
-            const filtered = Object.entries(users).filter(([, u]) => (u.company || '').trim() === company);
-            const rows = [['Company', 'Username', 'Email', 'Department', 'Role', 'Credits Remaining', 'Credits Used', 'Last Login', 'Created At', 'Credit Usage (What For)']];
-            filtered.forEach(([username, user]) => {
-                const creditsRem = user.credits === -1 ? 'Unlimited' : String(user.credits);
-                const creditsUsed = String(user.credits_used || 0);
-                const lastLogin = user.last_login ? user.last_login.replace('T', ' ').substring(0, 19) : '';
-                const created = user.created_at ? user.created_at.replace('T', ' ').substring(0, 19) : '';
-                const usageSummary = formatCreditUsageSummary(user.credit_usage_history || []);
-                rows.push([
-                    user.company || '',
-                    username,
-                    user.email || '',
-                    user.department || '',
-                    user.role || 'user',
-                    creditsRem,
-                    creditsUsed,
-                    lastLogin,
-                    created,
-                    usageSummary
-                ]);
-            });
-            const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `user_details_${company.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`;
-            a.click();
-            URL.revokeObjectURL(a.href);
-            if (typeof showToast === 'function') showToast(`Exported ${filtered.length} user(s) for ${company}`);
         }
 
         async function showAddUserModal() {
@@ -5138,6 +5079,154 @@
             a.click();
             URL.revokeObjectURL(a.href);
             if (typeof showToast === 'function') showToast('User activity exported to CSV');
+        }
+
+        function showExportUserInfoModal() {
+            const by = document.getElementById('exportUserInfoBy');
+            const userWrap = document.getElementById('exportUserInfoUserWrap');
+            const companyWrap = document.getElementById('exportUserInfoCompanyWrap');
+            const userSel = document.getElementById('exportUserInfoUsername');
+            const companySel = document.getElementById('exportUserInfoCompany');
+            const users = allUsers || {};
+            const usernames = Object.keys(users).sort();
+            const companies = [...new Set(Object.values(users).map(u => (u.company || '').trim()).filter(c => c))].sort();
+            userSel.innerHTML = usernames.map(u => `<option value="${(u || '').replace(/"/g, '&quot;')}">${(u || '').replace(/</g, '&lt;')}</option>`).join('') || '<option value="">No users</option>';
+            companySel.innerHTML = companies.map(c => `<option value="${(c || '').replace(/"/g, '&quot;')}">${(c || '').replace(/</g, '&lt;')}</option>`).join('') || '<option value="">No companies</option>';
+            if (by.value === 'user') {
+                userWrap.style.display = 'block';
+                companyWrap.style.display = 'none';
+            } else {
+                userWrap.style.display = 'none';
+                companyWrap.style.display = 'block';
+            }
+            document.getElementById('exportUserInfoModal').classList.add('show');
+        }
+
+        function closeExportUserInfoModal() {
+            document.getElementById('exportUserInfoModal').classList.remove('show');
+        }
+
+        function toggleExportUserInfoFields() {
+            const by = document.getElementById('exportUserInfoBy').value;
+            document.getElementById('exportUserInfoUserWrap').style.display = by === 'user' ? 'block' : 'none';
+            document.getElementById('exportUserInfoCompanyWrap').style.display = by === 'company' ? 'block' : 'none';
+        }
+
+        function buildUserActivityCSVRows(username, data) {
+            const user = data.user;
+            const activity = data.activity || {};
+            const featureUsage = activity.feature_usage || {};
+            const featureList = Object.entries(featureUsage).sort((a, b) => b[1] - a[1]);
+            const profilesViewed = activity.profiles_viewed || [];
+            const recentActions = activity.recent_actions || [];
+            const totalActions = Object.values(featureUsage).reduce((a, b) => a + b, 0);
+            const escape = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+            const rows = [];
+            rows.push(['User', username]);
+            rows.push([]);
+            rows.push(['[Overview]']);
+            rows.push(['Metric', 'Value']);
+            rows.push(['Credits Remaining', user.credits === -1 ? 'Unlimited' : String(user.credits)]);
+            rows.push(['Credits Used', String(user.credits_used || 0)]);
+            rows.push(['Profiles Viewed', String(profilesViewed.length)]);
+            rows.push(['Total Actions', String(totalActions)]);
+            rows.push(['Role', user.role || '']);
+            rows.push(['Last Login', user.last_login ? formatDateTimePST(user.last_login) : 'Never']);
+            rows.push(['Account Created', user.created_at ? formatDatePST(user.created_at) : '']);
+            rows.push(['Sessions', String(activity.total_sessions || 1)]);
+            rows.push([]);
+            rows.push(['[Credits Used]']);
+            rows.push(['Date', 'Description', 'Pull Type', 'Credits Used']);
+            (user.credit_usage_history || []).forEach(entry => {
+                rows.push([
+                    entry.used_at ? formatDateTimePST(entry.used_at) : '',
+                    entry.description || entry.pull_type || 'Analysis',
+                    entry.pull_type || '',
+                    String(entry.credits_used != null ? entry.credits_used : 1)
+                ]);
+            });
+            rows.push([]);
+            rows.push(['[Feature Usage]']);
+            rows.push(['Feature', 'Uses']);
+            featureList.forEach(([feature, count]) => {
+                rows.push([typeof formatFeatureName === 'function' ? formatFeatureName(feature) : feature, String(count)]);
+            });
+            rows.push([]);
+            rows.push(['[Profiles Viewed]']);
+            rows.push(['Profile', 'Viewed At']);
+            profilesViewed.forEach(p => {
+                rows.push([p.name || p.key || '', p.viewed_at ? formatDateTimePST(p.viewed_at) : '']);
+            });
+            rows.push([]);
+            rows.push(['[Recent Activity]']);
+            rows.push(['Action', 'Details', 'Timestamp']);
+            recentActions.forEach(a => {
+                rows.push([
+                    typeof formatActionName === 'function' ? formatActionName(a.action) : a.action,
+                    a.details || '',
+                    a.timestamp ? formatDateTimePST(a.timestamp) : ''
+                ]);
+            });
+            return rows;
+        }
+
+        async function doExportUserInfo() {
+            const by = document.getElementById('exportUserInfoBy').value;
+            const btn = document.getElementById('exportUserInfoBtn');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Exporting...';
+            try {
+                let url;
+                if (by === 'user') {
+                    const username = document.getElementById('exportUserInfoUsername').value;
+                    if (!username) {
+                        if (typeof showToast === 'function') showToast('Select a user', true);
+                        return;
+                    }
+                    url = `/api/admin/export-user-activity?username=${encodeURIComponent(username)}`;
+                } else {
+                    const company = document.getElementById('exportUserInfoCompany').value;
+                    if (!company) {
+                        if (typeof showToast === 'function') showToast('Select a company', true);
+                        return;
+                    }
+                    url = `/api/admin/export-user-activity?company=${encodeURIComponent(company)}`;
+                }
+                const response = await fetch(url, { credentials: 'same-origin' });
+                const data = await response.json();
+                if (!data.success) {
+                    if (typeof showToast === 'function') showToast(data.error || 'Export failed', true);
+                    return;
+                }
+                const users = data.users || [];
+                if (users.length === 0) {
+                    if (typeof showToast === 'function') showToast(by === 'company' ? 'No users found for that company' : 'No data', true);
+                    return;
+                }
+                const escape = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+                let allRows = [];
+                users.forEach(({ username, user, activity }) => {
+                    if (allRows.length) allRows.push([]);
+                    allRows = allRows.concat(buildUserActivityCSVRows(username, { user, activity }));
+                });
+                const csv = allRows.map(r => r.map(escape).join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                const name = by === 'user' ? `user_activity_${(users[0].username || 'export').replace(/[^a-zA-Z0-9_-]/g, '_')}` : `user_activity_company_${(data.company || 'export').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+                a.download = name + '.csv';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                closeExportUserInfoModal();
+                if (typeof showToast === 'function') showToast(users.length === 1 ? 'User activity exported' : `Exported ${users.length} users`);
+            } catch (e) {
+                console.error('Export user info error:', e);
+                if (typeof showToast === 'function') showToast('Export failed: ' + (e.message || 'Unknown error'), true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = origText;
+            }
         }
 
         function showUserDetailTab(tabName, btn) {
