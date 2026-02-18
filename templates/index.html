@@ -15301,7 +15301,7 @@
                         </div>
                     </div>
                     <div id="tstContentArea" style="display: none; flex: 1; flex-direction: column; overflow: hidden; padding: 0; min-height: 0;">
-                        <div id="tstHeader" class="dash-header-row" style="margin: 1.5rem 1.5rem 0 1.5rem; padding-bottom: 0;">
+                        <div id="tstHeader" class="dash-header-row" style="margin: 1.5rem 1.5rem 0 1.5rem; padding-bottom: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
                             <div class="dash-profile-info" style="display: flex; align-items: stretch; gap: 1rem; flex-wrap: wrap;">
                                 <div class="dash-profile-image" id="tstProfileImage" style="min-width: 80px; width: 120px; min-height: 100px; height: auto; align-self: stretch; flex-shrink: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; overflow: hidden;"><span id="tstProfileImagePlaceholder">🎬</span></div>
                                 <div class="dash-brand-container">
@@ -15310,11 +15310,14 @@
                                     <div id="tstGenreHeader" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
                                 </div>
                             </div>
+                            <div class="display-mode-toggle has-tooltip" id="tstHoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Toggle tooltips on/off when hovering over elements.">
+                                <span id="tstHoverToggleLabel">HOVER ON</span>
+                            </div>
                         </div>
                         <div class="dashboard-tabs" id="tstTabsBar" style="margin: 1rem 1.5rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                            <button class="tab-btn active" id="tstTabSummary" onclick="showTSTTab('summary')">📊 Summary</button>
-                            <button class="tab-btn" id="tstTabTheaters" onclick="showTSTTab('theaters')">🎬 Theaters</button>
-                            <button class="tab-btn" id="tstTabDemographics" onclick="showTSTTab('demographics')">👥 Demographics</button>
+                            <button class="tab-btn active has-tooltip" id="tstTabSummary" data-tooltip="Summary: Key metrics, audience snapshot, and overview." onclick="showTSTTab('summary')">📊 Summary</button>
+                            <button class="tab-btn has-tooltip" id="tstTabTheaters" data-tooltip="Theaters: Tickets sold and projected sales by theater chain." onclick="showTSTTab('theaters')">🎬 Theaters</button>
+                            <button class="tab-btn has-tooltip" id="tstTabDemographics" data-tooltip="Demographics: Age, gender, income, ethnicity, and location breakdown vs Gen Pop." onclick="showTSTTab('demographics')">👥 Demographics</button>
                         </div>
                         <div id="tstTabContent" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
                             <div id="tstTabSummaryPanel" class="tst-tab-panel">
@@ -15338,7 +15341,7 @@
                                         <div class="display-mode-toggle has-tooltip" id="tstDemographicsHoverToggle" onclick="toggleTSTDemographicsHover()" data-tooltip="Toggle chart tooltips on/off when hovering over data.">
                                             <span id="tstDemographicsHoverToggleLabel">HOVER ON</span>
                                         </div>
-                                        <button class="dash-action-btn" onclick="exportTSTDemographicsCSV()">📥 Export CSV</button>
+                                        <button class="dash-action-btn has-tooltip" data-tooltip="Export current demographics data (Overall or selected theater) to CSV." onclick="exportTSTDemographicsCSV()">📥 Export CSV</button>
                                     </div>
                                 </div>
                                 <div id="tstDemographicsOverall" class="demographics-charts-grid" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; margin-bottom: 2rem;"></div>
@@ -22376,15 +22379,26 @@
         function toggleTSTDemographicsHover() {
             tstDemographicsHoverEnabled = !tstDemographicsHoverEnabled;
             localStorage.setItem('bg_tst_demographics_hover', tstDemographicsHoverEnabled ? 'true' : 'false');
+            localStorage.setItem('bg_hover_enabled', tstDemographicsHoverEnabled ? 'true' : 'false');
+            if (typeof hoverEnabled !== 'undefined') hoverEnabled = tstDemographicsHoverEnabled;
+            document.body.classList.toggle('hover-disabled', !tstDemographicsHoverEnabled);
             const label = document.getElementById('tstDemographicsHoverToggleLabel');
             if (label) label.textContent = tstDemographicsHoverEnabled ? 'HOVER ON' : 'HOVER OFF';
             const toggle = document.getElementById('tstDemographicsHoverToggle');
             if (toggle) toggle.classList.toggle('active', !tstDemographicsHoverEnabled);
-            Object.keys(tstCharts).forEach(k => {
+            const tstLabel = document.getElementById('tstHoverToggleLabel');
+            const tstTgl = document.getElementById('tstHoverToggle');
+            if (tstLabel) tstLabel.textContent = tstDemographicsHoverEnabled ? 'HOVER ON' : 'HOVER OFF';
+            if (tstTgl) tstTgl.classList.toggle('active', !tstDemographicsHoverEnabled);
+            Object.keys(tstCharts || {}).forEach(k => {
                 if (tstCharts[k] && tstCharts[k].options?.plugins?.tooltip) {
                     tstCharts[k].options.plugins.tooltip.enabled = tstDemographicsHoverEnabled;
                     tstCharts[k].update();
                 }
+            });
+            ['hoverToggle','hoverToggleLabel','ticketSalesHoverToggle','ticketSalesHoverToggleLabel'].forEach((id,i) => {
+                const el = document.getElementById(id);
+                if (el) { if (id.includes('Label')) el.textContent = tstDemographicsHoverEnabled ? 'HOVER ON' : 'HOVER OFF'; else el.classList.toggle('active', !tstDemographicsHoverEnabled); }
             });
         }
         function exportTSTDemographicsCSV() {
@@ -27383,6 +27397,8 @@
             const label = document.getElementById('hoverToggleLabel');
             const tsToggle = document.getElementById('ticketSalesHoverToggle');
             const tsLabel = document.getElementById('ticketSalesHoverToggleLabel');
+            const tstToggle = document.getElementById('tstHoverToggle');
+            const tstLabel = document.getElementById('tstHoverToggleLabel');
             const tooltip = document.getElementById('globalTooltip');
             
             if (hoverEnabled) {
@@ -27390,13 +27406,23 @@
                 if (label) label.textContent = 'HOVER ON';
                 if (tsToggle) tsToggle.classList.remove('active');
                 if (tsLabel) tsLabel.textContent = 'HOVER ON';
+                if (tstToggle) tstToggle.classList.remove('active');
+                if (tstLabel) tstLabel.textContent = 'HOVER ON';
                 document.body.classList.remove('hover-disabled');
+                tstDemographicsHoverEnabled = true;
+                localStorage.setItem('bg_tst_demographics_hover', 'true');
+                Object.keys(tstCharts || {}).forEach(k => { const c = tstCharts[k]; if (c && c.options?.plugins?.tooltip) { c.options.plugins.tooltip.enabled = true; c.update(); } });
             } else {
                 if (toggle) toggle.classList.add('active');
                 if (label) label.textContent = 'HOVER OFF';
                 if (tsToggle) tsToggle.classList.add('active');
                 if (tsLabel) tsLabel.textContent = 'HOVER OFF';
+                if (tstToggle) tstToggle.classList.add('active');
+                if (tstLabel) tstLabel.textContent = 'HOVER OFF';
                 document.body.classList.add('hover-disabled');
+                tstDemographicsHoverEnabled = false;
+                localStorage.setItem('bg_tst_demographics_hover', 'false');
+                Object.keys(tstCharts || {}).forEach(k => { const c = tstCharts[k]; if (c && c.options?.plugins?.tooltip) { c.options.plugins.tooltip.enabled = false; c.update(); } });
                 
                 // Hide any currently visible tooltip using inline styles
                 if (tooltip) {
@@ -27437,6 +27463,10 @@
             }
             if (!subscriberOn && subLabel) subLabel.textContent = 'HOVER OFF';
             if (!hoverOn || !tickerOn) document.body.classList.add('hover-disabled');
+            const tstHoverLabel = document.getElementById('tstHoverToggleLabel');
+            const tstHoverToggle = document.getElementById('tstHoverToggle');
+            if (tstHoverLabel) tstHoverLabel.textContent = hoverOn ? 'HOVER ON' : 'HOVER OFF';
+            if (tstHoverToggle) tstHoverToggle.classList.toggle('active', !hoverOn);
             const tstDemoLabel = document.getElementById('tstDemographicsHoverToggleLabel');
             const tstDemoToggle = document.getElementById('tstDemographicsHoverToggle');
             if (tstDemoLabel) tstDemoLabel.textContent = tstDemographicsHoverEnabled ? 'HOVER ON' : 'HOVER OFF';
