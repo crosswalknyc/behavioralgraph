@@ -15327,18 +15327,31 @@
                         </div>
                         <div id="tstTabContent" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
                             <div id="tstTabSummaryPanel" class="tst-tab-panel">
-                                <div id="tstSummaryCards" class="exec-summary-grid" style="margin-bottom: 1.5rem;"></div>
-                                <div id="tstAudienceSnapshot" class="insight-card-v2" style="margin-bottom: 1.5rem;">
-                                    <h4 class="has-tooltip" data-tooltip="Quick demographic overview: dominant characteristic in each category. Percentages compare to Gen Pop (GP). US Gen Pop base 2026: 329,900,000." style="margin: 0 0 1rem 0; font-size: 0.95rem;">👤 Audience Snapshot</h4>
+                                <div data-tst-export="tst-summary" style="margin-bottom: 1.5rem;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                        <span style="font-size: 0.8rem; color: var(--text-secondary);">Summary metrics</span>
+                                        <span class="module-action-btns"><button class="module-btn png-btn has-tooltip" data-tooltip="Export as PNG" onclick="tstExportPNG('tst-summary')">PNG</button><button class="module-btn csv-btn has-tooltip" data-tooltip="Export as CSV" onclick="tstExportCSV('tst-summary')">CSV</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to workspace deck" onclick="tstAddToDeck('tst-summary', 'TST Summary')">➕</button></span>
+                                    </div>
+                                    <div id="tstSummaryCards" class="exec-summary-grid"></div>
+                                </div>
+                                <div id="tstAudienceSnapshot" class="insight-card-v2" data-tst-export="tst-snapshot" style="margin-bottom: 1.5rem;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                                        <h4 class="has-tooltip" data-tooltip="Quick demographic overview: dominant characteristic in each category. Percentages compare to Gen Pop (GP). US Gen Pop base 2026: 329,900,000." style="margin: 0; font-size: 0.95rem;">👤 Audience Snapshot</h4>
+                                        <span class="module-action-btns"><button class="module-btn png-btn has-tooltip" data-tooltip="Export as PNG" onclick="tstExportPNG('tst-snapshot')">PNG</button><button class="module-btn csv-btn has-tooltip" data-tooltip="Export as CSV" onclick="tstExportCSV('tst-snapshot')">CSV</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to workspace deck" onclick="tstAddToDeck('tst-snapshot', 'TST Audience Snapshot')">➕</button></span>
+                                    </div>
                                     <div id="tstAudienceSnapshotGrid" class="audience-snapshot" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;"></div>
                                 </div>
                             </div>
                             <div id="tstTabTheatersPanel" class="tst-tab-panel" style="display: none;">
                                 <h3 style="margin: 0 0 0.25rem 0; font-size: 1rem; font-weight: 600;">US Gen Pop Projected Tickets Sold &amp; Box Office Sales by Theater</h3>
                                 <p id="tstTheatersFootnote" style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 0 0 1rem 0;">Ticket price is calculated at $15 per ticket against total number of tickets sold with a 1.5x factor to account for a single purchaser buying multiple tickets.</p>
-                                <div id="tstTheatersTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); padding: 1.25rem 1.5rem;"></div>
+                                <div data-tst-export="tst-theater-cards" style="margin-bottom: 1rem;">
+                                    <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.35rem;"><span class="module-action-btns"><button class="module-btn png-btn has-tooltip" data-tooltip="Export as PNG" onclick="tstExportPNG('tst-theater-cards')">PNG</button><button class="module-btn csv-btn has-tooltip" data-tooltip="Export as CSV" onclick="tstExportCSV('tst-theater-cards')">CSV</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to deck" onclick="tstAddToDeck('tst-theater-cards', 'TST Theater Cards')">➕</button></span></div>
+                                    <div id="tstTheatersTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); padding: 1.25rem 1.5rem;"></div>
+                                </div>
                                 <div id="tstTheatersSortRow" style="margin-top: 1rem; margin-bottom: 0.5rem;"></div>
-                                <div id="tstTheatersChart" style="height: 300px; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
+                                <div id="tstTheatersChart" data-tst-export="tst-theater-chart" style="height: 300px; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); position: relative;">
+                                    <div style="position: absolute; top: 0.5rem; right: 0.5rem; z-index: 2;"><span class="module-action-btns"><button class="module-btn png-btn has-tooltip" data-tooltip="Export as PNG" onclick="tstExportPNG('tst-theater-chart')">PNG</button><button class="module-btn csv-btn has-tooltip" data-tooltip="Export as CSV" onclick="tstExportCSV('tst-theater-chart')">CSV</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to deck" onclick="tstAddToDeck('tst-theater-chart', 'TST Theater Chart')">➕</button></span></div>
                                     <canvas id="tstTheatersChartCanvas"></canvas>
                                 </div>
                             </div>
@@ -22290,6 +22303,93 @@
         }
         function sortTSTDemoChart(field, mode) { tstDemoSort[field]=mode; if(currentTSTData?.data) renderTSTDemographicsOverall(currentTSTData.data); }
         function sortTSTPerTheaterDemoChart(field, mode) { tstDemoSort[field]=mode; renderTSTPerTheaterCharts(); }
+        
+        function tstExportPNG(sourceId) {
+            if (!currentTSTData) { alert('No ticket sales data loaded'); return; }
+            const el = document.querySelector('[data-tst-export="' + sourceId + '"]');
+            if (!el) { alert('Export target not found'); return; }
+            const canvas = el.querySelector('canvas');
+            const name = (currentTSTData.display_name || 'TST').replace(/[^a-zA-Z0-9]/g, '_') + '_' + sourceId.replace(/[^a-zA-Z0-9-]/g, '_');
+            const doDownload = (dataUrl) => {
+                const a = document.createElement('a');
+                a.download = name + '.png';
+                a.href = dataUrl;
+                a.click();
+            };
+            if (canvas) {
+                doDownload(canvas.toDataURL('image/png'));
+                return;
+            }
+            if (typeof html2canvas === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                script.onload = () => html2canvas(el, { backgroundColor: '#1a1a2e', scale: 2 }).then(c => doDownload(c.toDataURL('image/png')));
+                document.head.appendChild(script);
+            } else {
+                html2canvas(el, { backgroundColor: '#1a1a2e', scale: 2 }).then(c => doDownload(c.toDataURL('image/png')));
+            }
+        }
+        
+        function tstExportCSV(sourceId) {
+            if (!currentTSTData || !currentTSTData.data) { alert('No ticket sales data loaded'); return; }
+            const d = currentTSTData.data;
+            const name = (currentTSTData.display_name || 'TST').replace(/[^a-zA-Z0-9]/g, '_') + '_' + sourceId.replace(/[^a-zA-Z0-9-]/g, '_');
+            let rows = [];
+            if (sourceId === 'tst-summary') {
+                rows = [['Metric','Value'], ['Total Tickets (US)', String(d.total_tickets_us ?? '')], ['Projected Ticket Sales (US)', String(d.projected_ticket_sales_us ?? '')]];
+            } else if (sourceId === 'tst-snapshot') {
+                rows = [['Category','Value','Percent']];
+                ['GENDER','AGE','ETHNICITY','INCOME','LOCATION'].forEach(field => {
+                    const arr = (d.demographics_overall && d.demographics_overall[field]) || [];
+                    arr.slice(0, 10).forEach(r => rows.push([field, String(r.value ?? ''), String(r.percent ?? '')]));
+                });
+            } else if (sourceId === 'tst-theater-cards' || sourceId === 'tst-theater-chart') {
+                rows = [['Theater','Tickets Sold','Projected Sales']];
+                (d.platforms || []).forEach(p => rows.push([String(p.platform || p.name || ''), String(p.tickets_sold ?? p.sold ?? ''), String(p.projected ?? '')]));
+            } else if (sourceId.startsWith('tst-demo-')) {
+                const field = sourceId.replace('tst-demo-', '');
+                const arr = (d.demographics_overall && d.demographics_overall[field]) || [];
+                rows = [['Value','Percent']];
+                arr.forEach(r => rows.push([String(r.value ?? ''), String(r.percent ?? '')]));
+            } else if (sourceId.startsWith('tst-compare-')) {
+                const field = sourceId.replace('tst-compare-', '');
+                const perTheater = d.demographics_per_theater || {};
+                const theaters = Object.keys(perTheater).sort();
+                const allValues = new Set();
+                theaters.forEach(t => { ((perTheater[t] || {})[field] || []).forEach(r => allValues.add(r.value != null ? r.value : '')); });
+                const valueList = Array.from(allValues);
+                const rowArrays = [['Theater', ...valueList]];
+                theaters.forEach(t => {
+                    const vals = (perTheater[t] || {})[field] || [];
+                    const byVal = {};
+                    vals.forEach(r => { byVal[r.value != null ? r.value : ''] = r.percent; });
+                    rowArrays.push([t, ...valueList.map(v => byVal[v] != null ? byVal[v] : '')]);
+                });
+                rows = rowArrays;
+            } else if (sourceId.startsWith('tst-per-')) {
+                const field = sourceId.replace('tst-per-', '');
+                const sel = document.getElementById('tstTheaterSelect');
+                const theater = sel ? sel.value : '';
+                const perTheater = d.demographics_per_theater || {};
+                const demo = theater ? (perTheater[theater] || {})[field] : (d.demographics_overall || {})[field] || [];
+                const arr = Array.isArray(demo) ? demo : [];
+                rows = [['Value','Percent']];
+                arr.forEach(r => rows.push([String(r.value ?? ''), String(r.percent ?? '')]));
+            }
+            if (!rows.length) { alert('No data to export for this section'); return; }
+            const csv = rows.map(r => Array.isArray(r) ? r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',') : r).join('\n');
+            const a = document.createElement('a');
+            a.download = name + '.csv';
+            a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+            a.click();
+        }
+        
+        function tstAddToDeck(sourceId, title) {
+            if (!currentTSTData) { alert('No ticket sales data loaded'); return; }
+            window._tstDeckTitle = title;
+            showDeckSelectionPopup('tst', sourceId);
+        }
+        
         function renderTSTDemographicsOverall(d) {
             const demo = d.demographics_overall || {};
             const container = document.getElementById('tstDemographicsOverall');
@@ -22320,7 +22420,8 @@
                 const sortRow = useBar ? `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div>` : '';
                 const demoCardDescriptions = { GENDER: 'The self-identified gender of all represented panelists.', AGE: 'The age distribution of all represented panelists.', INCOME: 'The household income distribution of all represented panelists.', ETHNICITY: 'The self-identified ethnicity of all represented panelists.', LOCATION: 'The geographic distribution of panelists by DMA.' };
                 const genPopCardTip = (demoCardDescriptions[field] || field) + ' GP = General Population. ' + TST_GENPOP_TOOLTIP;
-                html += `<div class="demographics-chart-card has-tooltip" data-tooltip="${(genPopCardTip||'').replace(/"/g,'&quot;')}" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
+                const exportBtns = `<span class="module-action-btns" style="margin-bottom:0.35rem;"><button class="module-btn png-btn" onclick="tstExportPNG('tst-demo-${field}')">PNG</button><button class="module-btn csv-btn" onclick="tstExportCSV('tst-demo-${field}')">CSV</button><button class="module-btn deck-btn" onclick="tstAddToDeck('tst-demo-${field}', 'TST ${field}')">➕</button></span>`;
+                html += `<div class="demographics-chart-card has-tooltip" data-tst-export="tst-demo-${field}" data-tooltip="${(genPopCardTip||'').replace(/"/g,'&quot;')}" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.35rem;"><h4 style="margin: 0; font-size: 0.9rem;">${field}</h4>${exportBtns}</div>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
             });
             container.innerHTML = html;
             keys.forEach(field => {
@@ -22461,8 +22562,9 @@
                 const headerDmaRank = isLocation ? `<th${thClick(field, 1)}>DMA Rank${sortIndicator(1)}</th>` : '';
                 const headerTheaters = theaterNames.map((t, i) => { const c = isLocation ? i + 2 : i + 1; return `<th${thClick(field, c)}>${(headerLabel(t)||'').replace(/</g,'&lt;')}${sortIndicator(c)}</th>`; }).join('');
                 const headerGenPop = `<th style="background: rgba(102,217,239,0.15);"${thClick(field, isLocation ? theaterNames.length + 2 : theaterNames.length + 1)}>Gen Pop${sortIndicator(isLocation ? theaterNames.length + 2 : theaterNames.length + 1)}</th>`;
-                html += `<div class="demographics-chart-card" style="grid-column: 1 / -1; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); overflow-x: auto;">
-                    <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">${field}</h4>
+                const compareExportBtns = `<span class="module-action-btns"><button class="module-btn png-btn" onclick="tstExportPNG('tst-compare-${field}')">PNG</button><button class="module-btn csv-btn" onclick="tstExportCSV('tst-compare-${field}')">CSV</button><button class="module-btn deck-btn" onclick="tstAddToDeck('tst-compare-${field}', 'TST Compare ${field}')">➕</button></span>`;
+                html += `<div class="demographics-chart-card" data-tst-export="tst-compare-${field}" style="grid-column: 1 / -1; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); overflow-x: auto;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;"><h4 style="margin: 0; font-size: 0.95rem;">${field}</h4>${compareExportBtns}</div>
                     <div class="comp-table-wrapper"><table class="comp-table" style="width: 100%; min-width: 400px;">
                     <thead><tr>${headerCategory}${headerDmaRank}${headerTheaters}${headerGenPop}</tr></thead>
                     <tbody>`;
@@ -22530,7 +22632,8 @@
                     ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="income_asc"'+(m==='income_asc'?' selected':'')+'>Income: Low to High</option><option value="income_desc"'+(m==='income_desc'?' selected':'')+'>Income: High to Low</option>'
                     : '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option>') : '';
                 const sortRow = useBar ? `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTPerTheaterDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div>` : '';
-                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
+                const perExportBtns = `<span class="module-action-btns"><button class="module-btn png-btn" onclick="tstExportPNG('tst-per-${field}')">PNG</button><button class="module-btn csv-btn" onclick="tstExportCSV('tst-per-${field}')">CSV</button><button class="module-btn deck-btn" onclick="tstAddToDeck('tst-per-${field}', 'TST ${field}')">➕</button></span>`;
+                html += `<div class="demographics-chart-card" data-tst-export="tst-per-${field}" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.35rem;"><h4 style="margin: 0; font-size: 0.9rem;">${field}</h4>${perExportBtns}</div>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
             });
             container.innerHTML = html;
             ['demo_per_gender','demo_per_age','demo_per_income','demo_per_ethnicity','demo_per_location'].forEach(k => { if (tstCharts[k]) { tstCharts[k].destroy(); tstCharts[k] = null; } });
@@ -35191,6 +35294,10 @@
             pendingCollaborators = [];
             pendingSelectedItems = selectedItems;
             
+            const addingLabel = type === 'tst'
+                ? (currentTSTData?.display_name || 'Ticket Sales') + ' - ' + (window._tstDeckTitle || category)
+                : (currentProfileData?.name || 'Profile') + ' - ' + category;
+            
             // Build workspace and deck options with last used pre-selected
             let workspaceOptions = '';
             Object.entries(workspaces || {}).forEach(([wsId, ws]) => {
@@ -35207,7 +35314,7 @@
                     <div style="padding: 1.5rem; text-align: left;">
                         <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-lime);">
                             <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Adding:</div>
-                            <div style="font-weight: 600;">${currentProfileData?.name || 'Profile'} - ${category}</div>
+                            <div style="font-weight: 600;">${addingLabel}</div>
                         </div>
                         
                         <div style="margin-bottom: 1rem;">
@@ -35342,7 +35449,7 @@
                 }
                 
                 // Create the slide/module item
-                const item = createModuleItem(type, category, pendingSelectedItems);
+                const item = await createModuleItem(type, category, pendingSelectedItems);
                 if (!item) {
                     alert('Failed to create slide item');
                     return;
@@ -35824,7 +35931,7 @@
             return item;
         }
         
-        function createModuleItem(type, category, selectedItems = null) {
+        async function createModuleItem(type, category, selectedItems = null) {
             const item = {
                 id: 'slide_' + Date.now(),
                 type: type,
@@ -35914,6 +36021,21 @@
                     item.data = { chartImage: canvas.toDataURL('image/png') };
                 }
                 item.title = `${category} Chart`;
+            } else if (type === 'tst') {
+                item.profileName = currentTSTData?.display_name || 'Ticket Sales';
+                item.profileKey = currentTSTData?.s3_key || null;
+                item.title = window._tstDeckTitle || category;
+                const el = document.querySelector('[data-tst-export="' + category + '"]');
+                if (el) {
+                    const canvas = el.querySelector('canvas');
+                    if (canvas) {
+                        item.data = { chartImage: canvas.toDataURL('image/png') };
+                    } else if (typeof html2canvas !== 'undefined') {
+                        const c = await html2canvas(el, { backgroundColor: '#1a1a2e', scale: 2 });
+                        item.data = { chartImage: c.toDataURL('image/png') };
+                    }
+                }
+                if (!item.data) item.data = { chartImage: null };
             }
             
             return item;
