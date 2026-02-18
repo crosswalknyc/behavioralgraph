@@ -4410,10 +4410,10 @@
                     </td>
                     <td>
                         <div class="action-buttons">
-                            ${currentUserRole === 'super_admin' && username !== currentUsername ? `<button class="btn btn-small" style="background: rgba(102, 217, 239, 0.2); color: #66d9ef;" onclick="cloakAsUser('${String(username).replace(/'/g, "\\'")}')" title="Log in as this user and act as them">Cloak</button>` : ''}
                             <button class="btn btn-small btn-secondary" onclick="editUser('${username}')">Edit</button>
                             <button class="btn btn-small" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;" onclick="resetPassword('${username}')">🔐 Reset PW</button>
                             ${username !== 'admin' ? `<button class="btn btn-small btn-danger" onclick="deleteUser('${username}')">Delete</button>` : ''}
+                            ${currentUserRole === 'super_admin' && username !== currentUsername ? `<button class="btn btn-small" style="background: rgba(102, 217, 239, 0.2); color: #66d9ef;" onclick="cloakAsUser('${String(username).replace(/'/g, "\\'")}')" title="Log in as this user and act as them">Cloak</button>` : ''}
                         </div>
                     </td>
                 `;
