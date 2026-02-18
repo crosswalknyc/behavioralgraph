@@ -857,7 +857,7 @@
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 1.25rem;
+            padding: 1.25rem 1.5rem;
             text-align: center;
         }
 
@@ -15311,9 +15311,9 @@
                             <div class="dash-profile-info" style="display: flex; align-items: stretch; gap: 1rem; flex-wrap: wrap;">
                                 <div class="dash-profile-image" id="tstProfileImage" style="min-width: 80px; width: 120px; min-height: 100px; height: auto; align-self: stretch; flex-shrink: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; overflow: hidden;"><span id="tstProfileImagePlaceholder">🎬</span></div>
                                 <div class="dash-brand-container">
-                                    <div class="dash-brand-box" id="tstMovieNameHeader"></div>
-                                    <div class="dash-date-box" id="tstDateRangeHeader"></div>
-                                    <div id="tstGenreHeader" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
+                                    <div class="dash-brand-box has-tooltip" id="tstMovieNameHeader" data-tooltip=""></div>
+                                    <div class="dash-date-box has-tooltip" id="tstDateRangeHeader" data-tooltip=""></div>
+                                    <div class="has-tooltip" id="tstGenreHeader" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;" data-tooltip=""></div>
                                 </div>
                             </div>
                             <div class="display-mode-toggle has-tooltip" id="tstHoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Toggle tooltips on/off when hovering over elements.">
@@ -15334,12 +15334,12 @@
                                 </div>
                             </div>
                             <div id="tstTabTheatersPanel" class="tst-tab-panel" style="display: none;">
-                                <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">US Gen Pop Projected Tickets Sold &amp; Box Office Sales by Theater</h3>
-                                <div id="tstTheatersTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);"></div>
+                                <h3 style="margin: 0 0 0.25rem 0; font-size: 1rem; font-weight: 600;">US Gen Pop Projected Tickets Sold &amp; Box Office Sales by Theater</h3>
+                                <p id="tstTheatersFootnote" style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 0 0 1rem 0;"></p>
+                                <div id="tstTheatersTable" style="background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); padding: 1.25rem 1.5rem;"></div>
                                 <div id="tstTheatersChart" style="height: 300px; margin-top: 1rem; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
                                     <canvas id="tstTheatersChartCanvas"></canvas>
                                 </div>
-                                <p id="tstTheatersFootnote" style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.75rem;"></p>
                             </div>
                             <div id="tstTabDemographicsPanel" class="tst-tab-panel" style="display: none;">
                                 <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
@@ -22039,11 +22039,19 @@
             const dateRange = meta.date_range || '';
             const movieEl = document.getElementById('tstMovieNameHeader');
             movieEl.textContent = movieName;
-            movieEl.title = 'Panelists who have confirmed digital ticket purchases to ' + movieName + ' from Fandango, AMC Theaters, Cinemark Theaters, Regal Cinemas or Alamo Drafthouse during ' + dateRange + '.';
+            const movieTooltip = 'Panelists who have confirmed digital ticket purchases to ' + movieName + ' from Fandango, AMC Theaters, Cinemark Theaters, Regal Cinemas or Alamo Drafthouse during ' + dateRange + '.';
+            movieEl.setAttribute('data-tooltip', movieTooltip);
+            movieEl.setAttribute('title', movieTooltip);
+            const dateEl = document.getElementById('tstDateRangeHeader');
+            dateEl.textContent = dateRange;
+            const dateTooltip = 'Date range for confirmed digital ticket purchases from reporting theaters.';
+            dateEl.setAttribute('data-tooltip', dateTooltip);
+            dateEl.setAttribute('title', dateTooltip);
             const genreEl = document.getElementById('tstGenreHeader');
             genreEl.textContent = d.genre ? 'Genre: ' + d.genre : '';
-            genreEl.title = 'Family & Animation ticket sales are factored by 2x to account for a single panelist purchasing multiple tickets.';
-            document.getElementById('tstDateRangeHeader').textContent = dateRange;
+            const genreTooltip = 'Family & Animation ticket sales are factored by 2x to account for a single panelist purchasing multiple tickets.';
+            genreEl.setAttribute('data-tooltip', genreTooltip);
+            genreEl.setAttribute('title', genreTooltip);
             const isFamilyAnimation = d.genre && String(d.genre).toLowerCase().includes('family') && String(d.genre).toLowerCase().includes('animation');
             const footnoteEl = document.getElementById('tstTheatersFootnote');
             if (footnoteEl) {
@@ -22136,7 +22144,7 @@
             const tableEl = document.getElementById('tstTheatersTable');
             if (tableEl) {
                 const arrow = (c) => s.col === c ? (s.dir === 'asc' ? ' ▲' : ' ▼') : '';
-                const sortHint = `<div style="display:flex;gap:1rem;margin-bottom:1rem;font-size:0.75rem;color:var(--text-secondary);">Sort by: <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('platform')" title="Click to sort">Theater${arrow('platform')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('sold')" title="Click to sort">Tickets Sold${arrow('sold')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('proj')" title="Click to sort">Projected Sales${arrow('proj')}</span></div>`;
+                const sortHint = `<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;font-size:0.75rem;color:var(--text-secondary);padding-left:0.125rem;">Sort by: <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('platform')" title="Click to sort">Theater${arrow('platform')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('sold')" title="Click to sort">Tickets Sold${arrow('sold')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('proj')" title="Click to sort">Projected Sales${arrow('proj')}</span></div>`;
                 tableEl.innerHTML = rows.length ? sortHint + `<div class="exec-summary-grid" style="margin-bottom:0;">${rows.map(r => `<div class="exec-summary-metric"><div class="exec-metric-label">${(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
             }
             const canvas = document.getElementById('tstTheatersChartCanvas');
