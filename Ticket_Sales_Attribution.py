@@ -486,10 +486,10 @@ def write_output(results, p):
     total_tickets = sum(platform_totals.values())
     total_tickets_gen_pop = gen_pop_projection(total_tickets)
 
-    # Genre check for 2x factor (family or animation)
+    # Genre check for 15x factor (family or animation)
     genre_lower = (p.get("genre") or "").lower()
     is_family_animation = "family" in genre_lower or "animation" in genre_lower
-    ticket_multiplier = 2.0 if is_family_animation else 1.0
+    ticket_multiplier = 15.0 if is_family_animation else 1.0
 
     # Projected ticket sales: total * $15, then * multiplier if family/animation
     projected_sales_base = total_tickets * 15.0 * ticket_multiplier
@@ -499,7 +499,7 @@ def write_output(results, p):
         ("", "TICKET SALES ATTRIBUTION RESULTS", "", "", "", ""),
         ("", "", "", "", "", ""),
         ("Movie", "", p["movie_name"], "", "", ""),
-        ("Genre", "", p.get("genre", ""), f"(2x factor: {'Yes' if is_family_animation else 'No'})", "", ""),
+        ("Genre", "", p.get("genre", ""), f"(15x factor: {'Yes' if is_family_animation else 'No'})", "", ""),
         ("Date Range", "", f"{p['start_date'].date()} to {p['end_date'].date()}", "", "", ""),
         ("", "", "", "", "", ""),
         ("", "TOTAL HITS (MOVIE VIEWERS) → THEATER BY PLATFORM", "", "", "", ""),
@@ -514,7 +514,7 @@ def write_output(results, p):
     rows.extend([
         ("", "", "", "", "", ""),
         ("Total Tickets Sold (sum of theater hits)", total_tickets, format_gen_pop_full(total_tickets_gen_pop), "", "", ""),
-        ("Projected Ticket Sales (Total × $15" + (" × 2" if is_family_animation else "") + ")", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
+        ("Projected Ticket Sales (Total × $15" + (" × 15" if is_family_animation else "") + ")", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
         ("", "", "", "", "", ""),
     ])
 
