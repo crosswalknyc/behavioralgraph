@@ -22077,7 +22077,8 @@
                 const gp = typeof _tstGetGenPop === 'function' ? _tstGetGenPop(key.toLowerCase(), top.value) : 0;
                 const index = gp > 0.05 ? (pct / gp) * 100 : 100;
                 const overIndex = index >= 100;
-                insights.push({ label, value: top.value || '', pct, gp, overIndex });
+                const displayVal = typeof _tstDisplayLabel === 'function' ? _tstDisplayLabel(key, top.value) : (top.value || '');
+                insights.push({ label, value: displayVal || '', pct, gp, overIndex });
             });
             container.innerHTML = insights.map(i => {
                 const pctColor = i.gp > 0.05 ? (i.overIndex ? '#10b981' : '#ef4444') : 'var(--text-primary)';
@@ -22141,6 +22142,25 @@
         }
         const TST_AGE_ORDER = ['<16','under 16','16-18','18-20','21-25','26-30','31-40','41-59','60+','65+','over 65'];
         const TST_INCOME_ORDER = ['$40k-$60k','$40k - $60k','$60k-$75k','$60k - $75k','$75k-$100k','$75k - $100k','$100k-$150k','$100k - $150k','$150k-$250k','$150k - $250k','$250k+','$250k +'];
+        const TST_ETHNICITY_ORDER = ['White','Black','Latinx','Asian','Other'];
+        const TST_GENDER_ORDER = ['Female','Male','Trans Male','Trans Female','Non-Binary'];
+        // Display label for demographics: actual category names + overrides (e.g. Latinx → Latino) to match Profile IQ.
+        function _tstDisplayLabel(field, value) {
+            const v = (value == null ? '' : String(value)).trim();
+            if (!v) return v;
+            const fieldUpper = (field || '').toUpperCase();
+            const isIndex = /^\d+$/.test(v);
+            const idx = isIndex ? parseInt(v, 10) : -1;
+            if (fieldUpper === 'AGE' && isIndex && idx >= 0 && idx < TST_AGE_ORDER.length) return TST_AGE_ORDER[idx];
+            if (fieldUpper === 'GENDER' && isIndex && idx >= 0 && idx < TST_GENDER_ORDER.length) return TST_GENDER_ORDER[idx];
+            if (fieldUpper === 'ETHNICITY') {
+                const raw = isIndex && idx >= 0 && idx < TST_ETHNICITY_ORDER.length ? TST_ETHNICITY_ORDER[idx] : v;
+                return (typeof displayDemographicLabel === 'function' ? displayDemographicLabel(raw) : (raw.trim().toLowerCase() === 'latinx' ? 'Latino' : raw));
+            }
+            if (fieldUpper === 'INCOME' && isIndex && idx >= 0 && idx < TST_INCOME_ORDER.length) return TST_INCOME_ORDER[idx];
+            if (fieldUpper === 'LOCATION') return v;
+            return v;
+        }
         let tstDemoSort = { AGE:'value_desc', INCOME:'value_desc', LOCATION:'value_desc' };
         function _tstDemoArrToObj(arr) { const o={}; (arr||[]).forEach(r=>{ const v=(r.value||'').trim(); if(v) o[v]=_tstParsePct(r.percent); }); return o; }
         function _tstGetGenPop(field, value) {
@@ -22223,9 +22243,10 @@
                 const isLocation = field === 'LOCATION';
                 const maxItems = isLocation ? 25 : 20;
                 const sorted = _tstSortDemoArr(field, arr).slice(0, maxItems);
-                const labels = sorted.map(r => r.value || '');
+                const rawValues = sorted.map(r => r.value || '');
+                const labels = rawValues.map(v => _tstDisplayLabel(field, v));
                 const data = sorted.map(r => _tstParsePct(r.percent));
-                const genPopVals = labels.map(v => _tstGetGenPop(field.toLowerCase(), v));
+                const genPopVals = rawValues.map(v => _tstGetGenPop(field.toLowerCase(), v));
                 const useBar = isLocation || field === 'AGE' || field === 'INCOME';
                 const colors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672','#ae81ff','#e6db74','#75715e'];
                 if (tstCharts['demo_' + field]) tstCharts['demo_' + field].destroy();
@@ -22326,9 +22347,10 @@
                 const isLocation = field === 'LOCATION';
                 const maxItems = isLocation ? 25 : 20;
                 const sorted = _tstSortDemoArr(field, arr).slice(0, maxItems);
-                const labels = sorted.map(r => r.value || '');
+                const rawValues = sorted.map(r => r.value || '');
+                const labels = rawValues.map(v => _tstDisplayLabel(field, v));
                 const data = sorted.map(r => _tstParsePct(r.percent));
-                const genPopVals = labels.map(v => _tstGetGenPop(field.toLowerCase(), v));
+                const genPopVals = rawValues.map(v => _tstGetGenPop(field.toLowerCase(), v));
                 const useBar = isLocation || field === 'AGE' || field === 'INCOME';
                 const colors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672','#ae81ff','#e6db74','#75715e'];
                 const pcts = sorted.map(r=>_tstParsePct(r.percent));
