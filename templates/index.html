@@ -15329,7 +15329,7 @@
                             <div id="tstTabSummaryPanel" class="tst-tab-panel">
                                 <div id="tstSummaryCards" class="exec-summary-grid" style="margin-bottom: 1.5rem;"></div>
                                 <div id="tstAudienceSnapshot" class="insight-card-v2" style="margin-bottom: 1.5rem;">
-                                    <h4 style="margin: 0 0 1rem 0; font-size: 0.95rem;">👤 Audience Snapshot</h4>
+                                    <h4 class="has-tooltip" data-tooltip="Quick demographic overview: dominant characteristic in each category. Percentages compare to Gen Pop (GP). US Gen Pop base 2026: 329,900,000." style="margin: 0 0 1rem 0; font-size: 0.95rem;">👤 Audience Snapshot</h4>
                                     <div id="tstAudienceSnapshotGrid" class="audience-snapshot" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;"></div>
                                 </div>
                             </div>
@@ -15343,7 +15343,7 @@
                             </div>
                             <div id="tstTabDemographicsPanel" class="tst-tab-panel" style="display: none;">
                                 <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
-                                    <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Overall Demographics</h3>
+                                    <h3 class="has-tooltip" data-tooltip="Demographics by category. GP = General Population. US Gen Pop base 2026: 329,900,000." style="margin: 0; font-size: 1rem; font-weight: 600;">Overall Demographics</h3>
                                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                                         <div class="display-mode-toggle has-tooltip" id="tstDemographicsHoverToggle" onclick="toggleTSTDemographicsHover()" data-tooltip="Toggle chart tooltips on/off when hovering over data.">
                                             <span id="tstDemographicsHoverToggleLabel">HOVER ON</span>
@@ -21942,6 +21942,8 @@
         let currentTSTData = null;
         let tstCharts = {};
         let tstActiveTab = 'summary';
+        const TST_GENPOP_BASE_2026 = '329,900,000';
+        const TST_GENPOP_TOOLTIP = 'US Gen Pop projections use the 2026 base of ' + TST_GENPOP_BASE_2026 + '.';
         let tstDemographicsHoverEnabled = localStorage.getItem('bg_tst_demographics_hover') !== 'false';
         async function loadTSTProfiles() {
             try {
@@ -22043,7 +22045,8 @@
             document.getElementById('tstSummaryCards').innerHTML = cards.map(c => {
                 const num = _tstParseNum(c.value);
                 const display = isNaN(num) ? (c.value||'').toString() : (c.isCurrency ? '$' : '') + Math.round(num).toLocaleString();
-                return `<div class="exec-summary-metric"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div></div>`;
+                const tip = (c.label || '') + '. ' + TST_GENPOP_TOOLTIP;
+                return `<div class="exec-summary-metric has-tooltip" data-tooltip="${(tip||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div></div>`;
             }).join('');
             renderTSTAudienceSnapshot(d);
             renderTSTTheatersTab(d);
@@ -22086,10 +22089,11 @@
                 const displayVal = typeof _tstDisplayLabel === 'function' ? _tstDisplayLabel(key, top.value) : (top.value || '');
                 insights.push({ label, value: displayVal || '', pct, gp, overIndex });
             });
+            const snapshotTip = 'Audience % vs General Population (GP). ' + TST_GENPOP_TOOLTIP;
             container.innerHTML = insights.map(i => {
                 const pctColor = i.gp > 0.05 ? (i.overIndex ? '#10b981' : '#ef4444') : 'var(--text-primary)';
                 const pctHtml = i.gp > 0.05 ? `<span style="color:${pctColor};">${i.pct.toFixed(2)}%</span> (GP: ${i.gp.toFixed(2)}%)` : `${i.pct.toFixed(2)}%`;
-                return `<div class="snapshot-item" style="text-align:left;padding:0.75rem;background:rgba(255,255,255,0.03);border-radius:8px;">
+                return `<div class="snapshot-item has-tooltip" data-tooltip="${(snapshotTip||'').replace(/"/g,'&quot;')}" style="text-align:left;padding:0.75rem;background:rgba(255,255,255,0.03);border-radius:8px;">
                     <div class="snapshot-label" style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">${(i.label||'').replace(/</g,'&lt;')}</div>
                     <div class="snapshot-value" style="font-size:1.1rem;font-weight:700;color:var(--accent-lime);margin-top:0.25rem;">${(i.value||'').replace(/</g,'&lt;')}</div>
                     <div class="snapshot-subtext" style="font-size:0.85rem;color:var(--text-primary);margin-top:0.25rem;">${pctHtml}</div>
@@ -22123,7 +22127,8 @@
             if (tableEl) {
                 const arrow = (c) => s.col === c ? (s.dir === 'asc' ? ' ▲' : ' ▼') : '';
                 const sortHint = `<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;font-size:0.75rem;color:var(--text-secondary);padding-left:0.125rem;">Sort by: <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('platform')" title="Click to sort">Theater${arrow('platform')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('sold')" title="Click to sort">Tickets Sold${arrow('sold')}</span> · <span style="cursor:pointer;text-decoration:underline;" onclick="sortTSTTheaters('proj')" title="Click to sort">Projected Sales${arrow('proj')}</span></div>`;
-                tableEl.innerHTML = rows.length ? sortHint + `<div class="exec-summary-grid" style="margin-bottom:0;">${rows.map(r => `<div class="exec-summary-metric"><div class="exec-metric-label">${(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
+                const theaterCardTip = (platform) => (platform || 'Theater') + ': projected sales and tickets sold. ' + TST_GENPOP_TOOLTIP;
+                tableEl.innerHTML = rows.length ? sortHint + `<div class="exec-summary-grid" style="margin-bottom:0;">${rows.map(r => `<div class="exec-summary-metric has-tooltip" data-tooltip="${(theaterCardTip(r.platform)||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
             }
             const canvas = document.getElementById('tstTheatersChartCanvas');
             if (!canvas || !platforms.length || typeof Chart === 'undefined') return;
@@ -22279,7 +22284,8 @@
                     ? '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option><option value="income_asc"'+(m==='income_asc'?' selected':'')+'>Income: Low to High</option><option value="income_desc"'+(m==='income_desc'?' selected':'')+'>Income: High to Low</option>'
                     : '<option value="value_desc"'+(m==='value_desc'?' selected':'')+'>Sort by: % Descending</option><option value="value_asc"'+(m==='value_asc'?' selected':'')+'>Sort by: % Ascending</option>') : '';
                 const sortRow = useBar ? `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><select id="${sortId}" onchange="sortTSTDemoChart('${field}', this.value)" style="padding:0.25rem 0.5rem;font-size:0.75rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);">${sortOpts}</select></div>` : '';
-                html += `<div class="demographics-chart-card" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
+                const genPopCardTip = 'GP = General Population. ' + TST_GENPOP_TOOLTIP;
+                html += `<div class="demographics-chart-card has-tooltip" data-tooltip="${(genPopCardTip||'').replace(/"/g,'&quot;')}" style="${fullWidth} background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);"><h4 style="margin: 0 0 0.35rem 0; font-size: 0.9rem;">${field}</h4>${showMedian ? `<span id="${medianId}" class="median-display" style="display:block;font-size:0.8rem;margin-bottom:0.35rem;"></span>` : ''}${sortRow}<div style="height: ${isLocation ? 420 : 280}px;"><canvas id="${id}"></canvas></div></div>`;
             });
             container.innerHTML = html;
             keys.forEach(field => {
@@ -22301,16 +22307,17 @@
                 const pcts = sorted.map(r=>_tstParsePct(r.percent));
                 const fmtPct = (n)=> (n||0).toFixed(1)+'%';
                 const medianSpan = document.getElementById('tstMedian'+field.replace(/\s/g,''));
+                const medianTip = 'Audience vs Gen Pop. ' + TST_GENPOP_TOOLTIP;
                 if (medianSpan && (field==='AGE'||field==='INCOME')) {
                     const obj = _tstDemoArrToObj(arr);
                     const gpObj = gp[field.toLowerCase()] || {};
                     if (field==='AGE') {
                         const profMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(obj) : 0;
                         const gpMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(gpObj) : 0;
-                        medianSpan.innerHTML = profMed>0 ? `<span style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
+                        medianSpan.innerHTML = profMed>0 ? `<span style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span class="has-tooltip" data-tooltip="${(medianTip||'').replace(/"/g,'&quot;')}" style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
                     } else {
                         const med = typeof calculateDemographicMedian==='function' ? calculateDemographicMedian(obj, gpObj, 'income') : {profile:null,genPop:null};
-                        medianSpan.innerHTML = med.profile ? `<span style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
+                        medianSpan.innerHTML = med.profile ? `<span style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span class="has-tooltip" data-tooltip="${(medianTip||'').replace(/"/g,'&quot;')}" style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
                     }
                 }
                 tstCharts['demo_' + field] = new Chart(canvas, {
