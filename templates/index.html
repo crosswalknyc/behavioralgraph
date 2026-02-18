@@ -22263,7 +22263,8 @@
             const gp = genPopBaselineData?.demographics || {};
             let html = '';
             keys.forEach(field => {
-                const arr = demo[field] || [];
+                let arr = demo[field] || [];
+                if (field === 'LOCATION' && typeof getDMARank === 'function') arr = arr.filter(r => getDMARank(r.value || '') != null);
                 if (!arr.length) return;
                 const id = 'tstChart' + field.replace(/\s/g,'');
                 const isLocation = field === 'LOCATION';
@@ -22288,7 +22289,8 @@
             });
             container.innerHTML = html;
             keys.forEach(field => {
-                const arr = demo[field] || [];
+                let arr = demo[field] || [];
+                if (field === 'LOCATION' && typeof getDMARank === 'function') arr = arr.filter(r => getDMARank(r.value || '') != null);
                 if (!arr.length) return;
                 const id = 'tstChart' + field.replace(/\s/g,'');
                 const canvas = document.getElementById(id);
@@ -22354,6 +22356,7 @@
             sel.innerHTML = opts || '<option value="">No theater data</option>';
         }
         function renderTSTCompareAllView(perTheater) {
+            window._tstCompareAllPerTheater = perTheater;
             ['demo_per_gender','demo_per_age','demo_per_income','demo_per_ethnicity','demo_per_location'].forEach(k => { if (tstCharts[k]) { tstCharts[k].destroy(); tstCharts[k] = null; } });
             const container = document.getElementById('tstDemographicsPerTheater');
             if (!container) return;
@@ -22387,6 +22390,7 @@
                     arr.forEach(r => {
                         const v = (r.value != null && r.value !== '' ? r.value : '').toString().trim();
                         if (!v) return;
+                        if (field === 'LOCATION' && typeof getDMARank === 'function' && getDMARank(v) == null) return;
                         if (!valueToPct[v]) valueToPct[v] = {};
                         valueToPct[v][tName] = r.percent;
                     });
@@ -22396,19 +22400,55 @@
                 else if (field === 'INCOME') orderedValues.sort((a,b) => _tstIncomeOrderIndex(a) - _tstIncomeOrderIndex(b));
                 else orderedValues.sort((a,b) => a.localeCompare(b));
                 if (orderedValues.length === 0) return;
+                const isLocation = field === 'LOCATION';
+                const sortState = (window._tstCompareAllSortState || {})[field] || { col: -1, dir: 1 };
+                if (sortState.col >= 0) {
+                    const getCellVal = (col, val) => {
+                        if (col === 0) return (val || '').toString();
+                        if (isLocation && col === 1) return getDMARank(val) != null ? getDMARank(val) : -1;
+                        const theaterIdx = isLocation ? col - 2 : col - 1;
+                        if (theaterIdx >= 0 && theaterIdx < theaterNames.length) return _tstParsePct(valueToPct[val] && valueToPct[val][theaterNames[theaterIdx]]);
+                        const gp = typeof _tstGetGenPop === 'function' ? _tstGetGenPop(fieldKey, val) : (gpObj[val] != null ? gpObj[val] : null);
+                        return _tstParsePct(gp);
+                    };
+                    orderedValues.sort((a, b) => {
+                        const va = getCellVal(sortState.col, a), vb = getCellVal(sortState.col, b);
+                        const numA = typeof va === 'number' && !Number.isNaN(va), numB = typeof vb === 'number' && !Number.isNaN(vb);
+                        let cmp = 0;
+                        if (numA && numB) cmp = va - vb;
+                        else cmp = String(va).localeCompare(String(vb), undefined, { numeric: true });
+                        return sortState.dir * (cmp < 0 ? -1 : cmp > 0 ? 1 : 0);
+                    });
+                }
+                const sortIndicator = (col) => (sortState.col === col ? (sortState.dir === 1 ? ' &#9660;' : ' &#9650;') : '');
+                const thClick = (f, col) => ` onclick="sortTSTCompareAllColumn('${f}', ${col})" style="cursor:pointer;" title="Sort by this column"`;
+                const headerCategory = `<th style="text-align: left;"${thClick(field, 0)}>Category${sortIndicator(0)}</th>`;
+                const headerDmaRank = isLocation ? `<th${thClick(field, 1)}>DMA Rank${sortIndicator(1)}</th>` : '';
+                const headerTheaters = theaterNames.map((t, i) => { const c = isLocation ? i + 2 : i + 1; return `<th${thClick(field, c)}>${(headerLabel(t)||'').replace(/</g,'&lt;')}${sortIndicator(c)}</th>`; }).join('');
+                const headerGenPop = `<th style="background: rgba(102,217,239,0.15);"${thClick(field, isLocation ? theaterNames.length + 2 : theaterNames.length + 1)}>Gen Pop${sortIndicator(isLocation ? theaterNames.length + 2 : theaterNames.length + 1)}</th>`;
                 html += `<div class="demographics-chart-card" style="grid-column: 1 / -1; background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); overflow-x: auto;">
                     <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">${field}</h4>
                     <div class="comp-table-wrapper"><table class="comp-table" style="width: 100%; min-width: 400px;">
-                    <thead><tr><th style="text-align: left;">Category</th>${theaterNames.map(t => `<th>${(headerLabel(t)||'').replace(/</g,'&lt;')}</th>`).join('')}<th style="background: rgba(102,217,239,0.15);">Gen Pop</th></tr></thead>
+                    <thead><tr>${headerCategory}${headerDmaRank}${headerTheaters}${headerGenPop}</tr></thead>
                     <tbody>`;
                 orderedValues.forEach(v => {
                     const displayLabel = _tstDisplayLabel(field, v);
                     const gpPct = typeof _tstGetGenPop === 'function' ? _tstGetGenPop(field.toLowerCase(), v) : (gpObj[v] != null ? gpObj[v] : null);
-                    html += `<tr><td style="font-weight: 500;">${(displayLabel||v).replace(/</g,'&lt;')}</td>${theaterNames.map(t => `<td>${fmtPct(valueToPct[v][t])}</td>`).join('')}<td style="background: rgba(102,217,239,0.08);">${fmtPct(gpPct)}</td></tr>`;
+                    const dmaRankCell = isLocation && typeof getDMARank === 'function' ? `<td>${getDMARank(v) != null ? getDMARank(v) : '—'}</td>` : '';
+                    html += `<tr><td style="font-weight: 500;">${(displayLabel||v).replace(/</g,'&lt;')}</td>${dmaRankCell}${theaterNames.map(t => `<td>${fmtPct(valueToPct[v][t])}</td>`).join('')}<td style="background: rgba(102,217,239,0.08);">${fmtPct(gpPct)}</td></tr>`;
                 });
                 html += '</tbody></table></div></div>';
             });
             container.innerHTML = html;
+        }
+        function sortTSTCompareAllColumn(field, colIndex) {
+            if (!window._tstCompareAllSortState) window._tstCompareAllSortState = {};
+            if (!window._tstCompareAllSortState[field]) window._tstCompareAllSortState[field] = { col: -1, dir: 1 };
+            const s = window._tstCompareAllSortState[field];
+            if (s.col === colIndex) s.dir = s.dir === 1 ? -1 : 1;
+            else { s.col = colIndex; s.dir = 1; }
+            const perTheater = window._tstCompareAllPerTheater;
+            if (perTheater) renderTSTCompareAllView(perTheater);
         }
         function renderTSTPerTheaterCharts() {
             const d = currentTSTData?.data || {};
@@ -22436,7 +22476,8 @@
             const safeTheater = (theater || '').replace(/[^a-zA-Z0-9]/g,'_');
             let html = '';
             keys.forEach(field => {
-                const arr = demo[field] || [];
+                let arr = demo[field] || [];
+                if (field === 'LOCATION' && typeof getDMARank === 'function') arr = arr.filter(r => getDMARank(r.value || '') != null);
                 if (!arr.length) return;
                 const id = 'tstPerChart' + field.replace(/\s/g,'') + safeTheater;
                 const isLocation = field === 'LOCATION';
@@ -22459,7 +22500,8 @@
             container.innerHTML = html;
             ['demo_per_gender','demo_per_age','demo_per_income','demo_per_ethnicity','demo_per_location'].forEach(k => { if (tstCharts[k]) { tstCharts[k].destroy(); tstCharts[k] = null; } });
             keys.forEach(field => {
-                const arr = demo[field] || [];
+                let arr = demo[field] || [];
+                if (field === 'LOCATION' && typeof getDMARank === 'function') arr = arr.filter(r => getDMARank(r.value || '') != null);
                 if (!arr.length) return;
                 const id = 'tstPerChart' + field.replace(/\s/g,'') + safeTheater;
                 const canvas = document.getElementById(id);
