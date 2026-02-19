@@ -145,6 +145,8 @@ def generate_search_term_variations(search_term):
 ALLOWED_GENRES = [
     "Serialized Drama",
     "Non-Scripted Competition",
+    "Non-Scripted Relationship",
+    "Non-Scripted Gameshow",
     "Adult Animation",
     "Stand Up Comedy",
     "Single Camera Sitcom",
