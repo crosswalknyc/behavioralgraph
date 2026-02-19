@@ -3759,6 +3759,11 @@ def index():
         has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
         has_ticket_sales_tracker = user.get('has_ticket_sales_tracker_access', False) if user else False
     
+    # When cloaked, grant Analysis IQ access so the admin can use it while acting as a user who may not have it
+    if session.get('cloaked_from'):
+        has_analysis_iq = True
+        analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time', 'ticket_sales_tracker']
+    
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
     
@@ -14628,6 +14633,9 @@ def user_can_run_analysis_module(user, module_key):
     """True if user can run the given Analysis IQ module (talent_search, svod, campaign, etc.)."""
     if not user:
         return False
+    # When admin is cloaked as another user, grant full Analysis IQ access
+    if session.get('cloaked_from'):
+        return True
     role = user.get('role', 'user')
     if role in ('admin', 'super_admin'):
         return True
