@@ -12033,6 +12033,19 @@ def list_jobs():
         # Filter out OTHER and UNCATEGORIZED categories - these should never appear in profile selector
         job_list = [e for e in job_list if (e.get('category') or '').upper() not in ('OTHER', 'UNCATEGORIZED', '')]
         
+        # Restrict to runs the user is allowed to see (Run Access in Admin)
+        allowed_runs = None
+        try:
+            users = load_users()
+            u = users.get(session.get('username')) if session.get('username') else None
+            if u is not None:
+                allowed_runs = u.get('allowed_runs')
+        except Exception:
+            pass
+        if allowed_runs is not None and not (isinstance(allowed_runs, list) and len(allowed_runs) == 1 and allowed_runs[0] == '*'):
+            allowed_set = set(allowed_runs or [])
+            job_list = [e for e in job_list if (e.get('s3_key') or '') in allowed_set]
+        
         categories = {e.get('category') for e in job_list if e.get('category')}
         
         # Sort by created_at descending (safe key for missing/None values)
