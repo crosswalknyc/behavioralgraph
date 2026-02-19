@@ -2881,9 +2881,12 @@
             const rows = document.querySelectorAll('#purgatoryItemsList tr[data-purgatory-id]');
             const row = Array.from(rows).find(tr => tr.getAttribute('data-purgatory-id') === purgatoryId);
             if (!row) { showToast('Row not found', true); return; }
-            const title = row.querySelector('input[data-field="title"]').value.trim();
+            const title = (row.querySelector('input[data-field="title"]') || {}).value.trim();
             const categorySelect = row.querySelector('select[data-field="category"]');
             const category = categorySelect ? categorySelect.value : '';
+            let imageUrl = row.getAttribute('data-image-url') || '';
+            const avatarImg = row.querySelector('.purgatory-avatar img');
+            if (avatarImg && avatarImg.src) imageUrl = avatarImg.src;
             try {
                 const response = await fetch('/api/admin/purgatory/update', {
                     method: 'POST',
@@ -2893,7 +2896,8 @@
                         purgatory_id: purgatoryId,
                         title: title,
                         category: category,
-                        project_name: title
+                        project_name: title,
+                        image_url: imageUrl || undefined
                     })
                 });
                 const data = await response.json();
@@ -2909,13 +2913,16 @@
         }
         
         async function releasePurgatoryItem(purgatoryId) {
-            // Get the updated values from the row (category is a select)
+            // Get the current values from the row so they persist on release (no need to click Save first)
             const rows = document.querySelectorAll('#purgatoryItemsList tr[data-purgatory-id]');
             const row = Array.from(rows).find(tr => tr.getAttribute('data-purgatory-id') === purgatoryId);
             if (!row) { alert('Row not found'); return; }
-            const title = row.querySelector('input[data-field="title"]').value;
+            const title = (row.querySelector('input[data-field="title"]') || {}).value || '';
             const categorySelect = row.querySelector('select[data-field="category"]');
             const category = categorySelect ? categorySelect.value : '';
+            let imageUrl = row.getAttribute('data-image-url') || '';
+            const avatarImg = row.querySelector('.purgatory-avatar img');
+            if (avatarImg && avatarImg.src) imageUrl = avatarImg.src;
             
             if (!confirm(`Release "${title}" to the main dashboard?\n\nThis will make it visible to all users.`)) {
                 return;
@@ -2928,8 +2935,9 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({
                         purgatory_id: purgatoryId,
-                        title: title,
-                        category: category
+                        title: title.trim(),
+                        category: category,
+                        image_url: imageUrl || undefined
                     })
                 });
                 
