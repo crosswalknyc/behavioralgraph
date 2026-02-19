@@ -1557,7 +1557,8 @@ def admin_portal():
     # Get current user's role and username to pass to template
     user = get_current_user()
     current_role = _normalize_role(user.get('role', 'user') if user else 'user')
-    return render_template('admin.html', current_user_role=current_role, current_username=session.get('username', ''))
+    default_profile_photo = load_default_profile_photo() or ''
+    return render_template('admin.html', current_user_role=current_role, current_username=session.get('username', ''), default_profile_photo=default_profile_photo)
 
 # ============================================================================
 # ADMIN CLOAK (super_admin only): log in as another user to act as them
@@ -3770,6 +3771,9 @@ def index():
     insights_quick_snapshot_icon = '📊'
     insights_quick_snapshot_title = 'Quick Snapshot'
     insights_quick_snapshot_desc = 'A snapshot across all categories.'
+    profile_picture = (user.get('profile_picture') or '').strip() if user else ''
+    if not profile_picture:
+        profile_picture = load_default_profile_photo() or ''
     return render_template('index.html', 
                            username=session.get('username'),
                            insights_quick_snapshot_icon=insights_quick_snapshot_icon,
@@ -3778,7 +3782,8 @@ def index():
                            role=role,
                            credits=user.get('credits', 0) if user else 0,
                            credits_used=user.get('credits_used', 0) if user else 0,
-                           profile_picture=user.get('profile_picture', '') if user else '',
+                           profile_picture=profile_picture,
+                           default_profile_photo=load_default_profile_photo() or '',
                            company_logo=company_logo,
                            has_profile_iq_access=has_profile_iq,
                            has_subscriber_iq_access=has_subscriber_iq,
@@ -10566,6 +10571,36 @@ PURGATORY_METADATA_KEY = 'system/purgatory_metadata.json'
 # Profile released notifications - per-user notifications when their purgatory profile is released
 PROFILE_RELEASED_NOTIFICATIONS_KEY = 'system/profile_released_notifications.json'
 
+# Default/stock profile photo (shown when a user has no photo) - super_admin sets in Settings
+DEFAULT_PROFILE_PHOTO_KEY = 'system/default_profile_photo.json'
+
+def load_default_profile_photo():
+    """Return the default profile photo URL (or None). Used when user has no profile_picture."""
+    if not s3_client:
+        return None
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=DEFAULT_PROFILE_PHOTO_KEY)
+        data = json.loads(response['Body'].read().decode('utf-8'))
+        return (data.get('image_url') or '').strip() or None
+    except Exception:
+        return None
+
+def save_default_profile_photo(image_url):
+    """Save the default profile photo URL. image_url can be None to clear."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=DEFAULT_PROFILE_PHOTO_KEY,
+            Body=json.dumps({'image_url': image_url or ''}, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except Exception as e:
+        print(f"Error saving default profile photo: {e}")
+        return False
+
 def load_profile_released_notifications():
     """Load profile-released notifications from S3."""
     if not s3_client:
@@ -11118,6 +11153,52 @@ def check_purgatory_access():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/settings/default-profile-photo', methods=['GET'])
+@requires_auth
+def get_default_profile_photo():
+    """Get the default/stock profile photo URL (used when a user has no photo)."""
+    url = load_default_profile_photo()
+    return jsonify({'success': True, 'image_url': url or ''})
+
+
+@app.route('/api/admin/settings/default-profile-photo', methods=['POST'])
+@requires_super_admin
+def set_default_profile_photo():
+    """Set or remove the default profile photo. Super admin only. Accepts file upload or JSON with image_url. Send remove=1 to clear."""
+    try:
+        data_json = request.get_json(silent=True) or {}
+        if request.form.get('remove') or data_json.get('remove'):
+            save_default_profile_photo(None)
+            return jsonify({'success': True, 'message': 'Default profile photo removed', 'image_url': ''})
+        image_url = None
+        if 'file' in request.files and request.files['file'].filename:
+            file = request.files['file']
+            file_data = file.read()
+            if len(file_data) > 2 * 1024 * 1024:
+                return jsonify({'success': False, 'error': 'File too large (max 2MB)'})
+            ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'jpg'
+            if ext not in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
+                ext = 'jpg'
+            content_type = f'image/{ext}'
+            if ext == 'jpg':
+                content_type = 'image/jpeg'
+            import uuid
+            s3_key = f"profile-images/default_stock_{uuid.uuid4().hex}.{ext}"
+            s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key, Body=file_data, ContentType=content_type)
+            image_url = f"/api/profile-image-file/{s3_key}"
+        else:
+            data = data_json or request.form
+            image_url = (data.get('image_url') or '').strip()
+        if not image_url:
+            return jsonify({'success': False, 'error': 'Upload a file or provide an image URL'}), 400
+        if not save_default_profile_photo(image_url):
+            return jsonify({'success': False, 'error': 'Failed to save setting'}), 500
+        return jsonify({'success': True, 'message': 'Default profile photo saved', 'image_url': image_url})
+    except Exception as e:
+        print(f"Error setting default profile photo: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/purgatory/my-items', methods=['GET'])
 @requires_auth
