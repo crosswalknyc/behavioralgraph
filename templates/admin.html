@@ -2662,6 +2662,7 @@
         // Current user's role and username (passed from server)
         const currentUserRole = '{{ current_user_role }}';
         const currentUsername = '{{ current_username }}';
+        const defaultProfilePhotoUrl = {{ (default_profile_photo or '')|tojson }};
         const defaultProfilePhoto = {{ (default_profile_photo or '')|tojson }};
 
         // Profile image cache for admin
@@ -4628,9 +4629,10 @@
                     }
                 }
                 
-                const avatarHtml = user.profile_picture 
-                    ? `<img src="${user.profile_picture}" alt="${username}">`
-                    : (defaultProfilePhoto ? `<img src="${defaultProfilePhoto.replace(/"/g, '&quot;')}" alt="${username}">` : `<span class="admin-avatar-initials">${username.substring(0, 2)}</span>`);
+                const avatarSrc = user.profile_picture || defaultProfilePhotoUrl || '';
+                const avatarHtml = avatarSrc 
+                    ? `<img src="${avatarSrc.replace(/"/g, '&quot;')}" alt="${username}">`
+                    : `<span class="admin-avatar-initials">${username.substring(0, 2)}</span>`;
                 
                 const row = document.createElement('tr');
                 row.innerHTML = `
