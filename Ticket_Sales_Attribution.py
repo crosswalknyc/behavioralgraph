@@ -485,9 +485,6 @@ def write_output(results, p):
     # Total Tickets = sum of the 5 displayed platform hits only
     total_tickets_raw = sum(platform_totals.values())
     total_tickets_gen_pop_raw = gen_pop_projection(total_tickets_raw)
-    NON_SALES_BOOST = 7.5
-    total_tickets = int(round(total_tickets_raw * NON_SALES_BOOST))
-    total_tickets_gen_pop = total_tickets_gen_pop_raw * NON_SALES_BOOST
 
     # 15x factor applied, then 75% of that as final projected ticket sales (uses raw counts)
     TICKET_PRICE = 15.0
@@ -497,6 +494,12 @@ def write_output(results, p):
     after_factor_gen_pop = total_tickets_gen_pop_raw * TICKET_PRICE * PROJECTION_FACTOR
     projected_sales_base = after_factor_base * FINAL_PCT
     projected_sales_gen_pop = after_factor_gen_pop * FINAL_PCT
+
+    # Non-sales numbers (tickets sold, gen pop tickets): set so that displayed = Projected Ticket Sales / $15 / 2
+    # So multiplier = (TICKET_PRICE * PROJECTION_FACTOR * FINAL_PCT) / (TICKET_PRICE * 2) = 168.75/30 = 5.625
+    NON_SALES_BOOST = (TICKET_PRICE * PROJECTION_FACTOR * FINAL_PCT) / (TICKET_PRICE * 2)
+    total_tickets = int(round(total_tickets_raw * NON_SALES_BOOST))
+    total_tickets_gen_pop = total_tickets_gen_pop_raw * NON_SALES_BOOST
 
     rows = [
         ("", "TICKET SALES ATTRIBUTION RESULTS", "", "", "", ""),
