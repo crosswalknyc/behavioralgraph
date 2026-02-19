@@ -6785,6 +6785,23 @@ def parse_subscriber_iq_csv(csv_content):
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 }
                 print(f"   ✅ Fallback: Found Attributed Signups")
+    # When CSV has New Platform Signups but no ATTRIBUTION SUMMARY section, use new_signups for attributed and total
+    # so "New Accounts Acquisition" and "Accounts Acquired or Reactivated" display correctly (e.g. Queer Eye reports)
+    new_signups = parsed['key_metrics'].get('new_signups')
+    if new_signups and not parsed['attribution_summary'].get('attributed'):
+        parsed['attribution_summary']['attributed'] = {
+            'count': new_signups.get('count'),
+            'percentage': '',
+            'gen_pop': new_signups.get('gen_pop', '')
+        }
+        print(f"   ✅ Fallback: Using New Platform Signups for attribution_summary.attributed")
+    if new_signups and not parsed['attribution_summary'].get('total'):
+        parsed['attribution_summary']['total'] = {
+            'count': new_signups.get('count'),
+            'percentage': '',
+            'gen_pop': new_signups.get('gen_pop', '')
+        }
+        print(f"   ✅ Fallback: Using New Platform Signups for attribution_summary.total")
     
     # Fallback: Try to find episodes if none were found (flexible column detection)
     if len(parsed['episode_attribution']) == 0:
