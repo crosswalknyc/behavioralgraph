@@ -15070,7 +15070,7 @@ def submit_svod_acquisition():
         
         # Genre: optional; if provided must be one of the allowed SVOD genres
         SVOD_ALLOWED_GENRES = [
-            'Serialized Drama', 'Non-Scripted Competition', 'Non-Scripted Relationship', 'Non-Scripted Gameshow',
+            'Serialized Drama', 'Non-Scripted Competition', 'Non-Scripted Relationship', 'Non-Scripted Gameshow', 'Non-Scripted Makeover',
             'Adult Animation', 'Stand Up Comedy', 'Single Camera Sitcom', 'Procedural Drama',
             'Multi Camera Sitcom', 'Live Sports', 'Single Event Telecast'
         ]

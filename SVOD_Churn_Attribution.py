@@ -147,6 +147,7 @@ ALLOWED_GENRES = [
     "Non-Scripted Competition",
     "Non-Scripted Relationship",
     "Non-Scripted Gameshow",
+    "Non-Scripted Makeover",
     "Adult Animation",
     "Stand Up Comedy",
     "Single Camera Sitcom",
