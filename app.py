@@ -1513,6 +1513,27 @@ def login_page():
         if not user:
             return jsonify({'success': False, 'error': 'Invalid username or password'})
         
+        # If user must reset password: accept whatever they type (min 8 chars) as their new password and log them in
+        if user.get('must_reset_password'):
+            if len(password) < 8:
+                return jsonify({'success': False, 'error': 'Choose a password at least 8 characters to sign in.'})
+            user['password_hash'] = hash_password(password)
+            user['must_reset_password'] = False
+            user['last_login'] = datetime.now().isoformat()
+            if 'activity' not in user:
+                user['activity'] = {'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0}
+            user['activity']['total_sessions'] = user['activity'].get('total_sessions', 0) + 1
+            user['activity']['recent_actions'].insert(0, {
+                'action': 'login',
+                'details': f'Session #{user["activity"]["total_sessions"]} (password set on first login)',
+                'timestamp': datetime.now().isoformat()
+            })
+            user['activity']['recent_actions'] = user['activity']['recent_actions'][:100]
+            save_users(users_data)
+            session['username'] = username
+            session['role'] = _normalize_role(user.get('role', 'user'))
+            return jsonify({'success': True, 'redirect': '/'})
+        
         if not verify_password(user['password_hash'], password):
             return jsonify({'success': False, 'error': 'Invalid username or password'})
         
