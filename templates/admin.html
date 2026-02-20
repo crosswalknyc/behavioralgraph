@@ -994,13 +994,16 @@
                         <h2>👥 User Management</h2>
                         <div style="display: flex; gap: 0.5rem;">
                             <button class="btn btn-small btn-secondary" onclick="loadUsers()">↻ Refresh</button>
-                            <button class="btn btn-small btn-secondary" onclick="exportUserDetailsCSV()" title="Download CSV of all users with credits used and what for">📥 Export User Details</button>
                             <button class="btn btn-small btn-secondary" onclick="showExportUserInfoModal()" title="Export full user activity by user or by company">📥 Export User Info</button>
                             <button class="btn btn-small btn-secondary" onclick="checkInactiveUsersAndSendAlerts()" title="Send email alerts for users inactive 7+ days (to liz, jessie, alexia, jenna)">📧 Check inactive users</button>
                             <button class="btn btn-small btn-success" onclick="showAddUserModal()">+ Add User</button>
                             <button class="btn btn-small btn-primary" onclick="restoreDefaultValuesForAllUsers()">Restore Default Values For All Users</button>
                         </div>
                     </div>
+                    <div style="margin-bottom: 0.75rem;">
+                        <input type="text" id="userSearchInput" placeholder="Search by username, first name, last name, company, department, email…" oninput="renderUsersTable(getFilteredUsers())" style="width: 100%; max-width: 400px; padding: 0.5rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                    </div>
+                    <div id="userTableScrollWrap" style="max-height: 1300px; overflow-y: auto;">
                     <table class="user-table">
                         <thead>
                             <tr>
@@ -1019,6 +1022,7 @@
                             <!-- Populated by JS -->
                         </tbody>
                     </table>
+                    </div>
                 </div>
 
                 <!-- Scheduled activity export by company -->
@@ -4532,7 +4536,7 @@
                 
                 if (data.success) {
                     allUsers = data.users;
-                    renderUsersTable(data.users);
+                    renderUsersTable(getFilteredUsers());
                     updateStats(data.users);
                     loadActivityExportCompany();
                 }
@@ -4727,7 +4731,25 @@
             document.querySelectorAll('.sort-arrow').forEach(el => { el.textContent = ''; });
             const arrow = document.getElementById('sortArrow-' + column);
             if (arrow) arrow.textContent = userTableSort.dir === 1 ? ' ↑' : ' ↓';
-            renderUsersTable(allUsers);
+            renderUsersTable(getFilteredUsers());
+        }
+
+        function getFilteredUsers() {
+            const q = (document.getElementById('userSearchInput') && document.getElementById('userSearchInput').value || '').trim().toLowerCase();
+            if (!q) return allUsers || {};
+            const users = allUsers || {};
+            const filtered = {};
+            Object.entries(users).forEach(([username, user]) => {
+                const first = (user.first_name || '').toLowerCase();
+                const last = (user.last_name || '').toLowerCase();
+                const company = (user.company || '').toLowerCase();
+                const dept = (user.department || '').toLowerCase();
+                const email = (user.email || '').toLowerCase();
+                const un = (username || '').toLowerCase();
+                if (un.includes(q) || first.includes(q) || last.includes(q) || company.includes(q) || dept.includes(q) || email.includes(q))
+                    filtered[username] = user;
+            });
+            return filtered;
         }
 
         function renderUsersTable(users) {
@@ -4883,38 +4905,6 @@
                 const n = entry.credits_used != null ? entry.credits_used : 1;
                 return `${date}: ${desc}${pull} - ${n} credit(s)`;
             }).join('; ');
-        }
-
-        function exportUserDetailsCSV() {
-            const users = allUsers || {};
-            const rows = [['Username', 'Email', 'Company', 'Department', 'Role', 'Credits Remaining', 'Credits Used', 'Last Login', 'Created At', 'Credit Usage (What For)']];
-            Object.entries(users).forEach(([username, user]) => {
-                const creditsRem = user.credits === -1 ? 'Unlimited' : String(user.credits);
-                const creditsUsed = String(user.credits_used || 0);
-                const lastLogin = user.last_login ? user.last_login.replace('T', ' ').substring(0, 19) : '';
-                const created = user.created_at ? user.created_at.replace('T', ' ').substring(0, 19) : '';
-                const usageSummary = formatCreditUsageSummary(user.credit_usage_history || []);
-                rows.push([
-                    username,
-                    user.email || '',
-                    user.company || '',
-                    user.department || '',
-                    user.role || 'user',
-                    creditsRem,
-                    creditsUsed,
-                    lastLogin,
-                    created,
-                    usageSummary
-                ]);
-            });
-            const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'user_details_export.csv';
-            a.click();
-            URL.revokeObjectURL(a.href);
-            if (typeof showToast === 'function') showToast('User details exported to CSV');
         }
 
         async function showAddUserModal() {
