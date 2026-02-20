@@ -1021,6 +1021,43 @@
                     </table>
                 </div>
 
+                <!-- Scheduled activity export by company -->
+                <div class="card" style="grid-column: span 2; margin-top: 1rem;">
+                    <div class="card-header">
+                        <h2>📧 Scheduled activity export by company</h2>
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Email user activity CSV to addresses at chosen cadence (weekly, bi-weekly, monthly, quarterly, yearly)</span>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem;">
+                            <div>
+                                <label style="display: block; margin-bottom: 0.35rem; font-weight: 600;">Company</label>
+                                <select id="activityExportCompanySelect" style="min-width: 180px; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                    <option value="">— Select company —</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.35rem; font-weight: 600;">Email addresses (comma-separated)</label>
+                                <input type="text" id="activityExportCompanyEmails" placeholder="email1@example.com, email2@example.com" style="min-width: 280px; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.35rem; font-weight: 600;">Cadence</label>
+                                <select id="activityExportCompanyCadence" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                    <option value="weekly">Weekly</option>
+                                    <option value="bi-weekly">Bi-weekly</option>
+                                    <option value="monthly">Monthly</option>
+                                    <option value="quarterly">Quarterly</option>
+                                    <option value="yearly">Yearly</option>
+                                </select>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="saveCompanyActivityExport()">Save</button>
+                        </div>
+                        <div id="activityExportCompanyList" style="font-size: 0.9rem;">
+                            <p style="color: var(--text-secondary);">Loading...</p>
+                        </div>
+                        <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">Run scheduled exports via cron: POST <code>/api/admin/run-activity-export-jobs</code> (e.g. daily).</p>
+                    </div>
+                </div>
+
                 <!-- Categories & Runs Access -->
                 <div class="card">
                     <div class="card-header">
@@ -2268,6 +2305,30 @@
                     <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--accent-lime); text-align: left;">
                         <span id="teamMembersCount">0</span> team members selected
                     </div>
+                </div>
+
+                <!-- Activity CSV export (per user) -->
+                <div class="access-section" id="activityExportSection" style="display: none;">
+                    <h4 style="margin-bottom: 0.75rem; text-align: left;">📧 Activity CSV export</h4>
+                    <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem; text-align: left;">
+                        Email user activity CSV to the addresses below at the chosen interval. Leave emails empty to disable.
+                    </p>
+                    <div style="margin-bottom: 1rem; text-align: left;">
+                        <label style="display: block; margin-bottom: 0.35rem; font-weight: 600;">Email addresses (comma-separated)</label>
+                        <input type="text" id="activityExportEmails" placeholder="email1@example.com, email2@example.com" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                    </div>
+                    <div style="margin-bottom: 1rem; text-align: left;">
+                        <label style="display: block; margin-bottom: 0.35rem; font-weight: 600;">Delivery cadence</label>
+                        <select id="activityExportCadence" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <option value="">— Disabled —</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="bi-weekly">Bi-weekly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
+                    </div>
+                    <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem; text-align: left;">Run scheduled exports via Admin or cron: POST /api/admin/run-activity-export-jobs</small>
                 </div>
 
                 <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
@@ -4473,9 +4534,103 @@
                     allUsers = data.users;
                     renderUsersTable(data.users);
                     updateStats(data.users);
+                    loadActivityExportCompany();
                 }
             } catch (error) {
                 showToast('Failed to load users', true);
+            }
+        }
+
+        async function loadActivityExportCompany() {
+            try {
+                const response = await fetch('/api/admin/activity-export/company', { credentials: 'same-origin' });
+                const data = await response.json();
+                const sel = document.getElementById('activityExportCompanySelect');
+                const listEl = document.getElementById('activityExportCompanyList');
+                if (!sel || !listEl) return;
+                const companies = data.companies || [];
+                const byCompany = data.by_company || {};
+                sel.innerHTML = '<option value="">— Select company —</option>' + companies.map(c => `<option value="${(c || '').replace(/"/g, '&quot;')}">${(c || '').replace(/</g, '&lt;')}</option>`).join('');
+                if (Object.keys(byCompany).length === 0) {
+                    listEl.innerHTML = '<p style="color: var(--text-secondary);">No company exports configured. Select a company, enter emails, choose cadence, and click Save.</p>';
+                } else {
+                    listEl.innerHTML = '<table class="user-table" style="margin-top: 0;"><thead><tr><th>Company</th><th>Emails</th><th>Cadence</th><th>Last sent</th><th></th></tr></thead><tbody>' +
+                        Object.entries(byCompany).map(([company, cfg]) => {
+                            const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                            return `<tr data-company="${esc(company)}">
+                                <td>${esc(company)}</td>
+                                <td style="font-size: 0.85rem;">${esc((cfg.emails || '').slice(0, 50))}${(cfg.emails || '').length > 50 ? '…' : ''}</td>
+                                <td>${esc(cfg.cadence)}</td>
+                                <td style="font-size: 0.85rem;">${esc(cfg.last_sent || '—')}</td>
+                                <td><button type="button" class="btn btn-small btn-secondary btn-remove-company-export">Remove</button></td>
+                            </tr>`;
+                        }).join('') +
+                        '</tbody></table>';
+                    listEl.querySelectorAll('.btn-remove-company-export').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const row = this.closest('tr');
+                            const company = row && row.getAttribute('data-company');
+                            if (company) removeCompanyActivityExport(company);
+                        });
+                    });
+                }
+            } catch (e) {
+                const listEl = document.getElementById('activityExportCompanyList');
+                if (listEl) listEl.innerHTML = '<p style="color: var(--text-secondary);">Failed to load.</p>';
+            }
+        }
+
+        async function saveCompanyActivityExport() {
+            const company = (document.getElementById('activityExportCompanySelect').value || '').trim();
+            const emails = (document.getElementById('activityExportCompanyEmails').value || '').trim();
+            const cadence = (document.getElementById('activityExportCompanyCadence').value || '').trim();
+            if (!company) {
+                if (typeof showToast === 'function') showToast('Select a company', true);
+                return;
+            }
+            if (!emails || !cadence) {
+                if (typeof showToast === 'function') showToast('Enter emails and select cadence', true);
+                return;
+            }
+            try {
+                const response = await fetch('/api/admin/activity-export/company', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ company, emails, cadence })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    if (typeof showToast === 'function') showToast(data.message || 'Saved');
+                    document.getElementById('activityExportCompanyEmails').value = '';
+                    loadActivityExportCompany();
+                } else {
+                    if (typeof showToast === 'function') showToast(data.error || 'Failed', true);
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Request failed', true);
+            }
+        }
+
+        async function removeCompanyActivityExport(company) {
+            if (!company) return;
+            if (!confirm(`Remove scheduled activity export for "${company}"?`)) return;
+            try {
+                const response = await fetch('/api/admin/activity-export/company', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ company, emails: '', cadence: '' })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    if (typeof showToast === 'function') showToast('Removed');
+                    loadActivityExportCompany();
+                } else {
+                    if (typeof showToast === 'function') showToast(data.error || 'Failed', true);
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Request failed', true);
             }
         }
 
@@ -4806,6 +4961,12 @@
                 document.getElementById('hasPurgatoryApproval').checked = false;
             }
             
+            // Activity CSV export (per user)
+            const activityExportSection = document.getElementById('activityExportSection');
+            if (activityExportSection) activityExportSection.style.display = 'block';
+            document.getElementById('activityExportEmails').value = '';
+            document.getElementById('activityExportCadence').value = '';
+            
             document.getElementById('originalUsername').value = '';
             
             // Load quick selects first so Run Access and Behavioral defaults come from quick select
@@ -4929,6 +5090,12 @@
                 purgatorySection.style.display = currentUserRole === 'super_admin' ? 'block' : 'none';
                 document.getElementById('hasPurgatoryApproval').checked = user.has_purgatory_approval === true;
             }
+            
+            // Activity CSV export (per user)
+            const activityExportSection = document.getElementById('activityExportSection');
+            if (activityExportSection) activityExportSection.style.display = 'block';
+            document.getElementById('activityExportEmails').value = user.activity_export_emails || '';
+            document.getElementById('activityExportCadence').value = user.activity_export_cadence || '';
 
             document.getElementById('userModal').classList.add('show');
         }
@@ -6390,7 +6557,9 @@
                 rankers_iq_options: getRankersIQOptions(),
                 send_welcome_email: document.getElementById('sendWelcomeEmail').checked,
                 collab_team: getSelectedTeamMembers(),
-                has_purgatory_approval: currentUserRole === 'super_admin' ? document.getElementById('hasPurgatoryApproval').checked : undefined
+                has_purgatory_approval: currentUserRole === 'super_admin' ? document.getElementById('hasPurgatoryApproval').checked : undefined,
+                activity_export_emails: (document.getElementById('activityExportEmails').value || '').trim(),
+                activity_export_cadence: (document.getElementById('activityExportCadence').value || '').trim()
             };
             
             // Include original username if changed

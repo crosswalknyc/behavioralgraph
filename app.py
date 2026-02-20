@@ -18,7 +18,7 @@ import re
 import io
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session
 from flask_cors import CORS
@@ -1726,6 +1726,67 @@ def send_email_via_gmail(to_email, subject, html_content, text_content=None):
         return False, str(e)
 
 
+def send_email_with_attachment(to_emails, subject, html_content, attachment_filename, attachment_bytes, text_content=None):
+    """Send email to one or more addresses with a CSV attachment. Uses Gmail API if available, else SMTP."""
+    import base64
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.base import MIMEBase
+    from email import encoders
+    
+    to_list = [e.strip() for e in (to_emails if isinstance(to_emails, list) else [to_emails]) if e and e.strip()]
+    if not to_list:
+        return False, "No recipients"
+    
+    msg = MIMEMultipart('mixed')
+    msg['Subject'] = subject
+    msg['To'] = ', '.join(to_list)
+    
+    part_body = MIMEMultipart('alternative')
+    if text_content:
+        part_body.attach(MIMEText(text_content, 'plain'))
+    part_body.attach(MIMEText(html_content, 'html'))
+    msg.attach(part_body)
+    
+    part_csv = MIMEBase('text', 'csv')
+    part_csv.set_payload(attachment_bytes)
+    encoders.encode_base64(part_csv)
+    part_csv.add_header('Content-Disposition', 'attachment', filename=attachment_filename)
+    msg.attach(part_csv)
+    
+    # Try Gmail API first
+    service = get_gmail_service()
+    if service:
+        try:
+            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+            service.users().messages().send(userId='me', body={'raw': raw}).execute()
+            print(f"✅ Activity export email sent via Gmail to {len(to_list)} recipient(s)")
+            return True, "Email sent via Gmail"
+        except Exception as e:
+            print(f"⚠️ Gmail send failed: {e}, trying SMTP...")
+    
+    # Fall back to SMTP
+    import smtplib
+    smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER', '')
+    smtp_password = os.environ.get('SMTP_PASSWORD', '')
+    from_email = os.environ.get('FROM_EMAIL', smtp_user)
+    if not smtp_user or not smtp_password:
+        return False, "Email not configured (Gmail or SMTP)"
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=15) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            msg['From'] = from_email
+            server.sendmail(from_email, to_list, msg.as_string())
+        print(f"✅ Activity export email sent via SMTP to {len(to_list)} recipient(s)")
+        return True, "Email sent via SMTP"
+    except Exception as e:
+        print(f"❌ SMTP send error: {e}")
+        return False, str(e)
+
+
 # Shared email design (dashboard-style) and signature for all notification emails
 EMAIL_SIGNATURE = "— Crosswalk IQ Team"
 
@@ -2248,6 +2309,12 @@ def update_user(username):
             user['rankers_iq_options'] = req_data['rankers_iq_options']
         if 'collab_team' in req_data:
             user['collab_team'] = req_data['collab_team']
+        # Activity CSV export (per user): emails comma-separated, cadence
+        if 'activity_export_emails' in req_data:
+            user['activity_export_emails'] = (req_data['activity_export_emails'] or '').strip()
+        if 'activity_export_cadence' in req_data:
+            cadence = (req_data['activity_export_cadence'] or '').strip().lower()
+            user['activity_export_cadence'] = cadence if cadence in ACTIVITY_EXPORT_CADENCES else ''
         # Purgatory approval (only super_admin can set this)
         if 'has_purgatory_approval' in req_data:
             current_user = get_current_user()
@@ -2869,6 +2936,112 @@ def check_inactive_users():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# Activity CSV export: cadence options and scheduling
+ACTIVITY_EXPORT_CADENCES = ['weekly', 'bi-weekly', 'monthly', 'quarterly', 'yearly']
+
+
+def _activity_export_format_ts(ts_str):
+    """Format ISO timestamp for CSV display (date only or datetime)."""
+    if not ts_str:
+        return ''
+    try:
+        dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+        if dt.hour == 0 and dt.minute == 0 and dt.second == 0:
+            return dt.strftime('%Y-%m-%d')
+        return dt.strftime('%Y-%m-%d %H:%M')
+    except Exception:
+        return str(ts_str)[:19] if ts_str else ''
+
+
+def _activity_export_is_due(cadence, last_sent_iso, today):
+    """Return True if an export is due. last_sent_iso is ISO date string or None. today is date object."""
+    if cadence not in ACTIVITY_EXPORT_CADENCES:
+        return False
+    if not last_sent_iso:
+        return True
+    try:
+        last = datetime.fromisoformat(last_sent_iso.replace('Z', '+00:00')).date()
+    except Exception:
+        return True
+    if cadence == 'weekly':
+        # Due if we haven't sent this week (Monday = start of week)
+        last_monday = last - timedelta(days=last.weekday())
+        this_monday = today - timedelta(days=today.weekday())
+        return last_monday < this_monday
+    if cadence == 'bi-weekly':
+        # Due every other week (e.g. week number % 2)
+        last_monday = last - timedelta(days=last.weekday())
+        this_monday = today - timedelta(days=today.weekday())
+        if last_monday >= this_monday:
+            return False
+        weeks_diff = (this_monday - last_monday).days // 7
+        return weeks_diff >= 2
+    if cadence == 'monthly':
+        return last.year < today.year or (last.year == today.year and last.month < today.month)
+    if cadence == 'quarterly':
+        q_last = (last.month - 1) // 3 + 1
+        q_this = (today.month - 1) // 3 + 1
+        return last.year < today.year or (last.year == today.year and q_last < q_this)
+    if cadence == 'yearly':
+        return last.year < today.year
+    return False
+
+
+def _build_activity_csv(username, user_dict, activity_dict):
+    """Build CSV string for one user's activity (same structure as frontend buildUserActivityCSVRows)."""
+    activity = activity_dict or {}
+    feature_usage = activity.get('feature_usage') or {}
+    feature_list = sorted(feature_usage.items(), key=lambda x: -x[1])
+    profiles_viewed = activity.get('profiles_viewed') or []
+    recent_actions = activity.get('recent_actions') or []
+    total_actions = sum(feature_usage.values())
+    
+    def escape(v):
+        s = '' if v is None else str(v)
+        return '"' + s.replace('"', '""') + '"'
+    
+    rows = []
+    rows.append(['User', username])
+    rows.append([])
+    rows.append(['[Overview]'])
+    rows.append(['Metric', 'Value'])
+    rows.append(['Credits Remaining', 'Unlimited' if user_dict.get('credits') == -1 else str(user_dict.get('credits', 0))])
+    rows.append(['Credits Used', str(user_dict.get('credits_used') or 0)])
+    rows.append(['Profiles Viewed', str(len(profiles_viewed))])
+    rows.append(['Total Actions', str(total_actions)])
+    rows.append(['Role', user_dict.get('role') or ''])
+    rows.append(['Last Login', _activity_export_format_ts(user_dict.get('last_login')) or 'Never'])
+    rows.append(['Account Created', _activity_export_format_ts(user_dict.get('created_at'))])
+    rows.append(['Sessions', str(activity.get('total_sessions') or 1)])
+    rows.append([])
+    rows.append(['[Credits Used]'])
+    rows.append(['Date', 'Description', 'Pull Type', 'Credits Used'])
+    for entry in (user_dict.get('credit_usage_history') or []):
+        rows.append([
+            _activity_export_format_ts(entry.get('used_at')),
+            entry.get('description') or entry.get('pull_type') or 'Analysis',
+            entry.get('pull_type') or '',
+            str(entry.get('credits_used') if entry.get('credits_used') is not None else 1)
+        ])
+    rows.append([])
+    rows.append(['[Feature Usage]'])
+    rows.append(['Feature', 'Uses'])
+    for feat, count in feature_list:
+        rows.append([feat, str(count)])
+    rows.append([])
+    rows.append(['[Profiles Viewed]'])
+    rows.append(['Profile', 'Viewed At'])
+    for p in profiles_viewed:
+        rows.append([p.get('name') or p.get('key') or '', _activity_export_format_ts(p.get('viewed_at'))])
+    rows.append([])
+    rows.append(['[Recent Activity]'])
+    rows.append(['Action', 'Details', 'Timestamp'])
+    for a in recent_actions:
+        rows.append([a.get('action') or '', a.get('details') or '', _activity_export_format_ts(a.get('timestamp'))])
+    
+    return '\n'.join(','.join(escape(c) for c in row) for row in rows)
+
+
 def _filter_activity_by_date_range(activity, date_from, date_to):
     """Filter activity recent_actions and profiles_viewed to only include items within date range."""
     if not date_from and not date_to:
@@ -2955,6 +3128,141 @@ def export_user_activity():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/activity-export/company', methods=['GET'])
+@requires_admin
+def get_activity_export_company():
+    """List companies and their activity export settings (emails, cadence)."""
+    try:
+        data = load_users()
+        by_company = data.get('activity_export_by_company') or {}
+        users_data = data.get('users', {})
+        companies = sorted(set((u.get('company') or '').strip() for u in users_data.values() if (u.get('company') or '').strip()))
+        return jsonify({
+            'success': True,
+            'companies': companies,
+            'by_company': {k: {'emails': v.get('emails', ''), 'cadence': v.get('cadence', ''), 'last_sent': v.get('last_sent')} for k, v in by_company.items()}
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/activity-export/company', methods=['POST'])
+@requires_admin
+def set_activity_export_company():
+    """Set or clear activity export for a company. Body: company, emails (comma-separated), cadence."""
+    try:
+        req = request.get_json() or {}
+        company = (req.get('company') or '').strip()
+        if not company:
+            return jsonify({'success': False, 'error': 'Company name required'}), 400
+        emails = (req.get('emails') or '').strip()
+        cadence = (req.get('cadence') or '').strip().lower()
+        if cadence and cadence not in ACTIVITY_EXPORT_CADENCES:
+            return jsonify({'success': False, 'error': f'Cadence must be one of: {", ".join(ACTIVITY_EXPORT_CADENCES)}'}), 400
+        data = load_users()
+        if 'activity_export_by_company' not in data:
+            data['activity_export_by_company'] = {}
+        if not emails or not cadence:
+            data['activity_export_by_company'].pop(company, None)
+        else:
+            data['activity_export_by_company'][company] = {
+                'emails': emails,
+                'cadence': cadence,
+                'last_sent': data.get('activity_export_by_company', {}).get(company, {}).get('last_sent')
+            }
+        save_users(data)
+        return jsonify({'success': True, 'message': f'Activity export for {company} updated'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/run-activity-export-jobs', methods=['POST'])
+@requires_admin
+def run_activity_export_jobs():
+    """Run scheduled activity CSV exports: per-user and per-company. Call via cron (e.g. daily)."""
+    try:
+        data = load_users()
+        users_data = data.get('users', {})
+        by_company = data.get('activity_export_by_company') or {}
+        today = date.today()
+        sent_user = []
+        sent_company = []
+        
+        # Per-user exports
+        for username, user in users_data.items():
+            emails_raw = (user.get('activity_export_emails') or '').strip()
+            cadence = (user.get('activity_export_cadence') or '').strip().lower()
+            if not emails_raw or cadence not in ACTIVITY_EXPORT_CADENCES:
+                continue
+            last_sent = user.get('activity_export_last_sent')
+            if not _activity_export_is_due(cadence, last_sent, today):
+                continue
+            # Fetch this user's activity (same as export_user_activity for username)
+            activity = user.get('activity') or {'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0}
+            safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
+            csv_str = _build_activity_csv(username, safe_user, activity)
+            csv_bytes = csv_str.encode('utf-8')
+            emails_list = [e.strip() for e in emails_raw.split(',') if e.strip()]
+            subject = f"Crosswalk IQ – User activity export: {username}"
+            html = _wrap_email_html(f"<p>Attached: user activity CSV for <strong>{username}</strong> (cadence: {cadence}).</p>", title='User activity export')
+            ok, _ = send_email_with_attachment(emails_list, subject, html, f'user_activity_{username}.csv', csv_bytes)
+            if ok:
+                user['activity_export_last_sent'] = today.isoformat()
+                sent_user.append(username)
+        
+        # Per-company exports
+        company_lower_to_name = {}
+        for c in by_company:
+            company_lower_to_name[(c or '').strip().lower()] = c
+        for company_key, config in list(by_company.items()):
+            emails_raw = (config.get('emails') or '').strip()
+            cadence = (config.get('cadence') or '').strip().lower()
+            if not emails_raw or cadence not in ACTIVITY_EXPORT_CADENCES:
+                continue
+            last_sent = config.get('last_sent')
+            if not _activity_export_is_due(cadence, last_sent, today):
+                continue
+            company_trim = (company_key or '').strip()
+            company_lower = company_trim.lower()
+            results = []
+            for u, user in users_data.items():
+                u_company = (user.get('company') or '').strip()
+                if u_company.lower() == company_lower:
+                    activity = user.get('activity') or {'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0}
+                    safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
+                    results.append({'username': u, 'user': safe_user, 'activity': activity})
+            if not results:
+                continue
+            rows = []
+            for item in results:
+                rows.append(_build_activity_csv(item['username'], item['user'], item['activity']))
+            csv_str = '\n\n'.join(rows)
+            csv_bytes = csv_str.encode('utf-8')
+            emails_list = [e.strip() for e in emails_raw.split(',') if e.strip()]
+            subject = f"Crosswalk IQ – Company activity export: {company_trim}"
+            html = _wrap_email_html(f"<p>Attached: user activity CSV for company <strong>{company_trim}</strong> ({len(results)} user(s), cadence: {cadence}).</p>", title='Company activity export')
+            ok, _ = send_email_with_attachment(emails_list, subject, html, f'user_activity_company_{company_trim.replace(" ", "_")}.csv', csv_bytes)
+            if ok:
+                by_company[company_key]['last_sent'] = today.isoformat()
+                sent_company.append(company_trim)
+        
+        if sent_user or sent_company:
+            data['activity_export_by_company'] = by_company
+            save_users(data)
+        
+        return jsonify({
+            'success': True,
+            'emails_sent_user': sent_user,
+            'emails_sent_company': sent_company,
+            'message': f'Sent {len(sent_user)} user export(s), {len(sent_company)} company export(s).'
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/track-activity', methods=['POST'])
 @requires_auth
