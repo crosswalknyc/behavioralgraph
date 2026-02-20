@@ -36308,16 +36308,15 @@
                 });
             } else if (type === 'behavioral') {
                 const items = currentDashboardData.behavioral[category] || [];
-                const isProjection = document.getElementById('displayModeToggle')?.checked || false;
                 const US_POP = 329900000;
-                
+                // Use same values as dashboard: projection and genPopProjection (not recalculated from %)
                 csvContent = `${profileName} - ${category}\n`;
                 csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index\n`;
                 items.forEach(item => {
                     const audiencePct = (item.pct || 0).toFixed(2);
-                    const audienceNumbers = Math.round((item.pct / 100) * US_POP);
-                    let genPopPct = item.genPopPct || 0;
-                    const genPopNumbers = Math.round((genPopPct / 100) * US_POP);
+                    const audienceNumbers = (item.projection != null && item.projection !== '') ? Math.round(Number(item.projection)) : Math.round(((item.pct || 0) / 100) * US_POP);
+                    const genPopPct = item.genPopPct || 0;
+                    const genPopNumbers = (item.genPopProjection != null && item.genPopProjection !== '') ? Math.round(Number(item.genPopProjection)) : Math.round((genPopPct / 100) * US_POP);
                     const index = item.index || 0;
                     csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}\n`;
                 });
@@ -43669,7 +43668,7 @@
                 filename = `${profileName}_Demographics.csv`;
                 
             } else if (tabLabel === 'behavioral') {
-                // Export all visible behavioral categories
+                // Export all visible behavioral categories (use same values as dashboard: projection and genPopProjection)
                 csvContent = `${profileName} - Behavioral\n\n`;
                 const behavioral = currentDashboardData.behavioral || {};
                 
@@ -43680,9 +43679,9 @@
                         csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index\n`;
                         items.forEach(item => {
                             const audiencePct = (item.pct || 0).toFixed(2);
-                            const audienceNumbers = Math.round((item.pct / 100) * US_POP);
+                            const audienceNumbers = (item.projection != null && item.projection !== '') ? Math.round(Number(item.projection)) : Math.round(((item.pct || 0) / 100) * US_POP);
                             const genPopPct = item.genPopPct || 0;
-                            const genPopNumbers = Math.round((genPopPct / 100) * US_POP);
+                            const genPopNumbers = (item.genPopProjection != null && item.genPopProjection !== '') ? Math.round(Number(item.genPopProjection)) : Math.round((genPopPct / 100) * US_POP);
                             const index = item.index || 0;
                             csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}\n`;
                         });
@@ -47258,6 +47257,16 @@
                 dataRows = dataRows.slice(0, numLimit);
             }
 
+            // Same scale for all columns: max value across all rows and all profiles in this section
+            let sectionMax = 0;
+            dataRows.forEach(row => {
+                profiles.forEach((p, i) => {
+                    const v = useProjection ? (row.projData[i] || 0) : (row.pctData[i] || 0);
+                    if (v > sectionMax) sectionMax = v;
+                });
+            });
+            if (sectionMax <= 0) sectionMax = 1;
+
             return dataRows.map(row => `
                 <tr>
                     <td>${row.value}</td>
@@ -47277,8 +47286,8 @@
                         const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
                         const section = sectionKey != null ? sectionKey : ('beh_' + category);
                         const isColumn = getComparisonChartType(section, i) === 'column';
-                        const maxPctBeh = 30;
-                        const fillPct = Math.min(pct / maxPctBeh * 100, 100);
+                        const val = useProjection ? (proj || 0) : (pct || 0);
+                        const fillPct = sectionMax > 0 ? Math.min((val / sectionMax) * 100, 100) : 0;
                         const cellClass = isColumn ? 'comp-bar-cell column-chart' : 'comp-bar-cell';
                         const fillStyle = isColumn ? `height: ${fillPct}%; width: 100%; background: ${p.color};` : `width: ${fillPct}%; background: ${p.color};`;
                         return `
@@ -47375,6 +47384,16 @@
                 dataRows = dataRows.slice(0, numLimit);
             }
 
+            // Same scale for all columns in this section
+            let sectionMax = 0;
+            dataRows.forEach(row => {
+                profiles.forEach((p, i) => {
+                    const v = useProjection ? (row.projData[i] || 0) : (row.pctData[i] || 0);
+                    if (v > sectionMax) sectionMax = v;
+                });
+            });
+            if (sectionMax <= 0) sectionMax = 1;
+
             return dataRows.map(row => `
                 <tr>
                     <td>${row.value}</td>
@@ -47392,7 +47411,8 @@
                         const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                         const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>` : '';
                         const isColumn = getComparisonChartType('location', i) === 'column';
-                        const fillPct = Math.min(pct / 10 * 100, 100);
+                        const val = useProjection ? (proj || 0) : (pct || 0);
+                        const fillPct = sectionMax > 0 ? Math.min((val / sectionMax) * 100, 100) : 0;
                         const cellClass = isColumn ? 'comp-bar-cell column-chart' : 'comp-bar-cell';
                         const fillStyle = isColumn ? `height: ${fillPct}%; width: 100%; background: ${p.color};` : `width: ${fillPct}%; background: ${p.color};`;
                         return `
@@ -47489,6 +47509,16 @@
                 dataRows = dataRows.slice(0, parseInt(limit));
             }
 
+            // Same scale for all columns in this section
+            let sectionMax = 0;
+            dataRows.forEach(row => {
+                profiles.forEach((p, i) => {
+                    const v = useProjection ? (row.projData[i] || 0) : (row.pctData[i] || 0);
+                    if (v > sectionMax) sectionMax = v;
+                });
+            });
+            if (sectionMax <= 0) sectionMax = 1;
+
             return dataRows.map(row => {
                 // Use display label for age ranges
                 const displayValue = demoType === 'age' ? getAgeDisplayLabel(row.value) : row.value.toUpperCase();
@@ -47499,7 +47529,6 @@
                             const pct = row.pctData[i];
                             const proj = row.projData[i];
                             const index = row.indexData[i];
-                            const maxPct = 60;
                             const isPrimary = i === primaryProfileIndex;
                             const primaryClass = isPrimary ? 'primary-col' : '';
                             const displayVal = useProjection
@@ -47513,7 +47542,8 @@
                             const indexBadge = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor};">${index}</span>` : '';
                             
                             const isColumn = getComparisonChartType(demoType, i) === 'column';
-                            const fillPct = Math.min(pct / maxPct * 100, 100);
+                            const val = useProjection ? (proj || 0) : (pct || 0);
+                            const fillPct = sectionMax > 0 ? Math.min((val / sectionMax) * 100, 100) : 0;
                             const cellClass = isColumn ? 'comp-bar-cell column-chart' : 'comp-bar-cell';
                             const fillStyle = isColumn
                                 ? `height: ${fillPct}%; width: 100%; background: ${p.color};`
