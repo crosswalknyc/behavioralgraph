@@ -2,7 +2,7 @@
   "users": {
     "admin": {
       "password_hash": "pbkdf2:sha256:600000$2c2c1ae32a0ae51ba02c72c8ca1ccd2e$05daae0b1cf8cc5f16974bdcdbd44f10123d76b7c94e3ccaff48ca8737b41308",
-      "role": "admin",
+      "role": "super_admin",
       "credits": -1,
       "credits_used": 27,
       "created_at": "2024-01-01T00:00:00",

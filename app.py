@@ -1593,6 +1593,11 @@ def admin_uncloak():
     original = session.pop('cloaked_from', None)
     if original:
         session['username'] = original
+        # Restore role from the original user's record (cloak had left session['role'] as the cloaked user's role)
+        data = load_users()
+        orig_user = data.get('users', {}).get(original)
+        if orig_user:
+            session['role'] = _normalize_role(orig_user.get('role', 'user'))
     return jsonify({'success': True, 'redirect': '/admin'})
 
 
@@ -2273,7 +2278,14 @@ def update_user(username):
         if 'department' in req_data:
             user['department'] = req_data['department']
         if 'role' in req_data:
-            user['role'] = _normalize_role(req_data['role'])
+            # Never allow downgrading the primary 'admin' account from super_admin
+            if username == 'admin':
+                if user.get('role') == 'super_admin':
+                    user['role'] = 'super_admin'  # keep super_admin
+                else:
+                    user['role'] = 'super_admin'   # repair: admin account must always be super_admin
+            else:
+                user['role'] = _normalize_role(req_data['role'])
         if 'credits' in req_data:
             user['credits'] = req_data['credits']
         if 'access_expires' in req_data:
@@ -2379,6 +2391,7 @@ def restore_defaults_all_users():
         users = data.get('users', {})
         count = 0
         for username, user in users.items():
+            # Only touch access/defaults; never change role or delete users
             user['allowed_categories'] = list(allowed_categories) if isinstance(allowed_categories, list) else ['*']
             user['allowed_runs'] = list(allowed_runs) if isinstance(allowed_runs, list) else ['*']
             user['allowed_behavioral_categories'] = list(allowed_behavioral_categories) if isinstance(allowed_behavioral_categories, list) else ['*']
@@ -3262,6 +3275,23 @@ def run_activity_export_jobs():
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cron/repair-admin-role', methods=['POST'])
+def cron_repair_admin_role():
+    """One-time repair: set the 'admin' user's role to super_admin. Call with CRON_SECRET to fix production after accidental role change."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    if not secret or secret != os.environ.get('CRON_SECRET', ''):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    try:
+        data = load_users()
+        if 'admin' not in data.get('users', {}):
+            return jsonify({'success': False, 'error': 'Admin user not found'}), 404
+        data['users']['admin']['role'] = 'super_admin'
+        save_users(data)
+        return jsonify({'success': True, 'message': "Admin user role set to super_admin. Log out and log back in."})
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
