@@ -7724,6 +7724,60 @@
             color: var(--text-primary);
         }
 
+        /* Comparison: SELECT PROFILE label (bold purple, two-line) */
+        .comp-select-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #a78bfa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            line-height: 1.35;
+            margin-bottom: 0.75rem;
+        }
+        .comp-select-label .line1 { display: block; }
+        .comp-select-label .line2 { display: block; }
+
+        /* Comparison: pill buttons row (purple count + grey clear) */
+        .comp-pills-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+        .comp-pill-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.4rem 0.9rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #fff;
+            background: #7c3aed;
+            border: none;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+        .comp-pill-clear {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.4rem 0.9rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #fff;
+            background: #6b7280;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+        .comp-pill-clear:hover {
+            background: #4b5563;
+        }
+
         .comparison-profile-list {
             flex: 1;
             overflow-y: auto;
@@ -14593,7 +14647,7 @@
                     <div class="comparison-container">
                         <div class="comparison-sidebar">
                             <div class="sidebar-section">
-                                <h3>Select Profiles</h3>
+                                <span class="comp-select-label"><span class="line1">SELECT</span><span class="line2">PROFILE:</span></span>
                                 <div style="background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.75rem; font-size: 0.75rem;">
                                     💡 <strong>All open tabs</strong> and <strong>Gen Pop</strong> are auto-selected for comparison
                                 </div>
@@ -14617,10 +14671,10 @@
                                 </div>
                             </div>
                             
-                            <div style="margin-top: 1rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; text-align: center;">
-                                <span class="comp-selected-count" style="font-weight: 600;">0 selected</span>
+                            <div class="comp-pills-row">
+                                <span class="comp-pill-count comp-selected-count">0 items</span>
+                                <button type="button" class="comp-pill-clear" onclick="clearComparison()">Clear</button>
                             </div>
-                            <button class="btn btn-small" style="margin-top: 0.5rem; width: 100%; background: var(--bg-dark);" onclick="clearComparison()">CLEAR ALL</button>
                         </div>
                         <div class="comparison-main">
                             <!-- Side-by-Side Tables Tab -->
@@ -45473,7 +45527,7 @@
         function updateSelectedCount() {
             const countEl = document.querySelector('.comp-selected-count');
             if (countEl) {
-                countEl.textContent = `${selectedForComparison.size} selected`;
+                countEl.textContent = `${selectedForComparison.size} items`;
             }
         }
 
