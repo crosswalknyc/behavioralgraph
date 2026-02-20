@@ -1054,7 +1054,7 @@
                         <div id="activityExportCompanyList" style="font-size: 0.9rem;">
                             <p style="color: var(--text-secondary);">Loading...</p>
                         </div>
-                        <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">Run scheduled exports via cron: POST <code>/api/admin/run-activity-export-jobs</code> (e.g. daily).</p>
+                        <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">Scheduled exports run automatically on Render daily at 6:00 UTC. Set <code>CRON_SECRET</code> in the Render dashboard (web + activity-export-cron) to enable. You can also run now: <button type="button" class="btn btn-small btn-secondary" onclick="runActivityExportJobsNow()">Run now</button></p>
                     </div>
                 </div>
 
@@ -2328,7 +2328,7 @@
                             <option value="yearly">Yearly</option>
                         </select>
                     </div>
-                    <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem; text-align: left;">Run scheduled exports via Admin or cron: POST /api/admin/run-activity-export-jobs</small>
+                    <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem; text-align: left;">Scheduled exports run automatically on Render daily (set CRON_SECRET in dashboard).</small>
                 </div>
 
                 <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
@@ -4626,6 +4626,24 @@
                 if (data.success) {
                     if (typeof showToast === 'function') showToast('Removed');
                     loadActivityExportCompany();
+                } else {
+                    if (typeof showToast === 'function') showToast(data.error || 'Failed', true);
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Request failed', true);
+            }
+        }
+
+        async function runActivityExportJobsNow() {
+            try {
+                const response = await fetch('/api/admin/run-activity-export-jobs', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    if (typeof showToast === 'function') showToast(data.message || 'Export jobs run completed');
                 } else {
                     if (typeof showToast === 'function') showToast(data.error || 'Failed', true);
                 }

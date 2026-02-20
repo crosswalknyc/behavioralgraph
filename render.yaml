@@ -66,3 +66,19 @@ services:
         value: "1"
       - key: GUNICORN_TIMEOUT
         value: "300"
+      # Cron secret for /api/cron/run-activity-export-jobs (set in Dashboard for web + cron)
+      - key: CRON_SECRET
+        sync: false
+
+  # Cron: run scheduled activity CSV exports daily at 6:00 UTC
+  - type: cron
+    name: activity-export-cron
+    runtime: python
+    schedule: "0 6 * * *"
+    buildCommand: "true"
+    startCommand: python run_activity_export_cron.py
+    envVars:
+      - key: APP_URL
+        value: "https://behavioralgraph.onrender.com"
+      - key: CRON_SECRET
+        sync: false

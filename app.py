@@ -3178,86 +3178,102 @@ def set_activity_export_company():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _run_activity_export_jobs_impl():
+    """Run scheduled activity CSV exports: per-user and per-company. Returns dict for jsonify."""
+    data = load_users()
+    users_data = data.get('users', {})
+    by_company = data.get('activity_export_by_company') or {}
+    today = date.today()
+    sent_user = []
+    sent_company = []
+
+    # Per-user exports
+    for username, user in users_data.items():
+        emails_raw = (user.get('activity_export_emails') or '').strip()
+        cadence = (user.get('activity_export_cadence') or '').strip().lower()
+        if not emails_raw or cadence not in ACTIVITY_EXPORT_CADENCES:
+            continue
+        last_sent = user.get('activity_export_last_sent')
+        if not _activity_export_is_due(cadence, last_sent, today):
+            continue
+        activity = user.get('activity') or {'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0}
+        safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
+        csv_str = _build_activity_csv(username, safe_user, activity)
+        csv_bytes = csv_str.encode('utf-8')
+        emails_list = [e.strip() for e in emails_raw.split(',') if e.strip()]
+        subject = f"Crosswalk IQ – User activity export: {username}"
+        html = _wrap_email_html(f"<p>Attached: user activity CSV for <strong>{username}</strong> (cadence: {cadence}).</p>", title='User activity export')
+        ok, _ = send_email_with_attachment(emails_list, subject, html, f'user_activity_{username}.csv', csv_bytes)
+        if ok:
+            user['activity_export_last_sent'] = today.isoformat()
+            sent_user.append(username)
+
+    # Per-company exports
+    for company_key, config in list(by_company.items()):
+        emails_raw = (config.get('emails') or '').strip()
+        cadence = (config.get('cadence') or '').strip().lower()
+        if not emails_raw or cadence not in ACTIVITY_EXPORT_CADENCES:
+            continue
+        last_sent = config.get('last_sent')
+        if not _activity_export_is_due(cadence, last_sent, today):
+            continue
+        company_trim = (company_key or '').strip()
+        company_lower = company_trim.lower()
+        results = []
+        for u, user in users_data.items():
+            u_company = (user.get('company') or '').strip()
+            if u_company.lower() == company_lower:
+                activity = user.get('activity') or {'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0}
+                safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
+                results.append({'username': u, 'user': safe_user, 'activity': activity})
+        if not results:
+            continue
+        rows = []
+        for item in results:
+            rows.append(_build_activity_csv(item['username'], item['user'], item['activity']))
+        csv_str = '\n\n'.join(rows)
+        csv_bytes = csv_str.encode('utf-8')
+        emails_list = [e.strip() for e in emails_raw.split(',') if e.strip()]
+        subject = f"Crosswalk IQ – Company activity export: {company_trim}"
+        html = _wrap_email_html(f"<p>Attached: user activity CSV for company <strong>{company_trim}</strong> ({len(results)} user(s), cadence: {cadence}).</p>", title='Company activity export')
+        ok, _ = send_email_with_attachment(emails_list, subject, html, f'user_activity_company_{company_trim.replace(" ", "_")}.csv', csv_bytes)
+        if ok:
+            by_company[company_key]['last_sent'] = today.isoformat()
+            sent_company.append(company_trim)
+
+    if sent_user or sent_company:
+        data['activity_export_by_company'] = by_company
+        save_users(data)
+
+    return {
+        'success': True,
+        'emails_sent_user': sent_user,
+        'emails_sent_company': sent_company,
+        'message': f'Sent {len(sent_user)} user export(s), {len(sent_company)} company export(s).'
+    }
+
+
 @app.route('/api/admin/run-activity-export-jobs', methods=['POST'])
 @requires_admin
 def run_activity_export_jobs():
     """Run scheduled activity CSV exports: per-user and per-company. Call via cron (e.g. daily)."""
     try:
-        data = load_users()
-        users_data = data.get('users', {})
-        by_company = data.get('activity_export_by_company') or {}
-        today = date.today()
-        sent_user = []
-        sent_company = []
-        
-        # Per-user exports
-        for username, user in users_data.items():
-            emails_raw = (user.get('activity_export_emails') or '').strip()
-            cadence = (user.get('activity_export_cadence') or '').strip().lower()
-            if not emails_raw or cadence not in ACTIVITY_EXPORT_CADENCES:
-                continue
-            last_sent = user.get('activity_export_last_sent')
-            if not _activity_export_is_due(cadence, last_sent, today):
-                continue
-            # Fetch this user's activity (same as export_user_activity for username)
-            activity = user.get('activity') or {'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0}
-            safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
-            csv_str = _build_activity_csv(username, safe_user, activity)
-            csv_bytes = csv_str.encode('utf-8')
-            emails_list = [e.strip() for e in emails_raw.split(',') if e.strip()]
-            subject = f"Crosswalk IQ – User activity export: {username}"
-            html = _wrap_email_html(f"<p>Attached: user activity CSV for <strong>{username}</strong> (cadence: {cadence}).</p>", title='User activity export')
-            ok, _ = send_email_with_attachment(emails_list, subject, html, f'user_activity_{username}.csv', csv_bytes)
-            if ok:
-                user['activity_export_last_sent'] = today.isoformat()
-                sent_user.append(username)
-        
-        # Per-company exports
-        company_lower_to_name = {}
-        for c in by_company:
-            company_lower_to_name[(c or '').strip().lower()] = c
-        for company_key, config in list(by_company.items()):
-            emails_raw = (config.get('emails') or '').strip()
-            cadence = (config.get('cadence') or '').strip().lower()
-            if not emails_raw or cadence not in ACTIVITY_EXPORT_CADENCES:
-                continue
-            last_sent = config.get('last_sent')
-            if not _activity_export_is_due(cadence, last_sent, today):
-                continue
-            company_trim = (company_key or '').strip()
-            company_lower = company_trim.lower()
-            results = []
-            for u, user in users_data.items():
-                u_company = (user.get('company') or '').strip()
-                if u_company.lower() == company_lower:
-                    activity = user.get('activity') or {'feature_usage': {}, 'profiles_viewed': [], 'recent_actions': [], 'total_sessions': 0}
-                    safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
-                    results.append({'username': u, 'user': safe_user, 'activity': activity})
-            if not results:
-                continue
-            rows = []
-            for item in results:
-                rows.append(_build_activity_csv(item['username'], item['user'], item['activity']))
-            csv_str = '\n\n'.join(rows)
-            csv_bytes = csv_str.encode('utf-8')
-            emails_list = [e.strip() for e in emails_raw.split(',') if e.strip()]
-            subject = f"Crosswalk IQ – Company activity export: {company_trim}"
-            html = _wrap_email_html(f"<p>Attached: user activity CSV for company <strong>{company_trim}</strong> ({len(results)} user(s), cadence: {cadence}).</p>", title='Company activity export')
-            ok, _ = send_email_with_attachment(emails_list, subject, html, f'user_activity_company_{company_trim.replace(" ", "_")}.csv', csv_bytes)
-            if ok:
-                by_company[company_key]['last_sent'] = today.isoformat()
-                sent_company.append(company_trim)
-        
-        if sent_user or sent_company:
-            data['activity_export_by_company'] = by_company
-            save_users(data)
-        
-        return jsonify({
-            'success': True,
-            'emails_sent_user': sent_user,
-            'emails_sent_company': sent_company,
-            'message': f'Sent {len(sent_user)} user export(s), {len(sent_company)} company export(s).'
-        })
+        return jsonify(_run_activity_export_jobs_impl())
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cron/run-activity-export-jobs', methods=['POST', 'GET'])
+def cron_run_activity_export_jobs():
+    """Run activity export jobs when called with valid CRON_SECRET (for Render cron). No session required."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    expected = os.environ.get('CRON_SECRET', '')
+    if not expected or secret != expected:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    try:
+        return jsonify(_run_activity_export_jobs_impl())
     except Exception as e:
         import traceback
         traceback.print_exc()
