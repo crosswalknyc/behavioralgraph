@@ -471,22 +471,35 @@
             gap: 0.5rem;
             margin-left: auto;
         }
-        .view-toggle { display: flex; gap: 0.5rem; }
+        .view-toggle { display: flex; align-items: center; gap: 0.75rem; }
+        .view-nav-label {
+            color: #ae81ff;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
         .view-nav-dropdown {
             padding: 0.5rem 2rem 0.5rem 1rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
+            background: rgba(174, 129, 255, 0.12);
+            border: 1px solid rgba(174, 129, 255, 0.45);
             color: var(--text-primary);
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 0.9rem;
+            font-weight: 500;
             cursor: pointer;
             min-width: 200px;
             appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b949e' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23ae81ff' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 0.75rem center;
+            transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
         }
-        .view-nav-dropdown:focus { outline: none; border-color: var(--accent-blue); }
+        .view-nav-dropdown:hover {
+            background: rgba(174, 129, 255, 0.18);
+            border-color: rgba(174, 129, 255, 0.6);
+        }
+        .view-nav-dropdown:focus { outline: none; border-color: #ae81ff; box-shadow: 0 0 0 2px rgba(174, 129, 255, 0.25); }
         .view-nav-dropdown option:disabled { color: var(--text-secondary); opacity: 0.6; }
         .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
@@ -11463,7 +11476,7 @@
                     </div>
                 </div>
                 <div class="view-toggle" id="iqTabsContainer">
-                    <span class="view-nav-label" style="color: var(--text-secondary); font-size: 0.9rem; align-self: center;">Select Product:</span>
+                    <span class="view-nav-label">Select Product:</span>
                     <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate">
                         <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                         <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
@@ -35364,9 +35377,15 @@
         let pendingCollaborators = [];
         let pendingSelectedItems = null;
         
-        // Track last used workspace and deck for pre-selection
-        let lastUsedWorkspace = null;
-        let lastUsedDeck = null;
+        // Track last used workspace and deck for pre-selection (persisted so Workspace opens to it)
+        let lastUsedWorkspace = (function(){ try { return localStorage.getItem('lastUsedWorkspace') || null; } catch(_){ return null; } })();
+        let lastUsedDeck = (function(){ try { return localStorage.getItem('lastUsedDeck') || null; } catch(_){ return null; } })();
+        function saveLastUsedDeckToStorage(wsId, deckId) {
+            if (!wsId || !deckId) return;
+            lastUsedWorkspace = wsId;
+            lastUsedDeck = deckId;
+            try { localStorage.setItem('lastUsedWorkspace', wsId); localStorage.setItem('lastUsedDeck', deckId); } catch(_) {}
+        }
         
         function showDeckSelectionPopup(type, category, selectedItems = null) {
             const modal = document.createElement('div');
@@ -35557,8 +35576,7 @@
                 populateDeckSlidesWithProfileImage(deck);
                 
                 // Save last used workspace and deck for pre-selection next time
-                lastUsedWorkspace = wsId;
-                lastUsedDeck = deckId;
+                saveLastUsedDeckToStorage(wsId, deckId);
                 
                 // Add collaborators if any were specified
                 if (pendingCollaborators && pendingCollaborators.length > 0) {
@@ -35844,8 +35862,7 @@
                 itemAdded = true; // Mark that item was successfully added
                 
                 // Save last used workspace and deck for pre-selection next time
-                lastUsedWorkspace = wsId;
-                lastUsedDeck = deckId;
+                saveLastUsedDeckToStorage(wsId, deckId);
                 
                 // Add collaborators if any were specified
                 const collabCount = pendingCollaborators ? pendingCollaborators.length : 0;
@@ -49936,8 +49953,7 @@
             deck.updatedAt = new Date().toISOString();
             
             // Save last used workspace and deck
-            lastUsedWorkspace = wsId;
-            lastUsedDeck = deckId;
+            saveLastUsedDeckToStorage(wsId, deckId);
             
             // Add collaborators if any were specified
             let collabCount = 0;
@@ -52932,6 +52948,7 @@
                         renderWorkspaceDecks();
                         renderSlideEditor();
                         initDeckCollaboration();
+                        saveLastUsedDeckToStorage('cloud', deckId);
                     } else {
                         showNotification(data.error || 'Failed to load deck', 'error');
                     }
@@ -52940,6 +52957,7 @@
                 }
             } else {
                 openDeckInEditor(wsId, deckId);
+                saveLastUsedDeckToStorage(wsId, deckId);
             }
         }
         
@@ -53511,6 +53529,7 @@
             renderWorkspaceDecks();
             renderSlideEditor();
             initDeckCollaboration();
+            saveLastUsedDeckToStorage(wsId, deckId);
         }
         
         // Current ribbon tab state (must be defined before renderSlideEditor)
@@ -58341,6 +58360,40 @@
             renderSharedProfiles();
             renderComments();
             renderNotifications();
+            
+            // Restore last used workspace and deck so user doesn't have to select each time
+            setTimeout(function restoreLastDeck() {
+                const ws = lastUsedWorkspace || (function(){ try { return localStorage.getItem('lastUsedWorkspace'); } catch(_){ return null; } })();
+                const deck = lastUsedDeck || (function(){ try { return localStorage.getItem('lastUsedDeck'); } catch(_){ return null; } })();
+                if (!ws || !deck) return;
+                if (ws === 'cloud') {
+                    selectWorkspace('cloud');
+                    setTimeout(function() {
+                        const dropdown = document.getElementById('deckSelectDropdown');
+                        if (!dropdown) return;
+                        const val = 'cloud|' + deck;
+                        const opt = Array.from(dropdown.options).find(function(o) { return o.value === val; });
+                        if (opt) {
+                            dropdown.value = val;
+                            selectDeckFromDropdown(val);
+                        }
+                    }, 400);
+                } else {
+                    if (!workspaces[ws] || !(workspaceDecks[ws] || []).some(function(d) { return d.id === deck; })) return;
+                    selectWorkspace(ws);
+                    setTimeout(function() {
+                        const dropdown = document.getElementById('deckSelectDropdown');
+                        if (dropdown) {
+                            const val = ws + '|' + deck;
+                            const opt = Array.from(dropdown.options).find(function(o) { return o.value === val; });
+                            if (opt) {
+                                dropdown.value = val;
+                                selectDeckFromDropdown(val);
+                            }
+                        }
+                    }, 350);
+                }
+            }, 450);
             
             // Populate comment mention dropdown with team members
             setTimeout(() => {

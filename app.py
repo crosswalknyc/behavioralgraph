@@ -7430,7 +7430,7 @@ def parse_subscriber_iq_csv(csv_content):
 
 
 def scale_subscriber_iq_values(parsed, divisor=10):
-    """Only Total Show Watchers is scaled (divided by divisor). All other Subscriber IQ values stay raw from CSV."""
+    """Scale all SVOD Subscriber Acquisition output numbers by 1/divisor (e.g. divisor=10 reduces all by 10x). Percentages and avg_days are left unchanged."""
     if divisor is None or divisor == 0:
         return
     scale = 1.0 / float(divisor)
@@ -7448,17 +7448,81 @@ def scale_subscriber_iq_values(parsed, divisor=10):
                 return str(int(scaled)) if scaled == int(scaled) else f'{scaled:.2f}'
         return v
 
-    # Only Total Show Watchers (key_metrics.total_watchers) is divided by 10; all other metrics stay raw
-    m = parsed.get('key_metrics', {}).get('total_watchers')
-    if isinstance(m, dict):
-        if 'count' in m and m['count'] is not None:
+    # key_metrics: scale count and gen_pop for all metrics (total_watchers, pre_existing, clean_sample, new_signups)
+    for key in ('total_watchers', 'pre_existing', 'clean_sample', 'new_signups'):
+        m = parsed.get('key_metrics', {}).get(key)
+        if isinstance(m, dict):
+            if 'count' in m and m['count'] is not None:
+                m['count'] = _scale_num(m['count'])
+            if 'gen_pop' in m:
+                val = m['gen_pop']
+                if isinstance(val, (int, float)):
+                    m['gen_pop'] = _scale_num(val)
+                elif isinstance(val, str) and parse_number(val) is not None:
+                    m['gen_pop'] = _scale_num(val)
+
+    # episode_attribution: scale signups and gen_pop
+    for ep in parsed.get('episode_attribution') or []:
+        if ep.get('signups') is not None:
+            ep['signups'] = _scale_num(ep['signups'])
+        if ep.get('gen_pop') is not None:
+            val = ep['gen_pop']
+            if isinstance(val, (int, float)):
+                ep['gen_pop'] = _scale_num(val)
+            elif isinstance(val, str) and parse_number(val) is not None:
+                ep['gen_pop'] = _scale_num(val)
+
+    # attribution_summary: scale count and gen_pop
+    for key in ('total', 'attributed', 'same_day', 'later'):
+        m = parsed.get('attribution_summary', {}).get(key)
+        if isinstance(m, dict):
+            if 'count' in m and m['count'] is not None:
+                m['count'] = _scale_num(m['count'])
+            if 'gen_pop' in m:
+                val = m['gen_pop']
+                if isinstance(val, (int, float)):
+                    m['gen_pop'] = _scale_num(val)
+                elif isinstance(val, str) and parse_number(val) is not None:
+                    m['gen_pop'] = _scale_num(val)
+
+    # signup_timing: scale signups
+    for t in parsed.get('signup_timing') or []:
+        if t.get('signups') is not None:
+            t['signups'] = _scale_num(t['signups'])
+
+    # post_signup_touchpoints: scale users
+    for t in parsed.get('post_signup_touchpoints') or []:
+        if t.get('users') is not None:
+            t['users'] = _scale_num(t['users'])
+
+    # competitive_platforms: scale count if present
+    for c in parsed.get('competitive_platforms') or []:
+        if c.get('count') is not None:
+            c['count'] = _scale_num(c['count'])
+
+    # monthly_signups: scale count if present
+    for m in parsed.get('monthly_signups') or []:
+        if m.get('count') is not None:
             m['count'] = _scale_num(m['count'])
-        if 'gen_pop' in m:
+
+    # monthly_churn: scale churned and gen_pop if numeric
+    for m in parsed.get('monthly_churn') or []:
+        if m.get('churned') is not None:
+            m['churned'] = _scale_num(m['churned'])
+        if m.get('gen_pop') is not None:
             val = m['gen_pop']
             if isinstance(val, (int, float)):
                 m['gen_pop'] = _scale_num(val)
             elif isinstance(val, str) and parse_number(val) is not None:
                 m['gen_pop'] = _scale_num(val)
+
+    # demographics: scale count for age and gender
+    for bucket in parsed.get('demographics', {}).get('age') or []:
+        if bucket.get('count') is not None:
+            bucket['count'] = _scale_num(bucket['count'])
+    for bucket in parsed.get('demographics', {}).get('gender') or []:
+        if bucket.get('count') is not None:
+            bucket['count'] = _scale_num(bucket['count'])
 
 
 @app.route('/api/subscriber-iq/list')
@@ -7536,7 +7600,7 @@ def get_subscriber_iq_data(s3_key):
         # Parse subscriber IQ CSV
         print(f"📝 CSV content preview (first 500 chars): {csv_content[:500]}")
         parsed = parse_subscriber_iq_csv(csv_content)
-        # Subscriber IQ: use raw values from CSV so sample size (Total Show Watchers) is not cut off
+        # Subscriber IQ: use raw values from CSV (no scaling at serve time)
 
         # Log what was parsed in detail
         print(f"📊 Parsed data summary:")

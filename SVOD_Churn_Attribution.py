@@ -1602,6 +1602,47 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
 
     df_out = pd.DataFrame(rows, columns=["Category", "Episode Date", "Count", "Count Label", "Secondary Count", "Secondary Label", "Tertiary Count", "Tertiary Label", "Percentage", "Gen Pop Projection"])
 
+    # Scale all final count and Gen Pop numbers by 1/10 (outputs were 10x too high)
+    OUTPUT_DIVISOR = 10
+    for idx in df_out.index:
+        cat = str(df_out.loc[idx, "Category"] or "")
+        # Count: scale if numeric; skip Exclusion/Attribution window (days)
+        if "Exclusion Window" not in cat and "Attribution Window" not in cat:
+            c = df_out.loc[idx, "Count"]
+            if c != "" and c is not None and not pd.isna(c):
+                try:
+                    n = int(float(str(c).replace(",", "")))
+                    df_out.loc[idx, "Count"] = int(round(n / OUTPUT_DIVISOR))
+                except (ValueError, TypeError):
+                    pass
+        # Secondary Count: scale if numeric; skip "Average Days from Show Available" (days value)
+        if "Average Days from Show Available" not in cat:
+            sc = df_out.loc[idx, "Secondary Count"]
+            if sc != "" and sc is not None and not pd.isna(sc):
+                try:
+                    n = int(float(str(sc).replace(",", "")))
+                    df_out.loc[idx, "Secondary Count"] = int(round(n / OUTPUT_DIVISOR))
+                except (ValueError, TypeError):
+                    pass
+        # Tertiary Count: scale if numeric (e.g. min avg view)
+        tc = df_out.loc[idx, "Tertiary Count"]
+        if tc != "" and tc is not None and not pd.isna(tc):
+            try:
+                n = float(str(tc).replace(",", ""))
+                scaled = n / OUTPUT_DIVISOR
+                df_out.loc[idx, "Tertiary Count"] = int(scaled) if scaled == int(scaled) else round(scaled, 2)
+            except (ValueError, TypeError):
+                pass
+        # Gen Pop Projection: parse comma-separated number, divide by 10, re-format
+        gp = df_out.loc[idx, "Gen Pop Projection"]
+        if gp and str(gp).strip() and not pd.isna(gp):
+            try:
+                n = int(float(str(gp).replace(",", "")))
+                if n >= 0:
+                    df_out.loc[idx, "Gen Pop Projection"] = f"{int(round(n / OUTPUT_DIVISOR)):,}"
+            except (ValueError, TypeError):
+                pass
+
     # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
     output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
     output_folder = output_folder if isinstance(output_folder, Path) else Path(output_folder)
