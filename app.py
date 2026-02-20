@@ -3351,6 +3351,23 @@ def cron_restore_users_from_deployed_file():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/cron/restore-users-from-body', methods=['POST'])
+def cron_restore_users_from_body():
+    """One-time: accept full users JSON in request body and save to S3. Use to push local users.json to production without redeploy. Requires CRON_SECRET."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    if not secret or secret != os.environ.get('CRON_SECRET', ''):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    try:
+        data = request.get_json()
+        if not data or not data.get('users'):
+            return jsonify({'success': False, 'error': 'JSON body with "users" object required'}), 400
+        save_users(data)
+        count = len(data['users'])
+        return jsonify({'success': True, 'message': f'Restored {count} users to S3. All users are now on production.'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/cron/repair-admin-role', methods=['POST'])
 def cron_repair_admin_role():
     """One-time repair: set the 'admin' user's role to super_admin. Call with CRON_SECRET to fix production after accidental role change."""
