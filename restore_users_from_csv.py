@@ -73,6 +73,7 @@ def main():
             'has_rankers_iq_access': False,
             'rankers_iq_options': [],
             'has_purgatory_approval': False,
+            'must_reset_password': True,
         }
 
     new_passwords = []

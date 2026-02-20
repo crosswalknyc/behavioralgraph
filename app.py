@@ -115,6 +115,19 @@ def server_error(e):
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
     return redirect(url_for('login_page'))
 
+
+@app.before_request
+def redirect_if_must_reset_password():
+    """If user must reset password, only allow /set-password and /api/set-password."""
+    if not session.get('username') or not session.get('must_reset_password'):
+        return None
+    path = request.path or ''
+    if path == '/set-password' or path.startswith('/api/set-password') or path == '/logout':
+        return None
+    if path.startswith('/static/') or path in ('/login', '/health', '/healthz', '/ready'):
+        return None
+    return redirect(url_for('set_password_page'))
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -1529,12 +1542,52 @@ def login_page():
         # Set session
         session['username'] = username
         session['role'] = _normalize_role(user.get('role', 'user'))
+        if user.get('must_reset_password'):
+            session['must_reset_password'] = True
+            return jsonify({'success': True, 'redirect': '/set-password'})
         
         # Always redirect to dashboard, admin can access admin panel from there
         return jsonify({'success': True, 'redirect': '/'})
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/set-password')
+def set_password_page():
+    """Require user to set a new password (e.g. after restore). Only shown when must_reset_password is set."""
+    if 'username' not in session:
+        return redirect(url_for('login_page'))
+    if not session.get('must_reset_password'):
+        return redirect(url_for('index'))
+    return render_template('set_password.html')
+
+
+@app.route('/api/set-password', methods=['POST'])
+def api_set_password():
+    """Update current user's password and clear must_reset_password. Requires login."""
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+    try:
+        data = request.get_json() or {}
+        new_password = (data.get('new_password') or '').strip()
+        confirm = (data.get('confirm_password') or '').strip()
+        if not new_password or new_password != confirm:
+            return jsonify({'success': False, 'error': 'Passwords do not match'})
+        if len(new_password) < 8:
+            return jsonify({'success': False, 'error': 'Password must be at least 8 characters'})
+        users_data = load_users()
+        username = session['username']
+        if username not in users_data.get('users', {}):
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user = users_data['users'][username]
+        user['password_hash'] = hash_password(new_password)
+        user['must_reset_password'] = False
+        save_users(users_data)
+        session.pop('must_reset_password', None)
+        return jsonify({'success': True, 'redirect': '/'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/logout')
 def logout():
