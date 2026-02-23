@@ -4232,7 +4232,10 @@ def index():
     
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
-    
+
+    # Purgatory: only admins, super_admins, or users with has_purgatory_approval can see Purgatory in product dropdown
+    has_purgatory_access = role in ['admin', 'super_admin'] or (user.get('has_purgatory_approval', False) if user else False)
+
     # Get user info for credits request
     first_name = user.get('first_name', '') if user else ''
     last_name = user.get('last_name', '') if user else ''
@@ -4269,6 +4272,7 @@ def index():
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
+                           has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
                            last_name=last_name,
                            company=company,

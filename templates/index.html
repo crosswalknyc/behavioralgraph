@@ -11679,9 +11679,12 @@
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
                             {% endif %}
-                            {% if role == 'super_admin' or role == 'admin' %}
-                            <option value="admin">🔐 Admin</option>
-                            {% endif %}
+                        {% if role == 'super_admin' or role == 'admin' %}
+                        <option value="admin">🔐 Admin</option>
+                        {% endif %}
+                        {% if has_purgatory_access %}
+                        <option value="purgatory">⏳ Purgatory</option>
+                        {% endif %}
                         </select>
                         <button type="button" class="view-nav-trigger" id="viewNavTrigger" aria-haspopup="listbox" aria-expanded="false" aria-label="Select product"></button>
                         <div class="view-nav-panel" id="viewNavPanel" role="listbox" aria-label="Product options"></div>
@@ -15855,7 +15858,8 @@
                     if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50);
                 },
                 customAnalysis: showCustomAnalysis,
-                admin: function() { window.location.href = '/admin'; }
+                admin: function() { window.location.href = '/admin'; },
+                purgatory: function() { window.location.href = '/admin#purgatory'; }
             };
             window.setViewNavDropdown = function(value) {
                 if (viewDropdown && value) {
@@ -15885,7 +15889,8 @@
                 hedgeFundIQ: 'Hedge Fund IQ: View hedge fund and institutional engagement and exposure.',
                 workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
-                admin: 'Admin: Manage users, access, and system settings.'
+                admin: 'Admin: Manage users, access, and system settings.',
+                purgatory: 'Purgatory: Review and release items pending admin approval.'
             };
             var triggerEl = document.getElementById('viewNavTrigger');
             var panelEl = document.getElementById('viewNavPanel');

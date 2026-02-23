@@ -2755,7 +2755,7 @@
             loadUsers();
             loadCategoriesAndRuns();
             loadContentFiles();
-            
+            if (window.location.hash === '#purgatory') showAdminTab('purgatory');
             // Add event listener for company field to load team members
             const companyField = document.getElementById('newCompany');
             if (companyField) {
