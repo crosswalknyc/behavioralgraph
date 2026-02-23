@@ -121,6 +121,16 @@
             border-radius: 8px;
             display: inline-block;
         }
+        .header-logo-text {
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: 0.02em;
+            color: #0a1929;
+            background: #c8d43a;
+            padding: 0.35rem 0.6rem;
+            border-radius: 8px;
+            display: inline-block;
+        }
         .header-text h1 { font-family: 'Space Mono', monospace; font-size: 1.5rem; color: var(--accent-cyan); }
         .header-text p { color: var(--text-secondary); font-size: 0.8rem; }
 
@@ -507,6 +517,52 @@
         }
         .view-nav-dropdown:focus { outline: none; border-color: #ae81ff; box-shadow: 0 0 0 2px rgba(174, 129, 255, 0.25); }
         .view-nav-dropdown option:disabled { color: var(--text-secondary); opacity: 0.6; }
+        .view-nav-custom-wrap { position: relative; display: inline-block; min-width: 200px; }
+        .view-nav-trigger {
+            padding: 0.5rem 2rem 0.5rem 1rem;
+            background: rgba(174, 129, 255, 0.12);
+            border: 1px solid rgba(174, 129, 255, 0.45);
+            color: var(--text-primary);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23ae81ff' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+        }
+        .view-nav-trigger:hover { background: rgba(174, 129, 255, 0.18); border-color: rgba(174, 129, 255, 0.6); }
+        .view-nav-panel {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 4px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            z-index: 1000;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .view-nav-panel.open { display: block; }
+        .view-nav-option {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+        .view-nav-option:hover { background: var(--bg-input); }
+        .view-nav-option:disabled, .view-nav-option.disabled { opacity: 0.6; cursor: not-allowed; }
         .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
             padding: 0.5rem 1rem;
@@ -11519,9 +11575,7 @@
         {% endif %}
         <header>
             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem;">
-                <div class="header-logo-wrap">
-                    <img src="/static/crosswalk-logo.png" alt="Crosswalk Logo" class="logo" style="height: 80px; width: auto;">
-                </div>
+                <div class="header-logo-text">CROSSWALK</div>
                 <div style="font-style: italic; color: var(--text-secondary); font-size: 0.75rem; margin-left: 0.25rem;">Signal Logic for Outcome-Driven Audience Navigation & Emergence</div>
             </div>
             <div class="header-right-section">
@@ -11546,21 +11600,25 @@
                 </div>
                 <div class="view-toggle" id="iqTabsContainer">
                     <span class="view-nav-label">Select Product:</span>
-                    <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate">
-                        <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
-                        <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
-                        <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
-                        <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
-                        <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
-                        <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
-                        <option value="workspace">🗂️ Workspace</option>
-                        {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
-                        <option value="customAnalysis">🔧 Analysis IQ</option>
-                        {% endif %}
-                        {% if role == 'super_admin' or role == 'admin' %}
-                        <option value="admin">🔐 Admin</option>
-                        {% endif %}
-                    </select>
+                    <div class="view-nav-custom-wrap" id="viewNavCustomWrap">
+                        <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
+                            <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
+                            <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
+                            <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
+                            <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
+                            <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
+                            <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
+                            <option value="workspace">🗂️ Workspace</option>
+                            {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
+                            <option value="customAnalysis">🔧 Analysis IQ</option>
+                            {% endif %}
+                            {% if role == 'super_admin' or role == 'admin' %}
+                            <option value="admin">🔐 Admin</option>
+                            {% endif %}
+                        </select>
+                        <button type="button" class="view-nav-trigger" id="viewNavTrigger" aria-haspopup="listbox" aria-expanded="false" aria-label="Select product"></button>
+                        <div class="view-nav-panel" id="viewNavPanel" role="listbox" aria-label="Product options"></div>
+                    </div>
                 </div>
             </div>
         </header>
@@ -15735,6 +15793,10 @@
                 if (viewDropdown && value) {
                     viewDropdown.value = value;
                 }
+                var trigger = document.getElementById('viewNavTrigger');
+                if (trigger && viewDropdown && viewDropdown.selectedIndex >= 0) {
+                    trigger.textContent = viewDropdown.options[viewDropdown.selectedIndex].textContent;
+                }
             };
             if (viewDropdown) {
                 viewDropdown.addEventListener('change', function() {
@@ -15743,6 +15805,62 @@
                     if (opt && opt.disabled) return;
                     const handler = navHandlers[val];
                     if (handler) handler();
+                });
+            }
+            // Custom product dropdown with hover descriptors (when HOVER ON)
+            var viewNavProductTooltips = {
+                profileIQ: 'Profile IQ: Build and analyze custom audience profiles based on engagement and behavior.',
+                subscriberIQ: 'Subscriber IQ: Explore subscriber demographics, retention, and engagement metrics.',
+                rankerIQ: 'Ranker: Compare and rank titles, genres, or properties by performance.',
+                ticketSalesIQ: 'Impact IQ: Measure impact and performance of titles via ticket sales and engagement.',
+                ticketSalesTracker: 'Ticket Sales Tracker: Track ticket sales and box office performance over time.',
+                hedgeFundIQ: 'Hedge Fund IQ: View hedge fund and institutional engagement and exposure.',
+                workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
+                customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
+                admin: 'Admin: Manage users, access, and system settings.'
+            };
+            var triggerEl = document.getElementById('viewNavTrigger');
+            var panelEl = document.getElementById('viewNavPanel');
+            if (triggerEl && panelEl && viewDropdown) {
+                for (var i = 0; i < viewDropdown.options.length; i++) {
+                    var opt = viewDropdown.options[i];
+                    var val = opt.value;
+                    var label = opt.textContent;
+                    var disabled = opt.disabled;
+                    var item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'view-nav-option' + (disabled ? ' disabled' : '') + ' has-tooltip';
+                    item.setAttribute('role', 'option');
+                    item.setAttribute('data-value', val);
+                    if (!disabled && viewNavProductTooltips[val]) item.setAttribute('data-tooltip', viewNavProductTooltips[val]);
+                    item.textContent = label;
+                    if (disabled) item.disabled = true;
+                    else {
+                        item.addEventListener('click', function() {
+                            var v = this.getAttribute('data-value');
+                            viewDropdown.value = v;
+                            viewDropdown.dispatchEvent(new Event('change', { bubbles: true }));
+                            triggerEl.textContent = this.textContent;
+                            panelEl.classList.remove('open');
+                            triggerEl.setAttribute('aria-expanded', 'false');
+                        });
+                    }
+                    panelEl.appendChild(item);
+                }
+                function updateTriggerText() {
+                    if (viewDropdown.selectedIndex >= 0) triggerEl.textContent = viewDropdown.options[viewDropdown.selectedIndex].textContent;
+                }
+                updateTriggerText();
+                triggerEl.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var open = panelEl.classList.toggle('open');
+                    triggerEl.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+                document.addEventListener('click', function(e) {
+                    if (!document.getElementById('viewNavCustomWrap').contains(e.target)) {
+                        panelEl.classList.remove('open');
+                        triggerEl.setAttribute('aria-expanded', 'false');
+                    }
                 });
             }
         });
