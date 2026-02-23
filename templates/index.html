@@ -1977,7 +1977,7 @@
         /* Tool tabs - purple to distinguish from data tabs */
         .tab-btn.tool-tab {
             background: rgba(139, 92, 246, 0.15);
-            border-color: rgba(139, 92, 246, 0.4);
+            border: 1px dashed rgba(239, 68, 68, 0.55);
             color: #c4b5fd;
         }
 
@@ -2074,7 +2074,7 @@
             display: flex;
             flex-direction: column;
             gap: 0.15rem;
-            align-items: flex-start;
+            align-items: center;
         }
         .toolbar-section-label {
             font-size: 0.65rem;
@@ -2082,9 +2082,9 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: var(--text-secondary);
-            padding-left: 0.25rem;
             margin-top: 0.1rem;
             order: 2;
+            padding-left: 0;
         }
         .toolbar-section .dashboard-tabs {
             order: 1;
@@ -13126,11 +13126,6 @@
                                             <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                             <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                             <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                            <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: AI-powered SWOT and strategic insight analysis for the selected profile." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🔑</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                            <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Life moments, behavioral context, and category relationships for this audience." onclick="openEcosystemFromNav()"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                            <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship potential and brand alignment recommendations." onclick="openSponsorshipFromNav()"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                            <button class="tab-btn tool-tab has-tooltip" data-feature="media" data-tooltip="Media: Media consumption patterns and channel recommendations." onclick="openMediaFromNav()"><span class="tab-icon">🎬</span><span class="tab-label">MEDIA</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                            <button class="tab-btn tool-tab has-tooltip" data-feature="content" data-tooltip="Content: Content development and partnership insights." onclick="openContentFromNav()"><span class="tab-icon">🎞️</span><span class="tab-label">CONTENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                             <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                         </div>
                                         <div class="toolbar-section-label">ANALYSIS TOOLS</div>
@@ -20804,7 +20799,7 @@
                 return qGeStart && qLeEnd;
             }
             
-            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Crosswalk Net Growth %</th><th style="padding: 0.75rem; text-align: right;">Actual Net Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
+            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
             
             // Sort quarters based on mode
             let sortedQuarters;
@@ -20854,14 +20849,14 @@
                 const netGrowthCount = data.subs - data.cancels;
                 const startConsumers = data.startConsumers != null ? Number(data.startConsumers) : 0;
                 const endConsumers = data.endConsumers != null ? Number(data.endConsumers) : 0;
-                // Actual Net Growth %: from actual subs/cancels only (reverted to how it was)
-                const actualGrowthPctNum = startConsumers > 0 ? (netGrowthCount / startConsumers) * 100 : 0;
-                const actualGrowthPct = actualGrowthPctNum.toFixed(2);
-                // Crosswalk Net Growth %: from daily start/end consumers (Crosswalk underlying data)
-                const crosswalkGrowthPctNum = startConsumers > 0 && endConsumers != null
+                const growthPctNum = startConsumers > 0 && endConsumers != null
                     ? ((endConsumers - startConsumers) / startConsumers) * 100
                     : (startConsumers > 0 ? (netGrowthCount / startConsumers) * 100 : 0);
-                const crosswalkGrowthPct = (typeof crosswalkGrowthPctNum === 'number' && !isNaN(crosswalkGrowthPctNum)) ? crosswalkGrowthPctNum.toFixed(2) : '0';
+                const growthPct = growthPctNum.toFixed(2);
+                // Net Growth as decimal rate (from underlying data): (end - start) / start
+                const netGrowthRate = startConsumers > 0 && endConsumers != null
+                    ? (endConsumers - startConsumers) / startConsumers
+                    : (startConsumers > 0 ? netGrowthCount / startConsumers : 0);
                 
                 // SEC Actuals: use value as entered (key match quarter string)
                 const secActualKey = q;
@@ -20871,7 +20866,7 @@
                 
                 if (secActual !== undefined && secActual !== null && secActual !== '') {
                     const secActualPct = parseFloat(secActual);
-                    const ourGrowthPct = parseFloat(actualGrowthPct);
+                    const ourGrowthPct = parseFloat(growthPct);
                     const variancePct = ourGrowthPct - secActualPct;
                     const varianceColor = Math.abs(variancePct) < 0.5 ? '#10b981' : (Math.abs(variancePct) < 2 ? '#eab308' : '#ef4444');
                     secActualCell = `<td style="padding: 0.75rem; text-align: right;">${Number(secActual).toFixed(2)}%</td>`;
@@ -20880,7 +20875,8 @@
                 
                 const rowStyle = inKpiRange ? 'border-bottom: 1px solid var(--border-color); background: rgba(0, 230, 230, 0.08);' : 'border-bottom: 1px solid var(--border-color);';
                 const titleAttr = inKpiRange ? ` title="KPI for this period: ${(kpiChange.label || '').replace(/"/g, '&quot;')}"` : '';
-                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${crosswalkGrowthPctNum >= 0 ? '#10b981' : '#ef4444'};">${crosswalkGrowthPct}%</td><td style="padding: 0.75rem; text-align: right; color: ${actualGrowthPctNum >= 0 ? '#10b981' : '#ef4444'};">${actualGrowthPct}%</td>${secActualCell}${varianceCell}</tr>`;
+                const netGrowthDisplay = (typeof netGrowthRate === 'number' && !isNaN(netGrowthRate)) ? netGrowthRate.toFixed(16).replace(/\.?0+$/, '') : '0';
+                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowthRate >= 0 ? '#10b981' : '#ef4444'};">${netGrowthDisplay}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
             });
             
             html += '</tbody></table>';
@@ -20941,7 +20937,11 @@
                 historicPerformanceChartInstance = null;
             }
             const labels = sortedQuarters;
-            const crosswalkGrowthPctData = sortedQuarters.map(q => {
+            const netGrowthData = sortedQuarters.map(q => {
+                const d = quarters[q];
+                return d ? (d.subs - d.cancels) : 0;
+            });
+            const growthPctData = sortedQuarters.map(q => {
                 const d = quarters[q];
                 if (!d) return null;
                 const startC = d.startConsumers != null ? Number(d.startConsumers) : 0;
@@ -20981,8 +20981,8 @@
                 }
             };
             const datasets = [
-                { label: 'Crosswalk Net Growth %', data: crosswalkGrowthPctData, borderColor: accentCyan, backgroundColor: 'rgba(0, 255, 255, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
-                { label: 'Actual Net Growth %', data: actualGrowthPctData, borderColor: green, backgroundColor: 'rgba(16, 185, 129, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
+                { label: 'Net Growth', data: netGrowthData, borderColor: accentCyan, backgroundColor: 'rgba(0, 255, 255, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
+                { label: 'Growth %', data: growthPctData, borderColor: green, backgroundColor: 'rgba(16, 185, 129, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
                 { label: 'SEC Actuals %', data: secActualsData, borderColor: blue, backgroundColor: 'rgba(59, 130, 246, 0.15)', fill: false, tension: 0.3, pointRadius: 4 }
             ];
             const ctx = canvas.getContext('2d');
@@ -49781,27 +49781,6 @@
                 return;
             }
             showProfileSelectionModal('ecosystem');
-        }
-        
-        function openSponsorshipFromNav() {
-            showTab('insights');
-            if (typeof showInsightsTab === 'function') showInsightsTab('summary');
-            const el = document.getElementById('insights-tab-summary');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-        
-        function openMediaFromNav() {
-            showTab('insights');
-            if (typeof showInsightsTab === 'function') showInsightsTab('summary');
-            const el = document.getElementById('insights-tab-summary');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-        
-        function openContentFromNav() {
-            showTab('insights');
-            if (typeof showInsightsTab === 'function') showInsightsTab('summary');
-            const el = document.getElementById('insights-tab-summary');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         
         function showProfileSelectionModal(mode) {
