@@ -2034,6 +2034,17 @@
             min-width: 0;
             margin-bottom: 0;
         }
+        .profile-title-and-toolbar-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            align-items: flex-start;
+            flex: 1;
+            min-width: 0;
+        }
+        .profile-title-and-toolbar-wrap .toolbar-content {
+            width: 100%;
+        }
         .profile-and-toolbar-row.collapsed {
             max-height: 0 !important;
             margin: 0 !important;
@@ -2063,6 +2074,7 @@
             display: flex;
             flex-direction: column;
             gap: 0.15rem;
+            align-items: flex-start;
         }
         .toolbar-section-label {
             font-size: 0.65rem;
@@ -2071,6 +2083,11 @@
             letter-spacing: 0.5px;
             color: var(--text-secondary);
             padding-left: 0.25rem;
+            margin-top: 0.1rem;
+            order: 2;
+        }
+        .toolbar-section .dashboard-tabs {
+            order: 1;
         }
         
         .toolbar-row.collapsed .toolbar-content {
@@ -13080,38 +13097,38 @@
             <div class="profile-tabs-bar" id="profileTabsBar">
             </div>
             
-            <!-- Profile + Toolbar: one row (title/image left, toolbar right) -->
+            <!-- Profile + Toolbar: image, then title+date and toolbar aligned (same left as title box) -->
             <div class="profile-and-toolbar-row" id="profileAndToolbarRow">
-                <!-- Row 1: Profile Info (image + title + date) -->
                 <div class="dash-header-row profile-header-row" id="profileHeaderRow">
                     <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
                         <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile" onerror="this.parentElement.classList.remove('loaded')"></div>
-                        <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
-                            <div class="dash-brand-box" id="dashBrandNameHeader"></div>
-                            <div class="dash-date-box" id="dashDateRangeHeader"></div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Toolbar: DATA + ANALYSIS TOOLS (sits by title and image) -->
-                <div id="toolbarRow" class="toolbar-row">
-                    <div class="toolbar-content" id="toolbarContent">
-                        <div class="toolbar-section">
-                            <div class="toolbar-section-label">DATA</div>
-                            <div class="dashboard-tabs">
-                                <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
-                                <button class="tab-btn has-tooltip" data-tooltip="Demographics: Detailed breakdown of age, gender, ethnicity, income, education, and other demographic characteristics." onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
-                                <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
-                                <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
-                                <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
+                        <div class="profile-title-and-toolbar-wrap">
+                            <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
+                                <div class="dash-brand-box" id="dashBrandNameHeader"></div>
+                                <div class="dash-date-box" id="dashDateRangeHeader"></div>
                             </div>
-                        </div>
-                        <div class="toolbar-section">
-                            <div class="toolbar-section-label">ANALYSIS TOOLS</div>
-                            <div class="dashboard-tabs" id="analysisToolsTabs">
-                                <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            <div id="toolbarRow" class="toolbar-row">
+                                <div class="toolbar-content" id="toolbarContent">
+                                    <div class="toolbar-section">
+                                        <div class="dashboard-tabs">
+                                            <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                                            <button class="tab-btn has-tooltip" data-tooltip="Demographics: Detailed breakdown of age, gender, ethnicity, income, education, and other demographic characteristics." onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                                            <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
+                                            <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
+                                            <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
+                                        </div>
+                                        <div class="toolbar-section-label">DATA</div>
+                                    </div>
+                                    <div class="toolbar-section">
+                                        <div class="dashboard-tabs" id="analysisToolsTabs">
+                                            <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                            <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                            <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                            <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                        </div>
+                                        <div class="toolbar-section-label">ANALYSIS TOOLS</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
