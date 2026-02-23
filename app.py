@@ -1462,8 +1462,9 @@ def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, u
     try:
         target_bucket = bucket or S3_BUCKET
         timestamp = datetime.now().strftime('%m_%d_%Y_%H_%M')
-        # Replace hyphens with underscores in filename for consistency
-        safe_brand_name = brand_name.replace('-', '_').replace(' ', '_')
+        # Name (or input) with parts separated by underscore: spaces/hyphens/slashes/commas -> single _
+        safe_brand_name = re.sub(r'[\s\-/,]+', '_', (brand_name or '').strip())
+        safe_brand_name = re.sub(r'_+', '_', safe_brand_name).strip('_') or 'Profile'
         base_key = f"{safe_brand_name}_{timestamp}.csv"
         s3_key = (S3_PURGATORY_PREFIX + base_key) if use_purgatory else base_key
         s3_client.upload_file(file_path, target_bucket, s3_key)
@@ -13531,7 +13532,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 # Upload to S3 (purgatory - admin must release to main bucket); pass brand_category so purgatory shows selected category
                 update_job_status(job_id, progress=95, message='Saving to cache...')
                 created_by = jobs.get(job_id, {}).get('created_by', '')
-                s3_key = upload_to_s3(output_path, brands[0] if brands else project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True, category=brand_category or 'GENERAL')
+                # Use project_name for filename so saved file is e.g. Dakota_Fanning_02_23_2026_19_57.csv (name with underscores + timestamp)
+                s3_key = upload_to_s3(output_path, project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True, category=brand_category or 'GENERAL')
                 if s3_key:
                     _add_user_profile(s3_key, created_by)
                 update_job_status(
