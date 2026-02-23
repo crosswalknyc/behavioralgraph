@@ -13069,11 +13069,6 @@
                             <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                             <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                             <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                            <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: SWOT analysis and key insights for the primary brand, comparing to comparison profiles and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                            <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="openEcosystemFromNav()"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                            <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                            <button class="tab-btn tool-tab has-tooltip" data-feature="media" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                            <button class="tab-btn tool-tab has-tooltip" data-feature="content" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                             <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         </div>
                     </div>
@@ -13803,632 +13798,7 @@
                 </div>
             </div>
 
-            <!-- Ecosystem Tab -->
-            <div id="tab-ecosystem" class="tab-content">
-                <div class="ecosystem-container">
-                    <!-- Ecosystem Overview -->
-                    <div class="ecosystem-header">
-                        <h2 style="margin: 0; font-size: 1.5rem; color: var(--text-primary);">🌐 Ecosystem Analysis</h2>
-                        <p style="margin: 0.5rem 0 1.5rem 0; color: var(--text-secondary); font-size: 0.9rem;">AI-powered strategic insights analyzing behavioral patterns, cultural momentum, and market opportunities.</p>
-                        
-                        <!-- AI Insights Container -->
-                        <div id="ecosystemAIInsights" style="margin-bottom: 2rem;">
-                            <div style="padding: 1.5rem; background: var(--bg-card); border-radius: 8px; border-left: 4px solid var(--accent-purple);">
-                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
-                                    <span style="font-size: 1.5rem;">✨</span>
-                                    <h3 style="margin: 0; color: var(--accent-purple);">Strategic Insights</h3>
-                                </div>
-                                <div id="ecosystemAIContent" style="color: var(--text-secondary); line-height: 1.8;">
-                                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                                        <div style="margin-bottom: 1rem;">🤖 Analyzing behavioral data...</div>
-                                        <div style="font-size: 0.85rem;">Generating high-level strategic insights from underlying data</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Insight Section 1: Life Moments & Behaviors -->
-                    <div class="ecosystem-section">
-                        <div class="ecosystem-section-header">
-                            <h3>🔄 Life Moments & Behavioral Context</h3>
-                            <p class="section-description">What people are doing before and after <span id="ecosystemBrandName">PROFILE</span> enters their life. What life moments precede brand interactions, and what behaviors the brand competes with.</p>
-                        </div>
-                        <div class="ecosystem-insights-grid">
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Pre-Engagement Behaviors: Activities and behaviors that typically occur before consumers interact with the brand.">⏮️ Before Engagement</h4>
-                                <div id="ecosystemBeforeEngagement" class="insight-content">
-                                    <div class="loading-placeholder">Analyzing pre-engagement patterns...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Post-Engagement Behaviors: Activities and behaviors that typically occur after consumers interact with the brand.">⏭️ After Engagement</h4>
-                                <div id="ecosystemAfterEngagement" class="insight-content">
-                                    <div class="loading-placeholder">Analyzing post-engagement patterns...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card highlight">
-                                <h4 class="has-tooltip" data-tooltip="Competitive Behaviors: What behaviors and categories compete with the brand for consumer attention and engagement.">⚔️ Competitive Behaviors</h4>
-                                <div id="ecosystemCompetitiveBehaviors" class="insight-content">
-                                    <div class="loading-placeholder">Identifying competitive moments...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Insight Section 2: Cross-Category Substitution -->
-                    <div class="ecosystem-section">
-                        <div class="ecosystem-section-header">
-                            <h3>🔄 Cross-Category Substitution & Occasion Leakage</h3>
-                            <p class="section-description">Early-warning signal data showing when people leave the category entirely, what replaces it, and functional shifts. Insights are tailored to your profile's category.</p>
-                        </div>
-                        <div class="ecosystem-insights-grid">
-                            <div class="ecosystem-insight-card highlight">
-                                <h4 class="has-tooltip" data-tooltip="Category Exit Signals: Behavioral indicators that consumers are leaving the category before sales data shows it.">🚪 Category Exit Signals</h4>
-                                <div id="ecosystemCategoryExit" class="insight-content">
-                                    <div class="loading-placeholder">Detecting exit patterns...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Replacement Categories: What categories and behaviors are replacing the brand's category in consumer lives.">🔄 Replacement Categories</h4>
-                                <div id="ecosystemReplacements" class="insight-content">
-                                    <div class="loading-placeholder">Identifying replacements...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Functional Shifts: How functional needs are being met by alternative categories relevant to your profile's category.">⚡ Functional Shifts</h4>
-                                <div id="ecosystemFunctionalShifts" class="insight-content">
-                                    <div class="loading-placeholder">Analyzing functional shifts...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Insight Section 3: Cultural Momentum Signals -->
-                    <div class="ecosystem-section">
-                        <div class="ecosystem-section-header">
-                            <h3>📈 Cultural Momentum Signals (Pre-Trend Detection)</h3>
-                            <p class="section-description">Behavioral shifts before culture names them. Not TikTok views, but actual behavioral changes that precede trend identification (e.g., nighttime consumption moving earlier, solo consumption replacing social, nostalgia usage spiking).</p>
-                        </div>
-                        <div class="ecosystem-insights-grid">
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Temporal Shifts: Changes in when consumers engage with the brand or category (e.g., nighttime moving to earlier times).">⏰ Temporal Shifts</h4>
-                                <div id="ecosystemTemporalShifts" class="insight-content">
-                                    <div class="loading-placeholder">Detecting temporal patterns...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Social Context Changes: Shifts in how consumers engage (solo vs social, treat reframed as mental health reward).">👥 Social Context Changes</h4>
-                                <div id="ecosystemSocialContext" class="insight-content">
-                                    <div class="loading-placeholder">Analyzing social patterns...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card highlight">
-                                <h4 class="has-tooltip" data-tooltip="Emerging Patterns: Behavioral patterns that are emerging before they become named trends.">🌱 Emerging Patterns</h4>
-                                <div id="ecosystemEmergingPatterns" class="insight-content">
-                                    <div class="loading-placeholder">Identifying emerging signals...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Insight Section 4: Attention & Emotion -->
-                    <div class="ecosystem-section">
-                        <div class="ecosystem-section-header">
-                            <h3>💭 Attention & Emotional Receptivity</h3>
-                            <p class="section-description">When people are actually mentally receptive, their emotional state at exposure, and whether the brand shows up in comfort vs celebration modes. Not just where ads run, but when consumers are emotionally ready.</p>
-                        </div>
-                        <div class="ecosystem-insights-grid">
-                            <div class="ecosystem-insight-card highlight">
-                                <h4 class="has-tooltip" data-tooltip="Emotional States: What emotional states are most receptive to brand engagement (e.g., recovery, relief, celebration, comfort).">😊 Emotional Receptivity</h4>
-                                <div id="ecosystemEmotionalStates" class="insight-content">
-                                    <div class="loading-placeholder">Analyzing emotional patterns...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Mental Receptivity: When consumers are most mentally available and receptive to brand messaging.">🧠 Mental Receptivity Windows</h4>
-                                <div id="ecosystemMentalReceptivity" class="insight-content">
-                                    <div class="loading-placeholder">Identifying receptivity windows...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Context Modes: Whether the brand appears in comfort vs celebration modes, and which performs better.">🎭 Context Modes</h4>
-                                <div id="ecosystemContextModes" class="insight-content">
-                                    <div class="loading-placeholder">Analyzing context modes...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Insight Section 5: Relevance Loss -->
-                    <div class="ecosystem-section">
-                        <div class="ecosystem-section-header">
-                            <h3>⚠️ Relevance Loss Signals</h3>
-                            <p class="section-description">Who the brand is losing relevance with before sales show it. Audiences who still purchase but are emotionally disengaging, replacing 'joy' with 'habit'.</p>
-                        </div>
-                        <div class="ecosystem-insights-grid">
-                            <div class="ecosystem-insight-card highlight warning">
-                                <h4 class="has-tooltip" data-tooltip="At-Risk Audiences: Demographics or segments that still purchase but show declining emotional engagement.">⚠️ At-Risk Audiences</h4>
-                                <div id="ecosystemAtRiskAudiences" class="insight-content">
-                                    <div class="loading-placeholder">Identifying at-risk segments...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Engagement Shift: How engagement is changing from emotional connection to habitual behavior.">📉 Engagement Shift</h4>
-                                <div id="ecosystemEngagementShift" class="insight-content">
-                                    <div class="loading-placeholder">Analyzing engagement changes...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Identity Disconnection: Segments where the brand no longer anchors identity or social expression.">🔗 Identity Disconnection</h4>
-                                <div id="ecosystemIdentityDisconnect" class="insight-content">
-                                    <div class="loading-placeholder">Detecting identity shifts...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Insight Section 6: White-Space Occasions -->
-                    <div class="ecosystem-section">
-                        <div class="ecosystem-section-header">
-                            <h3>🚀 White-Space Occasions</h3>
-                            <p class="section-description">New moments the brand doesn't own yet. Not new flavors, but new occasions: productivity breaks, micro-celebrations, stress-relief rituals, solo rewards vs shared joy.</p>
-                        </div>
-                        <div class="ecosystem-insights-grid">
-                            <div class="ecosystem-insight-card highlight">
-                                <h4 class="has-tooltip" data-tooltip="Untapped Occasions: New moments and occasions where the brand could play but currently doesn't.">💡 Untapped Occasions</h4>
-                                <div id="ecosystemUntappedOccasions" class="insight-content">
-                                    <div class="loading-placeholder">Identifying white-space moments...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Occasion Opportunities: Specific opportunities for innovation, packaging, creative, and partnerships.">🎯 Opportunity Areas</h4>
-                                <div id="ecosystemOpportunities" class="insight-content">
-                                    <div class="loading-placeholder">Analyzing opportunities...</div>
-                                </div>
-                            </div>
-                            <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Strategic Recommendations: Actionable recommendations for innovation, packaging, creative, and partnerships.">📋 Strategic Recommendations</h4>
-                                <div id="ecosystemRecommendations" class="insight-content">
-                                    <div class="loading-placeholder">Generating recommendations...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sponsorship Match Tab -->
-            <div id="tab-sponsorship" class="tab-content">
-                <div class="sponsorship-container">
-                    <!-- Executive Summary Row -->
-                    <div class="sponsor-summary-row">
-                        <div class="sponsor-summary-card executive">
-                            <h4 class="has-tooltip" data-tooltip="Executive Summary: A high-level narrative of this audience's sponsorship potential including key brand affinities and recommended partnership categories.">📋 Executive Summary</h4>
-                            <div id="sponsorExecSummary" class="exec-summary-content">
-                                <div class="loading-placeholder">Generating summary...</div>
-                            </div>
-                        </div>
-                        <div class="sponsor-summary-card">
-                            <h4 class="has-tooltip" data-tooltip="Key Recommendations: Specific actionable recommendations for sponsorship and partnership opportunities based on audience affinities.">🎯 Key Recommendations</h4>
-                            <div id="sponsorRecommendations" class="recommendations-list">
-                                <div class="loading-placeholder">Analyzing data...</div>
-                            </div>
-                        </div>
-                        <div class="sponsor-summary-card">
-                            <h4 class="has-tooltip" data-tooltip="ROI Potential: Visual meters showing estimated return potential based on audience reach quality, brand alignment, and partnership fit scores.">💵 ROI Potential</h4>
-                            <div class="roi-metrics" id="sponsorROI">
-                                <div class="roi-item has-tooltip" data-tooltip="Audience Reach Quality: Score based on sample size and US projection - larger audiences = higher reach potential.">
-                                    <span class="roi-label">Audience Reach Quality</span>
-                                    <div class="roi-bar"><div class="roi-fill" id="roiReach" style="width: 0%"></div></div>
-                                    <span class="roi-value" id="roiReachValue">--</span>
-                                </div>
-                                <div class="roi-item has-tooltip" data-tooltip="Brand Alignment Score: How well this audience aligns with potential sponsor brands based on affinity data.">
-                                    <span class="roi-label">Brand Alignment Score</span>
-                                    <div class="roi-bar"><div class="roi-fill" id="roiAlignment" style="width: 0%"></div></div>
-                                    <span class="roi-value" id="roiAlignmentValue">--</span>
-                                </div>
-                                <div class="roi-item has-tooltip" data-tooltip="Activation Potential: Score based on diversity and depth of over-indexing categories - more engagement points = more activation opportunities.">
-                                    <span class="roi-label">Activation Potential</span>
-                                    <div class="roi-bar"><div class="roi-fill" id="roiActivation" style="width: 0%"></div></div>
-                                    <span class="roi-value" id="roiActivationValue">--</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Activation Ideas -->
-                    <div class="activation-ideas-section">
-                        <h4 class="has-tooltip" data-tooltip="Activation Ideas: Creative sponsorship and marketing activation concepts tailored to this audience's interests and behaviors.">🚀 Activation Ideas</h4>
-                        <div id="sponsorActivations" class="activation-grid">
-                            <div class="loading-placeholder">Generating ideas...</div>
-                        </div>
-                    </div>
-                    
-                    <div class="sponsorship-grid">
-                        <div class="sponsor-card highlight">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
-                                <span class="has-tooltip" data-tooltip="Top Sponsor Categories">🏆 Top Categories</span>
-                                <span style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
-                                    <select class="affinity-sort-select" onchange="sortSponsorList('sponsorCategories', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                        <option value="index">Idx ↓</option>
-                                        <option value="pct">% ↓</option>
-                                        <option value="genpop">GP ↓</option>
-                                    </select>
-                                </span>
-                            </h3>
-                            <div id="sponsorCategories" class="sponsor-list" data-sort="index"></div>
-                        </div>
-                        
-                        <div class="sponsor-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
-                                <span class="has-tooltip" data-tooltip="Ideal Brand Partners">🎯 Brand Partners</span>
-                                <span style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
-                                    <select class="affinity-sort-select" onchange="sortSponsorList('sponsorBrands', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                        <option value="index">Idx ↓</option>
-                                        <option value="pct">% ↓</option>
-                                        <option value="genpop">GP ↓</option>
-                                    </select>
-                                </span>
-                            </h3>
-                            <div id="sponsorBrands" class="sponsor-list" data-sort="index"></div>
-                        </div>
-                        
-                        <div class="sponsor-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
-                                <span class="has-tooltip" data-tooltip="Purchase Behaviors">💳 Purchase Behaviors</span>
-                                <span style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
-                                    <select class="affinity-sort-select" onchange="sortSponsorList('sponsorPurchase', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                        <option value="index">Idx ↓</option>
-                                        <option value="pct">% ↓</option>
-                                        <option value="genpop">GP ↓</option>
-                                    </select>
-                                </span>
-                            </h3>
-                            <div id="sponsorPurchase" class="sponsor-list" data-sort="index"></div>
-                        </div>
-                        
-                        <div class="sponsor-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
-                                <span>🚫 Avoid Categories</span>
-                                <span style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
-                                    <select class="affinity-sort-select" onchange="sortSponsorList('sponsorAvoid', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                        <option value="index">Idx ↑</option>
-                                        <option value="pct">% ↓</option>
-                                        <option value="genpop">GP ↓</option>
-                                    </select>
-                                </span>
-                            </h3>
-                            <div id="sponsorAvoid" class="sponsor-list negative" data-sort="index"></div>
-                        </div>
-                        
-                        <div class="sponsor-card wide">
-                            <h3>📊 Sponsorship Opportunity Matrix</h3>
-                            <div class="matrix-legend">
-                                <div class="legend-header">
-                                    <span class="legend-col">Category</span>
-                                    <span class="legend-col">Affinity</span>
-                                    <span class="legend-col">Avg Index</span>
-                                    <span class="legend-col">Value</span>
-                                </div>
-                                <div class="legend-explainer">
-                                    <div class="legend-item"><strong>Affinity:</strong> <span class="legend-high">High</span> = 1.5x+ | <span class="legend-med">Medium</span> = 1.2x-1.49x | <span class="legend-low">Low</span> = 1.0x-1.19x</div>
-                                    <div class="legend-item"><strong>Avg Index:</strong> Combined index score for all items in category. Higher = stronger audience affinity.</div>
-                                    <div class="legend-item"><strong>Value:</strong> <span class="legend-value">$$$</span> = Premium tier | <span class="legend-value">$$</span> = Standard | <span class="legend-value">$</span> = Budget-friendly</div>
-                                </div>
-                            </div>
-                            <div id="sponsorMatrix" class="sponsor-matrix"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Partnership Value Analysis Section (formerly separate tab) -->
-                    <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border-color);">
-                        <h2 style="margin-bottom: 1rem;">📈 Partnership Value Analysis</h2>
-                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Evaluate this audience's value for brand partnerships and sponsorships</p>
-                        
-                        <div class="talent-summary">
-                            <div class="talent-score-card">
-                                <div class="talent-score" id="talentScore">--</div>
-                                <div class="talent-score-label">Partnership Score</div>
-                            </div>
-                            <div class="talent-metrics">
-                                <div class="talent-metric">
-                                    <span class="metric-value" id="talentReach">--</span>
-                                    <span class="metric-label">Est. Reach</span>
-                                </div>
-                                <div class="talent-metric">
-                                    <span class="metric-value" id="talentEngagement">--</span>
-                                    <span class="metric-label">Engagement Index</span>
-                                </div>
-                                <div class="talent-metric">
-                                    <span class="metric-value" id="talentBrandSafety">--</span>
-                                    <span class="metric-label">Brand Safety</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="talent-grid">
-                            <div class="talent-card">
-                                <h3>👥 Audience Quality</h3>
-                                <div id="talentAudienceQuality" class="talent-list"></div>
-                            </div>
-                            
-                            <div class="talent-card">
-                                <h3>🎯 Brand Alignment</h3>
-                                <div id="talentBrandAlignment" class="talent-list"></div>
-                            </div>
-                            
-                            <div class="talent-card">
-                                <h3>📈 Growth Indicators</h3>
-                                <div id="talentGrowth" class="talent-list"></div>
-                            </div>
-                            
-                            <div class="talent-card">
-                                <h3>⚠️ Risk Factors</h3>
-                                <div id="talentRisks" class="talent-list warning"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Media Optimizer Tab -->
-            <div id="tab-media" class="tab-content">
-                <div class="media-container">
-                    <!-- Channel Reach Analysis - FIRST -->
-                    <div class="media-reach-section">
-                        <div class="media-reach-row">
-                            <div class="media-reach-chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Channel Reach">
-                                <h3>📊 Channel Reach Comparison</h3>
-                                <div style="height: 280px; position: relative;">
-                                    <canvas id="mediaReachChart"></canvas>
-                                </div>
-                            </div>
-                            <div class="media-reach-insights-card">
-                                <h3>💡 Media Mix Insights</h3>
-                                <p style="font-size: 0.65rem; color: var(--text-secondary); margin: 0 0 0.5rem 0;">Click any insight to see details</p>
-                                <div id="mediaKeyInsights" class="media-insights-list">
-                                    <div class="loading-placeholder">Analyzing channels...</div>
-                                </div>
-                                <div id="mediaInsightDetails" class="media-insight-details" style="display: none;">
-                                    <div class="media-insight-details-header">
-                                        <span id="mediaInsightDetailsTitle"></span>
-                                        <button onclick="closeMediaInsightDetails()" class="close-details-btn">✕</button>
-                                    </div>
-                                    <div id="mediaInsightDetailsList" class="media-insight-details-list"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="media-metrics-row">
-                            <div class="media-metric-card has-tooltip" data-tooltip="Dominant Channel: The media platform or channel type where this audience has the highest engagement or over-indexing.">
-                                <span class="media-metric-icon">🏆</span>
-                                <span class="media-metric-value" id="mediaDominantChannel">--</span>
-                                <span class="media-metric-label">Dominant Channel</span>
-                            </div>
-                            <div class="media-metric-card has-tooltip" data-tooltip="Active Channels: Total number of media channels/platforms where this audience shows meaningful engagement.">
-                                <span class="media-metric-icon">📈</span>
-                                <span class="media-metric-value" id="mediaChannelCount">--</span>
-                                <span class="media-metric-label">Active Channels</span>
-                            </div>
-                            <div class="media-metric-card has-tooltip" data-tooltip="Avg Media Index: Average index across all media consumption categories. 1.0x = same as Gen Pop. Higher = stronger media engagement.">
-                                <span class="media-metric-icon">🎯</span>
-                                <span class="media-metric-value" id="mediaAvgIndex">--</span>
-                                <span class="media-metric-label">Avg Media Index</span>
-                            </div>
-                            <div class="media-metric-card has-tooltip" data-tooltip="High Performers: Number of media items with index 1.5x or higher - these are strong opportunities for media buys.">
-                                <span class="media-metric-icon">⚡</span>
-                                <span class="media-metric-value" id="mediaHighPerformers">--</span>
-                                <span class="media-metric-label">High Performers (150+)</span>
-                            </div>
-                        </div>
-                        
-                        <div class="media-recommendations-row">
-                            <div class="media-rec-card">
-                                <h4 class="has-tooltip" data-tooltip="Recommended Actions: Media channels and platforms where this audience significantly over-indexes - prioritize these for media buys.">✅ Recommended Actions</h4>
-                                <div id="mediaRecommendations" class="media-rec-list"></div>
-                            </div>
-                            <div class="media-rec-card">
-                                <h4 class="has-tooltip" data-tooltip="Avoid / Low Priority: Media channels where this audience under-indexes - consider reducing or reallocating spend from these.">⚠️ Avoid / Low Priority</h4>
-                                <div id="mediaAvoid" class="media-rec-list negative"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="media-summary">
-                        <div class="media-summary-card">
-                            <h4 class="has-tooltip" data-tooltip="Primary Channels: The media channels where this audience shows the strongest engagement and highest over-indexing.">Primary Channels</h4>
-                            <div id="primaryChannels" class="channel-badges"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="media-grid">
-                        <div class="media-card">
-                            <h3 class="has-tooltip" data-tooltip="VMVPD & Broadcast: Virtual MVPDs (Hulu Live, YouTube TV, etc.) and traditional broadcast/cable networks. Shows audience penetration and index vs Gen Pop.">📺 VMVPD & Broadcast</h3>
-                            <div id="mediaTV" class="media-list"></div>
-                        </div>
-                        
-                        <div class="media-card">
-                            <h3 class="has-tooltip" data-tooltip="Streaming: Subscription video streaming services (Netflix, Disney+, etc.). Shows which platforms this audience prefers and their engagement level.">📱 Streaming</h3>
-                            <div id="mediaStreaming" class="media-list"></div>
-                        </div>
-                        
-                        <div class="media-card">
-                            <h3 class="has-tooltip" data-tooltip="Social Media: Social platforms (Instagram, TikTok, X, etc.). Shows which platforms this audience uses most and where to focus social advertising.">📱 Social Media</h3>
-                            <div id="mediaSocial" class="media-list"></div>
-                        </div>
-                        
-                        <div class="media-card">
-                            <h3 class="has-tooltip" data-tooltip="Gaming: Gaming platforms and services (PlayStation, Xbox, PC gaming, etc.). Useful for in-game advertising and esports sponsorships.">🎮 Gaming</h3>
-                            <div id="mediaGaming" class="media-list"></div>
-                        </div>
-                        
-                        <div class="media-card">
-                            <h3 class="has-tooltip" data-tooltip="Audio/Podcasts: Audio streaming and podcast platforms (Spotify, Apple Podcasts, etc.). Key for audio advertising and podcast sponsorships.">🎧 Audio/Podcasts</h3>
-                            <div id="mediaAudio" class="media-list"></div>
-                        </div>
-                        
-                        <div class="media-card">
-                            <h3 class="has-tooltip" data-tooltip="News & Publishing: News websites, digital publications, and content sites. Good for programmatic display and native advertising.">📰 News & Publishing</h3>
-                            <div id="mediaNews" class="media-list"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Content Development Tab -->
-            <div id="tab-content" class="tab-content">
-                <div class="content-dev-container">
-                    <div class="content-dev-grid">
-                        <!-- Input Panel -->
-                        <div class="content-input-panel">
-                            <div class="input-section">
-                                <h3>🎯 Target Audience</h3>
-                                <div class="input-group">
-                                    <label>Gender</label>
-                                    <select id="contentGender" multiple>
-                                        <option value="Female">Female</option>
-                                        <option value="Male">Male</option>
-                                        <option value="Non-Binary">Non-Binary</option>
-                                    </select>
-                                </div>
-                                <div class="input-group">
-                                    <label>Age Range</label>
-                                    <select id="contentAge" multiple>
-                                        <option value="<16">Under 16</option>
-                                        <option value="16-18">16-18</option>
-                                        <option value="18-20">18-20</option>
-                                        <option value="21-25">21-25</option>
-                                        <option value="26-30">26-30</option>
-                                        <option value="31-40">31-40</option>
-                                        <option value="41-59">41-59</option>
-                                        <option value="60+">60+</option>
-                                    </select>
-                                </div>
-                                <div class="input-group">
-                                    <label>Income</label>
-                                    <select id="contentIncome" multiple>
-                                        <option value="$40K-$60K">$40K-$60K</option>
-                                        <option value="$60K-$75K">$60K-$75K</option>
-                                        <option value="$75K-$100K">$75K-$100K</option>
-                                        <option value="$100K-$150K">$100K-$150K</option>
-                                        <option value="$150K-$250K">$150K-$250K</option>
-                                        <option value="$250K+">$250K+</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="input-section">
-                                <h3>📺 Platform</h3>
-                                <div class="platform-grid" id="platformGrid">
-                                    <label class="platform-option"><input type="checkbox" value="NETFLIX"> Netflix</label>
-                                    <label class="platform-option"><input type="checkbox" value="HULU"> Hulu</label>
-                                    <label class="platform-option"><input type="checkbox" value="HBO"> HBO/Max</label>
-                                    <label class="platform-option"><input type="checkbox" value="DISNEY"> Disney+</label>
-                                    <label class="platform-option"><input type="checkbox" value="PARAMOUNT"> Paramount+</label>
-                                    <label class="platform-option"><input type="checkbox" value="PEACOCK"> Peacock</label>
-                                    <label class="platform-option"><input type="checkbox" value="AMAZON"> Prime Video</label>
-                                    <label class="platform-option"><input type="checkbox" value="APPLE"> Apple TV+</label>
-                                    <label class="platform-option"><input type="checkbox" value="BROADCAST"> Broadcast</label>
-                                    <label class="platform-option"><input type="checkbox" value="CABLE"> Cable</label>
-                                </div>
-                            </div>
-                            
-                            <button class="btn btn-primary" onclick="runContentAnalysis()" style="width: 100%; margin-top: 1rem;">
-                                🔍 Analyze Content Opportunities
-                            </button>
-                            
-                            <div id="contentAnalysisStatus" class="analysis-status"></div>
-                            
-                            <!-- Cache Status -->
-                            <div id="contentDevCacheStatus" class="cache-status-box" style="margin-top: 1rem; padding: 0.75rem; background: rgba(var(--accent-rgb), 0.1); border-radius: 8px; font-size: 0.8rem;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span id="cacheStatusIcon">⏳</span>
-                                    <span id="cacheStatusText">Loading cache...</span>
-                                </div>
-                                <button id="buildCacheBtn" onclick="buildDemographicsCache()" class="btn btn-sm" style="margin-top: 0.5rem; display: none; font-size: 0.75rem;">
-                                    🔧 Build Missing Cache
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Results Panel -->
-                        <div class="content-results-panel" id="contentResultsPanel" style="display: none;">
-                            <div class="results-tabs">
-                                <button class="result-tab active" onclick="showContentResultTab('shows')">📺 Shows</button>
-                                <button class="result-tab" onclick="showContentResultTab('gaps')">🎯 Gaps</button>
-                                <button class="result-tab" onclick="showContentResultTab('talent')">⭐ Talent</button>
-                                <button class="result-tab" onclick="showContentResultTab('brands')">💰 Brands</button>
-                                <button class="result-tab" onclick="showContentResultTab('genres')">🎭 Genres</button>
-                            </div>
-                            
-                            <!-- Shows Tab -->
-                            <div id="contentTab-shows" class="content-result-tab active">
-                                <div class="result-header">
-                                    <h3>📺 Top Performing Shows for This Audience</h3>
-                                    <p>Series that resonate with your target demographics</p>
-                                </div>
-                                <div id="contentShowsList" class="content-list"></div>
-                            </div>
-                            
-                            <!-- Gaps Tab -->
-                            <div id="contentTab-gaps" class="content-result-tab">
-                                <div class="result-header">
-                                    <h3>🎯 Content Gaps & Opportunities</h3>
-                                    <p>What's missing in the current content landscape</p>
-                                </div>
-                                <div id="contentGapsList" class="content-list"></div>
-                            </div>
-                            
-                            <!-- Talent Tab -->
-                            <div id="contentTab-talent" class="content-result-tab">
-                                <div class="result-header">
-                                    <h3>⭐ Recommended Talent</h3>
-                                    <p>Actors and personalities who resonate with this audience</p>
-                                </div>
-                                <div class="talent-gender-tabs">
-                                    <button class="gender-tab active" onclick="filterTalentByGender('all')">All</button>
-                                    <button class="gender-tab" onclick="filterTalentByGender('female')">Female</button>
-                                    <button class="gender-tab" onclick="filterTalentByGender('male')">Male</button>
-                                </div>
-                                <div id="contentTalentList" class="content-list"></div>
-                            </div>
-                            
-                            <!-- Brands Tab -->
-                            <div id="contentTab-brands" class="content-result-tab">
-                                <div class="result-header">
-                                    <h3>💰 Brand Integration Opportunities</h3>
-                                    <p>Brands ideal for product placement and integration</p>
-                                </div>
-                                <div id="contentBrandsList" class="content-list"></div>
-                            </div>
-                            
-                            <!-- Genres Tab -->
-                            <div id="contentTab-genres" class="content-result-tab">
-                                <div class="result-header">
-                                    <h3>🎭 Genre Performance by Demographics</h3>
-                                    <p>How genres perform across age and gender segments</p>
-                                </div>
-                                <div id="contentGenreAnalysis" class="genre-analysis"></div>
-                            </div>
-                            
-                            <!-- Logline Generator -->
-                            <div class="logline-section">
-                                <h3>✨ AI Content Generator</h3>
-                                <p>Based on the analysis, generate content recommendations</p>
-                                <button class="btn btn-primary" onclick="generateLogline()" id="loglineBtn">
-                                    🎬 Generate Logline & Content Concept
-                                </button>
-                                <div id="loglineResult" class="logline-result"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- (Ecosystem tab removed) -->
 
             <!-- Top Insights Tab -->
             <div id="tab-insights" class="tab-content active">
@@ -14776,19 +14146,6 @@
                             <button type="button" class="btn btn-small" onclick="closeProfileSelectionModal()" style="background: var(--bg-input);">Cancel</button>
                             <button type="button" id="profileSelectionGenerateBtn" class="btn btn-primary btn-small">Generate</button>
                         </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Key Insight Builder Modal -->
-            <div id="keyInsightBuilderModal" class="modal-overlay" style="display: none;">
-                <div class="modal-content key-insight-builder-modal-content" style="max-width: 1200px; max-height: 90vh; overflow-y: auto; text-align: left;">
-                    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border-color);">
-                        <h2 style="margin: 0; font-size: 1.5rem; color: var(--text-primary); text-align: left;">🎯 Key Insight Builder</h2>
-                        <button onclick="closeKeyInsightBuilder()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 0.25rem 0.5rem;">&times;</button>
-                    </div>
-                    <div id="keyInsightBuilderContent">
-                        <div class="loading-placeholder">Generating insights...</div>
                     </div>
                 </div>
             </div>
@@ -25829,9 +25186,11 @@
         
         // Make showTab globally accessible
         window.showTab = function(tabName) {
+            const tabEl = document.getElementById('tab-' + tabName);
+            if (!tabEl) return; // Removed tabs: ecosystem, sponsorship, media, content
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('tab-' + tabName).classList.add('active');
+            tabEl.classList.add('active');
             
             // Update inline tab header
             updateInlineTabHeader(tabName);
@@ -50986,6 +50345,7 @@
         }
         
         async function generateKeyInsightBuilder() {
+            if (!document.getElementById('keyInsightBuilderModal')) return; // Feature removed
             if (!window.comparisonProfilesData || window.comparisonProfilesData.length === 0) {
                 alert('Please run a comparison first. The selected primary profile (★) will be analyzed.');
                 return;
@@ -51834,11 +51194,13 @@
         }
         
         function closeKeyInsightBuilder() {
-            document.getElementById('keyInsightBuilderModal').style.display = 'none';
+            const el = document.getElementById('keyInsightBuilderModal');
+            if (el) el.style.display = 'none';
         }
         
         function copyKeyInsightsToClipboard() {
             const content = document.getElementById('keyInsightBuilderContent');
+            if (!content) return;
             const text = content.innerText;
             navigator.clipboard.writeText(text).then(() => {
                 alert('Key Insights copied to clipboard!');
@@ -51846,7 +51208,9 @@
         }
         
         function printKeyInsights() {
-            const content = document.getElementById('keyInsightBuilderContent').innerHTML;
+            const contentEl = document.getElementById('keyInsightBuilderContent');
+            if (!contentEl) return;
+            const content = contentEl.innerHTML;
             const printWindow = window.open('', '_blank');
             printWindow.document.write(`
                 <html>
@@ -51869,7 +51233,9 @@
         }
         
         function addKeyInsightsToDeck() {
-            const content = document.getElementById('keyInsightBuilderContent').innerHTML;
+            const contentEl = document.getElementById('keyInsightBuilderContent');
+            if (!contentEl) return;
+            const content = contentEl.innerHTML;
             const profiles = window.comparisonProfilesData || [];
             const primaryBrand = profiles[0];
             
