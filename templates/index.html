@@ -20804,7 +20804,7 @@
                 return qGeStart && qLeEnd;
             }
             
-            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
+            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Crosswalk Net Growth %</th><th style="padding: 0.75rem; text-align: right;">Actual Net Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
             
             // Sort quarters based on mode
             let sortedQuarters;
@@ -20854,14 +20854,14 @@
                 const netGrowthCount = data.subs - data.cancels;
                 const startConsumers = data.startConsumers != null ? Number(data.startConsumers) : 0;
                 const endConsumers = data.endConsumers != null ? Number(data.endConsumers) : 0;
-                const growthPctNum = startConsumers > 0 && endConsumers != null
+                // Actual Net Growth %: from actual subs/cancels only (reverted to how it was)
+                const actualGrowthPctNum = startConsumers > 0 ? (netGrowthCount / startConsumers) * 100 : 0;
+                const actualGrowthPct = actualGrowthPctNum.toFixed(2);
+                // Crosswalk Net Growth %: from daily start/end consumers (Crosswalk underlying data)
+                const crosswalkGrowthPctNum = startConsumers > 0 && endConsumers != null
                     ? ((endConsumers - startConsumers) / startConsumers) * 100
                     : (startConsumers > 0 ? (netGrowthCount / startConsumers) * 100 : 0);
-                const growthPct = growthPctNum.toFixed(2);
-                // Net Growth as decimal rate (from underlying data): (end - start) / start
-                const netGrowthRate = startConsumers > 0 && endConsumers != null
-                    ? (endConsumers - startConsumers) / startConsumers
-                    : (startConsumers > 0 ? netGrowthCount / startConsumers : 0);
+                const crosswalkGrowthPct = (typeof crosswalkGrowthPctNum === 'number' && !isNaN(crosswalkGrowthPctNum)) ? crosswalkGrowthPctNum.toFixed(2) : '0';
                 
                 // SEC Actuals: use value as entered (key match quarter string)
                 const secActualKey = q;
@@ -20871,7 +20871,7 @@
                 
                 if (secActual !== undefined && secActual !== null && secActual !== '') {
                     const secActualPct = parseFloat(secActual);
-                    const ourGrowthPct = parseFloat(growthPct);
+                    const ourGrowthPct = parseFloat(actualGrowthPct);
                     const variancePct = ourGrowthPct - secActualPct;
                     const varianceColor = Math.abs(variancePct) < 0.5 ? '#10b981' : (Math.abs(variancePct) < 2 ? '#eab308' : '#ef4444');
                     secActualCell = `<td style="padding: 0.75rem; text-align: right;">${Number(secActual).toFixed(2)}%</td>`;
@@ -20880,8 +20880,7 @@
                 
                 const rowStyle = inKpiRange ? 'border-bottom: 1px solid var(--border-color); background: rgba(0, 230, 230, 0.08);' : 'border-bottom: 1px solid var(--border-color);';
                 const titleAttr = inKpiRange ? ` title="KPI for this period: ${(kpiChange.label || '').replace(/"/g, '&quot;')}"` : '';
-                const netGrowthDisplay = (typeof netGrowthRate === 'number' && !isNaN(netGrowthRate)) ? netGrowthRate.toFixed(16).replace(/\.?0+$/, '') : '0';
-                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowthRate >= 0 ? '#10b981' : '#ef4444'};">${netGrowthDisplay}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
+                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${crosswalkGrowthPctNum >= 0 ? '#10b981' : '#ef4444'};">${crosswalkGrowthPct}%</td><td style="padding: 0.75rem; text-align: right; color: ${actualGrowthPctNum >= 0 ? '#10b981' : '#ef4444'};">${actualGrowthPct}%</td>${secActualCell}${varianceCell}</tr>`;
             });
             
             html += '</tbody></table>';
@@ -20942,16 +20941,18 @@
                 historicPerformanceChartInstance = null;
             }
             const labels = sortedQuarters;
-            const netGrowthData = sortedQuarters.map(q => {
-                const d = quarters[q];
-                return d ? (d.subs - d.cancels) : 0;
-            });
-            const growthPctData = sortedQuarters.map(q => {
+            const crosswalkGrowthPctData = sortedQuarters.map(q => {
                 const d = quarters[q];
                 if (!d) return null;
                 const startC = d.startConsumers != null ? Number(d.startConsumers) : 0;
                 const endC = d.endConsumers != null ? Number(d.endConsumers) : 0;
                 return startC > 0 && endC != null ? ((endC - startC) / startC) * 100 : (startC > 0 ? ((d.subs - d.cancels) / startC) * 100 : null);
+            });
+            const actualGrowthPctData = sortedQuarters.map(q => {
+                const d = quarters[q];
+                if (!d) return null;
+                const startC = d.startConsumers != null ? Number(d.startConsumers) : 0;
+                return startC > 0 ? ((d.subs - d.cancels) / startC) * 100 : null;
             });
             const secActualsData = sortedQuarters.map(q => {
                 const v = secActuals[q] != null ? secActuals[q] : (secActuals[(q || '').trim()] != null ? secActuals[(q || '').trim()] : null);
@@ -20980,8 +20981,8 @@
                 }
             };
             const datasets = [
-                { label: 'Net Growth', data: netGrowthData, borderColor: accentCyan, backgroundColor: 'rgba(0, 255, 255, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
-                { label: 'Growth %', data: growthPctData, borderColor: green, backgroundColor: 'rgba(16, 185, 129, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
+                { label: 'Crosswalk Net Growth %', data: crosswalkGrowthPctData, borderColor: accentCyan, backgroundColor: 'rgba(0, 255, 255, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
+                { label: 'Actual Net Growth %', data: actualGrowthPctData, borderColor: green, backgroundColor: 'rgba(16, 185, 129, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
                 { label: 'SEC Actuals %', data: secActualsData, borderColor: blue, backgroundColor: 'rgba(59, 130, 246, 0.15)', fill: false, tension: 0.3, pointRadius: 4 }
             ];
             const ctx = canvas.getContext('2d');
