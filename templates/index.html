@@ -487,14 +487,42 @@
             gap: 0.5rem;
             margin-left: auto;
         }
-        .view-toggle { display: flex; align-items: center; gap: 0.75rem; }
-        .view-nav-label {
-            color: #ae81ff;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 0.02em;
-            text-transform: uppercase;
+        .view-toggle { display: flex; align-items: center; gap: 0; }
+        .view-nav-outer {
+            position: relative;
+            display: flex;
+            align-items: stretch;
+            background: #9B6BE6;
+            border-radius: 20px;
+            padding: 10px 14px;
+            gap: 14px;
+            box-sizing: border-box;
         }
+        .view-nav-outer::before {
+            content: '';
+            position: absolute;
+            inset: -6px;
+            border-radius: 26px;
+            background: transparent;
+            z-index: -1;
+            animation: view-nav-glow 2s ease-in-out infinite;
+        }
+        @keyframes view-nav-glow {
+            0%, 100% { box-shadow: 0 0 20px 4px rgba(155, 107, 230, 0.45), 0 0 40px 8px rgba(155, 107, 230, 0.25); }
+            50% { box-shadow: 0 0 28px 8px rgba(155, 107, 230, 0.6), 0 0 56px 14px rgba(155, 107, 230, 0.35); }
+        }
+        .view-nav-label {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            line-height: 1.25;
+            padding-left: 4px;
+        }
+        .view-nav-label .view-nav-label-line { display: block; }
         .view-nav-dropdown {
             padding: 0.5rem 2rem 0.5rem 1rem;
             background: rgba(174, 129, 255, 0.12);
@@ -517,34 +545,34 @@
         }
         .view-nav-dropdown:focus { outline: none; border-color: #ae81ff; box-shadow: 0 0 0 2px rgba(174, 129, 255, 0.25); }
         .view-nav-dropdown option:disabled { color: var(--text-secondary); opacity: 0.6; }
-        .view-nav-custom-wrap { position: relative; display: inline-block; min-width: 200px; }
+        .view-nav-custom-wrap { position: relative; display: flex; align-items: center; min-width: 220px; flex: 1; max-width: 280px; }
         .view-nav-trigger {
-            padding: 0.5rem 2rem 0.5rem 1rem;
-            background: rgba(174, 129, 255, 0.12);
-            border: 1px solid rgba(174, 129, 255, 0.45);
-            color: var(--text-primary);
-            border-radius: 8px;
+            padding: 0.5rem 2.25rem 0.5rem 0.75rem;
+            background: #352A5C;
+            border: 1px solid #BC91F9;
+            color: #fff;
+            border-radius: 12px;
             font-size: 0.9rem;
             font-weight: 500;
             cursor: pointer;
             width: 100%;
             text-align: left;
             appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23ae81ff' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23ffffff' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 0.75rem center;
         }
-        .view-nav-trigger:hover { background: rgba(174, 129, 255, 0.18); border-color: rgba(174, 129, 255, 0.6); }
+        .view-nav-trigger:hover { background: #3d3268; border-color: #c9a5fa; }
         .view-nav-panel {
             display: none;
             position: absolute;
             top: 100%;
             left: 0;
             right: 0;
-            margin-top: 4px;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
+            margin-top: 6px;
+            background: #352A5C;
+            border: 1px solid #BC91F9;
+            border-radius: 12px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.4);
             z-index: 1000;
             max-height: 320px;
@@ -554,14 +582,14 @@
         .view-nav-option {
             padding: 0.5rem 1rem;
             cursor: pointer;
-            color: var(--text-primary);
+            color: #fff;
             font-size: 0.9rem;
             border: none;
             background: none;
             width: 100%;
             text-align: left;
         }
-        .view-nav-option:hover { background: var(--bg-input); }
+        .view-nav-option:hover { background: rgba(188, 145, 249, 0.25); }
         .view-nav-option:disabled, .view-nav-option.disabled { opacity: 0.6; cursor: not-allowed; }
         .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
@@ -11599,8 +11627,9 @@
                     </div>
                 </div>
                 <div class="view-toggle" id="iqTabsContainer">
-                    <span class="view-nav-label">Select Product:</span>
-                    <div class="view-nav-custom-wrap" id="viewNavCustomWrap">
+                    <div class="view-nav-outer" id="viewNavOuter">
+                        <span class="view-nav-label"><span class="view-nav-label-line">Select</span><span class="view-nav-label-line">Product</span></span>
+                        <div class="view-nav-custom-wrap" id="viewNavCustomWrap">
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
@@ -11618,6 +11647,7 @@
                         </select>
                         <button type="button" class="view-nav-trigger" id="viewNavTrigger" aria-haspopup="listbox" aria-expanded="false" aria-label="Select product"></button>
                         <div class="view-nav-panel" id="viewNavPanel" role="listbox" aria-label="Product options"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -15857,7 +15887,7 @@
                     triggerEl.setAttribute('aria-expanded', open ? 'true' : 'false');
                 });
                 document.addEventListener('click', function(e) {
-                    if (!document.getElementById('viewNavCustomWrap').contains(e.target)) {
+                    if (!document.getElementById('viewNavOuter').contains(e.target)) {
                         panelEl.classList.remove('open');
                         triggerEl.setAttribute('aria-expanded', 'false');
                     }
