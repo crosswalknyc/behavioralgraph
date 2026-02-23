@@ -20846,13 +20846,17 @@
                 }
                 
                 const data = quarters[q];
-                const netGrowth = data.subs - data.cancels;
+                const netGrowthCount = data.subs - data.cancels;
                 const startConsumers = data.startConsumers != null ? Number(data.startConsumers) : 0;
                 const endConsumers = data.endConsumers != null ? Number(data.endConsumers) : 0;
                 const growthPctNum = startConsumers > 0 && endConsumers != null
                     ? ((endConsumers - startConsumers) / startConsumers) * 100
-                    : (startConsumers > 0 ? (netGrowth / startConsumers) * 100 : 0);
+                    : (startConsumers > 0 ? (netGrowthCount / startConsumers) * 100 : 0);
                 const growthPct = growthPctNum.toFixed(2);
+                // Net Growth as decimal rate (from underlying data): (end - start) / start
+                const netGrowthRate = startConsumers > 0 && endConsumers != null
+                    ? (endConsumers - startConsumers) / startConsumers
+                    : (startConsumers > 0 ? netGrowthCount / startConsumers : 0);
                 
                 // SEC Actuals: use value as entered (key match quarter string)
                 const secActualKey = q;
@@ -20871,7 +20875,8 @@
                 
                 const rowStyle = inKpiRange ? 'border-bottom: 1px solid var(--border-color); background: rgba(0, 230, 230, 0.08);' : 'border-bottom: 1px solid var(--border-color);';
                 const titleAttr = inKpiRange ? ` title="KPI for this period: ${(kpiChange.label || '').replace(/"/g, '&quot;')}"` : '';
-                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowth >= 0 ? '#10b981' : '#ef4444'};">${netGrowth.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
+                const netGrowthDisplay = (typeof netGrowthRate === 'number' && !isNaN(netGrowthRate)) ? netGrowthRate.toFixed(16).replace(/\.?0+$/, '') : '0';
+                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowthRate >= 0 ? '#10b981' : '#ef4444'};">${netGrowthDisplay}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
             });
             
             html += '</tbody></table>';
