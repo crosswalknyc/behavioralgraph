@@ -525,19 +525,6 @@
             flex: 1;
             max-width: 280px;
         }
-        .view-nav-custom-wrap::before {
-            content: '';
-            position: absolute;
-            inset: -6px;
-            border-radius: 18px;
-            background: transparent;
-            z-index: -1;
-            animation: view-nav-glow 2s ease-in-out infinite;
-        }
-        @keyframes view-nav-glow {
-            0%, 100% { box-shadow: 0 0 20px 4px rgba(155, 107, 230, 0.45), 0 0 40px 8px rgba(155, 107, 230, 0.25); }
-            50% { box-shadow: 0 0 28px 8px rgba(155, 107, 230, 0.6), 0 0 56px 14px rgba(155, 107, 230, 0.35); }
-        }
         .view-nav-trigger {
             padding: 0.5rem 2.25rem 0.5rem 0.75rem;
             background: #352A5C;
