@@ -36401,6 +36401,26 @@
                 filteredLocs.forEach(loc => {
                     csvContent += `"${loc.name}",${loc.pct.toFixed(4)}%,${loc.genPopPct?.toFixed(4) || 0}%,${loc.index}\n`;
                 });
+            } else if (type === 'interests') {
+                // Interests: same structure as page - object of name -> { pct, genPopPct, index }; use allInterestsData if populated (matches grid), else currentDashboardData.interests
+                const interests = (typeof allInterestsData !== 'undefined' && allInterestsData.length > 0)
+                    ? allInterestsData
+                    : (currentDashboardData.interests ? Object.entries(currentDashboardData.interests).map(([name, data]) => ({
+                        name,
+                        pct: data.pct || 0,
+                        genPopPct: data.genPopPct || 0,
+                        index: data.index || 100,
+                        category: data.category
+                    })) : []);
+                csvContent = `${profileName} - ${category}\n`;
+                csvContent += `Interest,Audience %,Gen Pop %,Index\n`;
+                interests.forEach(item => {
+                    const name = (item && item.name) ? item.name : (typeof item === 'string' ? item : '');
+                    const pct = (item && (item.pct != null)) ? Number(item.pct) : 0;
+                    const genPopPct = (item && (item.genPopPct != null)) ? Number(item.genPopPct) : 0;
+                    const index = (item && (item.index != null)) ? Number(item.index) : 0;
+                    csvContent += `"${String(name).replace(/"/g, '""')}",${pct.toFixed(2)},${genPopPct.toFixed(2)},${index}\n`;
+                });
             } else if (type === 'affinity') {
                 const elementId = {
                     'Content & Entertainment': 'affinityContent',
@@ -43760,23 +43780,15 @@
                 filename = `${profileName}_Behavioral.csv`;
                 
             } else if (tabLabel === 'interests') {
-                // Export interests data
+                // Export interests data (flat object: name -> { pct, genPopPct, index })
                 csvContent = `${profileName} - Interests\n\n`;
                 const interests = currentDashboardData.interests || {};
-                
-                Object.keys(interests).forEach(category => {
-                    const items = interests[category] || [];
-                    if (items.length > 0) {
-                        csvContent += `${category.toUpperCase()}\n`;
-                        csvContent += `Name,Profile %,Gen Pop %,Index\n`;
-                        items.forEach(item => {
-                            const pct = (item.pct || item.percentage || 0).toFixed(2);
-                            const genPopPct = (item.genPopPct || item.genPop || 0).toFixed(2);
-                            const index = item.index || 0;
-                            csvContent += `"${item.name || item.label}",${pct}%,${genPopPct}%,${index}\n`;
-                        });
-                        csvContent += `\n`;
-                    }
+                csvContent += `Interest,Audience %,Gen Pop %,Index\n`;
+                Object.entries(interests).forEach(([name, vals]) => {
+                    const pct = (vals.pct != null ? vals.pct : 0).toFixed(2);
+                    const genPopPct = (vals.genPopPct != null ? vals.genPopPct : 0).toFixed(2);
+                    const index = vals.index != null ? vals.index : 0;
+                    csvContent += `"${String(name).replace(/"/g, '""')}",${pct},${genPopPct},${index}\n`;
                 });
                 filename = `${profileName}_Interests.csv`;
                 
