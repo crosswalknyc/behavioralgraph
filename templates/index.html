@@ -36362,18 +36362,22 @@
             const profileName = currentProfileData.name || 'Profile';
             
             if (type === 'demographic') {
-                const catLower = category.toLowerCase();
-                const data = currentDashboardData.demographics[catLower] || {};
-                const index = currentDashboardData.demographicsIndex[catLower] || {};
-                const genPop = currentDashboardData.demographicsGenPop[catLower] || {};
-                
+                // Map display category name to internal key (e.g. Sexual Orientation -> sexual_orientation)
+                const demoKeyByCategory = { 'age': 'age', 'gender': 'gender', 'ethnicity': 'ethnicity', 'income': 'income', 'education': 'education', 'relationship status': 'relationship', 'sexual orientation': 'sexual_orientation', 'parental status': 'parental_status', 'occupation': 'occupation' };
+                const catKey = demoKeyByCategory[category.toLowerCase()] || category.toLowerCase().replace(/\s+/g, '_');
+                const data = currentDashboardData.demographics[catKey] || {};
+                const index = currentDashboardData.demographicsIndex[catKey] || {};
+                const genPop = currentDashboardData.demographicsGenPop[catKey] || {};
+                // Sexual Orientation: use same display labels as dashboard (YES->LGBTQ+, NO->HETEROSEXUAL, other->uppercase)
+                const displayLabel = (catKey === 'sexual_orientation') ? (raw) => { const u = (raw || '').toUpperCase(); if (u === 'NO') return 'HETEROSEXUAL'; if (u === 'YES') return 'LGBTQ+'; return (raw || '').toUpperCase(); } : (l) => l;
                 csvContent = `${profileName} - ${category}\n`;
                 csvContent += `Label,Profile %,Gen Pop %,Index\n`;
                 Object.keys(data).forEach(label => {
                     const val = (parseFloat(data[label]) || 0).toFixed(2);
                     const gp = (parseFloat(genPop[label]) || 0).toFixed(2);
                     const idx = Math.round(parseFloat(index[label]) || 100);
-                    csvContent += `"${label}",${val}%,${gp}%,${idx}\n`;
+                    const csvLabel = displayLabel(label);
+                    csvContent += `"${csvLabel}",${val}%,${gp}%,${idx}\n`;
                 });
             } else if (type === 'behavioral') {
                 const items = currentDashboardData.behavioral[category] || [];
@@ -43731,25 +43735,23 @@
             trackActivity('export_page_csv', tabLabel);
             
             if (tabLabel === 'demographics') {
-                // Export all demographics data
+                // Export all demographics data; map display names to internal keys (sexual orientation -> sexual_orientation, etc.)
                 csvContent = `${profileName} - Demographics\n\n`;
-                const demoCategories = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship status', 'sexual orientation', 'parental status', 'occupation'];
-                
-                demoCategories.forEach(cat => {
-                    const catKey = cat.toLowerCase().replace(/ /g, '');
-                    const catKeyAlt = cat.toLowerCase();
-                    const data = currentDashboardData.demographics[catKey] || currentDashboardData.demographics[catKeyAlt] || currentDashboardData.demographics[cat] || {};
-                    const index = currentDashboardData.demographicsIndex[catKey] || currentDashboardData.demographicsIndex[catKeyAlt] || currentDashboardData.demographicsIndex[cat] || {};
-                    const genPop = currentDashboardData.demographicsGenPop[catKey] || currentDashboardData.demographicsGenPop[catKeyAlt] || currentDashboardData.demographicsGenPop[cat] || {};
-                    
+                const demoCategoryList = [{ key: 'age', title: 'Age' }, { key: 'gender', title: 'Gender' }, { key: 'ethnicity', title: 'Ethnicity' }, { key: 'income', title: 'Income' }, { key: 'education', title: 'Education' }, { key: 'relationship', title: 'Relationship Status' }, { key: 'sexual_orientation', title: 'Sexual Orientation' }, { key: 'parental_status', title: 'Parental Status' }, { key: 'occupation', title: 'Occupation' }];
+                const soDisplayLabel = (raw) => { const u = (raw || '').toUpperCase(); if (u === 'NO') return 'HETEROSEXUAL'; if (u === 'YES') return 'LGBTQ+'; return (raw || '').toUpperCase(); };
+                demoCategoryList.forEach(({ key: catKey, title: catTitle }) => {
+                    const data = currentDashboardData.demographics[catKey] || {};
+                    const index = currentDashboardData.demographicsIndex[catKey] || {};
+                    const genPop = currentDashboardData.demographicsGenPop[catKey] || {};
                     if (Object.keys(data).length > 0) {
-                        csvContent += `${cat.toUpperCase()}\n`;
+                        csvContent += `${catTitle.toUpperCase()}\n`;
                         csvContent += `Label,Profile %,Gen Pop %,Index\n`;
+                        const labelFn = (catKey === 'sexual_orientation') ? soDisplayLabel : (l) => l;
                         Object.keys(data).forEach(label => {
                             const val = (parseFloat(data[label]) || 0).toFixed(2);
                             const gp = (parseFloat(genPop[label]) || 0).toFixed(2);
                             const idx = Math.round(parseFloat(index[label]) || 100);
-                            csvContent += `"${label}",${val}%,${gp}%,${idx}\n`;
+                            csvContent += `"${labelFn(label)}",${val}%,${gp}%,${idx}\n`;
                         });
                         csvContent += `\n`;
                     }
