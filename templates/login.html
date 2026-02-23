@@ -7,17 +7,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-dark: #ffffff;
-            --bg-card: #ffffff;
-            --bg-input: #f1f5f9;
-            --accent-blue: #2563eb;
-            --accent-cyan: #0ea5e9;
-            --accent-green: #16a34a;
-            --accent-red: #dc2626;
-            --accent-lime: #65a30d;
-            --text-primary: #1e293b;
-            --text-secondary: #64748b;
-            --border-color: #e2e8f0;
+            --bg-dark: #0a1929;
+            --bg-card: #0d2137;
+            --bg-input: #132f4c;
+            --accent-blue: #5a9ad9;
+            --accent-cyan: #66d9ef;
+            --accent-green: #a6e22e;
+            --accent-red: #f92672;
+            --accent-lime: #c8ff00;
+            --text-primary: #e6f1ff;
+            --text-secondary: #8892b0;
+            --border-color: #1e3a5f;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -30,7 +30,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #ffffff;
+            background: linear-gradient(135deg, #0a1929 0%, #0d2137 50%, #132f4c 100%);
         }
 
         .login-container {
@@ -44,7 +44,7 @@
             border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 2.5rem;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
         }
 
         .logo-section {
@@ -52,16 +52,25 @@
             margin-bottom: 2rem;
         }
 
+        /* White background only behind the logo image */
+        .logo-wrap {
+            display: inline-block;
+            background: #ffffff;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+        }
+
         .logo {
             height: 200px;
             width: auto;
-            margin-bottom: 1.5rem;
+            display: block;
         }
 
         .logo-section h1 {
             font-family: 'Space Mono', monospace;
             font-size: 1.5rem;
-            color: var(--text-primary);
+            color: var(--accent-cyan);
             margin-bottom: 0.5rem;
         }
 
@@ -156,7 +165,7 @@
         }
 
         .footer-text a {
-            color: var(--accent-blue);
+            color: var(--accent-cyan);
             text-decoration: none;
         }
 
@@ -178,7 +187,7 @@
         .remember-me input[type="checkbox"] {
             width: 16px;
             height: 16px;
-            accent-color: var(--accent-blue);
+            accent-color: var(--accent-cyan);
             cursor: pointer;
         }
 
@@ -192,14 +201,14 @@
         }
 
         .forgot-password a {
-            color: var(--accent-blue);
+            color: var(--accent-cyan);
             text-decoration: none;
             font-size: 0.85rem;
             transition: color 0.2s;
         }
 
         .forgot-password a:hover {
-            color: var(--accent-cyan);
+            color: var(--accent-blue);
             text-decoration: underline;
         }
 
@@ -245,7 +254,7 @@
         .bg-circle {
             position: absolute;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(37, 99, 235, 0.06) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(90, 154, 217, 0.1) 0%, transparent 70%);
         }
 
         .bg-circle:nth-child(1) {
@@ -260,7 +269,7 @@
             height: 400px;
             bottom: -100px;
             left: -100px;
-            background: radial-gradient(circle, rgba(14, 165, 233, 0.05) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(200, 255, 0, 0.05) 0%, transparent 70%);
         }
     </style>
 </head>
@@ -273,7 +282,9 @@
     <div class="login-container">
         <div class="login-card">
             <div class="logo-section">
-                <img src="{{ url_for('static', filename='crosswalk-logo.png') }}" alt="Crosswalk Logo" class="logo" onerror="this.style.display='none'">
+                <div class="logo-wrap">
+                    <img src="{{ url_for('static', filename='crosswalk-logo.png') }}" alt="Crosswalk Logo" class="logo" onerror="this.style.display='none'">
+                </div>
                 <p style="font-size: 1.1rem; letter-spacing: 2px; margin-top: 1rem;">IQ LABORATORY DASHBOARD</p>
             </div>
 
