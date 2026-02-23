@@ -2035,6 +2035,35 @@
             border: 1px dashed rgba(239, 68, 68, 0.5);
         }
         
+        /* Profile + Toolbar: one row (title/image left, toolbar right) */
+        .profile-and-toolbar-row {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.75rem;
+            padding: 0.25rem 0;
+            transition: all 0.3s ease;
+        }
+        .profile-and-toolbar-row .profile-header-row {
+            flex: 0 0 auto;
+            margin-bottom: 0;
+            max-height: none;
+        }
+        .profile-and-toolbar-row .toolbar-row {
+            flex: 1 1 auto;
+            min-width: 0;
+            margin-bottom: 0;
+        }
+        .profile-and-toolbar-row.collapsed {
+            max-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden;
+            opacity: 0;
+            pointer-events: none;
+        }
+        
         /* Toolbar Row - Collapsible */
         .toolbar-row {
             display: flex;
@@ -2049,6 +2078,20 @@
             flex: 1;
             overflow: hidden;
             transition: all 0.3s ease;
+        }
+        
+        .toolbar-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .toolbar-section-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            padding-left: 0.25rem;
         }
         
         .toolbar-row.collapsed .toolbar-content {
@@ -13060,17 +13103,43 @@
             <div class="profile-tabs-bar" id="profileTabsBar">
             </div>
             
-            <!-- Row 1: Profile Info (collapses with toolbar) -->
-            <div class="dash-header-row profile-header-row" id="profileHeaderRow">
-                <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
-                    <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile" onerror="this.parentElement.classList.remove('loaded')"></div>
-                    <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
-                        <div class="dash-brand-box" id="dashBrandNameHeader"></div>
-                        <div class="dash-date-box" id="dashDateRangeHeader"></div>
+            <!-- Profile + Toolbar: one row (title/image left, toolbar right) -->
+            <div class="profile-and-toolbar-row" id="profileAndToolbarRow">
+                <!-- Row 1: Profile Info (image + title + date) -->
+                <div class="dash-header-row profile-header-row" id="profileHeaderRow">
+                    <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
+                        <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile" onerror="this.parentElement.classList.remove('loaded')"></div>
+                        <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
+                            <div class="dash-brand-box" id="dashBrandNameHeader"></div>
+                            <div class="dash-date-box" id="dashDateRangeHeader"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Toolbar: DATA + ANALYSIS TOOLS (sits by title and image) -->
+                <div id="toolbarRow" class="toolbar-row">
+                    <div class="toolbar-content" id="toolbarContent">
+                        <div class="toolbar-section">
+                            <div class="toolbar-section-label">DATA</div>
+                            <div class="dashboard-tabs">
+                                <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                                <button class="tab-btn has-tooltip" data-tooltip="Demographics: Detailed breakdown of age, gender, ethnicity, income, education, and other demographic characteristics." onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                                <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
+                                <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
+                                <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
+                            </div>
+                        </div>
+                        <div class="toolbar-section">
+                            <div class="toolbar-section-label">ANALYSIS TOOLS</div>
+                            <div class="dashboard-tabs" id="analysisToolsTabs">
+                                <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            
             
             <!-- AI Assistant Panel -->
             <div id="aiPanel" class="ai-panel" style="display: none;">
@@ -13138,31 +13207,6 @@
                 </div>
             </div>
 
-            <!-- Row 2: Tab Navigation + Action Buttons (Collapsible) -->
-            <div id="toolbarRow" class="toolbar-row">
-                <div class="toolbar-content" id="toolbarContent">
-                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                        <div style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); padding-left: 0.25rem;">Data</div>
-                        <div class="dashboard-tabs">
-                            <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
-                            <button class="tab-btn has-tooltip" data-tooltip="Demographics: Detailed breakdown of age, gender, ethnicity, income, education, and other demographic characteristics." onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
-                            <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
-                            <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
-                            <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
-                        </div>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                        <div style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); padding-left: 0.25rem;">Analysis Tools</div>
-                        <div class="dashboard-tabs" id="analysisToolsTabs">
-                            <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                            <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                            <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                            <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Action Buttons Row with Tab Title (grid aligns with sidebar | content below) -->
             <div class="action-buttons-row">
                 <div class="content-action-buttons" id="contentActionButtons">
@@ -27306,6 +27350,7 @@
         function toggleToolbar() {
             const toolbarRow = document.getElementById('toolbarRow');
             const profileHeaderRow = document.getElementById('profileHeaderRow');
+            const profileAndToolbarRow = document.getElementById('profileAndToolbarRow');
             const collapseIcon = document.getElementById('toolbarCollapseIcon');
             const workspaceCollapseIcon = document.getElementById('workspaceToolbarCollapseIcon');
             if (!toolbarRow) return;
@@ -27316,11 +27361,13 @@
             if (toolbarCollapsed) {
                 toolbarRow.classList.add('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
+                if (profileAndToolbarRow) profileAndToolbarRow.classList.add('collapsed');
                 if (collapseIcon) collapseIcon.style.transform = 'rotate(180deg)';
                 if (workspaceCollapseIcon) workspaceCollapseIcon.style.transform = 'rotate(180deg)';
             } else {
                 toolbarRow.classList.remove('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.remove('collapsed');
+                if (profileAndToolbarRow) profileAndToolbarRow.classList.remove('collapsed');
                 if (collapseIcon) collapseIcon.style.transform = 'rotate(0deg)';
                 if (workspaceCollapseIcon) workspaceCollapseIcon.style.transform = 'rotate(0deg)';
             }
@@ -27335,6 +27382,7 @@
         function initToolbarState() {
             const toolbarRow = document.getElementById('toolbarRow');
             const profileHeaderRow = document.getElementById('profileHeaderRow');
+            const profileAndToolbarRow = document.getElementById('profileAndToolbarRow');
             const labelEl = document.getElementById('toolbarCollapseLabel');
             const workspaceLabel = document.getElementById('workspaceToolbarCollapseLabel');
             const collapseIcon = document.getElementById('toolbarCollapseIcon');
@@ -27343,6 +27391,7 @@
             if (toolbarCollapsed) {
                 if (toolbarRow) toolbarRow.classList.add('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
+                if (profileAndToolbarRow) profileAndToolbarRow.classList.add('collapsed');
                 if (collapseIcon) collapseIcon.style.transform = 'rotate(180deg)';
                 if (workspaceCollapseIcon) workspaceCollapseIcon.style.transform = 'rotate(180deg)';
                 if (labelEl) labelEl.textContent = labelText;
