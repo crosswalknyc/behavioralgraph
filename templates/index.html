@@ -13126,6 +13126,11 @@
                                             <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                             <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                             <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                            <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: AI-powered SWOT and strategic insight analysis for the selected profile." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🔑</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                            <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Life moments, behavioral context, and category relationships for this audience." onclick="openEcosystemFromNav()"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                            <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship potential and brand alignment recommendations." onclick="openSponsorshipFromNav()"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                            <button class="tab-btn tool-tab has-tooltip" data-feature="media" data-tooltip="Media: Media consumption patterns and channel recommendations." onclick="openMediaFromNav()"><span class="tab-icon">🎬</span><span class="tab-label">MEDIA</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                            <button class="tab-btn tool-tab has-tooltip" data-feature="content" data-tooltip="Content: Content development and partnership insights." onclick="openContentFromNav()"><span class="tab-icon">🎞️</span><span class="tab-label">CONTENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                             <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                         </div>
                                         <div class="toolbar-section-label">ANALYSIS TOOLS</div>
@@ -49775,6 +49780,27 @@
                 return;
             }
             showProfileSelectionModal('ecosystem');
+        }
+        
+        function openSponsorshipFromNav() {
+            showTab('insights');
+            if (typeof showInsightsTab === 'function') showInsightsTab('summary');
+            const el = document.getElementById('insights-tab-summary');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        function openMediaFromNav() {
+            showTab('insights');
+            if (typeof showInsightsTab === 'function') showInsightsTab('summary');
+            const el = document.getElementById('insights-tab-summary');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        function openContentFromNav() {
+            showTab('insights');
+            if (typeof showInsightsTab === 'function') showInsightsTab('summary');
+            const el = document.getElementById('insights-tab-summary');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         
         function showProfileSelectionModal(mode) {
