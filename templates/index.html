@@ -17643,19 +17643,23 @@
             localStorage.setItem(`activeTickerTabId${userKey}`, activeTickerTabId || '');
         }
         
-        // Load saved ticker tabs from localStorage
+        // Load saved ticker tabs from localStorage. Uses refresh=1 at least once per day so data reloads daily, then cache.
         async function loadSavedTickerTabs() {
             try {
-                const userKey = currentUsername ? `_${currentUsername}` : '';
+                const userKey = (typeof currentUsername !== 'undefined' && currentUsername) ? `_${currentUsername}` : '';
                 const savedTabs = JSON.parse(localStorage.getItem(`openTickerTabs${userKey}`) || '[]');
                 const savedActiveId = localStorage.getItem(`activeTickerTabId${userKey}`) || '';
-                
+                const today = new Date().toISOString().slice(0, 10);
+                const lastRefresh = localStorage.getItem('hedgeFundIQ_lastRefreshDate' + userKey) || '';
+                const needRefresh = lastRefresh !== today;
+
                 for (const savedTab of savedTabs) {
                     try {
-                        const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(savedTab.s3Key)}`, { credentials: 'same-origin' });
+                        const url = `/api/hedge-fund-iq/data/${encodeURIComponent(savedTab.s3Key)}` + (needRefresh ? '?refresh=1' : '');
+                        const response = await fetch(url, { credentials: 'same-origin' });
                         if (response.status === 401) continue;
                         const data = await response.json();
-                        
+
                         if (data.success) {
                             openTickerTabs.push({
                                 id: savedTab.id,
@@ -17669,9 +17673,13 @@
                         console.warn('Failed to restore ticker tab:', savedTab.name);
                     }
                 }
-                
+
+                if (needRefresh && openTickerTabs.length > 0) {
+                    localStorage.setItem(`hedgeFundIQ_lastRefreshDate${userKey}`, today);
+                }
+
                 renderTickerTabsBar();
-                
+
                 if (openTickerTabs.length > 0) {
                     const tabToActivate = openTickerTabs.find(t => t.id === savedActiveId) || openTickerTabs[0];
                     switchToTickerTab(tabToActivate.id);
@@ -17814,20 +17822,26 @@
             }
             
             try {
-                console.log('📡 Fetching ticker data from API...');
-                const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
+                const userKey = (typeof currentUsername !== 'undefined' && currentUsername) ? `_${currentUsername}` : '';
+                const today = new Date().toISOString().slice(0, 10);
+                const lastRefresh = localStorage.getItem('hedgeFundIQ_lastRefreshDate' + userKey);
+                const needRefresh = lastRefresh !== today;
+                console.log('📡 Fetching ticker data from API...' + (needRefresh ? ' (refresh=1)' : ''));
+                const url = `/api/hedge-fund-iq/data/${encodeURIComponent(s3Key)}` + (needRefresh ? '?refresh=1' : '');
+                const response = await fetch(url, { credentials: 'same-origin' });
                 console.log('📥 Response status:', response.status);
-                
-                if (response.status === 401) { 
+
+                if (response.status === 401) {
                     console.warn('🔒 Unauthorized - redirecting to login');
-                    window.location.href = '/login'; 
-                    return; 
+                    window.location.href = '/login';
+                    return;
                 }
-                
+
                 const data = await response.json();
                 console.log('📊 Ticker data received:', data);
-                
+
                 if (data.success) {
+                    if (needRefresh) localStorage.setItem('hedgeFundIQ_lastRefreshDate' + userKey, today);
                     // Create new tab
                     const newTab = {
                         id: 'ticker_' + Date.now(),
@@ -17836,11 +17850,11 @@
                         kpi: data.kpi || '',
                         data: data
                     };
-                    
+
                     openTickerTabs.push(newTab);
                     activeTickerTabId = newTab.id;
                     currentTickerData = data;
-                    
+
                     // Save to localStorage
                     saveTickerTabs();
                     
@@ -21279,32 +21293,39 @@
             window.URL.revokeObjectURL(url);
         }
         
+        function getTickerRefreshDateKey() {
+            const userKey = (typeof currentUsername !== 'undefined' && currentUsername) ? `_${currentUsername}` : '';
+            return `hedgeFundIQ_lastRefreshDate${userKey}`;
+        }
+        function isTickerDataRefreshedToday() {
+            const today = new Date().toISOString().slice(0, 10);
+            return localStorage.getItem(getTickerRefreshDateKey()) === today;
+        }
+        function setTickerRefreshedToday() {
+            localStorage.setItem(getTickerRefreshDateKey(), new Date().toISOString().slice(0, 10));
+        }
+
         async function refreshTickerData() {
-            if (!currentTickerData || !activeTickerTabId) return;
-            
-            const tab = openTickerTabs.find(t => t.id === activeTickerTabId);
-            if (!tab) return;
-            
+            if (openTickerTabs.length === 0) return;
             try {
-                // Bypass daily cache so projection and stats use newest quarterly data from S3
-                const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(tab.s3Key)}?refresh=1`, { credentials: 'same-origin' });
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    return;
+                // Refresh all open ticker tabs so every tab (Live Data, Trends, Daily, Historic, etc.) has fresh data
+                for (const tab of openTickerTabs) {
+                    const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(tab.s3Key)}?refresh=1`, { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    const data = await response.json();
+                    if (data.success) tab.data = data;
                 }
-                
-                const data = await response.json();
-                if (data.success) {
-                    // Update the tab data
-                    tab.data = data;
-                    currentTickerData = data;
-                    
-                    // Re-render the dashboard
-                    renderTickerDashboard(data);
-                    
-                    // Save updated state
-                    saveTickerTabs();
+                setTickerRefreshedToday();
+                // Re-render current tab's dashboard
+                const activeTab = openTickerTabs.find(t => t.id === activeTickerTabId);
+                if (activeTab) {
+                    currentTickerData = activeTab.data;
+                    renderTickerDashboard(activeTab.data);
                 }
+                saveTickerTabs();
             } catch (error) {
                 console.error('Error refreshing ticker data:', error);
             }
@@ -21350,7 +21371,18 @@
         window.resetDailyQuarterRange = resetDailyQuarterRange;
         window.applyHistoricQuarterRange = applyHistoricQuarterRange;
         window.resetHistoricQuarterRange = resetHistoricQuarterRange;
-        
+        window.refreshTickerData = refreshTickerData;
+
+        // When user returns to tab (e.g. after relog or switching back), refresh ticker data if it's a new day so cache is at most 24h old
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState !== 'visible') return;
+            const hfView = document.getElementById('hedgeFundIQView');
+            if (!hfView || hfView.style.display === 'none') return;
+            if (typeof openTickerTabs === 'undefined' || !openTickerTabs || openTickerTabs.length === 0) return;
+            if (typeof isTickerDataRefreshedToday === 'function' && isTickerDataRefreshedToday()) return;
+            if (typeof refreshTickerData === 'function') refreshTickerData();
+        });
+
         // ============================================================================
         // END HEDGE FUND IQ FUNCTIONS
         // ============================================================================
