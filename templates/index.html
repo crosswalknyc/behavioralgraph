@@ -13942,12 +13942,6 @@
             <!-- Top Insights Tab -->
             <div id="tab-insights" class="tab-content active">
                 <div class="insights-container">
-                    <!-- Insights Sub-tabs -->
-                    <div class="insights-tabs" id="insightsSubTabs">
-                        <button class="insights-tab active" data-feature="insightsSummary" onclick="showInsightsTab('summary')">📋 Summary<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                    </div>
-                    
-                    <!-- Summary Tab -->
                     <div id="insights-tab-summary" class="insights-tab-content active">
                         <div class="insights-summary-grid">
                             <!-- Key Metrics Row - FIRST -->
@@ -38745,12 +38739,14 @@
         // TOP INSIGHTS FUNCTIONS
         // ============================================================================
         
-        // Show insights sub-tabs
+        // Show insights sub-tabs (Summary button removed; content panel still activated when called)
         function showInsightsTab(tabName) {
             document.querySelectorAll('.insights-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.insights-tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`.insights-tab[onclick*="${tabName}"]`).classList.add('active');
-            document.getElementById(`insights-tab-${tabName}`).classList.add('active');
+            const tabBtn = document.querySelector(`.insights-tab[onclick*="${tabName}"]`);
+            if (tabBtn) tabBtn.classList.add('active');
+            const content = document.getElementById(`insights-tab-${tabName}`);
+            if (content) content.classList.add('active');
         }
         
         function renderTopInsights(data) {
