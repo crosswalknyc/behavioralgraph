@@ -57349,7 +57349,7 @@
             document.body.appendChild(modal);
         }
         
-        function addSelectedModulesToDeck() {
+        async function addSelectedModulesToDeck() {
             const modal = document.getElementById('moduleSelectModal');
             if (!modal || !currentEditingDeck) return;
             const checked = modal.querySelectorAll('.module-select-check:checked');
@@ -57361,20 +57361,20 @@
             pushDeckUndoState();
             if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
             
-            // Find closing slide index to insert before it
             const closingIdx = currentEditingDeck.slides.findIndex(s => s.type === 'closing');
-            
-            checked.forEach((cb, i) => {
+            const inserted = [];
+            for (let i = 0; i < checked.length; i++) {
+                const cb = checked[i];
                 const type = cb.dataset.type;
                 const cat = cb.dataset.cat;
-                const item = createModuleItem(type, cat);
-                
-                if (closingIdx !== -1) {
-                    currentEditingDeck.slides.splice(closingIdx + i, 0, item);
-                } else {
-                    currentEditingDeck.slides.push(item);
-                }
-            });
+                const item = await createModuleItem(type, cat);
+                inserted.push(item);
+            }
+            if (closingIdx !== -1) {
+                inserted.forEach((item, i) => currentEditingDeck.slides.splice(closingIdx + i, 0, item));
+            } else {
+                inserted.forEach(item => currentEditingDeck.slides.push(item));
+            }
             
             saveDeckChanges();
             const newClosingIdx = currentEditingDeck.slides.findIndex(s => s.type === 'closing');
@@ -57384,14 +57384,13 @@
             showNotification(`✅ Added ${checked.length} module(s) to deck`, 'success');
         }
         
-        function addModuleToCurrentDeck(type, category) {
+        async function addModuleToCurrentDeck(type, category) {
             document.getElementById('moduleSelectModal')?.remove();
             if (!currentEditingDeck) return;
             pushDeckUndoState();
-            const item = createModuleItem(type, category);
+            const item = await createModuleItem(type, category);
             if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
             
-            // Insert before closing slide if it exists
             const closingIdx = currentEditingDeck.slides.findIndex(s => s.type === 'closing');
             if (closingIdx !== -1) {
                 currentEditingDeck.slides.splice(closingIdx, 0, item);
