@@ -26668,6 +26668,8 @@
                 const u = (cat || '').replace(/\s+/g, ' ').trim().toUpperCase();
                 if (u === 'STREAMING VIDEO') return 'STREAMING VIDEO';
                 if (u.includes('STREAMING') && u.includes('VIDEO')) return 'STREAMING VIDEO';
+                if (u === 'STREAMING/PLATFORM' || u === 'STREAMING PLATFORM') return 'STREAMING VIDEO';
+                if (u === 'PLATFORMS') return 'STREAMING VIDEO'; // backend sometimes uses "PLATFORMS" for streaming video
                 return cat || 'UNCATEGORIZED';
             };
             const byMasterCategory = {};
@@ -44008,9 +44010,11 @@
             'SVOD ACQUISITION': '📺'  // TV icon for SVOD
         };
         
-        // Display labels for sub-categories (e.g. PLATFORMS under Platforms -> Streaming Video)
+        // Display labels for sub-categories (merged streaming video shows as STREAMING VIDEO)
         const CATEGORY_DISPLAY_LABELS = {
-            'PLATFORMS': 'Streaming Video'
+            'PLATFORMS': 'STREAMING VIDEO',
+            'STREAMING VIDEO': 'STREAMING VIDEO',
+            'STREAMING/PLATFORM': 'STREAMING VIDEO'
         };
         function getCategoryDisplayLabel(cat) {
             return CATEGORY_DISPLAY_LABELS[(cat || '').toUpperCase()] || cat;
