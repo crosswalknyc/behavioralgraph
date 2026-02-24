@@ -2407,27 +2407,36 @@
             text-align: left !important;
             align-items: stretch;
         }
+        /* Two-column layout: checkboxes left, labels left */
+        #compSelectSectionsModal .comp-export-section-row {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.5rem;
+            align-items: center;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border-radius: 4px;
+            margin-bottom: 0.25rem;
+            cursor: pointer;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: left;
+        }
+        #compSelectSectionsModal .comp-export-section-col-check {
+            justify-self: start;
+            text-align: left;
+        }
+        #compSelectSectionsModal .comp-export-section-col-label {
+            justify-self: start;
+            text-align: left;
+            min-width: 0;
+        }
         #compSelectSectionsModal .comp-export-section-item,
         #compSelectSectionsModal .module-select-item {
             justify-content: flex-start !important;
             text-align: left !important;
             width: 100% !important;
             align-items: center;
-        }
-        #compSelectSectionsModal .comp-export-section-item span,
-        #compSelectSectionsModal .module-select-item span {
-            text-align: left !important;
-            display: block;
-            flex: 0 1 auto;
-        }
-        /* Force section labels to stay left; no grow so text starts at checkbox + gap */
-        #compSelectSectionsModal .comp-export-section-label {
-            text-align: left !important;
-            text-align: start !important;
-            display: inline-block;
-            flex: 0 0 auto;
-            min-width: 0;
-            max-width: 100%;
         }
         #compSelectSectionsModal .deck-workspace-content {
             direction: ltr;
@@ -49010,9 +49019,9 @@
             modal.className = 'deck-workspace-modal';
             modal.id = modalId;
             const optionsHtml = options.map(o => `
-                <label class="module-select-item comp-export-section-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; width: 100%; box-sizing: border-box;">
-                    <input type="checkbox" class="comp-export-section-check" value="${escapeHtml(o.value)}" checked>
-                    <span class="comp-export-section-label" style="text-align: left !important; direction: ltr;">${escapeHtml(o.label)}</span>
+                <label class="comp-export-section-row">
+                    <span class="comp-export-section-col-check"><input type="checkbox" class="comp-export-section-check" value="${escapeHtml(o.value)}" checked></span>
+                    <span class="comp-export-section-col-label">${escapeHtml(o.label)}</span>
                 </label>
             `).join('');
             modal.innerHTML = `
