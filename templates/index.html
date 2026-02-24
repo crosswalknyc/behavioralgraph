@@ -2401,6 +2401,16 @@
             text-align: left;
             width: 100%;
         }
+        #compSelectSectionsModal .deck-workspace-content,
+        #compSelectSectionsModal .deck-workspace-content > div {
+            text-align: left;
+        }
+        #compSelectSectionsModal .comp-export-section-item,
+        #compSelectSectionsModal .module-select-item {
+            justify-content: flex-start;
+            text-align: left;
+            width: 100%;
+        }
         
         .deck-workspace-header {
             display: flex;
@@ -48968,7 +48978,7 @@
             modal.className = 'deck-workspace-modal';
             modal.id = modalId;
             const optionsHtml = options.map(o => `
-                <label class="module-select-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; text-align: left;">
+                <label class="module-select-item comp-export-section-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; text-align: left; width: 100%; box-sizing: border-box;">
                     <input type="checkbox" class="comp-export-section-check" value="${escapeHtml(o.value)}" checked>
                     <span style="text-align: left;">${escapeHtml(o.label)}</span>
                 </label>
@@ -48985,7 +48995,7 @@
                             <button type="button" onclick="document.querySelectorAll('.comp-export-section-check').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Select all</button>
                             <button type="button" onclick="document.querySelectorAll('.comp-export-section-check').forEach(c => c.checked = false)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Clear</button>
                         </div>
-                        <div style="max-height: 40vh; overflow-y: auto; text-align: left;">${optionsHtml}</div>
+                        <div style="max-height: 40vh; overflow-y: auto; text-align: left; padding-left: 0;">${optionsHtml}</div>
                         <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-start;">
                             <button class="btn btn-secondary" onclick="document.getElementById('${modalId}').remove()">Cancel</button>
                             <button class="btn btn-primary" onclick="exportComparisonSelectedSectionsCSV(); document.getElementById('${modalId}').remove();">Download CSV</button>
