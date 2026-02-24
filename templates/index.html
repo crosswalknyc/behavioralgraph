@@ -26649,10 +26649,11 @@
             }
             
             // Normal hierarchical view when not searching
-            // Group by master category, then by sub-category (normalize so "Streaming Video" and "STREAMING VIDEO" merge as STREAMING VIDEO)
+            // Group by master category, then by sub-category (normalize so all "Streaming Video" variants merge as STREAMING VIDEO)
             const normalizeSubCategoryKey = (cat) => {
-                const u = (cat || '').toUpperCase().trim();
+                const u = (cat || '').replace(/\s+/g, ' ').trim().toUpperCase();
                 if (u === 'STREAMING VIDEO') return 'STREAMING VIDEO';
+                if (u.includes('STREAMING') && u.includes('VIDEO')) return 'STREAMING VIDEO';
                 return cat || 'UNCATEGORIZED';
             };
             const byMasterCategory = {};
