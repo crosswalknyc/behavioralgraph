@@ -2392,6 +2392,15 @@
             text-align: left;
             justify-content: flex-start;
         }
+        #moduleSelectModal .deck-workspace-content,
+        #moduleSelectModal .deck-workspace-content > div {
+            text-align: left;
+        }
+        #moduleSelectModal .module-select-item {
+            justify-content: flex-start;
+            text-align: left;
+            width: 100%;
+        }
         
         .deck-workspace-header {
             display: flex;
@@ -57478,7 +57487,7 @@
             if (currentDashboardData.demographics) {
                 demoHtml = Object.keys(currentDashboardData.demographics).map(key => {
                     const label = demoLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                    return `<label class="module-select-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">
+                    return `<label class="module-select-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; width: 100%; box-sizing: border-box; text-align: left;">
                         <input type="checkbox" class="module-select-check" data-type="demographic" data-cat="${key}">
                         <span>📊 ${label}</span>
                     </label>`;
@@ -57489,7 +57498,7 @@
             if (currentDashboardData.behavioral) {
                 const allBehavioralKeys = Object.keys(currentDashboardData.behavioral);
                 behavioralHtml = allBehavioralKeys.map(key => {
-                    return `<label class="module-select-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">
+                    return `<label class="module-select-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; width: 100%; box-sizing: border-box; text-align: left;">
                         <input type="checkbox" class="module-select-check" data-type="behavioral" data-cat="${escapeHtml(key || '')}">
                         <span>🎯 ${escapeHtml(key)}</span>
                     </label>`;
@@ -57511,7 +57520,7 @@
                             <button type="button" onclick="document.querySelectorAll('.module-select-check[data-type=demographic]').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">All Demographics</button>
                             <button type="button" onclick="document.querySelectorAll('.module-select-check[data-type=behavioral]').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">All Behavioral</button>
                         </div>
-                        <div style="max-height: 50vh; overflow-y: auto; text-align: left;">
+                        <div style="max-height: 50vh; overflow-y: auto; text-align: left; padding-left: 0;">
                             ${demoHtml ? '<h4 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-align: left;">Demographics</h4>' + demoHtml : ''}
                             ${behavioralHtml ? '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-align: left;">Behavioral</h4>' + behavioralHtml : ''}
                         </div>
