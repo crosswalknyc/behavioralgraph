@@ -7064,15 +7064,23 @@
                         });
                     }
                 } else if (fileInput.files && fileInput.files[0]) {
-                    // Upload file (profile/image)
-                    const formData = new FormData();
-                    formData.append('file', fileInput.files[0]);
-                    formData.append('profile_name', profileName);
-                    response = await fetch('/api/admin/profile-image', {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        body: formData
-                    });
+                    // Upload file (profile/image); retry once on server error so upload reliably saves
+                    const file = fileInput.files[0];
+                    const doUpload = () => {
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        fd.append('profile_name', profileName);
+                        return fetch('/api/admin/profile-image', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            body: fd
+                        });
+                    };
+                    response = await doUpload();
+                    if (!response.ok && response.status >= 500) {
+                        await new Promise(r => setTimeout(r, 800));
+                        response = await doUpload();
+                    }
                 } else {
                     // Set URL (profile/image)
                     response = await fetch('/api/admin/profile-image', {

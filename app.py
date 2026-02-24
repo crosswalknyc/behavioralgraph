@@ -10659,7 +10659,7 @@ def load_profile_image_cache():
         return False
 
 def save_profile_image_cache():
-    """Save profile image cache to S3."""
+    """Save profile image cache to S3. Retries up to 3 times on failure."""
     global profile_image_cache, profile_image_cache_dirty
     if not s3_client:
         print("⚠️ Cannot save profile image cache: S3 client not available")
@@ -10682,32 +10682,34 @@ def save_profile_image_cache():
             print(f"   📂 No existing cache found or error loading: {load_err}")
             # Keep current cache (might be empty, might have new entries)
     
-    try:
-        # Save the current cache state
-        cache_json = json.dumps(profile_image_cache, indent=2)
-        cache_size = len(cache_json)
-        print(f"   💾 Writing cache to S3: {len(profile_image_cache)} entries, {cache_size} bytes")
-        
-        s3_client.put_object(
-            Bucket=S3_BUCKET,
-            Key=S3_IMAGE_CACHE_KEY,
-            Body=cache_json,
-            ContentType='application/json'
-        )
-        profile_image_cache_dirty = False
-        print(f"   ✅ Successfully wrote cache to S3: {S3_IMAGE_CACHE_KEY}")
-        print(f"💾 Saved profile image cache: {len(profile_image_cache)} images")
-        
-        # Log sample of what was saved
-        sample_keys = list(profile_image_cache.keys())[:5]
-        print(f"   📋 Sample keys saved: {sample_keys}")
-        
-        return True
-    except Exception as e:
-        print(f"⚠️ Error saving profile image cache: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+    import time
+    cache_json = json.dumps(profile_image_cache, indent=2)
+    cache_size = len(cache_json)
+    print(f"   💾 Writing cache to S3: {len(profile_image_cache)} entries, {cache_size} bytes")
+    
+    for attempt in range(3):
+        try:
+            s3_client.put_object(
+                Bucket=S3_BUCKET,
+                Key=S3_IMAGE_CACHE_KEY,
+                Body=cache_json,
+                ContentType='application/json'
+            )
+            profile_image_cache_dirty = False
+            print(f"   ✅ Successfully wrote cache to S3: {S3_IMAGE_CACHE_KEY} (attempt {attempt + 1})")
+            print(f"💾 Saved profile image cache: {len(profile_image_cache)} images")
+            sample_keys = list(profile_image_cache.keys())[:5]
+            print(f"   📋 Sample keys saved: {sample_keys}")
+            return True
+        except Exception as e:
+            print(f"⚠️ Error saving profile image cache (attempt {attempt + 1}/3): {e}")
+            if attempt < 2:
+                time.sleep(0.5)
+            else:
+                import traceback
+                traceback.print_exc()
+                return False
+    return False
 
 
 @app.route('/api/prefetch-images', methods=['POST'])
@@ -10872,21 +10874,31 @@ def set_profile_image():
             'cached_at': datetime.now().isoformat()
         }
         
-        # Add to cache
+        # Add to cache (in-memory)
         profile_image_cache[cache_key] = new_entry
         profile_image_cache_dirty = True
         
         print(f"   📝 Added entry to cache: {cache_key} -> {image_url}")
         print(f"   📊 Cache now has {len(profile_image_cache)} entries before save")
         
-        # Save immediately and verify
+        # Read-merge-write: load current state from S3 and merge our entry so we never overwrite other updates
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
+            existing = json.loads(response['Body'].read().decode('utf-8'))
+            existing[cache_key] = new_entry
+            profile_image_cache = existing
+            print(f"   📥 Merged with S3 cache ({len(existing)} entries) before save")
+        except Exception as load_err:
+            print(f"   📂 No existing cache or load error (using in-memory): {load_err}")
+            # Keep current profile_image_cache (already has new_entry)
+        
+        # Save (with retries inside save_profile_image_cache)
         saved = save_profile_image_cache()
         
         # Ensure our entry is still there after save (in case save function reloaded cache)
         if cache_key not in profile_image_cache or profile_image_cache[cache_key] != new_entry:
             print(f"   ⚠️ WARNING: Entry was lost during save! Restoring...")
             profile_image_cache[cache_key] = new_entry
-            # Try saving again
             saved = save_profile_image_cache()
         if not saved:
             print(f"   ⚠️ Warning: Cache save may have failed for {cache_key}")
