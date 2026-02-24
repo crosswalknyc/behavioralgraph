@@ -2294,9 +2294,11 @@ def create_user():
             'has_purgatory_approval': False  # Default to false, only super_admin can enable
         }
         
-        # Purgatory approval (only super_admin can set this on create)
-        current_user = get_current_user()
-        if current_user and current_user.get('role') == 'super_admin':
+        # Purgatory clearance: only super_admin can grant (or set on create)
+        if 'has_purgatory_approval' in req_data:
+            current_user = get_current_user()
+            if not current_user or current_user.get('role') != 'super_admin':
+                return jsonify({'success': False, 'error': 'Only a super admin can grant purgatory clearance'}), 403
             data['users'][username]['has_purgatory_approval'] = req_data.get('has_purgatory_approval', False)
         
         save_users(data)
@@ -2402,11 +2404,12 @@ def update_user(username):
         if 'activity_export_cadence' in req_data:
             cadence = (req_data['activity_export_cadence'] or '').strip().lower()
             user['activity_export_cadence'] = cadence if cadence in ACTIVITY_EXPORT_CADENCES else ''
-        # Purgatory approval (only super_admin can set this)
+        # Purgatory clearance: only super_admin can grant or revoke
         if 'has_purgatory_approval' in req_data:
             current_user = get_current_user()
-            if current_user and current_user.get('role') == 'super_admin':
-                user['has_purgatory_approval'] = req_data['has_purgatory_approval']
+            if not current_user or current_user.get('role') != 'super_admin':
+                return jsonify({'success': False, 'error': 'Only a super admin can grant or revoke purgatory clearance'}), 403
+            user['has_purgatory_approval'] = req_data['has_purgatory_approval']
         
         # Handle username change
         new_username = req_data.get('new_username', '').strip().lower()
