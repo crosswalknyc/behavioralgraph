@@ -8292,6 +8292,7 @@
 
         .comp-table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             font-size: 0.8rem;
         }
@@ -8315,6 +8316,19 @@
             text-align: left;
             font-weight: 500;
             background: var(--bg-input);
+        }
+        /* Equal-width data columns so bar charts use the same scale visually (same % = same bar length) */
+        .comp-table td:not(:first-child) {
+            width: 180px;
+            min-width: 180px;
+            max-width: 180px;
+            box-sizing: border-box;
+        }
+        .comp-table th:not(:first-child) {
+            width: 180px;
+            min-width: 180px;
+            max-width: 180px;
+            box-sizing: border-box;
         }
 
         .comp-bar-cell {
