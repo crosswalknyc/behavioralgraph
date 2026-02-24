@@ -116,7 +116,7 @@
 
         .logo { width: 50px; height: auto; }
         .header-logo-wrap {
-            background: #eab308;
+            background: #c8d43a;
             padding: 0.35rem 0.6rem;
             border-radius: 8px;
             display: inline-block;
@@ -125,8 +125,8 @@
             font-weight: 700;
             font-size: 1.25rem;
             letter-spacing: 0.02em;
-            color: #166534;
-            background: #eab308;
+            color: #0a1929;
+            background: #c8d43a;
             padding: 0.35rem 0.6rem;
             border-radius: 8px;
             display: inline-block;
@@ -1563,7 +1563,7 @@
             max-width: 100px;
             min-height: 100px;
             max-height: 100px;
-            border-radius: 12px;
+            border-radius: 50%;
             overflow: hidden;
             border: 3px solid #4a5568;
             background: var(--bg-card);
@@ -1614,7 +1614,7 @@
             background: linear-gradient(135deg, #c8e600, #a0d911);
             color: #1a1a1a;
             padding: 0.6rem 1.25rem;
-            border-radius: 9999px;
+            border-radius: 8px;
             font-size: 1.1rem;
             font-weight: 800;
             text-transform: uppercase;
@@ -1680,7 +1680,7 @@
             gap: 0.5rem;
             background: var(--bg-card);
             border: 1px solid var(--border-color);
-            border-radius: 9999px;
+            border-radius: 8px 8px 0 0;
             padding: 0.5rem 0.75rem;
             cursor: pointer;
             transition: all 0.2s;
@@ -1926,10 +1926,10 @@
             align-items: center;
             justify-content: center;
             padding: 0.4rem 0.5rem;
-            background: #4b5563;
+            background: var(--bg-input);
             border: 1px solid var(--border-color);
             color: #b8c5d6;
-            border-radius: 9999px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 0.75rem;
             min-width: 60px;
@@ -1974,12 +1974,11 @@
             border-color: #5a9ad9;
         }
 
-        /* Analysis Tools - square with dashed red outline (match Profile IQ reference) */
+        /* Tool tabs - purple to distinguish from data tabs */
         .tab-btn.tool-tab {
-            background: rgba(139, 92, 246, 0.2);
+            background: rgba(139, 92, 246, 0.15);
             border: 1px dashed rgba(239, 68, 68, 0.55);
             color: #c4b5fd;
-            border-radius: 8px;
         }
 
         .tab-btn.tool-tab:hover {
@@ -2082,8 +2081,8 @@
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: var(--text-secondary);
-            margin-top: 0.1rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-top: 0.25rem;
             order: 2;
             padding-left: 0;
         }
@@ -20800,7 +20799,7 @@
                 return qGeStart && qLeEnd;
             }
             
-            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
+            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Crosswalk Net Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
             
             // Sort quarters based on mode
             let sortedQuarters;
@@ -20854,10 +20853,11 @@
                     ? ((endConsumers - startConsumers) / startConsumers) * 100
                     : (startConsumers > 0 ? (netGrowthCount / startConsumers) * 100 : 0);
                 const growthPct = growthPctNum.toFixed(2);
-                // Net Growth as decimal rate (from underlying data): (end - start) / start
-                const netGrowthRate = startConsumers > 0 && endConsumers != null
-                    ? (endConsumers - startConsumers) / startConsumers
-                    : (startConsumers > 0 ? netGrowthCount / startConsumers : 0);
+                // Net Growth = actual count of growth/loss (end consumers - start consumers)
+                const netGrowthCountActual = (endConsumers != null && startConsumers != null)
+                    ? (endConsumers - startConsumers)
+                    : netGrowthCount;
+                const netGrowthDisplay = (netGrowthCountActual >= 0 ? '+' : '') + Number(netGrowthCountActual).toLocaleString();
                 
                 // SEC Actuals: use value as entered (key match quarter string)
                 const secActualKey = q;
@@ -20876,8 +20876,7 @@
                 
                 const rowStyle = inKpiRange ? 'border-bottom: 1px solid var(--border-color); background: rgba(0, 230, 230, 0.08);' : 'border-bottom: 1px solid var(--border-color);';
                 const titleAttr = inKpiRange ? ` title="KPI for this period: ${(kpiChange.label || '').replace(/"/g, '&quot;')}"` : '';
-                const netGrowthDisplay = (typeof netGrowthRate === 'number' && !isNaN(netGrowthRate)) ? netGrowthRate.toFixed(16).replace(/\.?0+$/, '') : '0';
-                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowthRate >= 0 ? '#10b981' : '#ef4444'};">${netGrowthDisplay}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
+                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowthCountActual >= 0 ? '#10b981' : '#ef4444'};">${netGrowthDisplay}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
             });
             
             html += '</tbody></table>';
@@ -20983,7 +20982,7 @@
             };
             const datasets = [
                 { label: 'Net Growth', data: netGrowthData, borderColor: accentCyan, backgroundColor: 'rgba(0, 255, 255, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
-                { label: 'Growth %', data: growthPctData, borderColor: green, backgroundColor: 'rgba(16, 185, 129, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
+                { label: 'Crosswalk Net Growth %', data: growthPctData, borderColor: green, backgroundColor: 'rgba(16, 185, 129, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
                 { label: 'SEC Actuals %', data: secActualsData, borderColor: blue, backgroundColor: 'rgba(59, 130, 246, 0.15)', fill: false, tension: 0.3, pointRadius: 4 }
             ];
             const ctx = canvas.getContext('2d');
