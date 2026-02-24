@@ -15235,28 +15235,26 @@ def enforce_search_engine_google_top(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def sort_search_engine_by_raw_desc(df: pd.DataFrame) -> pd.DataFrame:
-    """Sort SEARCH ENGINE category rows by 'Original Raw Numbers' descending.
+    """Sort SEARCH ENGINE and SEARCH ENGINE/AI category rows by 'Original Raw Numbers' descending.
 
-    Only reorders rows within that category; leaves other categories untouched.
+    Only reorders rows within those categories; leaves other categories and their positions untouched.
     """
     import pandas as pd
     if df is None or df.empty:
         return df
     df = df.copy()
-    cat_mask = df['Column'].astype(str).str.upper() == 'SEARCH ENGINE'
+    col_upper = df['Column'].astype(str).str.upper()
+    cat_mask = (col_upper == 'SEARCH ENGINE') | (col_upper == 'SEARCH ENGINE/AI')
     if not cat_mask.any() or 'Original Raw Numbers' not in df.columns:
         return df
     seg = df.loc[cat_mask].copy()
-    # Use the correct column name that exists at this point in the pipeline
     raw_col = 'Original Raw Numbers (Database)' if 'Original Raw Numbers (Database)' in seg.columns else 'Original Raw Numbers'
     seg['RAW'] = pd.to_numeric(seg[raw_col].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
     seg_sorted = seg.sort_values(by='RAW', ascending=False).drop(columns=['RAW'])
-    # Rebuild df: non-search rows, then sorted search rows in the same relative block position
-    non_seg = df.loc[~cat_mask]
-    df_sorted = pd.concat([non_seg, seg_sorted], axis=0)
-    # Preserve original column order
-    df_sorted = df_sorted[df.columns]
-    return df_sorted
+    # Write sorted rows back into original positions so category block stays in place
+    cols = [c for c in df.columns if c in seg_sorted.columns]
+    df.loc[cat_mask, cols] = seg_sorted[cols].values
+    return df
 
 def sort_streaming_platform_by_raw_desc(df: pd.DataFrame) -> pd.DataFrame:
     """Sort STREAMING/PLATFORM(S) category rows by 'Original Raw Numbers' descending.
