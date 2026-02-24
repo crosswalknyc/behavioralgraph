@@ -2020,13 +2020,13 @@
             border: 1px dashed rgba(239, 68, 68, 0.5);
         }
         
-        /* Profile + Toolbar: one row (title/image left, toolbar right) */
+        /* Profile + Toolbar: one row (title/image left, toolbar right); tight spacing below to match top */
         .profile-and-toolbar-row {
             display: flex;
             align-items: center;
             gap: 0.9rem;
             flex-wrap: wrap;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.1rem;
             padding: 0.15rem 0;
             transition: all 0.3s ease;
         }
@@ -2576,13 +2576,13 @@
             position: relative;
         }
         
-        /* Action row: first column = sidebar width (280px), gap = 1rem, header never starts before this mark */
+        /* Action row: first column = sidebar width (280px), gap = 1rem, header never starts before this mark; tight top margin to match padding above profile */
         .action-buttons-row {
             display: grid;
             grid-template-columns: minmax(280px, 280px) 1fr;
             gap: 1rem;
             align-items: center;
-            margin-top: 0.4rem;
+            margin-top: 0.1rem;
             margin-bottom: 0.35rem;
             min-width: 0;
         }
