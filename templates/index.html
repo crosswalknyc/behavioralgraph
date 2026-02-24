@@ -20804,7 +20804,7 @@
                 return qGeStart && qLeEnd;
             }
             
-            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Crosswalk Net Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
+            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Customers</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Crosswalk Net Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
             
             // Sort quarters based on mode
             let sortedQuarters;
@@ -20846,7 +20846,7 @@
                 // Insert divider row before the first quarter in the KPI change range
                 if (kpiChange && inKpiRange && !insertedKpiDivider) {
                     const dividerLabel = (kpiChange.label || 'Different KPI').replace(/</g, '&lt;');
-                    html += `<tr style="border-top: 2px solid var(--accent-cyan); border-bottom: 1px solid var(--border-color); background: var(--bg-input);"><td colspan="7" style="padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600;">KPI Below Denotes: ${dividerLabel}</td></tr>`;
+                    html += `<tr style="border-top: 2px solid var(--accent-cyan); border-bottom: 1px solid var(--border-color); background: var(--bg-input);"><td colspan="8" style="padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600;">KPI Below Denotes: ${dividerLabel}</td></tr>`;
                     insertedKpiDivider = true;
                 }
                 
@@ -20881,7 +20881,8 @@
                 
                 const rowStyle = inKpiRange ? 'border-bottom: 1px solid var(--border-color); background: rgba(0, 230, 230, 0.08);' : 'border-bottom: 1px solid var(--border-color);';
                 const titleAttr = inKpiRange ? ` title="KPI for this period: ${(kpiChange.label || '').replace(/"/g, '&quot;')}"` : '';
-                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowthCountActual >= 0 ? '#10b981' : '#ef4444'};">${netGrowthDisplay}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
+                const totalCustomersDisplay = endConsumers != null ? Number(endConsumers).toLocaleString() : '-';
+                html += `<tr style="${rowStyle}"${titleAttr}><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${totalCustomersDisplay}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowthCountActual >= 0 ? '#10b981' : '#ef4444'};">${netGrowthDisplay}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
             });
             
             html += '</tbody></table>';
