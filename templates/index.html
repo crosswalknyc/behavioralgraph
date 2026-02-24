@@ -14225,9 +14225,6 @@
                 <!-- Comparison Analysis Tabs with Action Buttons -->
                 <div class="comp-analysis-tabs">
                     <button class="comp-tab active" onclick="showCompTab('tables')">📊 Side-by-Side</button>
-                    <button class="comp-tab" data-feature="overlapAnalysis" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
-                    <button class="comp-tab" data-feature="benchmarking" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
-                    <button class="comp-tab" data-feature="gapAnalysis" onclick="showCompTab('gap')">🎯 Gap Analysis</button>
                     <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section">
                             <option value="">📍 Jump to...</option>
                         </select>
@@ -14274,51 +14271,6 @@
                                     <div class="comparison-empty">
                                         <p>Select profiles from the left to compare</p>
                                         <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Overlap Analysis Tab -->
-                            <div id="comp-tab-overlap" class="comp-tab-content">
-                                <div class="overlap-analysis">
-                                    <div class="overlap-header">
-                                        <h3>🔄 Audience Overlap Analysis</h3>
-                                        <p>Discover shared behaviors and unique differentiators between profiles</p>
-                                    </div>
-                                    <div id="overlapContent">
-                                        <div class="comparison-empty">
-                                            <p>Run a comparison to see overlap analysis</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Benchmarking Tab -->
-                            <div id="comp-tab-benchmark" class="comp-tab-content">
-                                <div class="benchmark-analysis">
-                                    <div class="benchmark-header">
-                                        <h3>📈 Competitive Benchmarking</h3>
-                                        <p>Compare selected profiles against General Population and category averages</p>
-                                    </div>
-                                    <div id="benchmarkContent">
-                                        <div class="comparison-empty">
-                                            <p>Run a comparison to see benchmarking data</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Gap Analysis Tab -->
-                            <div id="comp-tab-gap" class="comp-tab-content">
-                                <div class="gap-analysis">
-                                    <div class="gap-header">
-                                        <h3>🎯 Gap Analysis</h3>
-                                        <p>Identify behavioral gaps and opportunities between profiles</p>
-                                    </div>
-                                    <div id="gapContent">
-                                        <div class="comparison-empty">
-                                            <p>Run a comparison to see gap analysis</p>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -15708,11 +15660,7 @@
             deckBuilder: true,
             rankers: true,
             // Insights Sub Tabs
-            insightsSummary: true,
-            // Compare sub-tabs
-            overlapAnalysis: true,
-            benchmarking: true,
-            gapAnalysis: true
+            insightsSummary: true
         };
         
         // User info variables (needed early for deck/slide rendering)
@@ -25445,7 +25393,7 @@
             media: '<strong>Media</strong> — Streaming, social, audio preferences and platform usage patterns for this audience.',
             content: '<strong>Content</strong> — Content development insights including talent, genres, and platform opportunities.',
             segmentation: '<strong>Segment</strong> — Build custom audience segments with demographic and behavioral filters.',
-            comparison: '<strong>Compare</strong> — Side-by-side profile comparison with overlap analysis and benchmarking.'
+            comparison: '<strong>Compare</strong> — Side-by-side profile comparison.'
         };
         
         // Tab header titles and descriptions for inline header
@@ -47352,27 +47300,19 @@
         // ============================================================================
         
         function showCompTab(tabName) {
-            // Update tab buttons
+            if (tabName !== 'tables') return;
             document.querySelectorAll('.comp-tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            // Update tab content
+            if (event && event.target) event.target.classList.add('active');
             document.querySelectorAll('.comp-tab-content').forEach(c => c.classList.remove('active'));
-            document.getElementById('comp-tab-' + tabName).classList.add('active');
-            
-            // Generate content if needed
-            if (tabName === 'overlap' && window.comparisonProfilesData) {
-                renderOverlapAnalysis(window.comparisonProfilesData);
-            } else if (tabName === 'benchmark' && window.comparisonProfilesData) {
-                renderBenchmarkAnalysis(window.comparisonProfilesData);
-            } else if (tabName === 'gap' && window.comparisonProfilesData) {
-                renderGapAnalysis(window.comparisonProfilesData);
-            }
+            const panel = document.getElementById('comp-tab-' + tabName);
+            if (panel) panel.classList.add('active');
         }
         
         function renderOverlapAnalysis(profiles) {
+            const el = document.getElementById('overlapContent');
+            if (!el) return;
             if (!profiles || profiles.length < 2) {
-                document.getElementById('overlapContent').innerHTML = '<div class="comparison-empty"><p>Select at least 2 profiles to see overlap analysis</p></div>';
+                el.innerHTML = '<div class="comparison-empty"><p>Select at least 2 profiles to see overlap analysis</p></div>';
                 return;
             }
             
@@ -47565,8 +47505,8 @@
                     `).join('')}
                 </div>
             `;
-            
-            document.getElementById('overlapContent').innerHTML = html;
+            const overlapEl = document.getElementById('overlapContent');
+            if (overlapEl) overlapEl.innerHTML = html;
         }
         
         // Store benchmark data globally for category deep dive
@@ -47587,8 +47527,10 @@
         };
         
         function renderBenchmarkAnalysis(profiles) {
+            const el = document.getElementById('benchmarkContent');
+            if (!el) return;
             if (!profiles || profiles.length < 1) {
-                document.getElementById('benchmarkContent').innerHTML = '<div class="comparison-empty"><p>Run a comparison to see benchmarking data</p></div>';
+                el.innerHTML = '<div class="comparison-empty"><p>Run a comparison to see benchmarking data</p></div>';
                 return;
             }
             
@@ -47978,8 +47920,8 @@
                     ` : '<div></div>'}
                 </div>
             `;
-            
-            document.getElementById('benchmarkContent').innerHTML = html;
+            const benchEl = document.getElementById('benchmarkContent');
+            if (benchEl) benchEl.innerHTML = html;
         }
         
         // Category Deep Dive function
@@ -48118,8 +48060,10 @@
         }
         
         function renderGapAnalysis(profiles) {
+            const el = document.getElementById('gapContent');
+            if (!el) return;
             if (!profiles || profiles.length < 2) {
-                document.getElementById('gapContent').innerHTML = '<div class="comparison-empty"><p>Select at least 2 profiles to see gap analysis</p></div>';
+                el.innerHTML = '<div class="comparison-empty"><p>Select at least 2 profiles to see gap analysis</p></div>';
                 return;
             }
             
@@ -48474,8 +48418,8 @@
                     </div>
                 </div>
             `;
-            
-            document.getElementById('gapContent').innerHTML = html;
+            const gapEl = document.getElementById('gapContent');
+            if (gapEl) gapEl.innerHTML = html;
         }
         
         // Helper: click handler for gap category cards
