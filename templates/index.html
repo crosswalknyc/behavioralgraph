@@ -1977,7 +1977,7 @@
         /* Tool tabs - purple to distinguish from data tabs */
         .tab-btn.tool-tab {
             background: rgba(139, 92, 246, 0.15);
-            border: 1px dashed rgba(239, 68, 68, 0.55);
+            border: 1px solid rgba(139, 92, 246, 0.4);
             color: #c4b5fd;
         }
 
@@ -2008,7 +2008,7 @@
         }
         
         .tab-btn.tool-tab.admin-only {
-            border: 1px dashed rgba(239, 68, 68, 0.5);
+            border: 1px solid rgba(139, 92, 246, 0.5);
         }
         .comp-tab.admin-only {
             border: 1px dashed rgba(239, 68, 68, 0.5);
@@ -2074,7 +2074,7 @@
             display: flex;
             flex-direction: column;
             gap: 0.15rem;
-            align-items: center;
+            align-items: flex-start;
         }
         .toolbar-section-label {
             font-size: 0.65rem;
@@ -2085,6 +2085,7 @@
             margin-top: 0.1rem;
             order: 2;
             padding-left: 0;
+            text-align: left;
         }
         .toolbar-section .dashboard-tabs {
             order: 1;
