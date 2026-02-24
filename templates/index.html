@@ -26853,6 +26853,7 @@
             trackActivity('profile_view', profileId);
             
             // Load and display the profile data (with auto-retry at released S3 location if 404 on purgatory key)
+            let profileLoadSucceeded = false;
             try {
                 let response = await fetch(`/api/get-csv-data/${encodeURIComponent(profileId)}`, { credentials: 'same-origin' });
                 if (response.status === 401) { window.location.href = '/login'; return; }
@@ -26895,6 +26896,7 @@
                 }
 
                 if (data.success && data.data) {
+                    profileLoadSucceeded = true;
                     const parsed = parseAllData(data.data);
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === effectiveId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
@@ -26913,7 +26915,11 @@
                     saveOpenTabs();
                     renderProfileTabsBar();
                     renderDashboardProfileTree(dashboardProfiles);
-                    displayProfileTabData(newTab);
+                    try {
+                        displayProfileTabData(newTab);
+                    } catch (displayErr) {
+                        console.error('Error displaying profile:', displayErr);
+                    }
                 } else {
                     const is404 = response.status === 404;
                     const msg = is404
@@ -26928,11 +26934,13 @@
                 }
             } catch (error) {
                 console.error('Error loading profile:', error);
-                const msg = 'Failed to load profile. Click ↻ to refresh the profile list and try again.';
-                if (typeof showNotification === 'function') {
-                    showNotification(msg, 'error');
-                } else {
-                    alert(msg);
+                if (!profileLoadSucceeded) {
+                    const msg = 'Failed to load profile. Click ↻ to refresh the profile list and try again.';
+                    if (typeof showNotification === 'function') {
+                        showNotification(msg, 'error');
+                    } else {
+                        alert(msg);
+                    }
                 }
             }
         }
