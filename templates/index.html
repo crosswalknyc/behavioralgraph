@@ -7922,27 +7922,6 @@
             color: var(--text-primary);
         }
 
-        /* Comparison: SELECT PROFILE label in a pill bubble */
-        .comp-select-label {
-            display: inline-flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 0.4rem 0.9rem;
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: #fff;
-            background: #7c3aed;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            line-height: 1.35;
-            margin-bottom: 0.75rem;
-            border-radius: 999px;
-            border: none;
-        }
-        .comp-select-label .line1 { display: block; }
-        .comp-select-label .line2 { display: block; }
-
         /* Comparison: pill buttons row (purple count + grey clear) */
         .comp-pills-row {
             display: flex;
@@ -8414,22 +8393,6 @@
             min-width: 55px;
             text-align: left;
             font-size: 0.75rem;
-        }
-
-        .comp-chart-type-btn {
-            padding: 0.1rem 0.35rem;
-            font-size: 0.75rem;
-            line-height: 1;
-            background: rgba(255,255,255,0.15);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            color: var(--text-primary);
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-        .comp-chart-type-btn:hover {
-            background: rgba(90, 154, 217, 0.3);
-            border-color: var(--accent-blue);
         }
 
         .comp-bar-cell.column-chart {
@@ -14235,7 +14198,6 @@
                     <div class="comparison-container">
                         <div class="comparison-sidebar">
                             <div class="sidebar-section">
-                                <span class="comp-select-label"><span class="line1">SELECT</span><span class="line2">PROFILE:</span></span>
                                 <div style="background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.75rem; font-size: 0.75rem;">
                                     💡 <strong>All open tabs</strong> and <strong>Gen Pop</strong> are auto-selected for comparison
                                 </div>
@@ -46367,18 +46329,14 @@
                 }
             });
 
-            // Helper to create sortable header with median age (only shown for age section) and bar/column toggle
+            // Helper to create sortable header with median age (only shown for age section)
             const sortableHeader = (section, idx, name, color, medianAge) => {
                 const isSorted = sortSection === section && sortProfileIdx === idx;
                 const isPrimary = idx === primaryProfileIndex;
                 const primaryClass = isPrimary ? 'primary-col' : '';
-                const chartType = getComparisonChartType(section, idx);
-                const chartTitle = chartType === 'column' ? 'Switch to bar chart (horizontal)' : 'Switch to column chart (vertical)';
-                const chartIcon = chartType === 'column' ? '▬' : '▯';
-                const chartToggleBtn = `<button type="button" class="comp-chart-type-btn" onclick="event.stopPropagation(); toggleComparisonColumnChart('${section}', ${idx})" title="${chartTitle}">${chartIcon}</button>`;
                 const ageDisplay = (section === 'age' && medianAge > 0) ? `<span class="header-median-age" title="Median Age">Median: ${medianAge.toFixed(2)}</span>` : '';
                 const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
-                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})"><span style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap;">${name}${sortIndicator} ${chartToggleBtn} ${ageDisplay}</span></th>`;
+                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})"><span style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap;">${name}${sortIndicator} ${ageDisplay}</span></th>`;
             };
             
             // Helper to generate export menu HTML for comparison sections (Export section = current; Export all = all segments)
