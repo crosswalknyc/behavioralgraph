@@ -48941,25 +48941,25 @@
             modal.className = 'deck-workspace-modal';
             modal.id = modalId;
             const optionsHtml = options.map(o => `
-                <label class="module-select-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">
+                <label class="module-select-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; text-align: left;">
                     <input type="checkbox" class="comp-export-section-check" value="${escapeHtml(o.value)}" checked>
-                    <span>${escapeHtml(o.label)}</span>
+                    <span style="text-align: left;">${escapeHtml(o.label)}</span>
                 </label>
             `).join('');
             modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 420px;">
-                    <div class="deck-workspace-header">
-                        <h2>Select sections for CSV</h2>
+                <div class="deck-workspace-content" style="max-width: 420px; text-align: left;">
+                    <div class="deck-workspace-header" style="text-align: left;">
+                        <h2 style="text-align: left;">Select sections for CSV</h2>
                         <button onclick="document.getElementById('${modalId}').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
-                    <div style="padding: 1rem;">
-                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Choose which sections to include in one CSV file.</p>
-                        <div style="margin-bottom: 0.75rem; display: flex; gap: 0.5rem;">
+                    <div style="padding: 1rem; text-align: left;">
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; text-align: left;">Choose which sections to include in one CSV file.</p>
+                        <div style="margin-bottom: 0.75rem; display: flex; gap: 0.5rem; justify-content: flex-start;">
                             <button type="button" onclick="document.querySelectorAll('.comp-export-section-check').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Select all</button>
                             <button type="button" onclick="document.querySelectorAll('.comp-export-section-check').forEach(c => c.checked = false)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Clear</button>
                         </div>
-                        <div style="max-height: 40vh; overflow-y: auto;">${optionsHtml}</div>
-                        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                        <div style="max-height: 40vh; overflow-y: auto; text-align: left;">${optionsHtml}</div>
+                        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-start;">
                             <button class="btn btn-secondary" onclick="document.getElementById('${modalId}').remove()">Cancel</button>
                             <button class="btn btn-primary" onclick="exportComparisonSelectedSectionsCSV(); document.getElementById('${modalId}').remove();">Download CSV</button>
                         </div>
