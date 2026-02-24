@@ -20860,14 +20860,13 @@
                 const netGrowthCount = data.subs - data.cancels;
                 const startConsumers = data.startConsumers != null ? Number(data.startConsumers) : 0;
                 const endConsumers = data.endConsumers != null ? Number(data.endConsumers) : 0;
-                const growthPctNum = startConsumers > 0 && endConsumers != null
-                    ? ((endConsumers - startConsumers) / startConsumers) * 100
-                    : (startConsumers > 0 ? (netGrowthCount / startConsumers) * 100 : 0);
+                // Crosswalk Net Growth % = (Total Subs - Total Cancels) / start-of-quarter customers (flow-based, ties to table)
+                const impliedStartConsumers = (endConsumers != null && endConsumers >= netGrowthCount) ? (endConsumers - netGrowthCount) : null;
+                const denominator = (impliedStartConsumers != null && impliedStartConsumers > 0) ? impliedStartConsumers : startConsumers;
+                const growthPctNum = denominator > 0 ? (netGrowthCount / denominator) * 100 : 0;
                 const growthPct = growthPctNum.toFixed(2);
-                // Net Growth = actual count of growth/loss (end consumers - start consumers)
-                const netGrowthCountActual = (endConsumers != null && startConsumers != null)
-                    ? (endConsumers - startConsumers)
-                    : netGrowthCount;
+                // Net Growth = Total Subs - Total Cancels (consistent with table columns)
+                const netGrowthCountActual = netGrowthCount;
                 const netGrowthDisplay = (netGrowthCountActual >= 0 ? '+' : '') + Number(netGrowthCountActual).toLocaleString();
                 
                 // SEC Actuals: use value as entered (key match quarter string)
