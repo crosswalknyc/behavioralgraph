@@ -26650,16 +26650,21 @@
             }
             
             // Normal hierarchical view when not searching
-            // Group by master category, then by sub-category
+            // Group by master category, then by sub-category (normalize so "Streaming Video" and "STREAMING VIDEO" merge as STREAMING VIDEO)
+            const normalizeSubCategoryKey = (cat) => {
+                const u = (cat || '').toUpperCase().trim();
+                if (u === 'STREAMING VIDEO') return 'STREAMING VIDEO';
+                return cat || 'UNCATEGORIZED';
+            };
             const byMasterCategory = {};
             profiles.forEach(p => {
                 const cat = p.category || 'UNCATEGORIZED';
-                // Check if this is a SVOD file (has is_svod flag or key starts with svod-acquisition/)
+                const subKey = normalizeSubCategoryKey(cat);
                 const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
                 const masterCat = getMasterCategory(cat, isSvod);
                 if (!byMasterCategory[masterCat]) byMasterCategory[masterCat] = {};
-                if (!byMasterCategory[masterCat][cat]) byMasterCategory[masterCat][cat] = [];
-                byMasterCategory[masterCat][cat].push(p);
+                if (!byMasterCategory[masterCat][subKey]) byMasterCategory[masterCat][subKey] = [];
+                byMasterCategory[masterCat][subKey].push(p);
             });
 
             // Master categories allowed in profile selector (SVOD ACQUISITION, MUSIC, OTHER never shown)
