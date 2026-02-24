@@ -43,17 +43,17 @@ def format_gen_pop(number):
 def calculate_inflation_factor(raw_value):
     """
     Calculate the inflation factor for a given raw value.
-    Uses same logic as bg.py: try 65x first, then scale down to 55x, 25x, 5x, 2.5x, or 1x
+    Uses same logic as bg.py: try 55x first, then scale down to 25x, 5x, 2.5x, or 1x
     so the result never exceeds 10M (SAMPLE_REPRESENTS).
     This ensures both Profile IQ and Subscriber IQ produce matching sample sizes.
     """
     MAX_ALLOWED_VALUE = SAMPLE_REPRESENTS  # 10,000,000
     
     if raw_value <= 0:
-        return 65  # Default to max inflation for zero/negative values
+        return 55  # Default to max inflation for zero/negative values
     
     # Same inflation options as bg.py
-    INFLATION_OPTIONS = [65, 55, 25, 5, 2.5, 1]
+    INFLATION_OPTIONS = [55, 25, 5, 2.5, 1]
     
     for mult in INFLATION_OPTIONS:
         if raw_value * mult <= MAX_ALLOWED_VALUE:
@@ -771,7 +771,7 @@ def run_query(conn, p):
         , 2) FROM TEMP_NEW_PLATFORM_SIGNUPS) AS TOTAL_SHOW_CONVERSION_RATE
     """
     df_summary = pd.read_sql(summary_sql, conn)
-    # Apply same sample size inflation as bg.py: try 65x, 55x, 25x, 5x, 2.5x, or 1x (whichever keeps result ≤10M)
+    # Apply same sample size inflation as bg.py: try 55x, 25x, 5x, 2.5x, or 1x (whichever keeps result ≤10M)
     # This ensures both Profile IQ and Subscriber IQ produce matching sample sizes for the same search
     if 'TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']):
         raw_show_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])
@@ -1263,7 +1263,7 @@ def run_query(conn, p):
     print("=" * 60 + "\n")
 
     # Apply same sample size inflation as bg.py to all count-based numbers
-    # Uses consistent inflation factor (65x, 55x, 25x, 5x, 2.5x, or 1x) calculated from base sample
+    # Uses consistent inflation factor (55x, 25x, 5x, 2.5x, or 1x) calculated from base sample
     # This ensures both Profile IQ and Subscriber IQ produce matching sample sizes
     
     # TOTAL_SHOW_WATCHERS already inflated earlier - get the inflation factor that was used
@@ -1271,7 +1271,7 @@ def run_query(conn, p):
     raw_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if ('NEW_SIGNUPS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS'])) else 0
     
     # Calculate inflation factor for NEW_SIGNUPS (same logic as bg.py)
-    inflation_factor = calculate_inflation_factor(raw_new_signups) if raw_new_signups > 0 else 65
+    inflation_factor = calculate_inflation_factor(raw_new_signups) if raw_new_signups > 0 else 55
     print(f"🔥 Applying {inflation_factor}x inflation factor to all count-based numbers (same as bg.py)...\n")
     
     # Inflate NEW_SIGNUPS with consistent inflation factor
