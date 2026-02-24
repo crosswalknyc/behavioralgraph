@@ -8336,17 +8336,18 @@
             font-weight: 500;
             background: var(--bg-input);
         }
-        /* Equal-width data columns so bar charts use the same scale visually (same % = same bar length) */
-        .comp-table td:not(:first-child) {
-            width: 180px;
-            min-width: 180px;
-            max-width: 180px;
+        /* Display column: as narrow as content needs so data columns get more space */
+        .comp-table th:first-child,
+        .comp-table td:first-child {
+            width: 1%;
+            max-width: 220px;
+            white-space: nowrap;
             box-sizing: border-box;
         }
+        /* Data columns: equal width, share remaining space (no explicit width = equal split; bars stay commensurate) */
+        .comp-table td:not(:first-child),
         .comp-table th:not(:first-child) {
-            width: 180px;
-            min-width: 180px;
-            max-width: 180px;
+            min-width: 140px;
             box-sizing: border-box;
         }
 
