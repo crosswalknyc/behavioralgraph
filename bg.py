@@ -201,7 +201,7 @@ All brand input entries in the output CSV will have:
 1.  Data Loading → Load from Snowflake database
 2.  Normalization → Standardize category/value names
 3.  🔄 ESPN Layer 1: consolidate_espn_brands() - Initial ESPN+/ESPN merge
-4.  Set Raw Numbers → From percentages using sample size (55x max down to 1x, capped at 10M)
+4.  Set Raw Numbers → From percentages using sample size (35x max down to 1x, capped at 10M)
 5.  2x Boost → All behavioral categories
 6.  Sports 40x/4.36x Boost → Major leagues and other sports
 7.  Dynamic Threshold Boosts → SEARCH ENGINE/AI (65% threshold)
@@ -223,7 +223,7 @@ All brand input entries in the output CSV will have:
 ================================================================================
 
 Sample Size Inflation:
-  - get_final_sample_size(): INFLATION_FACTOR = 55, 25, 5, 2.5, or 1 (stays ≤10M)
+  - get_final_sample_size(): INFLATION_FACTOR = 35, 25, 5, 2.5, or 1 (stays ≤10M)
 
 Boosting Functions:
   - Lines 4650-4698: boost_all_behavioral_by_2x()
@@ -263,7 +263,7 @@ Additional Boosting:
 ================================================================================
 
 To modify behavior:
-- Sample size inflation: 55x max down to 1x intelligently scaled to stay ≤10M
+- Sample size inflation: 35x max down to 1x intelligently scaled to stay ≤10M
 - Universal boost: Modify multiplier in boost_all_behavioral_by_2x() (Line 4693)
 - Sports boost: Modify multipliers in boost_sports_categories_by_436x() (Line 6020, 6023) - ALL teams boosted
 - Dynamic thresholds: Change min_threshold values (Lines 4028-4031)
@@ -3952,9 +3952,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # INFLATE SAMPLE SIZE: try 55x first, then scale down to 25x, 5x, 2.5x, or 1x
-        # so the result never exceeds 10M (max boost capped at 55x)
-        INFLATION_OPTIONS = [55, 25, 5, 2.5, 1]
+        # INFLATE SAMPLE SIZE: try 35x first, then scale down to 25x, 5x, 2.5x, or 1x
+        # so the result never exceeds 10M (max boost capped at 35x)
+        INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
         INFLATION_FACTOR = 1
         for mult in INFLATION_OPTIONS:
             if bounded * mult <= GENPOP_SAMPLE_CAP:
@@ -3982,8 +3982,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # INFLATE SAMPLE SIZE: try 55x, then scale down to stay under 10M (fallback path)
-        INFLATION_OPTIONS = [55, 25, 5, 2.5, 1]
+        # INFLATE SAMPLE SIZE: try 35x, then scale down to stay under 10M (fallback path)
+        INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
         INFLATION_FACTOR = 1
         for mult in INFLATION_OPTIONS:
             if bounded * mult <= GENPOP_SAMPLE_CAP:
@@ -4018,7 +4018,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         }
     ])
     
-    # SAMPLE SIZE value verified - intelligent inflation (55x max down to 1x) and capped at 10M
+    # SAMPLE SIZE value verified - intelligent inflation (35x max down to 1x) and capped at 10M
 
     # --- Begin: Behavior percentage transformation with added noise ---
     # Apply organic scaling to all behavior categories to ensure reasonable representation
@@ -5144,6 +5144,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = add_brand_penetration_column_using_final_raw(df_final)
     # Compute US Gen Pop projection from finalized raw numbers
     df_final = add_us_gen_pop_projection(df_final)
+    # SEARCH ENGINE/AI: enforce Google ≥65% and ChatGPT ≥25% in Brand Penetration (Row); Category Share sums to 100%; reconfigure raw and US Gen Pop
+    df_final = enforce_search_engine_ai_google_chatgpt_minimums(df_final)
     
     # Cap high brand penetration values to randomized 80-90% range with brand consistency
     df_final = cap_high_brand_penetration(df_final, cap_threshold=92.0, min_cap=80.0, max_cap=90.0)
@@ -5163,7 +5165,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = deduplicate_location_data(df_final)
     
     # scale_raw_numbers_to_universe DISABLED - per user request
-    # SAMPLE SIZE uses intelligent inflation: 55x max down to 1x (capped at 10M)
+    # SAMPLE SIZE uses intelligent inflation: 35x max down to 1x (capped at 10M)
     # All raw numbers will calculate naturally from: (percentage/100) × sample_size
     
     # Recalculate percentages DISABLED - percentages stay as organic counts from database
@@ -6628,6 +6630,109 @@ def boost_category_to_threshold(df: pd.DataFrame, category_name: str, min_thresh
         print(f"  ✅ All {category_name} values boosted by {boost_factor:.2f}x")
     
     return df
+
+
+def enforce_search_engine_ai_google_chatgpt_minimums(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure SEARCH ENGINE/AI: Google Brand Penetration (Row) at least 65% (set to 65.2322–69.9981 if below),
+    ChatGPT at least 25% (set to 25.5552–36.6915 if below). Category Share is recalculated to sum to 100%;
+    Original Raw Numbers and US Gen Pop Projection are reconfigured from the new Brand Penetration (Row)."""
+    import random
+    US_POPULATION = 329_900_000
+    SAMPLE_CAP = 10_000_000
+
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    bp_col = 'Brand Penetration (Row)'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    raw_col = 'Original Raw Numbers'
+    genpop_col = 'US Gen Pop Projection'
+    if bp_col not in df.columns:
+        return df
+
+    cat_name = 'SEARCH ENGINE/AI'
+    cat_mask = df['Column'].astype(str).str.upper() == cat_name
+    if not cat_mask.any():
+        return df
+
+    sample_rows = df[df['Column'].astype(str).str.upper() == 'SAMPLE SIZE']
+    if sample_rows.empty:
+        return df
+    try:
+        raw_val = sample_rows.iloc[0].get(raw_col)
+        sample_size = int(float(str(raw_val).replace(',', ''))) if raw_val else None
+    except (ValueError, TypeError):
+        return df
+    if not sample_size or sample_size <= 0:
+        return df
+
+    cat_indices = df.index[cat_mask].tolist()
+
+    def get_penetration(idx):
+        v = df.at[idx, bp_col]
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return 0.0
+
+    google_idx = None
+    chatgpt_idx = None
+    for idx in cat_indices:
+        val_upper = str(df.at[idx, 'Value']).strip().upper()
+        if val_upper == 'GOOGLE':
+            google_idx = idx
+        if val_upper in ('CHAT GPT', 'CHATGPT'):
+            chatgpt_idx = idx
+
+    changed = False
+    if google_idx is not None:
+        pct = get_penetration(google_idx)
+        if pct < 65.0:
+            target = round(random.uniform(65.2322, 69.9981), 4)
+            df.at[google_idx, bp_col] = target
+            changed = True
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"📈 SEARCH ENGINE/AI: Google Brand Penetration (Row) {pct:.2f}% → {target:.2f}% (min 65%)")
+    if chatgpt_idx is not None:
+        pct = get_penetration(chatgpt_idx)
+        if pct < 25.0:
+            target = round(random.uniform(25.5552, 36.6915), 4)
+            df.at[chatgpt_idx, bp_col] = target
+            changed = True
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"📈 SEARCH ENGINE/AI: ChatGPT Brand Penetration (Row) {pct:.2f}% → {target:.2f}% (min 25%)")
+
+    if not changed:
+        return df
+
+    # Category Share sums to 100%: category_share_i = (Brand Penetration_i / sum(Brand Penetration in category)) * 100
+    total_penetration = sum(get_penetration(i) for i in cat_indices)
+    if total_penetration <= 0:
+        return df
+    for idx in cat_indices:
+        pen = get_penetration(idx)
+        category_share = (pen / total_penetration) * 100.0
+        df.at[idx, cs_col] = round(category_share, 4)
+
+    # Original Raw Numbers from Brand Penetration: raw_i = (penetration_i / 100) * sample_size
+    for idx in cat_indices:
+        pen = get_penetration(idx)
+        raw_i = int((pen / 100.0) * sample_size)
+        df.at[idx, raw_col] = str(raw_i)
+
+    # US Gen Pop Projection from new raw: (raw / SAMPLE_CAP) * US_POPULATION
+    if genpop_col in df.columns:
+        for idx in cat_indices:
+            raw_val = df.at[idx, raw_col]
+            try:
+                raw_i = int(float(str(raw_val).replace(',', '')))
+            except (ValueError, TypeError):
+                raw_i = 0
+            proj = int(round((raw_i / SAMPLE_CAP) * US_POPULATION))
+            df.at[idx, genpop_col] = str(proj)
+
+    return df
+
 
 def boost_sports_categories_by_436x(df: pd.DataFrame) -> pd.DataFrame:
     """Boost sports-related values by additional multipliers (on top of the 3x boost).
