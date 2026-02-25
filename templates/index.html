@@ -15318,67 +15318,6 @@
                                 </select>
                             </div>
                             
-                            <!-- Category Filter (filter behavioral data by category) -->
-                            <div id="categoryFilterContainer" style="margin-bottom: 1rem;">
-                                <label style="font-weight: 600; margin-right: 0.5rem; color: var(--text-primary);">Category Filter:</label>
-                                <select id="categoryFilter" onchange="applyCategoryFilter()" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; min-width: 250px;">
-                                    <option value="">All Categories</option>
-                                    <option value="ACCESSORIES">ACCESSORIES</option>
-                                    <option value="AMUSEMENT PARKS">AMUSEMENT PARKS</option>
-                                    <option value="APP/PLATFORM USAGE">APP/PLATFORM USAGE</option>
-                                    <option value="APPAREL/FOOTWEAR">APPAREL/FOOTWEAR</option>
-                                    <option value="AUTOMOBILE">AUTOMOBILE</option>
-                                    <option value="BANKING">BANKING</option>
-                                    <option value="BEAUTY/WELLNESS">BEAUTY/WELLNESS</option>
-                                    <option value="BETTING">BETTING</option>
-                                    <option value="BROADCAST/CABLE">BROADCAST/CABLE</option>
-                                    <option value="COLLEGE/UNIVERSITY">COLLEGE/UNIVERSITY</option>
-                                    <option value="CREDIT PROVIDER">CREDIT PROVIDER</option>
-                                    <option value="DIGITAL BANKING">DIGITAL BANKING</option>
-                                    <option value="EDUCATION & LEARNING">EDUCATION & LEARNING</option>
-                                    <option value="EVENTS">EVENTS</option>
-                                    <option value="FRANCHISE">FRANCHISE</option>
-                                    <option value="GAMES">GAMES</option>
-                                    <option value="GOLF">GOLF</option>
-                                    <option value="HEALTH & WELLNESS">HEALTH & WELLNESS</option>
-                                    <option value="HEAVY MACHINERY">HEAVY MACHINERY</option>
-                                    <option value="HOME/OUTDOOR">HOME/OUTDOOR</option>
-                                    <option value="INSURANCE">INSURANCE</option>
-                                    <option value="INTEREST">INTEREST</option>
-                                    <option value="INVESTMENTS">INVESTMENTS</option>
-                                    <option value="MEDIA">MEDIA</option>
-                                    <option value="MOST PURCHASED BRANDS">MOST PURCHASED BRANDS</option>
-                                    <option value="MOST PURCHASED CATEGORIES">MOST PURCHASED CATEGORIES</option>
-                                    <option value="MOVIE THEATER">MOVIE THEATER</option>
-                                    <option value="NHL">NHL</option>
-                                    <option value="NON PROFIT/CHARITY">NON PROFIT/CHARITY</option>
-                                    <option value="ORGANIZATIONAL MEMBERSHIPS">ORGANIZATIONAL MEMBERSHIPS</option>
-                                    <option value="PETS">PETS</option>
-                                    <option value="PHARMACY">PHARMACY</option>
-                                    <option value="PODCAST">PODCAST</option>
-                                    <option value="PORN MEDIA">PORN MEDIA</option>
-                                    <option value="QSR">QSR</option>
-                                    <option value="SEARCH ENGINE/AI">SEARCH ENGINE/AI</option>
-                                    <option value="SOCIAL MEDIA">SOCIAL MEDIA</option>
-                                    <option value="SPORTS">SPORTS</option>
-                                    <option value="STREAMING/MUSIC">STREAMING/MUSIC</option>
-                                    <option value="STREAMING/PLATFORM">STREAMING/PLATFORM</option>
-                                    <option value="TALENT">TALENT</option>
-                                    <option value="TECHNOLOGY BRAND">TECHNOLOGY BRAND</option>
-                                    <option value="TECHNOLOGY/DEVICE">TECHNOLOGY/DEVICE</option>
-                                    <option value="TELECOM">TELECOM</option>
-                                    <option value="TENNIS">TENNIS</option>
-                                    <option value="TICKETING">TICKETING</option>
-                                    <option value="TOYS">TOYS</option>
-                                    <option value="TRAVEL">TRAVEL</option>
-                                    <option value="VENUE">VENUE</option>
-                                    <option value="VIRTUAL MVPD FAST">VIRTUAL MVPD FAST</option>
-                                    <option value="WHERE THEY DINE">WHERE THEY DINE</option>
-                                    <option value="WHERE THEY SHOP">WHERE THEY SHOP</option>
-                                    <option value="WORKOUT FACILITY">WORKOUT FACILITY</option>
-                                </select>
-                            </div>
-
                             <!-- Profile Content Container -->
                             <div id="tickerProfileContent">
                                 <div class="loading-placeholder">Loading customer profile...</div>
@@ -18422,6 +18361,7 @@
         
         function applyCategoryFilter() {
             const filterSelect = document.getElementById('categoryFilter');
+            if (!filterSelect) return;
             const selectedCategory = filterSelect.value;
             
             if (!currentProfileData) return;
@@ -18624,6 +18564,10 @@
             
             // Parse the CSV data
             const parsed = parseAllData(csvData);
+            // Projected US = (Crosswalk Respondents / 10M) * 329,900,000 (Hedge Fund IQ consumer profile)
+            if (parsed.sampleSize > 0) {
+                parsed.projectedUS = Math.round((parsed.sampleSize / 10000000) * 329900000);
+            }
             
             // Create inline Profile IQ dashboard
             container.innerHTML = `
@@ -44589,7 +44533,7 @@
 
         function filterJobs() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
-            const categoryFilter = document.getElementById('categoryFilter').value;
+            const categoryFilter = document.getElementById('categoryFilter')?.value || '';
             
             let filtered = allJobs;
             
