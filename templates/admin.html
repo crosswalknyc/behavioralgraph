@@ -1394,6 +1394,7 @@
                 <button class="admin-tab" onclick="showSettingsTab('quickSelects')">⚡ Quick Selects</button>
                 <button class="admin-tab" onclick="showSettingsTab('liveFeatures')">🚀 Live Features</button>
                 <button class="admin-tab" onclick="showSettingsTab('svodPricing')">📺 SVOD Pricing</button>
+                <button class="admin-tab" onclick="showSettingsTab('creditUsageExport')">📊 Credit Usage by Period</button>
                 <button class="admin-tab" id="settingsTabDefaultPhoto" onclick="showSettingsTab('defaultProfilePhoto')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">👤 Default Profile Photo</button>
             </div>
             
@@ -1701,6 +1702,32 @@
                         <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary);">
                             <strong>All values are monthly price per subscriber.</strong> Subscriber IQ lifetime value uses: (Total Signups × monthly price) for monthly revenue; weekly = monthly ÷ 4.33; yearly = monthly × 12.
                         </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Credit Usage by Period Tab -->
+            <div id="settings-tab-creditUsageExport" class="settings-tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📊 Credit Usage by Period</h2>
+                        <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            Export a CSV of all clients and what they used credits on within a date range. Includes username, company, email, date, description, pull type, job ID, and credits used.
+                        </p>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem;">From date</label>
+                                <input type="date" id="creditExportDateFrom" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem;">To date</label>
+                                <input type="date" id="creditExportDateTo" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="exportCreditUsageByPeriod()">📥 Export to CSV</button>
+                        </div>
+                        <p id="creditExportMessage" style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;"></p>
                     </div>
                 </div>
             </div>
@@ -2909,7 +2936,9 @@
                 const createdAt = item.created_at ? formatDateTimePST(item.created_at) : 'Unknown';
                 const sourceLabel = item.source_type === 'svod_acquisition' ? '📺 SVOD' : '🎯 Profile';
                 const imageUrl = item.image_url || '';
-                const titleVal = (item.title || item.project_name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const rawTitle = (item.title || item.project_name || '').trim();
+                const titleForDisplay = rawTitle.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                const titleVal = titleForDisplay.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const purgatoryIdEsc = (item.purgatory_id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 
                 const itemImageUrl = (item.image_url || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -3341,6 +3370,43 @@
             } catch (e) {
                 if (typeof showToast === 'function') showToast(e.message || 'Error saving', true);
                 else alert('Error: ' + e.message);
+            }
+        }
+        
+        async function exportCreditUsageByPeriod() {
+            const dateFrom = document.getElementById('creditExportDateFrom') && document.getElementById('creditExportDateFrom').value;
+            const dateTo = document.getElementById('creditExportDateTo') && document.getElementById('creditExportDateTo').value;
+            const msgEl = document.getElementById('creditExportMessage');
+            if (msgEl) msgEl.textContent = '';
+            if (!dateFrom || !dateTo) {
+                if (msgEl) msgEl.textContent = 'Please select both From date and To date.';
+                if (msgEl) msgEl.style.color = 'var(--accent-orange, #f59e0b)';
+                return;
+            }
+            if (dateFrom > dateTo) {
+                if (msgEl) msgEl.textContent = 'From date must be on or before To date.';
+                if (msgEl) msgEl.style.color = 'var(--accent-red, #ef4444)';
+                return;
+            }
+            const url = `/api/admin/credit-usage-export?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`;
+            try {
+                const res = await fetch(url, { credentials: 'same-origin' });
+                const contentType = res.headers.get('Content-Type') || '';
+                if (contentType.includes('application/json')) {
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || 'Export failed');
+                }
+                if (!res.ok) throw new Error(res.statusText || 'Export failed');
+                const blob = await res.blob();
+                const filename = res.headers.get('Content-Disposition') ? (res.headers.get('Content-Disposition').match(/filename="?([^";]+)"?/) || [])[1] : `credit_usage_${dateFrom}_to_${dateTo}.csv`;
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(a.href);
+                if (msgEl) { msgEl.textContent = 'Export started. If the file did not download, check pop-up blockers.'; msgEl.style.color = 'var(--text-secondary)'; }
+            } catch (e) {
+                if (msgEl) { msgEl.textContent = 'Error: ' + (e.message || 'Export failed'); msgEl.style.color = 'var(--accent-red, #ef4444)'; }
             }
         }
         
