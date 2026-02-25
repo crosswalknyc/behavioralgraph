@@ -6057,7 +6057,7 @@ def boost_all_behavioral_by_2x(df: pd.DataFrame) -> pd.DataFrame:
         'APP/PLATFORM USAGE', 'MEDIA', 'AUTOMOBILE', 'BANKING', 'DIGITAL BANKING', 
         'EDUCATION & LEARNING', 'GAMES', 'WHERE THEY SHOP', 'AMUSEMENT PARKS', 'FRANCHISE', 'INSURANCE',
         'VIRTUAL MVPD FAST', 'TOYS', 'WHERE THEY DINE', 'TECHNOLOGY/DEVICE', 
-        'PORN MEDIA', 'WORKOUT FACILITY', 'MOVIE THEATER', 'INTEREST', 'MOST PURCHASED BRANDS', 
+        'PORN MEDIA', 'WORKOUT FACILITY', 'INTEREST', 'MOST PURCHASED BRANDS', 
         'MOST PURCHASED CATEGORIES', 'STREAMING/CHANNEL', 'STREAMING/MUSIC', 'SOCIAL MEDIA', 
         'SEARCH ENGINE', 'QSR', 'TICKETING', 'CREDIT PROVIDER', 'NON PROFIT/CHARITY', 'EVENTS', 
         'VENUE', 'TRAVEL', 'BETTING', 'INVESTMENTS', 'TELECOM', 'DEVICE', 'TECHNOLOGY', 
@@ -6085,6 +6085,11 @@ def boost_all_behavioral_by_2x(df: pd.DataFrame) -> pd.DataFrame:
     # Categories with 6x boost
     boost_6x_categories = {
         'TALENT'  # Only TALENT gets 6x boost (non-sports)
+    }
+    
+    # Categories with 14x boost
+    boost_14x_categories = {
+        'MOVIE THEATER'
     }
     
     # Categories with 200x boost
@@ -6142,6 +6147,7 @@ def boost_all_behavioral_by_2x(df: pd.DataFrame) -> pd.DataFrame:
     boosted_2x_count = 0
     boosted_3x_count = 0
     boosted_6x_count = 0
+    boosted_14x_count = 0
     boosted_200x_count = 0
     excluded_count = 0
     
@@ -6175,6 +6181,9 @@ def boost_all_behavioral_by_2x(df: pd.DataFrame) -> pd.DataFrame:
             if col in boost_200x_categories:
                 boosted_raw = int(raw * 200)
                 boosted_200x_count += 1
+            elif col in boost_14x_categories:
+                boosted_raw = int(raw * 14)
+                boosted_14x_count += 1
             elif col in boost_6x_categories:
                 boosted_raw = int(raw * 6)
                 boosted_6x_count += 1
@@ -6222,7 +6231,7 @@ def boost_all_behavioral_by_2x(df: pd.DataFrame) -> pd.DataFrame:
             continue
     
     if not SILENCE_VERBOSE_OUTPUT:
-        print(f"🎯 Boost Applied: {boosted_15x_count} entries @ 1.5x, {boosted_15x_conditional_count} entries @ 1.5x (conditional), {boosted_2x_count} entries @ 2x, {boosted_3x_count} entries @ 3x, {boosted_6x_count} entries @ 6x, {boosted_200x_count} entries @ 200x, {excluded_count} entries excluded")
+        print(f"🎯 Boost Applied: {boosted_15x_count} entries @ 1.5x, {boosted_15x_conditional_count} entries @ 1.5x (conditional), {boosted_2x_count} entries @ 2x, {boosted_3x_count} entries @ 3x, {boosted_6x_count} entries @ 6x, {boosted_14x_count} entries @ 14x, {boosted_200x_count} entries @ 200x, {excluded_count} entries excluded")
     
     return df
 
