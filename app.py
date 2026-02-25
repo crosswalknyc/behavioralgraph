@@ -6282,9 +6282,9 @@ def get_profiles_without_images():
     global profile_image_cache, s3_cache
     
     try:
-        # Load caches
-        if not profile_image_cache:
-            load_profile_image_cache()
+        # Load caches (always load profile image cache from S3 so we see latest uploads
+        # across workers; in-memory cache is per-worker and would otherwise be stale)
+        load_profile_image_cache()
         
         if not s3_cache.get('loaded'):
             load_persisted_cache()
