@@ -15,13 +15,13 @@ and reliable brand metrics across all categories.
                     📊 SAMPLE SIZE INFLATION
 ================================================================================
 
-INFLATION FACTOR: Intelligent scaling (55x max down to 1x)
+INFLATION FACTOR: Intelligent scaling (15x max down to 1x)
 ---------------------------------------------------------
-- Try 55x first; if result > 10M, try 25x, 5x, 2.5x, or 1x
+- Try 15x first; if result > 10M, try 5x, 2.5x, or 1x
 - Result capped at 10,000,000 maximum
 - Examples: 
-  • ~182K UIDs → 10M sample size (55x applied, capped)
-  • 200K UIDs → 5M sample size (25x applied)
+  • ~667K UIDs → 10M sample size (15x applied, capped)
+  • 2M UIDs → 5M sample size (2.5x applied)
   • 4M UIDs → 4M sample size (1x, no inflation)
 - All percentages calculated from final sample size
 
@@ -201,7 +201,7 @@ All brand input entries in the output CSV will have:
 1.  Data Loading → Load from Snowflake database
 2.  Normalization → Standardize category/value names
 3.  🔄 ESPN Layer 1: consolidate_espn_brands() - Initial ESPN+/ESPN merge
-4.  Set Raw Numbers → From percentages using sample size (35x max down to 1x, capped at 10M)
+4.  Set Raw Numbers → From percentages using sample size (15x max down to 1x, capped at 10M)
 5.  2x Boost → All behavioral categories
 6.  Sports 40x/4.36x Boost → Major leagues and other sports
 7.  Dynamic Threshold Boosts → SEARCH ENGINE/AI (65% threshold)
@@ -223,7 +223,7 @@ All brand input entries in the output CSV will have:
 ================================================================================
 
 Sample Size Inflation:
-  - get_final_sample_size(): INFLATION_FACTOR = 35, 25, 5, 2.5, or 1 (stays ≤10M)
+  - get_final_sample_size(): INFLATION_FACTOR = 15, 5, 2.5, or 1 (stays ≤10M)
 
 Boosting Functions:
   - Lines 4650-4698: boost_all_behavioral_by_2x()
@@ -263,7 +263,7 @@ Additional Boosting:
 ================================================================================
 
 To modify behavior:
-- Sample size inflation: 35x max down to 1x intelligently scaled to stay ≤10M
+- Sample size inflation: 15x max down to 1x intelligently scaled to stay ≤10M
 - Universal boost: Modify multiplier in boost_all_behavioral_by_2x() (Line 4693)
 - Sports boost: Modify multipliers in boost_sports_categories_by_436x() (Line 6020, 6023) - ALL teams boosted
 - Dynamic thresholds: Change min_threshold values (Lines 4028-4031)
@@ -3952,9 +3952,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # INFLATE SAMPLE SIZE: try 35x first, then scale down to 25x, 5x, 2.5x, or 1x
-        # so the result never exceeds 10M (max boost capped at 35x)
-        INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
+        # INFLATE SAMPLE SIZE: try 15x first, then scale down to 5x, 2.5x, or 1x
+        # so the result never exceeds 10M (max boost capped at 15x)
+        INFLATION_OPTIONS = [15, 5, 2.5, 1]
         INFLATION_FACTOR = 1
         for mult in INFLATION_OPTIONS:
             if bounded * mult <= GENPOP_SAMPLE_CAP:
@@ -3982,8 +3982,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
             bounded = GENPOP_SAMPLE_CAP - buffer_down
         
-        # INFLATE SAMPLE SIZE: try 35x, then scale down to stay under 10M (fallback path)
-        INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
+        # INFLATE SAMPLE SIZE: try 15x, then scale down to stay under 10M (fallback path)
+        INFLATION_OPTIONS = [15, 5, 2.5, 1]
         INFLATION_FACTOR = 1
         for mult in INFLATION_OPTIONS:
             if bounded * mult <= GENPOP_SAMPLE_CAP:
@@ -4018,7 +4018,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         }
     ])
     
-    # SAMPLE SIZE value verified - intelligent inflation (35x max down to 1x) and capped at 10M
+    # SAMPLE SIZE value verified - intelligent inflation (15x max down to 1x) and capped at 10M
 
     # --- Begin: Behavior percentage transformation with added noise ---
     # Apply organic scaling to all behavior categories to ensure reasonable representation
@@ -5165,7 +5165,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = deduplicate_location_data(df_final)
     
     # scale_raw_numbers_to_universe DISABLED - per user request
-    # SAMPLE SIZE uses intelligent inflation: 35x max down to 1x (capped at 10M)
+    # SAMPLE SIZE uses intelligent inflation: 15x max down to 1x (capped at 10M)
     # All raw numbers will calculate naturally from: (percentage/100) × sample_size
     
     # Recalculate percentages DISABLED - percentages stay as organic counts from database
