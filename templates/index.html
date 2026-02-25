@@ -3812,7 +3812,7 @@
             opacity: 1;
         }
 
-        /* Behavioral Tab */
+        /* Behavioral Tab: 3 cols on wide, 2 on small/narrow (e.g. Safari) to avoid cut-off */
         .behavioral-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -3820,7 +3820,7 @@
             width: 100%;
         }
         
-        @media (max-width: 1200px) {
+        @media (max-width: 1400px) {
             .behavioral-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
