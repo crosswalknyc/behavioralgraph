@@ -19120,16 +19120,48 @@
             const container = document.getElementById('tickerProfileTabContent');
             
             const behavioral = parsed.behavioral || {};
-            const categories = Object.keys(behavioral).sort();
+            let categories = Object.keys(behavioral).sort();
+            
+            // Only show categories that are turned on in Admin Quick Settings (Behavioral Categories Access Control)
+            if (typeof hasAllBehavioralCategories !== 'undefined' && typeof allowedBehavioralCategories !== 'undefined') {
+                if (!hasAllBehavioralCategories && allowedBehavioralCategories.length > 0) {
+                    categories = categories.filter(cat => {
+                        const upperCat = cat.toUpperCase();
+                        return allowedBehavioralCategories.some(allowed => {
+                            const upperAllowed = (allowed || '').toUpperCase();
+                            return upperCat === upperAllowed || upperCat.includes(upperAllowed) || upperAllowed.includes(upperCat);
+                        });
+                    });
+                } else if (!hasAllBehavioralCategories && allowedBehavioralCategories.length === 0) {
+                    categories = [];
+                }
+                if (typeof quickSelectBehaviorsExclusions !== 'undefined' && quickSelectBehaviorsExclusions && quickSelectBehaviorsExclusions.length > 0) {
+                    const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => (c || '').toUpperCase()));
+                    categories = categories.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
+                }
+            }
             
             if (categories.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No behavioral data available</p>';
+                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No behavioral data available for categories you have access to.</p>';
                 return;
             }
+            
+            // Build Jump to dropdown options (only for this behavioral tab)
+            const jumpToOptions = categories.map(cat => {
+                const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                return `<option value="ticker-beh-${safeId}">${cat.replace(/</g, '&lt;')}</option>`;
+            }).join('');
             
             // Create the behavioral grid with categories
             let html = `
                 <div id="ticker-tab-behavioral" class="tab-content" style="display: block;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">📍 Jump to:</label>
+                        <select id="tickerBehavioralJumpTo" onchange="jumpToTickerBehavioralCategory(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 200px;">
+                            <option value="">📍 Jump to...</option>
+                            ${jumpToOptions}
+                        </select>
+                    </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1rem;">
             `;
             
@@ -19141,11 +19173,12 @@
                 const sortedItems = [...items].filter(i => (i.pct || 0) < 100).sort((a, b) => (b.pct || 0) - (a.pct || 0)).slice(0, 10);
                 if (sortedItems.length === 0) return;
                 const maxPct = Math.max(...sortedItems.map(i => i.pct || 0), 1);
+                const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
                 
                 html += `
-                    <div class="behavioral-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
+                    <div class="behavioral-card" id="ticker-beh-${safeId}" data-category="${cat.replace(/"/g, '&quot;')}" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
                         <h3 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: var(--accent-cyan); display: flex; justify-content: space-between; align-items: center;">
-                            <span>${cat}</span>
+                            <span>${cat.replace(/</g, '&lt;')}</span>
                             <span class="items-count-badge">${items.length} items</span>
                         </h3>
                         <div class="behavioral-header-row" style="display: flex; align-items: center; padding: 0.35rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; gap: 0.5rem;">
@@ -19183,6 +19216,18 @@
             `;
             
             container.innerHTML = html;
+        }
+        
+        function jumpToTickerBehavioralCategory(value) {
+            if (!value) return;
+            const el = document.getElementById(value);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('highlighted');
+                setTimeout(() => el.classList.remove('highlighted'), 2000);
+            }
+            const dropdown = document.getElementById('tickerBehavioralJumpTo');
+            if (dropdown) dropdown.value = '';
         }
         
         function renderTickerLocationTab(parsed, csvData) {
