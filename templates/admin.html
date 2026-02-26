@@ -8471,7 +8471,7 @@
                     throw new Error(data.error || 'Failed to load tickers');
                 }
                 
-                allTickersData = data.tickers || [];
+                allTickersData = (data.tickers || []).filter(function(t) { return t != null; });
                 
                 // Cache the data
                 localStorage.setItem(CACHE_KEY, JSON.stringify(allTickersData));
@@ -8694,6 +8694,12 @@
         
         async function saveTickerMetadataFromModal() {
             if (!currentTickerInModal) return;
+            // Capture s3_key before any await so we don't read from null after loadTickers() replaces allTickersData
+            const s3KeyToSave = currentTickerInModal.s3_key;
+            if (!s3KeyToSave) {
+                showToast('❌ Error: Missing ticker data. Please refresh and try again.', true);
+                return;
+            }
             
             const tickerSymbol = document.getElementById('tickerSymbol').value.trim();
             const displayName = document.getElementById('tickerDisplayName').value.trim();
@@ -8713,19 +8719,13 @@
             }
             
             try {
-                // Ensure we have s3_key from the ticker object
-                if (!currentTickerInModal.s3_key) {
-                    showToast('❌ Error: Missing ticker data. Please refresh and try again.', true);
-                    return;
-                }
-                
                 const kpiChangeEnabled = document.getElementById('tickerKpiChangeEnabled').checked;
                 const masterTicker = document.getElementById('tickerMasterTicker').value.trim() || null;
                 const response = await fetch('/api/hedge-fund-iq/metadata', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        s3_key: currentTickerInModal.s3_key,
+                        s3_key: s3KeyToSave,
                         ticker_symbol: tickerSymbol || null,
                         display_name: displayName,
                         kpi: kpi,
@@ -8747,8 +8747,7 @@
                     showToast('✅ Ticker metadata saved!');
                     invalidateTickersCache();
                     await loadTickers();
-                    const s3Key = currentTickerInModal.s3_key;
-                    const reopened = allTickersData.find(t => t.s3_key === s3Key);
+                    const reopened = allTickersData.find(t => t && t.s3_key === s3KeyToSave);
                     if (reopened) showTickerDetail(reopened.ticker);
                 } else {
                     showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
