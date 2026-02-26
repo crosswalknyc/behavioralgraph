@@ -1347,6 +1347,11 @@
                                     <input type="text" id="tickerKPI" placeholder="e.g., Disney+ Subscribers" style="font-size: 0.85rem;">
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Master Ticker</label>
+                                    <input type="text" id="tickerMasterTicker" placeholder="e.g., AAPL" style="font-size: 0.85rem;" title="Group this ticker under this category header in Hedge Fund IQ selector. Leave empty for no grouping.">
+                                    <small style="font-size: 0.75rem;">Category header in Hedge Fund IQ ticker selector; tickers with the same Master Ticker are grouped and collapsed.</small>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
                                     <label style="font-size: 0.85rem;">Stock Impact Relevance (%)</label>
                                     <input type="number" id="tickerRelevance" placeholder="0-100" min="0" max="100" step="0.1" style="font-size: 0.85rem;">
                                     <small style="font-size: 0.75rem;">What percentage does this KPI represent of the stock price movement?</small>
@@ -8598,6 +8603,7 @@
             document.getElementById('tickerSymbol').value = ticker.ticker;
             document.getElementById('tickerDisplayName').value = ticker.display_name;
             document.getElementById('tickerKPI').value = ticker.kpi;
+            document.getElementById('tickerMasterTicker').value = ticker.master_ticker || '';
             document.getElementById('tickerRelevance').value = ticker.relevance_percentage || '';
             
             // Tracked KPI change
@@ -8714,6 +8720,7 @@
                 }
                 
                 const kpiChangeEnabled = document.getElementById('tickerKpiChangeEnabled').checked;
+                const masterTicker = document.getElementById('tickerMasterTicker').value.trim() || null;
                 const response = await fetch('/api/hedge-fund-iq/metadata', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -8722,6 +8729,7 @@
                         ticker_symbol: tickerSymbol || null,
                         display_name: displayName,
                         kpi: kpi,
+                        master_ticker: masterTicker,
                         relevance_percentage: relevance_percentage,
                         kpi_change_enabled: kpiChangeEnabled,
                         kpi_change_quarter_start: kpiChangeEnabled ? (document.getElementById('tickerKpiChangeQuarterStart').value || null) : null,

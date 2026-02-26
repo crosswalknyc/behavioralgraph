@@ -3031,6 +3031,19 @@
             color: var(--accent-cyan);
         }
 
+        /* Master Ticker groups: collapsed by default; .open shows items */
+        #tickerTree .sidebar-category-items.master-ticker-items.open {
+            display: block !important;
+        }
+        #tickerTree .sidebar-category.open .sidebar-category-arrow {
+            transform: rotate(0deg);
+        }
+        #tickerTree .sidebar-category .sidebar-category-arrow {
+            display: inline-block;
+            transform: rotate(-90deg);
+            transition: transform 0.2s;
+        }
+
         .selected-profile-info {
             border-top: 1px solid var(--border-color);
             padding-top: 1rem;
@@ -14951,6 +14964,7 @@
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
                             <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
                             <select id="tickerSortSelect" onchange="sortTickers(this.value)" style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="master">Master Ticker</option>
                                 <option value="alpha">A-Z</option>
                                 <option value="alpha-desc">Z-A</option>
                                 <option value="industry">Industry</option>
@@ -17413,7 +17427,7 @@
         let currentTickerData = null;
         let dailyChurnChart = null;
         let liveChartAnimation = null;
-        let tickerSortMode = 'alpha'; // 'alpha', 'alpha-desc', 'industry', 'kpi'
+        let tickerSortMode = 'master'; // 'master', 'alpha', 'alpha-desc', 'industry', 'kpi'
         
         // Navigate to Trends tab from Live Data
         function navigateToTrends() {
@@ -17455,6 +17469,8 @@
                 
                 if (data.success) {
                     hedgeFundTickers = data.tickers;
+                    const sortSelect = document.getElementById('tickerSortSelect');
+                    if (sortSelect) sortSelect.value = tickerSortMode;
                     renderTickerTree();
                 } else {
                     container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Error loading tickers: ${data.error || 'Unknown error'}</div>`;
@@ -17476,7 +17492,8 @@
                     t.display_name.toLowerCase().includes(searchTerm) ||
                     t.ticker.toLowerCase().includes(searchTerm) ||
                     t.kpi.toLowerCase().includes(searchTerm) ||
-                    (t.industry || '').toLowerCase().includes(searchTerm)
+                    (t.industry || '').toLowerCase().includes(searchTerm) ||
+                    (t.master_ticker || '').toLowerCase().includes(searchTerm)
                 );
             }
             
@@ -17488,7 +17505,33 @@
             let html = '';
             
             // Handle different sort modes
-            if (tickerSortMode === 'industry') {
+            if (tickerSortMode === 'master') {
+                // Group by Master Ticker (category header); groups collapsed by default
+                const byMaster = {};
+                filteredTickers.forEach(t => {
+                    const master = (t.master_ticker || '').trim() || 'Ungrouped';
+                    if (!byMaster[master]) byMaster[master] = [];
+                    byMaster[master].push(t);
+                });
+                const masterKeys = Object.keys(byMaster).sort((a, b) => (a === 'Ungrouped' ? 1 : b === 'Ungrouped' ? -1 : a.localeCompare(b)));
+                masterKeys.forEach(master => {
+                    const tickers = byMaster[master].sort((a, b) => a.display_name.localeCompare(b.display_name));
+                    html += `
+                        <div class="sidebar-category" onclick="toggleTickerCategory(this)">
+                            <span>📁 ${master}</span>
+                            <span class="sidebar-category-arrow">▶</span>
+                        </div>
+                        <div class="sidebar-category-items master-ticker-items" style="display: none;">
+                            ${tickers.map(t => `
+                                <div class="sidebar-item" onclick="selectTicker('${t.s3_key}')">
+                                    <span class="sidebar-item-name">${t.display_name}</span>
+                                    <span class="sidebar-item-meta" style="font-size: 0.7rem; color: var(--text-secondary);">${t.kpi}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                });
+            } else if (tickerSortMode === 'industry') {
                 // Group by industry
                 const byIndustry = {};
                 filteredTickers.forEach(t => {
@@ -17571,7 +17614,10 @@
         
         function toggleTickerCategory(el) {
             el.classList.toggle('open');
-            el.nextElementSibling.classList.toggle('open');
+            const items = el.nextElementSibling;
+            items.classList.toggle('open');
+            const arrow = el.querySelector('.sidebar-category-arrow');
+            if (arrow) arrow.textContent = items.classList.contains('open') ? '▼' : '▶';
         }
         
         // Ticker tab management

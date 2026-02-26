@@ -8447,6 +8447,7 @@ def list_hedge_fund_tickers():
                 ticker['display_name'] = metadata[ticker_key].get('display_name', ticker['ticker'])
                 ticker['kpi'] = metadata[ticker_key].get('kpi', ticker['kpi'])
                 ticker['parent_ticker'] = metadata[ticker_key].get('parent_ticker', None)
+                ticker['master_ticker'] = metadata[ticker_key].get('master_ticker', None)
                 ticker['relevance_percentage'] = metadata[ticker_key].get('relevance_percentage', None)
                 ticker['kpi_change_enabled'] = metadata[ticker_key].get('kpi_change_enabled', False)
                 ticker['kpi_change_quarter_start'] = metadata[ticker_key].get('kpi_change_quarter_start')
@@ -8456,6 +8457,7 @@ def list_hedge_fund_tickers():
                 ticker['ticker'] = (metadata[ticker_key].get('ticker_symbol') or original_ticker).strip() or original_ticker
             else:
                 ticker['parent_ticker'] = None
+                ticker['master_ticker'] = None
                 ticker['relevance_percentage'] = None
                 ticker['kpi_change_enabled'] = False
                 ticker['kpi_change_quarter_start'] = None
@@ -8873,6 +8875,7 @@ def manage_ticker_metadata():
         display_name = data.get('display_name')
         kpi = data.get('kpi')
         parent_ticker = data.get('parent_ticker')
+        master_ticker = (data.get('master_ticker') or '').strip() or None
         relevance_percentage = data.get('relevance_percentage')
         # Tracked KPI change (for Historic Performance: different KPI in a date range)
         kpi_change_enabled = data.get('kpi_change_enabled', False)
@@ -8896,6 +8899,8 @@ def manage_ticker_metadata():
             metadata[s3_key]['kpi'] = kpi
         if parent_ticker is not None:  # Allow empty string to clear
             metadata[s3_key]['parent_ticker'] = parent_ticker
+        if master_ticker is not None:
+            metadata[s3_key]['master_ticker'] = master_ticker
         
         if 'kpi_change_enabled' in data:
             metadata[s3_key]['kpi_change_enabled'] = bool(kpi_change_enabled)
