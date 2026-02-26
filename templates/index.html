@@ -18663,13 +18663,13 @@
         function renderTickerInsightsTab(parsed, csvData, brandName) {
             const container = document.getElementById('tickerProfileTabContent');
             
-            // Get top insights (high penetration items); exclude metadata and system rows
+            // Get top insights (high penetration items); exclude metadata, system rows, and 100% (not meaningful)
             const skipInsightColumns = ['SAMPLE SIZE', 'INPUT_METADATA', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
             const insights = csvData
                 .filter(row => {
                     const penetration = parseFloat(row['Brand Penetration (Row)'] || 0);
                     const col = (row.Column || '').toUpperCase();
-                    return penetration > 50 && row.Column && row.Value && !skipInsightColumns.includes(col);
+                    return penetration > 50 && penetration < 100 && row.Column && row.Value && !skipInsightColumns.includes(col);
                 })
                 .sort((a, b) => parseFloat(b['Brand Penetration (Row)'] || 0) - parseFloat(a['Brand Penetration (Row)'] || 0))
                 .slice(0, 20);
@@ -19005,8 +19005,9 @@
                 const items = behavioral[cat] || [];
                 if (items.length === 0) return;
                 
-                // Sort by percentage descending and take top 10
-                const sortedItems = [...items].sort((a, b) => (b.pct || 0) - (a.pct || 0)).slice(0, 10);
+                // Sort by percentage descending, exclude 100% (not meaningful), take top 10
+                const sortedItems = [...items].filter(i => (i.pct || 0) < 100).sort((a, b) => (b.pct || 0) - (a.pct || 0)).slice(0, 10);
+                if (sortedItems.length === 0) return;
                 const maxPct = Math.max(...sortedItems.map(i => i.pct || 0), 1);
                 
                 html += `
