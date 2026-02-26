@@ -19143,21 +19143,40 @@
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1rem;">
             `;
             
+            // Per-category item limit for ticker behavioral (Show: Top N or All), default All
+            const tickerLimitOpts = [10, 15, 20, 25, 50, 100, 'All'];
+            if (typeof window.tickerBehavioralItemLimits === 'undefined') window.tickerBehavioralItemLimits = {};
+            const getTickerLimit = (c) => window.tickerBehavioralItemLimits[c];
+            
             categories.forEach(cat => {
                 const items = behavioral[cat] || [];
                 if (items.length === 0) return;
                 
-                // Sort by percentage descending, exclude 100% (not meaningful), take top 10
-                const sortedItems = [...items].filter(i => (i.pct || 0) < 100).sort((a, b) => (b.pct || 0) - (a.pct || 0)).slice(0, 10);
+                // Sort by percentage descending, exclude 100%; show all by default, or respect limit
+                const sortedItems = [...items].filter(i => (i.pct || 0) < 100).sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 if (sortedItems.length === 0) return;
-                const maxPct = Math.max(...sortedItems.map(i => i.pct || 0), 1);
+                const limit = getTickerLimit(cat);
+                const effectiveLimit = (limit === undefined || limit === null) ? 'All' : limit;
+                const displayItems = (effectiveLimit === 'All' || effectiveLimit >= sortedItems.length) ? sortedItems : sortedItems.slice(0, effectiveLimit);
+                const maxPct = Math.max(...displayItems.map(i => i.pct || 0), 1);
                 const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                const limitOptions = tickerLimitOpts.map(opt => {
+                    const val = opt === 'All' ? 'All' : opt;
+                    const sel = (effectiveLimit === 'All' && opt === 'All') || effectiveLimit === opt ? ' selected' : '';
+                    const label = opt === 'All' ? 'Show: All' : 'Show: Top ' + opt;
+                    return `<option value="${val}"${sel}>${label}</option>`;
+                }).join('');
                 
                 html += `
                     <div class="behavioral-card" id="ticker-beh-${safeId}" data-category="${cat.replace(/"/g, '&quot;')}" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
-                        <h3 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: var(--accent-cyan); display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: var(--accent-cyan); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                             <span>${cat.replace(/</g, '&lt;')}</span>
-                            <span class="items-count-badge">${items.length} items</span>
+                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span class="items-count-badge">${sortedItems.length} items</span>
+                                <select class="ticker-beh-limit-select" onchange="event.stopPropagation(); window._setTickerBehLimit('${cat.replace(/'/g, "\\'")}', this.value)" style="padding: 0.25rem 0.4rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    ${limitOptions}
+                                </select>
+                            </span>
                         </h3>
                         <div class="behavioral-header-row" style="display: flex; align-items: center; padding: 0.35rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; gap: 0.5rem;">
                             <span style="width: 20px; text-align: left;">#</span>
@@ -19165,18 +19184,19 @@
                             <span style="min-width: 50px; text-align: left;">Profile</span>
                             <span style="min-width: 45px; text-align: left;">Index</span>
                         </div>
-                        <div class="behavioral-list" style="max-height: 300px; overflow-y: auto;">
-                            ${sortedItems.map((item, idx) => {
+                        <div class="behavioral-list ticker-beh-list" style="max-height: 65vh; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;">
+                            ${displayItems.map((item, idx) => {
                                 const pct = item.pct || 0;
                                 const index = item.index || 0;
                                 const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                                 const barWidth = (pct / maxPct) * 100;
+                                const nameEsc = (item.name || '').replace(/</g, '&lt;').replace(/"/g, '&quot;');
                                 return `
                                     <div class="behavioral-item" style="display: flex; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid var(--border-color); gap: 0.5rem; font-size: 0.8rem;">
                                         <span style="width: 20px; text-align: left; color: var(--text-secondary); font-size: 0.75rem;">${idx + 1}</span>
                                         <div style="flex: 1; min-width: 0; position: relative;">
                                             <div style="position: absolute; left: 0; top: 0; bottom: 0; width: ${barWidth}%; background: rgba(90, 154, 217, 0.2); border-radius: 3px;"></div>
-                                            <span style="position: relative; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; padding: 0.1rem 0.3rem;" title="${item.name}">${item.name}</span>
+                                            <span style="position: relative; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; padding: 0.1rem 0.3rem;" title="${nameEsc}">${nameEsc}</span>
                                         </div>
                                         <span style="min-width: 50px; text-align: left; color: var(--text-primary);">${pct.toFixed(2)}%</span>
                                         <span style="min-width: 45px; text-align: left; color: ${indexColor}; font-weight: 600;">${index > 0 ? formatIndex(index) : '-'}</span>
@@ -19187,6 +19207,12 @@
                     </div>
                 `;
             });
+            
+            window._setTickerBehLimit = function(cat, value) {
+                window.tickerBehavioralItemLimits = window.tickerBehavioralItemLimits || {};
+                window.tickerBehavioralItemLimits[cat] = value === 'All' ? 'All' : (parseInt(value, 10) || 'All');
+                renderTickerBehavioralTab(parsed, csvData);
+            };
             
             html += `
                     </div>
