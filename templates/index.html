@@ -3044,6 +3044,19 @@
             transition: transform 0.2s;
         }
 
+        /* Hedge Fund IQ Compare: sticky table header and scrollable body */
+        .ticker-compare-table-scroll {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+        .ticker-compare-table thead th {
+            position: sticky;
+            top: 0;
+            background: var(--bg-dark);
+            z-index: 1;
+            box-shadow: 0 1px 0 var(--border-color);
+        }
+
         .selected-profile-info {
             border-top: 1px solid var(--border-color);
             padding-top: 1rem;
@@ -15342,7 +15355,7 @@
                         <div id="tickerCompareTab" class="ticker-tab-content" style="display: none;">
                             <div style="margin-bottom: 1rem;">
                                 <h3 style="color: var(--accent-cyan); margin: 0 0 0.5rem 0;">⚖️ Ticker Comparison</h3>
-                                <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">Compare metrics across your open tickers. Select which tickers to include in the comparison.</p>
+                                <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">Compare key metrics, trends, and performance across your open tickers. Select tickers below, run the comparison, and export to CSV if needed.</p>
                             </div>
                             
                             <!-- Ticker Selection for Comparison -->
@@ -15351,9 +15364,12 @@
                                 <div id="tickerCompareSelection" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
                                     <!-- Ticker selection chips will be rendered here -->
                                 </div>
-                                <div style="display: flex; gap: 0.5rem;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
                                     <button class="dash-action-btn" onclick="runTickerComparison()" style="background: var(--accent-cyan);">🔄 Run Comparison</button>
-                                    <button class="dash-action-btn" onclick="clearTickerComparison()">Clear All</button>
+                                    <button class="dash-action-btn" onclick="selectAllTickersForComparison()">Select All</button>
+                                    <button class="dash-action-btn" onclick="deselectAllTickersForComparison()">Deselect All</button>
+                                    <button class="dash-action-btn" onclick="clearTickerComparison()">Clear Results</button>
+                                    <span id="tickerCompareLastRun" style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem;"></span>
                                 </div>
                             </div>
                             
@@ -15364,14 +15380,14 @@
                                     <canvas id="tickerCompareTrendChart"></canvas>
                                 </div>
                                 <div id="tickerCompareTrendEmpty" style="display: none; text-align: center; padding: 2rem; color: var(--text-secondary);">
-                                    <p>Select at least 2 tickers to see trend comparison.</p>
+                                    <p>Select at least 2 tickers above to see the trend comparison chart.</p>
                                 </div>
                             </div>
                             
                             <!-- Comparison Results (metrics table) -->
-                            <div id="tickerCompareResults">
+                            <div id="tickerCompareResults" class="ticker-compare-results-wrapper">
                                 <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                                    <p>Select at least 2 tickers and click "Run Comparison" to see detailed metrics.</p>
+                                    <p>Select at least 2 tickers and click <strong>Run Comparison</strong> to see detailed metrics. You can export the table to CSV after running.</p>
                                 </div>
                             </div>
                         </div>
@@ -17939,7 +17955,7 @@
             if (!container) return;
             
             if (openTickerTabs.length < 2) {
-                container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem;">Open at least 2 tickers to compare them.</p>';
+                container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem;">Open at least 2 tickers from the sidebar (click ticker names) to compare them. The Compare tab appears when you have 2+ tickers open.</p>';
                 updateTrendPreviewChart();
                 return;
             }
@@ -18105,158 +18121,191 @@
             renderTickerCompareSelection();
         }
         
+        function selectAllTickersForComparison() {
+            openTickerTabs.forEach(tab => selectedTickersForComparison.add(tab.id));
+            renderTickerCompareSelection();
+        }
+        
+        function deselectAllTickersForComparison() {
+            selectedTickersForComparison.clear();
+            renderTickerCompareSelection();
+        }
+        
         function clearTickerComparison() {
             selectedTickersForComparison.clear();
             renderTickerCompareSelection();
-            document.getElementById('tickerCompareResults').innerHTML = `
+            const el = document.getElementById('tickerCompareResults');
+            if (el) el.innerHTML = `
                 <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                    <p>Select at least 2 tickers and click "Run Comparison" to see detailed metrics.</p>
+                    <p>Select at least 2 tickers and click <strong>Run Comparison</strong> to see detailed metrics. You can export the table to CSV after running.</p>
                 </div>
             `;
+            const lastRun = document.getElementById('tickerCompareLastRun');
+            if (lastRun) lastRun.textContent = '';
+        }
+        
+        // Safe getter for ticker tab data (handles missing data)
+        function getTickerStat(t, path) {
+            if (!t || !t.data) return null;
+            const parts = path.split('.');
+            let v = t.data;
+            for (const p of parts) {
+                v = v != null && typeof v === 'object' ? v[p] : undefined;
+                if (v === undefined) return null;
+            }
+            return v;
         }
         
         function runTickerComparison() {
             const selectedTickers = openTickerTabs.filter(t => selectedTickersForComparison.has(t.id));
             
             if (selectedTickers.length < 2) {
-                alert('Please select at least 2 tickers to compare.');
+                if (typeof showToast === 'function') showToast('Select at least 2 tickers to compare.', true);
+                else alert('Please select at least 2 tickers to compare.');
                 return;
             }
             
             const resultsContainer = document.getElementById('tickerCompareResults');
+            if (!resultsContainer) return;
             
-            // Build comparison table
+            // Compute best/worst for highlighting (numeric metrics where higher is better, or lower is better)
+            const growthValues = selectedTickers.map(t => getTickerStat(t, 'calculated_stats.projected_growth_pct'));
+            const accuracyValues = selectedTickers.map(t => getTickerStat(t, 'calculated_stats.accuracy_score'));
+            const subsValues = selectedTickers.map(t => getTickerStat(t, 'calculated_stats.total_subs'));
+            const maxGrowth = Math.max(...growthValues.filter(x => x != null));
+            const maxAccuracy = Math.max(...accuracyValues.filter(x => x != null));
+            const maxSubs = Math.max(...(subsValues.filter(x => x != null).length ? subsValues : [0]));
+            
+            const cell = (content, isBest, isWorst) => {
+                if (content === '-' || content === '') return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${content}</td>`;
+                let style = 'text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);';
+                if (isBest) style += ' background: rgba(16, 185, 129, 0.15); font-weight: 600; color: #10b981;';
+                if (isWorst) style += ' background: rgba(239, 68, 68, 0.1); color: #ef4444;';
+                return `<td style="${style}">${content}</td>`;
+            };
+            
             let html = `
                 <div class="insight-card-v2" style="margin-bottom: 1rem;">
-                    <h4 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">📊 Key Metrics Comparison</h4>
-                    <div style="overflow-x: auto;">
-                        <table class="comp-table" style="width: 100%; border-collapse: collapse;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                        <h4 style="margin: 0; color: var(--accent-cyan);">📊 Key Metrics Comparison</h4>
+                        <button type="button" class="dash-action-btn" onclick="exportTickerComparisonCSV()" id="tickerCompareExportBtn">📥 Export CSV</button>
+                    </div>
+                    <div class="ticker-compare-table-scroll" style="max-height: 60vh; overflow: auto; overflow-x: auto;">
+                        <table class="comp-table ticker-compare-table" style="width: 100%; border-collapse: collapse;">
                             <thead>
                                 <tr>
                                     <th style="text-align: left; padding: 0.75rem; border-bottom: 2px solid var(--border-color); color: var(--text-secondary);">Metric</th>
                                     ${selectedTickers.map((t, idx) => {
                                         const color = tickerCompareColors[idx % tickerCompareColors.length];
-                                        return `<th style="text-align: center; padding: 0.75rem; border-bottom: 2px solid var(--border-color); color: ${color}; font-weight: 600;">${t.name}</th>`;
+                                        return `<th style="text-align: center; padding: 0.75rem; border-bottom: 2px solid var(--border-color); color: ${color}; font-weight: 600;">${(t.name || '').replace(/</g, '&lt;')}</th>`;
                                     }).join('')}
                                 </tr>
                             </thead>
                             <tbody>
             `;
             
-            // KPI row
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">KPI</td>
-                    ${selectedTickers.map(t => `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${t.kpi || t.data.kpi || '-'}</td>`).join('')}
-                </tr>
-            `;
+            const fmt = (v) => v !== null && v !== undefined && v !== '' ? v : '-';
+            const fmtNum = (v) => v !== null && v !== undefined && typeof v === 'number' && !isNaN(v) ? formatNumber(v) : '-';
+            const fmtPct = (v, signed) => {
+                if (v === null || v === undefined || (typeof v !== 'number') || isNaN(v)) return '-';
+                const s = signed && v > 0 ? '+' : '';
+                return s + v.toFixed(2) + '%';
+            };
             
-            // Projected Growth Rate
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Projected Growth Rate</td>
-                    ${selectedTickers.map(t => {
-                        const stats = t.data.calculated_stats || {};
-                        const growth = stats.projected_growth_pct;
-                        const color = growth > 0 ? '#10b981' : growth < 0 ? '#ef4444' : 'var(--text-primary)';
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: ${color}; font-weight: 600;">${growth !== undefined && growth !== null ? (growth > 0 ? '+' : '') + growth.toFixed(2) + '%' : '-'}</td>`;
-                    }).join('')}
-                </tr>
-            `;
+            // KPI
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">KPI</td>${selectedTickers.map(t => cell(fmt(t.kpi || getTickerStat(t, 'kpi')))).join('')}</tr>`;
             
-            // Accuracy
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Accuracy</td>
-                    ${selectedTickers.map(t => {
-                        const stats = t.data.calculated_stats || {};
-                        const accuracy = stats.accuracy_score;
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${accuracy !== undefined && accuracy !== null ? accuracy.toFixed(1) + '%' : '-'}</td>`;
-                    }).join('')}
-                </tr>
-            `;
+            // Projected Growth Rate (highlight best)
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Projected Growth Rate</td>${
+                selectedTickers.map(t => {
+                    const growth = getTickerStat(t, 'calculated_stats.projected_growth_pct');
+                    const content = fmtPct(growth, true);
+                    const isBest = growth !== null && growth === maxGrowth && maxGrowth !== -Infinity;
+                    const isWorst = growth !== null && growth === Math.min(...growthValues.filter(x => x != null)) && selectedTickers.length > 1;
+                    const color = growth > 0 ? '#10b981' : growth < 0 ? '#ef4444' : 'var(--text-primary)';
+                    const style = `text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: ${color};${isBest ? ' background: rgba(16, 185, 129, 0.15);' : ''}${isWorst && !isBest ? ' background: rgba(239, 68, 68, 0.1);' : ''}`;
+                    return `<td style="${style}">${content}</td>`;
+                }).join('')
+            }</tr>`;
+            
+            // Accuracy (highlight best)
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Accuracy</td>${
+                selectedTickers.map(t => {
+                    const acc = getTickerStat(t, 'calculated_stats.accuracy_score');
+                    const rating = getTickerStat(t, 'calculated_stats.accuracy_rating');
+                    const content = acc != null ? (rating ? acc.toFixed(1) + '% (' + rating + ')' : acc.toFixed(1) + '%') : '-';
+                    const isBest = acc !== null && acc === maxAccuracy;
+                    const style = `text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);${isBest ? ' background: rgba(16, 185, 129, 0.15); font-weight: 600; color: #10b981;' : ''}`;
+                    return `<td style="${style}">${content}</td>`;
+                }).join('')
+            }</tr>`;
             
             // Stock Impact
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Stock Impact</td>
-                    ${selectedTickers.map(t => {
-                        const impact = t.data.relevance_percentage;
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${impact !== undefined && impact !== null ? impact + '%' : '-'}</td>`;
-                    }).join('')}
-                </tr>
-            `;
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Stock Impact</td>${selectedTickers.map(t => {
+                const v = getTickerStat(t, 'relevance_percentage');
+                return cell(v != null ? v + '%' : '-');
+            }).join('')}</tr>`;
             
             // Data Range
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Data Range</td>
-                    ${selectedTickers.map(t => {
-                        const data = t.data.data || [];
-                        if (data.length === 0) return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">-</td>`;
-                        const startDate = data[0]?.Date || '-';
-                        const endDate = data[data.length - 1]?.Date || '-';
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">${startDate} - ${endDate}</td>`;
-                    }).join('')}
-                </tr>
-            `;
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Data Range</td>${selectedTickers.map(t => {
+                const data = getTickerStat(t, 'data') || [];
+                if (!Array.isArray(data) || data.length === 0) return cell('-');
+                const start = data[0]?.Date || '-';
+                const end = data[data.length - 1]?.Date || '-';
+                return cell(start + ' – ' + end);
+            }).join('')}</tr>`;
             
             // Days of Data
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Days of Data</td>
-                    ${selectedTickers.map(t => `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${t.data.data ? t.data.data.length : '-'}</td>`).join('')}
-                </tr>
-            `;
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Days of Data</td>${selectedTickers.map(t => {
+                const data = getTickerStat(t, 'data') || [];
+                return cell(Array.isArray(data) ? String(data.length) : '-');
+            }).join('')}</tr>`;
             
-            // Latest Data Point
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Latest Data</td>
-                    ${selectedTickers.map(t => {
-                        const data = t.data.data || [];
-                        const latest = data.length > 0 ? data[data.length - 1] : null;
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">${latest ? latest.Date : '-'}</td>`;
-                    }).join('')}
-                </tr>
-            `;
+            // Latest Data
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Latest Data</td>${selectedTickers.map(t => {
+                const data = getTickerStat(t, 'data') || [];
+                const latest = Array.isArray(data) && data.length ? data[data.length - 1] : null;
+                return cell(latest ? latest.Date : '-');
+            }).join('')}</tr>`;
             
             // Current Consumers
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Current Consumers</td>
-                    ${selectedTickers.map(t => {
-                        const data = t.data.data || [];
-                        const latest = data.length > 0 ? data[data.length - 1] : null;
-                        const consumers = latest ? latest['Total Consumers'] : null;
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600;">${consumers !== null ? formatNumber(consumers) : '-'}</td>`;
-                    }).join('')}
-                </tr>
-            `;
+            const consumerValues = selectedTickers.map(t => {
+                const data = getTickerStat(t, 'data') || [];
+                const latest = Array.isArray(data) && data.length ? data[data.length - 1] : null;
+                return latest ? latest['Total Consumers'] : null;
+            });
+            const maxConsumers = Math.max(...consumerValues.filter(x => x != null)) || 0;
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Current Consumers</td>${selectedTickers.map((t, i) => {
+                const consumers = consumerValues[i];
+                const content = consumers != null ? formatNumber(consumers) : '-';
+                const isBest = consumers !== null && consumers === maxConsumers;
+                return cell(content, isBest, false);
+            }).join('')}</tr>`;
             
-            // QTD Total Subs
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD Total Subs</td>
-                    ${selectedTickers.map(t => {
-                        const stats = t.data.calculated_stats || {};
-                        const subs = stats.total_subs;
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: #10b981;">${subs !== undefined && subs !== null ? '+' + formatNumber(subs) : '-'}</td>`;
-                    }).join('')}
-                </tr>
-            `;
+            // QTD Total Subs (highlight best)
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD Total Subs</td>${
+                selectedTickers.map(t => {
+                    const subs = getTickerStat(t, 'calculated_stats.total_subs');
+                    const content = subs != null ? '+' + formatNumber(subs) : '-';
+                    const isBest = subs !== null && subs === maxSubs;
+                    return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: #10b981;${isBest ? ' background: rgba(16, 185, 129, 0.15); font-weight: 600;' : ''}">${content}</td>`;
+                }).join('')
+            }</tr>`;
             
             // QTD Total Cancels
-            html += `
-                <tr>
-                    <td style="padding: 0.75rem; color: var(--text-secondary);">QTD Total Cancels</td>
-                    ${selectedTickers.map(t => {
-                        const stats = t.data.calculated_stats || {};
-                        const cancels = stats.total_cancels;
-                        return `<td style="text-align: center; padding: 0.75rem; color: #ef4444;">${cancels !== undefined && cancels !== null ? '-' + formatNumber(cancels) : '-'}</td>`;
-                    }).join('')}
-                </tr>
-            `;
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD Total Cancels</td>${selectedTickers.map(t => {
+                const c = getTickerStat(t, 'calculated_stats.total_cancels');
+                return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: #ef4444;">${c != null ? '-' + formatNumber(c) : '-'}</td>`;
+            }).join('')}</tr>`;
+            
+            // Net Change (Subs - Cancels) if we have both
+            html += `<tr><td style="padding: 0.75rem; color: var(--text-secondary);">QTD Net Change</td>${selectedTickers.map(t => {
+                const subs = getTickerStat(t, 'calculated_stats.total_subs') || 0;
+                const cancels = getTickerStat(t, 'calculated_stats.total_cancels') || 0;
+                const net = subs - cancels;
+                const color = net >= 0 ? '#10b981' : '#ef4444';
+                return `<td style="text-align: center; padding: 0.75rem; font-weight: 600; color: ${color};">${(net >= 0 ? '+' : '') + formatNumber(net)}</td>`;
+            }).join('')}</tr>`;
             
             html += `
                             </tbody>
@@ -18266,6 +18315,43 @@
             `;
             
             resultsContainer.innerHTML = html;
+            
+            // Store selected tickers for CSV export
+            window._lastTickerComparisonTickers = selectedTickers;
+            
+            // Last run timestamp
+            const lastRunEl = document.getElementById('tickerCompareLastRun');
+            if (lastRunEl) lastRunEl.textContent = 'Last run: ' + new Date().toLocaleTimeString();
+        }
+        
+        function exportTickerComparisonCSV() {
+            const selectedTickers = window._lastTickerComparisonTickers;
+            if (!selectedTickers || selectedTickers.length < 2) {
+                if (typeof showToast === 'function') showToast('Run a comparison first, then export.', true);
+                return;
+            }
+            const headers = ['Metric', ...selectedTickers.map(t => (t.name || t.ticker || '').replace(/"/g, '""'))];
+            const rows = [
+                ['KPI', ...selectedTickers.map(t => fmt(getTickerStat(t, 'kpi') || t.kpi))],
+                ['Projected Growth Rate', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.projected_growth_pct'); return v != null ? (v > 0 ? '+' : '') + v.toFixed(2) + '%' : '-'; })],
+                ['Accuracy', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.accuracy_score'); return v != null ? v.toFixed(1) + '%' : '-'; })],
+                ['Stock Impact', ...selectedTickers.map(t => { const v = getTickerStat(t, 'relevance_percentage'); return v != null ? v + '%' : '-'; })],
+                ['Data Range', ...selectedTickers.map(t => { const d = getTickerStat(t, 'data') || []; const s = d[0]?.Date; const e = d.length ? d[d.length-1]?.Date : null; return s && e ? s + ' – ' + e : '-'; })],
+                ['Days of Data', ...selectedTickers.map(t => { const d = getTickerStat(t, 'data') || []; return Array.isArray(d) ? d.length : '-'; })],
+                ['Current Consumers', ...selectedTickers.map(t => { const d = getTickerStat(t, 'data') || []; const l = Array.isArray(d) && d.length ? d[d.length-1] : null; return l && l['Total Consumers'] != null ? l['Total Consumers'] : '-'; })],
+                ['QTD Total Subs', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.total_subs'); return v != null ? v : '-'; })],
+                ['QTD Total Cancels', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.total_cancels'); return v != null ? v : '-'; })],
+                ['QTD Net Change', ...selectedTickers.map(t => { const s = getTickerStat(t, 'calculated_stats.total_subs') || 0; const c = getTickerStat(t, 'calculated_stats.total_cancels') || 0; return s - c; })]
+            ];
+            function fmt(v) { return v === null || v === undefined || v === '' ? '' : String(v).replace(/"/g, '""'); }
+            const csv = [headers.map(h => '"' + h + '"').join(','), ...rows.map(r => r.map(c => '"' + fmt(c) + '"').join(','))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'hedgefund_iq_comparison_' + new Date().toISOString().slice(0,10) + '.csv';
+            a.click();
+            URL.revokeObjectURL(a.href);
+            if (typeof showToast === 'function') showToast('CSV exported.');
         }
         
         // Legacy chart instance (kept for compatibility)
