@@ -15415,6 +15415,16 @@
                                 <div id="tickerCompareSelection" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
                                     <!-- Ticker selection chips will be rendered here -->
                                 </div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 0.75rem;">
+                                    <label style="color: var(--text-secondary); font-size: 0.85rem;">Filter by period:</label>
+                                    <select id="tickerCompareQuarterFilter" style="background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.5rem; font-size: 0.85rem; min-width: 120px;">
+                                        <option value="">All (full data)</option>
+                                        <!-- Quarters populated by JS -->
+                                    </select>
+                                    <span style="color: var(--text-secondary); font-size: 0.85rem;">or date range:</span>
+                                    <input type="date" id="tickerCompareDateFrom" placeholder="From" style="background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.5rem; font-size: 0.85rem;" title="From date">
+                                    <input type="date" id="tickerCompareDateTo" placeholder="To" style="background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.5rem; font-size: 0.85rem;" title="To date">
+                                </div>
                                 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
                                     <button class="dash-action-btn" onclick="runTickerComparison()" style="background: var(--accent-cyan);">🔄 Run Comparison</button>
                                     <button class="dash-action-btn" onclick="selectAllTickersForComparison()">Select All</button>
@@ -17960,6 +17970,9 @@
             
             container.innerHTML = html;
             
+            // Populate quarter filter from selected tickers' data
+            populateTickerCompareQuarterFilter();
+            
             // Update the live trend preview chart
             updateTrendPreviewChart();
         }
@@ -18111,6 +18124,7 @@
         
         function clearTickerComparison() {
             selectedTickersForComparison.clear();
+            window._lastTickerComparisonDataOverrides = {};
             renderTickerCompareSelection();
             const el = document.getElementById('tickerCompareResults');
             if (el) el.innerHTML = `
@@ -18123,10 +18137,11 @@
         }
         
         // Safe getter for ticker tab data (handles missing data)
-        function getTickerStat(t, path) {
-            if (!t || !t.data) return null;
+        function getTickerStat(t, path, dataOverride) {
+            const root = (dataOverride && t && dataOverride[t.id]) ? dataOverride[t.id] : (t && t.data);
+            if (!root) return null;
             const parts = path.split('.');
-            let v = t.data;
+            let v = root;
             for (const p of parts) {
                 v = v != null && typeof v === 'object' ? v[p] : undefined;
                 if (v === undefined) return null;
@@ -18134,7 +18149,32 @@
             return v;
         }
         
-        function runTickerComparison() {
+        function getTickerCompareFilterParams() {
+            const quarterEl = document.getElementById('tickerCompareQuarterFilter');
+            const fromEl = document.getElementById('tickerCompareDateFrom');
+            const toEl = document.getElementById('tickerCompareDateTo');
+            const quarter = (quarterEl && quarterEl.value) ? quarterEl.value.trim() : '';
+            const from = (fromEl && fromEl.value) ? fromEl.value.trim() : '';
+            const to = (toEl && toEl.value) ? toEl.value.trim() : '';
+            return { quarter, from, to };
+        }
+        
+        function populateTickerCompareQuarterFilter() {
+            const sel = openTickerTabs.filter(t => selectedTickersForComparison.has(t.id));
+            const quarters = new Set();
+            sel.forEach(t => {
+                const data = t.data && t.data.data ? t.data.data : [];
+                data.forEach(d => { const q = (d.Quarter || '').trim(); if (q && q !== 'N/A') quarters.add(q); });
+            });
+            const sorted = Array.from(quarters).sort((a, b) => b.localeCompare(a));
+            const el = document.getElementById('tickerCompareQuarterFilter');
+            if (!el) return;
+            const current = el.value;
+            el.innerHTML = '<option value="">All (full data)</option>' + sorted.map(q => `<option value="${(q || '').replace(/"/g, '&quot;')}">${(q || '').replace(/</g, '&lt;')}</option>`).join('');
+            if (sorted.includes(current)) el.value = current;
+        }
+        
+        async function runTickerComparison() {
             const selectedTickers = openTickerTabs.filter(t => selectedTickersForComparison.has(t.id));
             
             if (selectedTickers.length < 2) {
@@ -18143,13 +18183,42 @@
                 return;
             }
             
+            const { quarter, from, to } = getTickerCompareFilterParams();
+            const useFilter = !!(quarter || from || to);
+            let dataOverrides = {};
+            if (useFilter) {
+                const params = new URLSearchParams();
+                if (quarter) params.set('quarter', quarter);
+                if (from) params.set('from', from);
+                if (to) params.set('to', to);
+                const query = params.toString();
+                const resultsContainer = document.getElementById('tickerCompareResults');
+                if (resultsContainer) resultsContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-cyan);">Loading filtered data...</div>';
+                try {
+                    await Promise.all(selectedTickers.map(async (t) => {
+                        const url = `/api/hedge-fund-iq/data/${encodeURIComponent(t.s3Key)}${query ? '?' + query : ''}`;
+                        const resp = await fetch(url, { credentials: 'same-origin' });
+                        const data = await resp.json();
+                        if (data && data.success) dataOverrides[t.id] = data;
+                    }));
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to load filtered data.', true);
+                    return;
+                }
+            }
+            
+            renderTickerComparisonTable(selectedTickers, dataOverrides, useFilter ? { quarter, from, to } : null);
+        }
+        
+        function renderTickerComparisonTable(selectedTickers, dataOverrides, filterLabel) {
             const resultsContainer = document.getElementById('tickerCompareResults');
             if (!resultsContainer) return;
+            dataOverrides = dataOverrides || {};
             
             // Compute best/worst for highlighting (numeric metrics where higher is better, or lower is better)
-            const growthValues = selectedTickers.map(t => getTickerStat(t, 'calculated_stats.projected_growth_pct'));
-            const accuracyValues = selectedTickers.map(t => getTickerStat(t, 'calculated_stats.accuracy_score'));
-            const subsValues = selectedTickers.map(t => getTickerStat(t, 'calculated_stats.total_subs'));
+            const growthValues = selectedTickers.map(t => getTickerStat(t, 'calculated_stats.projected_growth_pct', dataOverrides));
+            const accuracyValues = selectedTickers.map(t => getTickerStat(t, 'calculated_stats.accuracy_score', dataOverrides));
+            const subsValues = selectedTickers.map(t => getTickerStat(t, 'calculated_stats.total_subs', dataOverrides));
             const maxGrowth = Math.max(...growthValues.filter(x => x != null));
             const maxAccuracy = Math.max(...accuracyValues.filter(x => x != null));
             const maxSubs = Math.max(...(subsValues.filter(x => x != null).length ? subsValues : [0]));
@@ -18162,10 +18231,14 @@
                 return `<td style="${style}">${content}</td>`;
             };
             
+            const filterNote = filterLabel ? (filterLabel.quarter ? 'Showing: ' + filterLabel.quarter : (filterLabel.from || filterLabel.to) ? 'Showing: ' + (filterLabel.from || '') + ' – ' + (filterLabel.to || '') : '') : '';
             let html = `
                 <div class="insight-card-v2" style="margin-bottom: 1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                        <h4 style="margin: 0; color: var(--accent-cyan);">📊 Key Metrics Comparison</h4>
+                        <div>
+                            <h4 style="margin: 0; color: var(--accent-cyan);">📊 Key Metrics Comparison</h4>
+                            ${filterNote ? '<p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; color: var(--text-secondary);">' + filterNote + '</p>' : ''}
+                        </div>
                         <button type="button" class="dash-action-btn" onclick="exportTickerComparisonCSV()" id="tickerCompareExportBtn">📥 Export CSV</button>
                     </div>
                     <div class="ticker-compare-table-scroll" style="max-height: 60vh; overflow: auto; overflow-x: auto;">
@@ -18191,12 +18264,12 @@
             };
             
             // KPI
-            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">KPI</td>${selectedTickers.map(t => cell(fmt(t.kpi || getTickerStat(t, 'kpi')))).join('')}</tr>`;
+            html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">KPI</td>${selectedTickers.map(t => cell(fmt(t.kpi || getTickerStat(t, 'kpi', dataOverrides)))).join('')}</tr>`;
             
             // Projected Growth Rate (highlight best)
             html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Projected Growth Rate</td>${
                 selectedTickers.map(t => {
-                    const growth = getTickerStat(t, 'calculated_stats.projected_growth_pct');
+                    const growth = getTickerStat(t, 'calculated_stats.projected_growth_pct', dataOverrides);
                     const content = fmtPct(growth, true);
                     const isBest = growth !== null && growth === maxGrowth && maxGrowth !== -Infinity;
                     const isWorst = growth !== null && growth === Math.min(...growthValues.filter(x => x != null)) && selectedTickers.length > 1;
@@ -18209,8 +18282,8 @@
             // Accuracy (highlight best)
             html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Accuracy</td>${
                 selectedTickers.map(t => {
-                    const acc = getTickerStat(t, 'calculated_stats.accuracy_score');
-                    const rating = getTickerStat(t, 'calculated_stats.accuracy_rating');
+                    const acc = getTickerStat(t, 'calculated_stats.accuracy_score', dataOverrides);
+                    const rating = getTickerStat(t, 'calculated_stats.accuracy_rating', dataOverrides);
                     const content = acc != null ? (rating ? acc.toFixed(1) + '% (' + rating + ')' : acc.toFixed(1) + '%') : '-';
                     const isBest = acc !== null && acc === maxAccuracy;
                     const style = `text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);${isBest ? ' background: rgba(16, 185, 129, 0.15); font-weight: 600; color: #10b981;' : ''}`;
@@ -18220,13 +18293,13 @@
             
             // Stock Impact
             html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Stock Impact</td>${selectedTickers.map(t => {
-                const v = getTickerStat(t, 'relevance_percentage');
+                const v = getTickerStat(t, 'relevance_percentage', dataOverrides);
                 return cell(v != null ? v + '%' : '-');
             }).join('')}</tr>`;
             
             // Data Range
             html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Data Range</td>${selectedTickers.map(t => {
-                const data = getTickerStat(t, 'data') || [];
+                const data = getTickerStat(t, 'data', dataOverrides) || [];
                 if (!Array.isArray(data) || data.length === 0) return cell('-');
                 const start = data[0]?.Date || '-';
                 const end = data[data.length - 1]?.Date || '-';
@@ -18235,20 +18308,20 @@
             
             // Days of Data
             html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Days of Data</td>${selectedTickers.map(t => {
-                const data = getTickerStat(t, 'data') || [];
+                const data = getTickerStat(t, 'data', dataOverrides) || [];
                 return cell(Array.isArray(data) ? String(data.length) : '-');
             }).join('')}</tr>`;
             
             // Latest Data
             html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Latest Data</td>${selectedTickers.map(t => {
-                const data = getTickerStat(t, 'data') || [];
+                const data = getTickerStat(t, 'data', dataOverrides) || [];
                 const latest = Array.isArray(data) && data.length ? data[data.length - 1] : null;
                 return cell(latest ? latest.Date : '-');
             }).join('')}</tr>`;
             
             // Current Consumers
             const consumerValues = selectedTickers.map(t => {
-                const data = getTickerStat(t, 'data') || [];
+                const data = getTickerStat(t, 'data', dataOverrides) || [];
                 const latest = Array.isArray(data) && data.length ? data[data.length - 1] : null;
                 return latest ? latest['Total Consumers'] : null;
             });
@@ -18263,7 +18336,7 @@
             // QTD Total Subs (highlight best)
             html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD Total Subs</td>${
                 selectedTickers.map(t => {
-                    const subs = getTickerStat(t, 'calculated_stats.total_subs');
+                    const subs = getTickerStat(t, 'calculated_stats.total_subs', dataOverrides);
                     const content = subs != null ? '+' + formatNumber(subs) : '-';
                     const isBest = subs !== null && subs === maxSubs;
                     return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: #10b981;${isBest ? ' background: rgba(16, 185, 129, 0.15); font-weight: 600;' : ''}">${content}</td>`;
@@ -18272,14 +18345,14 @@
             
             // QTD Total Cancels
             html += `<tr><td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD Total Cancels</td>${selectedTickers.map(t => {
-                const c = getTickerStat(t, 'calculated_stats.total_cancels');
+                const c = getTickerStat(t, 'calculated_stats.total_cancels', dataOverrides);
                 return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: #ef4444;">${c != null ? '-' + formatNumber(c) : '-'}</td>`;
             }).join('')}</tr>`;
             
             // Net Change (Subs - Cancels) if we have both
             html += `<tr><td style="padding: 0.75rem; color: var(--text-secondary);">QTD Net Change</td>${selectedTickers.map(t => {
-                const subs = getTickerStat(t, 'calculated_stats.total_subs') || 0;
-                const cancels = getTickerStat(t, 'calculated_stats.total_cancels') || 0;
+                const subs = getTickerStat(t, 'calculated_stats.total_subs', dataOverrides) || 0;
+                const cancels = getTickerStat(t, 'calculated_stats.total_cancels', dataOverrides) || 0;
                 const net = subs - cancels;
                 const color = net >= 0 ? '#10b981' : '#ef4444';
                 return `<td style="text-align: center; padding: 0.75rem; font-weight: 600; color: ${color};">${(net >= 0 ? '+' : '') + formatNumber(net)}</td>`;
@@ -18294,8 +18367,9 @@
             
             resultsContainer.innerHTML = html;
             
-            // Store selected tickers for CSV export
+            // Store selected tickers and optional overrides for CSV export
             window._lastTickerComparisonTickers = selectedTickers;
+            window._lastTickerComparisonDataOverrides = dataOverrides;
             
             // Last run timestamp
             const lastRunEl = document.getElementById('tickerCompareLastRun');
@@ -18308,18 +18382,19 @@
                 if (typeof showToast === 'function') showToast('Run a comparison first, then export.', true);
                 return;
             }
+            const dataOverrides = window._lastTickerComparisonDataOverrides || {};
             const headers = ['Metric', ...selectedTickers.map(t => (t.name || t.ticker || '').replace(/"/g, '""'))];
             const rows = [
-                ['KPI', ...selectedTickers.map(t => fmt(getTickerStat(t, 'kpi') || t.kpi))],
-                ['Projected Growth Rate', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.projected_growth_pct'); return v != null ? (v > 0 ? '+' : '') + v.toFixed(2) + '%' : '-'; })],
-                ['Accuracy', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.accuracy_score'); return v != null ? v.toFixed(1) + '%' : '-'; })],
-                ['Stock Impact', ...selectedTickers.map(t => { const v = getTickerStat(t, 'relevance_percentage'); return v != null ? v + '%' : '-'; })],
-                ['Data Range', ...selectedTickers.map(t => { const d = getTickerStat(t, 'data') || []; const s = d[0]?.Date; const e = d.length ? d[d.length-1]?.Date : null; return s && e ? s + ' – ' + e : '-'; })],
-                ['Days of Data', ...selectedTickers.map(t => { const d = getTickerStat(t, 'data') || []; return Array.isArray(d) ? d.length : '-'; })],
-                ['Current Consumers', ...selectedTickers.map(t => { const d = getTickerStat(t, 'data') || []; const l = Array.isArray(d) && d.length ? d[d.length-1] : null; return l && l['Total Consumers'] != null ? l['Total Consumers'] : '-'; })],
-                ['QTD Total Subs', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.total_subs'); return v != null ? v : '-'; })],
-                ['QTD Total Cancels', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.total_cancels'); return v != null ? v : '-'; })],
-                ['QTD Net Change', ...selectedTickers.map(t => { const s = getTickerStat(t, 'calculated_stats.total_subs') || 0; const c = getTickerStat(t, 'calculated_stats.total_cancels') || 0; return s - c; })]
+                ['KPI', ...selectedTickers.map(t => fmt(getTickerStat(t, 'kpi', dataOverrides) || t.kpi))],
+                ['Projected Growth Rate', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.projected_growth_pct', dataOverrides); return v != null ? (v > 0 ? '+' : '') + v.toFixed(2) + '%' : '-'; })],
+                ['Accuracy', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.accuracy_score', dataOverrides); return v != null ? v.toFixed(1) + '%' : '-'; })],
+                ['Stock Impact', ...selectedTickers.map(t => { const v = getTickerStat(t, 'relevance_percentage', dataOverrides); return v != null ? v + '%' : '-'; })],
+                ['Data Range', ...selectedTickers.map(t => { const d = getTickerStat(t, 'data', dataOverrides) || []; const s = d[0]?.Date; const e = d.length ? d[d.length-1]?.Date : null; return s && e ? s + ' – ' + e : '-'; })],
+                ['Days of Data', ...selectedTickers.map(t => { const d = getTickerStat(t, 'data', dataOverrides) || []; return Array.isArray(d) ? d.length : '-'; })],
+                ['Current Consumers', ...selectedTickers.map(t => { const d = getTickerStat(t, 'data', dataOverrides) || []; const l = Array.isArray(d) && d.length ? d[d.length-1] : null; return l && l['Total Consumers'] != null ? l['Total Consumers'] : '-'; })],
+                ['QTD Total Subs', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.total_subs', dataOverrides); return v != null ? v : '-'; })],
+                ['QTD Total Cancels', ...selectedTickers.map(t => { const v = getTickerStat(t, 'calculated_stats.total_cancels', dataOverrides); return v != null ? v : '-'; })],
+                ['QTD Net Change', ...selectedTickers.map(t => { const s = getTickerStat(t, 'calculated_stats.total_subs', dataOverrides) || 0; const c = getTickerStat(t, 'calculated_stats.total_cancels', dataOverrides) || 0; return s - c; })]
             ];
             function fmt(v) { return v === null || v === undefined || v === '' ? '' : String(v).replace(/"/g, '""'); }
             const csv = [headers.map(h => '"' + h + '"').join(','), ...rows.map(r => r.map(c => '"' + fmt(c) + '"').join(','))].join('\n');

@@ -8560,13 +8560,18 @@ def get_hedge_fund_ticker_data(s3_key):
     So the first user each day/hour effectively refreshes data for everyone. Use ?refresh=1 to force fresh data anytime."""
     print(f"📥 get_hedge_fund_ticker_data called for: {s3_key}")
     
-    # Check daily cache first unless refresh requested (so Refresh button gets newest quarterly data)
+    # Check daily cache first unless refresh or date/quarter filter requested
     skip_cache = request.args.get('refresh', '').strip() in ('1', 'true', 'yes')
+    filter_quarter = request.args.get('quarter', '').strip()
+    filter_from = request.args.get('from', '').strip()
+    filter_to = request.args.get('to', '').strip()
+    if filter_quarter or filter_from or filter_to:
+        skip_cache = True  # Never use cache when filtering by date/quarter
     if not skip_cache:
         cached = _load_hedge_fund_daily_cache(s3_key)
         if cached is not None:
             return jsonify(cached)
-    elif skip_cache:
+    elif skip_cache and not (filter_quarter or filter_from or filter_to):
         print(f"🔄 Refresh requested: bypassing cache for {s3_key}")
     
     if not hedge_fund_s3_client:
@@ -8674,14 +8679,29 @@ def get_hedge_fund_ticker_data(s3_key):
         # Convert to records
         data = df.to_dict('records')
         
+        # Optional: filter by quarter or date range (for Compare tab)
+        if filter_quarter and len(data) > 0:
+            data = [d for d in data if (d.get('Quarter') or '').strip() == filter_quarter]
+        elif (filter_from or filter_to) and len(data) > 0:
+            def _date_in_range(d):
+                dt = (d.get('Date') or d.get('date') or '').strip()
+                if not dt:
+                    return True
+                if filter_from and dt < filter_from:
+                    return False
+                if filter_to and dt > filter_to:
+                    return False
+                return True
+            data = [d for d in data if _date_in_range(d)]
+        
         # Pre-calculate all stats for immediate display (no waiting on frontend)
         calculated_stats = {}
         if len(data) > 0:
             latest = data[-1]
-            latest_quarter = latest.get('Quarter', 'N/A')
+            latest_quarter = latest.get('Quarter', 'N/A') if not filter_quarter else filter_quarter
             
-            # Filter to current quarter
-            current_quarter_data = [d for d in data if d.get('Quarter') == latest_quarter]
+            # Use filtered data as the "current quarter" for stats
+            current_quarter_data = data
             
             if len(current_quarter_data) > 0:
                 # Calculate cumulative stats for current quarter (QTD - Quarter to Date)
@@ -8835,11 +8855,15 @@ def get_hedge_fund_ticker_data(s3_key):
             'kpi_change_label': ticker_metadata.get('kpi_change_label'),
             's3_key': s3_key,
             'bucket': HEDGE_FUND_S3_BUCKET,
-            'calculated_stats': calculated_stats  # Pre-calculated stats for instant display
+            'calculated_stats': calculated_stats,  # Pre-calculated stats for instant display
+            'filter_quarter': filter_quarter or None,
+            'filter_from': filter_from or None,
+            'filter_to': filter_to or None,
         }
         
-        # Save to daily cache for other users
-        _save_hedge_fund_daily_cache(s3_key, response_data)
+        # Save to daily cache only when returning full data (no date/quarter filter)
+        if not filter_quarter and not filter_from and not filter_to:
+            _save_hedge_fund_daily_cache(s3_key, response_data)
         
         return jsonify(response_data)
         
