@@ -6711,6 +6711,20 @@ def enforce_search_engine_ai_google_chatgpt_minimums(df: pd.DataFrame) -> pd.Dat
             if not SILENCE_VERBOSE_OUTPUT:
                 print(f"📈 SEARCH ENGINE/AI: ChatGPT Brand Penetration (Row) {pct:.2f}% → {target:.2f}% (min 25%)")
 
+    # Ensure Yahoo, Copilot, Bing, Duck Duck Go, AOL, Perplexity, MSN, Quora, Gemini are always over 38% (never exactly 38)
+    SEARCH_ENGINE_AI_OVER_38 = {'YAHOO', 'COPILOT', 'BING', 'DUCK DUCK GO', 'DUCKDUCKGO', 'AOL', 'PERPLEXITY', 'MSN', 'QUORA', 'GEMINI'}
+    for idx in cat_indices:
+        val_upper = str(df.at[idx, 'Value']).strip().upper()
+        val_no_space = val_upper.replace(' ', '')
+        if val_upper in SEARCH_ENGINE_AI_OVER_38 or val_no_space in {s.replace(' ', '') for s in SEARCH_ENGINE_AI_OVER_38}:
+            pct = get_penetration(idx)
+            if pct <= 38.0:
+                target = round(random.uniform(38.01, 41.99), 4)
+                df.at[idx, bp_col] = target
+                changed = True
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"📈 SEARCH ENGINE/AI: {val_upper} Brand Penetration (Row) {pct:.2f}% → {target:.2f}% (must be >38%)")
+
     if not changed:
         return df
 
