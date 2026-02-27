@@ -4756,7 +4756,9 @@ def api_generate_logline():
 @requires_auth
 def api_behavioral_summary():
     """Generate AI-powered behavioral summary bullets describing who this person is."""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
     result = generate_behavioral_summary(data)
     return jsonify(result)
 
@@ -6653,6 +6655,9 @@ def submit_rerun():
         platform_name = data.get('platform_name') or (metadata.get('PLATFORM_NAME') or '').strip() or None
         if is_listener_watcher and not platform_name:
             platform_name = None
+        # Rerun is Gen Pop only if the reference profile is actually Gen Pop (not for The Rock, etc.)
+        first_brand = (brands[0] or '').strip().lower()
+        is_genpop_rerun = first_brand in ('gen pop', 'gen_pop', 'genpop')
         project_name = re.sub(r'[<>:"/\\|?*]', '_', (data.get('project_name') or brands[0]).replace(' ', '_')[:80])
         job_id = str(uuid.uuid4())[:8]
         filters = {}
@@ -6678,7 +6683,7 @@ def submit_rerun():
             target=run_analysis,
             args=(job_id, project_name, brands, sample_start, sample_end,
                   behavior_start, behavior_end, filters, skew_settings,
-                  True, False, brand_category,
+                  is_genpop_rerun, False, brand_category,
                   False, is_listener_watcher, platform_name, None,
                   reference_demographics, reference_sample_size, s3_key)
         )
