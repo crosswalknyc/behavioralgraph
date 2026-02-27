@@ -13693,7 +13693,12 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         
         update_job_status(job_id, progress=25, message='Running analysis...')
         
-        # Same output flow for both new runs and reruns: pipeline default path → copy to OUTPUT_DIR → upload to purgatory
+        # Use /tmp/bg_pipeline on Render (app dir often read-only); same flow for new run and rerun
+        pipeline_out = '/tmp/bg_pipeline'
+        try:
+            os.makedirs(pipeline_out, exist_ok=True)
+        except OSError:
+            pipeline_out = None  # pipeline will use its default
         try:
             result_file = bg.run_full_pipeline(
                 conn=conn,
@@ -13709,11 +13714,28 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 purchasers_only=purchasers_only,
                 previous_file_path=actual_previous_file,
                 brand_category=brand_category,
-                is_listener_watcher=is_listener_watcher
+                is_listener_watcher=is_listener_watcher,
+                output_dir=pipeline_out if pipeline_out else None
             )
             
             update_job_status(job_id, progress=85, message='Processing results...')
             
+            # If path returned but file missing (e.g. path mismatch on server), find by project_name in output dir
+            if result_file and not os.path.exists(result_file) and pipeline_out and os.path.isdir(pipeline_out):
+                try:
+                    prefix = (project_name if isinstance(project_name, str) else str(project_name)) + '_'
+                    cutoff = datetime.now().timestamp() - 900  # 15 min
+                    found = []
+                    for f in os.listdir(pipeline_out):
+                        if f.endswith('.csv') and f.startswith(prefix):
+                            p = os.path.join(pipeline_out, f)
+                            if os.path.isfile(p) and os.path.getmtime(p) >= cutoff:
+                                found.append((os.path.getmtime(p), p))
+                    if found:
+                        found.sort(key=lambda x: -x[0])
+                        result_file = found[0][1]
+                except Exception:
+                    pass
             if result_file and os.path.exists(result_file):
                 # Apply frequency analysis if requested (matches bg.py terminal behavior EXACTLY)
                 if include_frequency and not is_genpop:
