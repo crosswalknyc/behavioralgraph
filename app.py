@@ -13709,7 +13709,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 purchasers_only=purchasers_only,
                 previous_file_path=actual_previous_file,
                 brand_category=brand_category,
-                is_listener_watcher=is_listener_watcher
+                is_listener_watcher=is_listener_watcher,
+                output_dir=OUTPUT_DIR
             )
             
             update_job_status(job_id, progress=85, message='Processing results...')

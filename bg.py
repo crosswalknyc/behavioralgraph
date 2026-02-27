@@ -2554,7 +2554,7 @@ def boost_netflix_3x_rob_lowe(df, project_name):
     
     return df
 
-def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, behavior_start, behavior_end, filters, skew_settings, is_genpop, purchasers_only=False, previous_file_path=None, brand_category=None, is_listener_watcher=False):
+def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, behavior_start, behavior_end, filters, skew_settings, is_genpop, purchasers_only=False, previous_file_path=None, brand_category=None, is_listener_watcher=False, output_dir=None):
     from datetime import datetime
     import time
     
@@ -2568,7 +2568,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     np.random.seed(deterministic_seed)
     
     timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M")
-    final_file = os.path.expanduser(f"~/Desktop/Behavioral_Graph/{project_name}_{timestamp}.csv")
+    base_dir = output_dir if output_dir else os.path.expanduser("~/Desktop/Behavioral_Graph")
+    final_file = os.path.join(base_dir, f"{project_name}_{timestamp}.csv")
     
     # Debug: Print the constructed path
     print(f"🔍 Debug: Project name: '{project_name}'")
@@ -5297,7 +5298,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print(f"✅ Successfully saved to: {final_file}")
     except OSError as e:
         print(f"❌ Error saving file: {e}")
-        fallback_file = os.path.expanduser(f"~/Desktop/Behavioral_Graph/fallback_{timestamp}.csv")
+        fallback_file = os.path.join(base_dir, f"fallback_{timestamp}.csv")
         df_final.to_csv(fallback_file, index=False)
         final_file = fallback_file
     
