@@ -31661,6 +31661,28 @@
                 return u !== 'INTEREST' && u !== 'INTERESTS';
             });
             
+            // Don't show separate cards for categories that are in the Sports or Most Purchased Brands slicers (one card each with a dropdown)
+            const sportsSlicerCategories = new Set([
+                'AFC', 'AFC EAST', 'AFC NORTH', 'AFC SOUTH', 'AFC WEST', 'AL', 'AL CENTRAL', 'AL EAST', 'AL WEST',
+                'ATLANTIC DIVISION', 'CENTRAL DIVISION', 'EASTERN CONFERENCE', 'HORSE RACING', 'LA LIGA', 'METROPOLITAN DIVISION',
+                'MLB', 'MLS', 'NBA', 'NFC', 'NFC EAST', 'NFC NORTH', 'NFC SOUTH', 'NFC WEST', 'NFL', 'NHL', 'NWSL',
+                'PACIFIC DIVISION', 'PREMIER LEAGUE', 'RUGBY', 'SERIE A', 'SOCCER', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'SPORTS TEAM', 'WNBA'
+            ]);
+            const mostPurchasedSlicerCategories = new Set([
+                'ACCESSORIES', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'CPG', 'HEALTH & WELLNESS', 'HOME/OUTDOOR',
+                'PETS', 'TECHNOLOGY BRAND', 'TOYS'
+            ]);
+            const hasMostPurchasedCard = sortedCats.some(c => {
+                const u = c.toUpperCase();
+                return u.includes('MOST PURCHASED BRANDS') || u === 'MOST PURCHASED';
+            });
+            sortedCats = sortedCats.filter(cat => {
+                const u = cat.toUpperCase();
+                if (sportsSlicerCategories.has(u)) return false;
+                if (hasMostPurchasedCard && mostPurchasedSlicerCategories.has(u)) return false;
+                return true;
+            });
+            
             // Apply quick-select exclusions (admin settings apply to all users)
             if (quickSelectBehaviorsExclusions && quickSelectBehaviorsExclusions.length > 0) {
                 const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => c.toUpperCase()));
