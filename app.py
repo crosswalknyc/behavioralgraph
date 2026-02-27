@@ -13640,7 +13640,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         np.random.seed(deterministic_seed)
         print(f"🎲 Deterministic seed set: {deterministic_seed}")
         
-        # If we have a reference file from S3, download it for consistency enforcement
+        # Rerun: use reference profile for sample size and demographics consistency (pipeline enforces via previous_file_path)
         actual_previous_file = previous_file_path
         if reference_file_key and s3_client and not previous_file_path:
             try:
@@ -13869,7 +13869,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         import traceback
                         traceback.print_exc()
                 
-                # Validate demographics against reference if provided
+                # Rerun: validate new run vs reference (demographics ±2%, sample size ±2%); pipeline already used reference for consistency
                 demographic_validation = None
                 if reference_demographics:
                     try:
