@@ -16055,7 +16055,7 @@ def run_ticket_sales_tracker(job_id):
 @app.route('/api/attribution/svod-acquisition', methods=['POST'])
 @requires_auth
 def submit_svod_acquisition():
-    """Submit a SVOD Acquisition IQ analysis job."""
+    """Submit a Subscriber IQ analysis job."""
     try:
         user = get_current_user()
         if not user:
@@ -16103,7 +16103,7 @@ def submit_svod_acquisition():
         if not has_credits_for(username, CREDITS_SVOD):
             _, credits_left = check_user_credits(username)
             return jsonify({
-                'error': f'SVOD Acquisition requires {CREDITS_SVOD} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'error': f'Subscriber IQ requires {CREDITS_SVOD} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
                 'credits_left': 0 if credits_left != -1 else -1
             }), 403
         
@@ -16149,7 +16149,7 @@ def submit_svod_acquisition():
         
         return jsonify({
             'job_id': job_id,
-            'message': 'SVOD Acquisition IQ job submitted successfully',
+            'message': 'Subscriber IQ job submitted successfully',
             'status': 'queued'
         })
         
@@ -16378,7 +16378,7 @@ def run_svod_acquisition(job_id):
                         if s3_key:
                             jobs[job_id]['s3_key'] = s3_key
                             jobs[job_id]['purgatory_id'] = f"{SUBSCRIBER_S3_BUCKET}:{s3_key}"
-                            print(f"✅ SVOD Acquisition uploaded to purgatory: {s3_key}")
+                            print(f"✅ Subscriber IQ uploaded to purgatory: {s3_key}")
                         
                         update_job_status(job_id, progress=100, status='completed', message='Analysis complete!', s3_key=s3_key)
                     else:

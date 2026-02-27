@@ -141,7 +141,7 @@ def generate_search_term_variations(search_term):
 # =========================
 # === Input collection ===
 # =========================
-# Allowed genre options (only these can be selected in CLI or passed from SVOD Acquisition IQ)
+# Allowed genre options (only these can be selected in CLI or passed from Subscriber IQ)
 ALLOWED_GENRES = [
     "Serialized Drama",
     "Non-Scripted Competition",

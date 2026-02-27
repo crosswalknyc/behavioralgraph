@@ -12194,7 +12194,7 @@
                     {% endif %}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('svod-acquisition')" id="customAnalysisTabSVODAcquisition">
-                        📺 SVOD Acquisition IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                        📺 Subscriber IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
                     </button>
                     {% endif %}
                     {% if 'campaign' in analysis_iq_modules or role == 'super_admin' %}
@@ -12772,11 +12772,11 @@
                     </div>
                 </div>
 
-                <!-- SVOD Acquisition IQ Tab Content (two-column: form + Status & Results sidebar) -->
+                <!-- Subscriber IQ Tab Content (two-column: form + Status & Results sidebar) -->
                 <div id="customAnalysisTabContentSVODAcquisition" class="custom-analysis-tab-content">
                     <div class="main-grid">
                         <div class="card">
-                            <h2>📺 SVOD Acquisition IQ</h2>
+                            <h2>📺 Subscriber IQ</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
                             <p class="section-description">Track show-to-platform attribution with episode tracking</p>
                             
@@ -17011,7 +17011,7 @@
             return episode_dates;
         }
         
-        // Custom SVOD Acquisition Form Handler
+        // Subscriber IQ Form Handler
         document.getElementById('customSVODAcquisitionForm')?.addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -17079,7 +17079,7 @@
                 const data = await response.json();
                 if (response.ok) {
                     showAnalysisStatusModal();
-                    pollCustomSVODAcquisitionJobStatus(data.job_id, projectName || data.project_name || 'SVOD Acquisition');
+                    pollCustomSVODAcquisitionJobStatus(data.job_id, projectName || data.project_name || 'Subscriber IQ');
                 } else {
                     alert('Error: ' + (data.error || 'Failed to submit job'));
                 }
@@ -17392,7 +17392,7 @@
                     }
                     if (document.getElementById('analysisStatusModal')?.classList.contains('active')) {
                         updateAnalysisStatusModal({
-                            project_name: projectName || data.project_name || 'SVOD Acquisition IQ',
+                            project_name: projectName || data.project_name || 'Subscriber IQ',
                             message: data.message || 'Processing...',
                             progress: data.progress || 0
                         });
@@ -44892,7 +44892,7 @@
             container.innerHTML = html;
         }
         
-        // SVOD Acquisition IQ tab: Results Library (only svod_acquisition source_type)
+        // Subscriber IQ tab: Results Library (only svod_acquisition source_type)
         function filterSvodAcquisitionResults() {
             renderSvodAcquisitionResultsList();
         }
@@ -59188,7 +59188,7 @@
             currentAnalysisType = analysisType;
             
             const typeLabels = {
-                'svod_acquisition': '📺 SVOD Acquisition IQ',
+                'svod_acquisition': '📺 Subscriber IQ',
                 'talent_theater': '🎬 Impact IQ',
                 'profile_analysis': '🎯 Profile Analysis',
                 'ticket_sales_tracker': '🎫 Ticket Sales Tracker'
