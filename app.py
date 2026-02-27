@@ -3508,6 +3508,9 @@ def get_admin_content():
     """Get all content files grouped by category, including archived."""
     print("📂 Admin content request received")
     
+    # Always load persisted cache from S3 so category/display name updates are visible
+    load_persisted_cache()
+    
     # Check AWS credentials
     aws_key = os.environ.get('AWS_ACCESS_KEY_ID')
     aws_secret = os.environ.get('AWS_SECRET_ACCESS_KEY')
@@ -11089,6 +11092,7 @@ def rename_file():
     global s3_cache
     
     try:
+        load_persisted_cache()
         data = request.get_json()
         old_key = data.get('old_key')
         new_name = data.get('new_name')
@@ -11143,38 +11147,59 @@ def rename_file():
             s3_client.delete_object(Bucket=S3_BUCKET, Key=old_key)
         
         # Update cache - find job in s3_cache and update its key AND display name
-        if s3_cache and 'jobs' in s3_cache:
-            for job in s3_cache.get('jobs', []):
-                if job.get('key') == old_key or job.get('s3_key') == old_key:
-                    job['key'] = new_key
-                    job['s3_key'] = new_key
+        jobs = s3_cache.get('jobs', [])
+        found = False
+        for job in jobs:
+            if job.get('key') == old_key or job.get('s3_key') == old_key:
+                job['key'] = new_key
+                job['s3_key'] = new_key
+                
+                # Update the display name
+                # If display_name was provided, use it; otherwise auto-generate from filename
+                if display_name and display_name.strip():
+                    new_display_name = display_name.strip()
+                    print(f"📝 Using custom display name: {new_display_name}")
+                else:
+                    # Extract name from new filename (remove extension and clean up)
+                    new_filename = new_key.split('/')[-1]
+                    name_without_ext = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
                     
-                    # Update the display name
-                    # If display_name was provided, use it; otherwise auto-generate from filename
-                    if display_name and display_name.strip():
-                        new_display_name = display_name.strip()
-                        print(f"📝 Using custom display name: {new_display_name}")
-                    else:
-                        # Extract name from new filename (remove extension and clean up)
-                        new_filename = new_key.split('/')[-1]
-                        name_without_ext = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
-                        
-                        # Remove timestamp patterns
-                        name_without_timestamp = remove_timestamp_from_name(name_without_ext)
-                        
-                        # Replace underscores with spaces and apply smart title case
-                        raw_name = name_without_timestamp.replace('_', ' ')
-                        new_display_name = smart_title_case(raw_name)
-                        print(f"📝 Auto-generated display name: {new_display_name}")
+                    # Remove timestamp patterns
+                    name_without_timestamp = remove_timestamp_from_name(name_without_ext)
                     
-                    # Update ALL name fields used for display
-                    job['name'] = new_display_name
-                    job['display_name'] = new_display_name
-                    job['project_name'] = new_display_name
-                    job['brand'] = new_display_name
-                    print(f"✅ Updated display name to: {new_display_name}")
-                    break
-            save_persisted_cache()
+                    # Replace underscores with spaces and apply smart title case
+                    raw_name = name_without_timestamp.replace('_', ' ')
+                    new_display_name = smart_title_case(raw_name)
+                    print(f"📝 Auto-generated display name: {new_display_name}")
+                
+                # Update ALL name fields used for display
+                job['name'] = new_display_name
+                job['display_name'] = new_display_name
+                job['project_name'] = new_display_name
+                job['brand'] = new_display_name
+                print(f"✅ Updated display name to: {new_display_name}")
+                found = True
+                break
+        if not found and old_key != new_key:
+            # File was not in cache; add entry for new key so admin list shows updated name
+            if display_name and display_name.strip():
+                new_display_name = display_name.strip()
+            else:
+                new_filename = new_key.split('/')[-1]
+                name_without_ext = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
+                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                new_display_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+            jobs.append({
+                'key': new_key,
+                's3_key': new_key,
+                'name': new_display_name,
+                'display_name': new_display_name,
+                'project_name': new_display_name,
+                'brand': new_display_name,
+                'category': 'Uncategorized',
+            })
+            s3_cache['jobs'] = jobs
+        save_persisted_cache()
         
         print(f"📝 Renamed file: {old_key} -> {new_key}")
         
@@ -12321,6 +12346,7 @@ def change_file_category():
     global s3_cache
     
     try:
+        load_persisted_cache()
         data = request.get_json()
         file_key = data.get('file_key')
         new_category = data.get('new_category', '').strip().upper()
@@ -12408,12 +12434,29 @@ def change_file_category():
                 print(f"🏷️ Updated purgatory metadata category for {file_key} to {new_category}")
         
         # Update cache - find job in s3_cache and update its category (released files only; purgatory not in cache)
-        if s3_cache and 'jobs' in s3_cache:
-            for job in s3_cache.get('jobs', []):
-                if job.get('key') == file_key or job.get('s3_key') == file_key:
-                    job['category'] = new_category
-                    break
-            save_persisted_cache()
+        jobs = s3_cache.get('jobs', [])
+        found = False
+        for job in jobs:
+            if job.get('key') == file_key or job.get('s3_key') == file_key:
+                job['category'] = new_category
+                found = True
+                break
+        if not found and not file_key.startswith(S3_PURGATORY_PREFIX):
+            # File not in cache (e.g. new upload); add entry so admin list shows updated category
+            filename = file_key.split('/')[-1]
+            name_without_ext = filename.replace('.csv', '') if filename.endswith('.csv') else filename
+            name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+            project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+            jobs.append({
+                'key': file_key,
+                's3_key': file_key,
+                'category': new_category,
+                'project_name': project_name,
+                'name': project_name,
+                'display_name': project_name,
+            })
+            s3_cache['jobs'] = jobs
+        save_persisted_cache()
         
         print(f"🏷️ Changed category for {file_key} to {new_category}")
         
@@ -12556,11 +12599,11 @@ def save_persisted_cache():
         return
     try:
         cache_data = {
-            'jobs': s3_cache['jobs'],
-            'categories': s3_cache['categories'],
-            'last_updated': s3_cache['last_updated'],
-            'file_count': s3_cache['file_count'],
-            'last_full_scan': s3_cache['last_full_scan']
+            'jobs': s3_cache.get('jobs', []),
+            'categories': s3_cache.get('categories', []),
+            'last_updated': s3_cache.get('last_updated'),
+            'file_count': s3_cache.get('file_count', 0),
+            'last_full_scan': s3_cache.get('last_full_scan')
         }
         s3_client.put_object(
             Bucket=S3_BUCKET,
