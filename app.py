@@ -6491,6 +6491,155 @@ def get_csv_data(s3_key):
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
 
 
+@app.route('/api/profile-run-metadata/<path:s3_key>')
+@requires_auth
+def get_profile_run_metadata(s3_key):
+    """Get run parameters from a profile CSV (brand, dates, sample size, demographics) for rerun-with-different-dates."""
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read().decode('utf-8')
+    except s3_client.exceptions.NoSuchKey:
+        if s3_key.startswith(S3_PURGATORY_PREFIX):
+            released = s3_key[len(S3_PURGATORY_PREFIX):]
+            try:
+                response = s3_client.get_object(Bucket=S3_BUCKET, Key=released)
+                csv_content = response['Body'].read().decode('utf-8')
+                s3_key = released
+            except Exception:
+                return jsonify({'success': False, 'error': 'Profile not found'}), 404
+        else:
+            return jsonify({'success': False, 'error': 'Profile not found'}), 404
+    metadata = parse_metadata_from_csv(csv_content)
+    if not metadata:
+        return jsonify({'success': False, 'error': 'Could not read run metadata from profile'}), 400
+    brand = metadata.get('BRAND') or metadata.get('brand')
+    sample_start = metadata.get('SAMPLE_START') or ''
+    sample_end = metadata.get('SAMPLE_END') or ''
+    behavior_start = metadata.get('BEHAVIOR_START') or sample_start
+    behavior_end = metadata.get('BEHAVIOR_END') or sample_end
+    sample_size = extract_sample_size_from_csv(csv_content)
+    demographics = extract_demographics_from_csv(csv_content)
+    display_name = None
+    for job in s3_cache.get('jobs', []):
+        if (job.get('s3_key') or job.get('key')) == s3_key:
+            display_name = job.get('display_name') or job.get('project_name') or job.get('name')
+            break
+    if not display_name:
+        name_without_ext = s3_key.replace('.csv', '').replace(S3_PURGATORY_PREFIX, '')
+        match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+        display_name = match.group(1).replace('_', ' ') if match else name_without_ext.replace('_', ' ')
+    return jsonify({
+        'success': True,
+        's3_key': s3_key,
+        'brand': brand,
+        'brand_display': display_name,
+        'sample_start': sample_start,
+        'sample_end': sample_end,
+        'behavior_start': behavior_start,
+        'behavior_end': behavior_end,
+        'sample_size': sample_size,
+        'demographics': demographics
+    })
+
+
+@app.route('/api/submit-rerun', methods=['POST'])
+@requires_auth
+def submit_rerun():
+    """Submit a profile run using the same search criteria as an existing profile, with new dates. Uses selected profile as reference so demographics stay within margin."""
+    try:
+        username = session.get('username')
+        if not has_credits_for(username, CREDITS_PROFILE_ANALYSIS):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'Profile Analysis requires {CREDITS_PROFILE_ANALYSIS} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1
+            }), 403
+        data = request.json
+        s3_key = data.get('s3_key') or data.get('source_s3_key')
+        if not s3_key:
+            return jsonify({'error': 'Missing s3_key (profile to rerun)'}), 400
+        sample_start = data.get('sample_start') or data.get('start_date')
+        sample_end = data.get('sample_end') or data.get('end_date')
+        if not sample_start or not sample_end:
+            return jsonify({'error': 'Missing sample_start and sample_end (or start_date and end_date)'}), 400
+        behavior_start = data.get('behavior_start') or sample_start
+        behavior_end = data.get('behavior_end') or sample_end
+        try:
+            sample_start = datetime.strptime(sample_start, '%Y-%m-%d').strftime('%Y-%m-%d')
+            sample_end = datetime.strptime(sample_end, '%Y-%m-%d').strftime('%Y-%m-%d')
+            behavior_start = datetime.strptime(behavior_start, '%Y-%m-%d').strftime('%Y-%m-%d')
+            behavior_end = datetime.strptime(behavior_end, '%Y-%m-%d').strftime('%Y-%m-%d')
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            csv_content = response['Body'].read().decode('utf-8')
+        except Exception:
+            if s3_key.startswith(S3_PURGATORY_PREFIX):
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key[len(S3_PURGATORY_PREFIX):])
+                    csv_content = response['Body'].read().decode('utf-8')
+                    s3_key = s3_key[len(S3_PURGATORY_PREFIX):]
+                except Exception:
+                    return jsonify({'error': 'Profile file not found'}), 404
+            else:
+                return jsonify({'error': 'Profile file not found'}), 404
+        metadata = parse_metadata_from_csv(csv_content)
+        if not metadata:
+            return jsonify({'error': 'Could not read run metadata from profile'}), 400
+        brand_raw = metadata.get('BRAND') or metadata.get('brand') or ''
+        brands = [b.strip().lower() for b in brand_raw.split(',') if b.strip()]
+        if not brands:
+            return jsonify({'error': 'No brand found in profile metadata'}), 400
+        reference_demographics = extract_demographics_from_csv(csv_content)
+        reference_sample_size = extract_sample_size_from_csv(csv_content)
+        project_name = re.sub(r'[<>:"/\\|?*]', '_', (data.get('project_name') or brands[0]).replace(' ', '_')[:80])
+        job_id = str(uuid.uuid4())[:8]
+        filters = {}
+        skew_settings = {}
+        jobs[job_id] = {
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Queued (rerun with new dates)',
+            'created_at': datetime.now().isoformat(),
+            'project_name': project_name,
+            'brands': brands[0],
+            'result_file': None,
+            'error': None,
+            'logs': [],
+            'reference_demographics': reference_demographics,
+            'reference_sample_size': reference_sample_size,
+            'created_by': username,
+            's3_key': None,
+        }
+        if s3_client:
+            _save_job_status_to_s3(job_id, jobs[job_id])
+        thread = threading.Thread(
+            target=run_analysis,
+            args=(job_id, project_name, brands, sample_start, sample_end,
+                  behavior_start, behavior_end, filters, skew_settings,
+                  True, False, data.get('brand_category') or 'GENERAL',
+                  False, False, None, None,
+                  reference_demographics, reference_sample_size, s3_key)
+        )
+        thread.daemon = True
+        thread.start()
+        desc = f"{project_name} rerun {sample_start}–{sample_end}"
+        consume_credit(username, description=desc, job_id=job_id, pull_type='Profile Analysis', credits_used=CREDITS_PROFILE_ANALYSIS)
+        _, credits_left = check_user_credits(username)
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Rerun job submitted; demographics will be kept within margin of the selected profile.',
+            'status': 'queued',
+            'credits_left': credits_left,
+            'brands_count': len(brands)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/segment-data', methods=['POST'])
 @requires_auth
 def get_segment_data():
