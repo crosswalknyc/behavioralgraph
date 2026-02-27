@@ -5114,6 +5114,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # CUSTOM BOOSTS - ENABLED
     df_final = boost_search_engine_ai_custom(df_final)  # Google @ 66x, top 4 @ 33x, others @ 5-11x
     df_final = boost_streaming_platform_custom(df_final)  # Netflix 15x, Hulu 12x, others no boost
+    df_final = boost_virtual_mvpd_fast_80x(df_final)  # VIRTUAL MVPD FAST: multiply all values by 80
     
     # DIVIDE STREAMING/PLATFORM VALUES BY 2 (except Netflix and ESPN)
     df_final = divide_streaming_platform_except_netflix_espn(df_final)
@@ -6459,6 +6460,34 @@ def boost_digital_banking_additional_2x(df: pd.DataFrame) -> pd.DataFrame:
         print(f"✅ Applied additional 2x boost to DIGITAL BANKING: {changes} entries updated (total: 4x)")
     
     return df
+
+
+def boost_virtual_mvpd_fast_80x(df: pd.DataFrame) -> pd.DataFrame:
+    """Multiply all VIRTUAL MVPD FAST category Original Raw Numbers by 80."""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    if 'Original Raw Numbers' not in df.columns:
+        return df
+    col_upper = df['Column'].astype(str).str.upper()
+    mask = (col_upper == 'VIRTUAL MVPD FAST') | (col_upper == 'VMVPD/FAST') | (col_upper == 'VIRTUAL MVPD/FAST')
+    indices = df.index[mask].tolist()
+    if not indices:
+        return df
+    changes = 0
+    for idx in indices:
+        try:
+            raw_val = df.at[idx, 'Original Raw Numbers']
+            current_raw = int(float(str(raw_val).replace(',', '')))
+            boosted_raw = int(current_raw * 80)
+            df.at[idx, 'Original Raw Numbers'] = str(boosted_raw)
+            changes += 1
+        except (ValueError, TypeError):
+            continue
+    if not SILENCE_VERBOSE_OUTPUT:
+        print(f"✅ VIRTUAL MVPD FAST: multiplied {changes} entries by 80x")
+    return df
+
 
 def boost_streaming_platform_custom(df: pd.DataFrame) -> pd.DataFrame:
     """Apply custom boost to STREAMING/PLATFORM category.
