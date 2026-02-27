@@ -2568,7 +2568,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     np.random.seed(deterministic_seed)
     
     timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M")
-    base_dir = output_dir if output_dir else os.path.expanduser("~/Desktop/Behavioral_Graph")
+    base_dir = (os.path.abspath(output_dir) if output_dir else os.path.expanduser("~/Desktop/Behavioral_Graph"))
     final_file = os.path.join(base_dir, f"{project_name}_{timestamp}.csv")
     
     # Debug: Print the constructed path
@@ -2576,7 +2576,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     print(f"🔍 Debug: Final file path: '{final_file}'")
     
     # Ensure the output directory exists
-    os.makedirs(os.path.dirname(final_file), exist_ok=True)
+    os.makedirs(base_dir, exist_ok=True)
     
     # Ensure we're using 6X-Large warehouse for the entire pipeline
     with conn.cursor() as cur:

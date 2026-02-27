@@ -13695,6 +13695,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         
         # Pipeline writes to OUTPUT_DIR (reliable on all hosts); we upload to S3 purgatory then remove local file
         try:
+            # Use absolute path so pipeline and app agree on location (avoids "No output file" on some hosts)
+            output_dir_abs = os.path.abspath(OUTPUT_DIR)
             result_file = bg.run_full_pipeline(
                 conn=conn,
                 project_name=project_name,
@@ -13710,11 +13712,24 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 previous_file_path=actual_previous_file,
                 brand_category=brand_category,
                 is_listener_watcher=is_listener_watcher,
-                output_dir=OUTPUT_DIR
+                output_dir=output_dir_abs
             )
             
             update_job_status(job_id, progress=85, message='Processing results...')
             
+            # If pipeline returned a path but file missing (e.g. path normalization on server), try to find it
+            if result_file and not os.path.exists(result_file) and os.path.isdir(output_dir_abs):
+                try:
+                    prefix = (project_name if isinstance(project_name, str) else str(project_name)) + '_'
+                    cutoff = datetime.now().timestamp() - 600  # last 10 min
+                    for f in os.listdir(output_dir_abs):
+                        if f.endswith('.csv') and f.startswith(prefix):
+                            candidate = os.path.join(output_dir_abs, f)
+                            if os.path.isfile(candidate) and os.path.getmtime(candidate) >= cutoff:
+                                result_file = candidate
+                                break
+                except Exception:
+                    pass
             if result_file and os.path.exists(result_file):
                 # Apply frequency analysis if requested (matches bg.py terminal behavior EXACTLY)
                 if include_frequency and not is_genpop:
