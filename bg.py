@@ -2593,8 +2593,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     previous_sample_dates = ""
     previous_behavior_dates = ""
     previous_brand_input = ""
+    previous_sample_size_ref = None
     if previous_file_path:
-        previous_demo_lookup, previous_behavioral_lookup, previous_sample_dates, previous_behavior_dates, previous_brand_input = load_previous_run_data(previous_file_path)
+        previous_demo_lookup, previous_behavioral_lookup, previous_sample_dates, previous_behavior_dates, previous_brand_input, previous_sample_size_ref = load_previous_run_data(previous_file_path)
 
     print("📦 Creating sample UID group...")
     cleaned_brands = [clean_brand(b) for b in brands]  # still used for any logic that needs normalized form
@@ -4001,6 +4002,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             if is_listener_watcher:
                 final_sample_size = max(1, final_sample_size // 10)
     
+    # Rerun: use reference profile sample size so output matches reference (demographics + sample size)
+    if previous_demo_lookup and previous_sample_size_ref and previous_sample_size_ref > 0:
+        final_sample_size = int(previous_sample_size_ref)
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"📊 Rerun: using reference sample size {final_sample_size:,}")
+    
     df_sample = pd.DataFrame([
         {
             "Column": normalize_category_name("Sample Size"),
@@ -4913,8 +4920,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # For new runs, the pipeline is complete - go straight to save
     # For previous runs, the pipeline is also complete - go straight to save
     
-    # Insert 'Brand Input' row at the top before saving
-    if brands and isinstance(brands, list) and len(brands) == 1:
+    # Insert 'Brand Input' row at the top before saving (rerun: use reference file's full brand list)
+    if previous_brand_input and previous_brand_input.strip():
+        brand_input_str = previous_brand_input.strip()
+    elif brands and isinstance(brands, list) and len(brands) == 1:
         brand_input_str = brands[0]
     else:
         brand_input_str = ', '.join(brands) if brands else ''
@@ -8985,7 +8994,7 @@ def load_previous_run_data(file_path):
     
     if previous_df is None:
         print("❌ Could not load file with any supported encoding. Continuing without previous run data...")
-        return {}, {}, "", "", ""
+        return {}, {}, "", "", "", None
     
     try:
         # Extract dates from previous run's Sample Size row
@@ -9017,6 +9026,24 @@ def load_previous_run_data(file_path):
         if brand_input_mask.any():
             previous_brand_input = previous_df[brand_input_mask].iloc[0]["Value"]
         
+        # CSV may use "Percentage" (pipeline output) or "Category Share" (saved exports)
+        pct_col = 'Percentage' if 'Percentage' in previous_df.columns else 'Category Share'
+        
+        # Extract reference sample size from SAMPLE SIZE row, column D (Category Share) = base number for rerun
+        previous_sample_size = None
+        sample_size_mask = previous_df["Column"].str.upper() == "SAMPLE SIZE"
+        if sample_size_mask.any():
+            ss_row = previous_df[sample_size_mask].iloc[0]
+            # Use D4 (Category Share) as the base sample size for reruns; fallback to other numeric columns
+            for col in ('Category Share', 'Original Raw Numbers', 'Percentage'):
+                if col in ss_row.index and pd.notna(ss_row[col]):
+                    try:
+                        previous_sample_size = int(float(str(ss_row[col]).replace(',', '')))
+                        if previous_sample_size > 0:
+                            break
+                    except (ValueError, TypeError):
+                        continue
+        
         # Define demographic categories
         demo_categories = ["GENDER", "AGE", "ETHNICITY", "INCOME", "EDUCATION", 
                           "RELATIONSHIP", "SEXUAL_ORIENTATION", "PARENTAL_STATUS", 
@@ -9027,37 +9054,35 @@ def load_previous_run_data(file_path):
         previous_demographics = previous_df[demo_mask].copy()
         previous_behavioral = previous_df[~demo_mask].copy()
         
-        # Create lookup dictionaries
+        # Create lookup dictionaries (use pct_col so both "Percentage" and "Category Share" CSVs work)
         demo_lookup = {}
         for _, row in previous_demographics.iterrows():
             key = normalize_lookup_key(row['Column'], row['Value'])
-            # Handle both string and numeric percentage values
-            pct_value = row['Percentage']
+            pct_value = row.get(pct_col, 0)
             if isinstance(pct_value, str):
-                # Remove any formatting and convert to float
                 pct_value = float(pct_value.replace(',', '').replace('%', ''))
             demo_lookup[key] = float(pct_value)
         
         behavioral_lookup = {}
         for _, row in previous_behavioral.iterrows():
             key = normalize_lookup_key(row['Column'], row['Value'])
-            # Handle both string and numeric percentage values
-            pct_value = row['Percentage']
+            pct_value = row.get(pct_col, 0)
             if isinstance(pct_value, str):
-                # Remove any formatting and convert to float
                 pct_value = float(pct_value.replace(',', '').replace('%', ''))
             behavioral_lookup[key] = float(pct_value)
         
         print(f"📊 Found {len(demo_lookup)} demographic values and {len(behavioral_lookup)} behavioral values in previous run")
+        if previous_sample_size:
+            print(f"📊 Reference sample size: {previous_sample_size:,}")
         print(f"📅 Previous Sample Dates: {previous_sample_dates}")
         print(f"📅 Previous Behavior Dates: {previous_behavior_dates}")
         print(f"🏷️ Previous Brand Input: {previous_brand_input}")
         
-        return demo_lookup, behavioral_lookup, previous_sample_dates, previous_behavior_dates, previous_brand_input
+        return demo_lookup, behavioral_lookup, previous_sample_dates, previous_behavior_dates, previous_brand_input, previous_sample_size
         
     except Exception as e:
         print(f"❌ Error processing previous run data: {e}")
-        return {}, {}, "", "", ""
+        return {}, {}, "", "", "", None
 
 def ensure_demographic_consistency(df_demo, previous_demo_lookup):
     """

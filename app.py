@@ -6658,7 +6658,10 @@ def submit_rerun():
         # Rerun is Gen Pop only if the reference profile is actually Gen Pop (not for The Rock, etc.)
         first_brand = (brands[0] or '').strip().lower()
         is_genpop_rerun = first_brand in ('gen pop', 'gen_pop', 'genpop')
-        project_name = re.sub(r'[<>:"/\\|?*]', '_', (data.get('project_name') or brands[0]).replace(' ', '_')[:80])
+        # Rerun output: same base name as reference file, new timestamp (e.g. The_Rock_2023_02_27_2026_21_36.csv)
+        name_from_key = os.path.splitext(os.path.basename(s3_key))[0]
+        rerun_basename = re.sub(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', name_from_key)
+        project_name = rerun_basename if rerun_basename else re.sub(r'[<>:"/\\|?*]', '_', (data.get('project_name') or brands[0]).replace(' ', '_')[:80])
         job_id = str(uuid.uuid4())[:8]
         filters = {}
         skew_settings = {}
