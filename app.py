@@ -13693,23 +13693,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         
         update_job_status(job_id, progress=25, message='Running analysis...')
         
-        # Prefer /tmp so pipeline works on Render (app dir is often read-only); upload to purgatory then remove file
-        def _writable_pipeline_dir():
-            candidates = ['/tmp/bg_pipeline', '/tmp']
-            if OUTPUT_DIR:
-                candidates.append(os.path.abspath(OUTPUT_DIR))
-            for p in candidates:
-                try:
-                    os.makedirs(p, exist_ok=True)
-                    test = os.path.join(p, '.write_test')
-                    with open(test, 'w') as f:
-                        f.write('1')
-                    os.remove(test)
-                    return os.path.abspath(p)
-                except Exception:
-                    continue
-            return candidates[-1] if candidates else os.path.abspath(OUTPUT_DIR)
-        pipeline_output_dir = _writable_pipeline_dir()
+        # Original working flow: pipeline uses its default output path (no output_dir); then copy to OUTPUT_DIR and upload
         try:
             result_file = bg.run_full_pipeline(
                 conn=conn,
@@ -13725,25 +13709,11 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 purchasers_only=purchasers_only,
                 previous_file_path=actual_previous_file,
                 brand_category=brand_category,
-                is_listener_watcher=is_listener_watcher,
-                output_dir=pipeline_output_dir
+                is_listener_watcher=is_listener_watcher
             )
             
             update_job_status(job_id, progress=85, message='Processing results...')
             
-            # If pipeline returned a path but file missing, try to find it in pipeline output dir
-            if result_file and not os.path.exists(result_file) and os.path.isdir(pipeline_output_dir):
-                try:
-                    prefix = (project_name if isinstance(project_name, str) else str(project_name)) + '_'
-                    cutoff = datetime.now().timestamp() - 600
-                    for f in os.listdir(pipeline_output_dir):
-                        if f.endswith('.csv') and f.startswith(prefix):
-                            candidate = os.path.join(pipeline_output_dir, f)
-                            if os.path.isfile(candidate) and os.path.getmtime(candidate) >= cutoff:
-                                result_file = candidate
-                                break
-                except Exception:
-                    pass
             if result_file and os.path.exists(result_file):
                 # Apply frequency analysis if requested (matches bg.py terminal behavior EXACTLY)
                 if include_frequency and not is_genpop:
@@ -13928,10 +13898,17 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     except Exception as e:
                         print(f"Demographic validation error: {e}")
                 
-                # Upload directly to S3 purgatory (no local copy; same as regular pipeline)
+                # Copy to OUTPUT_DIR then upload to S3 purgatory (original working flow)
+                output_filename = f"{job_id}_{project_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                output_path = os.path.join(OUTPUT_DIR, output_filename)
+                import shutil
+                try:
+                    shutil.copy2(result_file, output_path)
+                except OSError:
+                    output_path = result_file  # e.g. Render: use pipeline file directly if OUTPUT_DIR not writable
                 update_job_status(job_id, progress=95, message='Saving to purgatory...')
                 created_by = jobs.get(job_id, {}).get('created_by', '')
-                s3_key = upload_to_s3(result_file, project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True, category=brand_category or 'GENERAL')
+                s3_key = upload_to_s3(output_path, project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True, category=brand_category or 'GENERAL')
                 if s3_key:
                     _add_user_profile(s3_key, created_by)
                 update_job_status(
@@ -13939,16 +13916,10 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     status='completed',
                     progress=100,
                     message='Complete!',
-                    result_file=None,
+                    result_file=output_path,
                     demographic_validation=demographic_validation,
                     s3_key=s3_key
                 )
-                # Remove local file after upload (result lives only in S3 purgatory)
-                try:
-                    if result_file and os.path.exists(result_file):
-                        os.remove(result_file)
-                except Exception as cleanup_err:
-                    print(f"⚠️ Local file cleanup: {cleanup_err}")
             else:
                 if result_file:
                     print(f"⚠️ Pipeline returned path but file missing: {result_file}")
