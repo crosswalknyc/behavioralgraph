@@ -27079,7 +27079,7 @@
                                 const id = p.s3_key || p.job_id;
                                 const idEsc = escapeIdForOnclick(id);
                                 const isActive = selectedDashProfile === id;
-                                const dateLabel = getRunDateLabel(p.s3_key || '') || 'Run';
+                                const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
                                 return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
                             }).join('')}
                         </div>`;
@@ -27173,7 +27173,7 @@
                                     const id = p.s3_key || p.job_id;
                                     const idEsc = escapeIdForOnclick(id);
                                     const isActive = selectedDashProfile === id;
-                                    const dateLabel = getRunDateLabel(p.s3_key || '') || 'Run';
+                                    const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
                                     return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
                                 }).join('')}
                             </div>`;
@@ -27221,7 +27221,7 @@
                                         const id = p.s3_key || p.job_id;
                                         const idEsc = escapeIdForOnclick(id);
                                         const isActive = selectedDashProfile === id;
-                                        const dateLabel = getRunDateLabel(p.s3_key || '') || 'Run';
+                                        const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
                                         const dateAttr = escapeAttr(dateLabel);
                                         return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${dateAttr}">${dateAttr}</div>`;
                                     }).join('')}
@@ -45433,6 +45433,13 @@
             const [, mm, dd, yyyy] = m;
             const d = new Date(parseInt(yyyy, 10), parseInt(mm, 10) - 1, parseInt(dd, 10));
             return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        /** Year from profile name when it ends with a 4-digit year (e.g. "The Rock 2023" → "2023"). */
+        function getProfileYear(profile) {
+            const name = getProfileFullName(profile);
+            const m = name.match(/(\d{4})$/);
+            return m ? m[1] : '';
         }
 
         function renderComparisonProfiles(profiles) {
