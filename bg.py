@@ -4002,11 +4002,33 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             if is_listener_watcher:
                 final_sample_size = max(1, final_sample_size // 10)
     
-    # Rerun: use reference profile sample size so output matches reference (demographics + sample size)
+    # Rerun: use reference sample size with small up/down fluctuation based on whether rerun window is before or after original
     if previous_demo_lookup and previous_sample_size_ref and previous_sample_size_ref > 0:
-        final_sample_size = int(previous_sample_size_ref)
+        base_ref = int(previous_sample_size_ref)
+        multiplier = 1.0
+        if previous_sample_dates and sample_start and sample_end:
+            try:
+                # Parse reference window (e.g. "2025-06-01 to 2025-07-01")
+                ref_parts = previous_sample_dates.replace(" To ", " to ").split(" to ")
+                ref_dates = [p.strip() for p in ref_parts if p.strip()]
+                if len(ref_dates) >= 2:
+                    ref_start = pd.to_datetime(ref_dates[0])
+                    ref_end = pd.to_datetime(ref_dates[-1])
+                    cur_start = pd.to_datetime(sample_start)
+                    cur_end = pd.to_datetime(sample_end)
+                    ref_mid = (ref_start + (ref_end - ref_start) / 2).value
+                    cur_mid = (cur_start + (cur_end - cur_start) / 2).value
+                    # Rerun after original → sample size fluctuates up; before → down (±0.5%)
+                    if cur_mid > ref_mid:
+                        multiplier = 1.005
+                    elif cur_mid < ref_mid:
+                        multiplier = 0.995
+            except Exception:
+                pass
+        final_sample_size = max(1, int(round(base_ref * multiplier)))
+        final_sample_size = (final_sample_size // 10) * 10
         if not SILENCE_VERBOSE_OUTPUT:
-            print(f"📊 Rerun: using reference sample size {final_sample_size:,}")
+            print(f"📊 Rerun: using reference sample size {final_sample_size:,} (ref={base_ref:,}, multiplier={multiplier})")
     
     df_sample = pd.DataFrame([
         {
@@ -9093,9 +9115,9 @@ def ensure_demographic_consistency(df_demo, previous_demo_lookup):
     if not previous_demo_lookup:
         return df_demo
     
-    print("🔄 Ensuring demographic consistency with previous run (±2.3% rule)...")
+    print("🔄 Ensuring demographic consistency with previous run (AGE ±0.05%, others ±2.3%)...")
     
-    # Process each category separately to maintain ±2.3% constraints
+    # Process each category separately (AGE ±0.05%, others ±2.3%)
     for category in df_demo['Column'].unique():
         category_mask = df_demo['Column'] == category
         category_data = df_demo[category_mask].copy()
@@ -9115,9 +9137,9 @@ def ensure_demographic_consistency(df_demo, previous_demo_lookup):
             if key in previous_demo_lookup:
                 previous_pct = previous_demo_lookup[key]
                 current_pct = float(row['Percentage']) if isinstance(row['Percentage'], str) else row['Percentage']
-                
-                # Calculate allowed range (±2.3%) per new requirements
-                max_change = 2.3
+                # Age: ±0.05% of original; other demographics: ±2.3%
+                is_age = (row['Column'] or '').upper() == 'AGE'
+                max_change = 0.05 if is_age else 2.3
                 min_allowed = max(0.01, previous_pct - max_change)
                 max_allowed = min(98.0, previous_pct + max_change)
                 
@@ -14338,7 +14360,7 @@ def enforce_final_brand_consistency(df):
     return df_final
 
 def enforce_demographic_fluctuation_caps(df, previous_demo_lookup):
-    """Step 1: Ensure demographics only fluctuate ±2.5% from original values"""
+    """Step 1: Ensure demographics only fluctuate from original (AGE ±0.05%, others ±2.5%)"""
     demographic_categories = [
         "GENDER", "AGE", "ETHNICITY", "INCOME", "EDUCATION", 
         "RELATIONSHIP_STATUS", "SEXUAL_ORIENTATION", "PARENTAL_STATUS", 
@@ -14355,10 +14377,10 @@ def enforce_demographic_fluctuation_caps(df, previous_demo_lookup):
             if key in previous_demo_lookup:
                 prev_value = previous_demo_lookup[key]
                 current_value = float(row['Percentage'])
-                
-                # Apply ±2.5% fluctuation cap
-                min_allowed = max(0, prev_value - 2.5)
-                max_allowed = min(100, prev_value + 2.5)
+                # Age: ±0.05% of original; other demographics: ±2.5%
+                cap = 0.05 if (row['Column'] or '').upper() == 'AGE' else 2.5
+                min_allowed = max(0, prev_value - cap)
+                max_allowed = min(100, prev_value + cap)
                 
                 if current_value < min_allowed or current_value > max_allowed:
                     # Use random value within allowed band
