@@ -12939,6 +12939,7 @@ def list_jobs():
         # Add local jobs (always fresh); for purgatory s3_keys merge display name and category from purgatory metadata
         purgatory_meta = load_purgatory_metadata() if s3_client else {}
         for job_id, job in jobs.items():
+            s3_key = job.get('s3_key') or ''
             entry = {
                 'job_id': job_id,
                 'project_name': job.get('project_name', ''),
@@ -12947,10 +12948,10 @@ def list_jobs():
                 'created_at': job.get('created_at', ''),
                 'source': 'local',
                 'category': 'LOCAL',
-                's3_key': job.get('s3_key'),
-                'display_name': job.get('display_name')
+                's3_key': s3_key or job.get('s3_key'),
+                'display_name': job.get('display_name'),
+                'profile_subject': get_profile_subject_from_s3_key(s3_key) if s3_key else ''
             }
-            s3_key = job.get('s3_key') or ''
             if s3_key.startswith(S3_PURGATORY_PREFIX):
                 purgatory_id = f"{S3_BUCKET}:{s3_key}"
                 if purgatory_id in purgatory_meta:
@@ -12976,16 +12977,18 @@ def list_jobs():
         # Add cached S3 jobs (ensure each has created_at for sorting)
         for j in cache_jobs:
             if isinstance(j, dict):
+                sk = j.get('s3_key') or ''
                 entry = {
-                    'job_id': j.get('job_id') or j.get('s3_key', ''),
+                    'job_id': j.get('job_id') or sk or '',
                     'project_name': j.get('project_name') or j.get('name', 'Unknown'),
                     'status': j.get('status', 'cached'),
                     'progress': j.get('progress', 100),
                     'created_at': j.get('created_at') or j.get('last_modified', ''),
                     'source': j.get('source', 's3'),
                     'category': j.get('category', 'OTHER'),
-                    's3_key': j.get('s3_key'),
-                    'display_name': j.get('display_name')
+                    's3_key': sk,
+                    'display_name': j.get('display_name'),
+                    'profile_subject': j.get('profile_subject') or get_profile_subject_from_s3_key(sk) if sk else ''
                 }
                 # Preserve bucket/is_svod for SVOD profile detection
                 if 'bucket' in j:
@@ -13431,6 +13434,14 @@ def remove_timestamp_from_name(name):
     
     return name
 
+
+def get_profile_subject_from_s3_key(s3_key):
+    """Return a canonical key for grouping same-profile different-date runs (e.g. 'The_Rock')."""
+    if not s3_key:
+        return ''
+    filename = s3_key.split('/')[-1].replace('.csv', '')
+    return remove_timestamp_from_name(filename)
+
 def smart_title_case(text):
     """Convert to title case but preserve all-caps words (like JD, AOC, NFL, etc.)"""
     words = text.split(' ')
@@ -13505,7 +13516,8 @@ def process_s3_file_metadata(key, obj):
         'created_at': obj['LastModified'].isoformat(),
         'source': 's3',
         's3_key': key,
-        'category': category
+        'category': category,
+        'profile_subject': get_profile_subject_from_s3_key(key)
     }
 
 

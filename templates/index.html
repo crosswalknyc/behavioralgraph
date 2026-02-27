@@ -11768,6 +11768,19 @@
             </button>
         </div>
     </div>
+
+    <!-- Profile date ranges comparison (deltas) modal -->
+    <div id="profileDeltasModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeProfileDeltasModal()">
+        <div class="modal-content" style="max-width: 90vw; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 id="profileDeltasModalTitle" style="margin: 0; color: var(--text-primary);">Compare date ranges</h2>
+                <button type="button" onclick="closeProfileDeltasModal()" style="background: transparent; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">×</button>
+            </div>
+            <div id="profileDeltasModalContent" style="overflow: auto; flex: 1; min-height: 0;">
+                <div class="loading-placeholder">Loading runs...</div>
+            </div>
+        </div>
+    </div>
     
     <div class="container">
         {% if cloaked_from %}
@@ -13290,6 +13303,11 @@
                             <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
+                                <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Run:</span>
+                                    <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;"></select>
+                                    <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Compare date ranges</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -26902,6 +26920,7 @@
         let dashboardProfiles = [];
         let selectedDashProfile = null;
         let expandedDashCategories = new Set();
+        let expandedDashSubjects = new Set(); // same-profile different-date groups (e.g. "The_Rock")
         
         // Multi-tab profile management
         let openProfileTabs = []; // Array of { id, name, dateRange, data, parsed }
@@ -27102,18 +27121,41 @@
                         const nameB = getProfileFullName(b).toLowerCase();
                         return nameA.localeCompare(nameB);
                     });
-                    html += sortedItems.map(p => {
-                        const id = p.s3_key || p.job_id;
-                        const idEsc = escapeIdForOnclick(id);
-                        const isActive = selectedDashProfile === id;
-                        const fullName = getProfileFullName(p);
-                        const fullNameAttr = escapeAttr(fullName);
-                        return `
-                            <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${fullNameAttr}">
-                                ${fullNameAttr}
+                    const bySubject = {};
+                    sortedItems.forEach(p => {
+                        const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
+                        if (!bySubject[subj]) bySubject[subj] = [];
+                        bySubject[subj].push(p);
+                    });
+                    Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+                        const runs = bySubject[subj];
+                        const first = runs[0];
+                        const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
+                        const subjectExpanded = expandedDashSubjects.has(subj);
+                        if (runs.length === 1) {
+                            const id = first.s3_key || first.job_id;
+                            const idEsc = escapeIdForOnclick(id);
+                            const isActive = selectedDashProfile === id;
+                            const fullName = getProfileFullName(first);
+                            html += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(fullName)}">${escapeAttr(fullName)}</div>`;
+                        } else {
+                            const displayName = getProfileFullName(first);
+                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
+                                <span class="cat-arrow">▸</span>
+                                <span class="profile-cat-label">${escapeAttr(displayName)}</span>
+                                <span class="profile-cat-count">(${runs.length} date ranges)</span>
                             </div>
-                        `;
-                    }).join('');
+                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
+                                ${runs.sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '')).map(p => {
+                                    const id = p.s3_key || p.job_id;
+                                    const idEsc = escapeIdForOnclick(id);
+                                    const isActive = selectedDashProfile === id;
+                                    const dateLabel = getRunDateLabel(p.s3_key || '') || 'Run';
+                                    return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
+                                }).join('')}
+                            </div>`;
+                        }
+                    });
                 } else {
                     Object.keys(subcats).sort().forEach(cat => {
                         const items = subcats[cat];
@@ -27124,25 +27166,53 @@
                             const nameB = getProfileFullName(b).toLowerCase();
                             return nameA.localeCompare(nameB);
                         });
+                        const bySubject = {};
+                        sortedItems.forEach(p => {
+                            const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
+                            if (!bySubject[subj]) bySubject[subj] = [];
+                            bySubject[subj].push(p);
+                        });
+                        let itemsHtml = '';
+                        Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+                            const runs = bySubject[subj];
+                            const first = runs[0];
+                            const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
+                            const subjectExpanded = expandedDashSubjects.has(subj);
+                            if (runs.length === 1) {
+                                const id = first.s3_key || first.job_id;
+                                const idEsc = escapeIdForOnclick(id);
+                                const isActive = selectedDashProfile === id;
+                                const fullName = getProfileFullName(first);
+                                const fullNameAttr = escapeAttr(fullName);
+                                itemsHtml += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${fullNameAttr}">${fullNameAttr}</div>`;
+                            } else {
+                                const displayName = getProfileFullName(first);
+                                const displayNameAttr = escapeAttr(displayName);
+                                itemsHtml += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
+                                    <span class="cat-arrow">▸</span>
+                                    <span class="profile-cat-label">${displayNameAttr}</span>
+                                    <span class="profile-cat-count">(${runs.length} date ranges)</span>
+                                </div>
+                                <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
+                                    ${runs.sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '')).map(p => {
+                                        const id = p.s3_key || p.job_id;
+                                        const idEsc = escapeIdForOnclick(id);
+                                        const isActive = selectedDashProfile === id;
+                                        const dateLabel = getRunDateLabel(p.s3_key || '') || 'Run';
+                                        const dateAttr = escapeAttr(dateLabel);
+                                        return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${dateAttr}">${dateAttr}</div>`;
+                                    }).join('')}
+                                </div>`;
+                            }
+                        });
                         html += `
                             <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${catId}')">
                                 <span class="cat-arrow">▸</span>
                                 <span class="profile-cat-label">${getCategoryDisplayLabel(cat)}</span>
                                 <span class="profile-cat-count">(${items.length})</span>
                             </div>
-                            <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
-                                ${sortedItems.map(p => {
-                                    const id = p.s3_key || p.job_id;
-                                    const idEsc = escapeIdForOnclick(id);
-                                    const isActive = selectedDashProfile === id;
-                                    const fullName = getProfileFullName(p);
-                                    const fullNameAttr = escapeAttr(fullName);
-                                    return `
-                                        <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${fullNameAttr}">
-                                            ${fullNameAttr}
-                                        </div>
-                                    `;
-                                }).join('')}
+                            <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}" style="padding-left: 0.5rem;">
+                                ${itemsHtml}
                             </div>
                         `;
                     });
@@ -27161,6 +27231,95 @@
                 expandedDashCategories.add(catId);
             }
             renderDashboardProfileTree(dashboardProfiles);
+        }
+
+        function toggleDashSubject(element) {
+            const subj = element && element.getAttribute && element.getAttribute('data-dash-subject');
+            if (subj == null) return;
+            if (expandedDashSubjects.has(subj)) {
+                expandedDashSubjects.delete(subj);
+            } else {
+                expandedDashSubjects.add(subj);
+            }
+            renderDashboardProfileTree(dashboardProfiles);
+        }
+
+        function closeProfileDeltasModal() {
+            const modal = document.getElementById('profileDeltasModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function showProfileDeltasModal(subject, sameSubjectRuns) {
+            const modal = document.getElementById('profileDeltasModal');
+            const titleEl = document.getElementById('profileDeltasModalTitle');
+            const contentEl = document.getElementById('profileDeltasModalContent');
+            if (!modal || !titleEl || !contentEl) return;
+            const profileName = sameSubjectRuns.length ? getProfileFullName(sameSubjectRuns[0]) : subject.replace(/_/g, ' ');
+            titleEl.textContent = 'Compare date ranges: ' + profileName;
+            contentEl.innerHTML = '<div class="loading-placeholder">Loading runs...</div>';
+            modal.style.display = 'flex';
+            const runs = [...sameSubjectRuns].sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || ''));
+            const runData = [];
+            try {
+                for (const p of runs) {
+                    const key = p.s3_key || p.job_id;
+                    const res = await fetch('/api/get-csv-data/' + encodeURIComponent(key), { credentials: 'same-origin' });
+                    const data = await res.json();
+                    if (!data.success || !data.data) {
+                        runData.push({ label: getRunDateLabel(key) || key, error: true });
+                        continue;
+                    }
+                    const parsed = parseAllData(data.data);
+                    runData.push({
+                        label: getRunDateLabel(key) || key,
+                        key,
+                        sampleSize: parsed.sampleSize,
+                        projectedUS: parsed.projectedUS,
+                        demographics: parsed.demographics || {},
+                        dateRange: data.date_range || ''
+                    });
+                }
+            } catch (e) {
+                contentEl.innerHTML = '<p style="color: var(--accent-red);">Failed to load run data.</p>';
+                return;
+            }
+            const validRuns = runData.filter(r => !r.error);
+            if (validRuns.length === 0) {
+                contentEl.innerHTML = '<p style="color: var(--text-secondary);">No run data available.</p>';
+                return;
+            }
+            const firstSample = validRuns[0].sampleSize;
+            let table = '<table class="data-table" style="width: 100%; font-size: 0.85rem;"><thead><tr><th style="text-align: left;">Metric</th>';
+            validRuns.forEach(r => { table += `<th style="text-align: right;">${escapeAttr(r.label)}</th>`; });
+            table += '<th style="text-align: right;">Δ from first</th></tr></thead><tbody>';
+            table += `<tr><td>Sample size</td>${validRuns.map(r => `<td style="text-align: right;">${formatNumber(r.sampleSize)}</td>`).join('')}`;
+            table += `<td style="text-align: right;">—</td></tr>`;
+            table += '<tr><td>Δ vs first (sample)</td>';
+            validRuns.forEach((r, i) => {
+                const delta = i === 0 ? '—' : (firstSample ? (((r.sampleSize - firstSample) / firstSample) * 100).toFixed(1) + '%' : '—');
+                table += `<td style="text-align: right;">${delta}</td>`;
+            });
+            table += '<td style="text-align: right;">—</td></tr>';
+            const demoCategories = ['gender', 'age', 'ethnicity', 'income'];
+            validRuns[0].demographics && Object.keys(validRuns[0].demographics).forEach(cat => {
+                if (!demoCategories.includes(cat)) return;
+                const vals = validRuns[0].demographics[cat];
+                if (!vals || typeof vals !== 'object') return;
+                const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
+                Object.keys(vals).slice(0, 5).forEach(segment => {
+                    table += `<tr><td>${escapeAttr(catLabel)}: ${escapeAttr(segment)}</td>`;
+                    const firstVal = (validRuns[0].demographics[cat] && validRuns[0].demographics[cat][segment]) != null ? validRuns[0].demographics[cat][segment] : null;
+                    validRuns.forEach((r) => {
+                        const v = (r.demographics && r.demographics[cat] && r.demographics[cat][segment]) != null ? r.demographics[cat][segment] : '';
+                        table += `<td style="text-align: right;">${typeof v === 'number' ? v.toFixed(1) + '%' : escapeAttr(String(v))}</td>`;
+                    });
+                    const lastVal = (validRuns[validRuns.length - 1].demographics[cat] && validRuns[validRuns.length - 1].demographics[cat][segment]) != null ? validRuns[validRuns.length - 1].demographics[cat][segment] : null;
+                    const deltaPp = (firstVal != null && lastVal != null && typeof firstVal === 'number' && typeof lastVal === 'number') ? (lastVal - firstVal).toFixed(1) + ' pp' : '—';
+                    table += `<td style="text-align: right;">${deltaPp}</td></tr>`;
+                });
+            });
+            table += '</tbody></table>';
+            contentEl.innerHTML = '<p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Sample size and key demographics across date-range runs. Δ from first = percent change vs. earliest run.</p>' + table;
         }
 
         function filterDashboardProfiles() {
@@ -27573,7 +27732,30 @@
                     dateRangeEl.textContent = dateRange ? `Date Range: ${dateRange}` : '';
                     dateRangeEl.style.display = dateRange ? 'block' : 'none';
                 }
-                
+                const runsRow = document.getElementById('dashProfileRunsRow');
+                const runSelect = document.getElementById('dashRunSelect');
+                const deltasBtn = document.getElementById('dashViewDeltasBtn');
+                const currentProfile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
+                const subject = currentProfile ? getProfileSubject(currentProfile) : '';
+                const sameSubjectRuns = subject ? dashboardProfiles.filter(p => getProfileSubject(p) === subject) : [];
+                if (runsRow && runSelect && sameSubjectRuns.length > 1) {
+                    runsRow.style.display = 'flex';
+                    const sortedRuns = [...sameSubjectRuns].sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || ''));
+                    runSelect.innerHTML = sortedRuns.map(p => {
+                        const id = p.s3_key || p.job_id;
+                        const label = getRunDateLabel(p.s3_key || '') || id;
+                        return `<option value="${escapeAttr(id).replace(/"/g, '&quot;')}" ${id === profileId ? 'selected' : ''}>${escapeAttr(label)}</option>`;
+                    }).join('');
+                    runSelect.onchange = function() {
+                        const key = runSelect.value;
+                        if (key && key !== profileId) selectDashboardProfile(key);
+                    };
+                    if (deltasBtn) {
+                        deltasBtn.onclick = function() { showProfileDeltasModal(subject, sameSubjectRuns); };
+                    }
+                } else if (runsRow) {
+                    runsRow.style.display = 'none';
+                }
                 // Fetch profile image from Wikipedia (use base name for image lookup)
                 fetchProfileImage(brandName);
             }
@@ -45209,6 +45391,25 @@
                 return n.replace(/_/g, ' ').trim();
             }
             return 'Unknown';
+        }
+
+        /** Canonical key for grouping same profile run with different dates (e.g. "The_Rock"). */
+        function getProfileSubject(profile) {
+            if (profile.profile_subject && profile.profile_subject.trim()) return profile.profile_subject.trim();
+            const key = profile.s3_key || profile.job_id || '';
+            if (!key) return '';
+            const filename = key.split('/').pop().replace(/\.csv$/i, '');
+            return filename.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '').replace(/_\d{2}_\d{2}_\d{4}$/, '');
+        }
+
+        /** Short date label from s3_key timestamp (e.g. "Feb 23, 2026"). */
+        function getRunDateLabel(s3Key) {
+            if (!s3Key) return '';
+            const m = s3Key.match(/_(\d{2})_(\d{2})_(\d{4})(?:_\d{2}_\d{2})?\.csv$/i) || s3Key.match(/_(\d{2})_(\d{2})_(\d{4})$/);
+            if (!m) return '';
+            const [, mm, dd, yyyy] = m;
+            const d = new Date(parseInt(yyyy, 10), parseInt(mm, 10) - 1, parseInt(dd, 10));
+            return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
 
         function renderComparisonProfiles(profiles) {
