@@ -13693,7 +13693,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         
         update_job_status(job_id, progress=25, message='Running analysis...')
         
-        # Original working flow: pipeline uses its default output path (no output_dir); then copy to OUTPUT_DIR and upload
+        # Same output flow for both new runs and reruns: pipeline default path → copy to OUTPUT_DIR → upload to purgatory
         try:
             result_file = bg.run_full_pipeline(
                 conn=conn,
@@ -13898,7 +13898,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     except Exception as e:
                         print(f"Demographic validation error: {e}")
                 
-                # Copy to OUTPUT_DIR then upload to S3 purgatory (original working flow)
+                # Copy to OUTPUT_DIR then upload to S3 purgatory (same for new run and rerun)
                 output_filename = f"{job_id}_{project_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 output_path = os.path.join(OUTPUT_DIR, output_filename)
                 import shutil
