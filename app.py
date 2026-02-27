@@ -13693,10 +13693,24 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         
         update_job_status(job_id, progress=25, message='Running analysis...')
         
-        # Pipeline writes to OUTPUT_DIR (reliable on all hosts); we upload to S3 purgatory then remove local file
+        # Prefer /tmp so pipeline works on Render (app dir is often read-only); upload to purgatory then remove file
+        def _writable_pipeline_dir():
+            candidates = ['/tmp/bg_pipeline', '/tmp']
+            if OUTPUT_DIR:
+                candidates.append(os.path.abspath(OUTPUT_DIR))
+            for p in candidates:
+                try:
+                    os.makedirs(p, exist_ok=True)
+                    test = os.path.join(p, '.write_test')
+                    with open(test, 'w') as f:
+                        f.write('1')
+                    os.remove(test)
+                    return os.path.abspath(p)
+                except Exception:
+                    continue
+            return candidates[-1] if candidates else os.path.abspath(OUTPUT_DIR)
+        pipeline_output_dir = _writable_pipeline_dir()
         try:
-            # Use absolute path so pipeline and app agree on location (avoids "No output file" on some hosts)
-            output_dir_abs = os.path.abspath(OUTPUT_DIR)
             result_file = bg.run_full_pipeline(
                 conn=conn,
                 project_name=project_name,
@@ -13712,19 +13726,19 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 previous_file_path=actual_previous_file,
                 brand_category=brand_category,
                 is_listener_watcher=is_listener_watcher,
-                output_dir=output_dir_abs
+                output_dir=pipeline_output_dir
             )
             
             update_job_status(job_id, progress=85, message='Processing results...')
             
-            # If pipeline returned a path but file missing (e.g. path normalization on server), try to find it
-            if result_file and not os.path.exists(result_file) and os.path.isdir(output_dir_abs):
+            # If pipeline returned a path but file missing, try to find it in pipeline output dir
+            if result_file and not os.path.exists(result_file) and os.path.isdir(pipeline_output_dir):
                 try:
                     prefix = (project_name if isinstance(project_name, str) else str(project_name)) + '_'
-                    cutoff = datetime.now().timestamp() - 600  # last 10 min
-                    for f in os.listdir(output_dir_abs):
+                    cutoff = datetime.now().timestamp() - 600
+                    for f in os.listdir(pipeline_output_dir):
                         if f.endswith('.csv') and f.startswith(prefix):
-                            candidate = os.path.join(output_dir_abs, f)
+                            candidate = os.path.join(pipeline_output_dir, f)
                             if os.path.isfile(candidate) and os.path.getmtime(candidate) >= cutoff:
                                 result_file = candidate
                                 break
