@@ -13435,12 +13435,20 @@ def remove_timestamp_from_name(name):
     return name
 
 
+def normalize_profile_subject_for_grouping(name):
+    """For grouping only: strip trailing _YYYY so 'The_Rock_2025' and 'The_Rock_2023' both become 'The_Rock'."""
+    import re
+    # Strip trailing _YYYY (e.g. _2025, _2023) so same profile different years group together
+    return re.sub(r'_\d{4}$', '', name)
+
+
 def get_profile_subject_from_s3_key(s3_key):
     """Return a canonical key for grouping same-profile different-date runs (e.g. 'The_Rock')."""
     if not s3_key:
         return ''
     filename = s3_key.split('/')[-1].replace('.csv', '')
-    return remove_timestamp_from_name(filename)
+    name = remove_timestamp_from_name(filename)
+    return normalize_profile_subject_for_grouping(name)
 
 def smart_title_case(text):
     """Convert to title case but preserve all-caps words (like JD, AOC, NFL, etc.)"""
