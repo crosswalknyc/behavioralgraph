@@ -46863,6 +46863,11 @@
             });
 
             availableCategories.behavioral.sort();
+            // Exclude INTEREST/INTERESTS (they have their own INTERESTS tab), same as Behavioral tab
+            availableCategories.behavioral = availableCategories.behavioral.filter(c => {
+                const u = (c || '').toUpperCase();
+                return u !== 'INTEREST' && u !== 'INTERESTS';
+            });
 
             // Only show behavioral categories the user has been granted access to (demographics + location always shown)
             if (!hasAllBehavioralCategories) {
@@ -46884,6 +46889,28 @@
                 const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => (c || '').toUpperCase()));
                 availableCategories.behavioral = availableCategories.behavioral.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
             }
+            
+            // Same as Behavioral tab: exclude sports slicer and most-purchased sub-categories so Compare only shows same cards as Behavioral
+            const compSportsSlicer = new Set([
+                'AFC', 'AFC EAST', 'AFC NORTH', 'AFC SOUTH', 'AFC WEST', 'AL', 'AL CENTRAL', 'AL EAST', 'AL WEST',
+                'ATLANTIC DIVISION', 'CENTRAL DIVISION', 'EASTERN CONFERENCE', 'HORSE RACING', 'LA LIGA', 'METROPOLITAN DIVISION',
+                'MLB', 'MLS', 'NBA', 'NFC', 'NFC EAST', 'NFC NORTH', 'NFC SOUTH', 'NFC WEST', 'NFL', 'NHL', 'NWSL',
+                'PACIFIC DIVISION', 'PREMIER LEAGUE', 'RUGBY', 'SERIE A', 'SOCCER', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'SPORTS TEAM', 'WNBA'
+            ]);
+            const compMostPurchasedSlicer = new Set([
+                'ACCESSORIES', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'CPG', 'HEALTH & WELLNESS', 'HOME/OUTDOOR',
+                'PETS', 'TECHNOLOGY BRAND', 'TOYS'
+            ]);
+            const compHasMostPurchased = availableCategories.behavioral.some(c => {
+                const u = (c || '').toUpperCase();
+                return u.includes('MOST PURCHASED BRANDS') || u === 'MOST PURCHASED';
+            });
+            availableCategories.behavioral = availableCategories.behavioral.filter(cat => {
+                const u = (cat || '').toUpperCase();
+                if (compSportsSlicer.has(u)) return false;
+                if (compHasMostPurchased && compMostPurchasedSlicer.has(u)) return false;
+                return true;
+            });
 
             // Restore previous selections or select all by default
             if (preserveSelection && prevSelected.size > 0) {
@@ -47353,7 +47380,7 @@
                 </div>`;
             });
 
-            // Add behavioral categories (only if selected) - exclude INTEREST/INTERESTS, filter by user access
+            // Add behavioral categories (only if selected) - use same rules as Behavioral tab so only those cards appear
             let sortedBehavioralCats = Array.from(allBehavioralCats)
                 .filter(c => { const u = c.toUpperCase(); return u !== 'INTEREST' && u !== 'INTERESTS'; })
                 .sort();
@@ -47377,6 +47404,28 @@
                 const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => (c || '').toUpperCase()));
                 sortedBehavioralCats = sortedBehavioralCats.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
             }
+            
+            // Same as Behavioral tab: don't show separate cards for sports or most-purchased sub-categories (one card each with dropdown there)
+            const sportsSlicerCategories = new Set([
+                'AFC', 'AFC EAST', 'AFC NORTH', 'AFC SOUTH', 'AFC WEST', 'AL', 'AL CENTRAL', 'AL EAST', 'AL WEST',
+                'ATLANTIC DIVISION', 'CENTRAL DIVISION', 'EASTERN CONFERENCE', 'HORSE RACING', 'LA LIGA', 'METROPOLITAN DIVISION',
+                'MLB', 'MLS', 'NBA', 'NFC', 'NFC EAST', 'NFC NORTH', 'NFC SOUTH', 'NFC WEST', 'NFL', 'NHL', 'NWSL',
+                'PACIFIC DIVISION', 'PREMIER LEAGUE', 'RUGBY', 'SERIE A', 'SOCCER', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'SPORTS TEAM', 'WNBA'
+            ]);
+            const mostPurchasedSlicerCategories = new Set([
+                'ACCESSORIES', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'CPG', 'HEALTH & WELLNESS', 'HOME/OUTDOOR',
+                'PETS', 'TECHNOLOGY BRAND', 'TOYS'
+            ]);
+            const hasMostPurchasedCard = sortedBehavioralCats.some(c => {
+                const u = c.toUpperCase();
+                return u.includes('MOST PURCHASED BRANDS') || u === 'MOST PURCHASED';
+            });
+            sortedBehavioralCats = sortedBehavioralCats.filter(cat => {
+                const u = cat.toUpperCase();
+                if (sportsSlicerCategories.has(u)) return false;
+                if (hasMostPurchasedCard && mostPurchasedSlicerCategories.has(u)) return false;
+                return true;
+            });
             
             const displayedBehavioralCats = []; // Track which categories are displayed for Jump To dropdown
             sortedBehavioralCats.forEach(cat => {
