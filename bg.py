@@ -5164,6 +5164,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = divide_streaming_platform_except_netflix_espn(df_final)
     # DIVIDE APP/PLATFORM USAGE BY 2
     df_final = divide_app_platform_usage_by_2(df_final)
+    # DIVIDE BANKING, TRAVEL, BROADCAST/CABLE, AUTOMOBILE, GAMES, TELECOM, CREDIT PROVIDER, INVESTMENTS, INSURANCE, MEDIA BY 2
+    df_final = divide_categories_by_2(df_final, [
+        'BANKING', 'TRAVEL', 'BROADCAST/CABLE', 'AUTOMOBILE', 'GAMES', 'TELECOM',
+        'CREDIT PROVIDER', 'INVESTMENTS', 'INSURANCE', 'MEDIA'
+    ])
 
     # ENSURE CROSS-CATEGORY BRAND CONSISTENCY - AFTER all boosts are applied
     # This ensures Boston Celtics, Lakers, etc. have same boosted values across all categories
@@ -7341,6 +7346,29 @@ def divide_app_platform_usage_by_2(df: pd.DataFrame) -> pd.DataFrame:
     if not SILENCE_VERBOSE_OUTPUT:
         print(f"✅ Divided APP/PLATFORM USAGE category by 2: {changes} entries updated")
 
+    return df
+
+def divide_categories_by_2(df: pd.DataFrame, category_names: list) -> pd.DataFrame:
+    """Divide the given categories by 2 (Original Raw Numbers) and update accordingly."""
+    if df is None or df.empty or not category_names:
+        return df
+    df = df.copy()
+    upper_names = {str(c).upper().strip() for c in category_names}
+    mask = df['Column'].str.upper().isin(upper_names)
+    indices = df[mask].index
+    if len(indices) == 0:
+        return df
+    changes = 0
+    for idx in indices:
+        try:
+            current_raw = int(float(str(df.at[idx, 'Original Raw Numbers']).replace(',', '')))
+            new_raw = max(1, current_raw // 2)
+            df.at[idx, 'Original Raw Numbers'] = str(new_raw)
+            changes += 1
+        except Exception:
+            continue
+    if not SILENCE_VERBOSE_OUTPUT:
+        print(f"✅ Divided categories by 2 ({', '.join(sorted(upper_names))}): {changes} entries updated")
     return df
 
 def divide_streaming_platform_by_2_except_espn_netflix(df: pd.DataFrame) -> pd.DataFrame:
