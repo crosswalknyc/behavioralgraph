@@ -3930,76 +3930,76 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Define a hard ceiling representing the maximum GenPop cohort allowed
     GENPOP_SAMPLE_CAP = 10_000_000
     
-    # For GenPop runs, hardcode demographics and use exactly 10M sample size
+    # For GenPop runs, hardcode demographics and use exactly 10M sample size (do not return here - pipeline must continue to write CSV)
     if is_genpop:
         final_sample_size = GENPOP_SAMPLE_CAP
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"🎯 GenPop mode: Using hardcoded demographics with 10M sample size")
             print(f"✅ Final SAMPLE SIZE set to: {final_sample_size:,}")
-        return final_sample_size
-    try:
-        cur = conn.cursor()
-        # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-        # Use universe scan result (total unique users from full universe scan)
-        # This is the "Total Unique Users" shown at the start
-        actual_sample_size = getattr(run_full_pipeline, 'universe_size', None)
-        if actual_sample_size is None:
-            # Fallback to TEMP_UIDS if universe scan wasn't done
-            try:
-                actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_UIDS").fetchone()[0]
-            except Exception:
-                # Last resort fallback to TEMP_DEMOS
-                actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_DEMOS").fetchone()[0]
-        # Bound by GenPop cap so it never exceeds the allowed universe
-        bounded = min(int(actual_sample_size or 0), GENPOP_SAMPLE_CAP)
-        if bounded >= GENPOP_SAMPLE_CAP and not is_genpop:
-            # Apply a small buffer (0.5%) so we never report the hard cap (only for non-GenPop)
-            buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
-            bounded = GENPOP_SAMPLE_CAP - buffer_down
-        
-        # INFLATE SAMPLE SIZE: try 35x first, then scale down to 25x, 5x, 2.5x, or 1x
-        # so the result never exceeds 10M (max boost capped at 35x)
-        INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
-        INFLATION_FACTOR = 1
-        for mult in INFLATION_OPTIONS:
-            if bounded * mult <= GENPOP_SAMPLE_CAP:
-                INFLATION_FACTOR = mult
-                break
-        inflated_sample_size = bounded * INFLATION_FACTOR
-        final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
-        final_sample_size = (final_sample_size // 10) * 10
-        if is_listener_watcher:
-            final_sample_size = max(1, final_sample_size // 10)
+    else:
+        try:
+            cur = conn.cursor()
+            # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
+            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+            # Use universe scan result (total unique users from full universe scan)
+            # This is the "Total Unique Users" shown at the start
+            actual_sample_size = getattr(run_full_pipeline, 'universe_size', None)
+            if actual_sample_size is None:
+                # Fallback to TEMP_UIDS if universe scan wasn't done
+                try:
+                    actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_UIDS").fetchone()[0]
+                except Exception:
+                    # Last resort fallback to TEMP_DEMOS
+                    actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_DEMOS").fetchone()[0]
+            # Bound by GenPop cap so it never exceeds the allowed universe
+            bounded = min(int(actual_sample_size or 0), GENPOP_SAMPLE_CAP)
+            if bounded >= GENPOP_SAMPLE_CAP and not is_genpop:
+                # Apply a small buffer (0.5%) so we never report the hard cap (only for non-GenPop)
+                buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
+                bounded = GENPOP_SAMPLE_CAP - buffer_down
+            
+            # INFLATE SAMPLE SIZE: try 35x first, then scale down to 25x, 5x, 2.5x, or 1x
+            # so the result never exceeds 10M (max boost capped at 35x)
+            INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
+            INFLATION_FACTOR = 1
+            for mult in INFLATION_OPTIONS:
+                if bounded * mult <= GENPOP_SAMPLE_CAP:
+                    INFLATION_FACTOR = mult
+                    break
+            inflated_sample_size = bounded * INFLATION_FACTOR
+            final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
+            final_sample_size = (final_sample_size // 10) * 10
+            if is_listener_watcher:
+                final_sample_size = max(1, final_sample_size // 10)
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"📊 Listener/watcher/player profile: sample size divided by 10 → {final_sample_size:,}")
             if not SILENCE_VERBOSE_OUTPUT:
-                print(f"📊 Listener/watcher/player profile: sample size divided by 10 → {final_sample_size:,}")
-        if not SILENCE_VERBOSE_OUTPUT:
-            print(f"📊 Actual sampled UIDs: {actual_sample_size:,}")
-            print(f"📊 Inflation factor: {INFLATION_FACTOR}x (chosen so result ≤ 10M)")
-            print(f"📊 Final sample size: {inflated_sample_size:,}")
-            print(f"🔒 Sample size cap (10M): {GENPOP_SAMPLE_CAP:,}")
-            print(f"✅ Final SAMPLE SIZE set to: {final_sample_size:,}")
-    except Exception as e:
-        print(f"⚠️ Could not get actual sample size: {e}")
-        # Fallback to prior estimate; do not exceed GenPop cap
-        fallback_estimate = max(uid_count // 100, 1000)
-        bounded = min(fallback_estimate, GENPOP_SAMPLE_CAP)
-        if bounded >= GENPOP_SAMPLE_CAP and not is_genpop:
-            buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
-            bounded = GENPOP_SAMPLE_CAP - buffer_down
-        
-        # INFLATE SAMPLE SIZE: try 15x, then scale down to stay under 10M (fallback path)
-        INFLATION_OPTIONS = [15, 5, 2.5, 1]
-        INFLATION_FACTOR = 1
-        for mult in INFLATION_OPTIONS:
-            if bounded * mult <= GENPOP_SAMPLE_CAP:
-                INFLATION_FACTOR = mult
-                break
-        inflated_sample_size = bounded * INFLATION_FACTOR
-        final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
-        final_sample_size = (final_sample_size // 10) * 10
-        if is_listener_watcher:
-            final_sample_size = max(1, final_sample_size // 10)
+                print(f"📊 Actual sampled UIDs: {actual_sample_size:,}")
+                print(f"📊 Inflation factor: {INFLATION_FACTOR}x (chosen so result ≤ 10M)")
+                print(f"📊 Final sample size: {inflated_sample_size:,}")
+                print(f"🔒 Sample size cap (10M): {GENPOP_SAMPLE_CAP:,}")
+                print(f"✅ Final SAMPLE SIZE set to: {final_sample_size:,}")
+        except Exception as e:
+            print(f"⚠️ Could not get actual sample size: {e}")
+            # Fallback to prior estimate; do not exceed GenPop cap
+            fallback_estimate = max(uid_count // 100, 1000)
+            bounded = min(fallback_estimate, GENPOP_SAMPLE_CAP)
+            if bounded >= GENPOP_SAMPLE_CAP and not is_genpop:
+                buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
+                bounded = GENPOP_SAMPLE_CAP - buffer_down
+            
+            # INFLATE SAMPLE SIZE: try 15x, then scale down to stay under 10M (fallback path)
+            INFLATION_OPTIONS = [15, 5, 2.5, 1]
+            INFLATION_FACTOR = 1
+            for mult in INFLATION_OPTIONS:
+                if bounded * mult <= GENPOP_SAMPLE_CAP:
+                    INFLATION_FACTOR = mult
+                    break
+            inflated_sample_size = bounded * INFLATION_FACTOR
+            final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
+            final_sample_size = (final_sample_size // 10) * 10
+            if is_listener_watcher:
+                final_sample_size = max(1, final_sample_size // 10)
     
     df_sample = pd.DataFrame([
         {
