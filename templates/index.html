@@ -46202,6 +46202,32 @@
                     }
                     continue;
                 }
+
+                // Prefer data from an open profile tab (current in-memory data) over API to avoid stale cache
+                const openTab = openProfileTabs.find(t => t.id === id);
+                if (openTab && openTab.parsed) {
+                    const p = openTab.parsed;
+                    const medianAge = (typeof calculateMedianAgeFromDistribution === 'function' && p.demographics?.age)
+                        ? calculateMedianAgeFromDistribution(p.demographics.age) : 0;
+                    const displayTitle = getProfileDisplayTitle(openTab.name, p.brandCategory, p.behavioral);
+                    const profileData = {
+                        id: openTab.id,
+                        name: displayTitle.toUpperCase(),
+                        color: profileColors[idx % profileColors.length],
+                        sampleSize: p.sampleSize,
+                        projectedUS: p.projectedUS,
+                        medianAge: medianAge,
+                        demographics: p.demographics,
+                        demographicsProjection: p.demographicsProjection,
+                        demographicsIndex: p.demographicsIndex,
+                        behavioral: p.behavioral || {},
+                        behavioralProjection: {},
+                        locations: p.locations || []
+                    };
+                    profilesData.push(profileData);
+                    console.log(`✓ Using open tab data for ${openTab.name}: sample=${p.sampleSize}`);
+                    continue;
+                }
                 
                 try {
                     console.log(`Loading profile ${idx + 1}/${selectedIds.length}:`, id);
