@@ -27766,7 +27766,7 @@
                     const sortedRuns = [...sameSubjectRuns].sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || ''));
                     runSelect.innerHTML = sortedRuns.map(p => {
                         const id = p.s3_key || p.job_id;
-                        const label = getRunDateLabel(p.s3_key || '') || id;
+                        const label = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || id;
                         return `<option value="${escapeAttr(id).replace(/"/g, '&quot;')}" ${id === profileId ? 'selected' : ''}>${escapeAttr(label)}</option>`;
                     }).join('');
                     runSelect.onchange = function() {
