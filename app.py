@@ -13693,6 +13693,10 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         
         update_job_status(job_id, progress=25, message='Running analysis...')
         
+        # Use temp dir for pipeline output; result goes to S3 purgatory only (no local persistence)
+        import tempfile
+        pipeline_temp_dir = tempfile.mkdtemp(prefix='bg_pipeline_')
+        
         # Run the full pipeline with reference file for consistency
         try:
             result_file = bg.run_full_pipeline(
@@ -13710,7 +13714,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 previous_file_path=actual_previous_file,
                 brand_category=brand_category,
                 is_listener_watcher=is_listener_watcher,
-                output_dir=OUTPUT_DIR
+                output_dir=pipeline_temp_dir
             )
             
             update_job_status(job_id, progress=85, message='Processing results...')
@@ -13899,29 +13903,29 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     except Exception as e:
                         print(f"Demographic validation error: {e}")
                 
-                # Copy result to outputs directory
-                output_filename = f"{job_id}_{project_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                output_path = os.path.join(OUTPUT_DIR, output_filename)
-                
-                import shutil
-                shutil.copy2(result_file, output_path)
-                
-                # Upload to S3 (purgatory - admin must release to main bucket); pass brand_category so purgatory shows selected category
-                update_job_status(job_id, progress=95, message='Saving to cache...')
+                # Upload directly to S3 purgatory (no local copy; same as regular pipeline)
+                update_job_status(job_id, progress=95, message='Saving to purgatory...')
                 created_by = jobs.get(job_id, {}).get('created_by', '')
-                # Use project_name for filename so saved file is e.g. Dakota_Fanning_02_23_2026_19_57.csv (name with underscores + timestamp)
-                s3_key = upload_to_s3(output_path, project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True, category=brand_category or 'GENERAL')
+                s3_key = upload_to_s3(result_file, project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True, category=brand_category or 'GENERAL')
                 if s3_key:
                     _add_user_profile(s3_key, created_by)
                 update_job_status(
-                    job_id, 
-                    status='completed', 
-                    progress=100, 
+                    job_id,
+                    status='completed',
+                    progress=100,
                     message='Complete!',
-                    result_file=output_path,
+                    result_file=None,
                     demographic_validation=demographic_validation,
                     s3_key=s3_key
                 )
+                # Remove temp file and dir (result lives only in S3 purgatory)
+                try:
+                    if result_file and os.path.exists(result_file):
+                        os.remove(result_file)
+                    if os.path.exists(pipeline_temp_dir) and os.path.isdir(pipeline_temp_dir):
+                        os.rmdir(pipeline_temp_dir)
+                except Exception as cleanup_err:
+                    print(f"⚠️ Temp cleanup: {cleanup_err}")
             else:
                 update_job_status(job_id, status='failed', error='No output file generated')
                 
