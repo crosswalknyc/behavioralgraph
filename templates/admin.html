@@ -1360,6 +1360,10 @@
                                 <!-- Tracked KPI Change (for Historic Performance) -->
                                 <div class="form-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
                                     <div class="form-section-title">📊 Tracked KPI Change</div>
+                                    <div id="tickerKpiChangeCurrentSummary" style="display: none; margin-bottom: 0.5rem; padding: 0.5rem 0.6rem; background: rgba(0, 217, 255, 0.08); border-radius: 6px; border: 1px solid rgba(0, 217, 255, 0.2); font-size: 0.8rem; color: var(--text-secondary);">
+                                        <span id="tickerKpiChangeCurrentSummaryText"></span>
+                                        <button type="button" class="btn btn-small btn-danger" onclick="clearTickerKpiChangeAndSave()" style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; font-size: 0.75rem;">Remove</button>
+                                    </div>
                                     <label class="checkbox-group" style="margin-bottom: 0.75rem;">
                                         <input type="checkbox" id="tickerKpiChangeEnabled" onchange="document.getElementById('tickerKpiChangeFields').style.display = this.checked ? 'block' : 'none';">
                                         <span style="font-size: 0.85rem;">Track a period when a different KPI was used (show in Historic Performance)</span>
@@ -8613,6 +8617,21 @@
             document.getElementById('tickerKpiChangeQuarterStart').value = ticker.kpi_change_quarter_start || '';
             document.getElementById('tickerKpiChangeQuarterEnd').value = ticker.kpi_change_quarter_end || '';
             document.getElementById('tickerKpiChangeLabel').value = ticker.kpi_change_label || '';
+            // Show "currently set" summary when there is saved KPI change data
+            const hasKpiChange = kpiChangeEnabled && (ticker.kpi_change_quarter_start || ticker.kpi_change_label);
+            const summaryEl = document.getElementById('tickerKpiChangeCurrentSummary');
+            const summaryTextEl = document.getElementById('tickerKpiChangeCurrentSummaryText');
+            if (hasKpiChange && summaryEl && summaryTextEl) {
+                const start = (ticker.kpi_change_quarter_start || '').trim();
+                const end = (ticker.kpi_change_quarter_end || '').trim();
+                const label = (ticker.kpi_change_label || '').trim();
+                const range = start ? (end ? `${start} – ${end}` : `${start} (current)`) : '';
+                const parts = [range, label].filter(Boolean);
+                summaryTextEl.textContent = 'Currently set: ' + (parts.length ? parts.join(' · ') : '—');
+                summaryEl.style.display = 'block';
+            } else if (summaryEl) {
+                summaryEl.style.display = 'none';
+            }
             
             // Ensure s3_key is available (it should be from the ticker data)
             if (!ticker.s3_key) {
@@ -8690,6 +8709,18 @@
         async function deleteTickerFromModal() {
             if (!currentTickerInModal) return;
             await deleteTickerFromCard(currentTickerInModal.ticker, currentTickerInModal.s3_key);
+        }
+        
+        async function clearTickerKpiChangeAndSave() {
+            if (!currentTickerInModal) return;
+            document.getElementById('tickerKpiChangeEnabled').checked = false;
+            document.getElementById('tickerKpiChangeFields').style.display = 'none';
+            document.getElementById('tickerKpiChangeQuarterStart').value = '';
+            document.getElementById('tickerKpiChangeQuarterEnd').value = '';
+            document.getElementById('tickerKpiChangeLabel').value = '';
+            const summaryEl = document.getElementById('tickerKpiChangeCurrentSummary');
+            if (summaryEl) summaryEl.style.display = 'none';
+            await saveTickerMetadataFromModal();
         }
         
         async function saveTickerMetadataFromModal() {
