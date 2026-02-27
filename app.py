@@ -13693,11 +13693,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         
         update_job_status(job_id, progress=25, message='Running analysis...')
         
-        # Use temp dir for pipeline output; result goes to S3 purgatory only (no local persistence)
-        import tempfile
-        pipeline_temp_dir = tempfile.mkdtemp(prefix='bg_pipeline_')
-        
-        # Run the full pipeline with reference file for consistency
+        # Pipeline writes to OUTPUT_DIR (reliable on all hosts); we upload to S3 purgatory then remove local file
         try:
             result_file = bg.run_full_pipeline(
                 conn=conn,
@@ -13714,7 +13710,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 previous_file_path=actual_previous_file,
                 brand_category=brand_category,
                 is_listener_watcher=is_listener_watcher,
-                output_dir=pipeline_temp_dir
+                output_dir=OUTPUT_DIR
             )
             
             update_job_status(job_id, progress=85, message='Processing results...')
@@ -13918,15 +13914,15 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     demographic_validation=demographic_validation,
                     s3_key=s3_key
                 )
-                # Remove temp file and dir (result lives only in S3 purgatory)
+                # Remove local file after upload (result lives only in S3 purgatory)
                 try:
                     if result_file and os.path.exists(result_file):
                         os.remove(result_file)
-                    if os.path.exists(pipeline_temp_dir) and os.path.isdir(pipeline_temp_dir):
-                        os.rmdir(pipeline_temp_dir)
                 except Exception as cleanup_err:
-                    print(f"⚠️ Temp cleanup: {cleanup_err}")
+                    print(f"⚠️ Local file cleanup: {cleanup_err}")
             else:
+                if result_file:
+                    print(f"⚠️ Pipeline returned path but file missing: {result_file}")
                 update_job_status(job_id, status='failed', error='No output file generated')
                 
         except Exception as e:
