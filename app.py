@@ -6658,10 +6658,18 @@ def submit_rerun():
         # Rerun is Gen Pop only if the reference profile is actually Gen Pop (not for The Rock, etc.)
         first_brand = (brands[0] or '').strip().lower()
         is_genpop_rerun = first_brand in ('gen pop', 'gen_pop', 'genpop')
-        # Rerun output: same base name as reference file, new timestamp (e.g. The_Rock_2023_02_27_2026_21_36.csv)
+        # Rerun output: base name from reference, but year from the date range being pulled (e.g. The_Rock_2024 -> pull 2023 -> The_Rock_2023)
         name_from_key = os.path.splitext(os.path.basename(s3_key))[0]
         rerun_basename = re.sub(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', name_from_key)
-        project_name = rerun_basename if rerun_basename else re.sub(r'[<>:"/\\|?*]', '_', (data.get('project_name') or brands[0]).replace(' ', '_')[:80])
+        try:
+            year_from_range = int(str(sample_end or sample_start or '')[:4]) if (sample_end or sample_start) else None
+        except (ValueError, TypeError):
+            year_from_range = None
+        if year_from_range is not None and rerun_basename:
+            base_without_year = re.sub(r'_20\d{2}$', '', rerun_basename)
+            project_name = f"{base_without_year}_{year_from_range}" if base_without_year else f"{rerun_basename}_{year_from_range}"
+        else:
+            project_name = rerun_basename if rerun_basename else re.sub(r'[<>:"/\\|?*]', '_', (data.get('project_name') or brands[0]).replace(' ', '_')[:80])
         job_id = str(uuid.uuid4())[:8]
         filters = {}
         skew_settings = {}

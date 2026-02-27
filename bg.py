@@ -4002,27 +4002,34 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             if is_listener_watcher:
                 final_sample_size = max(1, final_sample_size // 10)
     
-    # Rerun: use reference sample size with small up/down fluctuation based on whether rerun window is before or after original
+    # Rerun: use reference sample size with up/down fluctuation based on whether rerun window is before or after original
     if previous_demo_lookup and previous_sample_size_ref and previous_sample_size_ref > 0:
         base_ref = int(previous_sample_size_ref)
         multiplier = 1.0
         if previous_sample_dates and sample_start and sample_end:
             try:
-                # Parse reference window (e.g. "2025-06-01 to 2025-07-01")
-                ref_parts = previous_sample_dates.replace(" To ", " to ").split(" to ")
+                # Parse reference window (e.g. "2025-06-01 to 2025-07-01" or "2025-06-01 To 2025-07-01")
+                ref_parts = re.split(r'\s+[Tt]o\s+', previous_sample_dates.strip())
                 ref_dates = [p.strip() for p in ref_parts if p.strip()]
                 if len(ref_dates) >= 2:
                     ref_start = pd.to_datetime(ref_dates[0])
                     ref_end = pd.to_datetime(ref_dates[-1])
                     cur_start = pd.to_datetime(sample_start)
                     cur_end = pd.to_datetime(sample_end)
-                    ref_mid = (ref_start + (ref_end - ref_start) / 2).value
-                    cur_mid = (cur_start + (cur_end - cur_start) / 2).value
-                    # Rerun after original → sample size fluctuates up; before → down (±0.5%)
-                    if cur_mid > ref_mid:
-                        multiplier = 1.005
-                    elif cur_mid < ref_mid:
-                        multiplier = 0.995
+                    ref_year = ref_start.year if hasattr(ref_start, 'year') else int(str(ref_dates[0])[:4])
+                    cur_year = cur_end.year if hasattr(cur_end, 'year') else int(str(sample_end)[:4])
+                    # Year-based: pull year after ref → +1%; before → -1% (clearly visible change)
+                    if cur_year > ref_year:
+                        multiplier = 1.01
+                    elif cur_year < ref_year:
+                        multiplier = 0.99
+                    else:
+                        ref_mid = (ref_start + (ref_end - ref_start) / 2).value
+                        cur_mid = (cur_start + (cur_end - cur_start) / 2).value
+                        if cur_mid > ref_mid:
+                            multiplier = 1.005
+                        elif cur_mid < ref_mid:
+                            multiplier = 0.995
             except Exception:
                 pass
         final_sample_size = max(1, int(round(base_ref * multiplier)))
