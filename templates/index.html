@@ -27075,7 +27075,7 @@
                             <span class="profile-cat-count" style="font-size: 0.75rem; color: var(--text-secondary);">(${runs.length} date ranges)</span>
                         </div>
                         <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 1.25rem;">
-                            ${runs.sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '')).map(p => {
+                            ${sortRunsByYearDesc(runs).map(p => {
                                 const id = p.s3_key || p.job_id;
                                 const idEsc = escapeIdForOnclick(id);
                                 const isActive = selectedDashProfile === id;
@@ -27169,7 +27169,7 @@
                                 <span class="profile-cat-count">(${runs.length} date ranges)</span>
                             </div>
                             <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
-                                ${runs.sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '')).map(p => {
+                                ${sortRunsByYearDesc(runs).map(p => {
                                     const id = p.s3_key || p.job_id;
                                     const idEsc = escapeIdForOnclick(id);
                                     const isActive = selectedDashProfile === id;
@@ -27217,7 +27217,7 @@
                                     <span class="profile-cat-count">(${runs.length} date ranges)</span>
                                 </div>
                                 <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
-                                    ${runs.sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '')).map(p => {
+                                    ${sortRunsByYearDesc(runs).map(p => {
                                         const id = p.s3_key || p.job_id;
                                         const idEsc = escapeIdForOnclick(id);
                                         const isActive = selectedDashProfile === id;
@@ -27281,7 +27281,7 @@
             titleEl.textContent = 'Compare date ranges: ' + profileName;
             contentEl.innerHTML = '<div class="loading-placeholder">Loading runs...</div>';
             modal.style.display = 'flex';
-            const runs = [...sameSubjectRuns].sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || ''));
+            const runs = sortRunsByYearDesc(sameSubjectRuns);
             const runData = [];
             try {
                 for (const p of runs) {
@@ -27763,7 +27763,7 @@
                 const sameSubjectRuns = subject ? dashboardProfiles.filter(p => getProfileSubject(p) === subject) : [];
                 if (runsRow && runSelect && sameSubjectRuns.length > 1) {
                     runsRow.style.display = 'flex';
-                    const sortedRuns = [...sameSubjectRuns].sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || ''));
+                    const sortedRuns = sortRunsByYearDesc(sameSubjectRuns);
                     runSelect.innerHTML = sortedRuns.map(p => {
                         const id = p.s3_key || p.job_id;
                         const label = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || id;
@@ -45440,6 +45440,20 @@
             const name = getProfileFullName(profile);
             const m = name.match(/(\d{4})$/);
             return m ? m[1] : '';
+        }
+
+        /** Sort profile runs by year descending when profile name has a year (2025, 2024, 2023); otherwise by created_at/s3_key. */
+        function sortRunsByYearDesc(runs) {
+            return [...runs].sort((a, b) => {
+                const yA = getProfileYear(a);
+                const yB = getProfileYear(b);
+                const numA = /^\d{4}$/.test(yA) ? parseInt(yA, 10) : null;
+                const numB = /^\d{4}$/.test(yB) ? parseInt(yB, 10) : null;
+                if (numA != null && numB != null) return numB - numA;
+                if (numA != null) return -1;
+                if (numB != null) return 1;
+                return (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '');
+            });
         }
 
         function renderComparisonProfiles(profiles) {
