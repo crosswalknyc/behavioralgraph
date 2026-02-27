@@ -5162,7 +5162,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     
     # DIVIDE STREAMING/PLATFORM VALUES BY 2 (except Netflix and ESPN)
     df_final = divide_streaming_platform_except_netflix_espn(df_final)
-    
+    # DIVIDE APP/PLATFORM USAGE BY 2
+    df_final = divide_app_platform_usage_by_2(df_final)
+
     # ENSURE CROSS-CATEGORY BRAND CONSISTENCY - AFTER all boosts are applied
     # This ensures Boston Celtics, Lakers, etc. have same boosted values across all categories
     df_final = enforce_cross_category_brand_consistency(df_final)
@@ -7310,6 +7312,35 @@ def divide_qsr_by_2(df: pd.DataFrame) -> pd.DataFrame:
     if not SILENCE_VERBOSE_OUTPUT:
         print(f"✅ Divided QSR category by 2: {changes} entries updated")
     
+    return df
+
+def divide_app_platform_usage_by_2(df: pd.DataFrame) -> pd.DataFrame:
+    """Divide the APP/PLATFORM USAGE category by 2 and update all related numbers accordingly."""
+    if df is None or df.empty:
+        return df
+
+    df = df.copy()
+
+    # Find APP/PLATFORM USAGE category (canonical name and common variant)
+    app_platform_mask = df['Column'].str.upper().isin(['APP/PLATFORM USAGE', 'APPS/PLATFORMS'])
+    indices = df[app_platform_mask].index
+
+    if len(indices) == 0:
+        return df
+
+    changes = 0
+    for idx in indices:
+        try:
+            current_raw = int(float(str(df.at[idx, 'Original Raw Numbers']).replace(',', '')))
+            new_raw = max(1, current_raw // 2)
+            df.at[idx, 'Original Raw Numbers'] = str(new_raw)
+            changes += 1
+        except Exception:
+            continue
+
+    if not SILENCE_VERBOSE_OUTPUT:
+        print(f"✅ Divided APP/PLATFORM USAGE category by 2: {changes} entries updated")
+
     return df
 
 def divide_streaming_platform_by_2_except_espn_netflix(df: pd.DataFrame) -> pd.DataFrame:
