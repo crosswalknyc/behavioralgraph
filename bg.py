@@ -2944,9 +2944,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     print(f"🚀 60M row cap applied to prevent data explosion")
                 
                 # Create temp table with sampled UIDs using proper Snowflake syntax
+                # Snowflake limits VALUES list to 200,000 expressions - cap to avoid SQL compilation error
+                SNOWFLAKE_VALUES_LIMIT = 200_000
                 if sampled_uids:
-                    # Create a temporary table with the sampled UIDs
-                    uid_values = ",\n".join([f"('{uid}')" for uid in sampled_uids])
+                    uids_for_table = sampled_uids[:SNOWFLAKE_VALUES_LIMIT]
+                    if len(sampled_uids) > SNOWFLAKE_VALUES_LIMIT and not SILENCE_VERBOSE_OUTPUT:
+                        print(f"⚠️ Capping UID list at {SNOWFLAKE_VALUES_LIMIT:,} (Snowflake VALUES limit); {len(sampled_uids):,} would exceed limit")
+                    uid_values = ",\n".join([f"('{uid}')" for uid in uids_for_table])
                     cur.execute(f"""
                         CREATE OR REPLACE TEMP TABLE TEMP_SAMPLED_UIDS AS
                         SELECT column1 AS UID FROM VALUES {uid_values}
@@ -2957,8 +2961,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         CREATE OR REPLACE TEMP TABLE TEMP_SAMPLED_UIDS AS
                         SELECT UID FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL WHERE 1=0
                     """)
+                    uids_for_table = []
                 
-                uid_count = sample_size
+                uid_count = len(uids_for_table) if uids_for_table else sample_size
                 if not SILENCE_VERBOSE_OUTPUT:
                     print(f"📊 Sampled {uid_count:,} UIDs from {total_active_uids:,} total active UIDs")
                     print(f"✅ Master UID pool created - consistent across all analysis periods")
