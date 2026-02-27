@@ -1238,6 +1238,13 @@ def normalize_brand_for_search(brand):
     """Normalize brand name for consistent matching."""
     return brand.lower().strip().replace(' ', '_').replace('.', '')
 
+def _decode_metadata_value(s):
+    """Decode a metadata value (e.g. + back to space) for display/API."""
+    if not s:
+        return s
+    return str(s).replace('+', ' ')
+
+
 def parse_metadata_from_csv(csv_content):
     """Extract metadata from the INPUT_METADATA row of a CSV."""
     try:
@@ -1247,7 +1254,7 @@ def parse_metadata_from_csv(csv_content):
                 parts = line.split(',')
                 if len(parts) >= 2:
                     metadata_str = parts[1]
-                    # Parse: BRAND:xxx_SAMPLE_START:xxx_SAMPLE_END:xxx_BEHAVIOR_START:xxx_BEHAVIOR_END:xxx_SEED:xxx
+                    # Parse: BRAND:xxx_SAMPLE_START:xxx_..._BRAND_CATEGORY:xxx_LISTENER_WATCHER:true_PLATFORM_NAME:xxx
                     metadata = {}
                     pairs = metadata_str.split('_')
                     for i, pair in enumerate(pairs):
@@ -1260,11 +1267,45 @@ def parse_metadata_from_csv(csv_content):
                                     metadata[f'{key}_{next_key}'] = next_value
                             else:
                                 metadata[key] = value
+                    # Decode stored values that use + for space
+                    for key in ('BRAND_CATEGORY', 'PLATFORM_NAME'):
+                        if key in metadata and metadata[key]:
+                            metadata[key] = _decode_metadata_value(metadata[key])
                     return metadata
         return None
     except Exception as e:
         print(f"Error parsing metadata: {e}")
         return None
+
+def _encode_metadata_value(s):
+    """Encode a metadata value for storage (space -> + so _ remains pair separator)."""
+    if not s:
+        return ''
+    return str(s).replace(' ', '+')
+
+
+def ensure_metadata_has_rerun_fields(csv_path, brand_category, is_listener_watcher, platform_name=None):
+    """Append BRAND_CATEGORY, LISTENER_WATCHER, PLATFORM_NAME to INPUT_METADATA row for future reruns."""
+    try:
+        import pandas as pd
+        df = pd.read_csv(csv_path)
+        mask = df['Column'].astype(str).str.upper() == 'INPUT_METADATA'
+        if not mask.any():
+            return
+        idx = mask.idxmax()
+        val = str(df.at[idx, 'Value'])
+        extra = []
+        if brand_category:
+            extra.append(f"_BRAND_CATEGORY:{_encode_metadata_value(brand_category)}")
+        extra.append(f"_LISTENER_WATCHER:{str(is_listener_watcher).lower()}")
+        if platform_name:
+            extra.append(f"_PLATFORM_NAME:{_encode_metadata_value(platform_name)}")
+        if extra:
+            df.at[idx, 'Value'] = val + ''.join(extra)
+            df.to_csv(csv_path, index=False)
+    except Exception as e:
+        print(f"ensure_metadata_has_rerun_fields error: {e}")
+
 
 def extract_demographics_from_csv(csv_content):
     """Extract demographic distributions from CSV for comparison."""
@@ -6521,10 +6562,15 @@ def get_profile_run_metadata(s3_key):
     behavior_end = metadata.get('BEHAVIOR_END') or sample_end
     sample_size = extract_sample_size_from_csv(csv_content)
     demographics = extract_demographics_from_csv(csv_content)
+    brand_category = (metadata.get('BRAND_CATEGORY') or '').strip() or None
+    is_listener_watcher = str(metadata.get('LISTENER_WATCHER') or 'false').strip().lower() == 'true'
+    platform_name = (metadata.get('PLATFORM_NAME') or '').strip() or None
     display_name = None
     for job in s3_cache.get('jobs', []):
         if (job.get('s3_key') or job.get('key')) == s3_key:
             display_name = job.get('display_name') or job.get('project_name') or job.get('name')
+            if not brand_category and job.get('category'):
+                brand_category = job.get('category')
             break
     if not display_name:
         name_without_ext = s3_key.replace('.csv', '').replace(S3_PURGATORY_PREFIX, '')
@@ -6540,7 +6586,10 @@ def get_profile_run_metadata(s3_key):
         'behavior_start': behavior_start,
         'behavior_end': behavior_end,
         'sample_size': sample_size,
-        'demographics': demographics
+        'demographics': demographics,
+        'brand_category': brand_category or 'GENERAL',
+        'is_listener_watcher': is_listener_watcher,
+        'platform_name': platform_name or ''
     })
 
 
@@ -6595,6 +6644,15 @@ def submit_rerun():
             return jsonify({'error': 'No brand found in profile metadata'}), 400
         reference_demographics = extract_demographics_from_csv(csv_content)
         reference_sample_size = extract_sample_size_from_csv(csv_content)
+        brand_category = (data.get('brand_category') or (metadata.get('BRAND_CATEGORY') or '').strip()) or 'GENERAL'
+        is_listener_watcher = data.get('is_listener_watcher')
+        if is_listener_watcher is None or is_listener_watcher == '':
+            is_listener_watcher = str(metadata.get('LISTENER_WATCHER') or 'false').strip().lower() == 'true'
+        else:
+            is_listener_watcher = bool(is_listener_watcher)
+        platform_name = data.get('platform_name') or (metadata.get('PLATFORM_NAME') or '').strip() or None
+        if is_listener_watcher and not platform_name:
+            platform_name = None
         project_name = re.sub(r'[<>:"/\\|?*]', '_', (data.get('project_name') or brands[0]).replace(' ', '_')[:80])
         job_id = str(uuid.uuid4())[:8]
         filters = {}
@@ -6620,8 +6678,8 @@ def submit_rerun():
             target=run_analysis,
             args=(job_id, project_name, brands, sample_start, sample_end,
                   behavior_start, behavior_end, filters, skew_settings,
-                  True, False, data.get('brand_category') or 'GENERAL',
-                  False, False, None, None,
+                  True, False, brand_category,
+                  False, is_listener_watcher, platform_name, None,
                   reference_demographics, reference_sample_size, s3_key)
         )
         thread.daemon = True
@@ -13683,6 +13741,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         df.to_csv(result_file, index=False)
                     except Exception as e:
                         print(f"⚠️ Listener/watcher adjustment error: {e}")
+                    ensure_metadata_has_rerun_fields(result_file, brand_category or 'GENERAL', is_listener_watcher, platform_name)
                 
                 # ========== POST-PROCESSING only when include_frequency (matches terminal exactly) ==========
                 # Terminal: when frequency is OFF, run_full_pipeline output is final; when ON, terminal runs this sequence after adding frequency.
@@ -13783,6 +13842,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         
                         # Save the fully processed file
                         df.to_csv(result_file, index=False)
+                        ensure_metadata_has_rerun_fields(result_file, brand_category or 'GENERAL', is_listener_watcher, platform_name)
                         print("✅ All post-processing complete (matching terminal behavior)")
                     except Exception as e:
                         print(f"⚠️ Post-processing error (non-fatal): {e}")

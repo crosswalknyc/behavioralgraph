@@ -12232,6 +12232,10 @@
                                     <small style="color: var(--text-secondary); font-size: 0.75rem;">Pick the profile whose search criteria and demographics to reuse.</small>
                                 </div>
                                 <div id="profileRerunDatesSection" style="display: none;">
+                                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Category (from original)</label>
+                                        <div id="profileRerunCategoryDisplay" style="font-weight: 500; color: var(--text-primary);"></div>
+                                    </div>
                                     <div class="form-row">
                                         <div class="form-group">
                                             <label>Sample Start Date</label>
@@ -12242,7 +12246,16 @@
                                             <input type="date" id="profileRerunEnd" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                                         </div>
                                     </div>
-                                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem 0;">New run will use the same search criteria; sample size and demographics will stay within a small margin of the selected profile.</p>
+                                    <div class="form-row" style="margin-bottom: 0.75rem;">
+                                        <label class="checkbox-group"><input type="checkbox" id="profileRerunListenerWatcher"><span>Is this a listener/watcher/player profile?</span></label>
+                                    </div>
+                                    <div id="profileRerunPlatformWrap" style="display: none; margin-left: 1rem; margin-bottom: 0.75rem;">
+                                        <div class="form-group">
+                                            <label>Platform name (as it appears in hostmap)</label>
+                                            <input type="text" id="profileRerunPlatform" placeholder="e.g., spotify, netflix, hulu" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                        </div>
+                                    </div>
+                                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 0.75rem 0;">New run will use the same search criteria and category; sample size and demographics will stay within a small margin of the selected profile.</p>
                                     <button type="button" class="btn btn-primary" id="profileRerunSubmitBtn">🚀 Run with these dates</button>
                                 </div>
                             </div>
@@ -26209,8 +26222,12 @@
             const searchInput = document.getElementById('profileRerunSearch');
             const dropdown = document.getElementById('profileRerunDropdown');
             const datesSection = document.getElementById('profileRerunDatesSection');
+            const categoryDisplay = document.getElementById('profileRerunCategoryDisplay');
             const startInput = document.getElementById('profileRerunStart');
             const endInput = document.getElementById('profileRerunEnd');
+            const listenerWatcherCb = document.getElementById('profileRerunListenerWatcher');
+            const platformWrap = document.getElementById('profileRerunPlatformWrap');
+            const platformInput = document.getElementById('profileRerunPlatform');
             const submitRerunBtn = document.getElementById('profileRerunSubmitBtn');
             if (!choiceCard || !yesBtn || !noBtn) return;
             let profileRerunList = [];
@@ -26283,6 +26300,11 @@
                 }
             });
 
+            if (listenerWatcherCb) {
+                listenerWatcherCb.addEventListener('change', function() {
+                    if (platformWrap) platformWrap.style.display = listenerWatcherCb.checked ? 'block' : 'none';
+                });
+            }
             async function fetchRerunMetadata(s3Key) {
                 if (!datesSection || !startInput || !endInput) return;
                 try {
@@ -26295,6 +26317,10 @@
                     selectedRerunMeta = meta;
                     startInput.value = meta.sample_start || '';
                     endInput.value = meta.sample_end || '';
+                    if (categoryDisplay) categoryDisplay.textContent = meta.brand_category || 'General';
+                    if (listenerWatcherCb) listenerWatcherCb.checked = !!meta.is_listener_watcher;
+                    if (platformInput) platformInput.value = meta.platform_name || '';
+                    if (platformWrap) platformWrap.style.display = (meta.is_listener_watcher && meta.platform_name) ? 'block' : (listenerWatcherCb && listenerWatcherCb.checked ? 'block' : 'none');
                     datesSection.style.display = 'block';
                 } catch (e) {
                     console.error('Failed to load profile metadata:', e);
@@ -26324,7 +26350,10 @@
                             body: JSON.stringify({
                                 s3_key: selectedRerunS3Key,
                                 sample_start: start,
-                                sample_end: end
+                                sample_end: end,
+                                brand_category: (selectedRerunMeta && selectedRerunMeta.brand_category) || 'GENERAL',
+                                is_listener_watcher: !!(listenerWatcherCb && listenerWatcherCb.checked),
+                                platform_name: (listenerWatcherCb && listenerWatcherCb.checked && platformInput) ? (platformInput.value || '').trim() : ''
                             })
                         });
                         const data = await res.json().catch(() => ({}));
