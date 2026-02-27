@@ -27015,15 +27015,16 @@
             
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase();
             
-            // If searching, show flat list of matches
+            // If searching, group matches by profile_subject (same as non-search) so "The Rock" shows once with sub date ranges
             if (searchTerm) {
                 const matchingProfiles = profiles.filter(p => {
                     const fullName = getProfileFullName(p).toLowerCase();
+                    const subj = (getProfileSubject(p) || fullName.replace(/\s+/g, '_')).toLowerCase();
                     const cat = (p.category || 'UNCATEGORIZED').toLowerCase();
                     const catDisplay = getCategoryDisplayLabel(p.category || 'UNCATEGORIZED').toLowerCase();
                     const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(p.category || 'UNCATEGORIZED', isSvod).toLowerCase();
-                    return fullName.includes(searchTerm) || cat.includes(searchTerm) || catDisplay.includes(searchTerm) || masterCat.includes(searchTerm);
+                    return fullName.includes(searchTerm) || subj.replace(/_/g, ' ').includes(searchTerm) || cat.includes(searchTerm) || catDisplay.includes(searchTerm) || masterCat.includes(searchTerm);
                 });
                 
                 if (matchingProfiles.length === 0) {
@@ -27031,35 +27032,58 @@
                     return;
                 }
                 
-                // Sort matches alphabetically
-                matchingProfiles.sort((a, b) => {
-                    const nameA = getProfileFullName(a).toLowerCase();
-                    const nameB = getProfileFullName(b).toLowerCase();
-                    return nameA.localeCompare(nameB);
-                });
-                
-                // Show flat list with category info
-                let html = '';
+                // Group by profile_subject (e.g. The_Rock) then sort by subject name
+                const bySubject = {};
                 matchingProfiles.forEach(p => {
-                    const id = p.s3_key || p.job_id;
-                    const idEsc = escapeIdForOnclick(id);
-                    const isActive = selectedDashProfile === id;
-                    const fullName = getProfileFullName(p);
-                    const fullNameAttr = escapeAttr(fullName);
-                    const cat = p.category || 'UNCATEGORIZED';
-                    const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
+                    const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
+                    if (!bySubject[subj]) bySubject[subj] = [];
+                    bySubject[subj].push(p);
+                });
+                const subjectKeys = Object.keys(bySubject).sort((a, b) => a.localeCompare(b));
+                
+                let html = '';
+                subjectKeys.forEach(subj => {
+                    const runs = bySubject[subj];
+                    const first = runs[0];
+                    const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
+                    const subjectExpanded = expandedDashSubjects.has(subj);
+                    const cat = first.category || 'UNCATEGORIZED';
+                    const isSvod = first.is_svod || (first.key && first.key.startsWith('svod-acquisition/')) || (first.s3_key && first.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(cat, isSvod);
                     const icon = MASTER_CATEGORY_ICONS[masterCat] || '📁';
+                    const subjectDisplayName = subj.replace(/_/g, ' ');
                     
-                    html += `
-                        <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectDashboardProfile('${idEsc}')" title="${fullNameAttr}">
+                    if (runs.length === 1) {
+                        const id = first.s3_key || first.job_id;
+                        const idEsc = escapeIdForOnclick(id);
+                        const isActive = selectedDashProfile === id;
+                        const fullName = getProfileFullName(first);
+                        html += `
+                        <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectDashboardProfile('${escapeIdForOnclick(id)}')" title="${escapeAttr(fullName)}">
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.9rem; opacity: 0.7;">${icon}</span>
-                                <span style="flex: 1;">${fullNameAttr}</span>
+                                <span style="flex: 1;">${escapeAttr(fullName)}</span>
                                 <span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${getCategoryDisplayLabel(cat)}</span>
                             </div>
+                        </div>`;
+                    } else {
+                        html += `
+                        <div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500; display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="cat-arrow">▸</span>
+                            <span style="font-size: 0.9rem; opacity: 0.7;">${icon}</span>
+                            <span class="profile-cat-label" style="flex: 1;">${escapeAttr(subjectDisplayName)}</span>
+                            <span class="profile-cat-count" style="font-size: 0.75rem; color: var(--text-secondary);">(${runs.length} date ranges)</span>
                         </div>
-                    `;
+                        <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 1.25rem;">
+                            ${runs.sort((a, b) => (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '')).map(p => {
+                                const id = p.s3_key || p.job_id;
+                                const idEsc = escapeIdForOnclick(id);
+                                const isActive = selectedDashProfile === id;
+                                const dateLabel = getRunDateLabel(p.s3_key || '') || 'Run';
+                                return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
+                            }).join('')}
+                        </div>`;
+                    }
                 });
                 
                 container.innerHTML = html;
