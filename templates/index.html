@@ -15916,8 +15916,8 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var navHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
-                if (typeof navHandlers[initialVal] === 'function') navHandlers[initialVal]();
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
             }
             // Initialize deck count from localStorage
             updateDeckCount();
