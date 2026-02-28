@@ -41798,6 +41798,8 @@
         
         function renderSponsorshipFinder(data) {
             if (!data || !data.behavioral) return;
+            // Sponsorship tab DOM was removed; skip if elements are missing to avoid null innerHTML crash
+            if (!document.getElementById('sponsorExecSummary')) return;
             
             const allItems = collectAllBehavioralItems(data);
             const profileName = currentProfileData?.name || 'This audience';
@@ -42037,6 +42039,8 @@
         
         function renderTalentAssessment(data) {
             if (!data) return;
+            // Talent tab DOM may be removed; skip if elements are missing to avoid null crash
+            if (!document.getElementById('talentScore')) return;
             
             const allItems = collectAllBehavioralItems(data);
             const demographics = data.demographics || {};
@@ -42120,6 +42124,8 @@
         
         function renderMediaOptimizer(data) {
             if (!data || !data.behavioral) return;
+            // Media tab DOM may be removed; skip if elements are missing to avoid null crash
+            if (!document.getElementById('primaryChannels')) return;
             
             const allItems = collectAllBehavioralItems(data);
             
