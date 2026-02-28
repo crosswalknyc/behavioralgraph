@@ -40348,6 +40348,8 @@
         
         function renderEcosystemInsights(data) {
             if (!data || !data.behavioral) return;
+            // Ecosystem tab DOM was removed; skip rendering if elements are missing to avoid null innerHTML crash
+            if (!document.getElementById('ecosystemBeforeEngagement')) return;
             
             const allItems = collectAllBehavioralItems(data);
             const profileName = currentProfileData?.name || 'PROFILE';
