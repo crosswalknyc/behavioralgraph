@@ -649,11 +649,14 @@
             font-style: italic;
             color: var(--text-secondary);
         }
-        #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; padding-top: 1.25rem; }
-        #rankerIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
-        #ticketSalesIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; padding-top: 1.25rem; }
-        #talentSearchIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
-        #talentTheaterIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        /* All product views: take remaining height when shown (flex: 1 1 0%, min-height: 0) */
+        #subscriberIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
+        #rankerIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
+        #ticketSalesIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
+        #talentSearchIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
+        #talentTheaterIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
+        #hedgeFundIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
+        #ticketSalesTrackerView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         
         /* Custom Analysis Tabs */
         .custom-analysis-tabs-container {
@@ -15972,8 +15975,24 @@
                     const val = this.value;
                     const opt = this.options[this.selectedIndex];
                     if (opt && opt.disabled) return;
-                    const handler = navHandlers[val];
-                    if (handler) handler();
+                    try {
+                        const handler = navHandlers[val];
+                        if (handler) handler();
+                    } catch (e) {
+                        console.error('View switch error:', e);
+                    }
+                    // Ensure selected view is visible (guard against handler not running or layout issues)
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
+                    var activeId = viewIds[val];
+                    if (activeId) {
+                        var activeEl = document.getElementById(activeId);
+                        if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
+                        ['formView', 'dashboardView', 'subscriberIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
+                            if (id === activeId) return;
+                            var el = document.getElementById(id);
+                            if (el) el.style.display = 'none';
+                        });
+                    }
                 });
             }
             // Custom product dropdown with hover descriptors (when HOVER ON)
@@ -16443,6 +16462,11 @@
             try {
                 imageContainer.classList.add('loading');
                 const response = await fetch(`/api/profile-image/${encodeURIComponent(showName)}`, { credentials: 'same-origin' });
+                if (!response.ok) {
+                    imageContainer.classList.remove('loading');
+                    profileImageCache[cacheKey] = 'none';
+                    return;
+                }
                 const data = await response.json();
                 
                 if (data.success && data.image_url) {
