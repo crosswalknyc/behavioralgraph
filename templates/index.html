@@ -12226,15 +12226,18 @@
                 <!-- Profile IQ Tab Content (bg.py form) - Integrated two-column layout -->
                 <div id="customAnalysisTabContentProfileIQ" class="custom-analysis-tab-content active">
                     <div class="main-grid">
-                        <!-- Run current profile with different dates (first step) -->
+                        <!-- Left: Analysis Parameters intro + pipeline fields (shown after Yes/No) -->
                         <div class="card" id="profileRerunChoiceCard">
-                            <h2>🎯 Profile Analysis</h2>
+                            <h2>📊 Analysis Parameters</h2>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Analysis</div>
+                            <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
                             <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary);">Are you looking to run a current profile with different dates?</p>
                             <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
                                 <button type="button" class="btn btn-primary" id="profileRerunYesBtn">Yes</button>
                                 <button type="button" class="btn" style="background: var(--bg-dark); color: var(--text-primary);" id="profileRerunNoBtn">No, create new</button>
                             </div>
-                            <div id="profileRerunFlow" style="display: none;">
+                            <div id="profilePipelineFields" style="display: none;">
+                                <div id="profileRerunFlow" style="display: none;">
                                 <div class="form-group" style="margin-bottom: 1rem;">
                                     <label>Select profile</label>
                                     <div style="position: relative;">
@@ -12271,11 +12274,8 @@
                                     <button type="button" class="btn btn-primary" id="profileRerunSubmitBtn">🚀 Run with these dates</button>
                                 </div>
                             </div>
-                        </div>
-                        <div class="card" id="profileNewAnalysisCard">
-                            <h2>📊 Analysis Parameters</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Analysis</div>
-                            <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
+                            </div>
+                            <div id="profileCreateNewFields" style="display: none;">
                             <form id="analysisForm">
                                 <div class="form-section">
                                     <div class="form-section-title">Define Your Profile</div>
@@ -12545,8 +12545,9 @@
 
                                 <button type="submit" class="btn btn-primary" id="submitBtn">🚀 Run Analysis</button>
                             </form>
+                            </div>
+                            </div>
                         </div>
-
                         <div class="card">
                             <h2>📈 Status & Results</h2>
                             <div id="currentJob" style="display: none;">
@@ -12575,7 +12576,7 @@
                                     <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
                                     <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="loadMyResults()" title="Refresh your results">🔄</button>
                                 </div>
-                                <div id="svodResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
+                                <div id="svodResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);">0 pending • 0 in dashboard...</div>
                             </div>
                             
                             <div style="margin-bottom: 0.75rem;">
@@ -26232,8 +26233,9 @@
         // Run current profile with different dates (Analysis IQ Profile Analysis)
         (function initProfileRerunFlow() {
             const choiceCard = document.getElementById('profileRerunChoiceCard');
+            const pipelineFields = document.getElementById('profilePipelineFields');
             const rerunFlow = document.getElementById('profileRerunFlow');
-            const newAnalysisCard = document.getElementById('profileNewAnalysisCard');
+            const createNewFields = document.getElementById('profileCreateNewFields');
             const yesBtn = document.getElementById('profileRerunYesBtn');
             const noBtn = document.getElementById('profileRerunNoBtn');
             const searchInput = document.getElementById('profileRerunSearch');
@@ -26252,8 +26254,9 @@
             let selectedRerunMeta = null;
 
             function showRerunFlow(show) {
+                if (pipelineFields) pipelineFields.style.display = 'block';
                 if (rerunFlow) rerunFlow.style.display = show ? 'block' : 'none';
-                if (newAnalysisCard) newAnalysisCard.style.display = show ? 'none' : 'block';
+                if (createNewFields) createNewFields.style.display = show ? 'none' : 'block';
             }
             yesBtn.addEventListener('click', function() {
                 showRerunFlow(true);
