@@ -5158,7 +5158,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # CUSTOM BOOSTS - ENABLED
     df_final = boost_search_engine_ai_custom(df_final)  # Google @ 66x, top 4 @ 33x, others @ 5-11x
     df_final = boost_streaming_platform_custom(df_final)  # Netflix 15x, Hulu 12x, others no boost
-    df_final = boost_virtual_mvpd_fast_40x(df_final)  # VIRTUAL MVPD FAST: multiply all values by 40
+    df_final = boost_virtual_mvpd_fast_20x(df_final)  # VIRTUAL MVPD FAST: multiply by 20 and recalc Brand Penetration, Category Share, US Gen Pop
     
     # DIVIDE STREAMING/PLATFORM VALUES BY 2 (except Netflix and ESPN)
     df_final = divide_streaming_platform_except_netflix_espn(df_final)
@@ -6513,30 +6513,66 @@ def boost_digital_banking_additional_2x(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def boost_virtual_mvpd_fast_40x(df: pd.DataFrame) -> pd.DataFrame:
-    """Multiply all VIRTUAL MVPD FAST category Original Raw Numbers by 40."""
+def boost_virtual_mvpd_fast_20x(df: pd.DataFrame) -> pd.DataFrame:
+    """Multiply all VIRTUAL MVPD FAST category Original Raw Numbers by 20 and recalc Brand Penetration, Category Share, US Gen Pop (same methodology as S3 backfill)."""
     if df is None or df.empty:
         return df
     df = df.copy()
     if 'Original Raw Numbers' not in df.columns:
+        return df
+    pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    sample_size = None
+    sample_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
+    if sample_mask.any():
+        sample_row = df.loc[sample_mask].iloc[0]
+        if pct_col in df.columns:
+            try:
+                sample_size = int(float(str(sample_row[pct_col]).replace(',', '')))
+            except (ValueError, TypeError):
+                pass
+        if (sample_size is None or sample_size <= 0) and 'Original Raw Numbers' in df.columns:
+            try:
+                sample_size = int(float(str(sample_row['Original Raw Numbers']).replace(',', '')))
+            except (ValueError, TypeError):
+                pass
+    if sample_size is None or sample_size <= 0:
         return df
     col_upper = df['Column'].astype(str).str.upper()
     mask = (col_upper == 'VIRTUAL MVPD FAST') | (col_upper == 'VMVPD/FAST') | (col_upper == 'VIRTUAL MVPD/FAST')
     indices = df.index[mask].tolist()
     if not indices:
         return df
-    changes = 0
+    US_POP = 329_900_000
+    SAMPLE_UNIVERSE = 10_000_000
     for idx in indices:
         try:
             raw_val = df.at[idx, 'Original Raw Numbers']
             current_raw = int(float(str(raw_val).replace(',', '')))
-            boosted_raw = int(current_raw * 40)
+            boosted_raw = current_raw * 20
             df.at[idx, 'Original Raw Numbers'] = str(boosted_raw)
-            changes += 1
+            if 'Brand Penetration (Row)' in df.columns:
+                df.at[idx, 'Brand Penetration (Row)'] = round((boosted_raw / sample_size) * 100.0, 4)
+            if 'US Gen Pop Projection' in df.columns:
+                df.at[idx, 'US Gen Pop Projection'] = str(int((boosted_raw / SAMPLE_UNIVERSE) * US_POP))
         except (ValueError, TypeError):
             continue
+    # Recalculate Category Share within VMVPD/FAST
+    if pct_col and indices:
+        total_raw = 0
+        for i in indices:
+            try:
+                total_raw += int(float(str(df.at[i, 'Original Raw Numbers']).replace(',', '')))
+            except (ValueError, TypeError):
+                pass
+        if total_raw > 0:
+            for idx in indices:
+                try:
+                    raw = int(float(str(df.at[idx, 'Original Raw Numbers']).replace(',', '')))
+                    df.at[idx, pct_col] = round((raw / total_raw) * 100.0, 4)
+                except (ValueError, TypeError):
+                    pass
     if not SILENCE_VERBOSE_OUTPUT:
-        print(f"✅ VIRTUAL MVPD FAST: multiplied {changes} entries by 40x")
+        print(f"✅ VIRTUAL MVPD FAST: multiplied {len(indices)} entries by 20x and recalculated Brand Penetration, Category Share, US Gen Pop")
     return df
 
 
