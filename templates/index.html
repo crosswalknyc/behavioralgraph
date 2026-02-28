@@ -622,7 +622,7 @@
         #formView { display: none; flex: 1; overflow-y: auto; }
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #customAnalysisView.active { display: flex; }
-        #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+        #dashboardView { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         
         /* App Footer - Data Source (above modals so always visible) */
         .app-footer {
@@ -15918,6 +15918,15 @@
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
                 var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
+                // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
+                if (initialVal === 'profileIQ') {
+                    var dv = document.getElementById('dashboardView');
+                    if (dv) { dv.style.display = 'flex'; dv.style.visibility = 'visible'; }
+                    var fv = document.getElementById('formView');
+                    if (fv) fv.style.display = 'none';
+                    var cav = document.getElementById('customAnalysisView');
+                    if (cav) cav.style.display = 'none';
+                }
             }
             // Initialize deck count from localStorage
             updateDeckCount();
