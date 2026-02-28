@@ -3311,15 +3311,18 @@ def set_activity_export_company():
 
 
 def _run_activity_export_jobs_impl():
-    """Run scheduled activity CSV exports: per-user and per-company. Returns dict for jsonify."""
+    """Run scheduled activity CSV exports: per-user and per-company. Returns dict for jsonify.
+    Sends all due exports first, then updates last_sent only after all sends complete, so an
+    interrupted run does not mark any as sent and the next run will retry everyone."""
     data = load_users()
     users_data = data.get('users', {})
     by_company = data.get('activity_export_by_company') or {}
     today = date.today()
-    sent_user = []
-    sent_company = []
 
-    # Per-user exports
+    # Build all due work (don't update last_sent yet)
+    user_jobs = []  # (username, emails_list, csv_bytes, subject, html, filename)
+    company_jobs = []  # (company_key, company_trim, emails_list, csv_bytes, subject, html, filename)
+
     for username, user in users_data.items():
         emails_raw = (user.get('activity_export_emails') or '').strip()
         cadence = (user.get('activity_export_cadence') or '').strip().lower()
@@ -3333,14 +3336,12 @@ def _run_activity_export_jobs_impl():
         csv_str = _build_activity_csv(username, safe_user, activity)
         csv_bytes = csv_str.encode('utf-8')
         emails_list = [e.strip() for e in emails_raw.split(',') if e.strip()]
+        if not emails_list:
+            continue
         subject = f"Crosswalk IQ – User activity export: {username}"
         html = _wrap_email_html(f"<p>Attached: user activity CSV for <strong>{username}</strong> (cadence: {cadence}).</p>", title='User activity export')
-        ok, _ = send_email_with_attachment(emails_list, subject, html, f'user_activity_{username}.csv', csv_bytes)
-        if ok:
-            user['activity_export_last_sent'] = today.isoformat()
-            sent_user.append(username)
+        user_jobs.append((username, emails_list, csv_bytes, subject, html, f'user_activity_{username}.csv'))
 
-    # Per-company exports
     for company_key, config in list(by_company.items()):
         emails_raw = (config.get('emails') or '').strip()
         cadence = (config.get('cadence') or '').strip().lower()
@@ -3366,14 +3367,30 @@ def _run_activity_export_jobs_impl():
         csv_str = '\n\n'.join(rows)
         csv_bytes = csv_str.encode('utf-8')
         emails_list = [e.strip() for e in emails_raw.split(',') if e.strip()]
+        if not emails_list:
+            continue
         subject = f"Crosswalk IQ – Company activity export: {company_trim}"
         html = _wrap_email_html(f"<p>Attached: user activity CSV for company <strong>{company_trim}</strong> ({len(results)} user(s), cadence: {cadence}).</p>", title='Company activity export')
-        ok, _ = send_email_with_attachment(emails_list, subject, html, f'user_activity_company_{company_trim.replace(" ", "_")}.csv', csv_bytes)
+        company_jobs.append((company_key, company_trim, emails_list, csv_bytes, subject, html, f'user_activity_company_{company_trim.replace(" ", "_")}.csv'))
+
+    # Send all emails; only then update last_sent so an interrupted run retries everyone next time
+    sent_user = []
+    sent_company = []
+    for username, emails_list, csv_bytes, subject, html, filename in user_jobs:
+        ok, _ = send_email_with_attachment(emails_list, subject, html, filename, csv_bytes)
         if ok:
-            by_company[company_key]['last_sent'] = today.isoformat()
+            sent_user.append(username)
+    for company_key, company_trim, emails_list, csv_bytes, subject, html, filename in company_jobs:
+        ok, _ = send_email_with_attachment(emails_list, subject, html, filename, csv_bytes)
+        if ok:
             sent_company.append(company_trim)
+            by_company[company_key] = by_company.get(company_key) or {}
+            by_company[company_key]['last_sent'] = today.isoformat()
 
     if sent_user or sent_company:
+        for username in sent_user:
+            if username in users_data:
+                users_data[username]['activity_export_last_sent'] = today.isoformat()
         data['activity_export_by_company'] = by_company
         save_users(data)
 
