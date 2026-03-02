@@ -7066,7 +7066,8 @@ def parse_subscriber_iq_csv(csv_content):
         if 'MONTHLY' in combined_check and ('SIGNUP' in combined_check or 'SIGNUPS' in combined_check):
             current_section = 'monthly_signups'
             continue
-        if 'ATTRIBUTION SUMMARY' in combined_check or 'ATTRIBUTION SUMMARY' in third_col.upper():
+        if ('ATTRIBUTION SUMMARY' in combined_check or 'ATTRIBUTION SUMMARY' in first_col.upper() or
+                'ATTRIBUTION SUMMARY' in second_col.upper() or 'ATTRIBUTION SUMMARY' in third_col.upper()):
             current_section = 'attribution_summary'
             print(f"   ✅ Entered ATTRIBUTION SUMMARY section at row {i}")
             continue
@@ -7534,26 +7535,39 @@ def parse_subscriber_iq_csv(csv_content):
                 }
                 print(f"   ✅ Fallback: Found Clean Sample")
     
-    # Fallback: Try to find attribution summary
-    if not parsed['attribution_summary'].get('total'):
-        for i, row in enumerate(rows):
-            if not row or len(row) < 2:
-                continue
-            first_col = row[0].strip() if row[0] else ''
-            if 'TOTAL SIGNUPS' in first_col.upper() and not parsed['attribution_summary'].get('total'):
-                parsed['attribution_summary']['total'] = {
-                    'count': parse_number(row[1]) if len(row) > 1 else None,
-                    'percentage': row[7].strip() if len(row) > 7 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
-                }
-                print(f"   ✅ Fallback: Found TOTAL SIGNUPS")
-            elif 'Attributed Signups' in first_col and not parsed['attribution_summary'].get('attributed'):
-                parsed['attribution_summary']['attributed'] = {
-                    'count': parse_number(row[1]) if len(row) > 1 else None,
-                    'percentage': row[7].strip() if len(row) > 7 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
-                }
-                print(f"   ✅ Fallback: Found Attributed Signups")
+    # Fallback: Try to find attribution summary (count in col 2, pct in col 8, gen_pop in col 9)
+    def _attr_count_row(r):
+        n = parse_number(r[2]) if len(r) > 2 else None
+        return n if n is not None else (parse_number(r[1]) if len(r) > 1 else None)
+    def _attr_pct_row(r):
+        return (r[8].strip() if len(r) > 8 and '%' in str(r[8]) else '') or (r[7].strip() if len(r) > 7 else '')
+    def _attr_gen_pop_row(r):
+        return (r[9].strip() if len(r) > 9 else '') or (r[8].strip() if len(r) > 8 else '')
+    for i, row in enumerate(rows):
+        if not row or len(row) < 1:
+            continue
+        first_col = (row[0].strip() if row[0] else '')
+        if not parsed['attribution_summary'].get('attributed') and 'Attributed Signups' in first_col:
+            parsed['attribution_summary']['attributed'] = {
+                'count': _attr_count_row(row),
+                'percentage': _attr_pct_row(row),
+                'gen_pop': _attr_gen_pop_row(row)
+            }
+            print(f"   ✅ Fallback: Found Attributed Signups (row {i})")
+        elif not parsed['attribution_summary'].get('dormant_reactive') and 'Dormant to Reactive' in first_col:
+            parsed['attribution_summary']['dormant_reactive'] = {
+                'count': _attr_count_row(row),
+                'percentage': _attr_pct_row(row),
+                'gen_pop': _attr_gen_pop_row(row)
+            }
+            print(f"   ✅ Fallback: Found Dormant to Reactive (row {i})")
+        elif not parsed['attribution_summary'].get('total') and 'TOTAL SIGNUPS' in first_col.upper():
+            parsed['attribution_summary']['total'] = {
+                'count': _attr_count_row(row),
+                'percentage': _attr_pct_row(row),
+                'gen_pop': _attr_gen_pop_row(row)
+            }
+            print(f"   ✅ Fallback: Found TOTAL SIGNUPS (row {i})")
     # When CSV has New Platform Signups but no ATTRIBUTION SUMMARY section, use new_signups for attributed and total
     # so "New Accounts Acquisition" and "Accounts Acquired or Reactivated" display correctly (e.g. Queer Eye reports)
     new_signups = parsed['key_metrics'].get('new_signups')
