@@ -8445,14 +8445,22 @@
             font-weight: 500;
             background: var(--bg-input);
         }
-        /* Label column: fixed width so labels don't truncate; leaves rest of table for data columns */
+        /* Label column: fixed width; wrap long text (e.g. MOST PURCHASED BRANDS (1816)) so it doesn't overlap next column */
         .comp-table th:first-child,
         .comp-table td:first-child {
             width: 200px;
             max-width: 200px;
             min-width: 140px;
-            white-space: nowrap;
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
             box-sizing: border-box;
+        }
+        /* All comparison headers: allow wrapping so profile names (e.g. GEN POP (%)) never overlap */
+        .comp-table th {
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         /* Data columns: equal width, share remaining space (table-layout: fixed divides remainder equally) */
         .comp-table td:not(:first-child),
@@ -47212,13 +47220,13 @@
                 const primaryClass = isPrimary ? 'primary-col' : '';
                 const ageDisplay = (section === 'age' && medianAge > 0) ? `<span class="header-median-age" title="Median Age">Median: ${medianAge.toFixed(2)}</span>` : '';
                 const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
-                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})"><span style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap;">${name}${sortIndicator} ${ageDisplay}</span></th>`;
+                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})"><span style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; min-width: 0;">${name}${sortIndicator} ${ageDisplay}</span></th>`;
             };
             // Label column: sort by label (e.g. Age, Gender) ascending/descending; profileIndex -1
             const sortableLabelHeader = (section, labelText) => {
                 const isSorted = sortSection === section && sortProfileIdx === -1;
                 const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
-                return `<th class="sortable comp-label-col ${isSorted ? 'sorted' : ''}" style="cursor: pointer;" onclick="sortComparisonTable('${section}', -1)"><span style="display: flex; align-items: center; gap: 0.25rem;">${labelText}${sortIndicator}</span></th>`;
+                return `<th class="sortable comp-label-col ${isSorted ? 'sorted' : ''}" style="cursor: pointer;" onclick="sortComparisonTable('${section}', -1)"><span style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; min-width: 0;">${labelText}${sortIndicator}</span></th>`;
             };
             
             // Helper to generate export menu HTML for comparison sections (Export section = current; Export all = all segments)
