@@ -17387,6 +17387,13 @@
                 attempts++;
                 try {
                     const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        clearInterval(pollInterval);
+                        if (typeof showAnalysisStatusModalError === 'function') showAnalysisStatusModalError('Session expired. Please log in again.');
+                        else alert('Session expired. Please log in again.');
+                        setTimeout(function() { window.location.href = '/login'; }, 1500);
+                        return;
+                    }
                     const data = await response.json();
                     
                     updateAnalysisStatusModal({
@@ -17424,6 +17431,13 @@
                 attempts++;
                 try {
                     const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        clearInterval(pollInterval);
+                        if (typeof showAnalysisStatusModalError === 'function') showAnalysisStatusModalError('Session expired. Please log in again.');
+                        else alert('Session expired. Please log in again.');
+                        setTimeout(function() { window.location.href = '/login'; }, 1500);
+                        return;
+                    }
                     const data = await response.json();
                     
                     const statusContent = document.getElementById('customSVODAcquisitionJobStatusContent');
@@ -17472,6 +17486,13 @@
                 attempts++;
                 try {
                     const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        clearInterval(pollInterval);
+                        if (typeof showAnalysisStatusModalError === 'function') showAnalysisStatusModalError('Session expired. Please log in again.');
+                        else alert('Session expired. Please log in again.');
+                        setTimeout(function() { window.location.href = '/login'; }, 1500);
+                        return;
+                    }
                     const data = await response.json();
                     
                     const statusContent = document.getElementById('customCampaignROIJobStatusContent');
@@ -17503,6 +17524,13 @@
                 attempts++;
                 try {
                     const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        clearInterval(pollInterval);
+                        if (typeof showAnalysisStatusModalError === 'function') showAnalysisStatusModalError('Session expired. Please log in again.');
+                        else alert('Session expired. Please log in again.');
+                        setTimeout(function() { window.location.href = '/login'; }, 1500);
+                        return;
+                    }
                     const data = await response.json();
                     
                     const statusContent = document.getElementById('customCrossShowJobStatusContent');
@@ -17534,6 +17562,13 @@
                 attempts++;
                 try {
                     const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        clearInterval(pollInterval);
+                        if (typeof showAnalysisStatusModalError === 'function') showAnalysisStatusModalError('Session expired. Please log in again.');
+                        else alert('Session expired. Please log in again.');
+                        setTimeout(function() { window.location.href = '/login'; }, 1500);
+                        return;
+                    }
                     const data = await response.json();
                     
                     const statusContent = document.getElementById('customWatchTimeJobStatusContent');
@@ -17565,6 +17600,14 @@
                 attempts++;
                 try {
                     const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        clearInterval(pollInterval);
+                        document.getElementById('tstStatusRunning').style.display = 'none';
+                        document.getElementById('tstStatusError').style.display = 'block';
+                        if (document.getElementById('tstErrorMessage')) document.getElementById('tstErrorMessage').textContent = 'Session expired. Please log in again.';
+                        setTimeout(function() { window.location.href = '/login'; }, 1500);
+                        return;
+                    }
                     const data = await response.json();
                     const fill = document.getElementById('tstProgressFill');
                     if (fill) fill.style.width = (data.progress || 0) + '%';
