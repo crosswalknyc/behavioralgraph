@@ -49572,6 +49572,11 @@
             document.querySelectorAll('.comp-export-menu').forEach(m => m.style.display = 'none');
         }
         
+        // Gen Pop is the baseline; never export an Index column for Gen Pop.
+        function isGenPopProfile(p) {
+            return (p.name || '').toUpperCase().replace(/\s+/g, ' ').trim() === 'GEN POP';
+        }
+        
         // Export comparison section to CSV
         function exportComparisonSectionCSV(moduleType) {
             const profiles = window.comparisonProfilesData || [];
@@ -49583,11 +49588,11 @@
             let csvContent = '';
             const sectionTitle = moduleType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
             
-            // Header row with profile names - include % and Index columns for each profile
+            // Header row: % for every profile; Index only for non–Gen Pop (Gen Pop has no index)
             const headerRow = ['Value'];
             profiles.forEach(p => {
                 headerRow.push(`"${p.name} %"`);
-                headerRow.push(`"${p.name} Index"`);
+                if (!isGenPopProfile(p)) headerRow.push(`"${p.name} Index"`);
             });
             csvContent += headerRow.join(',') + '\n';
             
@@ -49624,10 +49629,10 @@
                         const item = (p.behavioral?.[actualCat] || []).find(i => i.name === value);
                         if (item) {
                             row.push(item.pct?.toFixed(2) || '0');
-                            row.push(item.index || '-');
+                            if (!isGenPopProfile(p)) row.push(item.index || '-');
                         } else {
                             row.push('-');
-                            row.push('-');
+                            if (!isGenPopProfile(p)) row.push('-');
                         }
                     });
                     csvContent += row.join(',') + '\n';
@@ -49645,10 +49650,10 @@
                         const loc = (p.locations || []).find(l => (l.name || l.dma) === locName);
                         if (loc) {
                             row.push(loc.pct?.toFixed(2) || '0');
-                            row.push(loc.index || '-');
+                            if (!isGenPopProfile(p)) row.push(loc.index || '-');
                         } else {
                             row.push('-');
-                            row.push('-');
+                            if (!isGenPopProfile(p)) row.push('-');
                         }
                     });
                     csvContent += row.join(',') + '\n';
@@ -49680,10 +49685,10 @@
                         const pct = p.demographics?.[demoType]?.[value];
                         if (pct !== undefined) {
                             row.push(pct.toFixed(2));
-                            row.push(getIndex(p, demoType, value));
+                            if (!isGenPopProfile(p)) row.push(getIndex(p, demoType, value));
                         } else {
                             row.push('-');
-                            row.push('-');
+                            if (!isGenPopProfile(p)) row.push('-');
                         }
                     });
                     csvContent += row.join(',') + '\n';
@@ -49874,7 +49879,7 @@
                     csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
                 } else if (moduleType === 'location') {
                     const headerRow = ['Value'];
-                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); headerRow.push(`"${p.name} Index"`); });
+                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); if (!isGenPopProfile(p)) headerRow.push(`"${p.name} Index"`); });
                     csvContent += headerRow.join(',') + '\n';
                     const allLocations = new Set();
                     profiles.forEach(p => (p.locations || []).forEach(loc => allLocations.add(loc.name || loc.dma)));
@@ -49883,7 +49888,7 @@
                         profiles.forEach(p => {
                             const loc = (p.locations || []).find(l => (l.name || l.dma) === locName);
                             row.push(loc ? (loc.pct?.toFixed(2) || '0') : '-');
-                            row.push(loc ? (loc.index || '-') : '-');
+                            if (!isGenPopProfile(p)) row.push(loc ? (loc.index || '-') : '-');
                         });
                         csvContent += row.join(',') + '\n';
                     });
@@ -49898,7 +49903,7 @@
                     }
                     if (!catKey) return;
                     const headerRow = ['Value'];
-                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); headerRow.push(`"${p.name} Index"`); });
+                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); if (!isGenPopProfile(p)) headerRow.push(`"${p.name} Index"`); });
                     csvContent += headerRow.join(',') + '\n';
                     const allValues = new Set();
                     profiles.forEach(p => (p.behavioral?.[catKey] || []).forEach(item => allValues.add(item.name)));
@@ -49907,14 +49912,14 @@
                         profiles.forEach(p => {
                             const item = (p.behavioral?.[catKey] || []).find(i => i.name === value);
                             row.push(item ? (item.pct?.toFixed(2) || '0') : '-');
-                            row.push(item ? (item.index || '-') : '-');
+                            if (!isGenPopProfile(p)) row.push(item ? (item.index || '-') : '-');
                         });
                         csvContent += row.join(',') + '\n';
                     });
                 } else {
                     const demoType = moduleType.replace('demo_', '');
                     const headerRow = ['Value'];
-                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); headerRow.push(`"${p.name} Index"`); });
+                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); if (!isGenPopProfile(p)) headerRow.push(`"${p.name} Index"`); });
                     csvContent += headerRow.join(',') + '\n';
                     const allValues = new Set();
                     profiles.forEach(p => Object.keys(p.demographics?.[demoType] || {}).forEach(v => allValues.add(v)));
@@ -49924,7 +49929,7 @@
                         profiles.forEach(p => {
                             const pct = p.demographics?.[demoType]?.[value];
                             row.push(pct !== undefined ? pct.toFixed(2) : '-');
-                            row.push(getIndex(p, demoType, value));
+                            if (!isGenPopProfile(p)) row.push(getIndex(p, demoType, value));
                         });
                         csvContent += row.join(',') + '\n';
                     });
@@ -49963,7 +49968,7 @@
                     csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
                 } else if (moduleType === 'location') {
                     const headerRow = ['Value'];
-                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); headerRow.push(`"${p.name} Index"`); });
+                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); if (!isGenPopProfile(p)) headerRow.push(`"${p.name} Index"`); });
                     csvContent += headerRow.join(',') + '\n';
                     const allLocations = new Set();
                     profiles.forEach(p => (p.locations || []).forEach(loc => allLocations.add(loc.name || loc.dma)));
@@ -49972,7 +49977,7 @@
                         profiles.forEach(p => {
                             const loc = (p.locations || []).find(l => (l.name || l.dma) === locName);
                             row.push(loc ? (loc.pct?.toFixed(2) || '0') : '-');
-                            row.push(loc ? (loc.index || '-') : '-');
+                            if (!isGenPopProfile(p)) row.push(loc ? (loc.index || '-') : '-');
                         });
                         csvContent += row.join(',') + '\n';
                     });
@@ -49987,7 +49992,7 @@
                     }
                     if (!catKey) return;
                     const headerRow = ['Value'];
-                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); headerRow.push(`"${p.name} Index"`); });
+                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); if (!isGenPopProfile(p)) headerRow.push(`"${p.name} Index"`); });
                     csvContent += headerRow.join(',') + '\n';
                     const allValues = new Set();
                     profiles.forEach(p => (p.behavioral?.[catKey] || []).forEach(item => allValues.add(item.name)));
@@ -49996,14 +50001,14 @@
                         profiles.forEach(p => {
                             const item = (p.behavioral?.[catKey] || []).find(i => i.name === value);
                             row.push(item ? (item.pct?.toFixed(2) || '0') : '-');
-                            row.push(item ? (item.index || '-') : '-');
+                            if (!isGenPopProfile(p)) row.push(item ? (item.index || '-') : '-');
                         });
                         csvContent += row.join(',') + '\n';
                     });
                 } else {
                     const demoType = moduleType.replace('demo_', '');
                     const headerRow = ['Value'];
-                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); headerRow.push(`"${p.name} Index"`); });
+                    profiles.forEach(p => { headerRow.push(`"${p.name} %"`); if (!isGenPopProfile(p)) headerRow.push(`"${p.name} Index"`); });
                     csvContent += headerRow.join(',') + '\n';
                     const allValues = new Set();
                     profiles.forEach(p => Object.keys(p.demographics?.[demoType] || {}).forEach(v => allValues.add(v)));
@@ -50013,7 +50018,7 @@
                         profiles.forEach(p => {
                             const pct = p.demographics?.[demoType]?.[value];
                             row.push(pct !== undefined ? pct.toFixed(2) : '-');
-                            row.push(getIndex(p, demoType, value));
+                            if (!isGenPopProfile(p)) row.push(getIndex(p, demoType, value));
                         });
                         csvContent += row.join(',') + '\n';
                     });
