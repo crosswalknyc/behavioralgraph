@@ -46986,7 +46986,8 @@
             if (currentSortSection === section && currentSortColumn === profileIndex) {
                 currentSortDirection = currentSortDirection === 'desc' ? 'asc' : 'desc';
             } else {
-                currentSortDirection = 'desc'; // Default to descending for new column
+                // Label column (-1): default ascending (A–Z / youngest first); profile columns: default descending
+                currentSortDirection = (profileIndex === -1) ? 'asc' : 'desc';
             }
             
             currentSortColumn = profileIndex;
@@ -47213,6 +47214,12 @@
                 const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
                 return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})"><span style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap;">${name}${sortIndicator} ${ageDisplay}</span></th>`;
             };
+            // Label column: sort by label (e.g. Age, Gender) ascending/descending; profileIndex -1
+            const sortableLabelHeader = (section, labelText) => {
+                const isSorted = sortSection === section && sortProfileIdx === -1;
+                const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
+                return `<th class="sortable comp-label-col ${isSorted ? 'sorted' : ''}" style="cursor: pointer;" onclick="sortComparisonTable('${section}', -1)"><span style="display: flex; align-items: center; gap: 0.25rem;">${labelText}${sortIndicator}</span></th>`;
+            };
             
             // Helper to generate export menu HTML for comparison sections (Export section = current; Export all = all segments)
             const exportMenuHtml = (moduleType, sectionId) => `
@@ -47353,7 +47360,7 @@
                     <table class="comp-table">
                         <thead>
                             <tr>
-                                <th>Gender</th>
+                                ${sortableLabelHeader('gender', 'Gender')}
                                 ${profiles.map((p, i) => sortableHeader('gender', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
@@ -47394,7 +47401,7 @@
                     <table class="comp-table">
                         <thead>
                             <tr>
-                                <th>Age</th>
+                                ${sortableLabelHeader('age', 'Age')}
                                 ${profiles.map((p, i) => sortableHeader('age', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
@@ -47434,7 +47441,7 @@
                     <table class="comp-table">
                         <thead>
                             <tr>
-                                <th>Ethnicity</th>
+                                ${sortableLabelHeader('ethnicity', 'Ethnicity')}
                                 ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
@@ -47474,7 +47481,7 @@
                     <table class="comp-table">
                         <thead>
                             <tr>
-                                <th>Income</th>
+                                ${sortableLabelHeader('income', 'Income')}
                                 ${profiles.map((p, i) => sortableHeader('income', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
@@ -47522,7 +47529,7 @@
                     <table class="comp-table">
                         <thead>
                             <tr>
-                                <th>${title}</th>
+                                ${sortableLabelHeader(key, title)}
                                 ${profiles.map((p, i) => sortableHeader(key, i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
@@ -47617,7 +47624,7 @@
                         <table class="comp-table">
                             <thead>
                                 <tr>
-                                    <th>${cat} (${valueCount})</th>
+                                    ${sortableLabelHeader(catKey, cat + ' (' + valueCount + ')')}
                                     ${profiles.map((p, i) => {
                                         const isGenPop = (p.name || '').toUpperCase().includes('GEN POP') || (p.name || '').toUpperCase().includes('GENPOP');
                                         const colLabel = isGenPop ? p.name + ' (%)' : p.name + ' (% / Idx)';
@@ -47657,11 +47664,11 @@
                                 </select>
                             </span>
                         </div>
-                        <table class="comp-table">
-                            <thead>
-                                <tr>
-                                    <th>Location</th>
-                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name, p.color, p.medianAge)).join('')}
+                    <table class="comp-table">
+                        <thead>
+                            <tr>
+                                ${sortableLabelHeader('location', 'Location')}
+                                ${profiles.map((p, i) => sortableHeader('location', i, p.name, p.color, p.medianAge)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -47820,19 +47827,24 @@
             // Get sort direction (use global currentSortDirection)
             const behSortDir = currentSortDirection || 'desc';
 
-            // Sort by selected profile column or by primary profile descending
-            const sortIdx = (sortByProfileIdx !== null && sortByProfileIdx >= 0) ? sortByProfileIdx : ((primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : null);
-            if (sortIdx !== null) {
-                if (behSortDir === 'asc') {
-                    dataRows.sort((a, b) => getSortValue(a, sortIdx) - getSortValue(b, sortIdx));
-                } else {
-                    dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
-                }
+            // Sort by label column, then by selected profile column, else default
+            if (sortByProfileIdx === -1) {
+                const dir = behSortDir === 'asc' ? 1 : -1;
+                dataRows.sort((a, b) => dir * (a.value || '').toString().localeCompare((b.value || '').toString(), undefined, { sensitivity: 'base' }));
             } else {
-                if (sortType === 'index') {
-                    dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
+                const sortIdx = (sortByProfileIdx !== null && sortByProfileIdx >= 0) ? sortByProfileIdx : ((primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : null);
+                if (sortIdx !== null) {
+                    if (behSortDir === 'asc') {
+                        dataRows.sort((a, b) => getSortValue(a, sortIdx) - getSortValue(b, sortIdx));
+                    } else {
+                        dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
+                    }
                 } else {
-                    dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
+                    if (sortType === 'index') {
+                        dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
+                    } else {
+                        dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
+                    }
                 }
             }
 
@@ -47947,19 +47959,24 @@
             // Get sort direction (use global currentSortDirection)
             const locSortDir = currentSortDirection || 'desc';
 
-            // Sort by selected profile column or by primary profile descending
-            const sortIdx = (sortByProfileIdx !== null && sortByProfileIdx >= 0) ? sortByProfileIdx : ((primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : null);
-            if (sortIdx !== null) {
-                if (locSortDir === 'asc') {
-                    dataRows.sort((a, b) => getSortValue(a, sortIdx) - getSortValue(b, sortIdx));
-                } else {
-                    dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
-                }
+            // Sort by label column, then by selected profile column, else default
+            if (sortByProfileIdx === -1) {
+                const dir = locSortDir === 'asc' ? 1 : -1;
+                dataRows.sort((a, b) => dir * (a.value || '').toString().localeCompare((b.value || '').toString(), undefined, { sensitivity: 'base' }));
             } else {
-                if (sortType === 'index') {
-                    dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
+                const sortIdx = (sortByProfileIdx !== null && sortByProfileIdx >= 0) ? sortByProfileIdx : ((primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : null);
+                if (sortIdx !== null) {
+                    if (locSortDir === 'asc') {
+                        dataRows.sort((a, b) => getSortValue(a, sortIdx) - getSortValue(b, sortIdx));
+                    } else {
+                        dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
+                    }
                 } else {
-                    dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
+                    if (sortType === 'index') {
+                        dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
+                    } else {
+                        dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
+                    }
                 }
             }
 
@@ -48072,8 +48089,16 @@
                 return nums && nums[0] ? parseInt(nums[0]) : 0;
             };
 
-            // Sort logic - dropdown sortType takes priority for special sorts like 'age'
-            if (demoType === 'age' && sortType === 'age') {
+            // Sort logic - label column (profileIndex -1), then dropdown sortType, then profile column
+            if (sortByProfileIdx === -1) {
+                // Sort by label column: asc = A–Z / youngest first, desc = Z–A / oldest first
+                const dir = sortDir === 'asc' ? 1 : -1;
+                if (demoType === 'age') {
+                    dataRows.sort((a, b) => dir * (getAgeSortKey(a.value) - getAgeSortKey(b.value)));
+                } else {
+                    dataRows.sort((a, b) => dir * (a.value || '').toString().localeCompare((b.value || '').toString(), undefined, { sensitivity: 'base' }));
+                }
+            } else if (demoType === 'age' && sortType === 'age') {
                 // By age ascending (youngest first): <16 at top, then 17-18, 19-20, ..., 60+ at bottom
                 dataRows.sort((a, b) => getAgeSortKey(a.value) - getAgeSortKey(b.value));
             } else if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
