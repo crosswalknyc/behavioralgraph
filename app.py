@@ -4336,8 +4336,8 @@ def index():
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
 
-    # Purgatory: only admins, super_admins, or users with has_purgatory_approval can see Purgatory in product dropdown
-    has_purgatory_access = role in ['admin', 'super_admin'] or (user.get('has_purgatory_approval', False) if user else False)
+    # Purgatory: only super_admins or users explicitly allowed to access/approve (has_purgatory_approval) see it in the dropdown
+    has_purgatory_access = role == 'super_admin' or (user.get('has_purgatory_approval', False) if user else False)
 
     # Get user info for credits request
     first_name = user.get('first_name', '') if user else ''

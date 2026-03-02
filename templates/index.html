@@ -17349,6 +17349,13 @@
                 attempts++;
                 try {
                     const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        clearInterval(pollInterval);
+                        if (typeof showAnalysisStatusModalError === 'function') showAnalysisStatusModalError('Session expired. Please log in again.');
+                        else alert('Session expired. Please log in again.');
+                        setTimeout(function() { window.location.href = '/login'; }, 1500);
+                        return;
+                    }
                     const data = await response.json();
                     
                     const statusContent = document.getElementById('customTalentSearchJobStatusContent');
