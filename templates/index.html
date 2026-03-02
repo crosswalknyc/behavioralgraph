@@ -23711,13 +23711,57 @@
                 console.log('📅 Setting date range header:', finalDateRange, 'display:', finalDateRange ? 'block' : 'none');
             }
             
+            // Compute actual date ranges for exclusion and attribution from analysis date range
+            function parseAnalysisDateRange(rangeStr) {
+                if (!rangeStr || typeof rangeStr !== 'string') return { start: null, end: null };
+                const parts = rangeStr.split(/\s+to\s+/i).map(function(s) { return s.trim(); });
+                if (parts.length < 2) return { start: null, end: null };
+                function parseD(s) {
+                    if (!s) return null;
+                    const dash = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                    if (dash) return new Date(parseInt(dash[1], 10), parseInt(dash[2], 10) - 1, parseInt(dash[3], 10));
+                    const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                    if (slash) return new Date(parseInt(slash[3], 10) <= 99 ? 2000 + parseInt(slash[3], 10) : parseInt(slash[3], 10), parseInt(slash[1], 10) - 1, parseInt(slash[2], 10));
+                    return null;
+                }
+                var start = parseD(parts[0]);
+                var end = parseD(parts[1]);
+                return { start: start, end: end || start };
+            }
+            function addDays(d, days) {
+                if (!d || !(d instanceof Date) || isNaN(d.getTime())) return null;
+                var out = new Date(d);
+                out.setDate(out.getDate() + days);
+                return out;
+            }
+            function formatDateShort(d) {
+                if (!d || !(d instanceof Date) || isNaN(d.getTime())) return '';
+                var m = d.getMonth(), day = d.getDate(), y = d.getFullYear();
+                var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return months[m] + ' ' + day + ', ' + y;
+            }
+            var parsed = parseAnalysisDateRange(finalDateRange);
+            var exclusionDays = parseInt(exclusion, 10);
+            var attributionDays = parseInt(attribution, 10);
+            var exclusionRangeStr = '';
+            var attributionRangeStr = '';
+            if (parsed.start && !isNaN(parsed.start.getTime()) && exclusionDays >= 0) {
+                var exclEnd = addDays(parsed.start, -1);
+                var exclStart = addDays(parsed.start, -exclusionDays);
+                if (exclStart && exclEnd) exclusionRangeStr = ' (' + formatDateShort(exclStart) + ' – ' + formatDateShort(exclEnd) + ')';
+            }
+            if (parsed.end && !isNaN(parsed.end.getTime()) && attributionDays >= 0) {
+                var attrEnd = addDays(parsed.end, attributionDays);
+                if (attrEnd) attributionRangeStr = ' (through ' + formatDateShort(attrEnd) + ')';
+            }
+            
             if (exclusionWindow) {
-                exclusionWindow.textContent = exclusion ? `Exclusion Window: ${exclusion}` : '';
+                exclusionWindow.textContent = exclusion ? 'Exclusion Window: ' + exclusion + ' days' + exclusionRangeStr : '';
                 exclusionWindow.style.display = exclusion ? 'block' : 'none';
             }
             
             if (attributionWindow) {
-                attributionWindow.textContent = attribution ? `Attribution Window: ${attribution}` : '';
+                attributionWindow.textContent = attribution ? 'Attribution Window: ' + attribution + ' days' + attributionRangeStr : '';
                 attributionWindow.style.display = attribution ? 'block' : 'none';
             }
             
