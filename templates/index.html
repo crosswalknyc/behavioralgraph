@@ -49573,8 +49573,10 @@
         }
         
         // Gen Pop is the baseline; never export an Index column for Gen Pop.
+        // Match UI logic: any profile whose name contains GEN POP / GENPOP is treated as Gen Pop.
         function isGenPopProfile(p) {
-            return (p.name || '').toUpperCase().replace(/\s+/g, ' ').trim() === 'GEN POP';
+            const n = (p.name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+            return n === 'GEN POP' || n.includes('GEN POP') || n.includes('GENPOP') || n.includes('GENERAL POPULATION');
         }
         
         // Export comparison section to CSV
