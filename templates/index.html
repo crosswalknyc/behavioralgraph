@@ -14646,7 +14646,7 @@
                                 <button class="tab-btn" onclick="showSubscriberTab('revenue')"><span class="tab-icon">💰</span><span class="tab-label">REVENUE</span></button>
                                 <button class="tab-btn" id="subscriberEpisodesTabBtn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                                 <button class="tab-btn" id="subscriberTimingTabBtn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
-                                <button class="tab-btn" id="subscriberViewNumbersTabBtn" onclick="showSubscriberTab('viewnumbers')"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
+                                <button class="tab-btn" id="subscriberViewNumbersTabBtn" data-feature="viewNumbers" onclick="showSubscriberTab('viewnumbers')"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
                             </div>
@@ -15735,7 +15735,9 @@
             deckBuilder: true,
             rankers: true,
             // Insights Sub Tabs
-            insightsSummary: true
+            insightsSummary: true,
+            // Subscriber IQ tab
+            viewNumbers: true
         };
         
         // User info variables (needed early for deck/slide rendering)
@@ -15848,6 +15850,16 @@
             document.querySelectorAll('[data-feature]').forEach(btn => {
                 applyFeatureVisibility(btn);
             });
+            
+            // Subscriber IQ: hide View Numbers tab content when feature is off (admins still see it)
+            const viewNumbersTabContent = document.getElementById('subscriber-tab-viewnumbers');
+            const viewNumbersLive = liveFeatures.viewNumbers !== false;
+            if (viewNumbersTabContent) {
+                viewNumbersTabContent.style.display = (viewNumbersLive || isAdmin) ? '' : 'none';
+            }
+            if (!viewNumbersLive && !isAdmin && viewNumbersTabContent && viewNumbersTabContent.classList.contains('active')) {
+                showSubscriberTab('insights');
+            }
             
             // If Insights sub-tabs: when current active tab is hidden, switch to first visible
             const insightsSubTabs = document.getElementById('insightsSubTabs');

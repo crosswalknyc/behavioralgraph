@@ -1679,6 +1679,13 @@
                                 <span style="font-size: 1.25rem;">🗂️</span>
                                 <span style="font-size: 0.9rem;">Workspace</span>
                             </label>
+                            
+                            <!-- View Numbers (Subscriber IQ tab) -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="viewNumbers" checked onchange="updateLiveFeature('viewNumbers', this.checked)">
+                                <span style="font-size: 1.25rem;">🔢</span>
+                                <span style="font-size: 0.9rem;">View Numbers</span>
+                            </label>
                         </div>
                         
                         
@@ -4106,7 +4113,8 @@
             insightsSummary: true,
             overlapAnalysis: true,
             benchmarking: true,
-            gapAnalysis: true
+            gapAnalysis: true,
+            viewNumbers: true
         };
         
         // Load Live Features from server
