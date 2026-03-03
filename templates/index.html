@@ -1496,6 +1496,13 @@
         .btn-success { background: var(--accent-lime); color: #1a1a1a; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-small { padding: 0.35rem 0.75rem; font-size: 0.7rem; width: auto; }
+        /* Dashboard Run row: same-height Run dropdown + Compare date ranges button, purple button, visible dropdown chevron */
+        #dashProfileRunsRow { align-items: stretch; }
+        #dashProfileRunsRow select,
+        #dashProfileRunsRow #dashViewDeltasBtn { height: 2rem; min-height: 2rem; box-sizing: border-box; display: inline-flex; align-items: center; }
+        #dashProfileRunsRow select { background-color: var(--bg-input); padding-right: 1.75rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M6 9L1 4h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 12px; }
+        #dashViewDeltasBtn { background: #7c3aed; color: #fff; border-color: #7c3aed; white-space: nowrap; }
+        #dashViewDeltasBtn:hover { background: #6d28d9; border-color: #6d28d9; color: #fff; }
         .btn-run-analysis {
             border-radius: 9999px; background: #4a8ac9; color: white;
             padding: 0.75rem 1.5rem; font-weight: 700; text-transform: uppercase;
@@ -13315,7 +13322,7 @@
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.5rem;">
                                     <span style="font-size: 0.8rem; color: var(--text-secondary);">Run:</span>
-                                    <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;"></select>
+                                    <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;" title="Select a run (dropdown)"></select>
                                     <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Compare date ranges</button>
                                 </div>
                             </div>
