@@ -12289,8 +12289,7 @@
                                     <button type="button" class="btn btn-primary" id="profileRerunSubmitBtn">🚀 Run with these dates</button>
                                 </div>
                             </div>
-                        </div>
-                        <div class="card" id="profileNewAnalysisCard">
+                            <div id="profileNewAnalysisFlow" style="display: none;">
                             <h2>📊 Analysis Parameters</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Analysis</div>
                             <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
@@ -12563,49 +12562,54 @@
 
                                 <button type="submit" class="btn btn-primary" id="submitBtn">🚀 Run Analysis</button>
                             </form>
-                        </div>
 
-                        <div class="card">
-                            <h2>📈 Status & Results</h2>
-                            <div id="currentJob" style="display: none;">
-                                <div class="status-panel">
-                                    <div id="statusRunning">
-                                        <div class="spinner"></div>
-                                        <div class="pulse" id="statusText">Processing...</div>
-                                        <div style="font-size: 0.8rem; color: var(--text-secondary);" id="statusMessage">Analysis in progress</div>
-                                        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
-                                    </div>
-                                    <div id="statusComplete" style="display: none;">
-                                        <div style="font-size: 2.5rem;">✅</div>
-                                        <div style="margin: 0.5rem 0;">Complete!</div>
-                                        <button class="btn btn-success" id="viewResultsBtn" style="margin-top: 0.75rem;">📊 View Dashboard</button>
-                                    </div>
-                                    <div id="statusError" style="display: none;">
-                                        <div style="font-size: 2.5rem;">❌</div>
-                                        <div style="color: var(--accent-red);" id="errorMessage"></div>
+                            <div class="card" style="margin-top: 1rem;">
+                                <h2>📈 Status & Results</h2>
+                                <div id="currentJob" style="display: none;">
+                                    <div class="status-panel">
+                                        <div id="statusRunning">
+                                            <div class="spinner"></div>
+                                            <div class="pulse" id="statusText">Processing...</div>
+                                            <div style="font-size: 0.8rem; color: var(--text-secondary);" id="statusMessage">Analysis in progress</div>
+                                            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
+                                        </div>
+                                        <div id="statusComplete" style="display: none;">
+                                            <div style="font-size: 2.5rem;">✅</div>
+                                            <div style="margin: 0.5rem 0;">Complete!</div>
+                                            <button class="btn btn-success" id="viewResultsBtn" style="margin-top: 0.75rem;">📊 View Dashboard</button>
+                                        </div>
+                                        <div id="statusError" style="display: none;">
+                                            <div style="font-size: 2.5rem;">❌</div>
+                                            <div style="color: var(--accent-red);" id="errorMessage"></div>
+                                        </div>
                                     </div>
                                 </div>
+                                <div id="noCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
                             </div>
-                            <div id="noCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
-
-                            <div style="margin-top: 1.5rem; margin-bottom: 0.5rem;">
+                            </div>
+                        </div>
+                        <div class="card" id="profileIqResultsCard">
+                            <h2>📂 Things you've already pulled</h2>
+                            <div style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                                    <span style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</span>
                                     <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="loadMyResults()" title="Refresh your results">🔄</button>
                                 </div>
-                                <div id="svodResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
+                                <div id="profileIqResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
                             </div>
-                            
                             <div style="margin-bottom: 0.75rem;">
-                                <input type="text" id="svodResultsSearchInput" placeholder="🔍 Search your results..." oninput="filterSvodResults()" style="margin-bottom: 0.5rem;">
-                                <select id="svodResultsStatusFilter" onchange="filterSvodResults()" style="font-size: 0.8rem;">
+                                <input type="text" id="profileIqResultsSearchInput" placeholder="🔍 Search your results..." oninput="filterProfileIqResults()" style="margin-bottom: 0.5rem; width: 100%; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                <select id="profileIqResultsStatusFilter" onchange="filterProfileIqResults()" style="font-size: 0.8rem; width: 100%; margin-top: 0.25rem;">
                                     <option value="">All Status</option>
                                     <option value="pending">⏳ Pending Review</option>
                                     <option value="released">📊 In Dashboard</option>
                                 </select>
                             </div>
-                            
-                            <div id="svodResultsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
+                            <div id="profileIqResultsListHeader" style="display: none; padding: 0.35rem 0.6rem 0.15rem; font-size: 0.65rem; color: var(--text-secondary); font-weight: 600; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); margin-bottom: 0.25rem;">
+                                <span style="flex: 1; min-width: 0;">Project</span>
+                                <span style="min-width: 3.5rem;">Dashboard Status</span>
+                            </div>
+                            <div id="profileIqResultsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
                         </div>
                     </div>
                 </div>
@@ -16841,6 +16845,7 @@
                 const content = document.getElementById('customAnalysisTabContentProfileIQ');
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
+                if (typeof loadMyResults === 'function') loadMyResults();
             } else if (tabName === 'talent-search') {
                 const tab = document.getElementById('customAnalysisTabTalentSearch');
                 const content = document.getElementById('customAnalysisTabContentTalentSearch');
@@ -26379,7 +26384,7 @@
         (function initProfileRerunFlow() {
             const choiceCard = document.getElementById('profileRerunChoiceCard');
             const rerunFlow = document.getElementById('profileRerunFlow');
-            const newAnalysisCard = document.getElementById('profileNewAnalysisCard');
+            const newAnalysisFlow = document.getElementById('profileNewAnalysisFlow');
             const yesBtn = document.getElementById('profileRerunYesBtn');
             const noBtn = document.getElementById('profileRerunNoBtn');
             const searchInput = document.getElementById('profileRerunSearch');
@@ -26399,7 +26404,7 @@
 
             function showRerunFlow(show) {
                 if (rerunFlow) rerunFlow.style.display = show ? 'block' : 'none';
-                if (newAnalysisCard) newAnalysisCard.style.display = show ? 'none' : 'block';
+                if (newAnalysisFlow) newAnalysisFlow.style.display = show ? 'none' : 'block';
             }
             yesBtn.addEventListener('click', function() {
                 showRerunFlow(true);
@@ -44818,13 +44823,12 @@
             const svodContainer = document.getElementById('svodResultsList');
             const svodStatusEl = document.getElementById('svodResultsStatus');
             
-            // Show loading in both containers
-            if (container) {
-                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;"><span class="spinner"></span> Loading your results...</div>';
-            }
-            if (svodContainer) {
-                svodContainer.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;"><span class="spinner"></span> Loading your results...</div>';
-            }
+            const profileIqList = document.getElementById('profileIqResultsList');
+            const profileIqStatus = document.getElementById('profileIqResultsStatus');
+            const loadingHtml = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;"><span class="spinner"></span> Loading your results...</div>';
+            if (container) container.innerHTML = loadingHtml;
+            if (svodContainer) svodContainer.innerHTML = loadingHtml;
+            if (profileIqList) profileIqList.innerHTML = loadingHtml;
             
             try {
                 const response = await fetch('/api/my-results', { credentials: 'same-origin' });
@@ -44846,13 +44850,11 @@
                 const profileReleased = profileOnly.filter(r => r.status === 'released').length;
                 const statusText = `${data.pending_count || 0} pending • ${data.released_count || 0} in dashboard`;
                 const profileStatusText = `${profilePending} pending • ${profileReleased} in dashboard`;
-                if (statusEl) {
-                    statusEl.innerHTML = profileStatusText;
-                }
-                if (svodStatusEl) {
-                    svodStatusEl.innerHTML = statusText;
-                }
+                if (statusEl) statusEl.innerHTML = profileStatusText;
+                if (svodStatusEl) svodStatusEl.innerHTML = statusText;
+                if (profileIqStatus) profileIqStatus.innerHTML = profileStatusText;
                 renderMyResults(profileOnly);
+                if (profileIqList) renderMyResults(profileOnly, profileIqList, document.getElementById('profileIqResultsListHeader'));
                 renderSvodResults(myResults);
                 if (typeof renderSvodAcquisitionResultsList === 'function') {
                     svodAcquisitionResults = (myResults || []).filter(r => (r.source_type || '') === 'svod_acquisition');
@@ -44862,12 +44864,9 @@
             } catch (error) {
                 console.error('Failed to load my results:', error);
                 const emptyMsg = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results yet. Run an analysis to get started.</div>';
-                if (container) {
-                    container.innerHTML = emptyMsg;
-                }
-                if (svodContainer) {
-                    svodContainer.innerHTML = emptyMsg;
-                }
+                if (container) container.innerHTML = emptyMsg;
+                if (svodContainer) svodContainer.innerHTML = emptyMsg;
+                if (profileIqList) profileIqList.innerHTML = emptyMsg;
             }
         }
         
@@ -44888,9 +44887,25 @@
             renderMyResults(filtered);
         }
         
-        function renderMyResults(results) {
-            const container = document.getElementById('myResultsList');
-            const headerEl = document.getElementById('myResultsListHeader');
+        function filterProfileIqResults() {
+            const searchTerm = (document.getElementById('profileIqResultsSearchInput')?.value || '').toLowerCase().trim();
+            const statusFilter = document.getElementById('profileIqResultsStatusFilter')?.value || '';
+            let filtered = (myResults || []).filter(r => (r.source_type || 'profile_analysis') === 'profile_analysis');
+            if (searchTerm) {
+                filtered = filtered.filter(r =>
+                    (r.project_name || '').toLowerCase().includes(searchTerm) ||
+                    (r.category || '').toLowerCase().includes(searchTerm)
+                );
+            }
+            if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
+            const list = document.getElementById('profileIqResultsList');
+            const header = document.getElementById('profileIqResultsListHeader');
+            renderMyResults(filtered, list || undefined, header || undefined);
+        }
+        
+        function renderMyResults(results, optContainer, optHeader) {
+            const container = optContainer || document.getElementById('myResultsList');
+            const headerEl = optHeader || document.getElementById('myResultsListHeader');
             if (!container) return;
             
             if (headerEl) headerEl.style.display = 'none';
