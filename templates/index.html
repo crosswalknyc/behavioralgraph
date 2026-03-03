@@ -15851,13 +15851,17 @@
                 applyFeatureVisibility(btn);
             });
             
-            // Subscriber IQ: hide View Numbers tab content when feature is off (admins still see it)
+            // Subscriber IQ: when View Numbers is off, hide tab and content for everyone (including admins)
+            const viewNumbersTabBtn = document.getElementById('subscriberViewNumbersTabBtn');
             const viewNumbersTabContent = document.getElementById('subscriber-tab-viewnumbers');
             const viewNumbersLive = liveFeatures.viewNumbers !== false;
-            if (viewNumbersTabContent) {
-                viewNumbersTabContent.style.display = (viewNumbersLive || isAdmin) ? '' : 'none';
+            if (viewNumbersTabBtn) {
+                viewNumbersTabBtn.style.display = viewNumbersLive ? '' : 'none';
             }
-            if (!viewNumbersLive && !isAdmin && viewNumbersTabContent && viewNumbersTabContent.classList.contains('active')) {
+            if (viewNumbersTabContent) {
+                viewNumbersTabContent.style.display = viewNumbersLive ? '' : 'none';
+            }
+            if (!viewNumbersLive && viewNumbersTabContent && viewNumbersTabContent.classList.contains('active')) {
                 showSubscriberTab('insights');
             }
             
