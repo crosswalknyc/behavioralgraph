@@ -1501,7 +1501,7 @@
         #dashProfileRunsRow select,
         #dashProfileRunsRow #dashViewDeltasBtn { height: 2rem; min-height: 2rem; box-sizing: border-box; display: inline-flex; align-items: center; }
         #dashProfileRunsRow select { background-color: var(--bg-input); padding-right: 1.75rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M6 9L1 4h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 12px; }
-        #dashViewDeltasBtn { background: #7c3aed; color: #c5c7d4; border-color: #7c3aed; white-space: nowrap; font-family: inherit; font-weight: 500; }
+        #dashViewDeltasBtn { background: #7c3aed; color: #a8b2c1; border-color: #7c3aed; white-space: nowrap; font-family: 'Space Mono', monospace; }
         #dashViewDeltasBtn:hover { background: #6d28d9; border-color: #6d28d9; color: #c5c7d4; }
         .btn-run-analysis {
             border-radius: 9999px; background: #4a8ac9; color: white;
@@ -3309,12 +3309,12 @@
         .stat-value { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; }
         .stat-prefix { font-size: 1.25rem; color: var(--text-secondary); }
         
-        /* Demographics Insights Row */
+        /* Demographics Insights Row: smaller cards, content horizontal */
         .demo-insights-row {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin: 1rem 0;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+            margin: 0.75rem 0;
         }
         @media (max-width: 1200px) {
             .demo-insights-row { grid-template-columns: 1fr; }
@@ -3323,8 +3323,9 @@
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 1rem;
+            padding: 0.6rem 0.75rem;
             position: relative;
+            max-width: 100%;
         }
         
         .demo-insight-card.dragging {
@@ -3335,8 +3336,8 @@
             border: 2px dashed var(--accent-blue);
         }
         .demo-insight-card h4 {
-            margin: 0 0 0.5rem 0;
-            font-size: 0.85rem;
+            margin: 0 0 0.4rem 0;
+            font-size: 0.75rem;
             color: var(--accent-lime);
             display: flex;
             align-items: center;
@@ -3393,15 +3394,17 @@
         .top-cat-col-idx { min-width: 50px; }
         .top-cat-col-hot { min-width: 40px; }
         .demo-insight-content {
-            font-size: 0.8rem;
-            line-height: 1.5;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.4rem;
         }
         .demo-insight-item {
             display: flex;
             align-items: flex-start;
             gap: 0.5rem;
-            margin-bottom: 0.5rem;
-            padding: 0.4rem 0.5rem;
+            padding: 0.35rem 0.45rem;
             background: var(--bg-input);
             border-radius: 4px;
         }
@@ -12076,7 +12079,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Ethnicity</label>
-                                        <select id="ethnicity"><option value="">All</option><option>White</option><option>Black</option><option>Latino</option><option>Asian</option><option>Other</option></select>
+                                        <select id="ethnicity"><option value="">All</option><option>White</option><option>Black or African American</option><option>Hispanic or Latino</option><option>Asian</option><option>Another Race/Ethnicity</option></select>
                                     </div>
                                     <div class="form-group">
                                         <label>Income</label>
@@ -12124,7 +12127,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Check Ethnicity</label>
-                                        <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>Latino</option><option>Asian</option><option>Other</option></select>
+                                        <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black or African American</option><option>Hispanic or Latino</option><option>Asian</option><option>Another Race/Ethnicity</option></select>
                                     </div>
                                     <div class="form-group">
                                         <label>Size</label>
@@ -12501,7 +12504,7 @@
                                         <div class="form-row">
                                             <div class="form-group">
                                                 <label>Ethnicity</label>
-                                                <select id="ethnicity"><option value="">All</option><option>White</option><option>Black</option><option>Latino</option><option>Asian</option><option>Other</option></select>
+                                                <select id="ethnicity"><option value="">All</option><option>White</option><option>Black or African American</option><option>Hispanic or Latino</option><option>Asian</option><option>Another Race/Ethnicity</option></select>
                                             </div>
                                             <div class="form-group">
                                                 <label>Income</label>
@@ -12549,7 +12552,7 @@
                                         <div class="form-row">
                                             <div class="form-group">
                                                 <label>Check Ethnicity</label>
-                                                <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>Latino</option><option>Asian</option><option>Other</option></select>
+                                                <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black or African American</option><option>Hispanic or Latino</option><option>Asian</option><option>Another Race/Ethnicity</option></select>
                                             </div>
                                             <div class="form-group">
                                                 <label>Size</label>
@@ -13531,8 +13534,6 @@
                                     <div class="loading-placeholder">Loading...</div>
                                 </div>
                             </div>
-                            <!-- Spacer to maintain grid layout -->
-                            <div class="demo-insight-card" style="visibility: hidden;"></div>
                         </div>
                         <div class="charts-grid">
                             <div class="chart-card" data-module="Age">
@@ -14282,7 +14283,7 @@
                                         <option value="">All</option>
                                         <option value="White">White</option>
                                         <option value="Black">Black</option>
-                                        <option value="Latino">Latino</option>
+                                        <option value="Hispanic or Latino">Hispanic or Latino</option>
                                         <option value="Asian">Asian</option>
                                         <option value="Other">Other</option>
                                     </select>
@@ -16184,11 +16185,11 @@
             return n.toFixed(2) + '%';
         }
         
-        // Never display "Latinx" in UI — show "LATINO" (all caps) for latinx or Latino from raw data.
+        // Normalize ethnicity for display (legacy latinx/latino → Hispanic or Latino).
         function displayDemographicLabel(s) {
             if (s == null || typeof s !== 'string') return s;
             const v = String(s).trim().toLowerCase();
-            if (v === 'latinx' || v === 'latino') return 'LATINO';
+            if (v === 'latinx' || v === 'latino') return 'Hispanic or Latino';
             return s;
         }
         
@@ -19178,7 +19179,7 @@
             // Ethnicity Chart (Latino in all caps on demographics)
             if (demographics.ethnicity && Object.keys(demographics.ethnicity).length > 0) {
                 const ethnicityLabels = Object.keys(demographics.ethnicity);
-                const ethnicityDisplayLabels = ethnicityLabels.map(l => (l && l.toLowerCase()) === 'latino' ? 'LATINO' : l);
+                const ethnicityDisplayLabels = ethnicityLabels.map(l => (l && l.toLowerCase()) === 'latino' || (l && l.toLowerCase()) === 'latinx' ? 'Hispanic or Latino' : l);
                 const ethnicityData = Object.values(demographics.ethnicity);
                 const ctx = document.getElementById('tickerEthnicityChart');
                 if (ctx) {
@@ -21999,7 +22000,7 @@
         const TST_GENPOP_BASE_2026 = '329,900,000';
         const TST_GENPOP_TOOLTIP = 'US Gen Pop projections use the 2026 base of ' + TST_GENPOP_BASE_2026 + '.';
         const TST_GENPOP_DMA = { 'NEW YORK NY': 6.4, 'LOS ANGELES CA': 4.8, 'CHICAGO IL': 3.0, 'PHILADELPHIA PA': 2.5, 'DALLAS FORT WORTH TX': 2.4, 'SAN FRANCISCO OAKLAND SAN JOSE CA': 2.2, 'WASHINGTON DC': 2.2, 'HOUSTON TX': 2.2, 'BOSTON MA': 2.1, 'ATLANTA GA': 2.0, 'PHOENIX AZ': 1.7, 'TAMPA ST PETERSBURG FL': 1.6, 'SEATTLE TACOMA WA': 1.6, 'DETROIT MI': 1.6, 'MINNEAPOLIS ST PAUL MN': 1.5, 'MIAMI FT LAUDERDALE FL': 1.5, 'DENVER CO': 1.4, 'ORLANDO FL': 1.3, 'CLEVELAND OH': 1.2, 'SACRAMENTO CA': 1.2, 'ST LOUIS MO': 1.1, 'PORTLAND OR': 1.0, 'CHARLOTTE NC': 1.0, 'PITTSBURGH PA': 1.0, 'RALEIGH DURHAM NC': 1.0, 'INDIANAPOLIS IN': 0.9, 'BALTIMORE MD': 0.9, 'SAN DIEGO CA': 0.9, 'NASHVILLE TN': 0.9, 'HARTFORD CT': 0.8, 'KANSAS CITY MO': 0.8, 'COLUMBUS OH': 0.8, 'SALT LAKE CITY UT': 0.8, 'MILWAUKEE WI': 0.7, 'SAN ANTONIO TX': 0.7, 'AUSTIN TX': 0.7, 'LAS VEGAS NV': 0.7, 'CINCINNATI OH': 0.7, 'GREENVILLE SC': 0.6, 'WEST PALM BEACH FL': 0.6, 'JACKSONVILLE FL': 0.6, 'GRAND RAPIDS MI': 0.6, 'BIRMINGHAM AL': 0.6, 'OKLAHOMA CITY OK': 0.6, 'HARRISBURG PA': 0.6, 'NORFOLK VA': 0.5, 'ALBUQUERQUE SANTA FE NM': 0.5, 'MEMPHIS TN': 0.5, 'LOUISVILLE KY': 0.5, 'NEW ORLEANS LA': 0.5, 'PROVIDENCE RI': 0.5, 'BUFFALO NY': 0.5, 'GREENSBORO NC': 0.5, 'FRESNO CA': 0.4, 'RICHMOND VA': 0.4, 'KNOXVILLE TN': 0.4, 'LITTLE ROCK AR': 0.4, 'TULSA OK': 0.4, 'LEXINGTON KY': 0.4, 'DAYTON OH': 0.4, 'CHARLESTON SC': 0.4, 'WICHITA KS': 0.3, 'MOBILE AL': 0.3, 'FLINT MI': 0.3, 'TUCSON AZ': 0.3, 'TOLEDO OH': 0.3, 'HONOLULU HI': 0.3, 'DES MOINES IA': 0.3, 'SPOKANE WA': 0.3, 'OMAHA NE': 0.3, 'ROCHESTER NY': 0.3, 'SPRINGFIELD MO': 0.3, 'SHREVEPORT LA': 0.2, 'SYRACUSE NY': 0.2, 'PADUCAH KY': 0.2, 'MADISON WI': 0.2 };
-        const TST_GENPOP_DEMOGRAPHICS = { 'AGE': { '<16': 16.9, '16-18': 3.7, '18-20': 2.7, '21-25': 6.8, '26-30': 6.7, '31-40': 13.7, '41-59': 25.1, '60+': 24.5 }, 'GENDER': { 'Female': 48.2, 'Male': 47.8, 'Trans Female': 0.8, 'Trans Male': 1.0, 'Non-Binary': 2.1, 'FEMALE': 48.2, 'MALE': 47.8 }, 'ETHNICITY': { 'White': 59.0, 'Latino': 18.6, 'Black': 14.3, 'Other': 5.0, 'Asian': 3.0, 'WHITE': 59.0, 'LATINO': 18.6, 'LATINX': 18.6, 'BLACK': 14.3, 'ASIAN': 3.0 }, 'INCOME': { '$40K - $60K': 26.3, '$40K-$60K': 26.3, '$60K - $75K': 14.3, '$60K-$75K': 14.3, '$75K - $100K': 19.1, '$75K-$100K': 19.1, '$100K - $150K': 21.4, '$100K-$150K': 21.4, '$150K - $250K': 10.6, '$150K-$250K': 10.6, '$250K+': 8.2 } };
+        const TST_GENPOP_DEMOGRAPHICS = { 'AGE': { '<16': 16.9, '16-18': 3.7, '18-20': 2.7, '21-25': 6.8, '26-30': 6.7, '31-40': 13.7, '41-59': 25.1, '60+': 24.5 }, 'GENDER': { 'Female': 48.2, 'Male': 47.8, 'Trans Female': 0.8, 'Trans Male': 1.0, 'Non-Binary': 2.1, 'FEMALE': 48.2, 'MALE': 47.8 }, 'ETHNICITY': { 'White': 59.0, 'Hispanic or Latino': 18.6, 'Black or African American': 14.3, 'Another Race/Ethnicity': 5.0, 'Asian': 3.0, 'WHITE': 59.0, 'LATINO': 18.6, 'LATINX': 18.6, 'BLACK': 14.3, 'ASIAN': 3.0 }, 'INCOME': { '$40K - $60K': 26.3, '$40K-$60K': 26.3, '$60K - $75K': 14.3, '$60K-$75K': 14.3, '$75K - $100K': 19.1, '$75K-$100K': 19.1, '$100K - $150K': 21.4, '$100K-$150K': 21.4, '$150K - $250K': 10.6, '$150K-$250K': 10.6, '$250K+': 8.2 } };
         let tstDemographicsHoverEnabled = localStorage.getItem('bg_tst_demographics_hover') !== 'false';
         async function loadTSTProfiles() {
             try {
@@ -22252,7 +22253,7 @@
         const TST_AGE_ORDER = ['<16','16-18','18-20','21-25','26-30','31-40','41-59','60+'];
         const TST_AGE_ORDER_EXTRA = ['<16','under 16','16-18','18-20','21-25','26-30','31-40','41-59','60+','65+','over 65'];
         const TST_INCOME_ORDER = ['$40k-$60k','$40k - $60k','$60k-$75k','$60k - $75k','$75k-$100k','$75k - $100k','$100k-$150k','$100k - $150k','$150k-$250k','$150k - $250k','$250k+','$250k +'];
-        const TST_ETHNICITY_ORDER = ['White','Black','Latinx','Asian','Other'];
+        const TST_ETHNICITY_ORDER = ['White','Black or African American','Hispanic or Latino','Asian','Another Race/Ethnicity'];
         const TST_GENDER_ORDER = ['Female','Male','Trans Male','Trans Female','Non-Binary'];
         // Display label for demographics: actual category names + overrides; match Profile IQ (income $40,000 - $59,999; age 17-18, 19-20, etc.)
         function _tstDisplayLabel(field, value) {
@@ -22268,7 +22269,7 @@
             if (fieldUpper === 'GENDER' && isIndex && idx >= 0 && idx < TST_GENDER_ORDER.length) return TST_GENDER_ORDER[idx];
             if (fieldUpper === 'ETHNICITY') {
                 const raw = isIndex && idx >= 0 && idx < TST_ETHNICITY_ORDER.length ? TST_ETHNICITY_ORDER[idx] : v;
-                return (typeof displayDemographicLabel === 'function' ? displayDemographicLabel(raw) : (raw.trim().toLowerCase() === 'latinx' ? 'Latino' : raw));
+                return (typeof displayDemographicLabel === 'function' ? displayDemographicLabel(raw) : (raw.trim().toLowerCase() === 'latinx' || raw.trim().toLowerCase() === 'latino' ? 'Hispanic or Latino' : raw));
             }
             if (fieldUpper === 'INCOME') {
                 const lab = isIndex && idx >= 0 && idx < TST_INCOME_ORDER.length ? TST_INCOME_ORDER[idx] : v;
@@ -22297,7 +22298,7 @@
             const lookup = (gp) => {
                 if(!gp) return null;
                 let pct = gp[v]; if(pct!=null) return pct;
-                const ethKey = (v||'').toLowerCase()==='latinx'?'Latino':v;
+                const ethKey = (v||'').toLowerCase()==='latinx'||(v||'').toLowerCase()==='latino'?'Hispanic or Latino':v;
                 pct = gp[ethKey]; if(pct!=null) return pct;
                 for(const k of Object.keys(gp)){ if((k||'').toLowerCase()===(v||'').toLowerCase()) return gp[k]; }
                 return null;
@@ -26786,7 +26787,7 @@
                     'Female': 48.2, 'Male': 47.8, 'Trans Female': 0.8, 'Trans Male': 1.0, 'Non-Binary': 2.1
                 },
                 'ETHNICITY': {
-                    'White': 59.0, 'Latino': 18.6, 'Black': 14.3, 'Other': 5.0, 'Asian': 3.0
+                    'White': 59.0, 'Hispanic or Latino': 18.6, 'Black or African American': 14.3, 'Another Race/Ethnicity': 5.0, 'Asian': 3.0
                 },
                 'INCOME': {
                     '$40K - $60K': 26.3, '$40K-$60K': 26.3,
@@ -29611,7 +29612,7 @@
 
             // Ethnicity - with Gen Pop in legend (green/red based on index). Latino in all caps on demographics.
             const ethLabels = Object.keys(demographics.ethnicity);
-            const ethDisplayLabels = ethLabels.map(l => (l && l.toLowerCase()) === 'latino' ? 'LATINO' : l);
+            const ethDisplayLabels = ethLabels.map(l => (l && l.toLowerCase()) === 'latino' || (l && l.toLowerCase()) === 'latinx' ? 'Hispanic or Latino' : l);
             const ethGenPop = ethLabels.map(k => demographicsGenPop.ethnicity?.[k] || 0);
             const ethPcts = Object.values(demographics.ethnicity);
             const ethData = isProjection

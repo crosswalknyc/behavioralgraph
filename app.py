@@ -6494,8 +6494,8 @@ def get_csv_data(s3_key):
         data = df.to_dict('records')
         for row in data:
             val = row.get('Value')
-            if isinstance(val, str) and val.strip().lower() == 'latinx':
-                row['Value'] = 'Latino'
+            if isinstance(val, str) and val.strip().lower() in ('latinx', 'latino'):
+                row['Value'] = 'Hispanic or Latino'
         return csv_content, df, brand_name, date_range, data
     
     try:
@@ -6932,7 +6932,14 @@ def get_segment_data():
             def _display_ethnicity(val):
                 if not val or not isinstance(val, str):
                     return val
-                return 'Latino' if val.strip().lower() == 'latinx' else val
+                v = val.strip().lower()
+                if v in ('latinx', 'latino', 'latin x'):
+                    return 'Hispanic or Latino'
+                if v == 'black':
+                    return 'Black or African American'
+                if v == 'other':
+                    return 'Another Race/Ethnicity'
+                return val
 
             for row in demo_results:
                 gender, age, income, ethnicity, count = row

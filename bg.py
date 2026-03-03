@@ -727,10 +727,10 @@ GENPOP_DEMOGRAPHICS = [
     ("GENDER", "Non-Binary", 2.0926),
     ("GENDER", "Prefer not to say", 0.0926),
     ("ETHNICITY", "White", 59.0489),
-    ("ETHNICITY", "Black", 14.3119),
-    ("ETHNICITY", "LatinX", 18.6083),
+    ("ETHNICITY", "Black or African American", 14.3119),
+    ("ETHNICITY", "Hispanic or Latino", 18.6083),
     ("ETHNICITY", "Asian", 3.0309),
-    ("ETHNICITY", "Other", 5.0001),
+    ("ETHNICITY", "Another Race/Ethnicity", 5.0001),
     ("EDUCATION", "Complete College/University", 43.517),
     ("EDUCATION", "Completed HS only", 36.7209),
     ("EDUCATION", "Completed Grad School", 13.8065),
@@ -1549,7 +1549,7 @@ def get_user_inputs():
         fields = {
             "GENDER": "Gender (N for no or Female, Male, Trans Male, Trans Female, Non-binary): ",
             "AGE": "Age group (N for no or <16, 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+): ",
-            "ETHNICITY": "Ethnicity (N for no or White, LatinX, Other, Black, Asian): ",
+            "ETHNICITY": "Ethnicity (N for no or White, Hispanic or Latino, Another Race/Ethnicity, Black or African American, Asian): ",
             "INCOME": "HHI (N for no or $40K - $60K, $60K - $75K, $75K - $100K, $100K - $150K, $150K - $250K, $250K+): ",
             "EDUCATION": "Education (N for no or Complete College/University, Completed HS only, Completed Grad School, None): ",
             "RELATIONSHIP": "Relationship (N for no or Single, In a Relationship, Married, Other, Divorced): ",
@@ -1576,7 +1576,7 @@ def get_user_inputs():
                 "<16", "16-18", "18-20", "21-25", "26-30", "31-40", "41-59", "60+"
             ],
             "ETHNICITY": [
-                "White", "LatinX", "Other", "Black", "Asian"
+                "White", "Hispanic or Latino", "Another Race/Ethnicity", "Black or African American", "Asian"
             ],
             "INCOME": [
                 "$40K - $60K", "$60K - $75K", "$75K - $100K", "$100K - $150K", "$150K - $250K", "$250K+"
@@ -1655,7 +1655,7 @@ def get_user_inputs():
 # Build & normalize cap tables (base 10M)
 ethnicity_age_caps = pd.DataFrame({
     'AGE': ['<16', '16-18', '19-20', '21-25', '26-30', '31-40', '41-59', '60+'] * 5,
-    'ETHNICITY': ['White'] * 8 + ['Black'] * 8 + ['LatinX'] * 8 + ['Asian'] * 8 + ['Other'] * 8,
+    'ETHNICITY': ['White'] * 8 + ['Black or African American'] * 8 + ['Hispanic or Latino'] * 8 + ['Asian'] * 8 + ['Another Race/Ethnicity'] * 8,
     'MAX_COUNT': [
         886395,176361,153117,382102,375845,771541,1464555,1814626,
         244157,46567,39189,95525,89329,170718,287550,233094,
@@ -1839,7 +1839,9 @@ def capitalize_words(text):
     # Special case handling for specific terms
     special_cases = {
         # Demographics
-        'latinx': 'LatinX',
+        'latinx': 'Hispanic or Latino',
+        'hispanic or latino': 'Hispanic or Latino',
+        'latino': 'Hispanic or Latino',
         'lgbt': 'LGBT',
         'lgbtq': 'LGBTQ',
         'lgbtq+': 'LGBTQ+',
@@ -9861,7 +9863,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
     # --- ENSURE ALL ETHNICITY CATEGORIES ARE PRESENT ---
     def ensure_all_ethnicity_categories(df_behavior_data, df_demo_final):
         """
-        Ensure all ethnicity categories (White, Asian, LatinX, Black) are always present.
+        Ensure all ethnicity categories (White, Asian, Hispanic or Latino, Black or African American) are always present.
         Add missing ones with random noise while maintaining 100% total.
         """
         # Check if we have demographic data
@@ -9873,7 +9875,8 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             return df_behavior_data
         
         ethnicity_data = df_demo_final[ethnicity_mask].copy()
-        required_ethnicities = ['white', 'asian', 'latinx', 'black']
+        required_ethnicities = ['white', 'asian', 'hispanic or latino', 'black or african american']
+        ethnicity_display = {'white': 'White', 'asian': 'Asian', 'hispanic or latino': 'Hispanic or Latino', 'black or african american': 'Black or African American'}
         existing_ethnicities = ethnicity_data['Value'].str.lower().tolist()
         
         missing_ethnicities = []
@@ -9895,13 +9898,13 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
                 # Create new row
                 new_row = {
                     'Column': 'ETHNICITY',
-                    'Value': ethnicity.title(),
+                    'Value': ethnicity_display.get(ethnicity, ethnicity.title()),
                     'Percentage': random_pct
                 }
                 
                 # Add to demographic dataframe
                 df_demo_final = pd.concat([df_demo_final, pd.DataFrame([new_row])], ignore_index=True)
-                print(f"  ➕ Added {ethnicity.title()}: {random_pct:.4f}%")
+                print(f"  ➕ Added {ethnicity_display.get(ethnicity, ethnicity.title())}: {random_pct:.4f}%")
             
             # Renormalize ethnicity category to maintain 100% total
             ethnicity_mask = df_demo_final['Column'].str.upper() == 'ETHNICITY'
@@ -9976,7 +9979,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             'Complete College/University', 'Completed HS only', 'Completed Grad School', 'Other'
         ],
         'ETHNICITY': [
-            'White', 'Latinx', 'Asian', 'Black', 'Other'
+            'White', 'Hispanic or Latino', 'Asian', 'Black or African American', 'Another Race/Ethnicity'
         ]
         # Note: LOCATION is now handled in REQUIRED_DEMOGRAPHICS
     }
@@ -10351,7 +10354,7 @@ REQUIRED_DEMOGRAPHICS = {
         'Complete College/University', 'Completed HS only', 'Completed Grad School'
     ],
     'ETHNICITY': [
-        'White', 'Latinx', 'Asian', 'Black',
+        'White', 'Hispanic or Latino', 'Asian', 'Black or African American',
     ],
     'GENDER': [
         'Female', 'Male', 'Trans Female', 'Trans Male', 'Non-Binary'

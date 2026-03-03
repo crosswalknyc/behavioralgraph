@@ -127,7 +127,11 @@
             
             function displayEthnicityLabel(v) {
                 if (!v || typeof v !== 'string') return v;
-                return v.trim().toLowerCase() === 'latinx' ? 'Latino' : v;
+                const x = v.trim().toLowerCase();
+                if (x === 'latinx' || x === 'latino') return 'Hispanic or Latino';
+                if (x === 'black') return 'Black or African American';
+                if (x === 'other') return 'Another Race/Ethnicity';
+                return v;
             }
             csvData.forEach(row => {
                 const col = (row.Column || '').toUpperCase();
