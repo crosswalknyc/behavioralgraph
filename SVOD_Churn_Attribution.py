@@ -1526,6 +1526,8 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                 rows.append((f"  {day_label}", "", count, "signups", "", "", "", "", f"{pct:.2f}%", genpop))
 
     # Post-signup touchpoint analysis (show visits as 1st-5th platform touchpoint)
+    # 1st Touchpoint Gen Pop must always equal New Platform Signups Gen Pop; Total Gen Pop = sum(1st-5th)
+    new_signups_genpop_str = format_gen_pop(gen_pop_projection(new_signups))
     if not df_post_signup_touchpoints.empty:
         rows.append(("", "", "", "", "", "", "", "", "", ""))
         rows.append(("", "", "POST-SIGNUP TOUCHPOINT ANALYSIS", "", "", "", "", "", "", ""))
@@ -1538,17 +1540,28 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                 continue
             touchpoint_rank = int(row["TOUCHPOINT_RANK"])
             user_count = int(row["USER_COUNT"]) if not pd.isna(row["USER_COUNT"]) else 0
-            genpop = format_gen_pop(gen_pop_projection(user_count))
+            # 1st Touchpoint: use same Gen Pop as New Platform Signups (align US Gen Pop Projection)
+            if touchpoint_rank == 1:
+                genpop = new_signups_genpop_str
+            else:
+                genpop = format_gen_pop(gen_pop_projection(user_count))
             rank_label = f"{touchpoint_rank}{'st' if touchpoint_rank == 1 else 'nd' if touchpoint_rank == 2 else 'rd' if touchpoint_rank == 3 else 'th'} Touchpoint"
             touchpoint_rows.append((touchpoint_rank, rank_label, user_count, genpop))
             if 1 <= touchpoint_rank <= 5:
                 total_touchpoint_sum += user_count
+        # Total Platform Signups Gen Pop = sum of 1st, 2nd, 3rd, 4th, 5th Gen Pop (numeric)
+        def _gp_num(s):
+            try:
+                return int(float(str(s).replace(",", "")))
+            except (ValueError, TypeError):
+                return 0
+        genpop_sum = sum(_gp_num(gp) for (tr, rl, uc, gp) in touchpoint_rows if 1 <= tr <= 5)
+        total_genpop_str = format_gen_pop(genpop_sum)
         for tr, rl, uc, gp in touchpoint_rows:
             pct = round((uc * 100.0) / total_touchpoint_sum, 2) if total_touchpoint_sum > 0 else 0.0
             rows.append((rl, "", uc, "accounts activated", "", "", "", "", f"{pct:.2f}%", gp))
         if total_touchpoint_sum > 0:
-            total_genpop = format_gen_pop(gen_pop_projection(total_touchpoint_sum))
-            rows.append(("Total Platform Signups", "", total_touchpoint_sum, "accounts activated", "", "", "", "", "100.00%", total_genpop))
+            rows.append(("Total Platform Signups", "", total_touchpoint_sum, "accounts activated", "", "", "", "", "100.00%", total_genpop_str))
 
     # Competitive platforms
     if not df_comp.empty:

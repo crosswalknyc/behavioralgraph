@@ -7994,10 +7994,18 @@ def get_subscriber_iq_data(s3_key):
         print(f"   Data structure check - key_metrics content: {parsed.get('key_metrics')}")
         
         # Post-process post_signup_touchpoints: Total=100%, each 1st-5th = % of Total Platform Signups
+        # 1st Touchpoint Gen Pop Projection = always New Platform Signups Gen Pop; Total = sum(1st–5th Gen Pop)
         touchpoints = parsed.get('post_signup_touchpoints') or []
         if touchpoints:
             def _tp_users_num(t):
                 v = t.get('users')
+                if isinstance(v, (int, float)):
+                    return int(v)
+                if isinstance(v, str):
+                    return parse_number(v) or 0
+                return 0
+            def _tp_gen_pop_num(t):
+                v = t.get('gen_pop')
                 if isinstance(v, (int, float)):
                     return int(v)
                 if isinstance(v, str):
@@ -8018,6 +8026,31 @@ def get_subscriber_iq_data(s3_key):
                     else:
                         pct = (float(users_val) / total_users) * 100
                         t['percentage'] = f'{pct:.2f}%'
+            # 1st Touchpoint Gen Pop = always Gen Pop Projection New Platform Signups
+            new_signups_gen_pop = parsed.get('key_metrics', {}).get('new_signups', {}).get('gen_pop')
+            gen_pop_first = parse_number(new_signups_gen_pop) if isinstance(new_signups_gen_pop, str) else (int(new_signups_gen_pop) if new_signups_gen_pop is not None else None)
+            first_tp_key = None
+            for t in touchpoints:
+                tp = (t.get('touchpoint') or '').strip().lower()
+                if tp in ('1st', '1'):
+                    first_tp_key = tp
+                    break
+            if first_tp_key is not None and gen_pop_first is not None:
+                for t in touchpoints:
+                    if (t.get('touchpoint') or '').strip().lower() == first_tp_key:
+                        t['gen_pop'] = str(int(gen_pop_first))
+                        break
+            # Total Platform Signups Gen Pop = sum of 1st, 2nd, 3rd, 4th, 5th Gen Pop
+            ordinal_keys = ('1st', '2nd', '3rd', '4th', '5th', '1', '2', '3', '4', '5')
+            gen_pop_sum = 0
+            for t in touchpoints:
+                tp = (t.get('touchpoint') or '').strip().lower()
+                if tp in ordinal_keys:
+                    gen_pop_sum += _tp_gen_pop_num(t)
+            for t in touchpoints:
+                if (t.get('touchpoint') or '').strip().lower() == 'total':
+                    t['gen_pop'] = str(int(gen_pop_sum))
+                    break
 
         # Episode-Level Signup Timing section removed from dashboard (but data still available)
         parsed.pop('episode_signup_timing', None)

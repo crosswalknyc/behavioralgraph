@@ -36,14 +36,20 @@ def ensure_cols(row, min_len):
     return list(row) + [''] * (min_len - len(row))
 
 
+def format_gen_pop(n):
+    """Format integer with commas for CSV (e.g. 1305117 -> '1,305,117')."""
+    if n is None:
+        return ''
+    return f'{int(n):,}'
+
+
 def fix_touchpoints_section(rows):
     """
-    Modify rows in place. Find New Platform Signups gen_pop, then in POST-SIGNUP TOUCHPOINT
-    section set 1st Touchpoint col9 = that value, and Total Platform Signups col9 = sum(1st-5th).
+    Modify rows in place. Find New Platform Signups gen_pop, then set 1st Touchpoint col9 = that
+    value, and Total Platform Signups col9 = sum(1st-5th). Scan all rows (no section dependency).
     CSV: col0=label, col2=Count, col8=Percentage, col9=Gen Pop Projection.
     """
     new_signups_gen_pop = None
-    in_touchpoint_section = False
     first_touchpoint_row_idx = None
     touchpoint_row_indices = []  # list of (row_idx, '1'|'2'|...|'5'|'Total')
     GEN_POP_COL = 9
@@ -53,53 +59,42 @@ def fix_touchpoints_section(rows):
         if not row:
             continue
         first_col = (row[0].strip() if len(row) > 0 and row[0] else '').strip()
-        # KEY METRICS section: find New Platform Signups
+        # New Platform Signups (anywhere in file)
         if 'New Platform Signups' in first_col:
             row = ensure_cols(row, MIN_COLS)
             rows[i] = row
             val = parse_number(row[GEN_POP_COL]) if len(row) > GEN_POP_COL else None
             if val is not None:
                 new_signups_gen_pop = val
-
-        if 'POST-SIGNUP TOUCHPOINT ANALYSIS' in first_col:
-            in_touchpoint_section = True
-            continue
-        if in_touchpoint_section:
-            # Leave section on next major header (stop collecting rows)
-            if first_col and (
-                'COMPETITIVE PLATFORMS' in first_col
-                or (len(row) > 2 and 'COMPETITIVE PLATFORMS' in str(row[2] or ''))
-            ):
-                in_touchpoint_section = False
-                continue
-            # Match "1st Touchpoint", "2nd Touchpoint", ... "Total Platform Signups"
-            if first_col.endswith('Touchpoint'):
-                touchpoint_num = first_col.replace('Touchpoint', '').strip().rstrip()
-                if touchpoint_num == '1st':
-                    first_touchpoint_row_idx = i
-                    touchpoint_row_indices.append((i, '1'))
-                elif touchpoint_num == '2nd':
-                    touchpoint_row_indices.append((i, '2'))
-                elif touchpoint_num == '3rd':
-                    touchpoint_row_indices.append((i, '3'))
-                elif touchpoint_num == '4th':
-                    touchpoint_row_indices.append((i, '4'))
-                elif touchpoint_num == '5th':
-                    touchpoint_row_indices.append((i, '5'))
-            elif 'Total Platform Signups' in first_col:
-                touchpoint_row_indices.append((i, 'Total'))
+        # Touchpoint rows: match by col0 label only
+        if first_col.endswith('Touchpoint'):
+            touchpoint_num = first_col.replace('Touchpoint', '').strip().rstrip()
+            if touchpoint_num == '1st':
+                first_touchpoint_row_idx = i
+                touchpoint_row_indices.append((i, '1'))
+            elif touchpoint_num == '2nd':
+                touchpoint_row_indices.append((i, '2'))
+            elif touchpoint_num == '3rd':
+                touchpoint_row_indices.append((i, '3'))
+            elif touchpoint_num == '4th':
+                touchpoint_row_indices.append((i, '4'))
+            elif touchpoint_num == '5th':
+                touchpoint_row_indices.append((i, '5'))
+        elif 'Total Platform Signups' in first_col:
+            touchpoint_row_indices.append((i, 'Total'))
 
     if new_signups_gen_pop is None:
         return False, "New Platform Signups gen pop not found"
+    if not touchpoint_row_indices:
+        return False, "No touchpoint rows (1st-5th or Total) found"
 
     changed = False
-    # Set 1st Touchpoint gen_pop = New Platform Signups
+    # Set 1st Touchpoint gen_pop = New Platform Signups (formatted with commas)
     if first_touchpoint_row_idx is not None:
         row = ensure_cols(rows[first_touchpoint_row_idx], MIN_COLS)
-        old_val = row[GEN_POP_COL] if len(row) > GEN_POP_COL else ''
-        new_val = str(new_signups_gen_pop)
-        if old_val != new_val:
-            row[GEN_POP_COL] = new_val
+        old_num = parse_number(row[GEN_POP_COL]) if len(row) > GEN_POP_COL else None
+        if old_num != new_signups_gen_pop:
+            row[GEN_POP_COL] = format_gen_pop(new_signups_gen_pop)
             rows[first_touchpoint_row_idx] = row
             changed = True
 
@@ -118,10 +113,9 @@ def fix_touchpoints_section(rows):
     total_row_idx = next((idx for (idx, key) in touchpoint_row_indices if key == 'Total'), None)
     if total_row_idx is not None:
         row = ensure_cols(rows[total_row_idx], MIN_COLS)
-        old_val = row[GEN_POP_COL] if len(row) > GEN_POP_COL else ''
-        new_val = str(total_gen_pop)
-        if old_val != new_val:
-            row[GEN_POP_COL] = new_val
+        old_num = parse_number(row[GEN_POP_COL]) if len(row) > GEN_POP_COL else None
+        if old_num != total_gen_pop:
+            row[GEN_POP_COL] = format_gen_pop(total_gen_pop)
             rows[total_row_idx] = row
             changed = True
 
