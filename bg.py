@@ -710,32 +710,32 @@ RECLASSIFY_SECTIONS = [
     'Writer/Director/Author/Artist'
 ]
 
-# GenPop demographics
+# GenPop demographics (2026 US Census projections)
 GENPOP_DEMOGRAPHICS = [
-    ("AGE", "<16", 16.9006),
-    ("AGE", "16-18", 3.689),
-    ("AGE", "18-20", 2.6734),
-    ("AGE", "21-25", 6.7885),
-    ("AGE", "26-30", 6.7013),
-    ("AGE", "31-40", 13.6572),
-    ("AGE", "41-59", 25.0729),
-    ("AGE", "60+", 24.5169),
-    ("GENDER", "Female", 48.2343),
-    ("GENDER", "Male", 47.8478),
-    ("GENDER", "Trans Male", 0.9957),
-    ("GENDER", "Trans Female", 1.2588),
-    ("GENDER", "Non-Binary", 2.0926),
-    ("GENDER", "Prefer Not to Say", 0.0926),
-    ("ETHNICITY", "White", 59.0489),
-    ("ETHNICITY", "Black or African American", 14.3119),
-    ("ETHNICITY", "Hispanic or Latino", 18.6083),
-    ("ETHNICITY", "Asian", 3.0309),
-    ("ETHNICITY", "Another Race/Ethnicity", 5.0001),
-    ("EDUCATION", "Bachelor's Degree", 43.517),
-    ("EDUCATION", "High School or Less", 36.7209),
-    ("EDUCATION", "Graduate or Professional Degree", 13.8065),
-    ("EDUCATION", "Some College / Associate Degree", 0.0),
-    ("EDUCATION", "Prefer Not to Say", 5.9555),
+    ("AGE", "<16", 10.0),
+    ("AGE", "16-18", 9.6),
+    ("AGE", "18-20", 4.85),
+    ("AGE", "21-25", 11.45),
+    ("AGE", "26-30", 6.6),
+    ("AGE", "31-40", 20.2),
+    ("AGE", "41-59", 24.9),
+    ("AGE", "60+", 19.1),
+    ("GENDER", "Female", 50.83),
+    ("GENDER", "Male", 49.17),
+    ("GENDER", "Trans Male", 0.0),
+    ("GENDER", "Trans Female", 0.0),
+    ("GENDER", "Non-Binary", 0.0),
+    ("GENDER", "Prefer Not to Say", 0.0),
+    ("ETHNICITY", "White", 59.0),
+    ("ETHNICITY", "Black or African American", 13.0),
+    ("ETHNICITY", "Hispanic or Latino", 18.0),
+    ("ETHNICITY", "Asian", 6.0),
+    ("ETHNICITY", "Another Race/Ethnicity", 4.0),
+    ("EDUCATION", "Bachelor's Degree", 22.3),
+    ("EDUCATION", "High School or Less", 38.1),
+    ("EDUCATION", "Graduate or Professional Degree", 18.27),
+    ("EDUCATION", "Some College / Associate Degree", 22.0),
+    ("EDUCATION", "Prefer Not to Say", 0.0),
     ("INCOME", "$25,000 - $49,999", 0.0),
     ("INCOME", "$50,000 - $74,999", 40.6),
     ("INCOME", "$75,000 - $99,999", 19.1338),
@@ -5933,38 +5933,39 @@ def add_brand_penetration_column_using_final_raw(df: pd.DataFrame) -> pd.DataFra
     return df
 
 def get_hardcoded_genpop_demographics():
-    """Return hardcoded demographic data for GenPop runs with 10M sample size."""
+    """Return hardcoded demographic data for GenPop runs (2026 US Census projections)."""
     demographics = {
         'AGE': [
-            ('60+', 24.5169, 2451690),
-            ('41-59', 25.0729, 2507290),
-            ('<16', 16.9006, 1690060),
-            ('31-40', 13.6572, 1365721),
-            ('21-25', 6.7885, 678850),
-            ('18-20', 2.6734, 267341),
-            ('26-30', 6.7013, 670131),
-            ('16-18', 3.689, 368900)
+            ('60+', 19.1, 1910000),
+            ('41-59', 24.9, 2490000),
+            ('<16', 10.0, 1000000),
+            ('31-40', 20.2, 2020000),
+            ('21-25', 11.45, 1145000),
+            ('18-20', 4.85, 485000),
+            ('26-30', 6.6, 660000),
+            ('16-18', 9.6, 960000)
         ],
         'EDUCATION': [
-            ('COMPLETE COLLEGE/UNIVERSITY', 43.517, 4351700),
-            ('COMPLETED HS ONLY', 36.7209, 3672090),
-            ('COMPLETED GRAD SCHOOL', 13.8065, 1380650),
-            ('NONE', 5.9555, 595550)
+            ('COMPLETE COLLEGE/UNIVERSITY', 22.3, 2230000),
+            ('COMPLETED HS ONLY', 38.1, 3810000),
+            ('COMPLETED GRAD SCHOOL', 18.27, 1827000),
+            ('SOME COLLEGE / ASSOCIATE DEGREE', 22.0, 2200000),
+            ('NONE', 0.0, 0)
         ],
         'ETHNICITY': [
-            ('WHITE', 59.0489, 5904890),
-            ('LATINX', 18.6083, 1860830),
-            ('BLACK', 14.3119, 1431190),
-            ('OTHER', 5.0001, 500009),
-            ('ASIAN', 3.0309, 303090)
+            ('WHITE', 59.0, 5900000),
+            ('HISPANIC OR LATINO', 18.0, 1800000),
+            ('BLACK OR AFRICAN AMERICAN', 13.0, 1300000),
+            ('ASIAN', 6.0, 600000),
+            ('ANOTHER RACE/ETHNICITY', 4.0, 400000)
         ],
         'GENDER': [
-            ('MALE', 47.8478, 4784780),
-            ('FEMALE', 48.2343, 4823430),
-            ('TRANS MALE', 0.9957, 99570),
-            ('TRANS FEMALE', 1.2588, 125879),
-            ('NON-BINARY', 2.0926, 209260),
-            ('PREFER NOT TO SAY', 0.0926, 9260)
+            ('MALE', 49.17, 4917000),
+            ('FEMALE', 50.83, 5083000),
+            ('TRANS MALE', 0.0, 0),
+            ('TRANS FEMALE', 0.0, 0),
+            ('NON-BINARY', 0.0, 0),
+            ('PREFER NOT TO SAY', 0.0, 0)
         ],
         'INCOME': [
             ('$50,000 - $74,999', 40.6, 4060000),
