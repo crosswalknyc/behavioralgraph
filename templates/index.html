@@ -13329,6 +13329,7 @@
                             <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
+                                <div class="dash-date-box" id="dashDataSourceHeader" style="display: none; font-size: 0.8rem; color: var(--text-secondary);" title="Exact file used for this profile (Behavioral, Demographics, etc.)"></div>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.5rem;">
                                     <span style="font-size: 0.8rem; color: var(--text-secondary);">Run:</span>
                                     <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;" title="Select a run (dropdown)"></select>
@@ -28156,6 +28157,17 @@
                 if (dateRangeEl) {
                     dateRangeEl.textContent = dateRange ? `Date Range: ${dateRange}` : '';
                     dateRangeEl.style.display = dateRange ? 'block' : 'none';
+                }
+                const dataSourceEl = document.getElementById('dashDataSourceHeader');
+                const isGenPopProfile = (profileId || '').toString().toLowerCase().includes('gen_pop');
+                if (dataSourceEl) {
+                    if (isGenPopProfile) {
+                        const sourceFile = (tab.data && tab.data.s3_key) ? tab.data.s3_key : (typeof GEN_POP_CANONICAL_KEY !== 'undefined' ? GEN_POP_CANONICAL_KEY : profileId);
+                        dataSourceEl.textContent = 'Data source: ' + sourceFile;
+                        dataSourceEl.style.display = 'block';
+                    } else {
+                        dataSourceEl.style.display = 'none';
+                    }
                 }
                 const runsRow = document.getElementById('dashProfileRunsRow');
                 const runSelect = document.getElementById('dashRunSelect');
