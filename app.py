@@ -133,6 +133,8 @@ def redirect_if_must_reset_password():
 # ============================================================================
 
 S3_BUCKET = 'dashboard-inputs'
+# Canonical Gen Pop 2026 file - profile selector and get-csv-data always use this key so dashboard matches S3 link
+GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
@@ -6515,9 +6517,8 @@ def _preferred_gen_pop_key(s3_key):
     if match:
         mm1, dd1, year, mm2, dd2 = match.groups()
         return f"Gen_Pop_{year}_{mm1}_{dd1}_{year}_{mm2}_{dd2}.csv"
-    # Fallback: try known canonical key for 2026 (matches dashboard-inputs link)
     if '2026' in key_lower or 'gen_pop' in key_lower:
-        return "Gen_Pop_2026_03_04_2026_04_29.csv"
+        return GEN_POP_CANONICAL_KEY
     return None
 
 
@@ -6573,16 +6574,21 @@ def get_csv_data(s3_key):
                 row['Value'] = 'Hispanic or Latino'
         return csv_content, df, brand_name, date_range, data
     
-    # Prefer Gen_Pop_YYYY_... over Gen_Pop_MM_DD_... when both exist (same data, correct file)
+    # Gen Pop: always fetch the canonical S3 file so dashboard matches https://dashboard-inputs.s3.../Gen_Pop_2026_03_04_2026_04_29.csv
     effective_key = s3_key
-    preferred = _preferred_gen_pop_key(s3_key)
-    if preferred:
+    if s3_key and 'gen_pop' in s3_key.lower():
         try:
-            s3_client.head_object(Bucket=S3_BUCKET, Key=preferred)
-            effective_key = preferred
-            print(f"📂 Using preferred Gen Pop key: {effective_key}")
+            csv_content, df, brand_name, date_range, data = _fetch_and_return(GEN_POP_CANONICAL_KEY)
+            print(f"📂 Served canonical Gen Pop file: {GEN_POP_CANONICAL_KEY}")
+            return jsonify({
+                'success': True,
+                'data': data,
+                'brand': brand_name,
+                'date_range': date_range,
+                's3_key': GEN_POP_CANONICAL_KEY
+            })
         except Exception:
-            pass
+            pass  # fall back to requested key
     try:
         print(f"📂 Fetching from S3: {S3_BUCKET}/{effective_key}")
         csv_content, df, brand_name, date_range, data = _fetch_and_return(effective_key)
@@ -13219,6 +13225,23 @@ def list_jobs():
         # Filter out OTHER and UNCATEGORIZED categories - these should never appear in profile selector
         job_list = [e for e in job_list if (e.get('category') or '').upper() not in ('OTHER', 'UNCATEGORIZED', '')]
         
+        # Gen Pop: always show the canonical S3 key so profile selector only ever loads that file (no CMS/stale mapping)
+        seen_gen_pop = False
+        new_job_list = []
+        for e in job_list:
+            sk = (e.get('s3_key') or '').lower()
+            if 'gen_pop' in sk:
+                if seen_gen_pop:
+                    continue  # keep only one Gen Pop entry
+                seen_gen_pop = True
+                e = dict(e)
+                e['s3_key'] = GEN_POP_CANONICAL_KEY
+                e['job_id'] = GEN_POP_CANONICAL_KEY
+                e['project_name'] = e.get('project_name') or 'Gen Pop 2026'
+                e['display_name'] = e.get('display_name') or 'Gen Pop 2026'
+            new_job_list.append(e)
+        job_list = new_job_list
+        
         # Restrict to runs the user is allowed to see (Run Access in Admin)
         allowed_runs = None
         try:
@@ -13230,7 +13253,15 @@ def list_jobs():
             pass
         if allowed_runs is not None and not (isinstance(allowed_runs, list) and len(allowed_runs) == 1 and allowed_runs[0] == '*'):
             allowed_set = set(allowed_runs or [])
-            job_list = [e for e in job_list if (e.get('s3_key') or '') in allowed_set]
+            def job_allowed(e):
+                sk = e.get('s3_key') or ''
+                if sk in allowed_set:
+                    return True
+                # Gen Pop: if user has any gen_pop key in allowed_runs, allow the canonical Gen Pop entry
+                if sk == GEN_POP_CANONICAL_KEY and any('gen_pop' in (k or '').lower() for k in allowed_set):
+                    return True
+                return False
+            job_list = [e for e in job_list if job_allowed(e)]
         
         categories = {e.get('category') for e in job_list if e.get('category')}
         
