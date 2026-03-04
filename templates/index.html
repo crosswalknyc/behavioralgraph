@@ -14646,7 +14646,7 @@
                                 <button class="tab-btn" onclick="showSubscriberTab('revenue')"><span class="tab-icon">💰</span><span class="tab-label">REVENUE</span></button>
                                 <button class="tab-btn" id="subscriberEpisodesTabBtn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                                 <button class="tab-btn" id="subscriberTimingTabBtn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
-                                <button class="tab-btn" id="subscriberViewNumbersTabBtn" data-feature="viewNumbers" onclick="showSubscriberTab('viewnumbers')"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
+                                <button class="tab-btn" id="subscriberViewNumbersTabBtn" data-feature="viewNumbers" onclick="showSubscriberTab('viewnumbers')" style="display: none;"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
                             </div>
@@ -14717,8 +14717,8 @@
 
                         </div>
 
-                        <!-- View Numbers Tab (1st–5th view attribution) -->
-                        <div id="subscriber-tab-viewnumbers" class="tab-content">
+                        <!-- View Numbers Tab (1st–5th view attribution); hidden until live feature is on -->
+                        <div id="subscriber-tab-viewnumbers" class="tab-content" style="display: none;">
                             <div class="tab-section">
                                 <h3>🔢 View Numbers</h3>
                                 <p class="section-description" style="margin-bottom: 1.5rem;">When people signed up for the platform, was this show their 1st, 2nd, 3rd, 4th, or 5th view? These numbers show how many users watched this show at each position in their viewing sequence after signup.</p>
@@ -15736,8 +15736,8 @@
             rankers: true,
             // Insights Sub Tabs
             insightsSummary: true,
-            // Subscriber IQ tab
-            viewNumbers: true
+            // Subscriber IQ tab (default false so it stays hidden until API says on)
+            viewNumbers: false
         };
         
         // User info variables (needed early for deck/slide rendering)
@@ -15851,10 +15851,10 @@
                 applyFeatureVisibility(btn);
             });
             
-            // Subscriber IQ: when View Numbers is off, hide tab and content for everyone (including admins)
+            // Subscriber IQ: only show View Numbers when explicitly on from server (default off so unchecked in admin = hidden)
             const viewNumbersTabBtn = document.getElementById('subscriberViewNumbersTabBtn');
             const viewNumbersTabContent = document.getElementById('subscriber-tab-viewnumbers');
-            const viewNumbersLive = liveFeatures.viewNumbers !== false;
+            const viewNumbersLive = liveFeatures.viewNumbers === true;
             if (viewNumbersTabBtn) {
                 viewNumbersTabBtn.style.display = viewNumbersLive ? '' : 'none';
             }
