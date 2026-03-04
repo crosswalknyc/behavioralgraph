@@ -1,33 +1,26 @@
 #!/usr/bin/env python3
 """
-Update all CSV files in S3 bucket dashboard-inputs (root-level and historic/ only; no recursive subfolders).
-Use: PYTHONUNBUFFERED=1 python3 divide_s3_csv_categories_by_2.py  (for live progress) so that
-specified behavioral categories have values divided by 2, matching the pipeline's
-new divide-by-2 logic.
+Update CSV files in S3 bucket dashboard-inputs (root-level and historic/ only; no recursive subfolders):
+Multiply specified categories by given factors and recalc Brand Penetration (Row), Category Share, US Gen Pop Projection.
 
-For each matching row we:
-1. Divide Original Raw Numbers by 2
-2. Recalculate Brand Penetration (Row) = (new raw / sample size) * 100
-3. Recalculate Category Share = (value's raw / sum of raws in that category) * 100
-4. Recalculate US Gen Pop Projection = (Original Raw Number / 10_000_000) * 329_900_000
-5. Save back to the same S3 key (overwrite).
+Boosts applied (same as pipeline):
+- WHERE THEY DINE: 10x
+- VIRTUAL MVPD FAST (and VMVPD/FAST, VIRTUAL MVPD/FAST): 3x
+- EVENTS: 10x
+- TICKETING: 3x
 
-Categories updated: APP/PLATFORM USAGE, APPS/PLATFORMS, BANKING, TRAVEL,
-BROADCAST/CABLE, AUTOMOBILE, GAMES, TELECOM, CREDIT PROVIDER, INVESTMENTS,
-INSURANCE, MEDIA, WHERE THEY SHOP, QSR.
-
-Run with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY set (or default creds).
+For each matching row: Original Raw Numbers *= factor, then recalc BP, Category Share, US Gen Pop.
+Use: PYTHONUNBUFFERED=1 python3 boost_s3_csv_categories.py [--dry-run]
 """
 
 import os
 import sys
 import io
-import csv
 
 try:
     import boto3
     import pandas as pd
-except ImportError as e:
+except ImportError:
     print("Required: pip install boto3 pandas")
     sys.exit(1)
 
@@ -36,32 +29,22 @@ S3_REGION = "us-east-2"
 US_POP = 329_900_000
 SAMPLE_UNIVERSE = 10_000_000
 
-# Categories to divide by 2 (must match pipeline)
-DIVIDE_CATEGORIES = {
-    "APP/PLATFORM USAGE",
-    "APPS/PLATFORMS",
-    "BANKING",
-    "TRAVEL",
-    "BROADCAST/CABLE",
-    "AUTOMOBILE",
-    "GAMES",
-    "TELECOM",
-    "CREDIT PROVIDER",
-    "INVESTMENTS",
-    "INSURANCE",
-    "MEDIA",
-    "WHERE THEY SHOP",
-    "QSR",
+# Category name (upper) -> multiply factor
+BOOST_MAP = {
+    "WHERE THEY DINE": 10,
+    "VIRTUAL MVPD FAST": 3,
+    "VMVPD/FAST": 3,
+    "VIRTUAL MVPD/FAST": 3,
+    "EVENTS": 10,
+    "TICKETING": 3,
 }
 
 
 def get_sample_size_from_df(df):
-    """Get sample size from SAMPLE SIZE row; column D = index 3, or Category Share / Original Raw Numbers."""
     mask = df.iloc[:, 0].astype(str).str.strip().str.upper() == "SAMPLE SIZE"
     if not mask.any():
         return None
     row = df.loc[mask].iloc[0]
-    # Column D = index 3 (0-based)
     if len(df.columns) > 3:
         val = row.iloc[3]
         if pd.notna(val) and str(val).strip():
@@ -87,7 +70,6 @@ def get_sample_size_from_df(df):
 
 
 def safe_raw(x):
-    """Parse Original Raw Numbers cell to int."""
     if x is None or (isinstance(x, float) and pd.isna(x)):
         return 0
     try:
@@ -97,28 +79,26 @@ def safe_raw(x):
 
 
 def process_csv(content: str) -> str:
-    """Process CSV string: divide specified categories by 2 and recalc derived columns. Returns new CSV string."""
     df = pd.read_csv(io.StringIO(content), dtype=str, keep_default_na=False)
     if df.empty or len(df.columns) < 2:
         return content
 
-    # Normalize first column name (often "Column")
     col_col = df.columns[0]
     sample_size = get_sample_size_from_df(df)
     if sample_size is None or sample_size <= 0:
-        return content  # Skip if we can't get sample size
+        return content
 
     raw_col = "Original Raw Numbers" if "Original Raw Numbers" in df.columns else None
     pct_col = "Category Share" if "Category Share" in df.columns else ("Percentage" if "Percentage" in df.columns else None)
     bp_col = "Brand Penetration (Row)" if "Brand Penetration (Row)" in df.columns else None
     genpop_col = "US Gen Pop Projection" if "US Gen Pop Projection" in df.columns else None
-
     if not raw_col:
         return content
 
-    # Rows to process: Column (category) in DIVIDE_CATEGORIES
     col_upper = df[col_col].astype(str).str.strip().str.upper()
-    for cat in DIVIDE_CATEGORIES:
+    changed = False
+
+    for cat, factor in BOOST_MAP.items():
         mask = col_upper == cat
         if not mask.any():
             continue
@@ -127,20 +107,16 @@ def process_csv(content: str) -> str:
             raw = safe_raw(df.at[idx, raw_col])
             if raw <= 0:
                 continue
-            new_raw = max(1, raw // 2)
+            new_raw = max(1, int(raw * factor))
             df.at[idx, raw_col] = str(new_raw)
-
-            # Percent of total sample -> Brand Penetration (Row) only
             pct_of_sample = (new_raw / sample_size) * 100.0
             if bp_col:
                 df.at[idx, bp_col] = f"{pct_of_sample:.4f}"
-
-            # US Gen Pop Projection
             if genpop_col:
                 genpop = int((new_raw / SAMPLE_UNIVERSE) * US_POP)
                 df.at[idx, genpop_col] = str(genpop)
+            changed = True
 
-        # Recalculate Category Share within this category (percent of 100 within category)
         if pct_col and indices:
             raws = [safe_raw(df.at[i, raw_col]) for i in indices]
             total = sum(raws)
@@ -149,6 +125,8 @@ def process_csv(content: str) -> str:
                     share = (raws[i] / total) * 100.0
                     df.at[idx, pct_col] = f"{share:.4f}"
 
+    if not changed:
+        return content
     out = io.StringIO()
     df.to_csv(out, index=False)
     return out.getvalue()
@@ -156,7 +134,7 @@ def process_csv(content: str) -> str:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Divide specified category values by 2 in S3 CSVs and recalc derived columns.")
+    parser = argparse.ArgumentParser(description="Boost specified categories in S3 CSVs (WHERE THEY DINE 10x, VMVPD 3x, EVENTS 10x, TICKETING 3x).")
     parser.add_argument("--dry-run", action="store_true", help="List and process CSVs but do not upload changes.")
     args = parser.parse_args()
     dry_run = getattr(args, "dry_run", False)
@@ -170,7 +148,6 @@ def main():
         aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
     )
 
-    # Root-level and historic/ only (no recursive subfolders): use Delimiter="/"
     prefixes = ["", "historic/"]
     updated = 0
     errors = []

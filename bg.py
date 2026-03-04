@@ -741,7 +741,7 @@ GENPOP_DEMOGRAPHICS = [
     ("INCOME", "$50,000 - $74,999", 40.6),
     ("INCOME", "$75,000 - $99,999", 19.1338),
     ("INCOME", "$100,000 - $149,999", 21.4342),
-    ("INCOME", "$150,000 - $199,999", 10.637),
+    ("INCOME", "$150,000 - $249,999", 10.637),
     ("INCOME", "$250,000 or More", 8.1949),
     ("RELATIONSHIP", "Single", 28.9944),
     ("RELATIONSHIP", "In a Relationship", 28.5708),
@@ -1764,7 +1764,7 @@ def get_user_inputs():
             "GENDER": "Gender (N for no or Female, Male, Trans Male, Trans Female, Non-Binary): ",
             "AGE": "Age group (N for no or <16, 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+): ",
             "ETHNICITY": "Ethnicity (N for no or White, Hispanic or Latino, Another Race/Ethnicity, Black or African American, Asian): ",
-            "INCOME": "HHI (N for no or $25,000 - $49,999, $50,000 - $74,999, $75,000 - $99,999, $100,000 - $149,999, $150,000 - $199,999, $250,000 or More): ",
+            "INCOME": "HHI (N for no or $25,000 - $49,999, $50,000 - $74,999, $75,000 - $99,999, $100,000 - $149,999, $150,000 - $249,999, $250,000 or More): ",
             "EDUCATION": "Education (N for no or Bachelor's Degree, High School or Less, Graduate or Professional Degree, Some College / Associate Degree, Prefer Not to Say): ",
             "RELATIONSHIP": "Relationship (N for no or Single, Married, In a Relationship, Divorced or Separated, Prefer Not to Say): ",
             "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Straight / Heterosexual, Gay or Lesbian, Another Sexual Orientation, Prefer Not to Say): ",
@@ -1793,7 +1793,7 @@ def get_user_inputs():
                 "White", "Hispanic or Latino", "Another Race/Ethnicity", "Black or African American", "Asian"
             ],
             "INCOME": [
-                "$25,000 - $49,999", "$50,000 - $74,999", "$75,000 - $99,999", "$100,000 - $149,999", "$150,000 - $199,999", "$250,000 or More"
+                "$25,000 - $49,999", "$50,000 - $74,999", "$75,000 - $99,999", "$100,000 - $149,999", "$150,000 - $249,999", "$250,000 or More"
             ],
             "EDUCATION": [
                 "Bachelor's Degree", "High School or Less", "Graduate or Professional Degree", "Some College / Associate Degree", "Prefer Not to Say"
@@ -1903,7 +1903,7 @@ age_total_caps['AGE'] = age_total_caps['AGE'].apply(normalize_demo_value)
 
 income_caps = pd.DataFrame({
     'INCOME': ['$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999',
-               '$100,000 - $149,999', '$150,000 - $199,999', '$250,000 or More'],
+               '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or More'],
     'MAX_COUNT': [2000000, 4000000, 1913380, 2143420, 1063700, 819490]
 })
 income_caps['INCOME'] = income_caps['INCOME'].apply(normalize_demo_value)
@@ -5340,16 +5340,19 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # CUSTOM BOOSTS - ENABLED
     df_final = boost_search_engine_ai_custom(df_final)  # Google @ 66x, top 4 @ 33x, others @ 5-11x
     df_final = boost_streaming_platform_custom(df_final)  # Netflix 15x, Hulu 12x, others no boost
-    df_final = boost_virtual_mvpd_fast_20x(df_final)  # VIRTUAL MVPD FAST: multiply by 20 and recalc Brand Penetration, Category Share, US Gen Pop
+    df_final = boost_virtual_mvpd_fast_3x(df_final)  # VIRTUAL MVPD FAST: multiply by 3 and recalc Brand Penetration, Category Share, US Gen Pop
+    df_final = multiply_category_by_factor(df_final, 'WHERE THEY DINE', 10)  # WHERE THEY DINE: 10x
+    df_final = multiply_category_by_factor(df_final, 'EVENTS', 10)  # EVENTS: 10x
+    df_final = multiply_category_by_factor(df_final, 'TICKETING', 3)  # TICKETING: 3x
     
     # DIVIDE STREAMING/PLATFORM VALUES BY 2 (except Netflix and ESPN)
     df_final = divide_streaming_platform_except_netflix_espn(df_final)
     # DIVIDE APP/PLATFORM USAGE BY 2
     df_final = divide_app_platform_usage_by_2(df_final)
-    # DIVIDE BANKING, TRAVEL, BROADCAST/CABLE, AUTOMOBILE, GAMES, TELECOM, CREDIT PROVIDER, INVESTMENTS, INSURANCE, MEDIA BY 2
+    # DIVIDE BANKING, TRAVEL, BROADCAST/CABLE, AUTOMOBILE, GAMES, TELECOM, CREDIT PROVIDER, INVESTMENTS, INSURANCE, MEDIA, WHERE THEY SHOP, QSR BY 2
     df_final = divide_categories_by_2(df_final, [
         'BANKING', 'TRAVEL', 'BROADCAST/CABLE', 'AUTOMOBILE', 'GAMES', 'TELECOM',
-        'CREDIT PROVIDER', 'INVESTMENTS', 'INSURANCE', 'MEDIA'
+        'CREDIT PROVIDER', 'INVESTMENTS', 'INSURANCE', 'MEDIA', 'WHERE THEY SHOP', 'QSR'
     ])
 
     # ENSURE CROSS-CATEGORY BRAND CONSISTENCY - AFTER all boosts are applied
@@ -6158,7 +6161,7 @@ def get_hardcoded_genpop_demographics():
             ('$50,000 - $74,999', 40.6, 4060000),
             ('$100,000 - $149,999', 21.4342, 2143420),
             ('$75,000 - $99,999', 19.1338, 1913380),
-            ('$150,000 - $199,999', 10.637, 1063700),
+            ('$150,000 - $249,999', 10.637, 1063700),
             ('$250,000 or More', 8.1949, 819490),
             ('$25,000 - $49,999', 0.0, 0)
         ],
@@ -6726,9 +6729,19 @@ def boost_digital_banking_additional_2x(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def boost_virtual_mvpd_fast_20x(df: pd.DataFrame) -> pd.DataFrame:
-    """Multiply all VIRTUAL MVPD FAST category Original Raw Numbers by 20 and recalc Brand Penetration, Category Share, US Gen Pop (same methodology as S3 backfill)."""
-    if df is None or df.empty:
+def boost_virtual_mvpd_fast_3x(df: pd.DataFrame) -> pd.DataFrame:
+    """Multiply all VIRTUAL MVPD FAST category Original Raw Numbers by 3 and recalc Brand Penetration, Category Share, US Gen Pop."""
+    return _multiply_category_by_factor_impl(df, 'VIRTUAL MVPD FAST', 3, alt_names=('VMVPD/FAST', 'VIRTUAL MVPD/FAST'))
+
+
+def multiply_category_by_factor(df: pd.DataFrame, category_name: str, factor: float) -> pd.DataFrame:
+    """Multiply all rows in the given category's Original Raw Numbers by factor and recalc Brand Penetration, Category Share, US Gen Pop."""
+    return _multiply_category_by_factor_impl(df, category_name.upper(), factor, alt_names=())
+
+
+def _multiply_category_by_factor_impl(df: pd.DataFrame, category_upper: str, factor: float, alt_names: tuple = ()) -> pd.DataFrame:
+    """Shared impl: multiply category raw numbers by factor and recalc derived columns."""
+    if df is None or df.empty or factor <= 0:
         return df
     df = df.copy()
     if 'Original Raw Numbers' not in df.columns:
@@ -6751,7 +6764,8 @@ def boost_virtual_mvpd_fast_20x(df: pd.DataFrame) -> pd.DataFrame:
     if sample_size is None or sample_size <= 0:
         return df
     col_upper = df['Column'].astype(str).str.upper()
-    mask = (col_upper == 'VIRTUAL MVPD FAST') | (col_upper == 'VMVPD/FAST') | (col_upper == 'VIRTUAL MVPD/FAST')
+    names = {category_upper.strip(), *(str(x).upper().strip() for x in alt_names)}
+    mask = col_upper.isin(names)
     indices = df.index[mask].tolist()
     if not indices:
         return df
@@ -6761,7 +6775,8 @@ def boost_virtual_mvpd_fast_20x(df: pd.DataFrame) -> pd.DataFrame:
         try:
             raw_val = df.at[idx, 'Original Raw Numbers']
             current_raw = int(float(str(raw_val).replace(',', '')))
-            boosted_raw = current_raw * 20
+            boosted_raw = current_raw * int(factor) if factor == int(factor) else int(round(current_raw * factor))
+            boosted_raw = max(1, boosted_raw)
             df.at[idx, 'Original Raw Numbers'] = str(boosted_raw)
             if 'Brand Penetration (Row)' in df.columns:
                 df.at[idx, 'Brand Penetration (Row)'] = round((boosted_raw / sample_size) * 100.0, 4)
@@ -6769,8 +6784,7 @@ def boost_virtual_mvpd_fast_20x(df: pd.DataFrame) -> pd.DataFrame:
                 df.at[idx, 'US Gen Pop Projection'] = str(int((boosted_raw / SAMPLE_UNIVERSE) * US_POP))
         except (ValueError, TypeError):
             continue
-    # Recalculate Category Share within VMVPD/FAST
-    if pct_col and indices:
+    if pct_col in df.columns and indices:
         total_raw = 0
         for i in indices:
             try:
@@ -6785,7 +6799,7 @@ def boost_virtual_mvpd_fast_20x(df: pd.DataFrame) -> pd.DataFrame:
                 except (ValueError, TypeError):
                     pass
     if not SILENCE_VERBOSE_OUTPUT:
-        print(f"✅ VIRTUAL MVPD FAST: multiplied {len(indices)} entries by 20x and recalculated Brand Penetration, Category Share, US Gen Pop")
+        print(f"✅ {category_upper}: multiplied {len(indices)} entries by {factor}x and recalculated Brand Penetration, Category Share, US Gen Pop")
     return df
 
 
@@ -10181,7 +10195,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             'Male', 'Female', 'Trans Male', 'Trans Female', 'Non-Binary', 'Prefer Not to Say'
         ],
         'INCOME': [
-            '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $199,999', '$250,000 or More'
+            '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or More'
         ],
         'AGE': [
             '31-40', '41-59', '26-30', '21-25', '<16', '18-20', '60+', '16-18'
@@ -10571,7 +10585,7 @@ REQUIRED_DEMOGRAPHICS = {
         'Female', 'Male', 'Trans Female', 'Trans Male', 'Non-Binary'
     ],
     'INCOME': [
-        '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $199,999', '$250,000 or More'
+        '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or More'
     ],
     'RELATIONSHIP': [
         'Single', 'Married', 'In a Relationship', 'Divorced or Separated', 'Prefer Not to Say'
