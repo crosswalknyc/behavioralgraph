@@ -751,9 +751,9 @@ GENPOP_DEMOGRAPHICS = [
     ("SEXUAL_ORIENTATION", "Gay or Lesbian", 0.0),
     ("SEXUAL_ORIENTATION", "Another Sexual Orientation", 0.0),
     ("SEXUAL_ORIENTATION", "Prefer Not to Say", 60.6658),
-    ("PARENTAL_STATUS", "Doesn't have Kids", 52.0833),
-    ("PARENTAL_STATUS", "Has Kids", 27.8437),
-    ("PARENTAL_STATUS", "Other", 20.0729),
+    ("PARENTAL_STATUS", "No Children", 52.0833),
+    ("PARENTAL_STATUS", "Has Children", 27.8437),
+    ("PARENTAL_STATUS", "Prefer Not to Say", 20.0729),
     ("OCCUPATION", "Sales & Retail", 15.36),
     ("OCCUPATION", "Management, Business & Professional", 32.52),
     ("OCCUPATION", "Education or Library Services", 14.3),
@@ -1553,7 +1553,7 @@ def get_user_inputs():
             "EDUCATION": "Education (N for no or Bachelor's Degree, High School or Less, Graduate or Professional Degree, Some College / Associate Degree, Prefer Not to Say): ",
             "RELATIONSHIP": "Relationship (N for no or Single, Married, In a Relationship, Divorced or Separated, Prefer Not to Say): ",
             "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Straight / Heterosexual, Gay or Lesbian, Another Sexual Orientation, Prefer Not to Say): ",
-            "PARENTAL_STATUS": "Parental Status (N for no or Doesn't have Kids, Has Kids, Other): "
+            "PARENTAL_STATUS": "Parental Status (N for no or No Children, Has Children, Prefer Not to Say): "
         }
         for k, prompt in fields.items():
             values = input(prompt).strip().split(',')
@@ -1590,7 +1590,7 @@ def get_user_inputs():
                 "No", "Prefer Not to Say", "Yes"
             ],
             "PARENTAL_STATUS": [
-                "Doesn't have Kids", "Has Kids", "Other"
+                "No Children", "Has Children", "Prefer Not to Say"
             ]
         }
 
@@ -1713,7 +1713,7 @@ relationship_caps = pd.DataFrame({
 relationship_caps['RELATIONSHIP'] = relationship_caps['RELATIONSHIP'].apply(normalize_demo_value)
 
 parental_status_caps = pd.DataFrame({
-    'PARENTAL_STATUS': ['Doesn\'t have Kids', 'Has Kids', 'Other'],
+    'PARENTAL_STATUS': ['No Children', 'Has Children', 'Prefer Not to Say'],
     'MAX_COUNT': [5195000, 2797000, 2008000]
 })
 parental_status_caps['PARENTAL_STATUS'] = parental_status_caps['PARENTAL_STATUS'].apply(normalize_demo_value)
@@ -3450,7 +3450,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 UNION ALL
                 SELECT 'SEXUAL_ORIENTATION', SEXUAL_ORIENTATION FROM TEMP_DEMOS WHERE SEXUAL_ORIENTATION IN ('Straight / Heterosexual', 'Gay or Lesbian', 'Another Sexual Orientation', 'Prefer Not to Say')
                 UNION ALL
-                SELECT 'PARENTAL_STATUS', PARENTAL_STATUS FROM TEMP_DEMOS WHERE PARENTAL_STATUS IN ('Doesn''t have Kids', 'Has Kids', 'Other')
+                SELECT 'PARENTAL_STATUS', PARENTAL_STATUS FROM TEMP_DEMOS WHERE PARENTAL_STATUS IN ('No Children', 'Has Children', 'Prefer Not to Say')
                 UNION ALL
                 SELECT 'OCCUPATION', OCCUPATION FROM TEMP_DEMOS WHERE OCCUPATION IS NOT NULL AND OCCUPATION NOT IN ('', 'Other', 'Prefer not to say')
             )
@@ -10366,7 +10366,7 @@ REQUIRED_DEMOGRAPHICS = {
         'Straight / Heterosexual', 'Gay or Lesbian', 'Another Sexual Orientation', 'Prefer Not to Say'
     ],
     'PARENTAL_STATUS': [
-        'No Children', 'Has Children', 'Other'
+        'No Children', 'Has Children', 'Prefer Not to Say'
     ],
     'LOCATION': [
         'New York Ny', 'Los Angeles Ca', 'Chicago Il', 'Philadelphia Pa', 'Dallas Fort Worth Tx', 'San Francisco Oakland San Jose Ca', 'Boston Ma', 'Atlanta Ga', 'Washington Dc', 'Houston Tx', 'Detroit Mi', 'Phoenix Az', 'Tampa St Petersburg Fl', 'Seattle Tacoma Wa', 'Minneapolis St Paul Mn', 'Miami Ft Lauderdale Fl', 'Cleveland Akron Oh', 'Denver Co', 'Orlando Daytona Beach Melbourne Fl', 'Sacramento Stockton Modesto Ca', 'Pittsburgh Pa', 'Portland Or', 'St Louis Mo', 'Baltimore Md', 'Indianapolis In', 'San Diego Ca', 'Hartford New Haven Ct', 'Charlotte Nc', 'Milwaukee Wi', 'Raleigh Durham Fayetteville Nc', 'Nashville Tn', 'Columbus Oh', 'Cincinnati Oh', 'Kansas City Mo', 'Greenville Spartanburg Asheville Anderson Nc Sc', 'Salt Lake City Ut', 'San Antonio Tx', 'Grand Rapids Kalamazoo Battle Creek Mi', 'West Palm Beach Ft Pierce Fl', 'Birmingham Al', 'Norfolk Portsmouth Newport News Va', 'Albany Schenectady Troy Ny', 'New Orleans La', 'Memphis Tn', 'Buffalo Ny', 'Jacksonville Fl', 'Oklahoma City Ok', 'Albuquerque Santa Fe Nm', 'Greensboro High Point Winston Salem Nc', 'Louisville Ky', 'Austin Tx', 'Fresno Visalia Ca', 'Dayton Oh', 'Richmond Petersburg Va', 'Mobile Pensacola Fl Al', 'Rochester Ny', 'Honolulu Hi', 'Tulsa Ok', 'Flint Saginaw Bay City Mi', 'Knoxville Tn', 'Tucson Az', 'Lexington Ky', 'Charleston Huntington Wv', 'Wichita Hutchinson Ks', 'Little Rock Pine Bluff Ar', 'Roanoke Lynchburg Va', 'Green Bay Appleton Wi', 'Toledo Oh', 'Des Moines Ames Ia', 'Shreveport Tx La', 'Spokane Wa', 'Rochester Mason City Ia Austin Mn', 'Paducah Cape Girardeau Mo Harrisburg Il Ky', 'Springfield Mo', 'Columbia Jefferson City Mo', 'Huntsville Decatur Al', 'Madison Wi', 'Chattanooga Tn', 'Cedar Rapids Waterloo Iowa City Dubuque Ia', 'Jackson Ms Ms', 'Johnstown Altoona Pa', 'Evansville In', 'York Harrisburg Lancaster Lebanon Pa', 'Peoria Bloomington Il', 'Charleston Sc', 'Baton Rouge La', 'Ft Smith Fayetteville Springdale Rogers Ar', 'Colorado Springs Pueblo Co', 'Savannah Ga', 'Quad Cities Davenport Rock Island Moline Ia Il', 'Tri Cities Tn Va', 'Augusta Ga', 'Youngstown Oh', 'Lincoln Hastings Kearney Ne', 'Lansing Mi', 'Reno Nv', 'Sioux Falls Mitchell Sd', 'Fargo Valley City Nd', 'El Paso Tx', 'Springfield Mass', 'Fort Wayne In', 'Duluth Mn Superior Wi', 'Bakersfield Ca', 'Harrisburg Lancaster Lebanon York Pa', 'Eugene Or', 'Macon Ga', 'Portland Auburn Me', 'Columbus Tupelo West Point Houston Ms', 'La Crosse Eau Claire Wi', 'Amarillo Tx', 'Traverse City Cadillac Mi', 'Corpus Christi Tx', 'Watertown Ny', 'Syracuse Ny', 'Beaumont Port Arthur Tx', 'Lake Charles La', 'Florence Myrtle Beach Sc', 'Ft Myers Naples Fl', 'Terre Haute In', 'Topeka Ks', 'Gainesville Fl', 'Tyler Longview Lufkin Nacogdoches Tx', 'Waco Temple Bryan Tx', 'Rockford Il', 'Monroe La El Dorado Ar', 'Tallahassee Thomasville Fl Ga', 'Bluefield Beckley Lewisburg Wv', 'Salisbury Md', 'Joplin Pittsburg Mo Ks', 'Columbus Opelika Al Ga', 'Minot Bismarck Dickinson Williston Nd', 'Medford Klamath Falls Or', 'Albany Ga', 'Utica Ny', 'Montgomery Selma Al', 'Idaho Falls Pocatello Id', 'Palm Springs Ca', 'Dothan Al', 'Alexandria La', 'Wilmington Nc', 'San Angelo Tx', 'Lima Oh', 'Bangor Me', 'Meridian Ms', 'Greenville New Bern Washington Nc', 'Elmira Corning Ny', 'Hattiesburg Laurel Ms', 'Clarksburg Weston Wv', 'Marquette Mi', 'Butte Bozeman Mt', 'Twin Falls Id', 'Anchorage Ak', 'Fairbanks Ak', 'Victoria Tx', 'Laredo Tx', 'Bend Or', 'Mankato Mn', 'Mason City Clear Lake Iowa Falls Ia', 'Ottumwa Ia Kirksville Mo', 'Jonesboro Ar', 'Jackson Tn', 'Quincy Il Hannibal Mo Keokuk Ia', 'Bowling Green Ky', 'Abilene Sweetwater Tx', 'Odessa Midland Tx', 'Alexandria Mn', 'North Platte Ne', 'Zanesville Oh', 'Presque Isle Me', 'Helena Mt', 'Charlottesville Va', 'Eureka Ca', 'Harrisonburg Va', 'Alpena Mi', 'Lubbock Tx', 'Sioux City Ia', 'Mankato New Ulm Mn', 'Parkersburg Marietta Wv Oh', 'Wheeling Steubenville Wv Oh', 'Lafayette In', 'Bloomington Bedford In', 'Terre Haute In', 'Vincennes In', 'Cape Girardeau Mo Paducah Ky Harrisburg Il Ky', 'Quincy Il', 'Ottumwa Ia', 'Kirksville Mo', 'Columbia Mo', 'Hannibal Mo', 'St Joseph Mo', 'Topeka Ks', 'Manhattan Ks', 'Garden City Ks', 'Hays Ks', 'Great Bend Ks', 'Salina Ks', 'McPherson Ks', 'Hutchinson Ks', 'Dodge City Ks', 'Liberal Ks', 'Goodland Ks', 'Colby Ks', 'McCook Ne', 'Hastings Ne', 'Grand Island Ne', 'Kearney Ne', 'Norfolk Ne', 'Columbus Ne', 'Fremont Ne', 'Beatrice Ne', 'York Ne', 'Scottsbluff Ne', 'Alliance Ne', 'Sidney Ne', 'Chadron Ne', 'Valentine Ne', 'Ainsworth Ne', 'Broken Bow Ne', 'Lexington Ne', 'Holdrege Ne', 'Ogallala Ne', 'Imperial Ne', 'Harlingen Weslaco Brownsville Mcallen Tx', 'United States'
