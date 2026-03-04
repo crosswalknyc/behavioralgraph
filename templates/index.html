@@ -27151,10 +27151,11 @@
                     result.demographicsProjection.income[value] = usProjection;
                 }
                 if (category === 'EDUCATION' && value) {
-                    result.demographics.education[value] = pct;
-                    result.demographicsIndex.education[value] = index;
-                    result.demographicsGenPop.education[value] = genPopPct;
-                    result.demographicsProjection.education[value] = usProjection;
+                    const eduKey = displayDemographicLabel(value);
+                    result.demographics.education[eduKey] = pct;
+                    result.demographicsIndex.education[eduKey] = index;
+                    result.demographicsGenPop.education[eduKey] = genPopPct;
+                    result.demographicsProjection.education[eduKey] = usProjection;
                 }
                 if (category === 'RELATIONSHIP' && value) {
                     result.demographics.relationship[value] = pct;
