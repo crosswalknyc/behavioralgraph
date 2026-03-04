@@ -15906,6 +15906,9 @@
             }
         }
 
+        // Canonical Gen Pop file used for all indexing/comparison (must match backend GEN_POP_CANONICAL_KEY)
+        const GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv';
+
         // Resolve Gen Pop filename: use the file with "gen pop" (or gen_pop) + underscore + year; pick the one with the most recent year (e.g. Gen_Pop_2026_... over Gen_Pop_2025_...).
         function resolveGenPopFileName(jobs) {
             const genPopJobs = (jobs || []).filter(j => {
@@ -15942,28 +15945,12 @@
             }
             return best.s3_key || best.job_id || null;
         }
-        // Load Gen Pop file and parse it the same way as any profile; use that for Gen Pop % everywhere (locations, behavioral, demographics).
-        // Loads the Gen Pop file with the most recent year in the filename (e.g. Gen Pop 2026).
+        // Load Gen Pop file and parse it for Gen Pop % everywhere (indexing, comparisons, charts). Always use canonical file so GP values match Gen_Pop_2026_03_04_2026_04_29.csv.
         async function loadGenPopBaseline() {
             try {
-                let genPopKey = null;
-                const cached = typeof getSessionJobsCache === 'function' ? getSessionJobsCache() : null;
-                const jobs = (cached && cached.jobs) ? cached.jobs : [];
-                if (jobs.length > 0) {
-                    genPopKey = resolveGenPopFileName(jobs);
-                }
-                if (!genPopKey) {
-                    const response = await fetch(`/api/jobs?refresh=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
-                    const data = await response.json();
-                    const list = (data && data.jobs) ? data.jobs : [];
-                    genPopKey = resolveGenPopFileName(list);
-                }
-                if (!genPopKey) {
-                    console.warn('⚠️ No Gen Pop file found (no job with "gen pop" in name)');
-                    return;
-                }
-                console.log('📊 Loading Gen Pop from: ' + genPopKey);
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(genPopKey)}`, { credentials: 'same-origin' });
+                const genPopKey = GEN_POP_CANONICAL_KEY;
+                console.log('📊 Loading Gen Pop baseline from: ' + genPopKey);
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(genPopKey)}?_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success && data.data) {
