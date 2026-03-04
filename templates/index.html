@@ -26826,6 +26826,49 @@
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
             const US_POPULATION = 329900000;
             
+            // Redistribute old age brackets into new display buckets (older files show inline with new values)
+            function normalizeAgeBucketsForDashboard(res) {
+                const oldToNew = { '<16': [['17 and Under', 1]], 'under 16': [['17 and Under', 1]], '16-18': [['17 and Under', 0.67], ['18-24', 0.33]], '17-18': [['17 and Under', 0.67], ['18-24', 0.33]], '19-20': [['18-24', 1]], '18-20': [['18-24', 1]], '21-25': [['18-24', 0.8], ['25-34', 0.2]], '26-30': [['25-34', 1]], '31-40': [['25-34', 0.4], ['35-44', 0.6]], '41-49': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '41-59': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '60+': [['55-64', 0.25], ['65 or Older', 0.75]], '65+': [['55-64', 0.25], ['65 or Older', 0.75]], 'over 65': [['55-64', 0.25], ['65 or Older', 0.75]] };
+                const age = res.demographics.age || {};
+                const idx = res.demographicsIndex.age || {};
+                const gp = res.demographicsGenPop.age || {};
+                const proj = res.demographicsProjection.age || {};
+                const newAge = {}, newIdx = {}, newGp = {}, newProj = {};
+                const weightByNew = {};
+                for (const [oldKey, pct] of Object.entries(age)) {
+                    const key = (oldKey || '').trim().toLowerCase();
+                    const mapping = oldToNew[key] || oldToNew[oldKey];
+                    const i = idx[oldKey] != null ? idx[oldKey] : 100;
+                    const g = gp[oldKey] != null ? gp[oldKey] : 0;
+                    const pr = proj[oldKey] != null ? proj[oldKey] : 0;
+                    if (mapping) {
+                        mapping.forEach(([newBucket, ratio]) => {
+                            newAge[newBucket] = (newAge[newBucket] || 0) + pct * ratio;
+                            const w = pct * ratio;
+                            if (!weightByNew[newBucket]) weightByNew[newBucket] = { sumW: 0, sumIdx: 0, sumGp: 0, sumProj: 0 };
+                            weightByNew[newBucket].sumW += w;
+                            weightByNew[newBucket].sumIdx += i * w;
+                            weightByNew[newBucket].sumGp += g * w;
+                            weightByNew[newBucket].sumProj += pr * ratio;
+                        });
+                    } else {
+                        newAge[oldKey] = (newAge[oldKey] || 0) + pct;
+                        newIdx[oldKey] = i;
+                        newGp[oldKey] = g;
+                        newProj[oldKey] = pr;
+                    }
+                }
+                for (const [bucket, w] of Object.entries(weightByNew)) {
+                    newIdx[bucket] = w.sumW > 0 ? Math.round(w.sumIdx / w.sumW) : 100;
+                    newGp[bucket] = w.sumW > 0 ? w.sumGp / w.sumW : 0;
+                    newProj[bucket] = Math.round(w.sumProj);
+                }
+                res.demographics.age = newAge;
+                res.demographicsIndex.age = Object.keys(newIdx).length ? newIdx : res.demographicsIndex.age;
+                res.demographicsGenPop.age = Object.keys(newGp).length ? newGp : res.demographicsGenPop.age;
+                res.demographicsProjection.age = Object.keys(newProj).length ? newProj : res.demographicsProjection.age;
+            }
+            
             // HARDCODED GEN POP DMA PERCENTAGES (Nielsen DMA household distribution)
             const GENPOP_DMA = {
                 'NEW YORK NY': 6.4, 'LOS ANGELES CA': 4.8, 'CHICAGO IL': 3.0, 'PHILADELPHIA PA': 2.5,
@@ -27131,6 +27174,8 @@
                     });
                 }
             });
+
+            normalizeAgeBucketsForDashboard(result);
 
             // Sort behavioral by percentage
             Object.keys(result.behavioral).forEach(cat => {
@@ -30617,17 +30662,14 @@
         
         // Map original age labels to display labels
         const AGE_DISPLAY_LABELS = {
-            '<16': '<16',
-            'under 16': '<16',
-            '16-18': '17-18',
-            '18-20': '19-20',
-            '21-25': '21-25',
-            '26-30': '26-30',
-            '31-40': '31-40',
-            '41-59': '41-59',
-            '60+': '60+',
-            '65+': '65+',
-            'over 65': '65+'
+            '<16': '17 and Under', 'under 16': '17 and Under',
+            '16-18': '17 and Under', '17-18': '17 and Under',
+            '18-20': '18-24', '19-20': '18-24',
+            '21-25': '18-24', '26-30': '25-34',
+            '31-40': '35-44', '41-59': '45-54', '41-49': '45-54',
+            '60+': '65 or Older', '65+': '65 or Older', 'over 65': '65 or Older',
+            '17 and under': '17 and Under', '17 and Under': '17 and Under',
+            '18-24': '18-24', '25-34': '25-34', '35-44': '35-44', '45-54': '45-54', '55-64': '55-64', '65 or older': '65 or Older', '65 or Older': '65 or Older'
         };
         
         function getAgeDisplayLabel(originalLabel) {
@@ -31346,8 +31388,8 @@
                 // Sort by value descending
                 entries.sort((a, b) => b[1] - a[1]);
             } else {
-                // Sort by age in correct order: <16, 17-18, 19-20, 21-25, 26-30, 31-40, 41-59, 60+
-                const ageOrder = ['<16', 'under 16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '65+', 'over 65'];
+                // Sort by age in correct order (new display buckets first, then legacy)
+                const ageOrder = ['17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older', '<16', 'under 16', '16-18', '17-18', '18-20', '19-20', '21-25', '26-30', '31-40', '41-59', '41-49', '60+', '65+', 'over 65'];
                 entries.sort((a, b) => {
                     const getOrderIndex = (label) => {
                         const lower = label.toLowerCase();

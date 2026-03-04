@@ -1325,6 +1325,8 @@ def extract_demographics_from_csv(csv_content):
                         demographics[category][value] = percentage
                     except (ValueError, IndexError):
                         pass
+        if 'AGE' in demographics:
+            demographics['AGE'] = normalize_age_buckets_for_display(demographics['AGE'])
         return demographics
     except Exception as e:
         print(f"Error extracting demographics: {e}")
@@ -13010,6 +13012,43 @@ def save_demographics_cache():
         print(f"⚠️ Error saving demographics cache: {e}")
 
 
+# Map old age brackets to new display brackets with split ratios (old -> [(new_bucket, ratio), ...])
+# Used so older files show age inline with new bracket labels and redistributed percentages.
+_OLD_AGE_TO_NEW = {
+    '<16': [('17 and Under', 1.0)],
+    'under 16': [('17 and Under', 1.0)],
+    '16-18': [('17 and Under', 0.67), ('18-24', 0.33)],
+    '17-18': [('17 and Under', 0.67), ('18-24', 0.33)],
+    '19-20': [('18-24', 1.0)],
+    '18-20': [('18-24', 1.0)],
+    '21-25': [('18-24', 0.8), ('25-34', 0.2)],
+    '26-30': [('25-34', 1.0)],
+    '31-40': [('25-34', 0.4), ('35-44', 0.6)],
+    '41-49': [('35-44', 0.21), ('45-54', 0.53), ('55-64', 0.26)],
+    '41-59': [('35-44', 0.21), ('45-54', 0.53), ('55-64', 0.26)],
+    '60+': [('55-64', 0.25), ('65 or Older', 0.75)],
+    '65+': [('55-64', 0.25), ('65 or Older', 0.75)],
+    'over 65': [('55-64', 0.25), ('65 or Older', 0.75)],
+}
+
+
+def normalize_age_buckets_for_display(age_dict):
+    """Redistribute old age bracket percentages into new display buckets. Returns new dict."""
+    if not age_dict:
+        return dict(age_dict)
+    new_age = {}
+    for old_key, pct in age_dict.items():
+        key_norm = (old_key or '').strip().lower()
+        mapping = _OLD_AGE_TO_NEW.get(key_norm) or _OLD_AGE_TO_NEW.get(old_key)
+        if mapping:
+            for new_bucket, ratio in mapping:
+                new_age[new_bucket] = new_age.get(new_bucket, 0) + pct * ratio
+        else:
+            # Already a new bucket or unknown; keep as-is
+            new_age[old_key] = new_age.get(old_key, 0) + pct
+    return new_age
+
+
 def extract_demographics_summary(csv_content):
     """Extract demographic summary from CSV content."""
     try:
@@ -13043,6 +13082,7 @@ def extract_demographics_summary(csv_content):
             elif category == 'ETHNICITY' and value:
                 summary['ethnicity'][value] = pct
         
+        summary['age'] = normalize_age_buckets_for_display(summary['age'])
         return summary
     except Exception as e:
         print(f"Error extracting demographics: {e}")
