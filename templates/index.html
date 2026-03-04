@@ -27035,10 +27035,29 @@
                     } else {
                         const demoKey = category.toLowerCase().replace('_', '_');
                         if (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics[demoKey]) {
-                            genPopPct = genPopBaselineData.demographics[demoKey][value] || 0;
+                            const catObj = genPopBaselineData.demographics[demoKey];
+                            genPopPct = catObj[value] || 0;
+                            if (genPopPct === 0 && value) {
+                                const valLower = String(value).trim().toLowerCase();
+                                for (const [k, v] of Object.entries(catObj)) {
+                                    if (v != null && v > 0 && String(k).trim().toLowerCase() === valLower) {
+                                        genPopPct = v;
+                                        break;
+                                    }
+                                }
+                            }
                         }
                         if (genPopPct === 0 && GENPOP_DEMOGRAPHICS[category]) {
                             genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
+                            if (genPopPct === 0 && value) {
+                                const valLower = String(value).trim().toLowerCase();
+                                for (const [k, v] of Object.entries(GENPOP_DEMOGRAPHICS[category])) {
+                                    if (v != null && v > 0 && String(k).trim().toLowerCase() === valLower) {
+                                        genPopPct = v;
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                 } else if (category === 'LOCATION' && value) {
@@ -29614,7 +29633,34 @@
             lastRenderedDemographics = demographics || {};
             lastRenderedDemographicsIndex = demographicsIndex || {};
             lastRenderedDemographicsProjection = demographicsProjection || {};
-            lastRenderedDemographicsGenPop = demographicsGenPop || {};
+            // Fill missing Gen Pop % from baseline so indexing shows on age, income, sexual orientation, parental status, occupation
+            const effectiveGenPop = {};
+            const demoCatKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+            demoCatKeys.forEach(cat => {
+                effectiveGenPop[cat] = { ...(demographicsGenPop[cat] || {}) };
+                const demoKeys = Object.keys(demographics[cat] || {});
+                const base = genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics[cat];
+                if (base) {
+                    demoKeys.forEach(k => {
+                        let v = effectiveGenPop[cat][k];
+                        if (v == null || v === 0) {
+                            v = base[k];
+                            if (v == null || v === 0) {
+                                const kl = String(k).trim().toLowerCase();
+                                for (const [bk, bv] of Object.entries(base)) {
+                                    if (bv != null && bv > 0 && String(bk).trim().toLowerCase() === kl) {
+                                        v = bv;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (v != null && v > 0) effectiveGenPop[cat][k] = v;
+                        }
+                    });
+                }
+            });
+            lastRenderedDemographicsGenPop = effectiveGenPop;
+            demographicsGenPop = effectiveGenPop;
             Object.values(charts).forEach(c => c.destroy());
             charts = {};
             currentDemoIndexes = demographicsIndex;
