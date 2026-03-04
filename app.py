@@ -3198,6 +3198,16 @@ def _build_activity_csv(username, user_dict, activity_dict):
             str(entry.get('credits_used') if entry.get('credits_used') is not None else 1)
         ])
     rows.append([])
+    rows.append(['[Credits Added (Attributions)]'])
+    rows.append(['Date', 'Reason', 'Credits Added', 'Added By'])
+    for entry in (user_dict.get('credit_attribution_history') or []):
+        rows.append([
+            _activity_export_format_ts(entry.get('added_at')),
+            entry.get('reason') or '',
+            str(entry.get('credits_added') if entry.get('credits_added') is not None else 0),
+            entry.get('added_by') or ''
+        ])
+    rows.append([])
     rows.append(['[Feature Usage]'])
     rows.append(['Feature', 'Uses'])
     for feat, count in feature_list:

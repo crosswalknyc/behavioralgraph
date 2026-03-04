@@ -5552,6 +5552,17 @@
                 ]);
             });
             rows.push([]);
+            rows.push(['[Credits Added (Attributions)]']);
+            rows.push(['Date', 'Reason', 'Credits Added', 'Added By']);
+            (user.credit_attribution_history || []).forEach(entry => {
+                rows.push([
+                    entry.added_at ? formatDateTimePST(entry.added_at) : '',
+                    entry.reason || '',
+                    String(entry.credits_added != null ? entry.credits_added : 0),
+                    entry.added_by || ''
+                ]);
+            });
+            rows.push([]);
             rows.push(['[Feature Usage]']);
             rows.push(['Feature', 'Uses']);
             featureList.forEach(([feature, count]) => {
@@ -5722,6 +5733,17 @@
                     entry.description || entry.pull_type || 'Analysis',
                     entry.pull_type || '',
                     String(entry.credits_used != null ? entry.credits_used : 1)
+                ]);
+            });
+            rows.push([]);
+            rows.push(['[Credits Added (Attributions)]']);
+            rows.push(['Date', 'Reason', 'Credits Added', 'Added By']);
+            (user.credit_attribution_history || []).forEach(entry => {
+                rows.push([
+                    entry.added_at ? formatDateTimePST(entry.added_at) : '',
+                    entry.reason || '',
+                    String(entry.credits_added != null ? entry.credits_added : 0),
+                    entry.added_by || ''
                 ]);
             });
             rows.push([]);
