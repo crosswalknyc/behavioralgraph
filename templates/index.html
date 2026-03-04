@@ -15829,7 +15829,8 @@
         // Load live features from server and apply visibility
         async function loadAndApplyLiveFeatures() {
             try {
-                const response = await fetch('/api/admin/live-features', { credentials: 'same-origin' });
+                // Cache-bust so we always get fresh flags after admin saves
+                const response = await fetch('/api/admin/live-features?t=' + Date.now(), { credentials: 'same-origin' });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success && data.features) {
@@ -15929,6 +15930,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Apply live feature visibility immediately (View Numbers stays hidden until API says on)
+            if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
+            
             const startDateInput = document.getElementById('start_date');
             const endDateInput = document.getElementById('end_date');
             if (startDateInput) startDateInput.value = '2025-01-01';
