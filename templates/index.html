@@ -26827,11 +26827,19 @@
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
             const US_POPULATION = 329900000;
             
+            function normAgeKey(s) {
+                if (s == null) return '';
+                return String(s).trim().toLowerCase().replace(/\s*-\s*/g, '-').replace(/\s+/g, ' ');
+            }
             // Redistribute old age brackets using Original Raw Numbers: split people by ratio into new buckets, then new % = (bucket raw / total age raw) * 100
             function normalizeAgeBucketsForDashboard(res) {
                 const oldToNew = { '<16': [['17 and Under', 1]], 'under 16': [['17 and Under', 1]], '16-18': [['17 and Under', 0.67], ['18-24', 0.33]], '17-18': [['17 and Under', 0.67], ['18-24', 0.33]], '19-20': [['18-24', 1]], '18-20': [['18-24', 1]], '21-25': [['18-24', 0.8], ['25-34', 0.2]], '26-30': [['25-34', 1]], '31-40': [['25-34', 0.4], ['35-44', 0.6]], '41-49': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '41-59': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '60+': [['55-64', 0.25], ['65 or Older', 0.75]], '65+': [['55-64', 0.25], ['65 or Older', 0.75]], 'over 65': [['55-64', 0.25], ['65 or Older', 0.75]] };
-                const ageRaw = res.demographicsAgeRaw || {};
+                let ageRaw = res.demographicsAgeRaw || {};
                 const age = res.demographics.age || {};
+                if (Object.keys(ageRaw).length === 0 && Object.keys(age).length > 0 && (res.sampleSize || 0) > 0) {
+                    ageRaw = {};
+                    for (const [k, p] of Object.entries(age)) ageRaw[k] = Math.max(0, Math.round((p / 100) * res.sampleSize));
+                }
                 const idx = res.demographicsIndex.age || {};
                 const gp = res.demographicsGenPop.age || {};
                 const proj = res.demographicsProjection.age || {};
@@ -26841,8 +26849,8 @@
                     for (const [oldKey, raw] of Object.entries(ageRaw)) {
                         const n = parseInt(String(raw).replace(/,/g, ''), 10) || 0;
                         if (n <= 0) continue;
-                        const key = (oldKey || '').trim().toLowerCase();
-                        const mapping = oldToNew[key] || oldToNew[oldKey];
+                        const key = normAgeKey(oldKey);
+                        const mapping = oldToNew[key] || oldToNew[(oldKey || '').trim().toLowerCase()] || oldToNew[oldKey];
                         const i = idx[oldKey] != null ? idx[oldKey] : 100;
                         const g = gp[oldKey] != null ? gp[oldKey] : 0;
                         const pr = proj[oldKey] != null ? proj[oldKey] : 0;
@@ -26885,8 +26893,8 @@
                     const newAge = {}, newIdx = {}, newGp = {}, newProjOut = {};
                     const weightByNew = {};
                     for (const [oldKey, pct] of Object.entries(age)) {
-                        const key = (oldKey || '').trim().toLowerCase();
-                        const mapping = oldToNew[key] || oldToNew[oldKey];
+                        const key = normAgeKey(oldKey);
+                        const mapping = oldToNew[key] || oldToNew[(oldKey || '').trim().toLowerCase()] || oldToNew[oldKey];
                         const i = idx[oldKey] != null ? idx[oldKey] : 100;
                         const g = gp[oldKey] != null ? gp[oldKey] : 0;
                         const pr = proj[oldKey] != null ? proj[oldKey] : 0;
@@ -27001,7 +27009,7 @@
             csvData.forEach(row => {
                 const category = (row.Column || '').toUpperCase();
                 const value = row.Value || '';
-                const pct = parseFloat(row['Brand Penetration (Row)'] || 0);
+                const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || row['Percentage'] || 0) || 0;
                 const catShare = parseFloat(row['Category Share'] || 0);
                 const rawNumbers = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, '')) || 0;
                 // US Gen Pop Projection should be (rawNumbers / 10,000,000) * 329,900,000

@@ -13038,6 +13038,16 @@ _OLD_AGE_TO_NEW = {
 }
 
 
+def _norm_age_key(s):
+    """Normalize age value for mapping: strip, lower, collapse spaces around dashes (e.g. '18 - 24' -> '18-24')."""
+    if s is None:
+        return ""
+    s = str(s).strip().lower()
+    s = re.sub(r"\s*-\s*", "-", s)
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
 def _normalize_age_buckets_from_raw(age_raw_dict):
     """Redistribute old age bracket *raw counts* into new buckets, then return new bucket percentages.
     Each old bucket's count is split by ratio (e.g. 17-18: 67% -> 17 and Under, 33% -> 18-24);
@@ -13050,8 +13060,8 @@ def _normalize_age_buckets_from_raw(age_raw_dict):
         raw_count = int(float(str(raw_count).replace(",", ""))) if raw_count else 0
         if raw_count <= 0:
             continue
-        key_norm = (old_key or "").strip().lower()
-        mapping = _OLD_AGE_TO_NEW.get(key_norm) or _OLD_AGE_TO_NEW.get(old_key)
+        key_norm = _norm_age_key(old_key)
+        mapping = _OLD_AGE_TO_NEW.get(key_norm) or _OLD_AGE_TO_NEW.get((old_key or "").strip().lower()) or _OLD_AGE_TO_NEW.get(old_key)
         if mapping:
             for new_bucket, ratio in mapping:
                 new_raw[new_bucket] = new_raw.get(new_bucket, 0) + raw_count * ratio
@@ -13069,8 +13079,8 @@ def normalize_age_buckets_for_display(age_dict):
         return dict(age_dict)
     new_age = {}
     for old_key, pct in age_dict.items():
-        key_norm = (old_key or '').strip().lower()
-        mapping = _OLD_AGE_TO_NEW.get(key_norm) or _OLD_AGE_TO_NEW.get(old_key)
+        key_norm = _norm_age_key(old_key)
+        mapping = _OLD_AGE_TO_NEW.get(key_norm) or _OLD_AGE_TO_NEW.get((old_key or '').strip().lower()) or _OLD_AGE_TO_NEW.get(old_key)
         if mapping:
             for new_bucket, ratio in mapping:
                 new_age[new_bucket] = new_age.get(new_bucket, 0) + pct * ratio
@@ -13097,9 +13107,14 @@ def extract_demographics_summary(csv_content):
         for _, row in df.iterrows():
             category = str(row.get('Column', '')).upper()
             value = row.get('Value', '')
-            pct = float(row.get('Brand Penetration (Row)', 0) or 0)
-            
-            if category == 'SAMPLE SIZE':
+            pct = float(
+                row.get("Brand Penetration (Row)")
+                or row.get("Category Share")
+                or row.get("Percentage")
+                or 0
+            ) or 0
+
+            if category == "SAMPLE SIZE":
                 summary['sampleSize'] = int(row.get('Category Share', 0) or row.get('Original Raw Numbers', 0) or 0)
             elif category == 'BRAND INPUT':
                 summary['projectedUS'] = int(row.get('US Gen Pop Projection', 0) or 0)
@@ -13118,11 +13133,15 @@ def extract_demographics_summary(csv_content):
             elif category == 'ETHNICITY' and value:
                 summary['ethnicity'][value] = pct
         
-        # Use actual raw counts to build new age buckets, then derive percentages
+        # Use raw counts to build new age buckets, then derive percentages.
+        # Pipeline CSVs often have empty Original Raw Numbers for AGE; derive from pct and sample size.
+        if not age_raw and summary["age"] and summary["sampleSize"] > 0:
+            for k, pct in summary["age"].items():
+                age_raw[k] = max(0, round((pct / 100.0) * summary["sampleSize"]))
         if age_raw:
-            summary['age'] = _normalize_age_buckets_from_raw(age_raw)
+            summary["age"] = _normalize_age_buckets_from_raw(age_raw)
         else:
-            summary['age'] = normalize_age_buckets_for_display(summary['age'])
+            summary["age"] = normalize_age_buckets_for_display(summary["age"])
         return summary
     except Exception as e:
         print(f"Error extracting demographics: {e}")

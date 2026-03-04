@@ -133,6 +133,11 @@
                 if (x === 'other') return 'Another Race/Ethnicity';
                 return v;
             }
+            function normAgeKey(s) {
+                if (s == null) return '';
+                s = String(s).trim().toLowerCase().replace(/\s*-\s*/g, '-').replace(/\s+/g, ' ');
+                return s;
+            }
             // Redistribute old age brackets using Original Raw Numbers: split people by ratio into new buckets, then new % = (bucket raw / total age raw) * 100
             function normalizeAgeBucketsFromRaw(ageObj, ageRawObj) {
                 const oldToNew = {
@@ -148,8 +153,8 @@
                 for (const [oldKey, raw] of Object.entries(ageRawObj || {})) {
                     const n = parseInt(String(raw).replace(/,/g, ''), 10) || 0;
                     if (n <= 0) continue;
-                    const key = (oldKey || '').trim().toLowerCase();
-                    const mapping = oldToNew[key] || oldToNew[oldKey];
+                    const key = normAgeKey(oldKey);
+                    const mapping = oldToNew[key] || oldToNew[(oldKey || '').trim().toLowerCase()] || oldToNew[oldKey];
                     if (mapping) {
                         mapping.forEach(([newBucket, ratio]) => { newRaw[newBucket] = (newRaw[newBucket] || 0) + n * ratio; });
                     } else {
@@ -166,8 +171,8 @@
                 const oldToNew = { '<16': [['17 and Under', 1]], 'under 16': [['17 and Under', 1]], '16-18': [['17 and Under', 0.67], ['18-24', 0.33]], '17-18': [['17 and Under', 0.67], ['18-24', 0.33]], '19-20': [['18-24', 1]], '18-20': [['18-24', 1]], '21-25': [['18-24', 0.8], ['25-34', 0.2]], '26-30': [['25-34', 1]], '31-40': [['25-34', 0.4], ['35-44', 0.6]], '41-49': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '41-59': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '60+': [['55-64', 0.25], ['65 or Older', 0.75]], '65+': [['55-64', 0.25], ['65 or Older', 0.75]], 'over 65': [['55-64', 0.25], ['65 or Older', 0.75]] };
                 const out = {};
                 for (const [oldKey, pct] of Object.entries(ageObj || {})) {
-                    const key = (oldKey || '').trim().toLowerCase();
-                    const mapping = oldToNew[key] || oldToNew[oldKey];
+                    const key = normAgeKey(oldKey);
+                    const mapping = oldToNew[key] || oldToNew[(oldKey || '').trim().toLowerCase()] || oldToNew[oldKey];
                     if (mapping) { mapping.forEach(([newBucket, ratio]) => { out[newBucket] = (out[newBucket] || 0) + pct * ratio; }); } else { out[oldKey] = (out[oldKey] || 0) + pct; }
                 }
                 return out;
@@ -176,7 +181,7 @@
             csvData.forEach(row => {
                 const col = (row.Column || '').toUpperCase();
                 const val = row.Value || '';
-                const pct = parseFloat(row['Brand Penetration (Row)'] || 0);
+                const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || row['Percentage'] || 0) || 0;
                 const raw = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, ''), 10) || 0;
                 if (col === 'SAMPLE SIZE') sampleSize = parseInt(row['Category Share'] || row['Original Raw Numbers'] || 0);
                 if (col === 'GENDER' && val) demographics.gender[val] = pct;
@@ -187,6 +192,9 @@
                 if (col === 'ETHNICITY' && val) demographics.ethnicity[displayEthnicityLabel(val)] = pct;
                 if (col === 'INCOME' && val) demographics.income[val] = pct;
             });
+            if (Object.keys(ageRaw).length === 0 && Object.keys(demographics.age).length > 0 && sampleSize > 0) {
+                for (const [k, p] of Object.entries(demographics.age)) ageRaw[k] = Math.max(0, Math.round((p / 100) * sampleSize));
+            }
             demographics.age = Object.keys(ageRaw).length > 0 ? normalizeAgeBucketsFromRaw(demographics.age, ageRaw) : normalizeAgeBucketsFromPct(demographics.age);
             
             const projectedUS = Math.round((sampleSize / 10000000) * 324700000);
