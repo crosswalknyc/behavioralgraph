@@ -3420,20 +3420,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     """)
 
     print("📈 Generating demographic breakdown...")
-    if is_genpop:
-        # Use hard-coded GenPop demographics
-        # Create a temporary table with hard-coded demographics
-        cur.execute("CREATE OR REPLACE TEMP TABLE DEMO_COUNTS (\"COLUMN\" VARCHAR, \"VALUE\" VARCHAR, CNT NUMBER)")
-        for col, val, pct in GENPOP_DEMOGRAPHICS:
-            # Convert percentage to count (arbitrary base of 10000 for proportions)
-            count = int(pct * 100)
-            # Properly escape SQL values to handle special characters
-            escaped_col = col.replace("'", "''")
-            escaped_val = val.replace("'", "''")
-            cur.execute(f"INSERT INTO DEMO_COUNTS VALUES ('{escaped_col}', '{escaped_val}', {count})")
-    else:
-        # Calculate demographics from actual data
-        cur.execute("""
+    # Always compute demographics from actual data (TEMP_DEMOS); for Gen Pop we overwrite with hardcoded buckets at the end in Python
+    cur.execute("""
             CREATE OR REPLACE TEMP TABLE DEMO_COUNTS AS
             WITH long AS (
                 SELECT 'GENDER' AS "COLUMN", GENDER AS "VALUE" FROM TEMP_DEMOS WHERE GENDER IN ('Female', 'Male', 'Trans Male', 'Trans Female', 'Non-Binary', 'Prefer Not to Say')
@@ -3484,7 +3472,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                           ELSE DMA 
                      END
         """)
-        track_query_cost(cur, "Demographic data processing")
+    track_query_cost(cur, "Demographic data processing")
 
     print("📊 Calculating brand awareness...")
     # ULTRA-FAST BRAND AWARENESS: Skip expensive clickstream queries for maximum speed
@@ -3525,34 +3513,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     # print("🧩 Combining demographics and behaviors...")  # Suppressed per request
     print("🔧 Starting data processing...")
-    if is_genpop:
-        print("🔧 Processing GenPop data...")
-        # For GenPop, use exact hard-coded demographics
-        print("🔧 Creating GenPop demographics table...")
-        cur.execute("CREATE OR REPLACE TEMP TABLE DEMO_FINAL (\"COLUMN\" VARCHAR, \"VALUE\" VARCHAR, PERCENTAGE NUMBER)")
-        print("✅ GenPop demographics table created")
-        
-        print("🔧 Inserting GenPop demographic data...")
-        for col, val, pct in GENPOP_DEMOGRAPHICS:
-            # Properly escape SQL values to handle special characters
-            escaped_col = col.replace("'", "''")
-            escaped_val = val.replace("'", "''")
-            cur.execute(f"INSERT INTO DEMO_FINAL VALUES ('{escaped_col}', '{escaped_val}', {pct})")
-        print("✅ GenPop demographic data inserted")
-        
-        print("🔧 Creating final export table...")
-        cur.execute("""
-            CREATE OR REPLACE TEMP TABLE FINAL_EXPORT AS
-            SELECT "COLUMN", "VALUE", PERCENTAGE, NULL AS UID_COUNT
-            FROM DEMO_FINAL
-            UNION ALL
-            SELECT "COLUMN", "VALUE", PERCENTAGE, UID_COUNT
-            FROM BEHAVIOR_PCT
-        """)
-        print("✅ Final export table created successfully")
-    else:
-        # For regular runs, calculate demographic percentages from counts
-        cur.execute("""
+    # Always build FINAL_EXPORT from DEMO_COUNTS + BEHAVIOR_PCT; for Gen Pop we overwrite demographics in Python
+    cur.execute("""
             CREATE OR REPLACE TEMP TABLE FINAL_EXPORT AS
             SELECT "COLUMN", "VALUE", 
                 CASE 
@@ -3573,7 +3535,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             SELECT "COLUMN", "VALUE", PERCENTAGE, UID_COUNT
             FROM BEHAVIOR_PCT
         """)
-        track_query_cost(cur, "Final export data preparation")
+    track_query_cost(cur, "Final export data preparation")
     print("🔧 Retrieving sample size...")
     original_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_DEMOS").fetchone()[0]
     print(f"✅ Sample size retrieved: {original_sample_size}")
@@ -5336,6 +5298,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     other_columns = [col for col in df_final.columns if col not in column_order]
     df_final = df_final[existing_columns + other_columns]
 
+    # Gen Pop only: no value may be exactly 100% (including BRAND INPUT); SAMPLE SIZE remains 10M
+    if is_genpop:
+        df_final = enforce_genpop_no_exact_100(df_final)
+
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
@@ -6042,6 +6008,32 @@ def apply_hardcoded_genpop_demographics(df: pd.DataFrame) -> pd.DataFrame:
         print(f"🎯 Applied hardcoded demographics: {changes} entries updated")
 
     return df
+
+
+def enforce_genpop_no_exact_100(df: pd.DataFrame) -> pd.DataFrame:
+    """Gen Pop only: ensure no value is exactly 100% (cap at 99.99). SAMPLE SIZE row is unchanged."""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    sample_mask = df['Column'].astype(str).str.upper() == 'SAMPLE SIZE'
+    pct_cols = [c for c in ['Percentage', 'Category Share', 'Brand Penetration (Row)'] if c in df.columns]
+    for col in pct_cols:
+        for idx in df.index:
+            if sample_mask.loc[idx]:
+                continue
+            try:
+                val = df.at[idx, col]
+                if val is None or val == '':
+                    continue
+                num = float(val) if not isinstance(val, (int, float)) else float(val)
+                if num == 100.0:
+                    df.at[idx, col] = 99.99
+            except (ValueError, TypeError):
+                continue
+    if not SILENCE_VERBOSE_OUTPUT:
+        print("  ✅ Gen Pop: capped any 100% values to 99.99%")
+    return df
+
 
 def set_demographic_original_raws_from_percentage(df: pd.DataFrame) -> pd.DataFrame:
     """For demographic categories, set 'Original Raw Numbers' from Percentage and TOTAL UNIVERSE size.
