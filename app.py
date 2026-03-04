@@ -133,7 +133,9 @@ def redirect_if_must_reset_password():
 # ============================================================================
 
 S3_BUCKET = 'dashboard-inputs'
-# Canonical Gen Pop 2026 file - profile selector and get-csv-data always use this key so dashboard matches S3 link
+# Canonical Gen Pop 2026 file. Only this file is used for Gen Pop: list_jobs shows one Gen Pop entry
+# with this key, get_csv_data(any gen_pop key) serves this file. Old Gen Pop keys in S3/cache are
+# ignored; you can delete other Gen_Pop_*.csv from S3 if you want to remove them permanently.
 GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
@@ -13320,7 +13322,7 @@ def list_jobs():
         # Filter out OTHER and UNCATEGORIZED categories - these should never appear in profile selector
         job_list = [e for e in job_list if (e.get('category') or '').upper() not in ('OTHER', 'UNCATEGORIZED', '')]
         
-        # Gen Pop: always show the canonical S3 key so profile selector only ever loads that file (no CMS/stale mapping)
+        # Gen Pop: only one entry, always canonical key. Any other Gen Pop keys from cache/S3 are dropped.
         seen_gen_pop = False
         new_job_list = []
         for e in job_list:
