@@ -48433,24 +48433,108 @@
                 const key = Object.keys(genPopDemo).find(k => k.toLowerCase() === lower);
                 return key != null ? genPopDemo[key] : 0;
             };
+            
+            // Normalize demographic label for consistent matching across profiles
+            // This ensures "TRANS FEMALE", "Trans Female", "trans female" all match
+            const normalizeDemoLabel = (val, type) => {
+                if (!val) return val;
+                const v = String(val).trim();
+                const lower = v.toLowerCase();
+                // Gender normalization
+                if (type === 'gender') {
+                    if (lower === 'female') return 'Female';
+                    if (lower === 'male') return 'Male';
+                    if (lower === 'trans female' || lower === 'trans-female') return 'Trans Female';
+                    if (lower === 'trans male' || lower === 'trans-male') return 'Trans Male';
+                    if (lower === 'non-binary' || lower === 'nonbinary' || lower === 'non binary') return 'Non-Binary';
+                }
+                // Ethnicity normalization
+                if (type === 'ethnicity') {
+                    if (lower === 'white') return 'White';
+                    if (lower === 'black' || lower === 'black or african american') return 'Black or African American';
+                    if (lower === 'asian') return 'Asian';
+                    if (lower === 'hispanic or latino' || lower === 'latino' || lower === 'latinx') return 'Hispanic or Latino';
+                    if (lower === 'other' || lower === 'another race/ethnicity') return 'Another Race/Ethnicity';
+                }
+                // Parental status normalization
+                if (type === 'parental_status') {
+                    if (lower === 'has kids' || lower === 'has children') return 'Has Children';
+                    if (lower === 'doesnt have kids' || lower === "doesn't have kids" || lower === 'no children' || lower === "doesn't have children") return "Doesn't Have Children";
+                    if (lower === 'other' || lower === 'prefer not to say') return 'Prefer Not to Say';
+                }
+                // Sexual orientation normalization
+                if (type === 'sexual_orientation') {
+                    if (lower === 'no' || lower === 'straight / heterosexual' || lower === 'straight/heterosexual') return 'Straight / Heterosexual';
+                    if (lower === 'yes' || lower === 'gay or lesbian') return 'Gay or Lesbian';
+                    if (lower === 'other' || lower === 'another sexual orientation') return 'Another Sexual Orientation';
+                    if (lower === 'prefer not to say') return 'Prefer Not to Say';
+                }
+                // Education normalization
+                if (type === 'education') {
+                    if (lower === 'complete college/university' || lower === 'completed college/university' || lower === "bachelor's degree") return "Bachelor's Degree";
+                    if (lower === 'complete grad school' || lower === 'completed grad school' || lower === 'graduate or professional degree') return 'Graduate or Professional Degree';
+                    if (lower === 'completed hs only' || lower === 'complete hs only' || lower === 'high school or less') return 'High School or Less';
+                    if (lower === 'some college / associate degree' || lower === 'some college/associate degree') return 'Some College / Associate Degree';
+                    if (lower === 'none' || lower === 'prefer not to say') return 'Prefer Not to Say';
+                }
+                // Relationship normalization
+                if (type === 'relationship') {
+                    if (lower === 'single') return 'Single';
+                    if (lower === 'married') return 'Married';
+                    if (lower === 'in a relationship') return 'In a Relationship';
+                    if (lower === 'divorced' || lower === 'divorced or separated') return 'Divorced or Separated';
+                    if (lower === 'prefer not to say') return 'Prefer Not to Say';
+                }
+                return v;
+            };
+            
+            // Helper to get value from profile demographics with case-insensitive matching
+            const getProfileValue = (profile, type, normalizedKey) => {
+                const demo = profile.demographics?.[type] || {};
+                if (demo[normalizedKey] != null) return demo[normalizedKey];
+                const lower = normalizedKey.toLowerCase();
+                for (const [k, v] of Object.entries(demo)) {
+                    if (k.toLowerCase() === lower || normalizeDemoLabel(k, type) === normalizedKey) return v;
+                }
+                return 0;
+            };
+            const getProfileProjection = (profile, type, normalizedKey) => {
+                const proj = profile.demographicsProjection?.[type] || {};
+                if (proj[normalizedKey] != null) return proj[normalizedKey];
+                const lower = normalizedKey.toLowerCase();
+                for (const [k, v] of Object.entries(proj)) {
+                    if (k.toLowerCase() === lower || normalizeDemoLabel(k, type) === normalizedKey) return v;
+                }
+                return 0;
+            };
+            const getProfileIndex = (profile, type, normalizedKey) => {
+                const idx = profile.demographicsIndex?.[type] || {};
+                if (idx[normalizedKey] != null) return idx[normalizedKey];
+                const lower = normalizedKey.toLowerCase();
+                for (const [k, v] of Object.entries(idx)) {
+                    if (k.toLowerCase() === lower || normalizeDemoLabel(k, type) === normalizedKey) return v;
+                }
+                return 0;
+            };
 
-            // Get all unique values across all profiles
+            // Get all unique NORMALIZED values across all profiles
             const allValues = new Set();
             profiles.forEach(p => {
-                Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(v));
+                Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(normalizeDemoLabel(v, demoType)));
             });
 
             // Build data array with values for sorting; compute index at render time from Gen Pop baseline
+            // Use normalized keys for consistent matching across profiles
             let dataRows = Array.from(allValues).map(value => {
-                const pctData = profiles.map(p => p.demographics[demoType]?.[value] || 0);
-                const projData = profiles.map(p => p.demographicsProjection?.[demoType]?.[value] || 0);
+                const pctData = profiles.map(p => getProfileValue(p, demoType, value));
+                const projData = profiles.map(p => getProfileProjection(p, demoType, value));
                 const genPopPct = getGenPopPct(value);
                 const indexData = profiles.map((p, i) => {
                     const pct = pctData[i];
                     if (pct <= 0) return 0;
                     if (genPopProfile && profiles[i] === genPopProfile) return 100;
                     if (genPopPct > 0) return Math.round((pct / genPopPct) * 100);
-                    return p.demographicsIndex?.[demoType]?.[value] || 0;
+                    return getProfileIndex(p, demoType, value);
                 });
                 return { value, pctData, projData, indexData };
             });
