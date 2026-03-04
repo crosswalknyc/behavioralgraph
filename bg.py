@@ -731,10 +731,11 @@ GENPOP_DEMOGRAPHICS = [
     ("ETHNICITY", "Hispanic or Latino", 18.6083),
     ("ETHNICITY", "Asian", 3.0309),
     ("ETHNICITY", "Another Race/Ethnicity", 5.0001),
-    ("EDUCATION", "Complete College/University", 43.517),
-    ("EDUCATION", "Completed HS only", 36.7209),
-    ("EDUCATION", "Completed Grad School", 13.8065),
-    ("EDUCATION", "None", 5.9555),
+    ("EDUCATION", "Bachelor's Degree", 43.517),
+    ("EDUCATION", "High School or Less", 36.7209),
+    ("EDUCATION", "Graduate or Professional Degree", 13.8065),
+    ("EDUCATION", "Some College / Associate Degree", 0.0),
+    ("EDUCATION", "Prefer Not to Say", 5.9555),
     ("INCOME", "$40K - $60K", 26.2901),
     ("INCOME", "$60K - $75K", 14.31),
     ("INCOME", "$75K - $100K", 19.1338),
@@ -1553,7 +1554,7 @@ def get_user_inputs():
             "AGE": "Age group (N for no or <16, 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+): ",
             "ETHNICITY": "Ethnicity (N for no or White, Hispanic or Latino, Another Race/Ethnicity, Black or African American, Asian): ",
             "INCOME": "HHI (N for no or $40K - $60K, $60K - $75K, $75K - $100K, $100K - $150K, $150K - $250K, $250K+): ",
-            "EDUCATION": "Education (N for no or Complete College/University, Completed HS only, Completed Grad School, None): ",
+            "EDUCATION": "Education (N for no or Bachelor's Degree, High School or Less, Graduate or Professional Degree, Some College / Associate Degree, Prefer Not to Say): ",
             "RELATIONSHIP": "Relationship (N for no or Single, In a Relationship, Married, Other, Divorced): ",
             "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Straight / Heterosexual, Gay or Lesbian, Another Sexual Orientation, Prefer Not to Say): ",
             "PARENTAL_STATUS": "Parental Status (N for no or Doesn't have Kids, Has Kids, Other): "
@@ -1584,7 +1585,7 @@ def get_user_inputs():
                 "$40K - $60K", "$60K - $75K", "$75K - $100K", "$100K - $150K", "$150K - $250K", "$250K+"
             ],
             "EDUCATION": [
-                "Complete College/University", "Completed HS only", "Completed Grad School", "None"
+                "Bachelor's Degree", "High School or Less", "Graduate or Professional Degree", "Some College / Associate Degree", "Prefer Not to Say"
             ],
             "RELATIONSHIP": [
                 "Single", "In a Relationship", "Married", "Other", "Divorced"
@@ -1697,8 +1698,8 @@ income_caps = pd.DataFrame({
 income_caps['INCOME'] = income_caps['INCOME'].apply(normalize_demo_value)
 
 education_caps = pd.DataFrame({
-    'EDUCATION': ['Completed HS only', 'Complete College/University', 'Completed Grad School'],
-    'MAX_COUNT': [3940000, 4590000, 1470000]
+    'EDUCATION': ['High School or Less', "Bachelor's Degree", 'Graduate or Professional Degree', 'Some College / Associate Degree', 'Prefer Not to Say'],
+    'MAX_COUNT': [3670000, 4350000, 1380000, 500000, 595000]
 })
 education_caps['EDUCATION'] = education_caps['EDUCATION'].apply(normalize_demo_value)
 
@@ -9978,7 +9979,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             '31-40', '41-59', '26-30', '21-25', '<16', '18-20', '60+', '16-18'
         ],
         'EDUCATION': [
-            'Complete College/University', 'Completed HS only', 'Completed Grad School', 'Other'
+            "Bachelor's Degree", 'High School or Less', 'Graduate or Professional Degree', 'Some College / Associate Degree', 'Prefer Not to Say'
         ],
         'ETHNICITY': [
             'White', 'Hispanic or Latino', 'Asian', 'Black or African American', 'Another Race/Ethnicity'
@@ -10353,7 +10354,7 @@ REQUIRED_DEMOGRAPHICS = {
         '31-40', '41-59', '26-30', '21-25', '<16', '18-20', '60+', '16-18'
     ],
     'EDUCATION': [
-        'Complete College/University', 'Completed HS only', 'Completed Grad School'
+        "Bachelor's Degree", 'High School or Less', 'Graduate or Professional Degree', 'Some College / Associate Degree', 'Prefer Not to Say'
     ],
     'ETHNICITY': [
         'White', 'Hispanic or Latino', 'Asian', 'Black or African American',
