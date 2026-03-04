@@ -29480,6 +29480,10 @@
             };
 
         function renderCharts(demographics, demographicsIndex = {}, demographicsProjection = {}, demographicsGenPop = {}) {
+            lastRenderedDemographics = demographics || {};
+            lastRenderedDemographicsIndex = demographicsIndex || {};
+            lastRenderedDemographicsProjection = demographicsProjection || {};
+            lastRenderedDemographicsGenPop = demographicsGenPop || {};
             Object.values(charts).forEach(c => c.destroy());
             charts = {};
             currentDemoIndexes = demographicsIndex;
@@ -30531,7 +30535,7 @@
         const chartTypePrefs = {
             age: 'bar',
             gender: 'doughnut',
-            ethnicity: 'doughnut',
+            ethnicity: 'bar',
             income: 'bar',
             education: 'bar',
             relationship: 'doughnut',
@@ -30539,16 +30543,20 @@
             parentalStatus: 'doughnut'
         };
         
+        // Last demographics passed to renderCharts (so changing chart type never clears data)
+        let lastRenderedDemographics = null;
+        let lastRenderedDemographicsIndex = {};
+        let lastRenderedDemographicsProjection = {};
+        let lastRenderedDemographicsGenPop = {};
+        
         function changeChartType(chartName, newType) {
             chartTypePrefs[chartName] = newType;
-            // Re-render charts with new type
-            if (currentDashboardData) {
-                renderCharts(
-                    currentDashboardData.demographics, 
-                    currentDashboardData.demographicsIndex, 
-                    currentDashboardData.demographicsProjection, 
-                    currentDashboardData.demographicsGenPop
-                );
+            const demo = currentDashboardData && currentDashboardData.demographics ? currentDashboardData.demographics : (lastRenderedDemographics || {});
+            const demoIdx = currentDashboardData && currentDashboardData.demographicsIndex ? currentDashboardData.demographicsIndex : lastRenderedDemographicsIndex;
+            const demoProj = currentDashboardData && currentDashboardData.demographicsProjection ? currentDashboardData.demographicsProjection : lastRenderedDemographicsProjection;
+            const demoGP = currentDashboardData && currentDashboardData.demographicsGenPop ? currentDashboardData.demographicsGenPop : lastRenderedDemographicsGenPop;
+            if (demo && Object.keys(demo).length > 0) {
+                renderCharts(demo, demoIdx, demoProj, demoGP);
             }
         }
         
