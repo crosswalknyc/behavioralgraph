@@ -15692,8 +15692,7 @@
         let currentCSVData = null;
         let currentS3Key = null;
         let charts = {};
-        let genPopBaselineData = null; // Parsed Gen Pop file (Gen_Pop_11_13_2025_07_52.csv) - same parse as any profile; used for Gen Pop % everywhere
-        const GEN_POP_FILE_NAME = 'Gen_Pop_11_13_2025_07_52.csv';
+        let genPopBaselineData = null; // Parsed Gen Pop file - resolved to file with most recent year in filename; used for Gen Pop % everywhere
         
         // Subscriber IQ state variables (declared early for tooltip system access)
         let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
@@ -15907,11 +15906,48 @@
             }
         }
 
+        // Resolve Gen Pop filename: of all jobs with "gen pop" in the name, pick the one with the most recent year in the filename (e.g. 2026 over 2025).
+        function resolveGenPopFileName(jobs) {
+            const genPopJobs = (jobs || []).filter(j => {
+                const key = (j.s3_key || j.job_id || '').toLowerCase();
+                const name = (j.project_name || j.display_name || '').toLowerCase();
+                return key.includes('gen_pop') || key.includes('gen pop') || name.includes('gen pop') || name.includes('gen_pop');
+            });
+            if (genPopJobs.length === 0) return null;
+            const yearInKey = (key) => {
+                const m = (key || '').match(/\b(20[2-3]\d)\b/g);
+                return m ? Math.max(...m.map(Number)) : 0;
+            };
+            let best = genPopJobs[0];
+            let bestYear = yearInKey(best.s3_key || best.job_id);
+            for (let i = 1; i < genPopJobs.length; i++) {
+                const y = yearInKey(genPopJobs[i].s3_key || genPopJobs[i].job_id);
+                if (y > bestYear) { best = genPopJobs[i]; bestYear = y; }
+            }
+            return best.s3_key || best.job_id || null;
+        }
         // Load Gen Pop file and parse it the same way as any profile; use that for Gen Pop % everywhere (locations, behavioral, demographics).
+        // Loads the Gen Pop file with the most recent year in the filename (e.g. Gen Pop 2026).
         async function loadGenPopBaseline() {
             try {
-                console.log(`📊 Loading Gen Pop from: ${GEN_POP_FILE_NAME}`);
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(GEN_POP_FILE_NAME)}`, { credentials: 'same-origin' });
+                let genPopKey = null;
+                const cached = typeof getSessionJobsCache === 'function' ? getSessionJobsCache() : null;
+                const jobs = (cached && cached.jobs) ? cached.jobs : [];
+                if (jobs.length > 0) {
+                    genPopKey = resolveGenPopFileName(jobs);
+                }
+                if (!genPopKey) {
+                    const response = await fetch('/api/jobs?refresh=1', { credentials: 'same-origin' });
+                    const data = await response.json();
+                    const list = (data && data.jobs) ? data.jobs : [];
+                    genPopKey = resolveGenPopFileName(list);
+                }
+                if (!genPopKey) {
+                    console.warn('⚠️ No Gen Pop file found (no job with "gen pop" in name)');
+                    return;
+                }
+                console.log('📊 Loading Gen Pop from: ' + genPopKey);
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(genPopKey)}`, { credentials: 'same-origin' });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success && data.data) {
