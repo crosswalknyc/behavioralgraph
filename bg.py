@@ -736,12 +736,12 @@ GENPOP_DEMOGRAPHICS = [
     ("EDUCATION", "Graduate or Professional Degree", 13.8065),
     ("EDUCATION", "Some College / Associate Degree", 0.0),
     ("EDUCATION", "Prefer Not to Say", 5.9555),
-    ("INCOME", "$40K - $60K", 26.2901),
-    ("INCOME", "$60K - $75K", 14.31),
-    ("INCOME", "$75K - $100K", 19.1338),
-    ("INCOME", "$100K - $150K", 21.4342),
-    ("INCOME", "$150K - $250K", 10.637),
-    ("INCOME", "$250K+", 8.1949),
+    ("INCOME", "$25,000 - $49,999", 0.0),
+    ("INCOME", "$50,000 - $74,999", 40.6),
+    ("INCOME", "$75,000 - $99,999", 19.1338),
+    ("INCOME", "$100,000 - $149,999", 21.4342),
+    ("INCOME", "$150,000 - $199,999", 10.637),
+    ("INCOME", "$250,000 or More", 8.1949),
     ("RELATIONSHIP", "Single", 28.9944),
     ("RELATIONSHIP", "In a Relationship", 28.5708),
     ("RELATIONSHIP", "Divorced", 15.1939),
@@ -1553,7 +1553,7 @@ def get_user_inputs():
             "GENDER": "Gender (N for no or Female, Male, Trans Male, Trans Female, Non-Binary): ",
             "AGE": "Age group (N for no or <16, 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+): ",
             "ETHNICITY": "Ethnicity (N for no or White, Hispanic or Latino, Another Race/Ethnicity, Black or African American, Asian): ",
-            "INCOME": "HHI (N for no or $40K - $60K, $60K - $75K, $75K - $100K, $100K - $150K, $150K - $250K, $250K+): ",
+            "INCOME": "HHI (N for no or $25,000 - $49,999, $50,000 - $74,999, $75,000 - $99,999, $100,000 - $149,999, $150,000 - $199,999, $250,000 or More): ",
             "EDUCATION": "Education (N for no or Bachelor's Degree, High School or Less, Graduate or Professional Degree, Some College / Associate Degree, Prefer Not to Say): ",
             "RELATIONSHIP": "Relationship (N for no or Single, In a Relationship, Married, Other, Divorced): ",
             "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Straight / Heterosexual, Gay or Lesbian, Another Sexual Orientation, Prefer Not to Say): ",
@@ -1582,7 +1582,7 @@ def get_user_inputs():
                 "White", "Hispanic or Latino", "Another Race/Ethnicity", "Black or African American", "Asian"
             ],
             "INCOME": [
-                "$40K - $60K", "$60K - $75K", "$75K - $100K", "$100K - $150K", "$150K - $250K", "$250K+"
+                "$25,000 - $49,999", "$50,000 - $74,999", "$75,000 - $99,999", "$100,000 - $149,999", "$150,000 - $199,999", "$250,000 or More"
             ],
             "EDUCATION": [
                 "Bachelor's Degree", "High School or Less", "Graduate or Professional Degree", "Some College / Associate Degree", "Prefer Not to Say"
@@ -1691,9 +1691,9 @@ age_total_caps = pd.DataFrame({
 age_total_caps['AGE'] = age_total_caps['AGE'].apply(normalize_demo_value)
 
 income_caps = pd.DataFrame({
-    'INCOME': ['<$40K', '$41K-$60K', '$61K-$75K', '$76K-$100K',
-               '$101K-$150K', '$151K-$250K', '$251K+'],
-    'MAX_COUNT': [3255084, 1531804, 995673, 1340329, 1531804, 765902, 579405]
+    'INCOME': ['$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999',
+               '$100,000 - $149,999', '$150,000 - $199,999', '$250,000 or More'],
+    'MAX_COUNT': [2000000, 4000000, 1913380, 2143420, 1063700, 819490]
 })
 income_caps['INCOME'] = income_caps['INCOME'].apply(normalize_demo_value)
 
@@ -5973,12 +5973,12 @@ def get_hardcoded_genpop_demographics():
             ('PREFER NOT TO SAY', 0.0926, 9260)
         ],
         'INCOME': [
-            ('$40K-$60K', 26.2901, 2629010),
-            ('$100K-$150K', 21.4342, 2143420),
-            ('$75K-$100K', 19.1338, 1913380),
-            ('$60K-$75K', 14.31, 1431000),
-            ('$150K-$250K', 10.637, 1063700),
-            ('$250K+', 8.1949, 819490)
+            ('$50,000 - $74,999', 40.6, 4060000),
+            ('$100,000 - $149,999', 21.4342, 2143420),
+            ('$75,000 - $99,999', 19.1338, 1913380),
+            ('$150,000 - $199,999', 10.637, 1063700),
+            ('$250,000 or More', 8.1949, 819490),
+            ('$25,000 - $49,999', 0.0, 0)
         ],
         'RELATIONSHIP STATUS': [
             ('SINGLE', 28.9944, 2899440),
@@ -9973,7 +9973,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             'Male', 'Female', 'Trans Male', 'Trans Female', 'Non-Binary', 'Prefer Not to Say'
         ],
         'INCOME': [
-            '$75K-$100K', '$150K-$250K', '$250K+', '$100K-$150K', '$60K-$75K', '$40K-$60K'
+            '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $199,999', '$250,000 or More'
         ],
         'AGE': [
             '31-40', '41-59', '26-30', '21-25', '<16', '18-20', '60+', '16-18'
@@ -10363,7 +10363,7 @@ REQUIRED_DEMOGRAPHICS = {
         'Female', 'Male', 'Trans Female', 'Trans Male', 'Non-Binary'
     ],
     'INCOME': [
-        '$75K-$100K', '$150K-$250K', '$250K+', '$100K-$150K', '$60K-$75K', '$40K-$60K'
+        '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $199,999', '$250,000 or More'
     ],
     'RELATIONSHIP': [
         'Single', 'Married', 'Divorced', 'In A Relationship'
