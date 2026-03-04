@@ -29366,6 +29366,12 @@
                         const start = toNum(overMatch[1], true);
                         return { start, width: 150000 }; // assume 150k span for open-ended
                     }
+                    // Gen Pop: "$250,000 or More" (no plus sign)
+                    if (lower.includes('or more') || lower.includes('and over')) {
+                        const m = lower.match(/(\d+)\s*[k,]?\s*\d*/);
+                        const start = m ? toNum(m[1], true) : 250000;
+                        return { start, width: 150000 };
+                    }
                     return null;
                 };
                 const calcInterpolatedMedian = (incomeData) => {
@@ -46570,18 +46576,23 @@
             
             // Parse bracket to get start age and width (for "31-40" -> start 31, width 10)
             function parseBracket(key) {
-                const range = key.match(/^(\d+)-(\d+)$/);
+                const k = (key || '').trim();
+                const lower = k.toLowerCase();
+                // Gen Pop / common labels
+                if (lower === '17 and under' || lower === 'under 17') return { start: 0, width: 18 };
+                if (lower === '65 or older' || lower === '65 and older' || lower === '65+') return { start: 65, width: 25 };
+                const range = k.match(/^(\d+)-(\d+)$/);
                 if (range) {
                     const start = parseInt(range[1], 10);
                     const end = parseInt(range[2], 10);
                     return { start, width: end - start + 1 }; // inclusive: 31-40 = 10 years
                 }
-                const under = key.match(/^<(\d+)$/);
+                const under = k.match(/^<(\d+)$/);
                 if (under) {
                     const end = parseInt(under[1], 10);
                     return { start: 0, width: end };
                 }
-                const over = key.match(/^(\d+)\+$/);
+                const over = k.match(/^(\d+)\+$/);
                 if (over) {
                     const start = parseInt(over[1], 10);
                     return { start, width: 25 }; // assume 25-year span for open-ended
@@ -46589,8 +46600,8 @@
                 return null;
             }
             
-            // Order for common age keys (others sorted by start)
-            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '18-24', '25-34', '35-44', '45-54', '55-64', '65+'];
+            // Order for common age keys (others sorted by start); include Gen Pop labels (exact and lower)
+            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '17 and Under', '17 and under', 'under 17', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older', '65 or older', '65 and older', '65+'];
             const brackets = [];
             Object.entries(ageData).forEach(([key, pct]) => {
                 const val = parseFloat(pct);

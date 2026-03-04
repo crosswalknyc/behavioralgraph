@@ -8537,6 +8537,9 @@ def enforce_cross_category_brand_consistency(df):
     except Exception:
         sample_size = None
 
+    # Brand input names: never overwrite these with a lower max; they must stay 100%
+    brand_input_names = get_brand_input_names(df)
+
     # Second pass: apply maxima
     for idx, row in df.iterrows():
         brand_name = str(row.get('Value', '')).strip()
@@ -8546,6 +8549,9 @@ def enforce_cross_category_brand_consistency(df):
         if category.upper() in ['PURCHASE SHARE', 'BRAND PENETRATION']:
             continue
         if category.upper() == 'BRAND INPUT':
+            continue
+        # Skip brand input values so they keep 100% from enforce_input_brand_100
+        if is_brand_input_value(brand_name, brand_input_names):
             continue
         normalized_brand = brand_name.lower().strip()
 
