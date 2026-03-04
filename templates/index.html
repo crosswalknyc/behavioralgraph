@@ -13329,7 +13329,6 @@
                             <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
-                                <div class="dash-date-box" id="dashDataSourceHeader" style="display: none; font-size: 0.8rem; color: var(--text-secondary);" title="Exact file used for this profile (Behavioral, Demographics, etc.)"></div>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.5rem;">
                                     <span style="font-size: 0.8rem; color: var(--text-secondary);">Run:</span>
                                     <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;" title="Select a run (dropdown)"></select>
@@ -15907,9 +15906,6 @@
             }
         }
 
-        // Canonical Gen Pop file used for all indexing/comparison (must match backend GEN_POP_CANONICAL_KEY)
-        const GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv';
-
         // Resolve Gen Pop filename: use the file with "gen pop" (or gen_pop) + underscore + year; pick the one with the most recent year (e.g. Gen_Pop_2026_... over Gen_Pop_2025_...).
         function resolveGenPopFileName(jobs) {
             const genPopJobs = (jobs || []).filter(j => {
@@ -15946,18 +15942,32 @@
             }
             return best.s3_key || best.job_id || null;
         }
-        // Load Gen Pop file and parse it for Gen Pop % everywhere (indexing, comparisons, charts). Always use canonical file so GP values match Gen_Pop_2026_03_04_2026_04_29.csv.
+        // Load Gen Pop file and parse it the same way as any profile; use that for Gen Pop % everywhere (locations, behavioral, demographics).
+        // Loads the Gen Pop file with the most recent year in the filename (e.g. Gen Pop 2026).
         async function loadGenPopBaseline() {
             try {
-                const genPopKey = GEN_POP_CANONICAL_KEY;
-                console.log('📊 Loading Gen Pop baseline from: ' + genPopKey);
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(genPopKey)}?_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
+                let genPopKey = null;
+                const cached = typeof getSessionJobsCache === 'function' ? getSessionJobsCache() : null;
+                const jobs = (cached && cached.jobs) ? cached.jobs : [];
+                if (jobs.length > 0) {
+                    genPopKey = resolveGenPopFileName(jobs);
+                }
+                if (!genPopKey) {
+                    const response = await fetch(`/api/jobs?refresh=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
+                    const data = await response.json();
+                    const list = (data && data.jobs) ? data.jobs : [];
+                    genPopKey = resolveGenPopFileName(list);
+                }
+                if (!genPopKey) {
+                    console.warn('⚠️ No Gen Pop file found (no job with "gen pop" in name)');
+                    return;
+                }
+                console.log('📊 Loading Gen Pop from: ' + genPopKey);
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(genPopKey)}`, { credentials: 'same-origin' });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success && data.data) {
-                        // Clear old baseline so parseAllData doesn't read stale values when building the new one
-                        genPopBaselineData = null;
-                        genPopBaselineData = parseAllData(data.data, { isGenPopBaseline: true });
+                        genPopBaselineData = parseAllData(data.data);
                         console.log('✅ Gen Pop baseline loaded successfully');
                         if (currentDashboardData && Array.isArray(currentDashboardData.locations) && currentDashboardData.locations.length > 0) {
                             renderLocationTable(currentDashboardData.locations);
@@ -15985,14 +15995,15 @@
             // Load live features and apply visibility
             loadAndApplyLiveFeatures();
             
-            // Load Gen Pop baseline first so demographics/behavioral GP values use correct file when profiles load
-            (async function() {
-                await loadGenPopBaseline();
-                loadJobs();
-                if (window.defaultViewHedgeFundIQ) {
-                    showHedgeFundIQ();
-                } else {
-                    loadDashboardProfiles();
+            // Load Gen Pop baseline data
+            loadGenPopBaseline();
+            
+            loadJobs();
+            // If user only has Hedge Fund IQ, show Hedge Fund landing; otherwise apply selected product view so dashboard/content shows
+            if (window.defaultViewHedgeFundIQ) {
+                showHedgeFundIQ();
+            } else {
+                loadDashboardProfiles();
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
@@ -16008,7 +16019,6 @@
                     if (cav) cav.style.display = 'none';
                 }
             }
-            })();
             // Initialize deck count from localStorage
             updateDeckCount();
             
@@ -16250,6 +16260,8 @@
             if (s == null || typeof s !== 'string') return s;
             const v = String(s).trim().toLowerCase();
             if (v === 'latinx' || v === 'latino') return 'Hispanic or Latino';
+            if (v === 'black') return 'Black or African American';
+            if (v === 'other') return 'Another Race/Ethnicity';
             return s;
         }
         
@@ -22064,8 +22076,7 @@
         const TST_GENPOP_BASE_2026 = '329,900,000';
         const TST_GENPOP_TOOLTIP = 'US Gen Pop projections use the 2026 base of ' + TST_GENPOP_BASE_2026 + '.';
         const TST_GENPOP_DMA = { 'NEW YORK NY': 6.4, 'LOS ANGELES CA': 4.8, 'CHICAGO IL': 3.0, 'PHILADELPHIA PA': 2.5, 'DALLAS FORT WORTH TX': 2.4, 'SAN FRANCISCO OAKLAND SAN JOSE CA': 2.2, 'WASHINGTON DC': 2.2, 'HOUSTON TX': 2.2, 'BOSTON MA': 2.1, 'ATLANTA GA': 2.0, 'PHOENIX AZ': 1.7, 'TAMPA ST PETERSBURG FL': 1.6, 'SEATTLE TACOMA WA': 1.6, 'DETROIT MI': 1.6, 'MINNEAPOLIS ST PAUL MN': 1.5, 'MIAMI FT LAUDERDALE FL': 1.5, 'DENVER CO': 1.4, 'ORLANDO FL': 1.3, 'CLEVELAND OH': 1.2, 'SACRAMENTO CA': 1.2, 'ST LOUIS MO': 1.1, 'PORTLAND OR': 1.0, 'CHARLOTTE NC': 1.0, 'PITTSBURGH PA': 1.0, 'RALEIGH DURHAM NC': 1.0, 'INDIANAPOLIS IN': 0.9, 'BALTIMORE MD': 0.9, 'SAN DIEGO CA': 0.9, 'NASHVILLE TN': 0.9, 'HARTFORD CT': 0.8, 'KANSAS CITY MO': 0.8, 'COLUMBUS OH': 0.8, 'SALT LAKE CITY UT': 0.8, 'MILWAUKEE WI': 0.7, 'SAN ANTONIO TX': 0.7, 'AUSTIN TX': 0.7, 'LAS VEGAS NV': 0.7, 'CINCINNATI OH': 0.7, 'GREENVILLE SC': 0.6, 'WEST PALM BEACH FL': 0.6, 'JACKSONVILLE FL': 0.6, 'GRAND RAPIDS MI': 0.6, 'BIRMINGHAM AL': 0.6, 'OKLAHOMA CITY OK': 0.6, 'HARRISBURG PA': 0.6, 'NORFOLK VA': 0.5, 'ALBUQUERQUE SANTA FE NM': 0.5, 'MEMPHIS TN': 0.5, 'LOUISVILLE KY': 0.5, 'NEW ORLEANS LA': 0.5, 'PROVIDENCE RI': 0.5, 'BUFFALO NY': 0.5, 'GREENSBORO NC': 0.5, 'FRESNO CA': 0.4, 'RICHMOND VA': 0.4, 'KNOXVILLE TN': 0.4, 'LITTLE ROCK AR': 0.4, 'TULSA OK': 0.4, 'LEXINGTON KY': 0.4, 'DAYTON OH': 0.4, 'CHARLESTON SC': 0.4, 'WICHITA KS': 0.3, 'MOBILE AL': 0.3, 'FLINT MI': 0.3, 'TUCSON AZ': 0.3, 'TOLEDO OH': 0.3, 'HONOLULU HI': 0.3, 'DES MOINES IA': 0.3, 'SPOKANE WA': 0.3, 'OMAHA NE': 0.3, 'ROCHESTER NY': 0.3, 'SPRINGFIELD MO': 0.3, 'SHREVEPORT LA': 0.2, 'SYRACUSE NY': 0.2, 'PADUCAH KY': 0.2, 'MADISON WI': 0.2 };
-        // Fallback only; must match Gen_Pop_2026_03_04_2026_04_29.csv (canonical Gen Pop file)
-        const TST_GENPOP_DEMOGRAPHICS = { 'AGE': { '17 and Under': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6, '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1, 'Other': 0 }, 'GENDER': { 'Female': 49.684, 'Male': 47.892, 'Trans Female': 0.469, 'Trans Male': 0.576, 'Non-Binary': 1.379, 'FEMALE': 49.684, 'MALE': 47.892 }, 'ETHNICITY': { 'White': 57.786, 'Hispanic or Latino': 18.02, 'Black or African American': 11.86, 'Another Race/Ethnicity': 5.16, 'Asian': 6.173, 'WHITE': 57.786, 'LATINO': 18.02, 'LATINX': 18.02, 'BLACK': 11.86, 'ASIAN': 6.173 }, 'INCOME': { 'Under $25,000': 8.937, '$25,000-$49,999': 13.286, '$50,000-$74,999': 13.868, '$75,000-$99,999': 12.015, '$100,000-$149,999': 19.331, '$150,000-$249,999': 19.424, '$250,000 or More': 13.139, '$25,000 - $49,999': 13.286, '$50,000 - $74,999': 13.868, '$75,000 - $99,999': 12.015, '$100,000 - $149,999': 19.331, '$150,000 - $249,999': 10.6, '$250,000 or More': 8.2 } };
+        const TST_GENPOP_DEMOGRAPHICS = { 'AGE': { '<16': 16.9, '16-18': 3.7, '18-20': 2.7, '21-25': 6.8, '26-30': 6.7, '31-40': 13.7, '41-59': 25.1, '60+': 24.5 }, 'GENDER': { 'Female': 48.2, 'Male': 47.8, 'Trans Female': 0.8, 'Trans Male': 1.0, 'Non-Binary': 2.1, 'FEMALE': 48.2, 'MALE': 47.8 }, 'ETHNICITY': { 'White': 59.0, 'Hispanic or Latino': 18.6, 'Black or African American': 14.3, 'Another Race/Ethnicity': 5.0, 'Asian': 3.0, 'WHITE': 59.0, 'LATINO': 18.6, 'LATINX': 18.6, 'BLACK': 14.3, 'ASIAN': 3.0 }, 'INCOME': { '$25,000 - $49,999': 0, '$50,000 - $74,999': 40.6, '$75,000 - $99,999': 19.1, '$100,000 - $149,999': 21.4, '$150,000 - $249,999': 10.6, '$250,000 or More': 8.2 } };
         let tstDemographicsHoverEnabled = localStorage.getItem('bg_tst_demographics_hover') !== 'false';
         async function loadTSTProfiles() {
             try {
@@ -26068,8 +26079,8 @@
                 const usPop = parseFloat(String(row['US Gen Pop Projection'] || row['Gen Pop Projection'] || row[5] || '0').replace(/,/g, '')) || 0;
 
                 if (col === 'SAMPLE SIZE') {
-                    const d4 = catShare || 0;
-                    sampleSize = (d4 > 1000 ? Math.round(d4) : 0) || (rawNum > 0 ? rawNum : 0) || Math.round(d4);
+                    // Sample size from column D (Category Share), not E (Original Raw Numbers)
+                    sampleSize = catShare || rawNum || 0;
                 }
                 // Projected US is in column F (US Gen Pop Projection) on BRAND INPUT row
                 if (col === 'BRAND INPUT' && usPop > 0) projectedUS = usPop;
@@ -26798,9 +26809,7 @@
             renderTopInsights(parsed);
         }
 
-        function parseAllData(csvData, options) {
-            options = options || {};
-            const isGenPopBaseline = options.isGenPopBaseline === true;
+        function parseAllData(csvData) {
             const result = {
                 sampleSize: 0,
                 projectedUS: 0,
@@ -26946,62 +26955,49 @@
                 'SHREVEPORT LA': 0.2, 'SYRACUSE NY': 0.2, 'PADUCAH KY': 0.2, 'MADISON WI': 0.2
             };
             
-            // Fallback only when Gen Pop baseline (Gen_Pop_2026_03_04_2026_04_29.csv) has not loaded. Values must match that file.
+            // HARDCODED GEN POP DEMOGRAPHICS (2026 US Census projections, from bg.py GENPOP_DEMOGRAPHICS)
             const GENPOP_DEMOGRAPHICS = {
                 'AGE': {
-                    '17 and Under': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6,
-                    '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1, 'Other': 0
+                    '<16': 10.0, '16-18': 9.6, '18-20': 4.85, '21-25': 11.45,
+                    '26-30': 6.6, '31-40': 20.2, '41-59': 24.9, '60+': 19.1
                 },
                 'GENDER': {
-                    'Female': 49.684, 'Male': 47.892, 'Trans Female': 0.469, 'Trans Male': 0.576,
-                    'Non-Binary': 1.379, 'Prefer Not to Say': 0, 'FEMALE': 49.684, 'MALE': 47.892
+                    'Female': 50.83, 'Male': 49.17, 'Trans Female': 0, 'Trans Male': 0, 'Non-Binary': 0
                 },
                 'ETHNICITY': {
-                    'White': 57.786, 'Hispanic or Latino': 18.02, 'Black or African American': 11.86,
-                    'Another Race/Ethnicity': 5.16, 'Asian': 6.173, 'Native American / Alaska Native': 1.0,
-                    'WHITE': 57.786, 'LATINO': 18.02, 'LATINX': 18.02, 'BLACK': 11.86, 'ASIAN': 6.173
+                    'White': 59.0, 'Hispanic or Latino': 18.0, 'Black or African American': 13.0, 'Another Race/Ethnicity': 4.0, 'Asian': 6.0
                 },
                 'INCOME': {
-                    'Under $25,000': 8.937, '$25,000-$49,999': 13.286, '$50,000-$74,999': 13.868,
-                    '$75,000-$99,999': 12.015, '$100,000-$149,999': 19.331,
-                    '$150,000-$249,999': 19.424, '$250,000 or More': 13.139,
-                    '$25,000 - $49,999': 13.286, '$50,000 - $74,999': 13.868,
-                    '$75,000 - $99,999': 12.015, '$100,000 - $149,999': 19.331,
-                    '$150,000 - $249,999': 19.424, '$250,000 or More': 8.2
+                    '$25,000 - $49,999': 0, '$50,000 - $74,999': 40.6,
+                    '$75,000 - $99,999': 19.1, '$100,000 - $149,999': 21.4,
+                    '$150,000 - $249,999': 10.6, '$250,000 or More': 8.2
                 },
                 'EDUCATION': {
                     'Bachelor\'s Degree': 22.3, 'High School or Less': 38.1,
-                    'Graduate or Professional Degree': 13.298, 'Some College / Associate Degree': 21.997,
-                    'Trade School': 4.299, 'Prefer Not to Say': 0,
+                    'Graduate or Professional Degree': 18.27, 'Some College / Associate Degree': 22.0,
+                    'Prefer Not to Say': 0,
                     'None': 0, 'NONE': 0, 'Completed HS Only': 38.1, 'COMPLETED HS ONLY': 38.1,
                     'Complete College/University': 22.3, 'COMPLETE COLLEGE/UNIVERSITY': 22.3,
-                    'Completed Grad School': 13.298, 'COMPLETED GRAD SCHOOL': 13.298
+                    'Completed Grad School': 18.27, 'COMPLETED GRAD SCHOOL': 18.27
                 },
                 'RELATIONSHIP': {
-                    'Single': 34.1, 'SINGLE': 34.1,
-                    'In a Relationship': 4.299, 'IN A RELATIONSHIP': 4.299,
-                    'Married': 44.7, 'MARRIED': 44.7,
-                    'Divorced or Separated': 11.3, 'DIVORCED OR SEPARATED': 11.3,
-                    'Widowed': 5.6, 'WIDOWED': 5.6,
+                    'Single': 31.0, 'SINGLE': 31.0,
+                    'In a Relationship': 15.0, 'IN A RELATIONSHIP': 15.0,
+                    'Married': 48.0, 'MARRIED': 48.0,
+                    'Divorced or Separated': 6.0, 'DIVORCED OR SEPARATED': 6.0,
                     'Prefer Not to Say': 0, 'PREFER NOT TO SAY': 0
                 },
                 'SEXUAL_ORIENTATION': {
-                    'Straight / Heterosexual': 88.5, 'Gay or Lesbian': 6.3,
-                    'Another Sexual Orientation': 5.2, 'Prefer Not to Say': 0,
-                    'No': 88.5, 'NO': 88.5, 'Yes': 6.3, 'YES': 6.3
+                    'No': 92.7, 'NO': 92.7,
+                    'Yes': 5.6, 'YES': 5.6,
+                    'Prefer Not to Say': 1.7, 'PREFER NOT TO SAY': 1.7
                 },
                 'PARENTAL_STATUS': {
-                    'No Children': 56.6, 'NO CHILDREN': 56.6,
-                    'Has Children': 43.4, 'HAS CHILDREN': 43.4,
-                    'Prefer Not to Say': 0, 'PREFER NOT TO SAY': 0
+                    'No Children': 55.0, 'NO CHILDREN': 55.0,
+                    'Has Children': 40.0, 'HAS CHILDREN': 40.0,
+                    'Prefer Not to Say': 5.0, 'PREFER NOT TO SAY': 5.0
                 },
                 'OCCUPATION': {
-                    'Management, Business & Professional': 39.0, 'Healthcare Practitioners or Support': 18.0,
-                    'Education or Library Services': 5.2, 'Service & Hospitality': 11.0,
-                    'Manufacturing & Production': 2.0, 'Skilled Trades/Construction or Maintenance': 2.0,
-                    'Agriculture & Outdoor': 1.0, 'Public Safety & Protective Services': 3.0,
-                    'Transportation & Logistics': 2.0, 'Science, Technology & Technical Professions': 8.0,
-                    'Legal': 0.8, 'Sales & Retail': 8.0, 'Other': 0,
                     'Employed Full-Time': 48.0, 'EMPLOYED FULL-TIME': 48.0,
                     'Employed Part-Time': 12.0, 'EMPLOYED PART-TIME': 12.0,
                     'Self-Employed': 6.0, 'SELF-EMPLOYED': 6.0,
@@ -27025,105 +27021,87 @@
                 // Use calculated projection if CSV value seems wrong (less than 1/1000th of what it should be)
                 const usProjection = (csvProjection > 0 && csvProjection > calculatedProjection / 1000) ? csvProjection : calculatedProjection;
                 
-                // For DEMOGRAPHICS: Try to use loaded Gen Pop baseline, fallback to hardcoded (or use CSV own % when building baseline)
-                // For LOCATION: Gen Pop from baseline or DMA fallback (or CSV own % when building baseline)
-                // For BEHAVIORAL: Gen Pop from baseline or row (or CSV own % when building baseline)
+                // For DEMOGRAPHICS: Try to use loaded Gen Pop baseline, fallback to hardcoded
+                // For LOCATION: Use hardcoded Gen Pop DMA percentages  
+                // For BEHAVIORAL: Use loaded Gen Pop baseline
                 let genPopPct = 0;
                 let genPopProjection = 0;
                 if (demoCategories.includes(category)) {
-                    if (isGenPopBaseline) {
-                        genPopPct = catShare || pct;
-                    } else {
-                        const demoKey = category.toLowerCase().replace('_', '_');
-                        if (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics[demoKey]) {
-                            const catObj = genPopBaselineData.demographics[demoKey];
-                            genPopPct = catObj[value] || 0;
-                            if (genPopPct === 0 && value) {
-                                const valLower = String(value).trim().toLowerCase();
-                                for (const [k, v] of Object.entries(catObj)) {
-                                    if (v != null && v > 0 && String(k).trim().toLowerCase() === valLower) {
-                                        genPopPct = v;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if (genPopPct === 0 && GENPOP_DEMOGRAPHICS[category]) {
-                            genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
-                            if (genPopPct === 0 && value) {
-                                const valLower = String(value).trim().toLowerCase();
-                                for (const [k, v] of Object.entries(GENPOP_DEMOGRAPHICS[category])) {
-                                    if (v != null && v > 0 && String(k).trim().toLowerCase() === valLower) {
-                                        genPopPct = v;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+                    // Try to get from loaded Gen Pop baseline first
+                    const demoKey = category.toLowerCase().replace('_', '_');
+                    if (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics[demoKey]) {
+                        genPopPct = genPopBaselineData.demographics[demoKey][value] || 0;
+                    }
+                    // Fallback to hardcoded values if not found in baseline
+                    if (genPopPct === 0 && GENPOP_DEMOGRAPHICS[category]) {
+                        genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
                     }
                 } else if (category === 'LOCATION' && value) {
-                    if (isGenPopBaseline) {
-                        genPopPct = catShare || pct;
-                    } else {
-                        if (genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0) {
-                            const dmaKey = value.toUpperCase().trim();
-                            let genPopLoc = genPopBaselineData.locations.find(loc => (loc.name || '').toUpperCase().trim() === dmaKey);
-                            if (!genPopLoc) {
-                                genPopLoc = genPopBaselineData.locations.find(loc => {
-                                    const locKey = (loc.name || '').toUpperCase().trim();
-                                    return locKey.includes(dmaKey) || dmaKey.includes(locKey);
-                                });
-                            }
-                            if (genPopLoc != null && (genPopLoc.pct != null || genPopLoc.genPopPct != null)) {
-                                genPopPct = parseFloat(genPopLoc.pct ?? genPopLoc.genPopPct) || 0;
-                            }
+                    // Use same calculation as profile: Gen Pop % from Gen Pop profile's location data when available
+                    if (genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0) {
+                        const dmaKey = value.toUpperCase().trim();
+                        let genPopLoc = genPopBaselineData.locations.find(loc => (loc.name || '').toUpperCase().trim() === dmaKey);
+                        if (!genPopLoc) {
+                            genPopLoc = genPopBaselineData.locations.find(loc => {
+                                const locKey = (loc.name || '').toUpperCase().trim();
+                                return locKey.includes(dmaKey) || dmaKey.includes(locKey);
+                            });
                         }
-                        if (genPopPct === 0) {
-                            const dmaKey = value.toUpperCase();
-                            genPopPct = GENPOP_DMA[dmaKey] || 0;
-                            if (genPopPct === 0) {
-                                const dmaFirstPart = dmaKey.split(' ')[0];
-                                for (const [key, val] of Object.entries(GENPOP_DMA)) {
-                                    if (key.startsWith(dmaFirstPart) || key.includes(dmaFirstPart)) {
-                                        genPopPct = val;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (genPopPct === 0) genPopPct = 0.2;
+                        if (genPopLoc != null && (genPopLoc.pct != null || genPopLoc.genPopPct != null)) {
+                            genPopPct = parseFloat(genPopLoc.pct ?? genPopLoc.genPopPct) || 0;
+                            // Gen pop is actual % (0.78 = 0.78%), do not multiply by 100
                         }
                     }
-                } else {
-                    if (isGenPopBaseline) {
-                        genPopPct = catShare || pct;
-                        if (genPopPct > 0) genPopProjection = Math.round((genPopPct / 100) * 329900000);
-                    } else {
-                        if (genPopBaselineData && genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
-                            const genPopItem = genPopBaselineData.behavioral[category].find(item => item.name === value);
-                            if (genPopItem) {
-                                genPopPct = genPopItem.pct || 0;
-                                genPopProjection = genPopItem.projection || 0;
+                    // Fallback: hardcoded Gen Pop DMA percentages only when Gen Pop baseline locations not available
+                    if (genPopPct === 0) {
+                        const dmaKey = value.toUpperCase();
+                        genPopPct = GENPOP_DMA[dmaKey] || 0;
+                        if (genPopPct === 0) {
+                            const dmaFirstPart = dmaKey.split(' ')[0];
+                            for (const [key, val] of Object.entries(GENPOP_DMA)) {
+                                if (key.startsWith(dmaFirstPart) || key.includes(dmaFirstPart)) {
+                                    genPopPct = val;
+                                    break;
+                                }
                             }
                         }
-                        if (genPopPct === 0) genPopPct = catShare > 0 ? catShare : 0;
-                        if (genPopProjection === 0 && genPopPct > 0) {
-                            genPopProjection = Math.round((genPopPct / 100) * 329900000);
+                        if (genPopPct === 0) genPopPct = 0.2;
+                    }
+                } else {
+                    // For behavioral items, try to get Gen Pop percentage and projection from loaded baseline data
+                    if (genPopBaselineData && genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
+                        const genPopItem = genPopBaselineData.behavioral[category].find(item => item.name === value);
+                        if (genPopItem) {
+                            genPopPct = genPopItem.pct || 0;
+                            genPopProjection = genPopItem.projection || 0;
                         }
-                        const isGenPopProfile = currentS3Key?.toUpperCase().includes('GEN_POP') ||
-                                               currentS3Key?.toUpperCase().includes('GENPOP') ||
-                                               currentProfileData?.name?.toUpperCase().includes('GEN POP');
-                        if (isGenPopProfile && genPopPct === 0) {
-                            genPopPct = pct;
-                        }
+                    }
+                    
+                    // Fallback: Use Category Share if Gen Pop baseline not available
+                    if (genPopPct === 0) {
+                        genPopPct = catShare > 0 ? catShare : 0;
+                    }
+                    
+                    // Fallback for genPopProjection: calculate from genPopPct if not available
+                    if (genPopProjection === 0 && genPopPct > 0) {
+                        genPopProjection = Math.round((genPopPct / 100) * 329900000);
+                    }
+                    
+                    // If this IS the Gen Pop profile, use profile pct as gen pop pct (they should be the same)
+                    const isGenPopProfile = currentS3Key?.toUpperCase().includes('GEN_POP') || 
+                                           currentS3Key?.toUpperCase().includes('GENPOP') ||
+                                           currentProfileData?.name?.toUpperCase().includes('GEN POP');
+                    if (isGenPopProfile && genPopPct === 0) {
+                        genPopPct = pct; // Use profile percentage as gen pop percentage
                     }
                 }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 100;
 
-                // Sample size: first look at D4 (Category Share on SAMPLE SIZE row); if D4 is 1000 or less use E4 (Original Raw Numbers) instead
+                // Sample size from column D (Category Share) on SAMPLE SIZE row, not E (Original Raw Numbers)
                 if (category === 'SAMPLE SIZE') {
-                    const d4 = parseFloat(row['Category Share']) || parseInt(row['Category Share']) || 0;
-                    const e4 = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, ''), 10) || 0;
-                    const possibleSize = (d4 > 1000 ? Math.round(d4) : 0) || (e4 > 0 ? e4 : 0) || Math.round(d4) || parseInt(row['Brand Penetration (Row)']) || 0;
+                    const possibleSize = parseInt(row['Category Share']) || 
+                                        parseInt(row['Original Raw Numbers']) || 
+                                        parseInt(row['Brand Penetration (Row)']) || 0;
                     if (possibleSize > 0) result.sampleSize = possibleSize;
                 }
                 // Projected sample size: column F (US Gen Pop Projection) on BRAND INPUT row (row 4 = F4)
@@ -27258,18 +27236,6 @@
                 }
             });
 
-            // If usual sample size is under 1000, use column E row 4 for Crosswalk Respondents and F3 for Projected US Gen Pop
-            if (result.sampleSize < 1000 && csvData[3]) {
-                const row4ColE = parseInt(String(csvData[3]['Original Raw Numbers'] || csvData[3][4] || '0').replace(/,/g, ''), 10) || 0;
-                if (row4ColE > 0) {
-                    result.sampleSize = row4ColE;
-                    if (csvData[2]) {
-                        const f3 = parseInt(String(csvData[2]['US Gen Pop Projection'] || csvData[2]['Gen Pop Projection'] || csvData[2][5] || '0').replace(/,/g, ''), 10) || 0;
-                        if (f3 > 0) result.projectedUS = f3;
-                    }
-                }
-            }
-
             normalizeAgeBucketsForDashboard(result);
 
             // Sort behavioral by percentage
@@ -27336,19 +27302,16 @@
                 return true;
             });
             for (const savedTab of deduped) {
-                const isGenPop = (savedTab.id || '').toLowerCase().includes('gen_pop');
-                const keyToFetch = (isGenPop && typeof GEN_POP_CANONICAL_KEY !== 'undefined') ? GEN_POP_CANONICAL_KEY : savedTab.id;
-                const tabId = (isGenPop && typeof GEN_POP_CANONICAL_KEY !== 'undefined') ? GEN_POP_CANONICAL_KEY : savedTab.id;
-                if (openProfileTabs.some(t => t.id === tabId)) continue;
+                if (openProfileTabs.some(t => t.id === savedTab.id)) continue;
                 try {
-                    const response = await fetch(`/api/get-csv-data/${encodeURIComponent(keyToFetch)}?_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
+                    const response = await fetch(`/api/get-csv-data/${encodeURIComponent(savedTab.id)}`, { credentials: 'same-origin' });
                     if (response.status === 401) continue;
                     const data = await response.json();
                     
                     if (data.success && data.data) {
                         const parsed = parseAllData(data.data);
                         openProfileTabs.push({
-                            id: tabId,
+                            id: savedTab.id,
                             name: savedTab.name || data.brand || 'Unknown',
                             dateRange: savedTab.dateRange || data.date_range || '',
                             data: data,
@@ -27563,13 +27526,51 @@
                         }
                     });
                 } else if (master === 'GEN POP') {
-                    // GEN POP: always one entry that loads the canonical file so Most Purchased Brands / Where They Shop never show old data
-                    const genPopId = typeof GEN_POP_CANONICAL_KEY !== 'undefined' ? GEN_POP_CANONICAL_KEY : (resolveGenPopFileName(profiles) || '');
-                    if (genPopId) {
-                        const idEsc = escapeIdForOnclick(genPopId);
-                        const isActive = selectedDashProfile === genPopId;
-                        html += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="Gen Pop 2026">Gen Pop 2026</div>`;
-                    }
+                    // GEN POP: no subcategory row; list profiles directly under main GEN POP. Use resolved key so only the preferred file shows (e.g. Gen_Pop_2026_... over Gen_Pop_03_04_...).
+                    const allItems = [];
+                    Object.values(subcats).forEach(items => allItems.push(...items));
+                    const preferredKey = resolveGenPopFileName(profiles);
+                    const genPopFiltered = preferredKey ? allItems.filter(p => (p.s3_key || p.job_id) === preferredKey) : allItems;
+                    const sortedItems = [...genPopFiltered].sort((a, b) => {
+                        const nameA = getProfileFullName(a).toLowerCase();
+                        const nameB = getProfileFullName(b).toLowerCase();
+                        return nameA.localeCompare(nameB);
+                    });
+                    const bySubject = {};
+                    sortedItems.forEach(p => {
+                        const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
+                        if (!bySubject[subj]) bySubject[subj] = [];
+                        bySubject[subj].push(p);
+                    });
+                    Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+                        const runs = bySubject[subj];
+                        const first = runs[0];
+                        const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
+                        const subjectExpanded = expandedDashSubjects.has(subj);
+                        if (runs.length === 1) {
+                            const id = first.s3_key || first.job_id;
+                            const idEsc = escapeIdForOnclick(id);
+                            const isActive = selectedDashProfile === id;
+                            const fullName = getProfileFullName(first);
+                            html += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(fullName)}">${escapeAttr(fullName)}</div>`;
+                        } else {
+                            const displayName = getProfileFullName(first);
+                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
+                                <span class="cat-arrow">▸</span>
+                                <span class="profile-cat-label">${escapeAttr(displayName)}</span>
+                                <span class="profile-cat-count">(${runs.length} date ranges)</span>
+                            </div>
+                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
+                                ${sortRunsByYearDesc(runs).map(p => {
+                                    const id = p.s3_key || p.job_id;
+                                    const idEsc = escapeIdForOnclick(id);
+                                    const isActive = selectedDashProfile === id;
+                                    const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
+                                    return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
+                                }).join('')}
+                            </div>`;
+                        }
+                    });
                 } else {
                     Object.keys(subcats).sort().forEach(cat => {
                         const items = subcats[cat];
@@ -27818,30 +27819,29 @@
         }
 
         async function selectDashboardProfile(profileId, forceReload) {
-            // Gen Pop: always use canonical key so we never load an old file (Most Purchased Brands / Where They Shop)
-            const isGenPop = profileId && String(profileId).toLowerCase().includes('gen_pop');
-            const keyToFetch = (isGenPop && typeof GEN_POP_CANONICAL_KEY !== 'undefined') ? GEN_POP_CANONICAL_KEY : profileId;
-            const keyForTab = (isGenPop && typeof GEN_POP_CANONICAL_KEY !== 'undefined') ? GEN_POP_CANONICAL_KEY : profileId;
+            // Check if profile is already open in a tab (skip if forceReload, e.g. after profile list refresh)
             if (!forceReload) {
-                const existingTab = openProfileTabs.find(t => t.id === keyForTab || (isGenPop && (t.id || '').toLowerCase().includes('gen_pop')));
+                const existingTab = openProfileTabs.find(t => t.id === profileId);
                 if (existingTab) {
-                    switchToProfileTab(existingTab.id);
+                    switchToProfileTab(profileId);
                     return;
                 }
             }
             
-            selectedDashProfile = keyForTab;
+            selectedDashProfile = profileId;
             renderDashboardProfileTree(dashboardProfiles);
             
+            // Track profile view
             trackActivity('profile_view', profileId);
             
+            // Load and display the profile data (with auto-retry at released S3 location if 404 on purgatory key)
             let profileLoadSucceeded = false;
             try {
-                const csvUrl = `/api/get-csv-data/${encodeURIComponent(keyToFetch)}?_t=${Date.now()}`;
+                const csvUrl = `/api/get-csv-data/${encodeURIComponent(profileId)}?_t=${Date.now()}`;
                 let response = await fetch(csvUrl, { credentials: 'same-origin', cache: 'no-store' });
                 if (response.status === 401) { window.location.href = '/login'; return; }
                 let data = await response.json();
-                let effectiveId = (data.s3_key && String(data.s3_key).toLowerCase().includes('gen_pop')) ? (typeof GEN_POP_CANONICAL_KEY !== 'undefined' ? GEN_POP_CANONICAL_KEY : profileId) : profileId;
+                let effectiveId = profileId;
 
                 // If 404 and this was a purgatory key, try the released location (same filename without purgatory/ prefix)
                 if (!data.success && response.status === 404 && profileId.startsWith('purgatory/')) {
@@ -27896,9 +27896,9 @@
                         parsed: parsed
                     };
                     
-                    // Gen Pop: only one tab; use canonical id and remove any other gen_pop tab so we never show old data
-                    if ((effectiveId || '').toLowerCase().includes('gen_pop')) {
-                        openProfileTabs = openProfileTabs.filter(t => !(t.id || '').toLowerCase().includes('gen_pop'));
+                    // If this was a forceReload (e.g. Gen Pop after profile refresh), remove any other tab for the same "profile" (other gen_pop key) to avoid duplicates
+                    if (forceReload && (effectiveId || '').toLowerCase().includes('gen_pop')) {
+                        openProfileTabs = openProfileTabs.filter(t => !(t.id || '').toLowerCase().includes('gen_pop') || t.id === effectiveId);
                     }
                     openProfileTabs.push(newTab);
                     activeProfileTabId = effectiveId;
@@ -28157,17 +28157,6 @@
                 if (dateRangeEl) {
                     dateRangeEl.textContent = dateRange ? `Date Range: ${dateRange}` : '';
                     dateRangeEl.style.display = dateRange ? 'block' : 'none';
-                }
-                const dataSourceEl = document.getElementById('dashDataSourceHeader');
-                const isGenPopProfile = (profileId || '').toString().toLowerCase().includes('gen_pop');
-                if (dataSourceEl) {
-                    if (isGenPopProfile) {
-                        const sourceFile = (tab.data && tab.data.s3_key) ? tab.data.s3_key : (typeof GEN_POP_CANONICAL_KEY !== 'undefined' ? GEN_POP_CANONICAL_KEY : profileId);
-                        dataSourceEl.textContent = 'Data source: ' + sourceFile;
-                        dataSourceEl.style.display = 'block';
-                    } else {
-                        dataSourceEl.style.display = 'none';
-                    }
                 }
                 const runsRow = document.getElementById('dashProfileRunsRow');
                 const runSelect = document.getElementById('dashRunSelect');
@@ -29645,34 +29634,7 @@
             lastRenderedDemographics = demographics || {};
             lastRenderedDemographicsIndex = demographicsIndex || {};
             lastRenderedDemographicsProjection = demographicsProjection || {};
-            // Fill missing Gen Pop % from baseline so indexing shows on age, income, sexual orientation, parental status, occupation
-            const effectiveGenPop = {};
-            const demoCatKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
-            demoCatKeys.forEach(cat => {
-                effectiveGenPop[cat] = { ...(demographicsGenPop[cat] || {}) };
-                const demoKeys = Object.keys(demographics[cat] || {});
-                const base = genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics[cat];
-                if (base) {
-                    demoKeys.forEach(k => {
-                        let v = effectiveGenPop[cat][k];
-                        if (v == null || v === 0) {
-                            v = base[k];
-                            if (v == null || v === 0) {
-                                const kl = String(k).trim().toLowerCase();
-                                for (const [bk, bv] of Object.entries(base)) {
-                                    if (bv != null && bv > 0 && String(bk).trim().toLowerCase() === kl) {
-                                        v = bv;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (v != null && v > 0) effectiveGenPop[cat][k] = v;
-                        }
-                    });
-                }
-            });
-            lastRenderedDemographicsGenPop = effectiveGenPop;
-            demographicsGenPop = effectiveGenPop;
+            lastRenderedDemographicsGenPop = demographicsGenPop || {};
             Object.values(charts).forEach(c => c.destroy());
             charts = {};
             currentDemoIndexes = demographicsIndex;

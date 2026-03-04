@@ -183,11 +183,7 @@
                 const val = row.Value || '';
                 const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || row['Percentage'] || 0) || 0;
                 const raw = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, ''), 10) || 0;
-                if (col === 'SAMPLE SIZE') {
-                    const d4 = parseFloat(row['Category Share']) || parseInt(row['Category Share']) || 0;
-                    const e4 = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, ''), 10) || 0;
-                    sampleSize = (d4 > 1000 ? Math.round(d4) : 0) || (e4 > 0 ? e4 : 0) || Math.round(d4);
-                }
+                if (col === 'SAMPLE SIZE') sampleSize = parseInt(row['Category Share'] || row['Original Raw Numbers'] || 0);
                 if (col === 'GENDER' && val) demographics.gender[val] = pct;
                 if (col === 'AGE' && val) {
                     demographics.age[val] = pct;
@@ -196,22 +192,12 @@
                 if (col === 'ETHNICITY' && val) demographics.ethnicity[displayEthnicityLabel(val)] = pct;
                 if (col === 'INCOME' && val) demographics.income[val] = pct;
             });
-            let projectedUS = 0;
-            if (sampleSize < 1000 && csvData[3]) {
-                const row4ColE = parseInt(String(csvData[3]['Original Raw Numbers'] || csvData[3][4] || '0').replace(/,/g, ''), 10) || 0;
-                if (row4ColE > 0) {
-                    sampleSize = row4ColE;
-                    if (csvData[2]) {
-                        const f3 = parseInt(String(csvData[2]['US Gen Pop Projection'] || csvData[2]['Gen Pop Projection'] || csvData[2][5] || '0').replace(/,/g, ''), 10) || 0;
-                        if (f3 > 0) projectedUS = f3;
-                    }
-                }
-            }
-            if (projectedUS === 0) projectedUS = Math.round((sampleSize / 10000000) * 324700000);
             if (Object.keys(ageRaw).length === 0 && Object.keys(demographics.age).length > 0 && sampleSize > 0) {
                 for (const [k, p] of Object.entries(demographics.age)) ageRaw[k] = Math.max(0, Math.round((p / 100) * sampleSize));
             }
             demographics.age = Object.keys(ageRaw).length > 0 ? normalizeAgeBucketsFromRaw(demographics.age, ageRaw) : normalizeAgeBucketsFromPct(demographics.age);
+            
+            const projectedUS = Math.round((sampleSize / 10000000) * 324700000);
             
             document.getElementById('content').innerHTML = `
                 <div class="stats-row">

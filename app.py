@@ -133,9 +133,7 @@ def redirect_if_must_reset_password():
 # ============================================================================
 
 S3_BUCKET = 'dashboard-inputs'
-# Canonical Gen Pop 2026 file. Only this file is used for Gen Pop: list_jobs shows one Gen Pop entry
-# with this key, get_csv_data(any gen_pop key) serves this file. Old Gen Pop keys in S3/cache are
-# ignored; you can delete other Gen_Pop_*.csv from S3 if you want to remove them permanently.
+# Canonical Gen Pop 2026 file - profile selector and get-csv-data always use this key so dashboard matches S3 link
 GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
@@ -1337,36 +1335,24 @@ def extract_demographics_from_csv(csv_content):
         return {}
 
 def extract_sample_size_from_csv(csv_content):
-    """Extract sample size from CSV: column D (Category Share) on SAMPLE SIZE row, or E (Original Raw Numbers).
-    If that value is under 1000, use column E of row 4 (0-based index 3) for Crosswalk Respondents."""
+    """Extract sample size from CSV: column D (Category Share) on SAMPLE SIZE row, not E (Original Raw Numbers)."""
     try:
-        rows = list(csv.reader(io.StringIO(csv_content)))
-        usual = None
-        for row in rows:
-            if len(row) > 0 and str(row[0]).strip().upper() == "SAMPLE SIZE":
-                d4, e4 = None, None
-                if len(row) > 3 and row[3]:
-                    try:
-                        d4 = int(float(str(row[3]).replace(",", "")))
-                    except (ValueError, TypeError):
-                        pass
-                if len(row) > 4 and row[4]:
-                    try:
-                        e4 = int(float(str(row[4]).replace(",", "")))
-                    except (ValueError, TypeError):
-                        pass
-                usual = (d4 if (d4 is not None and d4 > 1000) else None) or (e4 if (e4 is not None and e4 > 0) else None) or d4
-                break
-        if usual is not None and usual < 1000 and len(rows) > 3:
-            row4 = rows[3]
-            if len(row4) > 4 and row4[4]:
-                try:
-                    col_e = int(float(str(row4[4]).replace(",", "")))
-                    if col_e > 0:
-                        return col_e
-                except (ValueError, TypeError):
-                    pass
-        return usual
+        reader = csv.reader(io.StringIO(csv_content))
+        for row in reader:
+            if len(row) > 0 and str(row[0]).strip().upper() == 'SAMPLE SIZE':
+                # Column D = index 3 (Category Share); E = index 4 (Original Raw Numbers)
+                if len(row) > 3:
+                    val = row[3]
+                    n = int(float(str(val).replace(',', ''))) if val else None
+                    if n is not None:
+                        return n
+                if len(row) > 4:
+                    val = row[4]
+                    n = int(float(str(val).replace(',', ''))) if val else None
+                    if n is not None:
+                        return n
+                return None
+        return None
     except Exception as e:
         print(f"Error extracting sample size: {e}")
         return None
@@ -13129,17 +13115,7 @@ def extract_demographics_summary(csv_content):
             ) or 0
 
             if category == "SAMPLE SIZE":
-                d4 = row.get("Category Share")
-                e4 = row.get("Original Raw Numbers")
-                try:
-                    d_val = int(float(str(d4).replace(",", ""))) if d4 is not None and str(d4).strip() != "" else 0
-                except (ValueError, TypeError):
-                    d_val = 0
-                try:
-                    e_val = int(float(str(e4).replace(",", ""))) if e4 is not None and str(e4).strip() != "" else 0
-                except (ValueError, TypeError):
-                    e_val = 0
-                summary["sampleSize"] = d_val if d_val > 1000 else (e_val if e_val > 0 else d_val)
+                summary['sampleSize'] = int(row.get('Category Share', 0) or row.get('Original Raw Numbers', 0) or 0)
             elif category == 'BRAND INPUT':
                 summary['projectedUS'] = int(row.get('US Gen Pop Projection', 0) or 0)
             elif category == 'GENDER' and value:
@@ -13156,27 +13132,7 @@ def extract_demographics_summary(csv_content):
                 summary['income'][value] = pct
             elif category == 'ETHNICITY' and value:
                 summary['ethnicity'][value] = pct
-
-        # If usual sample size is under 1000, use column E row 4 for Crosswalk Respondents and F3 for Projected US Gen Pop
-        if summary["sampleSize"] < 1000 and len(df) > 3:
-            row4 = df.iloc[3]
-            col_e = row4.get("Original Raw Numbers") or (row4.iloc[4] if len(row4) > 4 else None)
-            if col_e is not None and str(col_e).strip() != "":
-                try:
-                    n = int(float(str(col_e).replace(",", "")))
-                    if n > 0:
-                        summary["sampleSize"] = n
-                        if len(df) > 2:
-                            row3 = df.iloc[2]
-                            f3 = row3.get("US Gen Pop Projection") or row3.get("Gen Pop Projection") or (row3.iloc[5] if len(row3) > 5 else None)
-                            if f3 is not None and str(f3).strip() != "":
-                                try:
-                                    summary["projectedUS"] = int(float(str(f3).replace(",", "")))
-                                except (ValueError, TypeError):
-                                    pass
-                except (ValueError, TypeError):
-                    pass
-
+        
         # Use raw counts to build new age buckets, then derive percentages.
         # Pipeline CSVs often have empty Original Raw Numbers for AGE; derive from pct and sample size.
         if not age_raw and summary["age"] and summary["sampleSize"] > 0:
@@ -13322,7 +13278,7 @@ def list_jobs():
         # Filter out OTHER and UNCATEGORIZED categories - these should never appear in profile selector
         job_list = [e for e in job_list if (e.get('category') or '').upper() not in ('OTHER', 'UNCATEGORIZED', '')]
         
-        # Gen Pop: only one entry, always canonical key. Any other Gen Pop keys from cache/S3 are dropped.
+        # Gen Pop: always show the canonical S3 key so profile selector only ever loads that file (no CMS/stale mapping)
         seen_gen_pop = False
         new_job_list = []
         for e in job_list:
@@ -13336,23 +13292,9 @@ def list_jobs():
                 e['job_id'] = GEN_POP_CANONICAL_KEY
                 e['project_name'] = e.get('project_name') or 'Gen Pop 2026'
                 e['display_name'] = e.get('display_name') or 'Gen Pop 2026'
-                e['category'] = 'GEN POP'
             new_job_list.append(e)
         job_list = new_job_list
-
-        # If no Gen Pop was in cache, inject the canonical entry so the dropdown always shows Gen Pop and links to the right file
-        if not seen_gen_pop:
-            job_list.append({
-                's3_key': GEN_POP_CANONICAL_KEY,
-                'job_id': GEN_POP_CANONICAL_KEY,
-                'project_name': 'Gen Pop 2026',
-                'display_name': 'Gen Pop 2026',
-                'category': 'GEN POP',
-                'status': 'cached',
-                'created_at': '',
-                'source': 's3',
-            })
-
+        
         # Restrict to runs the user is allowed to see (Run Access in Admin)
         allowed_runs = None
         try:
@@ -13366,10 +13308,10 @@ def list_jobs():
             allowed_set = set(allowed_runs or [])
             def job_allowed(e):
                 sk = e.get('s3_key') or ''
-                # Gen Pop: always allow the canonical entry so it displays and links to the correct file for everyone
-                if sk == GEN_POP_CANONICAL_KEY:
-                    return True
                 if sk in allowed_set:
+                    return True
+                # Gen Pop: if user has any gen_pop key in allowed_runs, allow the canonical Gen Pop entry
+                if sk == GEN_POP_CANONICAL_KEY and any('gen_pop' in (k or '').lower() for k in allowed_set):
                     return True
                 return False
             job_list = [e for e in job_list if job_allowed(e)]
