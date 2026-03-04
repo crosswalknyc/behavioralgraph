@@ -27359,8 +27359,52 @@
                     <div class="profile-cat-children ${isMasterExpanded ? 'open' : ''}" id="cat-${masterId}" style="padding-left: 0.5rem;">
                 `;
                 
-                // Sub-categories within master (TRENDS: no sub-dropdown, items directly under parent)
+                // Sub-categories within master (TRENDS / GEN POP: no sub-dropdown, items directly under parent)
                 if (master === 'TRENDS') {
+                    const allItems = [];
+                    Object.values(subcats).forEach(items => allItems.push(...items));
+                    const sortedItems = [...allItems].sort((a, b) => {
+                        const nameA = getProfileFullName(a).toLowerCase();
+                        const nameB = getProfileFullName(b).toLowerCase();
+                        return nameA.localeCompare(nameB);
+                    });
+                    const bySubject = {};
+                    sortedItems.forEach(p => {
+                        const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
+                        if (!bySubject[subj]) bySubject[subj] = [];
+                        bySubject[subj].push(p);
+                    });
+                    Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+                        const runs = bySubject[subj];
+                        const first = runs[0];
+                        const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
+                        const subjectExpanded = expandedDashSubjects.has(subj);
+                        if (runs.length === 1) {
+                            const id = first.s3_key || first.job_id;
+                            const idEsc = escapeIdForOnclick(id);
+                            const isActive = selectedDashProfile === id;
+                            const fullName = getProfileFullName(first);
+                            html += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(fullName)}">${escapeAttr(fullName)}</div>`;
+                        } else {
+                            const displayName = getProfileFullName(first);
+                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
+                                <span class="cat-arrow">▸</span>
+                                <span class="profile-cat-label">${escapeAttr(displayName)}</span>
+                                <span class="profile-cat-count">(${runs.length} date ranges)</span>
+                            </div>
+                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
+                                ${sortRunsByYearDesc(runs).map(p => {
+                                    const id = p.s3_key || p.job_id;
+                                    const idEsc = escapeIdForOnclick(id);
+                                    const isActive = selectedDashProfile === id;
+                                    const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
+                                    return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
+                                }).join('')}
+                            </div>`;
+                        }
+                    });
+                } else if (master === 'GEN POP') {
+                    // GEN POP: no subcategory row; list profiles directly under main GEN POP
                     const allItems = [];
                     Object.values(subcats).forEach(items => allItems.push(...items));
                     const sortedItems = [...allItems].sort((a, b) => {
@@ -29346,29 +29390,34 @@
                 const parseIncomeBracket = (key) => {
                     const k = (key || '').replace(/\s/g, '');
                     const lower = k.toLowerCase();
+                    // Strip commas; only treat as thousands when key has 'k' or number is small (e.g. "25" from "25k")
                     const toNum = (numStr, isThousands) => {
                         const n = parseInt(String(numStr).replace(/[^\d]/g, ''), 10);
-                        return (isThousands || lower.includes('k')) ? n * 1000 : n;
+                        if (isNaN(n)) return 0;
+                        if (lower.includes('k') || (isThousands && n < 1000)) return n * 1000;
+                        return n;
                     };
+                    // Allow commas in numbers: e.g. "25,000" or "Under $25,000" -> capture "25,000"
                     if (lower.includes('<') || lower.includes('under')) {
-                        const m = lower.match(/(\d+)\s*[k]?/);
+                        const m = lower.match(/(\d[\d,]*)\s*[k]?/);
                         const end = m ? toNum(m[1], true) : 40000;
                         return { start: 0, width: end };
                     }
-                    const rangeMatch = lower.match(/(\d+)\s*[k]?\s*-\s*\$?(\d+)\s*[k]?/);
+                    // Range e.g. "$25,000-$49,999" or "$100,000-$149,999" (commas in numbers)
+                    const rangeMatch = lower.match(/(\d[\d,]*)\s*[k]?\s*-\s*\$?\s*(\d[\d,]*)\s*[k]?/);
                     if (rangeMatch) {
                         const low = toNum(rangeMatch[1], true);
                         const high = toNum(rangeMatch[2], true);
                         return { start: low, width: high - low };
                     }
-                    const overMatch = lower.match(/(\d+)\s*[k]?\+/);
+                    const overMatch = lower.match(/(\d[\d,]*)\s*[k]?\+/);
                     if (overMatch) {
                         const start = toNum(overMatch[1], true);
                         return { start, width: 150000 }; // assume 150k span for open-ended
                     }
                     // Gen Pop: "$250,000 or More" (no plus sign)
                     if (lower.includes('or more') || lower.includes('and over')) {
-                        const m = lower.match(/(\d+)\s*[k,]?\s*\d*/);
+                        const m = lower.match(/(\d[\d,]*)\s*[k,]?\s*\d*/);
                         const start = m ? toNum(m[1], true) : 250000;
                         return { start, width: 150000 };
                     }

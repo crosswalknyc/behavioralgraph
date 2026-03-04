@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """
 Go through all CSV files in S3 bucket dashboard-inputs and set any row whose Value
-is a brand input (from the BRAND INPUT row) to 100% Brand Penetration (Row), Category Share,
-Original Raw Numbers = sample size, and US Gen Pop Projection accordingly.
-If a brand was in BRAND INPUT but does not appear as a Value anywhere, we skip it (no worries).
+exactly matches (case-insensitive) a brand listed in the BRAND INPUT row to:
+  100% Brand Penetration (Row), 100% Category Share,
+  Original Raw Numbers = sample size, US Gen Pop Projection = (sample_size/10M)*329.9M.
+
+Do nothing for:
+  - BRAND INPUT Value is "CSV", null, or empty (no brands to match).
+  - Row Value is null, empty, or does not match any brand (e.g. partial match, different spelling).
+  - Rows in metadata/demo columns (SAMPLE SIZE, AGE, INCOME, etc.); only behavioral/category rows.
+If a brand is in BRAND INPUT but never appears as a Value elsewhere, we skip it (no change).
 """
 
 import io
@@ -53,30 +59,41 @@ def get_brand_input_names_from_df(df):
 
 
 def value_matches_brand(value, brand_names_set):
-    """True if value (row Value) matches any brand in brand_names_set."""
-    if not value or not brand_names_set:
+    """True if value (row Value) exactly matches any brand in brand_names_set (case-insensitive, trim)."""
+    if not brand_names_set:
         return False
-    v = str(value).strip().upper()
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return False
+    s = str(value).strip()
+    if not s:
+        return False
+    v = s.upper()
     vns = v.replace(" ", "")
     return v in brand_names_set or vns in brand_names_set
 
 
 def get_sample_size_from_df(df):
-    """Read sample size from SAMPLE SIZE row (Original Raw Numbers or Category Share / Percentage)."""
+    """Read sample size from SAMPLE SIZE row. Prefer first non-zero among Original Raw Numbers, Category Share, Percentage."""
     col_col = df.columns[0] if len(df.columns) > 0 else "Column"
     mask = df[col_col].astype(str).str.strip().str.upper() == "SAMPLE SIZE"
     if not mask.any():
         return None
     row = df.loc[mask].iloc[0]
+    candidates = []
     for c in ["Original Raw Numbers", "Category Share", "Percentage"]:
         if c in df.columns:
             val = row.get(c)
             if pd.notna(val) and str(val).strip():
                 try:
-                    return int(float(str(val).replace(",", "")))
+                    n = int(float(str(val).replace(",", "")))
+                    candidates.append(n)
                 except (ValueError, TypeError):
                     pass
-    return None
+    # Return first non-zero (e.g. Category Share may have sample size when Original Raw Numbers is 0)
+    for n in candidates:
+        if n > 0:
+            return n
+    return candidates[0] if candidates else None
 
 
 def process_csv(content: str):
@@ -143,16 +160,17 @@ def main():
         aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
     )
 
-    print("Listing all CSV files in S3...", flush=True)
+    # Only root-level CSVs (no recursion into subfolders)
+    print("Listing root-level CSV files in S3...", flush=True)
     paginator = s3.get_paginator("list_objects_v2")
     keys = []
-    for page in paginator.paginate(Bucket=S3_BUCKET):
+    for page in paginator.paginate(Bucket=S3_BUCKET, Delimiter="/"):
         for obj in page.get("Contents", []):
             k = obj["Key"]
             if k.lower().endswith(".csv"):
                 keys.append(k)
 
-    print(f"Found {len(keys)} CSV file(s).", flush=True)
+    print(f"Found {len(keys)} root-level CSV file(s).", flush=True)
     updated = 0
     errors = []
 
