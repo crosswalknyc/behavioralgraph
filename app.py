@@ -9652,39 +9652,35 @@ def save_quick_selects():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# Default live feature flags (merge with saved so new keys like viewNumbers are always present)
+DEFAULT_LIVE_FEATURES = {
+    'compare': True, 'segment': True, 'execSummary': True, 'keyInsightBuilder': True,
+    'ecosystem': True, 'affinity': True, 'sponsorship': True, 'media': True,
+    'content': True, 'collaborate': True, 'deckBuilder': True, 'rankers': True,
+    'overlapAnalysis': True, 'benchmarking': True, 'gapAnalysis': True,
+    'insightsSummary': True, 'viewNumbers': True,
+}
+
+
 @app.route('/api/admin/live-features', methods=['GET'])
 @requires_auth
 def get_live_features():
     """Get live features configuration (available to all authenticated users to check visibility)."""
     try:
         live_features = load_json_from_s3(LIVE_FEATURES_FILE)
-        return jsonify({
-            'success': True,
-            'features': live_features.get('features', {})
-        })
+        saved = live_features.get('features', {})
+        # Merge with defaults so new keys (e.g. viewNumbers) are always present; saved values override
+        features = {**DEFAULT_LIVE_FEATURES, **saved}
+        resp = jsonify({'success': True, 'features': features})
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
     except Exception as e:
         print(f"❌ Error loading live features: {e}")
-        # Return all features as live by default
-        return jsonify({
-            'success': True,
-            'features': {
-                'compare': True,
-                'segment': True,
-                'execSummary': True,
-                'keyInsightBuilder': True,
-                'ecosystem': True,
-                'affinity': True,
-                'sponsorship': True,
-                'media': True,
-                'content': True,
-                'collaborate': True,
-                'deckBuilder': True,
-                'rankers': True,
-                'overlapAnalysis': True,
-                'benchmarking': True,
-                'gapAnalysis': True
-            }
-        })
+        resp = jsonify({'success': True, 'features': dict(DEFAULT_LIVE_FEATURES)})
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
 
 
 @app.route('/api/admin/live-features', methods=['POST'])
