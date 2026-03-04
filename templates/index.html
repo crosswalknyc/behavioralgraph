@@ -27316,16 +27316,19 @@
                 return true;
             });
             for (const savedTab of deduped) {
-                if (openProfileTabs.some(t => t.id === savedTab.id)) continue;
+                const isGenPop = (savedTab.id || '').toLowerCase().includes('gen_pop');
+                const keyToFetch = (isGenPop && typeof GEN_POP_CANONICAL_KEY !== 'undefined') ? GEN_POP_CANONICAL_KEY : savedTab.id;
+                const tabId = (isGenPop && typeof GEN_POP_CANONICAL_KEY !== 'undefined') ? GEN_POP_CANONICAL_KEY : savedTab.id;
+                if (openProfileTabs.some(t => t.id === tabId)) continue;
                 try {
-                    const response = await fetch(`/api/get-csv-data/${encodeURIComponent(savedTab.id)}`, { credentials: 'same-origin' });
+                    const response = await fetch(`/api/get-csv-data/${encodeURIComponent(keyToFetch)}?_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
                     if (response.status === 401) continue;
                     const data = await response.json();
                     
                     if (data.success && data.data) {
                         const parsed = parseAllData(data.data);
                         openProfileTabs.push({
-                            id: savedTab.id,
+                            id: tabId,
                             name: savedTab.name || data.brand || 'Unknown',
                             dateRange: savedTab.dateRange || data.date_range || '',
                             data: data,
@@ -27540,51 +27543,13 @@
                         }
                     });
                 } else if (master === 'GEN POP') {
-                    // GEN POP: no subcategory row; list profiles directly under main GEN POP. Use resolved key so only the preferred file shows (e.g. Gen_Pop_2026_... over Gen_Pop_03_04_...).
-                    const allItems = [];
-                    Object.values(subcats).forEach(items => allItems.push(...items));
-                    const preferredKey = resolveGenPopFileName(profiles);
-                    const genPopFiltered = preferredKey ? allItems.filter(p => (p.s3_key || p.job_id) === preferredKey) : allItems;
-                    const sortedItems = [...genPopFiltered].sort((a, b) => {
-                        const nameA = getProfileFullName(a).toLowerCase();
-                        const nameB = getProfileFullName(b).toLowerCase();
-                        return nameA.localeCompare(nameB);
-                    });
-                    const bySubject = {};
-                    sortedItems.forEach(p => {
-                        const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
-                        if (!bySubject[subj]) bySubject[subj] = [];
-                        bySubject[subj].push(p);
-                    });
-                    Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
-                        const runs = bySubject[subj];
-                        const first = runs[0];
-                        const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
-                        const subjectExpanded = expandedDashSubjects.has(subj);
-                        if (runs.length === 1) {
-                            const id = first.s3_key || first.job_id;
-                            const idEsc = escapeIdForOnclick(id);
-                            const isActive = selectedDashProfile === id;
-                            const fullName = getProfileFullName(first);
-                            html += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(fullName)}">${escapeAttr(fullName)}</div>`;
-                        } else {
-                            const displayName = getProfileFullName(first);
-                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
-                                <span class="cat-arrow">▸</span>
-                                <span class="profile-cat-label">${escapeAttr(displayName)}</span>
-                                <span class="profile-cat-count">(${runs.length} date ranges)</span>
-                            </div>
-                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
-                                ${sortRunsByYearDesc(runs).map(p => {
-                                    const id = p.s3_key || p.job_id;
-                                    const idEsc = escapeIdForOnclick(id);
-                                    const isActive = selectedDashProfile === id;
-                                    const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
-                                    return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
-                                }).join('')}
-                            </div>`;
-                        }
-                    });
+                    // GEN POP: always one entry that loads the canonical file so Most Purchased Brands / Where They Shop never show old data
+                    const genPopId = typeof GEN_POP_CANONICAL_KEY !== 'undefined' ? GEN_POP_CANONICAL_KEY : (resolveGenPopFileName(profiles) || '');
+                    if (genPopId) {
+                        const idEsc = escapeIdForOnclick(genPopId);
+                        const isActive = selectedDashProfile === genPopId;
+                        html += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="Gen Pop 2026">Gen Pop 2026</div>`;
+                    }
                 } else {
                     Object.keys(subcats).sort().forEach(cat => {
                         const items = subcats[cat];
@@ -27833,29 +27798,30 @@
         }
 
         async function selectDashboardProfile(profileId, forceReload) {
-            // Check if profile is already open in a tab (skip if forceReload, e.g. after profile list refresh)
+            // Gen Pop: always use canonical key so we never load an old file (Most Purchased Brands / Where They Shop)
+            const isGenPop = profileId && String(profileId).toLowerCase().includes('gen_pop');
+            const keyToFetch = (isGenPop && typeof GEN_POP_CANONICAL_KEY !== 'undefined') ? GEN_POP_CANONICAL_KEY : profileId;
+            const keyForTab = (isGenPop && typeof GEN_POP_CANONICAL_KEY !== 'undefined') ? GEN_POP_CANONICAL_KEY : profileId;
             if (!forceReload) {
-                const existingTab = openProfileTabs.find(t => t.id === profileId);
+                const existingTab = openProfileTabs.find(t => t.id === keyForTab || (isGenPop && (t.id || '').toLowerCase().includes('gen_pop')));
                 if (existingTab) {
-                    switchToProfileTab(profileId);
+                    switchToProfileTab(existingTab.id);
                     return;
                 }
             }
             
-            selectedDashProfile = profileId;
+            selectedDashProfile = keyForTab;
             renderDashboardProfileTree(dashboardProfiles);
             
-            // Track profile view
             trackActivity('profile_view', profileId);
             
-            // Load and display the profile data (with auto-retry at released S3 location if 404 on purgatory key)
             let profileLoadSucceeded = false;
             try {
-                const csvUrl = `/api/get-csv-data/${encodeURIComponent(profileId)}?_t=${Date.now()}`;
+                const csvUrl = `/api/get-csv-data/${encodeURIComponent(keyToFetch)}?_t=${Date.now()}`;
                 let response = await fetch(csvUrl, { credentials: 'same-origin', cache: 'no-store' });
                 if (response.status === 401) { window.location.href = '/login'; return; }
                 let data = await response.json();
-                let effectiveId = profileId;
+                let effectiveId = (data.s3_key && String(data.s3_key).toLowerCase().includes('gen_pop')) ? (typeof GEN_POP_CANONICAL_KEY !== 'undefined' ? GEN_POP_CANONICAL_KEY : profileId) : profileId;
 
                 // If 404 and this was a purgatory key, try the released location (same filename without purgatory/ prefix)
                 if (!data.success && response.status === 404 && profileId.startsWith('purgatory/')) {
@@ -27910,9 +27876,9 @@
                         parsed: parsed
                     };
                     
-                    // If this was a forceReload (e.g. Gen Pop after profile refresh), remove any other tab for the same "profile" (other gen_pop key) to avoid duplicates
-                    if (forceReload && (effectiveId || '').toLowerCase().includes('gen_pop')) {
-                        openProfileTabs = openProfileTabs.filter(t => !(t.id || '').toLowerCase().includes('gen_pop') || t.id === effectiveId);
+                    // Gen Pop: only one tab; use canonical id and remove any other gen_pop tab so we never show old data
+                    if ((effectiveId || '').toLowerCase().includes('gen_pop')) {
+                        openProfileTabs = openProfileTabs.filter(t => !(t.id || '').toLowerCase().includes('gen_pop'));
                     }
                     openProfileTabs.push(newTab);
                     activeProfileTabId = effectiveId;
