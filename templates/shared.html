@@ -192,6 +192,10 @@
                 if (col === 'ETHNICITY' && val) demographics.ethnicity[displayEthnicityLabel(val)] = pct;
                 if (col === 'INCOME' && val) demographics.income[val] = pct;
             });
+            if (sampleSize < 1000 && csvData[3]) {
+                const row4ColE = parseInt(String(csvData[3]['Original Raw Numbers'] || csvData[3][4] || '0').replace(/,/g, ''), 10) || 0;
+                if (row4ColE > 0) sampleSize = row4ColE;
+            }
             if (Object.keys(ageRaw).length === 0 && Object.keys(demographics.age).length > 0 && sampleSize > 0) {
                 for (const [k, p] of Object.entries(demographics.age)) ageRaw[k] = Math.max(0, Math.round((p / 100) * sampleSize));
             }
