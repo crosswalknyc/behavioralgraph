@@ -710,7 +710,7 @@ RECLASSIFY_SECTIONS = [
     'Writer/Director/Author/Artist'
 ]
 
-# GenPop demographics (2026 US Census projections - UPDATE 2026)
+# GenPop demographics (from Gen Pop single sheet.xlsx Add'l Cuts - hardcoded when Gen Pop box checked)
 GENPOP_DEMOGRAPHICS = [
     ("AGE", "25-34", 13.2),
     ("AGE", "18-24", 9.7),
@@ -720,53 +720,57 @@ GENPOP_DEMOGRAPHICS = [
     ("AGE", "17 and Under", 19.6),
     ("AGE", "55-64", 12.5),
     ("AGE", "65 or Older", 19.1),
-    ("GENDER", "Female", 50.83),
-    ("GENDER", "Male", 49.17),
-    ("GENDER", "Trans Male", 0.0),
-    ("GENDER", "Trans Female", 0.0),
-    ("GENDER", "Non-Binary", 0.0),
+    ("GENDER", "Male", 47.892),
+    ("GENDER", "Female", 49.684),
+    ("GENDER", "Trans Male", 0.576),
+    ("GENDER", "Trans Female", 0.469),
+    ("GENDER", "Non-Binary", 1.379),
     ("GENDER", "Prefer Not to Say", 0.0),
-    ("ETHNICITY", "White", 59.0),
-    ("ETHNICITY", "Black or African American", 13.0),
-    ("ETHNICITY", "Hispanic or Latino", 18.0),
-    ("ETHNICITY", "Asian", 6.0),
-    ("ETHNICITY", "Another Race/Ethnicity", 4.0),
+    ("ETHNICITY", "White", 57.786),
+    ("ETHNICITY", "Black or African American", 11.86),
+    ("ETHNICITY", "Hispanic or Latino", 18.02),
+    ("ETHNICITY", "Asian", 6.173),
+    ("ETHNICITY", "Native American / Alaska Native", 1.0),
+    ("ETHNICITY", "Another Race/Ethnicity", 5.16),
     ("EDUCATION", "High School or Less", 38.1),
-    ("EDUCATION", "Trade School", 4.3),
-    ("EDUCATION", "Some College / Associate Degree", 22.0),
-    ("EDUCATION", "Bachelor's Degree", 22.30),
-    ("EDUCATION", "Graduate or Professional Degree", 13.3),
+    ("EDUCATION", "Trade School", 4.299),
+    ("EDUCATION", "Some College / Associate Degree", 21.997),
+    ("EDUCATION", "Bachelor's Degree", 22.3),
+    ("EDUCATION", "Graduate or Professional Degree", 13.298),
     ("EDUCATION", "Prefer Not to Say", 0.0),
-    ("INCOME", "$25,000 - $49,999", 0.0),
-    ("INCOME", "$50,000 - $74,999", 40.6),
-    ("INCOME", "$75,000 - $99,999", 19.1338),
-    ("INCOME", "$100,000 - $149,999", 21.4342),
-    ("INCOME", "$150,000 - $249,999", 10.637),
-    ("INCOME", "$250,000 or More", 8.1949),
-    ("RELATIONSHIP", "Single", 28.9944),
-    ("RELATIONSHIP", "In a Relationship", 28.5708),
-    ("RELATIONSHIP", "Divorced or Separated", 15.1939),
-    ("RELATIONSHIP", "Married", 27.2408),
+    ("INCOME", "Under $25,000", 8.937),
+    ("INCOME", "$25,000 - $49,999", 13.286),
+    ("INCOME", "$50,000 - $74,999", 13.868),
+    ("INCOME", "$75,000 - $99,999", 12.015),
+    ("INCOME", "$100,000 - $149,999", 19.331),
+    ("INCOME", "$150,000 - $249,999", 19.424),
+    ("INCOME", "$250,000 or More", 13.139),
+    ("RELATIONSHIP", "Married", 44.7),
+    ("RELATIONSHIP", "In a Relationship", 4.299),
+    ("RELATIONSHIP", "Single", 34.1),
+    ("RELATIONSHIP", "Divorced or Separated", 11.3),
+    ("RELATIONSHIP", "Widowed", 5.6),
     ("RELATIONSHIP", "Prefer Not to Say", 0.0),
-    ("SEXUAL_ORIENTATION", "Straight / Heterosexual", 39.3342),
-    ("SEXUAL_ORIENTATION", "Gay or Lesbian", 0.0),
-    ("SEXUAL_ORIENTATION", "Another Sexual Orientation", 0.0),
-    ("SEXUAL_ORIENTATION", "Prefer Not to Say", 60.6658),
-    ("PARENTAL_STATUS", "No Children", 52.0833),
-    ("PARENTAL_STATUS", "Has Children", 27.8437),
-    ("PARENTAL_STATUS", "Prefer Not to Say", 20.0729),
-    ("OCCUPATION", "Sales & Retail", 15.36),
-    ("OCCUPATION", "Management, Business & Professional", 32.52),
-    ("OCCUPATION", "Education or Library Services", 14.3),
-    ("OCCUPATION", "Healthcare Practitioners or Support", 15.0),
-    ("OCCUPATION", "Service & Hospitality", 5.5),
-    ("OCCUPATION", "Skilled Trades/Construction or Maintenance", 2.84),
-    ("OCCUPATION", "Agriculture & Outdoor", 2.65),
-    ("OCCUPATION", "Transportation & Logistics", 2.4),
-    ("OCCUPATION", "Manufacturing & Production", 2.38),
-    ("OCCUPATION", "Public Safety & Protective Services", 2.34),
-    ("OCCUPATION", "Science, Technology & Technical Professions", 3.06),
-    ("OCCUPATION", "Other", 5.0)
+    ("SEXUAL_ORIENTATION", "Straight / Heterosexual", 88.5),
+    ("SEXUAL_ORIENTATION", "Gay or Lesbian", 6.3),
+    ("SEXUAL_ORIENTATION", "Another Sexual Orientation", 5.2),
+    ("SEXUAL_ORIENTATION", "Prefer Not to Say", 0.0),
+    ("PARENTAL_STATUS", "Has Children", 43.4),
+    ("PARENTAL_STATUS", "No Children", 56.6),
+    ("PARENTAL_STATUS", "Prefer Not to Say", 0.0),
+    ("OCCUPATION", "Management, Business & Professional", 28.7),
+    ("OCCUPATION", "Healthcare Practitioners or Support", 11.0),
+    ("OCCUPATION", "Education or Library Services", 5.8),
+    ("OCCUPATION", "Service & Hospitality", 13.7),
+    ("OCCUPATION", "Manufacturing & Production", 5.7),
+    ("OCCUPATION", "Skilled Trades/Construction or Maintenance", 8.0),
+    ("OCCUPATION", "Agriculture & Outdoor", 0.3),
+    ("OCCUPATION", "Public Safety & Protective Services", 2.4),
+    ("OCCUPATION", "Transportation & Logistics", 8.9),
+    ("OCCUPATION", "Science, Technology & Technical Professions", 6.0),
+    ("OCCUPATION", "Legal", 0.8),
+    ("OCCUPATION", "Sales & Retail", 8.7),
+    ("OCCUPATION", "Other", 0.0)
 ]
 
 # GenPop LOCATION: 210 DMAs and % of US from DMAs.xlsx (hardcoded)
@@ -1764,7 +1768,7 @@ def get_user_inputs():
             "GENDER": "Gender (N for no or Female, Male, Trans Male, Trans Female, Non-Binary): ",
             "AGE": "Age group (N for no or <16, 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+): ",
             "ETHNICITY": "Ethnicity (N for no or White, Hispanic or Latino, Another Race/Ethnicity, Black or African American, Asian): ",
-            "INCOME": "HHI (N for no or $25,000 - $49,999, $50,000 - $74,999, $75,000 - $99,999, $100,000 - $149,999, $150,000 - $249,999, $250,000 or More): ",
+            "INCOME": "HHI (N for no or Under $25,000, $25,000 - $49,999, $50,000 - $74,999, $75,000 - $99,999, $100,000 - $149,999, $150,000 - $249,999, $250,000 or More): ",
             "EDUCATION": "Education (N for no or Bachelor's Degree, High School or Less, Graduate or Professional Degree, Some College / Associate Degree, Prefer Not to Say): ",
             "RELATIONSHIP": "Relationship (N for no or Single, Married, In a Relationship, Divorced or Separated, Prefer Not to Say): ",
             "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Straight / Heterosexual, Gay or Lesbian, Another Sexual Orientation, Prefer Not to Say): ",
@@ -1793,7 +1797,7 @@ def get_user_inputs():
                 "White", "Hispanic or Latino", "Another Race/Ethnicity", "Black or African American", "Asian"
             ],
             "INCOME": [
-                "$25,000 - $49,999", "$50,000 - $74,999", "$75,000 - $99,999", "$100,000 - $149,999", "$150,000 - $249,999", "$250,000 or More"
+                "Under $25,000", "$25,000 - $49,999", "$50,000 - $74,999", "$75,000 - $99,999", "$100,000 - $149,999", "$150,000 - $249,999", "$250,000 or More"
             ],
             "EDUCATION": [
                 "Bachelor's Degree", "High School or Less", "Graduate or Professional Degree", "Some College / Associate Degree", "Prefer Not to Say"
@@ -1902,9 +1906,9 @@ age_total_caps = pd.DataFrame({
 age_total_caps['AGE'] = age_total_caps['AGE'].apply(normalize_demo_value)
 
 income_caps = pd.DataFrame({
-    'INCOME': ['$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999',
+    'INCOME': ['Under $25,000', '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999',
                '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or More'],
-    'MAX_COUNT': [2000000, 4000000, 1913380, 2143420, 1063700, 819490]
+    'MAX_COUNT': [893700, 1328600, 1386800, 1201500, 1933100, 1942400, 1313900]
 })
 income_caps['INCOME'] = income_caps['INCOME'].apply(normalize_demo_value)
 
@@ -1922,8 +1926,8 @@ sexual_orientation_caps = pd.DataFrame({
 sexual_orientation_caps['SEXUAL_ORIENTATION'] = sexual_orientation_caps['SEXUAL_ORIENTATION'].apply(normalize_demo_value)
 
 relationship_caps = pd.DataFrame({
-    'RELATIONSHIP': ['Single', 'Married', 'In a Relationship', 'Divorced or Separated', 'Prefer Not to Say'],
-    'MAX_COUNT': [2859000, 2859000, 2781000, 1501000, 500000]
+    'RELATIONSHIP': ['Single', 'Married', 'In a Relationship', 'Divorced or Separated', 'Widowed', 'Prefer Not to Say'],
+    'MAX_COUNT': [3410000, 4470000, 429900, 1130000, 560000, 0]
 })
 relationship_caps['RELATIONSHIP'] = relationship_caps['RELATIONSHIP'].apply(normalize_demo_value)
 
@@ -1934,11 +1938,11 @@ parental_status_caps = pd.DataFrame({
 parental_status_caps['PARENTAL_STATUS'] = parental_status_caps['PARENTAL_STATUS'].apply(normalize_demo_value)
 
 occupation_caps = pd.DataFrame({
-    'OCCUPATION': ['Sales & Retail', 'Management, Business & Professional', 'Education or Library Services',
-                   'Healthcare Practitioners or Support', 'Service & Hospitality', 'Skilled Trades/Construction or Maintenance',
-                   'Agriculture & Outdoor', 'Transportation & Logistics', 'Manufacturing & Production',
-                   'Public Safety & Protective Services', 'Science, Technology & Technical Professions', 'Other'],
-    'MAX_COUNT': [1536000, 4439000, 1430000, 2436000, 550000, 284000, 265000, 240000, 238000, 234000, 309000, 500000]
+    'OCCUPATION': ['Management, Business & Professional', 'Healthcare Practitioners or Support', 'Education or Library Services',
+                   'Service & Hospitality', 'Manufacturing & Production', 'Skilled Trades/Construction or Maintenance',
+                   'Agriculture & Outdoor', 'Public Safety & Protective Services', 'Transportation & Logistics',
+                   'Science, Technology & Technical Professions', 'Legal', 'Sales & Retail', 'Other'],
+    'MAX_COUNT': [2870000, 1100000, 580000, 1370000, 570000, 800000, 30000, 240000, 890000, 600000, 80000, 870000, 0]
 })
 occupation_caps['OCCUPATION'] = occupation_caps['OCCUPATION'].apply(normalize_demo_value)
 # Location caps for major US DMAs - removed to allow all DMAs to display naturally
@@ -10195,7 +10199,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             'Male', 'Female', 'Trans Male', 'Trans Female', 'Non-Binary', 'Prefer Not to Say'
         ],
         'INCOME': [
-            '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or More'
+            'Under $25,000', '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or More'
         ],
         'AGE': [
             '31-40', '41-59', '26-30', '21-25', '<16', '18-20', '60+', '16-18'
@@ -10579,16 +10583,16 @@ REQUIRED_DEMOGRAPHICS = {
         'High School or Less', 'Trade School', 'Some College / Associate Degree', "Bachelor's Degree", 'Graduate or Professional Degree', 'Prefer Not to Say'
     ],
     'ETHNICITY': [
-        'White', 'Black or African American', 'Hispanic or Latino', 'Asian', 'Another Race/Ethnicity',
+        'White', 'Black or African American', 'Hispanic or Latino', 'Asian', 'Native American / Alaska Native', 'Another Race/Ethnicity',
     ],
     'GENDER': [
-        'Female', 'Male', 'Trans Female', 'Trans Male', 'Non-Binary'
+        'Female', 'Male', 'Trans Female', 'Trans Male', 'Non-Binary', 'Prefer Not to Say'
     ],
     'INCOME': [
-        '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or More'
+        'Under $25,000', '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999', '$250,000 or More'
     ],
     'RELATIONSHIP': [
-        'Single', 'Married', 'In a Relationship', 'Divorced or Separated', 'Prefer Not to Say'
+        'Single', 'Married', 'In a Relationship', 'Divorced or Separated', 'Widowed', 'Prefer Not to Say'
     ],
     'SEXUAL_ORIENTATION': [
         'Straight / Heterosexual', 'Gay or Lesbian', 'Another Sexual Orientation', 'Prefer Not to Say'
