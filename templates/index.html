@@ -15953,7 +15953,7 @@
                     genPopKey = resolveGenPopFileName(jobs);
                 }
                 if (!genPopKey) {
-                    const response = await fetch('/api/jobs?refresh=1', { credentials: 'same-origin' });
+                    const response = await fetch(`/api/jobs?refresh=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
                     const data = await response.json();
                     const list = (data && data.jobs) ? data.jobs : [];
                     genPopKey = resolveGenPopFileName(list);
@@ -26496,7 +26496,7 @@
 
             async function loadProfileRerunList() {
                 try {
-                    const res = await fetch('/api/jobs?refresh=1', { credentials: 'same-origin' });
+                    const res = await fetch(`/api/jobs?refresh=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
                     const data = await res.json().catch(() => ({}));
                     profileRerunList = (data.jobs || []).filter(j => (j.s3_key || j.job_id) && (j.status === 'cached' || j.status === 'completed'));
                     renderProfileRerunDropdown(profileRerunList);
@@ -27704,7 +27704,7 @@
             clearSessionJobsCache();
             const container = document.getElementById('dashProfileTree');
             if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Refreshing...</div>';
-            const res = await fetch('/api/jobs?refresh=1', { credentials: 'same-origin' });
+            const res = await fetch(`/api/jobs?refresh=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
                 if (data.jobs) { setSessionJobsCache(data); dashboardProfiles = data.jobs; renderDashboardProfileTree(dashboardProfiles); }
@@ -28181,8 +28181,8 @@
                     if (openProfileTabs.length === 0) restoreSavedTabs();
                     return;
                 }
-                // First load: refresh from S3 so new profiles show up, then cache for session
-                const response = await fetch('/api/jobs?refresh=1', { credentials: 'same-origin' });
+                // First load: refresh from S3 so new profiles show up, then cache for session (cache-bust so browser doesn't serve stale list)
+                const response = await fetch(`/api/jobs?refresh=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
                 
                 // Handle authentication errors
                 if (response.status === 401) {

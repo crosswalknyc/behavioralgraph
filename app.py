@@ -6498,6 +6498,29 @@ def view_shared(share_id):
                          share_id=share_id)
 
 
+def _preferred_gen_pop_key(s3_key):
+    """If s3_key is a Gen Pop key without Gen_Pop_YYYY_ prefix (e.g. Gen_Pop_03_04_2026_04_29.csv),
+    return the preferred key with explicit year (e.g. Gen_Pop_2026_03_04_2026_04_29.csv)."""
+    if not s3_key or '.csv' not in s3_key:
+        return None
+    key_lower = s3_key.lower().strip()
+    if 'gen_pop' not in key_lower:
+        return None
+    # Already has Gen_Pop_YYYY_ (4 digits right after gen_pop_)
+    if re.match(r'^gen_pop_\d{4}_', key_lower):
+        return None
+    # Pattern Gen_Pop_MM_DD_YYYY_MM_DD -> try Gen_Pop_YYYY_MM_DD_YYYY_MM_DD
+    base = key_lower.replace('.csv', '')
+    match = re.match(r'^gen_pop_(\d{2})_(\d{2})_(\d{4})_(\d{2})_(\d{2})$', base)
+    if not match:
+        return None
+    mm1, dd1, year, mm2, dd2 = match.groups()
+    preferred = f"Gen_Pop_{year}_{mm1}_{dd1}_{year}_{mm2}_{dd2}.csv"
+    if preferred.lower() == key_lower:
+        return None
+    return preferred
+
+
 @app.route('/api/get-csv-data/<path:s3_key>')
 @requires_auth
 def get_csv_data(s3_key):
@@ -6550,16 +6573,26 @@ def get_csv_data(s3_key):
                 row['Value'] = 'Hispanic or Latino'
         return csv_content, df, brand_name, date_range, data
     
+    # Prefer Gen_Pop_YYYY_... over Gen_Pop_MM_DD_... when both exist (same data, correct file)
+    effective_key = s3_key
+    preferred = _preferred_gen_pop_key(s3_key)
+    if preferred:
+        try:
+            s3_client.head_object(Bucket=S3_BUCKET, Key=preferred)
+            effective_key = preferred
+            print(f"📂 Using preferred Gen Pop key: {effective_key}")
+        except Exception:
+            pass
     try:
-        print(f"📂 Fetching from S3: {S3_BUCKET}/{s3_key}")
-        csv_content, df, brand_name, date_range, data = _fetch_and_return(s3_key)
+        print(f"📂 Fetching from S3: {S3_BUCKET}/{effective_key}")
+        csv_content, df, brand_name, date_range, data = _fetch_and_return(effective_key)
         print(f"✅ Got CSV content: {len(csv_content)} bytes for brand: {brand_name}")
         return jsonify({
             'success': True,
             'data': data,
             'brand': brand_name,
             'date_range': date_range,
-            's3_key': s3_key
+            's3_key': effective_key
         })
     except s3_client.exceptions.NoSuchKey:
         # File not in S3 (e.g. released from purgatory — key was purgatory/... and is now at root)
