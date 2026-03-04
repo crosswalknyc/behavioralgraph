@@ -15906,7 +15906,7 @@
             }
         }
 
-        // Resolve Gen Pop filename: of all jobs with "gen pop" in the name, pick the one with the most recent year in the filename (e.g. 2026 over 2025).
+        // Resolve Gen Pop filename: use the file with "gen pop" (or gen_pop) + underscore + year; pick the one with the most recent year (e.g. Gen_Pop_2026_... over Gen_Pop_2025_...).
         function resolveGenPopFileName(jobs) {
             const genPopJobs = (jobs || []).filter(j => {
                 const key = (j.s3_key || j.job_id || '').toLowerCase();
@@ -15914,10 +15914,17 @@
                 return key.includes('gen_pop') || key.includes('gen pop') || name.includes('gen pop') || name.includes('gen_pop');
             });
             if (genPopJobs.length === 0) return null;
-            const yearInKey = (key) => {
+            // Prefer year from pattern Gen_Pop_YYYY (year immediately after gen_pop_)
+            const yearFromGenPopPrefix = (key) => {
+                const k = (key || '').toLowerCase();
+                const match = k.match(/gen_pop_(\d{4})/);
+                return match ? parseInt(match[1], 10) : 0;
+            };
+            const yearAnywhere = (key) => {
                 const m = (key || '').match(/\b(20[2-3]\d)\b/g);
                 return m ? Math.max(...m.map(Number)) : 0;
             };
+            const yearInKey = (key) => yearFromGenPopPrefix(key) || yearAnywhere(key);
             let best = genPopJobs[0];
             let bestYear = yearInKey(best.s3_key || best.job_id);
             for (let i = 1; i < genPopJobs.length; i++) {
@@ -28196,6 +28203,18 @@
                 const profiles = data.jobs || [];
                 renderDashboardProfileTree(profiles);
                 
+                // Reload Gen Pop baseline so new/updated Gen Pop file in S3 is used (e.g. after upload)
+                if (typeof loadGenPopBaseline === 'function') {
+                    loadGenPopBaseline().then(() => {
+                        if (currentDashboardData && genPopBaselineData) {
+                            renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, genPopBaselineData.demographics || {});
+                            if (currentDashboardData.behavioral) renderBehavioralCards(currentDashboardData.behavioral);
+                            if (Array.isArray(currentDashboardData.locations)) renderLocationTable(currentDashboardData.locations);
+                            if (typeof renderDemoInsights === 'function') renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, genPopBaselineData.demographics || {});
+                        }
+                    });
+                }
+                
                 // Restore saved tabs (only once after initial load)
                 if (openProfileTabs.length === 0) {
                     restoreSavedTabs();
@@ -29746,9 +29765,12 @@
                 plugins: [ChartDataLabels]
             });
 
-            // Ethnicity - with Gen Pop in legend (green/red based on index). Latino in all caps on demographics.
+            // Ethnicity - with Gen Pop in legend (green/red based on index). All labels in ALL CAPS.
             const ethLabels = Object.keys(demographics.ethnicity);
-            const ethDisplayLabels = ethLabels.map(l => (l && l.toLowerCase()) === 'latino' || (l && l.toLowerCase()) === 'latinx' ? 'Hispanic or Latino' : l);
+            const ethDisplayLabels = ethLabels.map(l => {
+                const display = (l && l.toLowerCase()) === 'latino' || (l && l.toLowerCase()) === 'latinx' ? 'Hispanic or Latino' : (l || '');
+                return String(display).toUpperCase();
+            });
             const ethGenPop = ethLabels.map(k => demographicsGenPop.ethnicity?.[k] || 0);
             const ethPcts = Object.values(demographics.ethnicity);
             const ethData = isProjection
