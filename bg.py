@@ -725,7 +725,7 @@ GENPOP_DEMOGRAPHICS = [
     ("GENDER", "Trans Male", 0.9957),
     ("GENDER", "Trans Female", 1.2588),
     ("GENDER", "Non-Binary", 2.0926),
-    ("GENDER", "Prefer not to say", 0.0926),
+    ("GENDER", "Prefer Not to Say", 0.0926),
     ("ETHNICITY", "White", 59.0489),
     ("ETHNICITY", "Black or African American", 14.3119),
     ("ETHNICITY", "Hispanic or Latino", 18.6083),
@@ -746,7 +746,7 @@ GENPOP_DEMOGRAPHICS = [
     ("RELATIONSHIP", "Divorced", 15.1939),
     ("RELATIONSHIP", "Married", 27.2408),
     ("SEXUAL_ORIENTATION", "Yes", 39.3342),
-    ("SEXUAL_ORIENTATION", "Prefer not to say", 60.6658),
+    ("SEXUAL_ORIENTATION", "Prefer Not to Say", 60.6658),
     ("PARENTAL_STATUS", "Doesn't have Kids", 52.0833),
     ("PARENTAL_STATUS", "Has Kids", 27.8437),
     ("PARENTAL_STATUS", "Other", 20.0729),
@@ -1547,13 +1547,13 @@ def get_user_inputs():
     
     if use_demographics == 'Y':
         fields = {
-            "GENDER": "Gender (N for no or Female, Male, Trans Male, Trans Female, Non-binary): ",
+            "GENDER": "Gender (N for no or Female, Male, Trans Male, Trans Female, Non-Binary): ",
             "AGE": "Age group (N for no or <16, 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+): ",
             "ETHNICITY": "Ethnicity (N for no or White, Hispanic or Latino, Another Race/Ethnicity, Black or African American, Asian): ",
             "INCOME": "HHI (N for no or $40K - $60K, $60K - $75K, $75K - $100K, $100K - $150K, $150K - $250K, $250K+): ",
             "EDUCATION": "Education (N for no or Complete College/University, Completed HS only, Completed Grad School, None): ",
             "RELATIONSHIP": "Relationship (N for no or Single, In a Relationship, Married, Other, Divorced): ",
-            "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Yes, No, Prefer not to say): ",
+            "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Yes, No, Prefer Not to Say): ",
             "PARENTAL_STATUS": "Parental Status (N for no or Doesn't have Kids, Has Kids, Other): "
         }
         for k, prompt in fields.items():
@@ -1570,7 +1570,7 @@ def get_user_inputs():
     if scale_demo == 'Y':
         category_options = {
             "GENDER": [
-                "Female", "Male", "Trans Male", "Trans Female", "Non-binary"
+                "Female", "Male", "Trans Male", "Trans Female", "Non-Binary"
             ],
             "AGE": [
                 "<16", "16-18", "18-20", "21-25", "26-30", "31-40", "41-59", "60+"
@@ -1588,7 +1588,7 @@ def get_user_inputs():
                 "Single", "In a Relationship", "Married", "Other", "Divorced"
             ],
             "SEXUAL_ORIENTATION": [
-                "No", "Prefer not to say", "Yes"
+                "No", "Prefer Not to Say", "Yes"
             ],
             "PARENTAL_STATUS": [
                 "Doesn't have Kids", "Has Kids", "Other"
@@ -1669,7 +1669,7 @@ ethnicity_age_caps['ETHNICITY'] = ethnicity_age_caps['ETHNICITY'].apply(normaliz
 
 gender_age_caps = pd.DataFrame({
     'AGE': ['<16','16-18','19-20','21-25','26-30','31-40','41-59','60+'] * 5,
-    'GENDER': ['Male']*8 + ['Female']*8 + ['Trans Male']*8 + ['Trans Female']*8 + ['Non-binary']*8,
+    'GENDER': ['Male']*8 + ['Female']*8 + ['Trans Male']*8 + ['Trans Female']*8 + ['Non-Binary']*8,
     'MAX_COUNT': [
         879182,161965,136299,333259,319587,643854,1181976,1160634,
         841396,155581,132003,327105,317297,649770,1231761,1337071,
@@ -1702,7 +1702,7 @@ education_caps['EDUCATION'] = education_caps['EDUCATION'].apply(normalize_demo_v
 
 # Additional cap tables for other demographic categories
 sexual_orientation_caps = pd.DataFrame({
-    'SEXUAL_ORIENTATION': ['Yes', 'No', 'Prefer not to say'],
+    'SEXUAL_ORIENTATION': ['Yes', 'No', 'Prefer Not to Say'],
     'MAX_COUNT': [815000, 8625000, 1258000]
 })
 sexual_orientation_caps['SEXUAL_ORIENTATION'] = sexual_orientation_caps['SEXUAL_ORIENTATION'].apply(normalize_demo_value)
@@ -3439,7 +3439,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         cur.execute("""
             CREATE OR REPLACE TEMP TABLE DEMO_COUNTS AS
             WITH long AS (
-                SELECT 'GENDER' AS "COLUMN", GENDER AS "VALUE" FROM TEMP_DEMOS WHERE GENDER IN ('Female', 'Male', 'Trans Male', 'Trans Female', 'Non-binary')
+                SELECT 'GENDER' AS "COLUMN", GENDER AS "VALUE" FROM TEMP_DEMOS WHERE GENDER IN ('Female', 'Male', 'Trans Male', 'Trans Female', 'Non-Binary', 'Prefer Not to Say')
                 UNION ALL
                 SELECT 'AGE', AGE FROM TEMP_DEMOS WHERE AGE IS NOT NULL AND AGE NOT IN ('', 'Other', 'Prefer not to say')
                 UNION ALL
@@ -3451,7 +3451,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 UNION ALL
                 SELECT 'RELATIONSHIP', RELATIONSHIP FROM TEMP_DEMOS WHERE RELATIONSHIP IS NOT NULL AND RELATIONSHIP NOT IN ('', 'Other', 'Prefer not to say')
                 UNION ALL
-                SELECT 'SEXUAL_ORIENTATION', SEXUAL_ORIENTATION FROM TEMP_DEMOS WHERE SEXUAL_ORIENTATION IN ('Yes', 'No', 'Prefer not to say')
+                SELECT 'SEXUAL_ORIENTATION', SEXUAL_ORIENTATION FROM TEMP_DEMOS WHERE SEXUAL_ORIENTATION IN ('Yes', 'No', 'Prefer Not to Say')
                 UNION ALL
                 SELECT 'PARENTAL_STATUS', PARENTAL_STATUS FROM TEMP_DEMOS WHERE PARENTAL_STATUS IN ('Doesn''t have Kids', 'Has Kids', 'Other')
                 UNION ALL
@@ -9967,7 +9967,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
     # Define master lists for each demographic category
     master_lists = {
         'GENDER': [
-            'Male', 'Female', 'Trans Male', 'Trans Female', 'Non-Binary', 'Prefer Not To Say'
+            'Male', 'Female', 'Trans Male', 'Trans Female', 'Non-Binary', 'Prefer Not to Say'
         ],
         'INCOME': [
             '$75K-$100K', '$150K-$250K', '$250K+', '$100K-$150K', '$60K-$75K', '$40K-$60K'
@@ -10366,7 +10366,7 @@ REQUIRED_DEMOGRAPHICS = {
         'Single', 'Married', 'Divorced', 'In A Relationship'
     ],
     'SEXUAL_ORIENTATION': [
-        'Yes', 'No', 'Prefer Not To Say'
+        'Yes', 'No', 'Prefer Not to Say'
     ],
     'PARENTAL_STATUS': [
         'No Children', 'Has Children', 'Other'

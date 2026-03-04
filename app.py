@@ -2470,6 +2470,48 @@ def update_user(username):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+
+@app.route('/api/admin/users/<username>/add-credits', methods=['POST'])
+@requires_admin
+def add_user_credits(username):
+    """Add credits to a user and record attribution (what the credits were for). Admin only."""
+    try:
+        req = request.get_json() or {}
+        credits = req.get('credits')
+        reason = (req.get('reason') or '').strip() or 'Credits added by admin'
+        if credits is None:
+            return jsonify({'success': False, 'error': 'credits is required'}), 400
+        try:
+            credits = int(credits)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'credits must be a number'}), 400
+        if credits <= 0:
+            return jsonify({'success': False, 'error': 'credits must be positive'}), 400
+
+        data = load_users()
+        if username not in data['users']:
+            return jsonify({'success': False, 'error': 'User not found'})
+        user = data['users'][username]
+        if user.get('credits') == -1:
+            return jsonify({'success': False, 'error': 'User has unlimited credits; cannot add'})
+
+        added_by = (get_current_user() or {}).get('username') or 'admin'
+        added_at = datetime.now().isoformat()
+        user['credits'] = user.get('credits', 0) + credits
+        history = user.setdefault('credit_attribution_history', [])
+        history.insert(0, {
+            'added_at': added_at,
+            'credits_added': credits,
+            'reason': reason,
+            'added_by': added_by
+        })
+        user['credit_attribution_history'] = history[:500]
+        save_users(data)
+        return jsonify({'success': True, 'message': f'Added {credits} credits to {username}', 'credits': user['credits']})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/admin/users/<username>', methods=['DELETE'])
 @requires_admin
 def delete_user(username):
