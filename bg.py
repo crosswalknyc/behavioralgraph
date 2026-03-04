@@ -710,16 +710,16 @@ RECLASSIFY_SECTIONS = [
     'Writer/Director/Author/Artist'
 ]
 
-# GenPop demographics (2026 US Census projections)
+# GenPop demographics (2026 US Census projections - UPDATE 2026)
 GENPOP_DEMOGRAPHICS = [
-    ("AGE", "<16", 10.0),
-    ("AGE", "16-18", 9.6),
-    ("AGE", "18-20", 4.85),
-    ("AGE", "21-25", 11.45),
-    ("AGE", "26-30", 6.6),
-    ("AGE", "31-40", 20.2),
-    ("AGE", "41-59", 24.9),
-    ("AGE", "60+", 19.1),
+    ("AGE", "25-34", 13.2),
+    ("AGE", "18-24", 9.7),
+    ("AGE", "35-44", 13.6),
+    ("AGE", "45-54", 12.4),
+    ("AGE", "Other", 0.0),
+    ("AGE", "17 and Under", 19.6),
+    ("AGE", "55-64", 12.5),
+    ("AGE", "65 or Older", 19.1),
     ("GENDER", "Female", 50.83),
     ("GENDER", "Male", 49.17),
     ("GENDER", "Trans Male", 0.0),
@@ -731,10 +731,11 @@ GENPOP_DEMOGRAPHICS = [
     ("ETHNICITY", "Hispanic or Latino", 18.0),
     ("ETHNICITY", "Asian", 6.0),
     ("ETHNICITY", "Another Race/Ethnicity", 4.0),
-    ("EDUCATION", "Bachelor's Degree", 22.3),
     ("EDUCATION", "High School or Less", 38.1),
-    ("EDUCATION", "Graduate or Professional Degree", 18.27),
+    ("EDUCATION", "Trade School", 4.3),
     ("EDUCATION", "Some College / Associate Degree", 22.0),
+    ("EDUCATION", "Bachelor's Degree", 23.3),
+    ("EDUCATION", "Graduate or Professional Degree", 13.3),
     ("EDUCATION", "Prefer Not to Say", 0.0),
     ("INCOME", "$25,000 - $49,999", 0.0),
     ("INCOME", "$50,000 - $74,999", 40.6),
@@ -10338,13 +10339,13 @@ def enforce_final_difference_caps(df_final, previous_demo_lookup, previous_behav
 # Canonical lists for demographics (comprehensive lists to ensure all required values are present)
 REQUIRED_DEMOGRAPHICS = {
     'AGE': [
-        '31-40', '41-59', '26-30', '21-25', '<16', '18-20', '60+', '16-18'
+        '25-34', '18-24', '35-44', '45-54', 'Other', '17 and Under', '55-64', '65 or Older'
     ],
     'EDUCATION': [
-        "Bachelor's Degree", 'High School or Less', 'Graduate or Professional Degree', 'Some College / Associate Degree', 'Prefer Not to Say'
+        'High School or Less', 'Trade School', 'Some College / Associate Degree', "Bachelor's Degree", 'Graduate or Professional Degree', 'Prefer Not to Say'
     ],
     'ETHNICITY': [
-        'White', 'Hispanic or Latino', 'Asian', 'Black or African American',
+        'White', 'Black or African American', 'Hispanic or Latino', 'Asian', 'Another Race/Ethnicity',
     ],
     'GENDER': [
         'Female', 'Male', 'Trans Female', 'Trans Male', 'Non-Binary'
