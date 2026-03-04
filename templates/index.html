@@ -27177,10 +27177,25 @@
                     result.demographicsProjection.parental_status[psKey] = usProjection;
                 }
                 if (category === 'OCCUPATION' && value) {
-                    result.demographics.occupation[value] = pct;
-                    result.demographicsIndex.occupation[value] = index;
-                    result.demographicsGenPop.occupation[value] = genPopPct;
-                    result.demographicsProjection.occupation[value] = usProjection;
+                    const occKey = ((v) => {
+                        const u = (v || '').trim().toLowerCase();
+                        if (u.includes('business and financial') || u.includes('office admin') || u === 'management') return 'Management, Business & Professional';
+                        if (u.includes('sales and related') || u.includes('sales & related')) return 'Sales or Retail';
+                        if (u.includes('educational instruction') || u.includes('library')) return 'Education or Library Services';
+                        if (u.includes('health care support') || u.includes('healthcare support') || u.includes('healthcare practitioner') || u.includes('health care practitioner')) return 'Healthcare Practitioners or Support';
+                        if (u.includes('personal care and service') || u.includes('food prep') || u.includes('food preparation')) return 'Service & Hospitality';
+                        if (u.includes('farming') || u.includes('fishing') || u.includes('forestry')) return 'Agriculture & Outdoor';
+                        if (u.includes('building and grounds') || u.includes('cleaning and maintenance') || u.includes('cleaning & maintenance')) return 'Skilled Trade/Construction or Maintenance';
+                        if (u === 'production') return 'Manufacturing & Production';
+                        if (u.includes('protective service')) return 'Public Safety & Protective Services';
+                        if (u.includes('transportation') || u.includes('material moving')) return 'Transportation & Logistics';
+                        if (u.includes('computer and mathematical') || u.includes('computer & mathematical') || u.includes('architecture and engineering') || u.includes('architecture & engineering') || u.includes('life, physical') || u.includes('social science')) return 'Science, Technology & Technical Professions';
+                        return v;
+                    })(value);
+                    result.demographics.occupation[occKey] = (result.demographics.occupation[occKey] || 0) + pct;
+                    result.demographicsIndex.occupation[occKey] = index;
+                    result.demographicsGenPop.occupation[occKey] = (result.demographicsGenPop.occupation[occKey] || 0) + genPopPct;
+                    result.demographicsProjection.occupation[occKey] = (result.demographicsProjection.occupation[occKey] || 0) + usProjection;
                 }
                 
                 // Interests category (handle both singular and plural)
