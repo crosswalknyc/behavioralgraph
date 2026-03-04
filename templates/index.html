@@ -16255,13 +16255,19 @@
             return n.toFixed(2) + '%';
         }
         
-        // Normalize ethnicity for display (legacy latinx/latino → Hispanic or Latino).
+        // Normalize ethnicity/education for display (legacy labels → standard labels).
         function displayDemographicLabel(s) {
             if (s == null || typeof s !== 'string') return s;
             const v = String(s).trim().toLowerCase();
+            // Ethnicity
             if (v === 'latinx' || v === 'latino') return 'Hispanic or Latino';
             if (v === 'black') return 'Black or African American';
             if (v === 'other') return 'Another Race/Ethnicity';
+            // Education
+            if (v === 'complete college/university' || v === 'completed college/university') return "Bachelor's Degree";
+            if (v === 'complete grad school' || v === 'completed grad school') return 'Graduate or Professional Degree';
+            if (v === 'completed hs only' || v === 'complete hs only' || v === 'completed high school only') return 'High School or Less';
+            if (v === 'none') return 'Prefer Not to Say';
             return s;
         }
         
