@@ -27163,10 +27163,11 @@
                     result.demographicsProjection.relationship[value] = usProjection;
                 }
                 if (category === 'SEXUAL_ORIENTATION' && value) {
-                    result.demographics.sexual_orientation[value] = pct;
-                    result.demographicsIndex.sexual_orientation[value] = index;
-                    result.demographicsGenPop.sexual_orientation[value] = genPopPct;
-                    result.demographicsProjection.sexual_orientation[value] = usProjection;
+                    const soKey = ((v) => { const u = (v || '').trim().toUpperCase(); if (u === 'NO') return 'Straight / Heterosexual'; if (u === 'YES') return 'Gay or Lesbian'; if (u === 'OTHER') return 'Another Sexual Orientation'; return v; })(value);
+                    result.demographics.sexual_orientation[soKey] = pct;
+                    result.demographicsIndex.sexual_orientation[soKey] = index;
+                    result.demographicsGenPop.sexual_orientation[soKey] = genPopPct;
+                    result.demographicsProjection.sexual_orientation[soKey] = usProjection;
                 }
                 if (category === 'PARENTAL_STATUS' && value) {
                     result.demographics.parental_status[value] = pct;
