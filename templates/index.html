@@ -27098,15 +27098,25 @@
         let openProfileTabs = []; // Array of { id, name, dateRange, data, parsed }
         let activeProfileTabId = null;
         
+        // Deduplicate openProfileTabs by id (keep first). Call before save/render to fix duplicate-tab state.
+        function dedupeOpenProfileTabs() {
+            const seen = new Set();
+            const before = openProfileTabs.length;
+            openProfileTabs = openProfileTabs.filter(t => {
+                if (seen.has(t.id)) return false;
+                seen.add(t.id);
+                return true;
+            });
+            if (openProfileTabs.length < before && activeProfileTabId && !openProfileTabs.some(t => t.id === activeProfileTabId)) {
+                activeProfileTabId = openProfileTabs.length ? openProfileTabs[0].id : null;
+            }
+        }
         // Save open tabs to localStorage (only save id, name, dateRange - not full data)
-        // Uses currentUsername to make tabs user-specific
+        // Uses currentUsername to make tabs user-specific. Deduplicate by id so we never persist duplicates.
         function saveOpenTabs() {
+            dedupeOpenProfileTabs();
+            const tabsToSave = openProfileTabs.map(t => ({ id: t.id, name: t.name, dateRange: t.dateRange }));
             const userKey = currentUsername ? `_${currentUsername}` : '';
-            const tabsToSave = openProfileTabs.map(t => ({
-                id: t.id,
-                name: t.name,
-                dateRange: t.dateRange
-            }));
             localStorage.setItem(`openProfileTabs${userKey}`, JSON.stringify(tabsToSave));
             localStorage.setItem(`activeProfileTabId${userKey}`, activeProfileTabId || '');
         }
@@ -27123,13 +27133,18 @@
             }
         }
         
-        // Restore tabs on page load
+        // Restore tabs on page load. Deduplicate saved tabs by id so corrupted storage with repeats doesn't recreate duplicate tabs.
         async function restoreSavedTabs() {
             const { savedTabs, savedActiveId } = loadSavedTabs();
             if (savedTabs.length === 0) return;
-            
-            // Load each saved tab's data
-            for (const savedTab of savedTabs) {
+            const seen = new Set();
+            const deduped = savedTabs.filter(t => {
+                if (seen.has(t.id)) return false;
+                seen.add(t.id);
+                return true;
+            });
+            for (const savedTab of deduped) {
+                if (openProfileTabs.some(t => t.id === savedTab.id)) continue;
                 try {
                     const response = await fetch(`/api/get-csv-data/${encodeURIComponent(savedTab.id)}`, { credentials: 'same-origin' });
                     if (response.status === 401) continue;
@@ -27659,6 +27674,10 @@
 
                 if (data.success && data.data) {
                     profileLoadSucceeded = true;
+                    if (openProfileTabs.some(t => t.id === effectiveId)) {
+                        switchToProfileTab(effectiveId);
+                        return;
+                    }
                     const parsed = parseAllData(data.data);
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === effectiveId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
@@ -27708,6 +27727,7 @@
         }
         
         function renderProfileTabsBar() {
+            dedupeOpenProfileTabs();
             const container = document.getElementById('profileTabsBar');
             const emptyText = document.getElementById('profileTabsEmpty');
             
