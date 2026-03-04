@@ -744,8 +744,9 @@ GENPOP_DEMOGRAPHICS = [
     ("INCOME", "$250,000 or More", 8.1949),
     ("RELATIONSHIP", "Single", 28.9944),
     ("RELATIONSHIP", "In a Relationship", 28.5708),
-    ("RELATIONSHIP", "Divorced", 15.1939),
+    ("RELATIONSHIP", "Divorced or Separated", 15.1939),
     ("RELATIONSHIP", "Married", 27.2408),
+    ("RELATIONSHIP", "Prefer Not to Say", 0.0),
     ("SEXUAL_ORIENTATION", "Straight / Heterosexual", 39.3342),
     ("SEXUAL_ORIENTATION", "Gay or Lesbian", 0.0),
     ("SEXUAL_ORIENTATION", "Another Sexual Orientation", 0.0),
@@ -1550,7 +1551,7 @@ def get_user_inputs():
             "ETHNICITY": "Ethnicity (N for no or White, Hispanic or Latino, Another Race/Ethnicity, Black or African American, Asian): ",
             "INCOME": "HHI (N for no or $25,000 - $49,999, $50,000 - $74,999, $75,000 - $99,999, $100,000 - $149,999, $150,000 - $199,999, $250,000 or More): ",
             "EDUCATION": "Education (N for no or Bachelor's Degree, High School or Less, Graduate or Professional Degree, Some College / Associate Degree, Prefer Not to Say): ",
-            "RELATIONSHIP": "Relationship (N for no or Single, In a Relationship, Married, Other, Divorced): ",
+            "RELATIONSHIP": "Relationship (N for no or Single, Married, In a Relationship, Divorced or Separated, Prefer Not to Say): ",
             "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Straight / Heterosexual, Gay or Lesbian, Another Sexual Orientation, Prefer Not to Say): ",
             "PARENTAL_STATUS": "Parental Status (N for no or Doesn't have Kids, Has Kids, Other): "
         }
@@ -1583,7 +1584,7 @@ def get_user_inputs():
                 "Bachelor's Degree", "High School or Less", "Graduate or Professional Degree", "Some College / Associate Degree", "Prefer Not to Say"
             ],
             "RELATIONSHIP": [
-                "Single", "In a Relationship", "Married", "Other", "Divorced"
+                "Single", "Married", "In a Relationship", "Divorced or Separated", "Prefer Not to Say"
             ],
             "SEXUAL_ORIENTATION": [
                 "No", "Prefer Not to Say", "Yes"
@@ -1706,7 +1707,7 @@ sexual_orientation_caps = pd.DataFrame({
 sexual_orientation_caps['SEXUAL_ORIENTATION'] = sexual_orientation_caps['SEXUAL_ORIENTATION'].apply(normalize_demo_value)
 
 relationship_caps = pd.DataFrame({
-    'RELATIONSHIP': ['Single', 'In a Relationship', 'Married', 'Divorced', 'Other'],
+    'RELATIONSHIP': ['Single', 'Married', 'In a Relationship', 'Divorced or Separated', 'Prefer Not to Say'],
     'MAX_COUNT': [2859000, 2859000, 2781000, 1501000, 500000]
 })
 relationship_caps['RELATIONSHIP'] = relationship_caps['RELATIONSHIP'].apply(normalize_demo_value)
@@ -10359,7 +10360,7 @@ REQUIRED_DEMOGRAPHICS = {
         '$25,000 - $49,999', '$50,000 - $74,999', '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $199,999', '$250,000 or More'
     ],
     'RELATIONSHIP': [
-        'Single', 'Married', 'Divorced', 'In A Relationship'
+        'Single', 'Married', 'In a Relationship', 'Divorced or Separated', 'Prefer Not to Say'
     ],
     'SEXUAL_ORIENTATION': [
         'Straight / Heterosexual', 'Gay or Lesbian', 'Another Sexual Orientation', 'Prefer Not to Say'
