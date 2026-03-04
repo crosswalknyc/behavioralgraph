@@ -27170,10 +27170,11 @@
                     result.demographicsProjection.sexual_orientation[soKey] = usProjection;
                 }
                 if (category === 'PARENTAL_STATUS' && value) {
-                    result.demographics.parental_status[value] = pct;
-                    result.demographicsIndex.parental_status[value] = index;
-                    result.demographicsGenPop.parental_status[value] = genPopPct;
-                    result.demographicsProjection.parental_status[value] = usProjection;
+                    const psKey = ((v) => { const u = (v || '').trim().toLowerCase(); if (u === 'has kids') return 'Has Children'; if (u === 'doesnt have kids' || u === "doesn't have kids") return 'No Children'; if (u === 'other') return 'Prefer Not to Say'; return v; })(value);
+                    result.demographics.parental_status[psKey] = pct;
+                    result.demographicsIndex.parental_status[psKey] = index;
+                    result.demographicsGenPop.parental_status[psKey] = genPopPct;
+                    result.demographicsProjection.parental_status[psKey] = usProjection;
                 }
                 if (category === 'OCCUPATION' && value) {
                     result.demographics.occupation[value] = pct;
