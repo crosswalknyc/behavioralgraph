@@ -1342,16 +1342,18 @@ def extract_sample_size_from_csv(csv_content):
         usual = None
         for row in rows:
             if len(row) > 0 and str(row[0]).strip().upper() == "SAMPLE SIZE":
+                d4, e4 = None, None
+                if len(row) > 3 and row[3]:
+                    try:
+                        d4 = int(float(str(row[3]).replace(",", "")))
+                    except (ValueError, TypeError):
+                        pass
                 if len(row) > 4 and row[4]:
                     try:
-                        usual = int(float(str(row[4]).replace(",", "")))
+                        e4 = int(float(str(row[4]).replace(",", "")))
                     except (ValueError, TypeError):
                         pass
-                if usual is None and len(row) > 3 and row[3]:
-                    try:
-                        usual = int(float(str(row[3]).replace(",", "")))
-                    except (ValueError, TypeError):
-                        pass
+                usual = (d4 if (d4 is not None and d4 >= 1000) else None) or (e4 if (e4 is not None and e4 > 0) else None) or d4
                 break
         if usual is not None and usual < 1000 and len(rows) > 3:
             row4 = rows[3]
@@ -13125,14 +13127,17 @@ def extract_demographics_summary(csv_content):
             ) or 0
 
             if category == "SAMPLE SIZE":
-                raw_val = row.get("Original Raw Numbers")
-                if raw_val is not None and str(raw_val).strip() != "":
-                    try:
-                        summary["sampleSize"] = int(float(str(raw_val).replace(",", "")))
-                    except (ValueError, TypeError):
-                        summary["sampleSize"] = int(float(row.get("Category Share", 0) or 0))
-                else:
-                    summary["sampleSize"] = int(row.get("Category Share", 0) or row.get("Original Raw Numbers", 0) or 0)
+                d4 = row.get("Category Share")
+                e4 = row.get("Original Raw Numbers")
+                try:
+                    d_val = int(float(str(d4).replace(",", ""))) if d4 is not None and str(d4).strip() != "" else 0
+                except (ValueError, TypeError):
+                    d_val = 0
+                try:
+                    e_val = int(float(str(e4).replace(",", ""))) if e4 is not None and str(e4).strip() != "" else 0
+                except (ValueError, TypeError):
+                    e_val = 0
+                summary["sampleSize"] = d_val if d_val >= 1000 else (e_val if e_val > 0 else d_val)
             elif category == 'BRAND INPUT':
                 summary['projectedUS'] = int(row.get('US Gen Pop Projection', 0) or 0)
             elif category == 'GENDER' and value:

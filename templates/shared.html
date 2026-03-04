@@ -184,8 +184,9 @@
                 const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || row['Percentage'] || 0) || 0;
                 const raw = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, ''), 10) || 0;
                 if (col === 'SAMPLE SIZE') {
-                    const raw = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, ''), 10) || 0;
-                    sampleSize = raw > 0 ? raw : parseInt(row['Category Share'] || 0);
+                    const d4 = parseFloat(row['Category Share']) || parseInt(row['Category Share']) || 0;
+                    const e4 = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, ''), 10) || 0;
+                    sampleSize = (d4 >= 1000 ? Math.round(d4) : 0) || (e4 > 0 ? e4 : 0) || Math.round(d4);
                 }
                 if (col === 'GENDER' && val) demographics.gender[val] = pct;
                 if (col === 'AGE' && val) {
