@@ -15926,10 +15926,19 @@
             };
             const yearInKey = (key) => yearFromGenPopPrefix(key) || yearAnywhere(key);
             let best = genPopJobs[0];
-            let bestYear = yearInKey(best.s3_key || best.job_id);
+            let bestKey = (best.s3_key || best.job_id || '').toLowerCase();
+            let bestYear = yearInKey(bestKey);
+            let bestHasExplicitYear = yearFromGenPopPrefix(bestKey) > 0;
             for (let i = 1; i < genPopJobs.length; i++) {
-                const y = yearInKey(genPopJobs[i].s3_key || genPopJobs[i].job_id);
-                if (y > bestYear) { best = genPopJobs[i]; bestYear = y; }
+                const key = (genPopJobs[i].s3_key || genPopJobs[i].job_id || '').toLowerCase();
+                const y = yearInKey(key);
+                const hasExplicit = yearFromGenPopPrefix(key) > 0;
+                if (y > bestYear || (y === bestYear && hasExplicit && !bestHasExplicitYear)) {
+                    best = genPopJobs[i];
+                    bestYear = y;
+                    bestKey = key;
+                    bestHasExplicitYear = hasExplicit;
+                }
             }
             return best.s3_key || best.job_id || null;
         }
@@ -27411,10 +27420,12 @@
                         }
                     });
                 } else if (master === 'GEN POP') {
-                    // GEN POP: no subcategory row; list profiles directly under main GEN POP
+                    // GEN POP: no subcategory row; list profiles directly under main GEN POP. Use resolved key so only the preferred file shows (e.g. Gen_Pop_2026_... over Gen_Pop_03_04_...).
                     const allItems = [];
                     Object.values(subcats).forEach(items => allItems.push(...items));
-                    const sortedItems = [...allItems].sort((a, b) => {
+                    const preferredKey = resolveGenPopFileName(profiles);
+                    const genPopFiltered = preferredKey ? allItems.filter(p => (p.s3_key || p.job_id) === preferredKey) : allItems;
+                    const sortedItems = [...genPopFiltered].sort((a, b) => {
                         const nameA = getProfileFullName(a).toLowerCase();
                         const nameB = getProfileFullName(b).toLowerCase();
                         return nameA.localeCompare(nameB);
@@ -27701,13 +27712,14 @@
             if (typeof selectDashboardProfile === 'function') selectDashboardProfile(n.s3_key);
         }
 
-        async function selectDashboardProfile(profileId) {
-            // Check if profile is already open in a tab
-            const existingTab = openProfileTabs.find(t => t.id === profileId);
-            if (existingTab) {
-                // Switch to existing tab
-                switchToProfileTab(profileId);
-                return;
+        async function selectDashboardProfile(profileId, forceReload) {
+            // Check if profile is already open in a tab (skip if forceReload, e.g. after profile list refresh)
+            if (!forceReload) {
+                const existingTab = openProfileTabs.find(t => t.id === profileId);
+                if (existingTab) {
+                    switchToProfileTab(profileId);
+                    return;
+                }
             }
             
             selectedDashProfile = profileId;
@@ -27719,7 +27731,8 @@
             // Load and display the profile data (with auto-retry at released S3 location if 404 on purgatory key)
             let profileLoadSucceeded = false;
             try {
-                let response = await fetch(`/api/get-csv-data/${encodeURIComponent(profileId)}`, { credentials: 'same-origin' });
+                const csvUrl = `/api/get-csv-data/${encodeURIComponent(profileId)}?_t=${Date.now()}`;
+                let response = await fetch(csvUrl, { credentials: 'same-origin', cache: 'no-store' });
                 if (response.status === 401) { window.location.href = '/login'; return; }
                 let data = await response.json();
                 let effectiveId = profileId;
@@ -27727,7 +27740,7 @@
                 // If 404 and this was a purgatory key, try the released location (same filename without purgatory/ prefix)
                 if (!data.success && response.status === 404 && profileId.startsWith('purgatory/')) {
                     const releasedKey = profileId.replace(/^purgatory\//, '');
-                    const retryResponse = await fetch(`/api/get-csv-data/${encodeURIComponent(releasedKey)}`, { credentials: 'same-origin' });
+                    const retryResponse = await fetch(`/api/get-csv-data/${encodeURIComponent(releasedKey)}?_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
                     if (retryResponse.ok) {
                         const retryData = await retryResponse.json();
                         if (retryData.success && retryData.data) {
@@ -27777,6 +27790,10 @@
                         parsed: parsed
                     };
                     
+                    // If this was a forceReload (e.g. Gen Pop after profile refresh), remove any other tab for the same "profile" (other gen_pop key) to avoid duplicates
+                    if (forceReload && (effectiveId || '').toLowerCase().includes('gen_pop')) {
+                        openProfileTabs = openProfileTabs.filter(t => !(t.id || '').toLowerCase().includes('gen_pop') || t.id === effectiveId);
+                    }
                     openProfileTabs.push(newTab);
                     activeProfileTabId = effectiveId;
                     
@@ -28202,6 +28219,15 @@
                 setSessionJobsCache(data);
                 const profiles = data.jobs || [];
                 renderDashboardProfileTree(profiles);
+                
+                // If Gen Pop is currently selected, re-load it from the resolved key so we show the correct file (avoids stale cache)
+                const curKey = (selectedDashProfile || '').toLowerCase();
+                if (curKey.includes('gen_pop') && typeof resolveGenPopFileName === 'function') {
+                    const preferredKey = resolveGenPopFileName(profiles);
+                    if (preferredKey && typeof selectDashboardProfile === 'function') {
+                        await selectDashboardProfile(preferredKey, true);
+                    }
+                }
                 
                 // Reload Gen Pop baseline so new/updated Gen Pop file in S3 is used (e.g. after upload)
                 if (typeof loadGenPopBaseline === 'function') {
