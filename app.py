@@ -1353,7 +1353,7 @@ def extract_sample_size_from_csv(csv_content):
                         e4 = int(float(str(row[4]).replace(",", "")))
                     except (ValueError, TypeError):
                         pass
-                usual = (d4 if (d4 is not None and d4 >= 1000) else None) or (e4 if (e4 is not None and e4 > 0) else None) or d4
+                usual = (d4 if (d4 is not None and d4 > 1000) else None) or (e4 if (e4 is not None and e4 > 0) else None) or d4
                 break
         if usual is not None and usual < 1000 and len(rows) > 3:
             row4 = rows[3]
@@ -13137,7 +13137,7 @@ def extract_demographics_summary(csv_content):
                     e_val = int(float(str(e4).replace(",", ""))) if e4 is not None and str(e4).strip() != "" else 0
                 except (ValueError, TypeError):
                     e_val = 0
-                summary["sampleSize"] = d_val if d_val >= 1000 else (e_val if e_val > 0 else d_val)
+                summary["sampleSize"] = d_val if d_val > 1000 else (e_val if e_val > 0 else d_val)
             elif category == 'BRAND INPUT':
                 summary['projectedUS'] = int(row.get('US Gen Pop Projection', 0) or 0)
             elif category == 'GENDER' and value:
@@ -13334,9 +13334,23 @@ def list_jobs():
                 e['job_id'] = GEN_POP_CANONICAL_KEY
                 e['project_name'] = e.get('project_name') or 'Gen Pop 2026'
                 e['display_name'] = e.get('display_name') or 'Gen Pop 2026'
+                e['category'] = 'GEN POP'
             new_job_list.append(e)
         job_list = new_job_list
-        
+
+        # If no Gen Pop was in cache, inject the canonical entry so the dropdown always shows Gen Pop and links to the right file
+        if not seen_gen_pop:
+            job_list.append({
+                's3_key': GEN_POP_CANONICAL_KEY,
+                'job_id': GEN_POP_CANONICAL_KEY,
+                'project_name': 'Gen Pop 2026',
+                'display_name': 'Gen Pop 2026',
+                'category': 'GEN POP',
+                'status': 'cached',
+                'created_at': '',
+                'source': 's3',
+            })
+
         # Restrict to runs the user is allowed to see (Run Access in Admin)
         allowed_runs = None
         try:
@@ -13350,10 +13364,10 @@ def list_jobs():
             allowed_set = set(allowed_runs or [])
             def job_allowed(e):
                 sk = e.get('s3_key') or ''
-                if sk in allowed_set:
+                # Gen Pop: always allow the canonical entry so it displays and links to the correct file for everyone
+                if sk == GEN_POP_CANONICAL_KEY:
                     return True
-                # Gen Pop: if user has any gen_pop key in allowed_runs, allow the canonical Gen Pop entry
-                if sk == GEN_POP_CANONICAL_KEY and any('gen_pop' in (k or '').lower() for k in allowed_set):
+                if sk in allowed_set:
                     return True
                 return False
             job_list = [e for e in job_list if job_allowed(e)]

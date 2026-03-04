@@ -26078,7 +26078,7 @@
 
                 if (col === 'SAMPLE SIZE') {
                     const d4 = catShare || 0;
-                    sampleSize = (d4 >= 1000 ? Math.round(d4) : 0) || (rawNum > 0 ? rawNum : 0) || Math.round(d4);
+                    sampleSize = (d4 > 1000 ? Math.round(d4) : 0) || (rawNum > 0 ? rawNum : 0) || Math.round(d4);
                 }
                 // Projected US is in column F (US Gen Pop Projection) on BRAND INPUT row
                 if (col === 'BRAND INPUT' && usPop > 0) projectedUS = usPop;
@@ -27095,11 +27095,11 @@
                 }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 100;
 
-                // Sample size from D4 (Category Share on SAMPLE SIZE row); if that number is low (< 1000) use E4 (Original Raw Numbers) instead
+                // Sample size: first look at D4 (Category Share on SAMPLE SIZE row); if D4 is 1000 or less use E4 (Original Raw Numbers) instead
                 if (category === 'SAMPLE SIZE') {
                     const d4 = parseFloat(row['Category Share']) || parseInt(row['Category Share']) || 0;
                     const e4 = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, ''), 10) || 0;
-                    const possibleSize = (d4 >= 1000 ? Math.round(d4) : 0) || (e4 > 0 ? e4 : 0) || Math.round(d4) || parseInt(row['Brand Penetration (Row)']) || 0;
+                    const possibleSize = (d4 > 1000 ? Math.round(d4) : 0) || (e4 > 0 ? e4 : 0) || Math.round(d4) || parseInt(row['Brand Penetration (Row)']) || 0;
                     if (possibleSize > 0) result.sampleSize = possibleSize;
                 }
                 // Projected sample size: column F (US Gen Pop Projection) on BRAND INPUT row (row 4 = F4)
