@@ -26816,6 +26816,7 @@
                 demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
                 demographicsGenPop: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
                 demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
+                demographicsAgeRaw: {}, // value -> Original Raw Numbers for AGE (used to build new buckets from counts)
                 behavioral: {},
                 categories: {},
                 locations: [],
@@ -26826,47 +26827,96 @@
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
             const US_POPULATION = 329900000;
             
-            // Redistribute old age brackets into new display buckets (older files show inline with new values)
+            // Redistribute old age brackets using Original Raw Numbers: split people by ratio into new buckets, then new % = (bucket raw / total age raw) * 100
             function normalizeAgeBucketsForDashboard(res) {
                 const oldToNew = { '<16': [['17 and Under', 1]], 'under 16': [['17 and Under', 1]], '16-18': [['17 and Under', 0.67], ['18-24', 0.33]], '17-18': [['17 and Under', 0.67], ['18-24', 0.33]], '19-20': [['18-24', 1]], '18-20': [['18-24', 1]], '21-25': [['18-24', 0.8], ['25-34', 0.2]], '26-30': [['25-34', 1]], '31-40': [['25-34', 0.4], ['35-44', 0.6]], '41-49': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '41-59': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '60+': [['55-64', 0.25], ['65 or Older', 0.75]], '65+': [['55-64', 0.25], ['65 or Older', 0.75]], 'over 65': [['55-64', 0.25], ['65 or Older', 0.75]] };
+                const ageRaw = res.demographicsAgeRaw || {};
                 const age = res.demographics.age || {};
                 const idx = res.demographicsIndex.age || {};
                 const gp = res.demographicsGenPop.age || {};
                 const proj = res.demographicsProjection.age || {};
-                const newAge = {}, newIdx = {}, newGp = {}, newProj = {};
-                const weightByNew = {};
-                for (const [oldKey, pct] of Object.entries(age)) {
-                    const key = (oldKey || '').trim().toLowerCase();
-                    const mapping = oldToNew[key] || oldToNew[oldKey];
-                    const i = idx[oldKey] != null ? idx[oldKey] : 100;
-                    const g = gp[oldKey] != null ? gp[oldKey] : 0;
-                    const pr = proj[oldKey] != null ? proj[oldKey] : 0;
-                    if (mapping) {
-                        mapping.forEach(([newBucket, ratio]) => {
-                            newAge[newBucket] = (newAge[newBucket] || 0) + pct * ratio;
-                            const w = pct * ratio;
-                            if (!weightByNew[newBucket]) weightByNew[newBucket] = { sumW: 0, sumIdx: 0, sumGp: 0, sumProj: 0 };
-                            weightByNew[newBucket].sumW += w;
-                            weightByNew[newBucket].sumIdx += i * w;
-                            weightByNew[newBucket].sumGp += g * w;
-                            weightByNew[newBucket].sumProj += pr * ratio;
-                        });
-                    } else {
-                        newAge[oldKey] = (newAge[oldKey] || 0) + pct;
-                        newIdx[oldKey] = i;
-                        newGp[oldKey] = g;
-                        newProj[oldKey] = pr;
+                const newRaw = {}, newIdxSum = {}, newIdxW = {}, newGpSum = {}, newGpW = {}, newProj = {};
+                const hasRaw = Object.keys(ageRaw).length > 0;
+                if (hasRaw) {
+                    for (const [oldKey, raw] of Object.entries(ageRaw)) {
+                        const n = parseInt(String(raw).replace(/,/g, ''), 10) || 0;
+                        if (n <= 0) continue;
+                        const key = (oldKey || '').trim().toLowerCase();
+                        const mapping = oldToNew[key] || oldToNew[oldKey];
+                        const i = idx[oldKey] != null ? idx[oldKey] : 100;
+                        const g = gp[oldKey] != null ? gp[oldKey] : 0;
+                        const pr = proj[oldKey] != null ? proj[oldKey] : 0;
+                        if (mapping) {
+                            mapping.forEach(([newBucket, ratio]) => {
+                                const piece = n * ratio;
+                                newRaw[newBucket] = (newRaw[newBucket] || 0) + piece;
+                                newIdxSum[newBucket] = (newIdxSum[newBucket] || 0) + i * piece;
+                                newIdxW[newBucket] = (newIdxW[newBucket] || 0) + piece;
+                                newGpSum[newBucket] = (newGpSum[newBucket] || 0) + g * piece;
+                                newGpW[newBucket] = (newGpW[newBucket] || 0) + piece;
+                                newProj[newBucket] = (newProj[newBucket] || 0) + pr * ratio;
+                            });
+                        } else {
+                            newRaw[oldKey] = (newRaw[oldKey] || 0) + n;
+                            newIdxSum[oldKey] = (newIdxSum[oldKey] || 0) + i * n;
+                            newIdxW[oldKey] = (newIdxW[oldKey] || 0) + n;
+                            newGpSum[oldKey] = (newGpSum[oldKey] || 0) + g * n;
+                            newGpW[oldKey] = (newGpW[oldKey] || 0) + n;
+                            newProj[oldKey] = (newProj[oldKey] || 0) + pr;
+                        }
                     }
+                    const totalRaw = Object.values(newRaw).reduce((a, b) => a + b, 0);
+                    if (totalRaw > 0) {
+                        const newAge = {};
+                        const newIdx = {};
+                        const newGp = {};
+                        for (const [b, r] of Object.entries(newRaw)) {
+                            newAge[b] = Math.round((r / totalRaw) * 10000) / 100;
+                            newIdx[b] = newIdxW[b] > 0 ? Math.round(newIdxSum[b] / newIdxW[b]) : 100;
+                            newGp[b] = newGpW[b] > 0 ? newGpSum[b] / newGpW[b] : 0;
+                        }
+                        res.demographics.age = newAge;
+                        res.demographicsIndex.age = newIdx;
+                        res.demographicsGenPop.age = newGp;
+                        res.demographicsProjection.age = {};
+                        for (const b of Object.keys(newProj)) res.demographicsProjection.age[b] = Math.round(newProj[b]);
+                    }
+                } else {
+                    const newAge = {}, newIdx = {}, newGp = {}, newProjOut = {};
+                    const weightByNew = {};
+                    for (const [oldKey, pct] of Object.entries(age)) {
+                        const key = (oldKey || '').trim().toLowerCase();
+                        const mapping = oldToNew[key] || oldToNew[oldKey];
+                        const i = idx[oldKey] != null ? idx[oldKey] : 100;
+                        const g = gp[oldKey] != null ? gp[oldKey] : 0;
+                        const pr = proj[oldKey] != null ? proj[oldKey] : 0;
+                        if (mapping) {
+                            mapping.forEach(([newBucket, ratio]) => {
+                                const w = pct * ratio;
+                                newAge[newBucket] = (newAge[newBucket] || 0) + w;
+                                if (!weightByNew[newBucket]) weightByNew[newBucket] = { sumW: 0, sumIdx: 0, sumGp: 0, sumProj: 0 };
+                                weightByNew[newBucket].sumW += w;
+                                weightByNew[newBucket].sumIdx += i * w;
+                                weightByNew[newBucket].sumGp += g * w;
+                                weightByNew[newBucket].sumProj += pr * ratio;
+                            });
+                        } else {
+                            newAge[oldKey] = (newAge[oldKey] || 0) + pct;
+                            newIdx[oldKey] = i;
+                            newGp[oldKey] = g;
+                            newProjOut[oldKey] = pr;
+                        }
+                    }
+                    for (const [bucket, w] of Object.entries(weightByNew)) {
+                        newIdx[bucket] = w.sumW > 0 ? Math.round(w.sumIdx / w.sumW) : 100;
+                        newGp[bucket] = w.sumW > 0 ? w.sumGp / w.sumW : 0;
+                        newProjOut[bucket] = Math.round(w.sumProj);
+                    }
+                    res.demographics.age = newAge;
+                    res.demographicsIndex.age = Object.keys(newIdx).length ? newIdx : res.demographicsIndex.age;
+                    res.demographicsGenPop.age = Object.keys(newGp).length ? newGp : res.demographicsGenPop.age;
+                    res.demographicsProjection.age = Object.keys(newProjOut).length ? newProjOut : res.demographicsProjection.age;
                 }
-                for (const [bucket, w] of Object.entries(weightByNew)) {
-                    newIdx[bucket] = w.sumW > 0 ? Math.round(w.sumIdx / w.sumW) : 100;
-                    newGp[bucket] = w.sumW > 0 ? w.sumGp / w.sumW : 0;
-                    newProj[bucket] = Math.round(w.sumProj);
-                }
-                res.demographics.age = newAge;
-                res.demographicsIndex.age = Object.keys(newIdx).length ? newIdx : res.demographicsIndex.age;
-                res.demographicsGenPop.age = Object.keys(newGp).length ? newGp : res.demographicsGenPop.age;
-                res.demographicsProjection.age = Object.keys(newProj).length ? newProj : res.demographicsProjection.age;
             }
             
             // HARDCODED GEN POP DMA PERCENTAGES (Nielsen DMA household distribution)
@@ -27055,12 +27105,13 @@
                     result.brandCategory = (value || '').toString().trim();
                 }
 
-                // Demographics - store pct, genPopPct, index, and projection
+                // Demographics - store pct, genPopPct, index, and projection; for AGE also store raw count for bucket normalization
                 if (category === 'AGE' && value) {
                     result.demographics.age[value] = pct;
                     result.demographicsIndex.age[value] = index;
                     result.demographicsGenPop.age[value] = genPopPct;
                     result.demographicsProjection.age[value] = usProjection;
+                    if (rawNumbers > 0) result.demographicsAgeRaw[value] = rawNumbers;
                 }
                 if (category === 'GENDER' && value) {
                     result.demographics.gender[value] = pct;
