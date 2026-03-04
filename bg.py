@@ -745,7 +745,9 @@ GENPOP_DEMOGRAPHICS = [
     ("RELATIONSHIP", "In a Relationship", 28.5708),
     ("RELATIONSHIP", "Divorced", 15.1939),
     ("RELATIONSHIP", "Married", 27.2408),
-    ("SEXUAL_ORIENTATION", "Yes", 39.3342),
+    ("SEXUAL_ORIENTATION", "Straight / Heterosexual", 39.3342),
+    ("SEXUAL_ORIENTATION", "Gay or Lesbian", 0.0),
+    ("SEXUAL_ORIENTATION", "Another Sexual Orientation", 0.0),
     ("SEXUAL_ORIENTATION", "Prefer Not to Say", 60.6658),
     ("PARENTAL_STATUS", "Doesn't have Kids", 52.0833),
     ("PARENTAL_STATUS", "Has Kids", 27.8437),
@@ -1553,7 +1555,7 @@ def get_user_inputs():
             "INCOME": "HHI (N for no or $40K - $60K, $60K - $75K, $75K - $100K, $100K - $150K, $150K - $250K, $250K+): ",
             "EDUCATION": "Education (N for no or Complete College/University, Completed HS only, Completed Grad School, None): ",
             "RELATIONSHIP": "Relationship (N for no or Single, In a Relationship, Married, Other, Divorced): ",
-            "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Yes, No, Prefer Not to Say): ",
+            "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Straight / Heterosexual, Gay or Lesbian, Another Sexual Orientation, Prefer Not to Say): ",
             "PARENTAL_STATUS": "Parental Status (N for no or Doesn't have Kids, Has Kids, Other): "
         }
         for k, prompt in fields.items():
@@ -1702,8 +1704,8 @@ education_caps['EDUCATION'] = education_caps['EDUCATION'].apply(normalize_demo_v
 
 # Additional cap tables for other demographic categories
 sexual_orientation_caps = pd.DataFrame({
-    'SEXUAL_ORIENTATION': ['Yes', 'No', 'Prefer Not to Say'],
-    'MAX_COUNT': [815000, 8625000, 1258000]
+    'SEXUAL_ORIENTATION': ['Straight / Heterosexual', 'Gay or Lesbian', 'Another Sexual Orientation', 'Prefer Not to Say'],
+    'MAX_COUNT': [8625000, 815000, 500000, 1258000]
 })
 sexual_orientation_caps['SEXUAL_ORIENTATION'] = sexual_orientation_caps['SEXUAL_ORIENTATION'].apply(normalize_demo_value)
 
@@ -3451,7 +3453,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 UNION ALL
                 SELECT 'RELATIONSHIP', RELATIONSHIP FROM TEMP_DEMOS WHERE RELATIONSHIP IS NOT NULL AND RELATIONSHIP NOT IN ('', 'Other', 'Prefer not to say')
                 UNION ALL
-                SELECT 'SEXUAL_ORIENTATION', SEXUAL_ORIENTATION FROM TEMP_DEMOS WHERE SEXUAL_ORIENTATION IN ('Yes', 'No', 'Prefer Not to Say')
+                SELECT 'SEXUAL_ORIENTATION', SEXUAL_ORIENTATION FROM TEMP_DEMOS WHERE SEXUAL_ORIENTATION IN ('Straight / Heterosexual', 'Gay or Lesbian', 'Another Sexual Orientation', 'Prefer Not to Say')
                 UNION ALL
                 SELECT 'PARENTAL_STATUS', PARENTAL_STATUS FROM TEMP_DEMOS WHERE PARENTAL_STATUS IN ('Doesn''t have Kids', 'Has Kids', 'Other')
                 UNION ALL
@@ -10366,7 +10368,7 @@ REQUIRED_DEMOGRAPHICS = {
         'Single', 'Married', 'Divorced', 'In A Relationship'
     ],
     'SEXUAL_ORIENTATION': [
-        'Yes', 'No', 'Prefer Not to Say'
+        'Straight / Heterosexual', 'Gay or Lesbian', 'Another Sexual Orientation', 'Prefer Not to Say'
     ],
     'PARENTAL_STATUS': [
         'No Children', 'Has Children', 'Other'
