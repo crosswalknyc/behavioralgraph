@@ -13143,7 +13143,7 @@ def extract_demographics_summary(csv_content):
             elif category == 'ETHNICITY' and value:
                 summary['ethnicity'][value] = pct
 
-        # If usual sample size is under 1000, use column E row 4 for Crosswalk Respondents
+        # If usual sample size is under 1000, use column E row 4 for Crosswalk Respondents and F3 for Projected US Gen Pop
         if summary["sampleSize"] < 1000 and len(df) > 3:
             row4 = df.iloc[3]
             col_e = row4.get("Original Raw Numbers") or (row4.iloc[4] if len(row4) > 4 else None)
@@ -13152,6 +13152,14 @@ def extract_demographics_summary(csv_content):
                     n = int(float(str(col_e).replace(",", "")))
                     if n > 0:
                         summary["sampleSize"] = n
+                        if len(df) > 2:
+                            row3 = df.iloc[2]
+                            f3 = row3.get("US Gen Pop Projection") or row3.get("Gen Pop Projection") or (row3.iloc[5] if len(row3) > 5 else None)
+                            if f3 is not None and str(f3).strip() != "":
+                                try:
+                                    summary["projectedUS"] = int(float(str(f3).replace(",", "")))
+                                except (ValueError, TypeError):
+                                    pass
                 except (ValueError, TypeError):
                     pass
 
