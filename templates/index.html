@@ -26964,16 +26964,24 @@
             };
             
             // HARDCODED GEN POP DEMOGRAPHICS (2026 US Census projections, from bg.py GENPOP_DEMOGRAPHICS)
+            // Includes both old CSV labels and new display labels for proper lookup
             const GENPOP_DEMOGRAPHICS = {
                 'AGE': {
                     '<16': 10.0, '16-18': 9.6, '18-20': 4.85, '21-25': 11.45,
-                    '26-30': 6.6, '31-40': 20.2, '41-59': 24.9, '60+': 19.1
+                    '26-30': 6.6, '31-40': 20.2, '41-59': 24.9, '60+': 19.1,
+                    '17 and Under': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6, '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1
                 },
                 'GENDER': {
-                    'Female': 50.83, 'Male': 49.17, 'Trans Female': 0, 'Trans Male': 0, 'Non-Binary': 0
+                    'Female': 50.83, 'FEMALE': 50.83, 'Male': 49.17, 'MALE': 49.17,
+                    'Trans Female': 0.5, 'TRANS FEMALE': 0.5, 'Trans Male': 0.5, 'TRANS MALE': 0.5,
+                    'Non-Binary': 1.0, 'NON-BINARY': 1.0
                 },
                 'ETHNICITY': {
-                    'White': 59.0, 'Hispanic or Latino': 18.0, 'Black or African American': 13.0, 'Another Race/Ethnicity': 4.0, 'Asian': 6.0
+                    'White': 59.0, 'WHITE': 59.0,
+                    'Hispanic or Latino': 18.0, 'HISPANIC OR LATINO': 18.0, 'Latino': 18.0, 'LATINO': 18.0, 'Latinx': 18.0, 'LATINX': 18.0,
+                    'Black or African American': 13.0, 'BLACK OR AFRICAN AMERICAN': 13.0, 'Black': 13.0, 'BLACK': 13.0,
+                    'Another Race/Ethnicity': 4.0, 'ANOTHER RACE/ETHNICITY': 4.0, 'Other': 4.0, 'OTHER': 4.0,
+                    'Asian': 6.0, 'ASIAN': 6.0
                 },
                 'INCOME': {
                     '$25,000 - $49,999': 0, '$50,000 - $74,999': 40.6,
@@ -26986,26 +26994,32 @@
                     'Prefer Not to Say': 0,
                     'None': 0, 'NONE': 0, 'Completed HS Only': 38.1, 'COMPLETED HS ONLY': 38.1,
                     'Complete College/University': 22.3, 'COMPLETE COLLEGE/UNIVERSITY': 22.3,
-                    'Completed Grad School': 18.27, 'COMPLETED GRAD SCHOOL': 18.27
+                    'Complete Grad School': 18.27, 'Completed Grad School': 18.27, 'COMPLETED GRAD SCHOOL': 18.27
                 },
                 'RELATIONSHIP': {
                     'Single': 31.0, 'SINGLE': 31.0,
                     'In a Relationship': 15.0, 'IN A RELATIONSHIP': 15.0,
                     'Married': 48.0, 'MARRIED': 48.0,
-                    'Divorced or Separated': 6.0, 'DIVORCED OR SEPARATED': 6.0,
+                    'Divorced or Separated': 6.0, 'DIVORCED OR SEPARATED': 6.0, 'Divorced': 6.0, 'DIVORCED': 6.0,
                     'Prefer Not to Say': 0, 'PREFER NOT TO SAY': 0
                 },
                 'SEXUAL_ORIENTATION': {
-                    'No': 92.7, 'NO': 92.7,
-                    'Yes': 5.6, 'YES': 5.6,
+                    'No': 92.7, 'NO': 92.7, 'Straight / Heterosexual': 92.7, 'STRAIGHT / HETEROSEXUAL': 92.7,
+                    'Yes': 5.6, 'YES': 5.6, 'Gay or Lesbian': 5.6, 'GAY OR LESBIAN': 5.6,
+                    'Other': 1.7, 'OTHER': 1.7, 'Another Sexual Orientation': 1.7, 'ANOTHER SEXUAL ORIENTATION': 1.7,
                     'Prefer Not to Say': 1.7, 'PREFER NOT TO SAY': 1.7
                 },
                 'PARENTAL_STATUS': {
-                    'No Children': 55.0, 'NO CHILDREN': 55.0,
-                    'Has Children': 40.0, 'HAS CHILDREN': 40.0,
-                    'Prefer Not to Say': 5.0, 'PREFER NOT TO SAY': 5.0
+                    "Doesn't Have Children": 55.0, "DOESN'T HAVE CHILDREN": 55.0, 'No Children': 55.0, 'NO CHILDREN': 55.0, 'Doesnt have kids': 55.0, "Doesn't have kids": 55.0,
+                    'Has Children': 40.0, 'HAS CHILDREN': 40.0, 'Has Kids': 40.0, 'HAS KIDS': 40.0,
+                    'Prefer Not to Say': 5.0, 'PREFER NOT TO SAY': 5.0, 'Other': 5.0, 'OTHER': 5.0
                 },
                 'OCCUPATION': {
+                    'Management, Business & Professional': 20.0, 'Sales or Retail': 10.0, 'Education or Library Services': 6.0,
+                    'Healthcare Practitioners or Support': 8.0, 'Service & Hospitality': 12.0, 'Agriculture & Outdoor': 2.0,
+                    'Skilled Trade/Construction or Maintenance': 8.0, 'Manufacturing & Production': 6.0,
+                    'Public Safety & Protective Services': 3.0, 'Transportation & Logistics': 5.0,
+                    'Science, Technology & Technical Professions': 8.0,
                     'Employed Full-Time': 48.0, 'EMPLOYED FULL-TIME': 48.0,
                     'Employed Part-Time': 12.0, 'EMPLOYED PART-TIME': 12.0,
                     'Self-Employed': 6.0, 'SELF-EMPLOYED': 6.0,
@@ -27039,10 +27053,25 @@
                     const demoKey = category.toLowerCase().replace('_', '_');
                     if (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics[demoKey]) {
                         genPopPct = genPopBaselineData.demographics[demoKey][value] || 0;
+                        // Try case-insensitive lookup if exact match failed
+                        if (genPopPct === 0) {
+                            const gpDemo = genPopBaselineData.demographics[demoKey];
+                            const valLower = (value || '').toLowerCase();
+                            for (const [k, v] of Object.entries(gpDemo)) {
+                                if ((k || '').toLowerCase() === valLower) { genPopPct = v; break; }
+                            }
+                        }
                     }
                     // Fallback to hardcoded values if not found in baseline
                     if (genPopPct === 0 && GENPOP_DEMOGRAPHICS[category]) {
                         genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
+                        // Try case-insensitive lookup if exact match failed
+                        if (genPopPct === 0) {
+                            const valLower = (value || '').toLowerCase();
+                            for (const [k, v] of Object.entries(GENPOP_DEMOGRAPHICS[category])) {
+                                if ((k || '').toLowerCase() === valLower) { genPopPct = v; break; }
+                            }
+                        }
                     }
                 } else if (category === 'LOCATION' && value) {
                     // Use same calculation as profile: Gen Pop % from Gen Pop profile's location data when available
@@ -27171,7 +27200,7 @@
                     result.demographicsProjection.sexual_orientation[soKey] = usProjection;
                 }
                 if (category === 'PARENTAL_STATUS' && value) {
-                    const psKey = ((v) => { const u = (v || '').trim().toLowerCase(); if (u === 'has kids') return 'Has Children'; if (u === 'doesnt have kids' || u === "doesn't have kids") return 'No Children'; if (u === 'other') return 'Prefer Not to Say'; return v; })(value);
+                    const psKey = ((v) => { const u = (v || '').trim().toLowerCase(); if (u === 'has kids') return 'Has Children'; if (u === 'doesnt have kids' || u === "doesn't have kids" || u === 'no children') return "Doesn't Have Children"; if (u === 'other') return 'Prefer Not to Say'; return v; })(value);
                     result.demographics.parental_status[psKey] = pct;
                     result.demographicsIndex.parental_status[psKey] = index;
                     result.demographicsGenPop.parental_status[psKey] = genPopPct;
