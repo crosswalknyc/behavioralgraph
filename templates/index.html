@@ -16588,9 +16588,10 @@
             const opt = dd?.querySelector('option[value="subscriberIQ"]');
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('subscriberIQ');
-            // Re-fetch live features and apply so View Numbers on/off is up to date without full refresh
+            // Apply current live features immediately so off-features (e.g. View Numbers) stay hidden
+            if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
+            // Re-fetch and apply again so we have latest from server (no full refresh needed)
             if (typeof loadAndApplyLiveFeatures === 'function') loadAndApplyLiveFeatures();
-            else if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
 
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
