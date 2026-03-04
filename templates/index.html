@@ -23885,11 +23885,12 @@
                 timingTabBtn.style.display = hasTimingData ? '' : 'none';
             }
             
-            // View Numbers tab - hide if no post_signup_touchpoints data
+            // View Numbers tab - hide if live feature off or no post_signup_touchpoints data
             const viewNumbersTabBtn = document.getElementById('subscriberViewNumbersTabBtn');
             if (viewNumbersTabBtn) {
                 const touchpoints = data.post_signup_touchpoints || [];
-                viewNumbersTabBtn.style.display = touchpoints.length > 0 ? '' : 'none';
+                const viewNumbersLive = liveFeatures.viewNumbers === true;
+                viewNumbersTabBtn.style.display = (viewNumbersLive && touchpoints.length > 0) ? '' : 'none';
             }
         }
         
