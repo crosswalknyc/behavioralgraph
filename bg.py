@@ -753,23 +753,18 @@ GENPOP_DEMOGRAPHICS = [
     ("PARENTAL_STATUS", "Doesn't have Kids", 52.0833),
     ("PARENTAL_STATUS", "Has Kids", 27.8437),
     ("PARENTAL_STATUS", "Other", 20.0729),
-    ("OCCUPATION", "Sales and Retail", 15.36),
-    ("OCCUPATION", "Business and Finance", 15.36),
-    ("OCCUPATION", "Management", 14.73),
-    ("OCCUPATION", "Educational Instruction", 14.3),
-    ("OCCUPATION", "Healthcare Support", 13.96),
-    ("OCCUPATION", "Food Preparation", 2.98),
-    ("OCCUPATION", "Building and Grounds", 2.84),
-    ("OCCUPATION", "Farming, Fishing", 2.65),
-    ("OCCUPATION", "Personal Care", 2.52),
-    ("OCCUPATION", "Transportation", 2.4),
-    ("OCCUPATION", "Production", 2.38),
-    ("OCCUPATION", "Protective Service", 2.34),
-    ("OCCUPATION", "Office and Admin", 1.43),
-    ("OCCUPATION", "Legal", 1.05),
-    ("OCCUPATION", "Community", 1.04),
-    ("OCCUPATION", "Healthcare Practitioners", 1.04),
-    ("OCCUPATION", "Architecture", 1.03)
+    ("OCCUPATION", "Sales & Retail", 15.36),
+    ("OCCUPATION", "Management, Business & Professional", 32.52),
+    ("OCCUPATION", "Education or Library Services", 14.3),
+    ("OCCUPATION", "Healthcare Practitioners or Support", 15.0),
+    ("OCCUPATION", "Service & Hospitality", 5.5),
+    ("OCCUPATION", "Skilled Trades/Construction or Maintenance", 2.84),
+    ("OCCUPATION", "Agriculture & Outdoor", 2.65),
+    ("OCCUPATION", "Transportation & Logistics", 2.4),
+    ("OCCUPATION", "Manufacturing & Production", 2.38),
+    ("OCCUPATION", "Public Safety & Protective Services", 2.34),
+    ("OCCUPATION", "Science, Technology & Technical Professions", 3.06),
+    ("OCCUPATION", "Other", 5.0)
 ]
 
 def normalize_demo_value(s: str) -> str:
@@ -1723,13 +1718,11 @@ parental_status_caps = pd.DataFrame({
 parental_status_caps['PARENTAL_STATUS'] = parental_status_caps['PARENTAL_STATUS'].apply(normalize_demo_value)
 
 occupation_caps = pd.DataFrame({
-    'OCCUPATION': ['Sales and Related', 'Business and Financial Operations', 'Management', 
-                   'Educational Instruction and Library', 'Healthcare Support', 'Food Preparation and Serving Related',
-                   'Building and Grounds Cleaning and Maintenance', 'Farming, Fishing and Forestry', 'Personal Care and Service',
-                   'Transportation and Material Moving', 'Production', 'Protective Service', 'Office and Administrative Support',
-                   'Legal', 'Community and Social Service', 'Healthcare Practitioners and Technical', 'Architecture and Engineering',
-                   'Computer and Mathematical', 'Other'],
-    'MAX_COUNT': [1536000, 1536000, 1473000, 1430000, 1396000, 298000, 284000, 265000, 252000, 240000, 238000, 234000, 143000, 105000, 104000, 104000, 103000, 102000, 500000]
+    'OCCUPATION': ['Sales & Retail', 'Management, Business & Professional', 'Education or Library Services',
+                   'Healthcare Practitioners or Support', 'Service & Hospitality', 'Skilled Trades/Construction or Maintenance',
+                   'Agriculture & Outdoor', 'Transportation & Logistics', 'Manufacturing & Production',
+                   'Public Safety & Protective Services', 'Science, Technology & Technical Professions', 'Other'],
+    'MAX_COUNT': [1536000, 4439000, 1430000, 2436000, 550000, 284000, 265000, 240000, 238000, 234000, 309000, 500000]
 })
 occupation_caps['OCCUPATION'] = occupation_caps['OCCUPATION'].apply(normalize_demo_value)
 # Location caps for major US DMAs - removed to allow all DMAs to display naturally
