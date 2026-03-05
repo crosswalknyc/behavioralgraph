@@ -11,6 +11,7 @@ services:
   - type: web
     name: behavioral-graph
     runtime: python
+    pythonVersion: "3.11.4"
     plan: starter
     # Instance count (manual scaling). For CPU/memory-based autoscaling use Dashboard > Scaling (Pro workspace).
     numInstances: 1
