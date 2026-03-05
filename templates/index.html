@@ -27015,20 +27015,29 @@
                     }
                 }
                 
-                // Hardcoded Gen Pop 2026 income percentages for proper indexing
-                const INCOME_GENPOP_2026 = {
-                    'Under $25,000': 10.0,
-                    '$25,000 - $49,999': 15.0,
-                    '$50,000 - $74,999': 17.0,
-                    '$75,000 - $99,999': 12.0,
-                    '$100,000 - $149,999': 18.0,
-                    '$150,000 - $249,999': 15.0,
-                    '$250,000 or More': 13.0
+                // Get Gen Pop income values from loaded genPopBaselineData
+                const getGenPopIncomeValue = (bucketName) => {
+                    if (!genPopBaselineData || !genPopBaselineData.demographics || !genPopBaselineData.demographics.income) return 0;
+                    const gpIncome = genPopBaselineData.demographics.income;
+                    // Try exact match first
+                    if (gpIncome[bucketName] != null) return gpIncome[bucketName];
+                    // Try case-insensitive match
+                    const lower = bucketName.toLowerCase();
+                    for (const [k, v] of Object.entries(gpIncome)) {
+                        if (k.toLowerCase() === lower) return v;
+                    }
+                    // Try matching by key numbers (e.g., "25000 - 49999" matches "$25,000 - $49,999")
+                    const bucketNums = bucketName.replace(/[^0-9]/g, '');
+                    for (const [k, v] of Object.entries(gpIncome)) {
+                        const kNums = k.replace(/[^0-9]/g, '');
+                        if (kNums === bucketNums) return v;
+                    }
+                    return 0;
                 };
                 
                 for (const [bucket, w] of Object.entries(weightByNew)) {
-                    // Use hardcoded Gen Pop for new buckets, calculate index from that
-                    const gpPct = INCOME_GENPOP_2026[bucket] || (w.sumW > 0 ? w.sumGp / w.sumW : 0);
+                    // Get Gen Pop from loaded Gen Pop file for new buckets, calculate index from that
+                    const gpPct = getGenPopIncomeValue(bucket) || (w.sumW > 0 ? w.sumGp / w.sumW : 0);
                     newGp[bucket] = gpPct;
                     // Recalculate index based on new bucket percentage vs Gen Pop
                     const bucketPct = newIncome[bucket] || 0;
