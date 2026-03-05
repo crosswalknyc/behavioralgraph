@@ -28,7 +28,7 @@ S3_BUCKET = "dashboard-inputs"
 S3_REGION = "us-east-2"
 
 TARGET_CATEGORY = "SEARCH ENGINE/AI"
-TARGET_VALUE = "DUCKDUCKGO"
+TARGET_VALUES = {"DUCKDUCKGO", "ECOSIA", "GEMINI", "CHATGPT", "CHAT GPT", "BRAVE SEARCH", "BRAVE", "QUORA"}
 
 
 def safe_float(x):
@@ -78,15 +78,15 @@ def process_csv(content: str, filename: str) -> str:
 
     category_indices = df.index[category_mask].tolist()
     
-    # Find DuckDuckGo rows within the category
-    duckduckgo_mask = category_mask & (val_upper == TARGET_VALUE)
-    if not duckduckgo_mask.any():
+    # Find target rows within the category (DuckDuckGo, Ecosia, Gemini, ChatGPT, Brave Search, Quora)
+    target_mask = category_mask & (val_upper.isin(TARGET_VALUES))
+    if not target_mask.any():
         return content
 
-    duckduckgo_indices = df.index[duckduckgo_mask].tolist()
+    target_indices = df.index[target_mask].tolist()
     modified = False
 
-    for idx in duckduckgo_indices:
+    for idx in target_indices:
         # Divide Original Raw Numbers by 2
         if raw_col:
             raw = safe_raw(df.at[idx, raw_col])
