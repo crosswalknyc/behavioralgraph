@@ -26950,13 +26950,15 @@
             
             // Check if income key matches a pattern (more flexible matching)
             function matchIncomePattern(key) {
-                const s = String(key).toLowerCase().replace(/,/g, '').replace(/\$/g, '').replace(/\s+/g, '');
-                // $40,000 - $59,999 pattern
-                if (s.includes('40000') && s.includes('59')) return '40-59';
-                // $60,000 - $74,999 pattern
-                if (s.includes('60000') && s.includes('74')) return '60-74';
+                const s = String(key).toLowerCase().replace(/,/g, '').replace(/\$/g, '').replace(/\s+/g, '').replace(/-/g, '');
+                // $40,000 - $59,999 pattern (40000 to 59999)
+                if ((s.includes('40000') || s.includes('40k')) && (s.includes('59') || s.includes('60'))) return '40-59';
+                // $60,000 - $74,999 pattern (60000 to 74999)
+                if ((s.includes('60000') || s.includes('60k')) && (s.includes('74') || s.includes('75'))) return '60-74';
                 // $250,000+ pattern
-                if (s.includes('250000') && (s.includes('+') || s.includes('more') || s.includes('over'))) return '250+';
+                if ((s.includes('250000') || s.includes('250k')) && (s.includes('+') || s.includes('more') || s.includes('over') || /250000\+?$/.test(s))) return '250+';
+                // Also catch just $250,000+ without "more"
+                if (/250000\+/.test(s) || s === '250000+' || s.endsWith('250000+')) return '250+';
                 return null;
             }
             
@@ -26974,6 +26976,8 @@
                 const income = res.demographics.income || {};
                 if (Object.keys(income).length === 0) return;
                 
+                console.log('🔄 normalizeIncomeBucketsForDashboard called, income keys:', Object.keys(income));
+                
                 const idx = res.demographicsIndex.income || {};
                 const gp = res.demographicsGenPop.income || {};
                 const proj = res.demographicsProjection.income || {};
@@ -26984,6 +26988,7 @@
                 for (const [oldKey, pct] of Object.entries(income)) {
                     const pattern = matchIncomePattern(oldKey);
                     const mapping = pattern ? patternToNew[pattern] : null;
+                    console.log(`  Income key "${oldKey}" -> pattern: ${pattern}, has mapping: ${!!mapping}`);
                     
                     const i = idx[oldKey] != null ? idx[oldKey] : 100;
                     const g = gp[oldKey] != null ? gp[oldKey] : 0;
@@ -27016,6 +27021,7 @@
                     newProj[bucket] = Math.round(w.sumProj);
                 }
                 
+                console.log('  New income buckets:', Object.keys(newIncome));
                 res.demographics.income = newIncome;
                 res.demographicsIndex.income = Object.keys(newIdx).length ? newIdx : res.demographicsIndex.income;
                 res.demographicsGenPop.income = Object.keys(newGp).length ? newGp : res.demographicsGenPop.income;
