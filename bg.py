@@ -5354,10 +5354,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # DIVIDE APP/PLATFORM USAGE BY 2
     df_final = divide_app_platform_usage_by_2(df_final)
     # DIVIDE BANKING, TRAVEL, BROADCAST/CABLE, AUTOMOBILE, GAMES, TELECOM, CREDIT PROVIDER, INVESTMENTS, INSURANCE, MEDIA, WHERE THEY SHOP, QSR BY 2
+    # Note: Amazon, Walmart, Target are excluded from division in WHERE THEY SHOP
     df_final = divide_categories_by_2(df_final, [
         'BANKING', 'TRAVEL', 'BROADCAST/CABLE', 'AUTOMOBILE', 'GAMES', 'TELECOM',
         'CREDIT PROVIDER', 'INVESTMENTS', 'INSURANCE', 'MEDIA', 'WHERE THEY SHOP', 'QSR'
-    ])
+    ], exclusions={
+        'WHERE THEY SHOP': ['AMAZON', 'WALMART', 'TARGET']
+    })
 
     # ENSURE CROSS-CATEGORY BRAND CONSISTENCY - AFTER all boosts are applied
     # This ensures Boston Celtics, Lakers, etc. have same boosted values across all categories
@@ -7615,8 +7618,15 @@ def divide_app_platform_usage_by_2(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def divide_categories_by_2(df: pd.DataFrame, category_names: list) -> pd.DataFrame:
-    """Divide the given categories by 2 (Original Raw Numbers) and update accordingly."""
+def divide_categories_by_2(df: pd.DataFrame, category_names: list, exclusions: dict = None) -> pd.DataFrame:
+    """Divide the given categories by 2 (Original Raw Numbers) and update accordingly.
+    
+    Args:
+        df: DataFrame to modify
+        category_names: List of category names to divide by 2
+        exclusions: Optional dict mapping category name (upper) to list of value names to exclude from division
+                   e.g. {'WHERE THEY SHOP': ['AMAZON', 'WALMART', 'TARGET']}
+    """
     if df is None or df.empty or not category_names:
         return df
     df = df.copy()
@@ -7625,9 +7635,26 @@ def divide_categories_by_2(df: pd.DataFrame, category_names: list) -> pd.DataFra
     indices = df[mask].index
     if len(indices) == 0:
         return df
+    
+    # Build exclusion lookup (category -> set of excluded values in upper case)
+    exclusion_lookup = {}
+    if exclusions:
+        for cat, vals in exclusions.items():
+            exclusion_lookup[cat.upper().strip()] = {str(v).upper().strip() for v in vals}
+    
     changes = 0
+    skipped = 0
     for idx in indices:
         try:
+            # Get category and value
+            category = str(df.at[idx, 'Column']).upper().strip()
+            value = str(df.at[idx, 'Value']).upper().strip()
+            
+            # Check if this value should be excluded for this category
+            if category in exclusion_lookup and value in exclusion_lookup[category]:
+                skipped += 1
+                continue
+            
             current_raw = int(float(str(df.at[idx, 'Original Raw Numbers']).replace(',', '')))
             new_raw = max(1, current_raw // 2)
             df.at[idx, 'Original Raw Numbers'] = str(new_raw)
@@ -7635,7 +7662,8 @@ def divide_categories_by_2(df: pd.DataFrame, category_names: list) -> pd.DataFra
         except Exception:
             continue
     if not SILENCE_VERBOSE_OUTPUT:
-        print(f"✅ Divided categories by 2 ({', '.join(sorted(upper_names))}): {changes} entries updated")
+        skip_msg = f", skipped {skipped} excluded values" if skipped > 0 else ""
+        print(f"✅ Divided categories by 2 ({', '.join(sorted(upper_names))}): {changes} entries updated{skip_msg}")
     return df
 
 def divide_streaming_platform_by_2_except_espn_netflix(df: pd.DataFrame) -> pd.DataFrame:
