@@ -3078,14 +3078,32 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('✅ Item released successfully!');
-                    loadPurgatoryItems();
+                    showToast('✅ Item released successfully!');
+                    // Remove item from DOM instead of refreshing the whole list
+                    removePurgatoryItemFromDOM(purgatoryId);
                 } else {
                     alert('Error: ' + data.error);
                 }
             } catch (error) {
                 console.error('Error releasing item:', error);
                 alert('Error releasing item');
+            }
+        }
+        
+        // Remove a purgatory item from DOM without full refresh
+        function removePurgatoryItemFromDOM(purgatoryId) {
+            const item = document.querySelector(`[data-purgatory-id="${purgatoryId}"]`);
+            if (item) {
+                item.style.transition = 'opacity 0.3s, transform 0.3s';
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-20px)';
+                setTimeout(() => item.remove(), 300);
+            }
+            // Update count
+            const countEl = document.getElementById('purgatoryCount');
+            if (countEl) {
+                const current = parseInt(countEl.textContent) || 0;
+                countEl.textContent = Math.max(0, current - 1);
             }
         }
         
@@ -3105,8 +3123,9 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('Item rejected and deleted');
-                    loadPurgatoryItems();
+                    showToast('Item rejected and deleted');
+                    // Remove item from DOM instead of refreshing the whole list
+                    removePurgatoryItemFromDOM(purgatoryId);
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -7012,7 +7031,13 @@
                 if (data.success) {
                     showToast('File and display name updated successfully!');
                     closeRenameModal();
-                    loadContentFiles(); // Refresh the file list
+                    // Update in place instead of refreshing the whole list
+                    const newKey = data.new_key || fileKey;
+                    const newDisplayName = displayName || newName.replace(/_/g, ' ');
+                    updateFileRowInPlace(fileKey, newKey, {
+                        project_name: newDisplayName,
+                        filename: newKey.split('/').pop()
+                    });
                 } else {
                     showToast(data.error || 'Failed to rename file', true);
                 }
@@ -7174,7 +7199,8 @@
                 if (data.success) {
                     showToast('Category updated successfully!');
                     closeCategoryModal();
-                    loadContentFiles(); // Refresh the file list
+                    // Update in place instead of refreshing the whole list
+                    updateFileRowInPlace(fileKey, fileKey, { category: newCategory.toUpperCase() });
                 } else {
                     showToast(data.error || 'Failed to update category', true);
                 }
@@ -7341,10 +7367,16 @@
                     
                     closeProfileImageModal();
                     document.getElementById('profileImagePurgatoryId').value = '';
-                    setTimeout(() => {
-                        loadContentFiles();
-                        if (!isTicketSales) loadProfileImages();
-                    }, 500);
+                    // Update in place instead of refreshing the whole list
+                    if (fileKey) {
+                        const imageUrl = data.image_url || urlInput;
+                        updateFileRowInPlace(fileKey, fileKey, { custom_image: imageUrl });
+                    }
+                    // Only refresh profile images list if needed (not content files)
+                    if (!isTicketSales && !isTicketSalesTracker) {
+                        // Update the profile images section without full refresh
+                        setTimeout(() => loadProfileImages(), 500);
+                    }
                 } else {
                     showToast(data.error || 'Failed to save image', true);
                     console.error('Save failed:', data);
@@ -7376,7 +7408,13 @@
                 if (data.success) {
                     showToast('Custom image removed');
                     closeProfileImageModal();
-                    loadContentFiles();
+                    // Update in place - find the file by profile name and clear its custom_image
+                    const file = contentFiles.find(f => f.project_name === profileName);
+                    if (file) {
+                        updateFileRowInPlace(file.key, file.key, { custom_image: null });
+                    }
+                    // Refresh profile images list
+                    setTimeout(() => loadProfileImages(), 500);
                 } else {
                     showToast(data.error || 'Failed to remove image', true);
                 }
@@ -7791,6 +7829,52 @@
             `;
         }
 
+        // Update a single file row in place without refreshing the whole list
+        function updateFileRowInPlace(oldKey, newKey, updates) {
+            // Find the file in contentFiles array and update it
+            const fileIndex = contentFiles.findIndex(f => f.key === oldKey);
+            if (fileIndex !== -1) {
+                // Update the file object
+                if (newKey && newKey !== oldKey) {
+                    contentFiles[fileIndex].key = newKey;
+                }
+                Object.assign(contentFiles[fileIndex], updates);
+                
+                // Find and update the DOM row
+                const row = document.querySelector(`tr[data-key="${oldKey}"]`);
+                if (row) {
+                    const file = contentFiles[fileIndex];
+                    const isTicketSales = file.is_ticket_sales || (file.key && file.key.startsWith('ticket-sales-iq/'));
+                    const isTicketSalesTracker = file.is_ticket_sales_tracker || (file.key && file.key.startsWith('ticket-sales-tracker/'));
+                    const newRowHtml = renderFileRow(file, isTicketSales, isTicketSalesTracker);
+                    const temp = document.createElement('tbody');
+                    temp.innerHTML = newRowHtml;
+                    const newRow = temp.firstElementChild;
+                    row.replaceWith(newRow);
+                }
+            }
+            // Also check archivedFiles
+            const archivedIndex = archivedFiles.findIndex(f => f.key === oldKey);
+            if (archivedIndex !== -1) {
+                if (newKey && newKey !== oldKey) {
+                    archivedFiles[archivedIndex].key = newKey;
+                }
+                Object.assign(archivedFiles[archivedIndex], updates);
+                
+                const row = document.querySelector(`tr[data-key="${oldKey}"]`);
+                if (row) {
+                    const file = archivedFiles[archivedIndex];
+                    const isTicketSales = file.is_ticket_sales || (file.key && file.key.startsWith('ticket-sales-iq/'));
+                    const isTicketSalesTracker = file.is_ticket_sales_tracker || (file.key && file.key.startsWith('ticket-sales-tracker/'));
+                    const newRowHtml = renderFileRow(file, isTicketSales, isTicketSalesTracker);
+                    const temp = document.createElement('tbody');
+                    temp.innerHTML = newRowHtml;
+                    const newRow = temp.firstElementChild;
+                    row.replaceWith(newRow);
+                }
+            }
+        }
+
         function toggleAccordion(header) {
             const accordion = header.closest('.category-accordion');
             accordion.classList.toggle('open');
@@ -7913,6 +7997,31 @@
             sortContentFiles();
         }
 
+        // Remove a file row from DOM with animation
+        function removeFileRowFromDOM(key) {
+            const row = document.querySelector(`tr[data-key="${key}"]`);
+            if (row) {
+                row.style.transition = 'opacity 0.3s, transform 0.3s';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-20px)';
+                setTimeout(() => row.remove(), 300);
+            }
+            // Update counts
+            const totalEl = document.getElementById('contentTotalFiles');
+            const archivedEl = document.getElementById('contentArchived');
+            if (totalEl && !showingArchived) {
+                totalEl.textContent = Math.max(0, (parseInt(totalEl.textContent) || 0) - 1);
+            }
+            if (archivedEl && showingArchived) {
+                archivedEl.textContent = Math.max(0, (parseInt(archivedEl.textContent) || 0) - 1);
+            }
+            // Remove from local arrays
+            const idx = contentFiles.findIndex(f => f.key === key);
+            if (idx !== -1) contentFiles.splice(idx, 1);
+            const archivedIdx = archivedFiles.findIndex(f => f.key === key);
+            if (archivedIdx !== -1) archivedFiles.splice(archivedIdx, 1);
+        }
+
         // Single file operations
         async function archiveFile(key) {
             if (!confirm(`Archive "${key.split('/').pop()}"?\n\nThis will move it to the historic folder.`)) return;
@@ -7927,7 +8036,7 @@
                 const data = await response.json();
                 if (data.success) {
                     showToast('File archived successfully');
-                    loadContentFiles();
+                    removeFileRowFromDOM(key);
                 } else {
                     showToast(data.error || 'Failed to archive file', true);
                 }
@@ -7949,7 +8058,7 @@
                 const data = await response.json();
                 if (data.success) {
                     showToast('File restored successfully');
-                    loadContentFiles();
+                    removeFileRowFromDOM(key);
                 } else {
                     showToast(data.error || 'Failed to restore file', true);
                 }
@@ -7972,7 +8081,7 @@
                 const data = await response.json();
                 if (data.success) {
                     showToast('File deleted permanently');
-                    loadContentFiles();
+                    removeFileRowFromDOM(key);
                 } else {
                     showToast(data.error || 'Failed to delete file', true);
                 }
@@ -8005,9 +8114,10 @@
                 const data = await response.json();
                 if (data.success) {
                     showToast(`${archiveKeys.length} file(s) archived successfully`);
+                    // Remove rows from DOM
+                    archiveKeys.forEach(key => removeFileRowFromDOM(key));
                     selectedFiles.clear();
                     updateSelectionBar();
-                    loadContentFiles();
                 } else {
                     showToast(data.error || 'Failed to archive files', true);
                 }
@@ -8041,9 +8151,10 @@
                 const data = await response.json();
                 if (data.success) {
                     showToast(`${deleteKeys.length} file(s) deleted permanently`);
+                    // Remove rows from DOM
+                    deleteKeys.forEach(key => removeFileRowFromDOM(key));
                     selectedFiles.clear();
                     updateSelectionBar();
-                    loadContentFiles();
                 } else {
                     showToast(data.error || 'Failed to delete files', true);
                 }
