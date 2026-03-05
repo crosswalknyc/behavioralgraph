@@ -60,6 +60,11 @@ except ImportError:
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _APP_DIR)
 
+# Environment configuration - 'development' or 'production'
+APP_ENV = os.environ.get('APP_ENV', 'production').lower()
+IS_DEV_ENV = APP_ENV == 'development'
+print(f"🌍 Running in {APP_ENV.upper()} environment")
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 CORS(app)
@@ -1161,6 +1166,38 @@ def _normalize_role(role):
 # ============================================================================
 # AUTHENTICATION DECORATORS
 # ============================================================================
+
+# DEV ENVIRONMENT ACCESS CONTROL
+# In development mode, only admin and super_admin users can access the site
+# This allows testing changes without affecting regular users
+ALLOWED_DEV_PATHS = ['/login', '/logout', '/health', '/healthz', '/ready', '/static', '/api/login']
+
+@app.before_request
+def check_dev_environment_access():
+    """In dev environment, restrict access to admin/super_admin users only."""
+    if not IS_DEV_ENV:
+        return None  # Production - no restrictions
+    
+    # Allow health checks and static files without auth
+    path = request.path
+    if any(path.startswith(allowed) for allowed in ALLOWED_DEV_PATHS):
+        return None
+    
+    # If not logged in, allow through to login page
+    if 'username' not in session:
+        if path == '/' or path.startswith('/api/'):
+            return None  # Let the normal auth flow handle it
+        return None
+    
+    # Check if user is admin or super_admin
+    user = get_current_user()
+    if user:
+        role = _normalize_role(user.get('role', 'user'))
+        if role in ('admin', 'super_admin'):
+            return None  # Allow access
+    
+    # Non-admin user trying to access dev site
+    return render_template('dev_access_denied.html'), 403
 
 def requires_auth(f):
     @wraps(f)
@@ -4439,7 +4476,8 @@ def index():
                            last_name=last_name,
                            company=company,
                            user_email=email,
-                           cloaked_from=session.get('cloaked_from'))
+                           cloaked_from=session.get('cloaked_from'),
+                           is_dev_env=IS_DEV_ENV)
 
 
 @app.route('/api/request-credits', methods=['POST'])
