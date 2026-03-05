@@ -1335,23 +1335,26 @@ def extract_demographics_from_csv(csv_content):
         return {}
 
 def extract_sample_size_from_csv(csv_content):
-    """Extract sample size from CSV: column D (Category Share) on SAMPLE SIZE row, not E (Original Raw Numbers)."""
+    """Extract sample size from SAMPLE SIZE row. If primary value is under 1000, use alternate column (largest of D, E, etc.)."""
     try:
         reader = csv.reader(io.StringIO(csv_content))
         for row in reader:
             if len(row) > 0 and str(row[0]).strip().upper() == 'SAMPLE SIZE':
-                # Column D = index 3 (Category Share); E = index 4 (Original Raw Numbers)
-                if len(row) > 3:
-                    val = row[3]
-                    n = int(float(str(val).replace(',', ''))) if val else None
-                    if n is not None:
-                        return n
-                if len(row) > 4:
-                    val = row[4]
-                    n = int(float(str(val).replace(',', ''))) if val else None
-                    if n is not None:
-                        return n
-                return None
+                candidates = []
+                for idx in [3, 4, 2]:  # D=Category Share, E=Original Raw Numbers, C=Brand Penetration
+                    if len(row) > idx and row[idx]:
+                        try:
+                            n = int(float(str(row[idx]).replace(',', '')))
+                            if n > 0:
+                                candidates.append(n)
+                        except (ValueError, TypeError):
+                            pass
+                if not candidates:
+                    return None
+                chosen = candidates[0]
+                if chosen < 1000 and len(candidates) > 1:
+                    chosen = max(candidates)
+                return chosen
         return None
     except Exception as e:
         print(f"Error extracting sample size: {e}")
