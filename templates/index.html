@@ -1605,6 +1605,10 @@
             animation: pulse 1.5s infinite;
         }
         
+        .dash-profile-image.error {
+            display: none !important;
+        }
+        
         @keyframes pulse {
             0%, 100% { opacity: 0.6; }
             50% { opacity: 1; }
@@ -13324,7 +13328,7 @@
             <div class="profile-and-toolbar-row" id="profileAndToolbarRow">
                 <div class="dash-header-row profile-header-row" id="profileHeaderRow">
                     <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
-                        <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile" onerror="this.parentElement.classList.remove('loaded')"></div>
+                        <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile" onerror="this.style.display='none'; this.parentElement.classList.remove('loaded','loading'); this.parentElement.classList.add('error');"></div>
                         <div class="profile-title-and-toolbar-wrap">
                             <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
@@ -14627,7 +14631,7 @@
                         <!-- Profile Info Header -->
                         <div id="subscriberProfileInfo" class="dash-header-row">
                             <div class="dash-profile-info">
-                                <div class="dash-profile-image" id="subscriberProfileImage"><img src="" alt="Show" onerror="this.parentElement.classList.remove('loaded')"></div>
+                                <div class="dash-profile-image" id="subscriberProfileImage"><img src="" alt="Show" onerror="this.style.display='none'; this.parentElement.classList.remove('loaded','loading'); this.parentElement.classList.add('error');"></div>
                                 <div class="dash-brand-container">
                                     <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
                                     <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
@@ -16405,15 +16409,17 @@
             if (currentProfileForImage && currentProfileForImage !== cacheKey) {
                 console.log(`🔄 Profile changed from ${currentProfileForImage} to ${cacheKey}, clearing image`);
                 img.src = '';
-                imageContainer.classList.remove('loaded', 'loading');
+                img.style.display = '';
+                imageContainer.classList.remove('loaded', 'loading', 'error');
             }
             
             // Update current profile tracker
             currentProfileForImage = cacheKey;
             
-            // Reset image state
-            imageContainer.classList.remove('loaded', 'loading');
+            // Reset image state - clear all classes and hide img
+            imageContainer.classList.remove('loaded', 'loading', 'error');
             img.src = '';
+            img.style.display = '';
             
             // If forcing refresh (e.g., after saving), clear cache for this profile
             if (forceRefresh) {
@@ -16437,7 +16443,8 @@
                     };
                     img.onerror = () => {
                         console.log(`⚠️ Cached image failed to load for ${profileName}, fetching fresh...`);
-                        imageContainer.classList.remove('loaded');
+                        imageContainer.classList.remove('loaded', 'loading');
+                        img.style.display = 'none';
                         // Clear cache and fetch fresh
                         delete profileImageCache[cacheKey];
                         fetchProfileImage(profileName, 0, true);
@@ -16510,7 +16517,10 @@
                                     }
                                 }, 500);
                             } else {
-                                imageContainer.classList.remove('loaded');
+                                // All retries exhausted - hide the container
+                                imageContainer.classList.remove('loaded', 'loading');
+                                imageContainer.classList.add('error');
+                                img.style.display = 'none';
                                 profileImageCache[cacheKey] = 'none';
                             }
                         }
@@ -16518,12 +16528,19 @@
                     tempImg.src = data.image_url;
                 } else {
                     if (currentProfileForImage === cacheKey) {
+                        // No image available - hide the container
+                        imageContainer.classList.remove('loaded', 'loading');
+                        imageContainer.classList.add('error');
+                        img.style.display = 'none';
                         profileImageCache[cacheKey] = 'none';
                     }
                 }
             } catch (error) {
                 console.log('Could not fetch profile image:', error);
+                // Error fetching - hide the container
                 imageContainer.classList.remove('loading');
+                imageContainer.classList.add('error');
+                img.style.display = 'none';
                 profileImageCache[cacheKey] = 'none';
             }
         }
@@ -16536,9 +16553,10 @@
             // Use lowercase key for cache consistency
             const cacheKey = showName.toLowerCase().trim();
             
-            // Reset image state
-            imageContainer.classList.remove('loaded', 'loading');
+            // Reset image state - clear all classes and show img
+            imageContainer.classList.remove('loaded', 'loading', 'error');
             img.src = '';
+            img.style.display = '';
             
             const cachedUrl = profileImageCache[cacheKey];
             
@@ -16551,7 +16569,9 @@
                 };
                 img.onerror = () => {
                     console.log(`⚠️ Cached image failed to load for ${showName}`);
-                    imageContainer.classList.remove('loaded');
+                    imageContainer.classList.remove('loaded', 'loading');
+                    imageContainer.classList.add('error');
+                    img.style.display = 'none';
                 };
                 return;
             }
@@ -16562,6 +16582,8 @@
                 const response = await fetch(`/api/profile-image/${encodeURIComponent(showName)}`, { credentials: 'same-origin' });
                 if (!response.ok) {
                     imageContainer.classList.remove('loading');
+                    imageContainer.classList.add('error');
+                    img.style.display = 'none';
                     profileImageCache[cacheKey] = 'none';
                     return;
                 }
@@ -16576,15 +16598,21 @@
                     };
                     img.onerror = () => {
                         imageContainer.classList.remove('loaded', 'loading');
+                        imageContainer.classList.add('error');
+                        img.style.display = 'none';
                         profileImageCache[cacheKey] = 'none';
                     };
                 } else {
                     imageContainer.classList.remove('loading');
+                    imageContainer.classList.add('error');
+                    img.style.display = 'none';
                     profileImageCache[cacheKey] = 'none';
                 }
             } catch (error) {
                 console.log('Could not fetch subscriber profile image:', error);
                 imageContainer.classList.remove('loading');
+                imageContainer.classList.add('error');
+                img.style.display = 'none';
                 profileImageCache[cacheKey] = 'none';
             }
         }
