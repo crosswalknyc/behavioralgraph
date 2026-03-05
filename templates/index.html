@@ -26939,6 +26939,89 @@
                 }
             }
             
+            // Normalize income key for matching
+            function normIncomeKey(s) {
+                if (s == null) return '';
+                return String(s).trim().toLowerCase().replace(/\s+/g, ' ').replace(/,/g, '').replace(/\$/g, '');
+            }
+            
+            // Redistribute old income brackets to new standard brackets
+            // $40,000 - $59,999: 3% -> Under $25,000, 47% -> $25,000 - $49,999, 50% -> $50,000 - $74,999
+            // $60,000 - $74,999: 100% -> $50,000 - $74,999
+            // $250,000+: 100% -> $250,000 or More
+            function normalizeIncomeBucketsForDashboard(res) {
+                const oldToNew = {
+                    '40000 - 59999': [['Under $25,000', 0.03], ['$25,000 - $49,999', 0.47], ['$50,000 - $74,999', 0.50]],
+                    '$40000 - $59999': [['Under $25,000', 0.03], ['$25,000 - $49,999', 0.47], ['$50,000 - $74,999', 0.50]],
+                    '$40,000 - $59,999': [['Under $25,000', 0.03], ['$25,000 - $49,999', 0.47], ['$50,000 - $74,999', 0.50]],
+                    '60000 - 74999': [['$50,000 - $74,999', 1.0]],
+                    '$60000 - $74999': [['$50,000 - $74,999', 1.0]],
+                    '$60,000 - $74,999': [['$50,000 - $74,999', 1.0]],
+                    '250000+': [['$250,000 or More', 1.0]],
+                    '$250000+': [['$250,000 or More', 1.0]],
+                    '$250,000+': [['$250,000 or More', 1.0]],
+                    '250000 or more': [['$250,000 or More', 1.0]],
+                    '$250000 or more': [['$250,000 or More', 1.0]],
+                    '$250,000 or more': [['$250,000 or More', 1.0]],
+                };
+                
+                const income = res.demographics.income || {};
+                if (Object.keys(income).length === 0) return;
+                
+                const idx = res.demographicsIndex.income || {};
+                const gp = res.demographicsGenPop.income || {};
+                const proj = res.demographicsProjection.income || {};
+                
+                const newIncome = {}, newIdx = {}, newGp = {}, newProj = {};
+                const weightByNew = {};
+                
+                for (const [oldKey, pct] of Object.entries(income)) {
+                    const key = normIncomeKey(oldKey);
+                    let mapping = null;
+                    for (const [mapKey, mapVal] of Object.entries(oldToNew)) {
+                        if (normIncomeKey(mapKey) === key) {
+                            mapping = mapVal;
+                            break;
+                        }
+                    }
+                    
+                    const i = idx[oldKey] != null ? idx[oldKey] : 100;
+                    const g = gp[oldKey] != null ? gp[oldKey] : 0;
+                    const pr = proj[oldKey] != null ? proj[oldKey] : 0;
+                    
+                    if (mapping) {
+                        mapping.forEach(([newBucket, ratio]) => {
+                            const w = pct * ratio;
+                            newIncome[newBucket] = (newIncome[newBucket] || 0) + w;
+                            if (!weightByNew[newBucket]) weightByNew[newBucket] = { sumW: 0, sumIdx: 0, sumGp: 0, sumProj: 0 };
+                            weightByNew[newBucket].sumW += w;
+                            weightByNew[newBucket].sumIdx += i * w;
+                            weightByNew[newBucket].sumGp += g * w;
+                            weightByNew[newBucket].sumProj += pr * ratio;
+                        });
+                    } else {
+                        // Pass through unchanged
+                        newIncome[oldKey] = (newIncome[oldKey] || 0) + pct;
+                        if (!weightByNew[oldKey]) weightByNew[oldKey] = { sumW: 0, sumIdx: 0, sumGp: 0, sumProj: 0 };
+                        weightByNew[oldKey].sumW += pct;
+                        weightByNew[oldKey].sumIdx += i * pct;
+                        weightByNew[oldKey].sumGp += g * pct;
+                        weightByNew[oldKey].sumProj += pr;
+                    }
+                }
+                
+                for (const [bucket, w] of Object.entries(weightByNew)) {
+                    newIdx[bucket] = w.sumW > 0 ? Math.round(w.sumIdx / w.sumW) : 100;
+                    newGp[bucket] = w.sumW > 0 ? w.sumGp / w.sumW : 0;
+                    newProj[bucket] = Math.round(w.sumProj);
+                }
+                
+                res.demographics.income = newIncome;
+                res.demographicsIndex.income = Object.keys(newIdx).length ? newIdx : res.demographicsIndex.income;
+                res.demographicsGenPop.income = Object.keys(newGp).length ? newGp : res.demographicsGenPop.income;
+                res.demographicsProjection.income = Object.keys(newProj).length ? newProj : res.demographicsProjection.income;
+            }
+            
             // HARDCODED GEN POP DMA PERCENTAGES (Nielsen DMA household distribution)
             const GENPOP_DMA = {
                 'NEW YORK NY': 6.4, 'LOS ANGELES CA': 4.8, 'CHICAGO IL': 3.0, 'PHILADELPHIA PA': 2.5,
@@ -26986,9 +27069,11 @@
                     'Asian': 6.0, 'ASIAN': 6.0
                 },
                 'INCOME': {
-                    '$25,000 - $49,999': 0, '$50,000 - $74,999': 40.6,
-                    '$75,000 - $99,999': 19.1, '$100,000 - $149,999': 21.4,
-                    '$150,000 - $249,999': 10.6, '$250,000 or More': 8.2
+                    'Under $25,000': 10.0, 'UNDER $25,000': 10.0,
+                    '$25,000 - $49,999': 15.0, '$50,000 - $74,999': 17.0,
+                    '$75,000 - $99,999': 12.0, '$100,000 - $149,999': 18.0,
+                    '$150,000 - $249,999': 15.0, '$250,000 or More': 13.0, '$250,000+': 13.0,
+                    '$40,000 - $59,999': 16.0, '$60,000 - $74,999': 10.0
                 },
                 'EDUCATION': {
                     'Bachelor\'s Degree': 22.3, 'High School or Less': 38.1,
@@ -27299,6 +27384,7 @@
             });
 
             normalizeAgeBucketsForDashboard(result);
+            normalizeIncomeBucketsForDashboard(result);
 
             // Sort behavioral by percentage
             Object.keys(result.behavioral).forEach(cat => {
@@ -48495,6 +48581,14 @@
                     if (lower === 'in a relationship') return 'In a Relationship';
                     if (lower === 'divorced' || lower === 'divorced or separated') return 'Divorced or Separated';
                     if (lower === 'prefer not to say') return 'Prefer Not to Say';
+                }
+                // Income normalization
+                if (type === 'income') {
+                    const noComma = lower.replace(/,/g, '');
+                    if (noComma.includes('250000') && (noComma.includes('+') || noComma.includes('or more'))) return '$250,000 or More';
+                    if (noComma.includes('40000') && noComma.includes('59')) return '$40,000 - $59,999';
+                    if (noComma.includes('60000') && noComma.includes('74')) return '$60,000 - $74,999';
+                    if (noComma.includes('under') && noComma.includes('25000')) return 'Under $25,000';
                 }
                 return v;
             };
