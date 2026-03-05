@@ -11551,8 +11551,8 @@ def rename_file():
                 print(f"✅ Updated display name to: {new_display_name}")
                 found = True
                 break
-        if not found and old_key != new_key:
-            # File was not in cache; add entry for new key so admin list shows updated name
+        if not found:
+            # File was not in cache; add entry so admin list shows updated name
             if display_name and display_name.strip():
                 new_display_name = display_name.strip()
             else:
@@ -11570,6 +11570,7 @@ def rename_file():
                 'category': 'Uncategorized',
             })
             s3_cache['jobs'] = jobs
+            print(f"📝 Added new cache entry for {new_key} with display name: {new_display_name}")
         save_persisted_cache()
         
         print(f"📝 Renamed file: {old_key} -> {new_key}")
@@ -12827,6 +12828,9 @@ def change_file_category():
                 'display_name': project_name,
             })
             s3_cache['jobs'] = jobs
+            print(f"📝 Added new cache entry for {file_key} with category: {new_category}")
+        elif found:
+            print(f"📝 Updated existing cache entry for {file_key} with category: {new_category}")
         save_persisted_cache()
         
         print(f"🏷️ Changed category for {file_key} to {new_category}")
