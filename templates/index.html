@@ -26892,8 +26892,10 @@
                         const newGp = {};
                         for (const [b, r] of Object.entries(newRaw)) {
                             newAge[b] = Math.round((r / totalRaw) * 10000) / 100;
-                            newIdx[b] = newIdxW[b] > 0 ? Math.round(newIdxSum[b] / newIdxW[b]) : 100;
-                            newGp[b] = newGpW[b] > 0 ? newGpSum[b] / newGpW[b] : 0;
+                            // Get Gen Pop from loaded file, recalculate index
+                            const gpPct = getGenPopValue('age', b) || (newGpW[b] > 0 ? newGpSum[b] / newGpW[b] : 0);
+                            newGp[b] = gpPct;
+                            newIdx[b] = gpPct > 0 ? Math.round((newAge[b] / gpPct) * 100) : 100;
                         }
                         res.demographics.age = newAge;
                         res.demographicsIndex.age = newIdx;
@@ -26928,8 +26930,11 @@
                         }
                     }
                     for (const [bucket, w] of Object.entries(weightByNew)) {
-                        newIdx[bucket] = w.sumW > 0 ? Math.round(w.sumIdx / w.sumW) : 100;
-                        newGp[bucket] = w.sumW > 0 ? w.sumGp / w.sumW : 0;
+                        // Get Gen Pop from loaded file, recalculate index
+                        const gpPct = getGenPopValue('age', bucket) || (w.sumW > 0 ? w.sumGp / w.sumW : 0);
+                        newGp[bucket] = gpPct;
+                        const bucketPct = newAge[bucket] || 0;
+                        newIdx[bucket] = gpPct > 0 ? Math.round((bucketPct / gpPct) * 100) : 100;
                         newProjOut[bucket] = Math.round(w.sumProj);
                     }
                     res.demographics.age = newAge;
@@ -26976,7 +26981,6 @@
                 const income = res.demographics.income || {};
                 if (Object.keys(income).length === 0) return;
                 
-                console.log('🔄 normalizeIncomeBucketsForDashboard called, income keys:', Object.keys(income));
                 
                 const idx = res.demographicsIndex.income || {};
                 const gp = res.demographicsGenPop.income || {};
@@ -26988,7 +26992,6 @@
                 for (const [oldKey, pct] of Object.entries(income)) {
                     const pattern = matchIncomePattern(oldKey);
                     const mapping = pattern ? patternToNew[pattern] : null;
-                    console.log(`  Income key "${oldKey}" -> pattern: ${pattern}, has mapping: ${!!mapping}`);
                     
                     const i = idx[oldKey] != null ? idx[oldKey] : 100;
                     const g = gp[oldKey] != null ? gp[oldKey] : 0;
@@ -27015,29 +27018,9 @@
                     }
                 }
                 
-                // Get Gen Pop income values from loaded genPopBaselineData
-                const getGenPopIncomeValue = (bucketName) => {
-                    if (!genPopBaselineData || !genPopBaselineData.demographics || !genPopBaselineData.demographics.income) return 0;
-                    const gpIncome = genPopBaselineData.demographics.income;
-                    // Try exact match first
-                    if (gpIncome[bucketName] != null) return gpIncome[bucketName];
-                    // Try case-insensitive match
-                    const lower = bucketName.toLowerCase();
-                    for (const [k, v] of Object.entries(gpIncome)) {
-                        if (k.toLowerCase() === lower) return v;
-                    }
-                    // Try matching by key numbers (e.g., "25000 - 49999" matches "$25,000 - $49,999")
-                    const bucketNums = bucketName.replace(/[^0-9]/g, '');
-                    for (const [k, v] of Object.entries(gpIncome)) {
-                        const kNums = k.replace(/[^0-9]/g, '');
-                        if (kNums === bucketNums) return v;
-                    }
-                    return 0;
-                };
-                
                 for (const [bucket, w] of Object.entries(weightByNew)) {
                     // Get Gen Pop from loaded Gen Pop file for new buckets, calculate index from that
-                    const gpPct = getGenPopIncomeValue(bucket) || (w.sumW > 0 ? w.sumGp / w.sumW : 0);
+                    const gpPct = getGenPopValue('income', bucket) || (w.sumW > 0 ? w.sumGp / w.sumW : 0);
                     newGp[bucket] = gpPct;
                     // Recalculate index based on new bucket percentage vs Gen Pop
                     const bucketPct = newIncome[bucket] || 0;
@@ -27045,16 +27028,59 @@
                     newProj[bucket] = Math.round(w.sumProj);
                 }
                 
-                console.log('  New income buckets:', Object.keys(newIncome));
-                console.log('  New income GenPop:', newGp);
-                console.log('  New income Index:', newIdx);
                 res.demographics.income = newIncome;
                 res.demographicsIndex.income = Object.keys(newIdx).length ? newIdx : res.demographicsIndex.income;
                 res.demographicsGenPop.income = Object.keys(newGp).length ? newGp : res.demographicsGenPop.income;
                 res.demographicsProjection.income = Object.keys(newProj).length ? newProj : res.demographicsProjection.income;
             }
             
-            // HARDCODED GEN POP DMA PERCENTAGES (Nielsen DMA household distribution)
+            // Universal helper to get Gen Pop value from loaded genPopBaselineData
+            // Always prioritizes the loaded Gen Pop file (most recent year)
+            function getGenPopValue(category, value) {
+                if (!genPopBaselineData) return 0;
+                const catLower = (category || '').toLowerCase().replace(/_/g, '_');
+                const valStr = String(value || '').trim();
+                const valLower = valStr.toLowerCase();
+                
+                // For demographics
+                if (genPopBaselineData.demographics && genPopBaselineData.demographics[catLower]) {
+                    const gpDemo = genPopBaselineData.demographics[catLower];
+                    // Try exact match
+                    if (gpDemo[valStr] != null) return gpDemo[valStr];
+                    if (gpDemo[value] != null) return gpDemo[value];
+                    // Try case-insensitive match
+                    for (const [k, v] of Object.entries(gpDemo)) {
+                        if ((k || '').toLowerCase() === valLower) return v;
+                    }
+                    // Try matching by numbers only (for income brackets)
+                    const valNums = valStr.replace(/[^0-9]/g, '');
+                    if (valNums) {
+                        for (const [k, v] of Object.entries(gpDemo)) {
+                            const kNums = (k || '').replace(/[^0-9]/g, '');
+                            if (kNums === valNums) return v;
+                        }
+                    }
+                }
+                
+                // For locations
+                if (catLower === 'location' && genPopBaselineData.locations) {
+                    const dmaKey = valStr.toUpperCase();
+                    const loc = genPopBaselineData.locations.find(l => (l.name || '').toUpperCase().trim() === dmaKey);
+                    if (loc && (loc.pct != null || loc.genPopPct != null)) {
+                        return parseFloat(loc.pct ?? loc.genPopPct) || 0;
+                    }
+                }
+                
+                // For behavioral
+                if (genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
+                    const item = genPopBaselineData.behavioral[category].find(i => i.name === value);
+                    if (item) return item.pct || 0;
+                }
+                
+                return 0;
+            }
+            
+            // HARDCODED GEN POP DMA PERCENTAGES (Nielsen DMA household distribution) - FALLBACK ONLY
             const GENPOP_DMA = {
                 'NEW YORK NY': 6.4, 'LOS ANGELES CA': 4.8, 'CHICAGO IL': 3.0, 'PHILADELPHIA PA': 2.5,
                 'DALLAS FORT WORTH TX': 2.4, 'SAN FRANCISCO OAKLAND SAN JOSE CA': 2.2, 'WASHINGTON DC': 2.2,
@@ -27162,29 +27188,17 @@
                 // Use calculated projection if CSV value seems wrong (less than 1/1000th of what it should be)
                 const usProjection = (csvProjection > 0 && csvProjection > calculatedProjection / 1000) ? csvProjection : calculatedProjection;
                 
-                // For DEMOGRAPHICS: Try to use loaded Gen Pop baseline, fallback to hardcoded
-                // For LOCATION: Use hardcoded Gen Pop DMA percentages  
-                // For BEHAVIORAL: Use loaded Gen Pop baseline
+                // For ALL categories: Use loaded Gen Pop baseline (most recent year file)
+                // Fallback to hardcoded values only if Gen Pop file not loaded
                 let genPopPct = 0;
                 let genPopProjection = 0;
                 if (demoCategories.includes(category)) {
-                    // Try to get from loaded Gen Pop baseline first
+                    // Get from loaded Gen Pop baseline file (most recent year)
                     const demoKey = category.toLowerCase().replace('_', '_');
-                    if (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics[demoKey]) {
-                        genPopPct = genPopBaselineData.demographics[demoKey][value] || 0;
-                        // Try case-insensitive lookup if exact match failed
-                        if (genPopPct === 0) {
-                            const gpDemo = genPopBaselineData.demographics[demoKey];
-                            const valLower = (value || '').toLowerCase();
-                            for (const [k, v] of Object.entries(gpDemo)) {
-                                if ((k || '').toLowerCase() === valLower) { genPopPct = v; break; }
-                            }
-                        }
-                    }
-                    // Fallback to hardcoded values if not found in baseline
-                    if (genPopPct === 0 && GENPOP_DEMOGRAPHICS[category]) {
+                    genPopPct = getGenPopValue(demoKey, value);
+                    // Fallback to hardcoded values ONLY if Gen Pop file not loaded
+                    if (genPopPct === 0 && !genPopBaselineData && GENPOP_DEMOGRAPHICS[category]) {
                         genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
-                        // Try case-insensitive lookup if exact match failed
                         if (genPopPct === 0) {
                             const valLower = (value || '').toLowerCase();
                             for (const [k, v] of Object.entries(GENPOP_DEMOGRAPHICS[category])) {
@@ -27193,23 +27207,10 @@
                         }
                     }
                 } else if (category === 'LOCATION' && value) {
-                    // Use same calculation as profile: Gen Pop % from Gen Pop profile's location data when available
-                    if (genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0) {
-                        const dmaKey = value.toUpperCase().trim();
-                        let genPopLoc = genPopBaselineData.locations.find(loc => (loc.name || '').toUpperCase().trim() === dmaKey);
-                        if (!genPopLoc) {
-                            genPopLoc = genPopBaselineData.locations.find(loc => {
-                                const locKey = (loc.name || '').toUpperCase().trim();
-                                return locKey.includes(dmaKey) || dmaKey.includes(locKey);
-                            });
-                        }
-                        if (genPopLoc != null && (genPopLoc.pct != null || genPopLoc.genPopPct != null)) {
-                            genPopPct = parseFloat(genPopLoc.pct ?? genPopLoc.genPopPct) || 0;
-                            // Gen pop is actual % (0.78 = 0.78%), do not multiply by 100
-                        }
-                    }
-                    // Fallback: hardcoded Gen Pop DMA percentages only when Gen Pop baseline locations not available
-                    if (genPopPct === 0) {
+                    // Get from loaded Gen Pop baseline file
+                    genPopPct = getGenPopValue('location', value);
+                    // Fallback: hardcoded Gen Pop DMA percentages only when Gen Pop file not loaded
+                    if (genPopPct === 0 && !genPopBaselineData) {
                         const dmaKey = value.toUpperCase();
                         genPopPct = GENPOP_DMA[dmaKey] || 0;
                         if (genPopPct === 0) {
