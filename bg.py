@@ -5361,6 +5361,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     ], exclusions={
         'WHERE THEY SHOP': ['AMAZON', 'WALMART', 'TARGET']
     })
+    
+    # DIVIDE MOST PURCHASED BRANDS BY 1.6
+    df_final = divide_category_by_factor(df_final, 'MOST PURCHASED BRANDS', 1.6)
 
     # ENSURE CROSS-CATEGORY BRAND CONSISTENCY - AFTER all boosts are applied
     # This ensures Boston Celtics, Lakers, etc. have same boosted values across all categories
@@ -7616,6 +7619,76 @@ def divide_app_platform_usage_by_2(df: pd.DataFrame) -> pd.DataFrame:
     if not SILENCE_VERBOSE_OUTPUT:
         print(f"✅ Divided APP/PLATFORM USAGE category by 2: {changes} entries updated")
 
+    return df
+
+def divide_category_by_factor(df: pd.DataFrame, category_name: str, factor: float) -> pd.DataFrame:
+    """Divide a category by a custom factor (Brand Penetration, Original Raw Numbers, US Gen Pop Projection).
+    
+    Args:
+        df: DataFrame to modify
+        category_name: Category name to divide
+        factor: The factor to divide by (e.g., 1.6)
+    """
+    if df is None or df.empty or not category_name or factor == 0:
+        return df
+    df = df.copy()
+    
+    category_upper = category_name.upper().strip()
+    mask = df['Column'].str.upper().str.strip() == category_upper
+    indices = df[mask].index
+    
+    if len(indices) == 0:
+        return df
+    
+    changes = 0
+    for idx in indices:
+        try:
+            # Divide Brand Penetration (Row)
+            if 'Brand Penetration (Row)' in df.columns:
+                current_pen = float(str(df.at[idx, 'Brand Penetration (Row)']).replace(',', ''))
+                new_pen = current_pen / factor
+                df.at[idx, 'Brand Penetration (Row)'] = round(new_pen, 2)
+            
+            # Divide Original Raw Numbers
+            if 'Original Raw Numbers' in df.columns:
+                current_raw = int(float(str(df.at[idx, 'Original Raw Numbers']).replace(',', '')))
+                new_raw = max(1, int(round(current_raw / factor)))
+                df.at[idx, 'Original Raw Numbers'] = str(new_raw)
+            
+            # Divide US Gen Pop Projection
+            if 'US Gen Pop Projection' in df.columns:
+                current_proj = int(float(str(df.at[idx, 'US Gen Pop Projection']).replace(',', '')))
+                new_proj = max(1, int(round(current_proj / factor)))
+                df.at[idx, 'US Gen Pop Projection'] = str(new_proj)
+            
+            changes += 1
+        except Exception:
+            continue
+    
+    # Recalculate Category Share for this category
+    if 'Brand Penetration (Row)' in df.columns and 'Category Share' in df.columns:
+        category_rows = df[mask]
+        if len(category_rows) > 0:
+            total_penetration = 0
+            for cat_idx in category_rows.index:
+                try:
+                    val = float(str(df.at[cat_idx, 'Brand Penetration (Row)']).replace(',', ''))
+                    total_penetration += val
+                except:
+                    pass
+            
+            if total_penetration > 0:
+                for cat_idx in category_rows.index:
+                    try:
+                        val = float(str(df.at[cat_idx, 'Brand Penetration (Row)']).replace(',', ''))
+                        new_share = (val / total_penetration) * 100
+                        df.at[cat_idx, 'Category Share'] = round(new_share, 2)
+                    except:
+                        pass
+    
+    if not SILENCE_VERBOSE_OUTPUT:
+        print(f"✅ Divided {category_upper} by {factor}: {changes} entries updated")
+    
     return df
 
 def divide_categories_by_2(df: pd.DataFrame, category_names: list, exclusions: dict = None) -> pd.DataFrame:
