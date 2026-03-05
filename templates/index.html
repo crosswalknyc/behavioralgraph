@@ -26939,10 +26939,25 @@
                 }
             }
             
-            // Normalize income key for matching
+            // Normalize income key for matching - extract just the numbers
             function normIncomeKey(s) {
                 if (s == null) return '';
-                return String(s).trim().toLowerCase().replace(/\s+/g, ' ').replace(/,/g, '').replace(/\$/g, '');
+                // Extract all numbers from the string
+                const nums = String(s).match(/\d+/g);
+                if (!nums) return String(s).trim().toLowerCase();
+                return nums.join('-');
+            }
+            
+            // Check if income key matches a pattern (more flexible matching)
+            function matchIncomePattern(key) {
+                const s = String(key).toLowerCase().replace(/,/g, '').replace(/\$/g, '').replace(/\s+/g, '');
+                // $40,000 - $59,999 pattern
+                if (s.includes('40000') && s.includes('59')) return '40-59';
+                // $60,000 - $74,999 pattern
+                if (s.includes('60000') && s.includes('74')) return '60-74';
+                // $250,000+ pattern
+                if (s.includes('250000') && (s.includes('+') || s.includes('more') || s.includes('over'))) return '250+';
+                return null;
             }
             
             // Redistribute old income brackets to new standard brackets
@@ -26950,19 +26965,10 @@
             // $60,000 - $74,999: 100% -> $50,000 - $74,999
             // $250,000+: 100% -> $250,000 or More
             function normalizeIncomeBucketsForDashboard(res) {
-                const oldToNew = {
-                    '40000 - 59999': [['Under $25,000', 0.03], ['$25,000 - $49,999', 0.47], ['$50,000 - $74,999', 0.50]],
-                    '$40000 - $59999': [['Under $25,000', 0.03], ['$25,000 - $49,999', 0.47], ['$50,000 - $74,999', 0.50]],
-                    '$40,000 - $59,999': [['Under $25,000', 0.03], ['$25,000 - $49,999', 0.47], ['$50,000 - $74,999', 0.50]],
-                    '60000 - 74999': [['$50,000 - $74,999', 1.0]],
-                    '$60000 - $74999': [['$50,000 - $74,999', 1.0]],
-                    '$60,000 - $74,999': [['$50,000 - $74,999', 1.0]],
-                    '250000+': [['$250,000 or More', 1.0]],
-                    '$250000+': [['$250,000 or More', 1.0]],
-                    '$250,000+': [['$250,000 or More', 1.0]],
-                    '250000 or more': [['$250,000 or More', 1.0]],
-                    '$250000 or more': [['$250,000 or More', 1.0]],
-                    '$250,000 or more': [['$250,000 or More', 1.0]],
+                const patternToNew = {
+                    '40-59': [['Under $25,000', 0.03], ['$25,000 - $49,999', 0.47], ['$50,000 - $74,999', 0.50]],
+                    '60-74': [['$50,000 - $74,999', 1.0]],
+                    '250+': [['$250,000 or More', 1.0]],
                 };
                 
                 const income = res.demographics.income || {};
@@ -26976,14 +26982,8 @@
                 const weightByNew = {};
                 
                 for (const [oldKey, pct] of Object.entries(income)) {
-                    const key = normIncomeKey(oldKey);
-                    let mapping = null;
-                    for (const [mapKey, mapVal] of Object.entries(oldToNew)) {
-                        if (normIncomeKey(mapKey) === key) {
-                            mapping = mapVal;
-                            break;
-                        }
-                    }
+                    const pattern = matchIncomePattern(oldKey);
+                    const mapping = pattern ? patternToNew[pattern] : null;
                     
                     const i = idx[oldKey] != null ? idx[oldKey] : 100;
                     const g = gp[oldKey] != null ? gp[oldKey] : 0;
