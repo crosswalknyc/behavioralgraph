@@ -16454,12 +16454,13 @@
                         }
                     };
                     img.onerror = () => {
-                        console.log(`⚠️ Cached image failed to load for ${profileName}, fetching fresh...`);
+                        console.log(`⚠️ Cached image failed to load for ${profileName}, hiding image`);
                         imageContainer.classList.remove('loaded', 'loading');
+                        imageContainer.classList.add('error');
                         img.style.display = 'none';
-                        // Clear cache and fetch fresh
-                        delete profileImageCache[cacheKey];
-                        fetchProfileImage(profileName, 0, true);
+                        img.src = '';
+                        // Mark as no image available - don't retry
+                        profileImageCache[cacheKey] = 'none';
                     };
                 }
                 // Still check API in background to update cache if image was changed
@@ -16518,23 +16519,14 @@
                         }
                     };
                     tempImg.onerror = () => {
-                        // Retry once if image fails to load (only if still current profile)
+                        // Image failed to load - just hide it, no retries
                         if (currentProfileForImage === cacheKey) {
-                            if (retryCount < 2) {
-                                console.log(`🔄 Retrying image load for ${profileName} (attempt ${retryCount + 1})`);
-                                setTimeout(() => {
-                                    if (currentProfileForImage === cacheKey) {
-                                        profileImageCache[cacheKey] = null;
-                                        fetchProfileImage(profileName, retryCount + 1, true);
-                                    }
-                                }, 500);
-                            } else {
-                                // All retries exhausted - hide the container
-                                imageContainer.classList.remove('loaded', 'loading');
-                                imageContainer.classList.add('error');
-                                img.style.display = 'none';
-                                profileImageCache[cacheKey] = 'none';
-                            }
+                            console.log(`⚠️ Image failed to load for ${profileName}, hiding image`);
+                            imageContainer.classList.remove('loaded', 'loading');
+                            imageContainer.classList.add('error');
+                            img.style.display = 'none';
+                            img.src = '';
+                            profileImageCache[cacheKey] = 'none';
                         }
                     };
                     tempImg.src = data.image_url;
