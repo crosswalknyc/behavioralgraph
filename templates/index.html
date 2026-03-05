@@ -27015,13 +27015,30 @@
                     }
                 }
                 
+                // Hardcoded Gen Pop 2026 income percentages for proper indexing
+                const INCOME_GENPOP_2026 = {
+                    'Under $25,000': 10.0,
+                    '$25,000 - $49,999': 15.0,
+                    '$50,000 - $74,999': 17.0,
+                    '$75,000 - $99,999': 12.0,
+                    '$100,000 - $149,999': 18.0,
+                    '$150,000 - $249,999': 15.0,
+                    '$250,000 or More': 13.0
+                };
+                
                 for (const [bucket, w] of Object.entries(weightByNew)) {
-                    newIdx[bucket] = w.sumW > 0 ? Math.round(w.sumIdx / w.sumW) : 100;
-                    newGp[bucket] = w.sumW > 0 ? w.sumGp / w.sumW : 0;
+                    // Use hardcoded Gen Pop for new buckets, calculate index from that
+                    const gpPct = INCOME_GENPOP_2026[bucket] || (w.sumW > 0 ? w.sumGp / w.sumW : 0);
+                    newGp[bucket] = gpPct;
+                    // Recalculate index based on new bucket percentage vs Gen Pop
+                    const bucketPct = newIncome[bucket] || 0;
+                    newIdx[bucket] = gpPct > 0 ? Math.round((bucketPct / gpPct) * 100) : 100;
                     newProj[bucket] = Math.round(w.sumProj);
                 }
                 
                 console.log('  New income buckets:', Object.keys(newIncome));
+                console.log('  New income GenPop:', newGp);
+                console.log('  New income Index:', newIdx);
                 res.demographics.income = newIncome;
                 res.demographicsIndex.income = Object.keys(newIdx).length ? newIdx : res.demographicsIndex.income;
                 res.demographicsGenPop.income = Object.keys(newGp).length ? newGp : res.demographicsGenPop.income;
