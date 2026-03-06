@@ -281,6 +281,7 @@ import re
 import random
 import glob
 from datetime import datetime
+from genpop_calibration import calibrate_to_genpop
 
 # Optional S3 support for caching
 try:
@@ -5393,7 +5394,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = add_us_gen_pop_projection(df_final)
     # SEARCH ENGINE/AI: enforce Google ≥65% and ChatGPT ≥25% in Brand Penetration (Row); Category Share sums to 100%; reconfigure raw and US Gen Pop
     df_final = enforce_search_engine_ai_google_chatgpt_minimums(df_final)
-    
+
+    # INDEX-BASED GEN-POP CALIBRATION
+    # Anchors all behavioral categories to verified US general population
+    # penetration rates. Preserves each profile's relative signal (index)
+    # while bringing absolute values in line with reality.
+    # Correction factors live in genpop_calibration.py — add new entries
+    # there when additional ground-truth data becomes available.
+    df_final = calibrate_to_genpop(df_final)
+
     # Cap high brand penetration values to randomized 80-90% range with brand consistency
     df_final = cap_high_brand_penetration(df_final, cap_threshold=92.0, min_cap=80.0, max_cap=90.0)
 
