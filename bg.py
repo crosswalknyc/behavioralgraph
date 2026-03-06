@@ -1530,6 +1530,7 @@ def connect_snowflake():
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")  # 4 hour timeout for large queries
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET QUERY_TAG = 'ULTRA_FAST_YEARLY'")
+        cur.execute("ALTER SESSION SET PYTHON_CONNECTOR_QUERY_RESULT_FORMAT = 'JSON'")
     if not SILENCE_VERBOSE_OUTPUT:
         print("🚀 Connected to Snowflake with BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration).")
     return conn
