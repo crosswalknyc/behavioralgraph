@@ -277,12 +277,30 @@ import os
 import io
 import pandas as pd
 import snowflake.connector
+import snowflake.connector.cursor
 import numpy as np
 import re
 import random
 import glob
 from datetime import datetime
 from genpop_calibration import calibrate_to_genpop
+
+# ─── Patch Snowflake cursor to survive Arrow dtype conversion errors ───
+# snowflake-connector-python 3.12.0 bundles nanoarrow which crashes on certain
+# integer values ("Invalid value 'X' for dtype 'float64'"). We wrap fetchone/
+# fetchall to catch these and re-execute with Arrow disabled via JSON fallback.
+_original_execute = snowflake.connector.cursor.SnowflakeCursor.execute
+
+def _safe_execute(self, command, params=None, *args, **kwargs):
+    """Execute that forces JSON result format to avoid Arrow dtype bugs."""
+    result = _original_execute(self, command, params, *args, **kwargs)
+    try:
+        self._query_result_format = 'json'
+    except Exception:
+        pass
+    return result
+
+snowflake.connector.cursor.SnowflakeCursor.execute = _safe_execute
 
 # Optional S3 support for caching
 try:
@@ -1530,7 +1548,6 @@ def connect_snowflake():
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")  # 4 hour timeout for large queries
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET QUERY_TAG = 'ULTRA_FAST_YEARLY'")
-        cur.execute("ALTER SESSION SET PYTHON_CONNECTOR_QUERY_RESULT_FORMAT = 'JSON'")
     if not SILENCE_VERBOSE_OUTPUT:
         print("🚀 Connected to Snowflake with BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration).")
     return conn
