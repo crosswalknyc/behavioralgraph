@@ -16288,6 +16288,51 @@
             if (v === 'divorced') return 'Divorced or Separated';
             return s;
         }
+
+        function normalizeDemoForIndex(value) {
+            if (value == null) return '';
+            const v = String(value).trim().toLowerCase().replace(/[&+]/g, ' ').replace(/\s+/g, ' ').trim();
+            const CANONICAL = {
+                'black': 'black or african american',
+                'black african american': 'black or african american',
+                'black or african american': 'black or african american',
+                'african american': 'black or african american',
+                'latino': 'hispanic or latino',
+                'latinx': 'hispanic or latino',
+                'hispanic': 'hispanic or latino',
+                'hispanic or latino': 'hispanic or latino',
+                'hispanic latino': 'hispanic or latino',
+                'other': 'another race/ethnicity',
+                'another race/ethnicity': 'another race/ethnicity',
+                'another race ethnicity': 'another race/ethnicity',
+                'another race': 'another race/ethnicity',
+                'completed hs only': 'high school or less',
+                'complete hs only': 'high school or less',
+                'completed high school only': 'high school or less',
+                'high school or less': 'high school or less',
+                'hs only': 'high school or less',
+                'complete college/university': "bachelor's degree",
+                'completed college/university': "bachelor's degree",
+                "bachelor's degree": "bachelor's degree",
+                'bachelors degree': "bachelor's degree",
+                'complete grad school': 'graduate or professional degree',
+                'completed grad school': 'graduate or professional degree',
+                'graduate or professional degree': 'graduate or professional degree',
+                'grad school': 'graduate or professional degree',
+                'none': 'prefer not to say',
+                'prefer not to say': 'prefer not to say',
+                'divorced': 'divorced or separated',
+                'divorced or separated': 'divorced or separated',
+                'trans female': 'trans female',
+                'transgender female': 'trans female',
+                'trans male': 'trans male',
+                'transgender male': 'trans male',
+                'non-binary': 'non-binary',
+                'nonbinary': 'non-binary',
+                'non binary': 'non-binary',
+            };
+            return CANONICAL[v] || v;
+        }
         
         // Normalize a name for deduplication (handles variations like "Patrick Mahomes" vs "patrick-mahomes")
         function normalizeNameForDedup(name) {
@@ -27082,15 +27127,20 @@
                 const valStr = String(value || '').trim();
                 const valLower = valStr.toLowerCase();
                 
-                // For demographics
+                // For demographics — use normalizeDemoForIndex for fuzzy matching
                 if (genPopBaselineData.demographics && genPopBaselineData.demographics[catLower]) {
                     const gpDemo = genPopBaselineData.demographics[catLower];
-                    // Try exact match
+                    // Try exact match first
                     if (gpDemo[valStr] != null) return gpDemo[valStr];
                     if (gpDemo[value] != null) return gpDemo[value];
                     // Try case-insensitive match
                     for (const [k, v] of Object.entries(gpDemo)) {
                         if ((k || '').toLowerCase() === valLower) return v;
+                    }
+                    // Try normalized match (handles Black vs Black or African American, etc.)
+                    const normVal = normalizeDemoForIndex(valStr);
+                    for (const [k, v] of Object.entries(gpDemo)) {
+                        if (normalizeDemoForIndex(k) === normVal) return v;
                     }
                     // Try matching by numbers only (for income brackets)
                     const valNums = valStr.replace(/[^0-9]/g, '');
@@ -29980,12 +30030,15 @@
                             formatter: (value, ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
+                                const ageKey = ageOriginalKeys[ctx.dataIndex];
+                                const idx = demographicsIndex.age?.[ageKey] || 0;
                                 if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
+                                const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
-                                    return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                 }
-                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                             }
                         }
                     }, 
@@ -30063,13 +30116,15 @@
                             },
                             formatter: (v, ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
+                                const idx = demographicsIndex.gender?.[genderLabels[ctx.dataIndex]] || 0;
                                 if (isGenPop) return isProjection ? formatNumber(Math.round(v)) : formatPct(pct);
+                                const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
                                 let genPop = genderGenPop[ctx.dataIndex] || 0;
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
-                                    return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                 }
-                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                             }
                         } : doughnutDataLabels
                     },
@@ -30184,13 +30239,15 @@
                             },
                             formatter: (v, ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
+                                const idx = demographicsIndex.ethnicity?.[ethLabels[ctx.dataIndex]] || demographicsIndex.ethnicity?.[ethDisplayLabels[ctx.dataIndex]] || 0;
                                 if (isGenPop) return isProjection ? formatNumber(Math.round(v)) : formatPct(pct);
+                                const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
                                 let genPop = ethGenPop[ctx.dataIndex] || 0;
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
-                                    return formatNumber(Math.round(v)) + (!isGenPop && gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    return formatNumber(Math.round(v)) + (!isGenPop && gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                 }
-                                return formatPct(pct) + (!isGenPop && genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                return formatPct(pct) + (!isGenPop && genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                             }
                         }
                     },
@@ -30301,13 +30358,15 @@
                             },
                             formatter: (value, ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
+                                const idx = demographicsIndex.income?.[incomeLabels[ctx.dataIndex]] || 0;
                                 if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
+                                const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
-                                    return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                 }
-                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                             }
                         }
                     }, 
@@ -30383,13 +30442,15 @@
                                 },
                                 formatter: (v, ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
+                                    const idx = demographicsIndex.education?.[eduLabels[ctx.dataIndex]] || 0;
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(v)) : formatPct(pct);
+                                    const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
-                                        return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                        return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                     }
-                                    return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                    return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                                 }
                             } 
                         }, 
@@ -30491,13 +30552,15 @@
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = relPcts[ctx.dataIndex] || 0;
+                                    const idx = demographicsIndex.relationship?.[relLabels[ctx.dataIndex]] || 0;
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
+                                    const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
                                     const genPop = relGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
-                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                     }
-                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
+                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                                 }
                             }
                         },
@@ -30605,13 +30668,15 @@
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = soPcts[ctx.dataIndex] || 0;
+                                    const idx = demographicsIndex.sexual_orientation?.[soLabels[ctx.dataIndex]] || 0;
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
+                                    const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
                                     const genPop = soGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
-                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                     }
-                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
+                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                                 }
                             }
                         },
@@ -30715,13 +30780,15 @@
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = psPcts[ctx.dataIndex] || 0;
+                                    const idx = demographicsIndex.parental_status?.[psLabels[ctx.dataIndex]] || 0;
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
+                                    const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
                                     const genPop = psGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
-                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                     }
-                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
+                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                                 }
                             }
                         },
@@ -30835,13 +30902,15 @@
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = occPcts[ctx.dataIndex] || 0;
+                                    const idx = demographicsIndex.occupation?.[occLabels[ctx.dataIndex]] || 0;
                                     if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
+                                    const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
                                     const genPop = occGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
-                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                     }
-                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
+                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                                 }
                             }
                         },
