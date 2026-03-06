@@ -13593,10 +13593,10 @@
                                 <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="genderChartType" onchange="changeChartType('gender', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
-                                            <option value="doughnut">🍩</option>
-                                            <option value="pie">🥧</option>
                                             <option value="bar">📊</option>
                                             <option value="column">▮ Col</option>
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Gender')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Gender')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Gender')">➕</button></span>
@@ -13703,10 +13703,10 @@
                                 <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="sexualOrientationChartType" onchange="changeChartType('sexualOrientation', this.value)" class="chart-type-select">
-                                            <option value="doughnut">🍩</option>
-                                            <option value="pie">🥧</option>
                                             <option value="bar">📊</option>
                                             <option value="column">▮ Col</option>
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Sexual Orientation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Sexual Orientation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Sexual Orientation')">➕</button></span>
@@ -30008,7 +30008,7 @@
                 ? genderLabels.map(k => demographicsProjection.gender?.[k] || 0)
                 : genderPcts;
             
-            const genderChartType = chartTypePrefs.gender || 'doughnut';
+            const genderChartType = chartTypePrefs.gender || 'bar';
             const genderIsCircular = ['doughnut', 'pie', 'polarArea'].includes(genderChartType);
             const genderIsBarLike = genderChartType === 'bar' || genderChartType === 'column';
             const genderChartTypeEffective = genderChartType === 'column' ? 'bar' : genderChartType;
@@ -30552,7 +30552,7 @@
                 const soPcts = Object.values(demographics.sexual_orientation);
                 const soData = isProjection ? soLabels.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
                 
-                const soChartType = chartTypePrefs.sexualOrientation || 'doughnut';
+                const soChartType = chartTypePrefs.sexualOrientation || 'bar';
                 const soIsCircular = ['doughnut', 'pie', 'polarArea'].includes(soChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -30909,13 +30909,13 @@
         // Chart type preferences (stored per chart)
         const chartTypePrefs = {
             age: 'bar',
-            gender: 'doughnut',
+            gender: 'bar',
             ethnicity: 'bar',
             income: 'bar',
             education: 'bar',
-            relationship: 'doughnut',
-            sexualOrientation: 'doughnut',
-            parentalStatus: 'doughnut'
+            relationship: 'bar',
+            sexualOrientation: 'bar',
+            parentalStatus: 'bar'
         };
         
         // Last demographics passed to renderCharts (so changing chart type never clears data)
