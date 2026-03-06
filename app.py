@@ -13944,13 +13944,15 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
             import bg
             import random
             import numpy as np
-            from config import SNOWFLAKE_CONFIG
-            # Log which bg script is running so you can confirm it matches local
             _bg_file = getattr(bg, '__file__', 'unknown')
             print(f"📜 Profile analysis using bg from: {_bg_file}")
         except ImportError as e:
             update_job_status(job_id, status='failed', error=f'Module import failed: {str(e)}')
             return
+        try:
+            from config import SNOWFLAKE_CONFIG
+        except ImportError:
+            SNOWFLAKE_CONFIG = None
         
         # ========== EXPAND BRANDS TO ALL NAME COMBOS (matches terminal "Auto Format Inputs? Y") ==========
         if hasattr(bg, 'generate_brand_variations') and brands:
