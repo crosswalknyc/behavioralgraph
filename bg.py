@@ -4324,27 +4324,50 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print(f"🎯 GenPop mode: Using hardcoded demographics with 10M sample size")
             print(f"✅ Final SAMPLE SIZE set to: {final_sample_size:,}")
     else:
-        # Step 1: Check Gen Pop CSV for this brand's penetration
-        genpop_pct, genpop_cat = get_genpop_penetration_for_brand(project_name, brand_category)
-        genpop_derived_sample = None
+        final_sample_size = None
         
-        if genpop_pct is not None and genpop_pct > 0:
-            genpop_derived_sample = round(genpop_pct / 100 * GENPOP_SAMPLE_CAP)
-            genpop_derived_sample = (genpop_derived_sample // 10) * 10
-            genpop_derived_sample = max(genpop_derived_sample, 10_000)
-            if is_listener_watcher:
-                genpop_derived_sample = max(1, genpop_derived_sample // 10)
-            if not SILENCE_VERBOSE_OUTPUT:
-                print(f"📊 Gen Pop lookup: '{project_name}' found in {genpop_cat} at {genpop_pct:.4f}%")
-                print(f"📊 Gen Pop-derived sample size: {genpop_derived_sample:,}")
+        # Step 1: Try Gen Pop CSV lookup (wrapped in try/except so it never crashes pipeline)
+        try:
+            genpop_pct, genpop_cat = get_genpop_penetration_for_brand(project_name, brand_category)
+            if genpop_pct is not None and genpop_pct > 0:
+                genpop_derived_sample = round(genpop_pct / 100 * GENPOP_SAMPLE_CAP)
+                genpop_derived_sample = (genpop_derived_sample // 10) * 10
+                genpop_derived_sample = max(genpop_derived_sample, 10_000)
+                if is_listener_watcher:
+                    genpop_derived_sample = max(1, genpop_derived_sample // 10)
+                final_sample_size = genpop_derived_sample
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"📊 Gen Pop lookup: '{project_name}' found in {genpop_cat} at {genpop_pct:.4f}%")
+                    print(f"✅ Final SAMPLE SIZE set from Gen Pop: {final_sample_size:,}")
+        except Exception as e:
+            print(f"⚠️ Gen Pop lookup failed (non-fatal): {e}")
         
-        if genpop_derived_sample is not None:
-            final_sample_size = genpop_derived_sample
-            if not SILENCE_VERBOSE_OUTPUT:
-                print(f"✅ Final SAMPLE SIZE set from Gen Pop penetration: {final_sample_size:,}")
-        else:
-            # Step 2: Not in Gen Pop — get actual universe size for fallback estimation
-            actual_sample_size = None
+        # Step 2: If Gen Pop didn't yield a result, try digital panel estimate
+        if final_sample_size is None:
+            try:
+                actual_sample_size = getattr(run_full_pipeline, 'universe_size', None)
+                if actual_sample_size is None:
+                    try:
+                        cur = conn.cursor()
+                        actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_UIDS").fetchone()[0]
+                    except Exception:
+                        try:
+                            actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_DEMOS").fetchone()[0]
+                        except Exception:
+                            actual_sample_size = None
+                final_sample_size = estimate_sample_size_for_unknown_brand(
+                    brand_category, actual_universe_size=actual_sample_size
+                )
+                if is_listener_watcher:
+                    final_sample_size = max(1, final_sample_size // 10)
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"📊 '{project_name}' not in Gen Pop — digital panel estimate")
+                    print(f"✅ Final SAMPLE SIZE (estimated): {final_sample_size:,}")
+            except Exception as e:
+                print(f"⚠️ Digital panel estimate failed: {e}")
+        
+        # Step 3: Last resort — classic inflation method
+        if final_sample_size is None:
             try:
                 cur = conn.cursor()
                 cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
@@ -4354,21 +4377,26 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_UIDS").fetchone()[0]
                     except Exception:
                         actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_DEMOS").fetchone()[0]
+                bounded = min(int(actual_sample_size or 0), GENPOP_SAMPLE_CAP)
+                if bounded >= GENPOP_SAMPLE_CAP:
+                    bounded = GENPOP_SAMPLE_CAP - max(1, int(GENPOP_SAMPLE_CAP * 0.005))
+                INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
+                INFLATION_FACTOR = 1
+                for mult in INFLATION_OPTIONS:
+                    if bounded * mult <= GENPOP_SAMPLE_CAP:
+                        INFLATION_FACTOR = mult
+                        break
+                final_sample_size = min(int(bounded * INFLATION_FACTOR), GENPOP_SAMPLE_CAP)
+                final_sample_size = (final_sample_size // 10) * 10
+                if is_listener_watcher:
+                    final_sample_size = max(1, final_sample_size // 10)
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"📊 Fallback inflation: {actual_sample_size:,} x {INFLATION_FACTOR} = {final_sample_size:,}")
             except Exception as e:
-                print(f"⚠️ Could not get actual sample size: {e}")
-                actual_sample_size = max(uid_count // 100, 1000) if uid_count else 1000
-            
-            # Step 3: Use digital-panel-aware estimation for brands not in Gen Pop
-            final_sample_size = estimate_sample_size_for_unknown_brand(
-                brand_category, actual_universe_size=actual_sample_size
-            )
-            if is_listener_watcher:
-                final_sample_size = max(1, final_sample_size // 10)
-            if not SILENCE_VERBOSE_OUTPUT:
-                print(f"📊 '{project_name}' not found in Gen Pop — using digital panel estimate")
-                print(f"📊 Brand category: {brand_category or 'UNKNOWN'}")
-                print(f"📊 Actual universe size: {actual_sample_size:,}" if actual_sample_size else "📊 Actual universe size: N/A")
-                print(f"✅ Final SAMPLE SIZE (estimated): {final_sample_size:,}")
+                print(f"⚠️ All sample size methods failed: {e}")
+                final_sample_size = 100_000
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"✅ Using emergency fallback sample size: {final_sample_size:,}")
     
     # Rerun: use reference sample size with up/down fluctuation based on whether rerun window is before or after original
     if previous_demo_lookup and previous_sample_size_ref and previous_sample_size_ref > 0:
