@@ -277,14 +277,33 @@ import os
 import io
 import pandas as pd
 import sys
-# Block nanoarrow BEFORE snowflake.connector.cursor loads so it can never
-# use Arrow result format. This forces the connector to use JSON for all
-# query results, avoiding the 'Invalid value X for dtype float64' crash
-# in the nanoarrow C extension (snowflake-connector-python 3.12.0 bug).
+
+# ── Force Snowflake connector to ALWAYS use JSON results ────────────────
+# The nanoarrow C extension (snowflake-connector-python >=3.x) crashes on
+# certain integer values with 'Invalid value X for dtype float64'.
+# Previous fixes (blocking sys.modules, deleting .so files, session params,
+# CAN_USE_ARROW_RESULT_FORMAT=False) all failed on Render/eventlet.
+#
+# Definitive fix: monkey-patch SnowflakeCursor.execute so every query
+# includes _statement_params={'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT':'JSON'}.
+# This is a per-query directive that the Snowflake server MUST honour,
+# guaranteeing results come back as JSON regardless of client config.
 sys.modules['snowflake.connector.nanoarrow_arrow_iterator'] = None
 import snowflake.connector
 import snowflake.connector.cursor
 snowflake.connector.cursor.CAN_USE_ARROW_RESULT_FORMAT = False
+
+_ORIGINAL_SF_EXECUTE = snowflake.connector.cursor.SnowflakeCursor.execute
+_JSON_FMT_KEY = 'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT'
+
+def _force_json_execute(self, command, params=None, **kwargs):
+    sp = kwargs.get('_statement_params') or {}
+    sp[_JSON_FMT_KEY] = 'JSON'
+    kwargs['_statement_params'] = sp
+    return _ORIGINAL_SF_EXECUTE(self, command, params, **kwargs)
+
+snowflake.connector.cursor.SnowflakeCursor.execute = _force_json_execute
+print("✅ Snowflake cursor patched: all queries forced to JSON result format")
 import numpy as np
 import re
 import random

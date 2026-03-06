@@ -14285,6 +14285,9 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 
         except Exception as e:
             error_msg = f'Analysis error: {str(e)}'
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
             update_job_status(job_id, status='failed', error=error_msg)
             
         finally:
