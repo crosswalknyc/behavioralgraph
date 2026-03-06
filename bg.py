@@ -278,29 +278,13 @@ import io
 import pandas as pd
 import snowflake.connector
 import snowflake.connector.cursor
+snowflake.connector.cursor.CAN_USE_ARROW_RESULT_FORMAT = False
 import numpy as np
 import re
 import random
 import glob
 from datetime import datetime
 from genpop_calibration import calibrate_to_genpop
-
-# ─── Patch Snowflake cursor to survive Arrow dtype conversion errors ───
-# snowflake-connector-python 3.12.0 bundles nanoarrow which crashes on certain
-# integer values ("Invalid value 'X' for dtype 'float64'"). We wrap fetchone/
-# fetchall to catch these and re-execute with Arrow disabled via JSON fallback.
-_original_execute = snowflake.connector.cursor.SnowflakeCursor.execute
-
-def _safe_execute(self, command, params=None, *args, **kwargs):
-    """Execute that forces JSON result format to avoid Arrow dtype bugs."""
-    result = _original_execute(self, command, params, *args, **kwargs)
-    try:
-        self._query_result_format = 'json'
-    except Exception:
-        pass
-    return result
-
-snowflake.connector.cursor.SnowflakeCursor.execute = _safe_execute
 
 # Optional S3 support for caching
 try:
