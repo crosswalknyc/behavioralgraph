@@ -32583,9 +32583,9 @@
 
         let allBehavioralData = {};
         let currentCategoryOrder = [];
-        // Track how many items to show per category (default top 15)
+        // Track how many items to show per category (default show all)
         let categoryItemLimits = {};
-        const defaultItemLimit = 15;
+        const defaultItemLimit = 'All';
         const itemLimitOptions = [3, 5, 10, 15, 20, 25, 'All'];
         
         // Generate item limit dropdown options (labels: "Show: Top 15", "Show: All", etc.)
