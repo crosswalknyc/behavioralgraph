@@ -32985,8 +32985,18 @@
                     return true;
                 });
                 
+                // Filter out items that don't exist in gen pop (can't index against them)
+                const isCurrentGenPop = currentS3Key?.toUpperCase().includes('GEN_POP') || currentS3Key?.toUpperCase().includes('GENPOP');
+                const gpCatItems = genPopBaselineData?.behavioral?.[cat];
+                const filteredItems = (!isCurrentGenPop && gpCatItems && gpCatItems.length > 0)
+                    ? dedupedItems.filter(item => {
+                        const itemName = (item.name || '').toUpperCase().trim();
+                        return gpCatItems.some(gp => (gp.name || '').toUpperCase().trim() === itemName);
+                    })
+                    : dedupedItems;
+                
                 // Default sort by percentage descending
-                const sortedItems = dedupedItems.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                const sortedItems = filteredItems.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 // Apply item limit (default top 15)
                 const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
                 const displayItems = itemLimit === 'All' || itemLimit >= sortedItems.length ? sortedItems : sortedItems.slice(0, itemLimit);
@@ -33207,7 +33217,7 @@
                             ${positionBadge}
                         </h3>
                         <div class="behavioral-card-controls">
-                            <span class="count">${items.length} items</span>
+                            <span class="count">${sortedItems.length} Items</span>
                             <span class="module-action-btns">
                                 <button class="module-btn csv-btn has-tooltip" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" data-tooltip="Export CSV: Download this behavioral category data as a CSV file.">CSV</button>
                                 <button class="module-btn png-btn has-tooltip" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" data-tooltip="Export PNG: Download this behavioral category chart as a PNG image.">PNG</button>
