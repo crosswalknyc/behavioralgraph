@@ -274,6 +274,7 @@ To modify behavior:
 """
 
 import os
+import io
 import pandas as pd
 import snowflake.connector
 import numpy as np
@@ -318,6 +319,212 @@ def get_s3_client():
     except Exception as e:
         print(f"⚠️ S3 client error: {e}")
         return None
+
+# ============================================================================
+# GEN POP PENETRATION LOOKUP FOR SAMPLE SIZE CALIBRATION
+# ============================================================================
+
+GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
+_genpop_df_cache = None
+
+def _load_genpop_csv():
+    """Load and cache the Gen Pop CSV from S3. Returns DataFrame or None."""
+    global _genpop_df_cache
+    if _genpop_df_cache is not None:
+        return _genpop_df_cache
+    if not S3_AVAILABLE:
+        return None
+    try:
+        s3 = get_s3_client()
+        if s3 is None:
+            return None
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=GEN_POP_CANONICAL_KEY)
+        _genpop_df_cache = pd.read_csv(io.BytesIO(obj['Body'].read()))
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"📊 Loaded Gen Pop baseline from S3: {GEN_POP_CANONICAL_KEY} ({len(_genpop_df_cache)} rows)")
+        return _genpop_df_cache
+    except Exception as e:
+        print(f"⚠️ Could not load Gen Pop CSV from S3: {e}")
+        return None
+
+def _normalize_brand_for_lookup(name):
+    """Normalize a brand name for Gen Pop lookup: strip separators, URL encoding, uppercase."""
+    import re, urllib.parse
+    if not name:
+        return ''
+    s = str(name).strip()
+    try:
+        s = urllib.parse.unquote(s)
+    except Exception:
+        pass
+    s = re.sub(r'[-._/\\|~#$%&*+=@]+', ' ', s)
+    s = re.sub(r'\s+', ' ', s).strip().upper()
+    return s
+
+BRAND_CATEGORY_TO_GENPOP_CATS = {
+    'ACTOR': ['ACTOR', 'TALENT'],
+    'MUSICIAN/BAND': ['MUSICIAN/BAND', 'TALENT'],
+    'HOST/PERSONALITY': ['HOST/PERSONALITY', 'TALENT'],
+    'ATHLETE': ['ATHLETE', 'TALENT'],
+    'POLITICS/ACTIVIST': ['POLITICS/ACTIVIST', 'TALENT'],
+    'WRITER/DIRECTOR/AUTHOR/ARTIST': ['WRITER/DIRECTOR/AUTHOR/ARTIST', 'TALENT'],
+    'CREATOR/INFLUENCER': ['TALENT', 'HOST/PERSONALITY'],
+    'QSR': ['QSR', 'WHERE THEY DINE'],
+    'MEDIA': ['MEDIA', 'BROADCAST/CABLE'],
+    'SOCIAL MEDIA': ['SOCIAL MEDIA', 'APP/PLATFORM USAGE'],
+    'TELECOM': ['TELECOM'],
+    'DIGITAL BANKING': ['DIGITAL BANKING', 'BANKING'],
+    'BANKING': ['BANKING', 'DIGITAL BANKING'],
+    'STREAMING/PLATFORM': ['STREAMING/PLATFORM'],
+    'STREAMING/MUSIC': ['STREAMING/MUSIC'],
+    'GAMES': ['GAMES'],
+    'INSURANCE': ['INSURANCE'],
+    'AUTOMOBILE': ['AUTOMOBILE'],
+    'TRAVEL': ['TRAVEL'],
+    'BETTING': ['BETTING'],
+    'RETAILERS': ['WHERE THEY SHOP', 'MOST PURCHASED BRANDS'],
+    'GROCERY': ['WHERE THEY SHOP', 'MOST PURCHASED BRANDS'],
+    'APPAREL': ['APPAREL/FOOTWEAR', 'MOST PURCHASED BRANDS'],
+    'FOOTWEAR': ['APPAREL/FOOTWEAR', 'MOST PURCHASED BRANDS'],
+    'BEAUTY': ['BEAUTY/WELLNESS', 'MOST PURCHASED BRANDS'],
+    'BEVERAGE': ['CPG', 'QSR', 'MOST PURCHASED BRANDS'],
+    'TOY': ['TOYS', 'FRANCHISE'],
+    'PHARMA': ['PHARMACY'],
+    'PLATFORMS': ['APP/PLATFORM USAGE', 'STREAMING/PLATFORM'],
+    'PODCAST': ['PODCAST'],
+    'NON PROFIT/CHARITY': ['NON PROFIT/CHARITY'],
+    'MOVIE THEATER': ['MOVIE THEATER'],
+    'AMUSEMENT PARKS': ['AMUSEMENT PARKS'],
+    'COLLEGE/UNIVERSITY': ['COLLEGE/UNIVERSITY'],
+    'INVESTMENTS': ['INVESTMENTS'],
+    'CREDIT PROVIDER': ['CREDIT PROVIDER'],
+    'TECHNOLOGY/DEVICE': ['TECHNOLOGY/DEVICE', 'TECHNOLOGY BRAND'],
+}
+
+DIGITAL_PANEL_TIER_ESTIMATES = {
+    'STREAMING/PLATFORM': (0.15, 0.55),
+    'SOCIAL MEDIA': (0.10, 0.45),
+    'APP/PLATFORM USAGE': (0.08, 0.40),
+    'SEARCH ENGINE/AI': (0.10, 0.45),
+    'TELECOM': (0.08, 0.35),
+    'STREAMING/MUSIC': (0.05, 0.30),
+    'DIGITAL BANKING': (0.05, 0.25),
+    'BANKING': (0.03, 0.20),
+    'MEDIA': (0.03, 0.20),
+    'BROADCAST/CABLE': (0.03, 0.20),
+    'GAMES': (0.02, 0.20),
+    'ACTOR': (0.01, 0.12),
+    'MUSICIAN/BAND': (0.01, 0.15),
+    'HOST/PERSONALITY': (0.005, 0.08),
+    'ATHLETE': (0.005, 0.10),
+    'CREATOR/INFLUENCER': (0.005, 0.08),
+    'POLITICS/ACTIVIST': (0.005, 0.10),
+    'QSR': (0.03, 0.20),
+    'RETAILERS': (0.03, 0.20),
+    'GROCERY': (0.03, 0.15),
+    'APPAREL': (0.02, 0.12),
+    'FOOTWEAR': (0.02, 0.10),
+    'BEAUTY': (0.02, 0.12),
+    'INSURANCE': (0.02, 0.10),
+    'AUTOMOBILE': (0.02, 0.10),
+    'TRAVEL': (0.03, 0.15),
+    'BETTING': (0.02, 0.10),
+    'INVESTMENTS': (0.02, 0.10),
+    'CREDIT PROVIDER': (0.02, 0.10),
+    'TECHNOLOGY/DEVICE': (0.03, 0.15),
+    'PHARMACY': (0.02, 0.10),
+    'BEVERAGE': (0.02, 0.12),
+    'TOY': (0.01, 0.08),
+    'PHARMA': (0.01, 0.08),
+    'PODCAST': (0.01, 0.08),
+    'NON PROFIT/CHARITY': (0.01, 0.06),
+    'MOVIE THEATER': (0.02, 0.08),
+    'AMUSEMENT PARKS': (0.01, 0.06),
+    'HEAVY MACHINERY': (0.002, 0.03),
+    'COLLEGE/UNIVERSITY': (0.005, 0.05),
+}
+
+def get_genpop_penetration_for_brand(brand_name, brand_category=None):
+    """Look up a brand's penetration in the Gen Pop CSV.
+    
+    Returns (penetration_pct, category_found_in) or (None, None) if not found.
+    """
+    gp = _load_genpop_csv()
+    if gp is None:
+        return None, None
+    
+    norm_brand = _normalize_brand_for_lookup(brand_name)
+    if not norm_brand:
+        return None, None
+    
+    col_name = gp.columns[0]
+    val_name = gp.columns[1]
+    bp_name = gp.columns[2]
+    
+    gp_upper = gp.copy()
+    gp_upper['_col'] = gp_upper[col_name].astype(str).str.strip().str.upper()
+    gp_upper['_val'] = gp_upper[val_name].astype(str).str.strip().str.upper()
+    
+    search_cats = []
+    if brand_category:
+        bc_upper = brand_category.strip().upper()
+        if bc_upper.startswith('SERIES'):
+            search_cats = ['STREAMING/PLATFORM', 'FRANCHISE', 'MEDIA']
+        elif bc_upper.startswith('GAMES'):
+            search_cats = ['GAMES']
+        else:
+            search_cats = BRAND_CATEGORY_TO_GENPOP_CATS.get(bc_upper, [bc_upper])
+    
+    for cat in search_cats:
+        mask = (gp_upper['_col'] == cat) & (gp_upper['_val'] == norm_brand)
+        matches = gp_upper[mask]
+        if not matches.empty:
+            pct = float(matches.iloc[0][bp_name])
+            return pct, cat
+    
+    all_cats = gp_upper['_col'].unique()
+    skip = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
+            'AGE', 'EDUCATION', 'ETHNICITY', 'GENDER', 'INCOME', 'OCCUPATION',
+            'LOCATION', 'PARENTAL_STATUS', 'RELATIONSHIP', 'SEXUAL_ORIENTATION',
+            'BRAND CATEGORY'}
+    for cat in all_cats:
+        if cat in skip:
+            continue
+        mask = (gp_upper['_col'] == cat) & (gp_upper['_val'] == norm_brand)
+        matches = gp_upper[mask]
+        if not matches.empty:
+            pct = float(matches.iloc[0][bp_name])
+            return pct, cat
+    
+    return None, None
+
+def estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=None):
+    """Estimate a reasonable sample size for a brand not found in Gen Pop.
+    
+    Uses digital panel tier estimates based on BRAND CATEGORY.
+    If actual_universe_size is available, uses it to position within the tier range.
+    """
+    GENPOP_CAP = 10_000_000
+    bc_upper = (brand_category or '').strip().upper()
+    if bc_upper.startswith('SERIES'):
+        bc_upper = 'STREAMING/PLATFORM'
+    elif bc_upper.startswith('GAMES'):
+        bc_upper = 'GAMES'
+    
+    tier = DIGITAL_PANEL_TIER_ESTIMATES.get(bc_upper, (0.01, 0.08))
+    lo, hi = tier
+    
+    if actual_universe_size and actual_universe_size > 0:
+        ratio = min(actual_universe_size / GENPOP_CAP, 1.0)
+        pct = lo + (hi - lo) * ratio
+    else:
+        pct = (lo + hi) / 2
+    
+    sample_size = round(pct * GENPOP_CAP)
+    sample_size = max(sample_size, 10_000)
+    sample_size = min(sample_size, GENPOP_CAP)
+    sample_size = (sample_size // 10) * 10
+    return sample_size
 
 def extract_demographics_from_df(df):
     """Extract demographic distributions from a DataFrame for comparison."""
@@ -4108,80 +4315,60 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 df_demo_final.loc[location_mask, "Percentage"] = new_percentages
                 
 
-    # Handle sample size - use ACTUAL database cohort size, bounded by GenPop cap
-    # Define a hard ceiling representing the maximum GenPop cohort allowed
+    # Handle sample size - first check Gen Pop penetration, then fall back to database cohort
     GENPOP_SAMPLE_CAP = 10_000_000
     
-    # For GenPop runs, hardcode demographics and use exactly 10M sample size (do not return here - pipeline must continue to write CSV)
     if is_genpop:
         final_sample_size = GENPOP_SAMPLE_CAP
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"🎯 GenPop mode: Using hardcoded demographics with 10M sample size")
             print(f"✅ Final SAMPLE SIZE set to: {final_sample_size:,}")
     else:
-        try:
-            cur = conn.cursor()
-            # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-            # Use universe scan result (total unique users from full universe scan)
-            # This is the "Total Unique Users" shown at the start
-            actual_sample_size = getattr(run_full_pipeline, 'universe_size', None)
-            if actual_sample_size is None:
-                # Fallback to TEMP_UIDS if universe scan wasn't done
-                try:
-                    actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_UIDS").fetchone()[0]
-                except Exception:
-                    # Last resort fallback to TEMP_DEMOS
-                    actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_DEMOS").fetchone()[0]
-            # Bound by GenPop cap so it never exceeds the allowed universe
-            bounded = min(int(actual_sample_size or 0), GENPOP_SAMPLE_CAP)
-            if bounded >= GENPOP_SAMPLE_CAP and not is_genpop:
-                # Apply a small buffer (0.5%) so we never report the hard cap (only for non-GenPop)
-                buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
-                bounded = GENPOP_SAMPLE_CAP - buffer_down
-            
-            # INFLATE SAMPLE SIZE: try 35x first, then scale down to 25x, 5x, 2.5x, or 1x
-            # so the result never exceeds 10M (max boost capped at 35x)
-            INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
-            INFLATION_FACTOR = 1
-            for mult in INFLATION_OPTIONS:
-                if bounded * mult <= GENPOP_SAMPLE_CAP:
-                    INFLATION_FACTOR = mult
-                    break
-            inflated_sample_size = bounded * INFLATION_FACTOR
-            final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
-            final_sample_size = (final_sample_size // 10) * 10
+        # Step 1: Check Gen Pop CSV for this brand's penetration
+        genpop_pct, genpop_cat = get_genpop_penetration_for_brand(project_name, brand_category)
+        genpop_derived_sample = None
+        
+        if genpop_pct is not None and genpop_pct > 0:
+            genpop_derived_sample = round(genpop_pct / 100 * GENPOP_SAMPLE_CAP)
+            genpop_derived_sample = (genpop_derived_sample // 10) * 10
+            genpop_derived_sample = max(genpop_derived_sample, 10_000)
             if is_listener_watcher:
-                final_sample_size = max(1, final_sample_size // 10)
-                if not SILENCE_VERBOSE_OUTPUT:
-                    print(f"📊 Listener/watcher/player profile: sample size divided by 10 → {final_sample_size:,}")
+                genpop_derived_sample = max(1, genpop_derived_sample // 10)
             if not SILENCE_VERBOSE_OUTPUT:
-                print(f"📊 Actual sampled UIDs: {actual_sample_size:,}")
-                print(f"📊 Inflation factor: {INFLATION_FACTOR}x (chosen so result ≤ 10M)")
-                print(f"📊 Final sample size: {inflated_sample_size:,}")
-                print(f"🔒 Sample size cap (10M): {GENPOP_SAMPLE_CAP:,}")
-                print(f"✅ Final SAMPLE SIZE set to: {final_sample_size:,}")
-        except Exception as e:
-            print(f"⚠️ Could not get actual sample size: {e}")
-            # Fallback to prior estimate; do not exceed GenPop cap
-            fallback_estimate = max(uid_count // 100, 1000)
-            bounded = min(fallback_estimate, GENPOP_SAMPLE_CAP)
-            if bounded >= GENPOP_SAMPLE_CAP and not is_genpop:
-                buffer_down = max(1, int(GENPOP_SAMPLE_CAP * 0.005))
-                bounded = GENPOP_SAMPLE_CAP - buffer_down
+                print(f"📊 Gen Pop lookup: '{project_name}' found in {genpop_cat} at {genpop_pct:.4f}%")
+                print(f"📊 Gen Pop-derived sample size: {genpop_derived_sample:,}")
+        
+        if genpop_derived_sample is not None:
+            final_sample_size = genpop_derived_sample
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"✅ Final SAMPLE SIZE set from Gen Pop penetration: {final_sample_size:,}")
+        else:
+            # Step 2: Not in Gen Pop — get actual universe size for fallback estimation
+            actual_sample_size = None
+            try:
+                cur = conn.cursor()
+                cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+                actual_sample_size = getattr(run_full_pipeline, 'universe_size', None)
+                if actual_sample_size is None:
+                    try:
+                        actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_UIDS").fetchone()[0]
+                    except Exception:
+                        actual_sample_size = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_DEMOS").fetchone()[0]
+            except Exception as e:
+                print(f"⚠️ Could not get actual sample size: {e}")
+                actual_sample_size = max(uid_count // 100, 1000) if uid_count else 1000
             
-            # INFLATE SAMPLE SIZE: try 15x, then scale down to stay under 10M (fallback path)
-            INFLATION_OPTIONS = [15, 5, 2.5, 1]
-            INFLATION_FACTOR = 1
-            for mult in INFLATION_OPTIONS:
-                if bounded * mult <= GENPOP_SAMPLE_CAP:
-                    INFLATION_FACTOR = mult
-                    break
-            inflated_sample_size = bounded * INFLATION_FACTOR
-            final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
-            final_sample_size = (final_sample_size // 10) * 10
+            # Step 3: Use digital-panel-aware estimation for brands not in Gen Pop
+            final_sample_size = estimate_sample_size_for_unknown_brand(
+                brand_category, actual_universe_size=actual_sample_size
+            )
             if is_listener_watcher:
                 final_sample_size = max(1, final_sample_size // 10)
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"📊 '{project_name}' not found in Gen Pop — using digital panel estimate")
+                print(f"📊 Brand category: {brand_category or 'UNKNOWN'}")
+                print(f"📊 Actual universe size: {actual_sample_size:,}" if actual_sample_size else "📊 Actual universe size: N/A")
+                print(f"✅ Final SAMPLE SIZE (estimated): {final_sample_size:,}")
     
     # Rerun: use reference sample size with up/down fluctuation based on whether rerun window is before or after original
     if previous_demo_lookup and previous_sample_size_ref and previous_sample_size_ref > 0:
