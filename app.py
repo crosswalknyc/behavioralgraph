@@ -13836,6 +13836,11 @@ def process_s3_file_metadata(key, obj):
     except Exception as e:
         print(f"Error reading category from {key}: {e}")
     
+    # Ensure Gen Pop files always have the correct category with space
+    key_lower = key.lower()
+    if 'gen_pop' in key_lower or 'genpop' in key_lower:
+        category = 'GEN POP'
+    
     return {
         'job_id': key,
         'project_name': project_name,
