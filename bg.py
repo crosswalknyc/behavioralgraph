@@ -444,8 +444,66 @@ DIGITAL_PANEL_TIER_ESTIMATES = {
     'COLLEGE/UNIVERSITY': (0.005, 0.05),
 }
 
-def get_genpop_penetration_for_brand(brand_name, brand_category=None):
+def _extract_core_brand(project_name, brands=None):
+    """Extract the core brand name from a profile title and its search terms.
+    
+    Examples:
+      project_name="YouTube - Most Viewed", brands=["youtube.com","my youtube"] -> "YOUTUBE"
+      project_name="Mr Beast", brands=["mr beast youtube","youtube mr beast"] -> "MR BEAST"
+      project_name="Netflix", brands=["netflix.com"] -> "NETFLIX"
+      project_name="Taylor Swift", brands=["taylor swift"] -> "TAYLOR SWIFT"
+    """
+    import re, urllib.parse
+    
+    # Clean the project name: strip suffixes like "- Most Viewed", "- General", "(2025)", dates
+    clean = str(project_name or '').strip()
+    clean = re.sub(r'\s*[-–—]\s*(Most Viewed|General|Overall|Listeners?|Watchers?|Players?|Fans?|Purchasers?).*$', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'\s*\(\d{4}\)$', '', clean)
+    clean = re.sub(r'\s*\d{4}$', '', clean)
+    clean = re.sub(r'[-._/\\|~#$%&*+=@]+', ' ', clean)
+    clean = re.sub(r'\s+', ' ', clean).strip().upper()
+    
+    candidates = [clean] if clean else []
+    
+    if brands:
+        # Extract domain-based brand names from URLs
+        for b in brands:
+            b_str = str(b).strip()
+            # Pull domain from URLs: youtube.com/mrbeast -> youtube
+            domain_match = re.match(r'^(?:https?://)?(?:www\.)?([a-zA-Z0-9]+)\.', b_str)
+            if domain_match:
+                domain_brand = domain_match.group(1).upper()
+                if domain_brand not in ('COM', 'ORG', 'NET', 'IO', 'CO', 'WWW'):
+                    if domain_brand not in candidates:
+                        candidates.append(domain_brand)
+            # Also normalize the full search term
+            norm = _normalize_brand_for_lookup(b_str)
+            if norm and norm not in candidates:
+                candidates.append(norm)
+    
+    if not candidates:
+        return [_normalize_brand_for_lookup(project_name)]
+    
+    # If project name is multi-word (like "Mr Beast"), it's likely the real brand
+    # If search terms all contain a common word that matches project name, use that
+    if clean and len(clean.split()) >= 2:
+        candidates.insert(0, clean)
+    
+    # Deduplicate while preserving order
+    seen = set()
+    unique = []
+    for c in candidates:
+        if c and c not in seen:
+            seen.add(c)
+            unique.append(c)
+    return unique
+
+
+def get_genpop_penetration_for_brand(brand_name, brand_category=None, brands=None):
     """Look up a brand's penetration in the Gen Pop CSV.
+    
+    Intelligently extracts the core brand from the profile name and search terms.
+    E.g. project_name="YouTube - Most Viewed" with brands=["youtube.com"] finds YOUTUBE.
     
     Returns (penetration_pct, category_found_in) or (None, None) if not found.
     """
@@ -453,8 +511,8 @@ def get_genpop_penetration_for_brand(brand_name, brand_category=None):
     if gp is None:
         return None, None
     
-    norm_brand = _normalize_brand_for_lookup(brand_name)
-    if not norm_brand:
+    candidate_names = _extract_core_brand(brand_name, brands)
+    if not candidate_names:
         return None, None
     
     col_name = gp.columns[0]
@@ -475,26 +533,58 @@ def get_genpop_penetration_for_brand(brand_name, brand_category=None):
         else:
             search_cats = BRAND_CATEGORY_TO_GENPOP_CATS.get(bc_upper, [bc_upper])
     
-    for cat in search_cats:
-        mask = (gp_upper['_col'] == cat) & (gp_upper['_val'] == norm_brand)
-        matches = gp_upper[mask]
-        if not matches.empty:
-            pct = float(matches.iloc[0][bp_name])
-            return pct, cat
-    
     all_cats = gp_upper['_col'].unique()
     skip = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
             'AGE', 'EDUCATION', 'ETHNICITY', 'GENDER', 'INCOME', 'OCCUPATION',
             'LOCATION', 'PARENTAL_STATUS', 'RELATIONSHIP', 'SEXUAL_ORIENTATION',
-            'BRAND CATEGORY'}
-    for cat in all_cats:
-        if cat in skip:
+            'BRAND CATEGORY', 'INTEREST'}
+    
+    # Pass 1: Try each candidate name in priority category order, then all categories
+    for try_name in candidate_names:
+        if not try_name:
             continue
-        mask = (gp_upper['_col'] == cat) & (gp_upper['_val'] == norm_brand)
-        matches = gp_upper[mask]
-        if not matches.empty:
-            pct = float(matches.iloc[0][bp_name])
-            return pct, cat
+        # Try priority categories first
+        for cat in search_cats:
+            mask = (gp_upper['_col'] == cat) & (gp_upper['_val'] == try_name)
+            if mask.any():
+                return float(gp_upper.loc[mask].iloc[0][bp_name]), cat
+        # Then try all categories
+        for cat in all_cats:
+            if cat in skip:
+                continue
+            mask = (gp_upper['_col'] == cat) & (gp_upper['_val'] == try_name)
+            if mask.any():
+                return float(gp_upper.loc[mask].iloc[0][bp_name]), cat
+    
+    # Pass 2: Substring/contains match — check if any Gen Pop value contains a candidate
+    # (only for candidates with 4+ chars to avoid false positives like "AT" or "FOX")
+    gp_vals = gp_upper[~gp_upper['_col'].isin(skip)]
+    for try_name in candidate_names:
+        if not try_name or len(try_name) < 4:
+            continue
+        # Check if a Gen Pop value exactly starts with the candidate (e.g. "YOUTUBE" matches "YOUTUBE")
+        contains_mask = gp_vals['_val'].str.startswith(try_name + ' ') | (gp_vals['_val'] == try_name)
+        if contains_mask.any():
+            # If in priority categories, prefer that
+            for cat in search_cats:
+                cat_match = contains_mask & (gp_vals['_col'] == cat)
+                if cat_match.any():
+                    return float(gp_vals.loc[cat_match].iloc[0][bp_name]), cat
+            # Otherwise take first match
+            row = gp_vals.loc[contains_mask].iloc[0]
+            return float(row[bp_name]), row['_col']
+    
+    # Pass 3: Check if any Gen Pop value is contained in the PROFILE NAME only
+    # (not search terms, to avoid "mr beast youtube" matching YOUTUBE)
+    # e.g. profile "YouTube Most Viewed" contains Gen Pop value "YOUTUBE"
+    profile_norm = _normalize_brand_for_lookup(brand_name)
+    if profile_norm and len(profile_norm) >= 6:
+        for cat in (search_cats + [c for c in all_cats if c not in skip and c not in search_cats]):
+            cat_rows = gp_vals[gp_vals['_col'] == cat]
+            for idx, row in cat_rows.iterrows():
+                gp_val = row['_val']
+                if len(gp_val) >= 4 and gp_val in profile_norm:
+                    return float(row[bp_name]), cat
     
     return None, None
 
@@ -4328,7 +4418,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         
         # Step 1: Try Gen Pop CSV lookup (wrapped in try/except so it never crashes pipeline)
         try:
-            genpop_pct, genpop_cat = get_genpop_penetration_for_brand(project_name, brand_category)
+            genpop_pct, genpop_cat = get_genpop_penetration_for_brand(project_name, brand_category, brands=brands)
             if genpop_pct is not None and genpop_pct > 0:
                 genpop_derived_sample = round(genpop_pct / 100 * GENPOP_SAMPLE_CAP)
                 genpop_derived_sample = (genpop_derived_sample // 10) * 10
