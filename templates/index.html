@@ -16508,7 +16508,7 @@
                     };
                 }
                 // Still check API in background to update cache if image was changed
-                fetch(`/api/wiki-image/${encodeURIComponent(profileName)}`).then(r => r.json()).then(data => {
+                fetch(`/api/profile-image/${encodeURIComponent(profileName)}`).then(r => r.json()).then(data => {
                     // Only update if this is still the current profile
                     if (currentProfileForImage === cacheKey) {
                         if (data.success && data.image_url && data.image_url !== cachedUrl) {
@@ -16534,7 +16534,7 @@
             profileImageCache[cacheKey] = 'pending';
             
             try {
-                const response = await fetch(`/api/wiki-image/${encodeURIComponent(profileName)}`);
+                const response = await fetch(`/api/profile-image/${encodeURIComponent(profileName)}`);
                 const data = await response.json();
                 
                 imageContainer.classList.remove('loading');
@@ -26861,7 +26861,7 @@
                 document.getElementById('dashDateRangeHeader').textContent = dateRange ? 'Date Range: ' + dateRange : '';
                 document.getElementById('dashDateRangeHeader').style.display = dateRange ? 'block' : 'none';
                 
-                // Fetch profile image from Wikipedia (use base name for image lookup)
+                // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
             }
             
@@ -28453,7 +28453,7 @@
                 } else if (runsRow) {
                     runsRow.style.display = 'none';
                 }
-                // Fetch profile image from Wikipedia (use base name for image lookup)
+                // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
             }
             const sampleSizeEl = document.getElementById('dashSampleSize');

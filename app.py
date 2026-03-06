@@ -6390,8 +6390,9 @@ def remove_favorite(profile_key):
 
 shared_links = {}  # In production, store in database/S3
 
+@app.route('/api/profile-image/<path:name>')
 @app.route('/api/wiki-image/<path:name>')
-def get_wiki_image(name):
+def get_profile_image(name):
     """Get profile image - only returns admin-uploaded custom images."""
     global profile_image_cache
     
@@ -14411,26 +14412,6 @@ def prefetch_profile_images():
                                 image_url = og_match.group(1)
                                 source = 'instagram'
                                 title = f'@{handle}'
-                    except:
-                        pass
-            
-            # Try Wikipedia
-            if not image_url:
-                search_name = re.sub(r'@\w+', '', profile_name).replace('_', ' ').replace('-', ' ').strip()
-                if search_name:
-                    try:
-                        wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_name)}"
-                        req = urllib.request.Request(wiki_url, headers={'User-Agent': 'CrosswalkIQ/1.0'})
-                        with urllib.request.urlopen(req, timeout=3) as response:
-                            data = json.loads(response.read().decode())
-                            if 'thumbnail' in data:
-                                image_url = data['thumbnail'].get('source')
-                                source = 'wikipedia'
-                                title = data.get('title', profile_name)
-                            elif 'originalimage' in data:
-                                image_url = data['originalimage'].get('source')
-                                source = 'wikipedia'
-                                title = data.get('title', profile_name)
                     except:
                         pass
             
