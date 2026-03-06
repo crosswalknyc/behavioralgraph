@@ -3,11 +3,10 @@
 One-time script to apply all verified US gen-pop penetration corrections
 to the Gen Pop CSV and ensure cross-category consistency.
 
-Run:  python apply_genpop_corrections.py
+Run:  python3 apply_genpop_corrections.py
 """
 
 import pandas as pd
-import sys
 
 CSV_PATH = '/Users/jennamenking/Downloads/Gen_Pop_2026_03_04_2026_04_29.csv'
 SAMPLE_SIZE = 10_000_000
@@ -21,241 +20,355 @@ SKIP_CATEGORIES = {
 }
 
 # ── (CATEGORY, VALUE) -> corrected_penetration_pct ────────────────────────
-# Only entries where the discrepancy vs. reality is material.
-# SEARCH ENGINE/AI and BETTING are excluded per user request.
+# SEARCH ENGINE/AI and BETTING excluded per user request.
+# CBS NEWS / CBS SPORTS / CNBC / NBC SPORTS / NBC NEWS kept per user request.
 
 CORRECTIONS: dict[tuple[str, str], float] = {
 
     # ══════════════════════════════════════════════════════════════════════
-    # STREAMING / PLATFORM
+    # STREAMING / PLATFORM  (round 2 — niche platforms)
     # ══════════════════════════════════════════════════════════════════════
-    ('STREAMING/PLATFORM', 'NETFLIX'):            67.0,
-    ('STREAMING/PLATFORM', 'HULU'):               17.0,
-    ('STREAMING/PLATFORM', 'DISNEY+'):            28.0,
-    ('STREAMING/PLATFORM', 'HBO MAX'):            22.0,
-    ('STREAMING/PLATFORM', 'APPLE TV+'):          13.0,
-    ('STREAMING/PLATFORM', 'PARAMOUNT+'):         11.0,
-    ('STREAMING/PLATFORM', 'PEACOCK'):             9.0,
-    ('STREAMING/PLATFORM', 'AMAZON PRIME VIDEO'): 43.0,
-    ('STREAMING/PLATFORM', 'KICK'):                2.5,
-    ('STREAMING/PLATFORM', 'UFC FIGHT PASS'):      2.5,
-    ('STREAMING/PLATFORM', 'TELEMUNDO'):           6.0,
-    ('STREAMING/PLATFORM', 'KALOS TV'):            0.5,
-    ('STREAMING/PLATFORM', 'SLING PLATFORM'):      3.0,
-    ('STREAMING/PLATFORM', 'DAZN'):                1.0,
-    ('STREAMING/PLATFORM', 'MUBI'):                0.5,
-    ('STREAMING/PLATFORM', 'SHOWTIME TV'):         4.0,
-    ('STREAMING/PLATFORM', 'YOUTUBE KIDS'):        8.0,
-    ('STREAMING/PLATFORM', 'DISCOVERY+'):          5.0,
-    ('STREAMING/PLATFORM', 'STARZ'):               3.0,
-    ('STREAMING/PLATFORM', 'AMC PLUS'):            1.5,
-    ('STREAMING/PLATFORM', 'BRITBOX'):             0.5,
-    ('STREAMING/PLATFORM', 'HALLMARK PLUS'):       1.0,
-    # ESPN already corrected to 27.0 in prior pass
+    ('STREAMING/PLATFORM', 'NOW THATS TV'):       0.5,
+    ('STREAMING/PLATFORM', 'LIVETV'):             0.5,
+    ('STREAMING/PLATFORM', 'BOWLTV'):             0.1,
+    ('STREAMING/PLATFORM', 'PPV'):                3.0,
+    ('STREAMING/PLATFORM', 'FANDANGO AT HOME'):   3.0,
+    ('STREAMING/PLATFORM', 'STREMIO'):            0.5,
+    ('STREAMING/PLATFORM', 'CHAUPAL'):            0.2,
+    ('STREAMING/PLATFORM', 'ZEE5'):               0.5,
+    ('STREAMING/PLATFORM', 'GOTHAM SPORTS'):      0.5,
+    ('STREAMING/PLATFORM', 'DROPOUT TV'):         0.3,
+    ('STREAMING/PLATFORM', 'CRISP SHORT FORM'):   0.1,
+    ('STREAMING/PLATFORM', 'FIFA+'):              1.0,
+    ('STREAMING/PLATFORM', 'VIX'):                2.0,
+    ('STREAMING/PLATFORM', 'NESN 360'):           0.5,
+    ('STREAMING/PLATFORM', 'ULLU'):               0.2,
+    ('STREAMING/PLATFORM', 'HIDIVE'):             0.3,
+    ('STREAMING/PLATFORM', 'TENNIS TV'):          0.3,
+    ('STREAMING/PLATFORM', 'BYUTV'):              0.5,
+    ('STREAMING/PLATFORM', 'SIGHT & SOUND TV'):   0.2,
+    ('STREAMING/PLATFORM', 'OSN+'):               0.1,
+    ('STREAMING/PLATFORM', 'FLOSPORTS'):          0.5,
+    ('STREAMING/PLATFORM', 'KOCOWA+'):            0.3,
+    ('STREAMING/PLATFORM', 'TRILLERTV'):          0.2,
+    ('STREAMING/PLATFORM', 'ALLBLK'):             0.3,
+    ('STREAMING/PLATFORM', 'LIVE SPORTS ON TV TODAY'): 0.2,
+    ('STREAMING/PLATFORM', 'BET+'):               0.5,
+    ('STREAMING/PLATFORM', 'FILMZIE'):            0.1,
+    ('STREAMING/PLATFORM', 'RING OF HONOR'):      0.2,
+    ('STREAMING/PLATFORM', 'CRACKLE'):            0.5,
+    ('STREAMING/PLATFORM', 'FLIX LATINO'):         0.3,
+    ('STREAMING/PLATFORM', 'CANELA.TV'):          0.3,
+    ('STREAMING/PLATFORM', 'GOODSHORT'):          0.1,
 
     # ══════════════════════════════════════════════════════════════════════
-    # TELECOM
+    # STREAMING / MUSIC  (round 2 — niche services)
     # ══════════════════════════════════════════════════════════════════════
-    ('TELECOM', 'XFINITY'):          25.0,
-    ('TELECOM', 'VERIZON'):          30.0,
-    ('TELECOM', 'T-MOBILE'):         28.0,
-    ('TELECOM', 'AT&T'):             25.0,
-    ('TELECOM', 'STARLINK'):          1.5,
-    ('TELECOM', 'SPECTRUM'):         11.0,
-    ('TELECOM', 'GOOGLE FIBER'):      0.5,
-    ('TELECOM', 'CENTURY LINK'):      2.0,
-    ('TELECOM', 'VISIBLE'):           1.0,
-    ('TELECOM', 'CRICKET WIRELESS'):  2.5,
+    ('STREAMING/MUSIC', 'TUBIDY'):          1.0,
+    ('STREAMING/MUSIC', 'VEVO'):            5.0,
+    ('STREAMING/MUSIC', 'ONLINE RADIO BOX'):0.5,
+    ('STREAMING/MUSIC', 'LIVEONE'):         0.5,
+    ('STREAMING/MUSIC', 'QELLO CONCERTS'):  0.3,
+    ('STREAMING/MUSIC', 'SIMPLE RADIO'):    0.5,
+    ('STREAMING/MUSIC', 'RADIO NET'):       0.3,
+    ('STREAMING/MUSIC', 'FREEFY'):          0.2,
+    ('STREAMING/MUSIC', 'MYTUNER FM RADIO'):0.3,
+    ('STREAMING/MUSIC', 'NAPSTER'):         0.3,
+    ('STREAMING/MUSIC', 'ACCURADIO'):       0.2,
+    ('STREAMING/MUSIC', 'POCKET FM'):       0.3,
 
     # ══════════════════════════════════════════════════════════════════════
-    # BANKING
+    # BROADCAST / CABLE  (round 2 — mid-tier)
+    # CBS NEWS/SPORTS, CNBC, NBC SPORTS/NEWS kept per user request
     # ══════════════════════════════════════════════════════════════════════
-    ('BANKING', 'CHASE'):                22.0,
-    ('BANKING', 'BANK OF AMERICA'):      14.0,
-    ('BANKING', 'WELLS FARGO'):          11.0,
-    ('BANKING', 'CITIBANK'):              6.0,
-    ('BANKING', 'TD BANK'):               4.5,
-    ('BANKING', 'US BANK'):               5.0,
-    ('BANKING', 'SOFI BANK'):             1.5,
-    ('BANKING', 'TRUIST BANK'):           5.0,
-    ('BANKING', 'PNC BANK'):              5.0,
-    ('BANKING', 'BANK OF MONTREAL/BMO'):  2.0,
-    ('BANKING', 'VANGUARD'):              7.0,
-    ('BANKING', 'FIFTH THIRD BANK'):      2.0,
-    ('BANKING', 'HUNTINGTON BANK'):       2.0,
-    ('BANKING', 'CITIZENS BANK'):         2.0,
-    ('BANKING', 'REGIONS BANK'):          2.0,
-    ('BANKING', 'KEYBANK'):               1.5,
-    ('BANKING', 'BARCLAYS US'):           1.0,
-    ('BANKING', 'SANTANDER BANK'):        1.0,
-    ('BANKING', 'APPLE PAY'):            13.0,
+    ('BROADCAST/CABLE', 'BET NETWORK'):           3.0,
+    ('BROADCAST/CABLE', 'WILLOW TV'):             0.3,
+    ('BROADCAST/CABLE', 'DRAFTKINGS NETWORK'):    2.0,
+    ('BROADCAST/CABLE', 'FOX BUSINESS'):          3.0,
+    ('BROADCAST/CABLE', 'PBS'):                  12.0,
+    ('BROADCAST/CABLE', 'THETVAPP.TO'):           0.2,
+    ('BROADCAST/CABLE', 'MTV'):                   7.0,
+    ('BROADCAST/CABLE', 'CNET'):                  5.0,
+    ('BROADCAST/CABLE', 'NICKELODEON'):           8.0,
+    ('BROADCAST/CABLE', 'NEWSMAX'):               4.0,
+    ('BROADCAST/CABLE', 'FOOD NETWORK'):          8.0,
+    ('BROADCAST/CABLE', 'CBS'):                  12.0,
+    ('BROADCAST/CABLE', 'A&E CRIME CENTRAL'):     1.5,
+    ('BROADCAST/CABLE', 'DISTROTV'):              0.3,
+    ('BROADCAST/CABLE', 'TNT'):                   6.0,
+    ('BROADCAST/CABLE', 'BRAVOTV'):               5.0,
+    ('BROADCAST/CABLE', 'HISTORY CHANNEL'):       6.0,
+    ('BROADCAST/CABLE', 'ANIMAL PLANET'):         4.0,
+    ('BROADCAST/CABLE', 'ABC'):                  10.0,
+    ('BROADCAST/CABLE', 'NEWSWEEK'):              4.0,
 
     # ══════════════════════════════════════════════════════════════════════
-    # CREDIT PROVIDER
+    # MEDIA  (round 2 — mid-tier)
+    # CBS NEWS/SPORTS, CNBC, NBC SPORTS/NEWS kept per user request
     # ══════════════════════════════════════════════════════════════════════
-    ('CREDIT PROVIDER', 'AMERICAN EXPRESS'):      14.0,
-    ('CREDIT PROVIDER', 'CAPITAL ONE'):           18.0,
-    ('CREDIT PROVIDER', 'DISCOVER CREDIT CARD'):   7.0,
-    ('CREDIT PROVIDER', 'SYNCHRONY'):              6.0,
-    ('CREDIT PROVIDER', 'AFFIRM PAYMENT'):         4.0,
-    ('CREDIT PROVIDER', 'GM FINANCIAL'):           2.0,
-    ('CREDIT PROVIDER', 'FUNDBOX'):                0.5,
-    ('CREDIT PROVIDER', 'FREEDOM MORTGAGE'):       2.0,
-    ('CREDIT PROVIDER', 'QUICKEN LOANS'):          3.0,
+    ('MEDIA', 'NEWSWEEK'):               4.0,
+    ('MEDIA', 'YAHOO SPORTS'):           8.0,
+    ('MEDIA', 'APPLE NEWS'):            15.0,
+    ('MEDIA', 'GOOGLE NEWS'):           20.0,
+    ('MEDIA', 'TODAY'):                  8.0,
+    ('MEDIA', 'BET NETWORK'):            3.0,
+    ('MEDIA', 'BRITISH BROADCASTING CORPORATION'): 5.0,
+    ('MEDIA', 'YAHOO NEWS'):            10.0,
+    ('MEDIA', 'ABC NEWS'):              10.0,
+    ('MEDIA', 'NATIONAL PUBLIC RADIO'):  10.0,
+    ('MEDIA', 'FORBES'):                 5.0,
+    ('MEDIA', 'WILLOW TV'):              0.3,
+    ('MEDIA', 'DRAFTKINGS NETWORK'):     2.0,
+    ('MEDIA', 'FINANCIAL TIMES'):        2.0,
+    ('MEDIA', 'CANADIAN BROADCASTING CORPORATION CA'): 0.5,
+    ('MEDIA', 'THE NEW YORKER'):         4.0,
+    ('MEDIA', 'FOX BUSINESS'):           3.0,
+    ('MEDIA', 'PBS'):                   12.0,
+    ('MEDIA', 'USA TODAY'):              8.0,
+    ('MEDIA', 'SPORTS ILLUSTRATED'):     5.0,
+    ('MEDIA', 'FANDOM'):                 8.0,
 
     # ══════════════════════════════════════════════════════════════════════
-    # INSURANCE
+    # GAMES  (round 2 — across the board)
     # ══════════════════════════════════════════════════════════════════════
-    ('INSURANCE', 'UNITED HEALTHCARE'):  16.0,
-    ('INSURANCE', 'USAA'):                6.0,
-    ('INSURANCE', 'KAISER PERMANENTE'):   5.0,
-    ('INSURANCE', 'GEICO'):              15.0,
-    ('INSURANCE', 'AETNA'):               9.0,
-    ('INSURANCE', 'STATE FARM'):         17.0,
-    ('INSURANCE', 'CIGNA'):               7.0,
-    ('INSURANCE', 'HUMANA'):              6.0,
-    ('INSURANCE', 'METLIFE'):             5.0,
-    ('INSURANCE', 'PROGRESSIVE'):        14.0,
-    ('INSURANCE', 'ALLSTATE'):           10.0,
-    ('INSURANCE', 'HEALTHCARE.GOV'):      5.0,
-    ('INSURANCE', 'LIBERTY MUTUAL'):      7.0,
+    ('GAMES', 'STAR WARS'):             8.0,
+    ('GAMES', 'LEGO'):                 12.0,
+    ('GAMES', 'GRAND THEFT AUTO'):     12.0,
+    ('GAMES', 'STEAM'):                18.0,
+    ('GAMES', 'CHESS.COM'):             7.0,
+    ('GAMES', 'LICHESS'):              1.5,
+    ('GAMES', 'VALORANT'):             4.0,
+    ('GAMES', 'GAMEBANANA'):           1.0,
+    ('GAMES', 'RIOT GAMES'):           6.0,
+    ('GAMES', 'EPIC GAMES'):          12.0,
+    ('GAMES', 'FINAL FANTASY'):        4.0,
+    ('GAMES', 'BARBIE'):               4.0,
+    ('GAMES', 'DOTA 2'):              1.5,
+    ('GAMES', 'MORTAL KOMBAT'):        4.0,
+    ('GAMES', 'ASSASSINS CREED'):      5.0,
+    ('GAMES', 'SOLITAIRE'):          15.0,
+    ('GAMES', 'SUPER MARIO'):         12.0,
+    ('GAMES', 'EA SPORTS PGA TOUR'):   2.0,
+    ('GAMES', 'HARRY POTTER'):         8.0,
+    ('GAMES', 'CRAZY GAMES'):          2.0,
+    ('GAMES', 'GAME OF THRONES'):      5.0,
+    ('GAMES', 'CLASH ROYALE'):         3.0,
+    ('GAMES', 'AMAZON LUNA'):          1.5,
+    ('GAMES', 'STUMBLE GUYS'):         2.0,
+    ('GAMES', 'ANGRY BIRDS'):          5.0,
+    ('GAMES', 'ROCKSTAR GAMES'):       6.0,
+    ('GAMES', 'PBS KIDS'):             8.0,
+    ('GAMES', 'EA SPORTS'):            8.0,
+    ('GAMES', 'NEOPETS'):              1.0,
+    ('GAMES', 'LIODEN'):               0.3,
 
     # ══════════════════════════════════════════════════════════════════════
-    # TRAVEL  (top ~35 brands with biggest discrepancies)
+    # APP / PLATFORM USAGE  (round 2 — top inflated values)
     # ══════════════════════════════════════════════════════════════════════
-    ('TRAVEL', 'DELTA AIR LINES'):                  7.0,
-    ('TRAVEL', 'AMERICAN AIRLINES'):                6.0,
-    ('TRAVEL', 'UNITED AIRLINE & AVIATIONS'):       6.0,
-    ('TRAVEL', 'BOOKING'):                         12.0,
-    ('TRAVEL', 'EXPEDIA'):                         10.0,
-    ('TRAVEL', 'AIRBNB'):                          12.0,
-    ('TRAVEL', 'SOUTHWEST AIRLINES'):               8.0,
-    ('TRAVEL', 'TRIPADVISOR'):                      8.0,
-    ('TRAVEL', 'MARRIOTT'):                         8.0,
-    ('TRAVEL', 'ALASKA AIRLINES'):                  2.0,
-    ('TRAVEL', 'RADISSON HOTELS'):                  2.0,
-    ('TRAVEL', 'VRBO'):                             5.0,
-    ('TRAVEL', 'AMERICAN EXPRESS TRAVEL'):           3.0,
-    ('TRAVEL', 'AVIS'):                             4.0,
-    ('TRAVEL', 'HILTON'):                           8.0,
-    ('TRAVEL', 'MSC CRUISES'):                      1.0,
-    ('TRAVEL', 'HOTELS.COM'):                       6.0,
-    ('TRAVEL', 'TRIVAGO'):                          4.0,
-    ('TRAVEL', 'PRICELINE'):                        5.0,
-    ('TRAVEL', 'HYATT'):                            3.0,
-    ('TRAVEL', 'JET BLUE'):                         3.0,
-    ('TRAVEL', 'UBER'):                            20.0,
-    ('TRAVEL', 'MGM RESORTS'):                      3.0,
-    ('TRAVEL', 'SANDALS RESORT'):                   1.0,
-    ('TRAVEL', 'DISNEY VACATION CLUB'):             1.5,
-    ('TRAVEL', 'RITZ-CARLTON'):                     0.5,
-    ('TRAVEL', 'ROYAL CARIBBEAN'):                  3.0,
-    ('TRAVEL', 'CARNIVAL CRUISE LINE'):             3.0,
-    ('TRAVEL', 'NORWEGIAN CRUISE LINE'):            1.5,
-    ('TRAVEL', 'AMTRAK'):                           5.0,
-    ('TRAVEL', 'LYFT'):                            12.0,
-    ('TRAVEL', 'HERTZ'):                            3.0,
-    ('TRAVEL', 'ENTERPRISE'):                       4.0,
-    ('TRAVEL', 'TURO'):                             2.0,
-    ('TRAVEL', 'SPIRIT AIRLINES'):                  2.5,
-    ('TRAVEL', 'FRONTIER AIRLINES'):                2.0,
-    ('TRAVEL', 'FOUR SEASONS HOTEL & RESORTS'):     0.3,
+    ('APP/PLATFORM USAGE', 'GOOGLE DOCS'):              28.0,
+    ('APP/PLATFORM USAGE', 'ZOOM'):                     28.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE CALENDAR'):          25.0,
+    ('APP/PLATFORM USAGE', 'YAHOO MAIL'):               12.0,
+    ('APP/PLATFORM USAGE', 'NEST'):                      6.0,
+    ('APP/PLATFORM USAGE', 'CANVA'):                     8.0,
+    ('APP/PLATFORM USAGE', 'MICROSOFT OUTLOOK MAIL'):   18.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE TRANSLATE'):         18.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE DRIVE'):             28.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE MEET'):              12.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE MAPS'):              67.0,
+    ('APP/PLATFORM USAGE', 'MICROSOFT TEAMS'):          18.0,
+    ('APP/PLATFORM USAGE', 'DOORDASH'):                 12.0,
+    ('APP/PLATFORM USAGE', 'UBER EATS'):                10.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE PLAY'):              35.0,
+    ('APP/PLATFORM USAGE', 'INSTACART'):                 8.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE CLASSROOM'):         10.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE PHOTOS'):            25.0,
+    ('APP/PLATFORM USAGE', 'ZILLOW'):                   12.0,
+    ('APP/PLATFORM USAGE', 'DROPBOX'):                  10.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE ADS'):                5.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE SCHOLAR'):            5.0,
+    ('APP/PLATFORM USAGE', 'IQIYI'):                     0.5,
+    ('APP/PLATFORM USAGE', 'CRAIGSLIST'):               12.0,
+    ('APP/PLATFORM USAGE', 'SHUTTERSTOCK'):              2.0,
+    ('APP/PLATFORM USAGE', 'GOOGLE EARTH'):             10.0,
+    ('APP/PLATFORM USAGE', 'ICLOUD'):                   45.0,
+    ('APP/PLATFORM USAGE', 'GMAIL'):                    55.0,
+    ('APP/PLATFORM USAGE', 'FEDEX'):                    10.0,
+    ('APP/PLATFORM USAGE', 'USPS'):                     15.0,
+    ('APP/PLATFORM USAGE', 'GOODREADS'):                 5.0,
+    ('APP/PLATFORM USAGE', 'UPS'):                      12.0,
+    ('APP/PLATFORM USAGE', 'YELP'):                     12.0,
+    ('APP/PLATFORM USAGE', 'VIMEO'):                     3.0,
+    ('APP/PLATFORM USAGE', 'INDEED'):                   10.0,
+    ('APP/PLATFORM USAGE', 'GRAMMARLY'):                 5.0,
+    ('APP/PLATFORM USAGE', 'ANCESTRY'):                  4.0,
+    ('APP/PLATFORM USAGE', 'AOL MAIL'):                  5.0,
+    ('APP/PLATFORM USAGE', 'SCRIBD'):                    3.0,
+    ('APP/PLATFORM USAGE', 'DISCOGS'):                   1.0,
+    ('APP/PLATFORM USAGE', 'MY FITNESS PAL'):            5.0,
+    ('APP/PLATFORM USAGE', 'WEATHER'):                  15.0,
+    ('APP/PLATFORM USAGE', 'REALTOR.COM'):               8.0,
+    ('APP/PLATFORM USAGE', 'REDFIN'):                    5.0,
+    ('APP/PLATFORM USAGE', 'NERDWALLET'):                5.0,
+    ('APP/PLATFORM USAGE', 'TRULIA'):                    4.0,
+    ('APP/PLATFORM USAGE', 'QUIZLET'):                   4.0,
+    ('APP/PLATFORM USAGE', 'GOPUFF'):                    2.0,
+    ('APP/PLATFORM USAGE', 'FLICKR'):                    2.0,
+    ('APP/PLATFORM USAGE', 'MICROSOFT 365'):            12.0,
+    ('APP/PLATFORM USAGE', 'SKYPE'):                     5.0,
+    ('APP/PLATFORM USAGE', 'GLASSDOOR'):                 5.0,
+    ('APP/PLATFORM USAGE', 'ESPN FANTASY'):              5.0,
+    ('APP/PLATFORM USAGE', 'NEXTDOOR'):                  8.0,
+    ('APP/PLATFORM USAGE', 'CREDIT KARMA'):              8.0,
+    ('APP/PLATFORM USAGE', 'KICKSTARTER'):               3.0,
+    ('APP/PLATFORM USAGE', 'SHAZAM'):                    5.0,
+    ('APP/PLATFORM USAGE', 'WEBMD'):                     8.0,
+    ('APP/PLATFORM USAGE', 'EXPERIAN'):                  5.0,
+    ('APP/PLATFORM USAGE', 'AUDIBLE'):                   5.0,
+    ('APP/PLATFORM USAGE', 'GRUBHUB'):                   5.0,
+    ('APP/PLATFORM USAGE', 'KINDLE'):                    8.0,
+    ('APP/PLATFORM USAGE', 'BUMBLE'):                    3.0,
+    ('APP/PLATFORM USAGE', 'AARP'):                      8.0,
+    ('APP/PLATFORM USAGE', 'GROUPON'):                   4.0,
+    ('APP/PLATFORM USAGE', 'WAZE'):                     12.0,
+    ('APP/PLATFORM USAGE', 'WIKIPEDIA'):                20.0,
+    ('APP/PLATFORM USAGE', 'OPEN TABLE'):                5.0,
+    ('APP/PLATFORM USAGE', 'HELLOFRESH'):                3.0,
+    ('APP/PLATFORM USAGE', 'CALM'):                      3.0,
+    ('APP/PLATFORM USAGE', 'GOODRX'):                    5.0,
+    ('APP/PLATFORM USAGE', 'HINGE'):                     4.0,
+    ('APP/PLATFORM USAGE', 'TURBO TAX'):                10.0,
+    ('APP/PLATFORM USAGE', 'QUICKBOOKS'):                3.0,
+    ('APP/PLATFORM USAGE', 'ID ME'):                     5.0,
+    ('APP/PLATFORM USAGE', 'PAYPAL HONEY'):              5.0,
 
     # ══════════════════════════════════════════════════════════════════════
-    # QSR
+    # WHERE THEY SHOP  (round 2 — luxury / niche brands)
     # ══════════════════════════════════════════════════════════════════════
-    ('QSR', 'STARBUCKS'):                40.0,
-    ('QSR', 'MCDONALDS'):               37.0,
-    ('QSR', 'DOMINOS'):                  27.0,
-    ('QSR', 'PIZZA HUT'):               22.0,
-    ('QSR', 'TACO BELL'):               32.0,
-    ('QSR', 'BURGER KING'):             22.0,
-    ('QSR', 'JERSEY MIKES SUBS'):        8.0,
-    ('QSR', 'PAPA JOHNS'):              12.0,
-    ('QSR', 'PORTILLOS'):                2.0,
-    ('QSR', 'NOODLES AND CO.'):           2.0,
-    ('QSR', 'SWEETGREEN'):               2.5,
-    ('QSR', 'EL POLLO LOCO'):            3.0,
-    ('QSR', 'MOES SOUTHWEST GRILL'):     3.0,
-    ('QSR', 'CHIPOTLE MEXICAN GRILL'):  20.0,
-    ('QSR', 'BONCHON'):                   1.5,
-    ('QSR', 'KFC'):                      18.0,
-    ('QSR', 'SPRINKLES CUPCAKES'):        0.5,
-    ('QSR', 'AUNTIE ANNES PRETZELS'):    5.0,
-    ('QSR', 'CHICK-FIL-A'):             32.0,
-    ('QSR', 'JENIS ICE CREAM'):           1.0,
-    ('QSR', 'FRESH BROTHERS'):            0.5,
-    ('QSR', 'LITTLE CAESARS'):           12.0,
-    ('QSR', 'PLANET SMOOTHIE'):           1.0,
-    ('QSR', 'POPEYES'):                  12.0,
-    ('QSR', 'ZAXBYS'):                    4.0,
-    ('QSR', 'PANERA BREAD'):            14.0,
-    ('QSR', 'BOJANGLES'):                 3.0,
-    ('QSR', 'PEI WEI ASIAN KITCHEN'):    1.0,
-    ('QSR', 'DUNKIN'):                   23.0,
-    ('QSR', 'WINGSTOP'):                  8.0,
+    ('WHERE THEY SHOP', 'RESTORATION HARDWARE'):    3.0,
+    ('WHERE THEY SHOP', 'SAKS OFF 5TH'):            2.0,
+    ('WHERE THEY SHOP', 'GILT'):                    1.0,
+    ('WHERE THEY SHOP', 'THE VITAMIN SHOPPE'):      3.0,
+    ('WHERE THEY SHOP', 'FWRD'):                    0.5,
+    ('WHERE THEY SHOP', 'GOAT'):                    2.0,
+    ('WHERE THEY SHOP', '1STDIBS'):                 0.5,
+    ('WHERE THEY SHOP', 'LYST'):                    0.5,
+    ('WHERE THEY SHOP', 'BOTTEGA VENETA'):          0.3,
+    ('WHERE THEY SHOP', 'DILLARDS'):                5.0,
+    ('WHERE THEY SHOP', 'FOOT LOCKER'):             6.0,
+    ('WHERE THEY SHOP', 'HSN'):                     5.0,
+    ('WHERE THEY SHOP', 'SEARS'):                   3.0,
+    ('WHERE THEY SHOP', 'COSTCO OPTICAL'):          8.0,
+    ('WHERE THEY SHOP', 'WOLF & BADGER'):           0.3,
+    ('WHERE THEY SHOP', 'ROSS DRESS FOR LESS'):     8.0,
+    ('WHERE THEY SHOP', 'ULTA BEAUTY'):            10.0,
+    ('WHERE THEY SHOP', 'TOYS R US'):               3.0,
+    ('WHERE THEY SHOP', 'GIVENCHY'):                0.3,
+    ('WHERE THEY SHOP', 'GNC'):                     5.0,
+    ('WHERE THEY SHOP', 'FIVE BELOW'):              8.0,
+    ('WHERE THEY SHOP', 'DIOR'):                    0.5,
+    ('WHERE THEY SHOP', 'MAISON MARGIELA'):         0.2,
+    ('WHERE THEY SHOP', 'HARRODS'):                 0.2,
+    ('WHERE THEY SHOP', 'WALGREENS'):              25.0,
+    ('WHERE THEY SHOP', 'HOME GOODS'):             10.0,
+    ('WHERE THEY SHOP', 'KOHLS'):                  12.0,
+    ('WHERE THEY SHOP', 'CHEWY'):                   8.0,
+    ('WHERE THEY SHOP', 'POSHMARK'):                3.0,
+    ('WHERE THEY SHOP', 'NFL SHOP'):                3.0,
+    ('WHERE THEY SHOP', 'WEGMANS'):                 3.0,
+    ('WHERE THEY SHOP', 'WINN-DIXIE'):              3.0,
+    ('WHERE THEY SHOP', 'ASOS'):                    2.0,
 
     # ══════════════════════════════════════════════════════════════════════
-    # WHERE THEY SHOP  (biggest discrepancies)
+    # WHERE THEY DINE  (round 2 — smaller chains still too low)
     # ══════════════════════════════════════════════════════════════════════
-    ('WHERE THEY SHOP', 'TARGET'):                        48.0,
-    ('WHERE THEY SHOP', 'WALMART'):                       85.0,
-    ('WHERE THEY SHOP', 'ALBERTSONS'):                     8.0,
-    ('WHERE THEY SHOP', 'COSTCO'):                        28.0,
-    ('WHERE THEY SHOP', 'CVS'):                           30.0,
-    ('WHERE THEY SHOP', 'PUBLIX'):                        12.0,
-    ('WHERE THEY SHOP', 'EBAY'):                          12.0,
-    ('WHERE THEY SHOP', 'SEPHORA'):                       12.0,
-    ('WHERE THEY SHOP', 'LOWES'):                         20.0,
-    ('WHERE THEY SHOP', 'HOME DEPOT'):                    25.0,
-    ('WHERE THEY SHOP', 'WAYFAIR'):                        8.0,
-    ('WHERE THEY SHOP', 'MACYS'):                         15.0,
-    ('WHERE THEY SHOP', 'SHEIN'):                         12.0,
-    ('WHERE THEY SHOP', 'ETSY'):                           7.0,
-    ('WHERE THEY SHOP', 'IKEA'):                          10.0,
-    ('WHERE THEY SHOP', 'TEMU'):                          10.0,
-    ('WHERE THEY SHOP', 'PACSUN'):                         2.5,
-    ('WHERE THEY SHOP', 'OPTICSPLANET'):                   1.0,
-    ('WHERE THEY SHOP', 'QVC'):                            8.0,
-    ('WHERE THEY SHOP', 'YVES SAINT LAURENT'):             0.5,
-    ('WHERE THEY SHOP', 'OVERSTOCK'):                      3.0,
-    ('WHERE THEY SHOP', 'SAKS FIFTH AVENUE'):              2.5,
-    ('WHERE THEY SHOP', 'REVOLVE'):                        2.0,
-    ('WHERE THEY SHOP', 'BURBERRY'):                       0.5,
-    ('WHERE THEY SHOP', 'MEIJER'):                         5.0,
-    ('WHERE THEY SHOP', 'MERCADO LIBRE'):                  0.5,
-    ('WHERE THEY SHOP', 'PAVILIONS'):                      1.5,
-    ('WHERE THEY SHOP', 'SWAROVSKI'):                      2.0,
-    ('WHERE THEY SHOP', 'TRADER JOES'):                   12.0,
-    ('WHERE THEY SHOP', 'YOOX'):                           0.3,
-    ('WHERE THEY SHOP', 'BEST BUY'):                      20.0,
-    ('WHERE THEY SHOP', 'ACADEMY SPORTS + OUTDOORS'):      4.0,
-    ('WHERE THEY SHOP', 'WHOLE FOODS MARKET'):             8.0,
-    ('WHERE THEY SHOP', 'BALENCIAGA'):                     0.3,
-    ('WHERE THEY SHOP', 'WILLIAMS-SONOMA'):                3.0,
-    ('WHERE THEY SHOP', 'ADVANCE AUTO PARTS'):             3.0,
-    ('WHERE THEY SHOP', 'TRAMONTINA'):                     1.0,
-    ('WHERE THEY SHOP', 'ALLMODERN'):                      1.0,
-    ('WHERE THEY SHOP', 'ALEXANDER MCQUEEN'):              0.3,
+    ('WHERE THEY DINE', 'IHOP'):                    5.0,
+    ('WHERE THEY DINE', 'WAFFLE HOUSE'):            5.0,
+    ('WHERE THEY DINE', 'P.F. CHANGS'):             2.0,
+    ('WHERE THEY DINE', 'LONGHORN STEAKHOUSE'):     4.0,
+    ('WHERE THEY DINE', 'TGI FRIDAYS'):             3.0,
+    ('WHERE THEY DINE', 'HOOTERS'):                 2.0,
+    ('WHERE THEY DINE', 'RED ROBIN'):               3.0,
+    ('WHERE THEY DINE', 'BOB EVANS'):               2.0,
+    ('WHERE THEY DINE', 'BONEFISH GRILL'):          1.5,
+    ('WHERE THEY DINE', 'YARD HOUSE'):              1.5,
 
     # ══════════════════════════════════════════════════════════════════════
-    # WHERE THEY DINE  (uniformly too low — need to boost)
+    # QSR  (round 2 — remaining adjustments)
     # ══════════════════════════════════════════════════════════════════════
-    ('WHERE THEY DINE', 'THE CHEESECAKE FACTORY'):                  6.0,
-    ('WHERE THEY DINE', 'TEXAS ROADHOUSE'):                         5.0,
-    ('WHERE THEY DINE', 'OLIVE GARDEN'):                            8.0,
-    ('WHERE THEY DINE', 'RUTHS CHRIS STEAK HOUSE'):                 2.0,
-    ('WHERE THEY DINE', 'GOLDEN CORRAL'):                           4.0,
-    ('WHERE THEY DINE', 'FOGO DE CHAO'):                            1.0,
-    ('WHERE THEY DINE', 'CHILIS'):                                  6.0,
-    ('WHERE THEY DINE', 'THE CAPITAL GRILLE'):                      1.0,
-    ('WHERE THEY DINE', 'BJS RESTAURANT & BREWHOUSE'):              2.0,
-    ('WHERE THEY DINE', 'CRACKER BARREL'):                          4.0,
-    ('WHERE THEY DINE', 'RED LOBSTER'):                             4.0,
-    ('WHERE THEY DINE', 'APPLEBEES GRILL + BAR'):                   5.0,
-    ('WHERE THEY DINE', 'OUTBACK STEAKHOUSE'):                      4.0,
-    ('WHERE THEY DINE', 'CALIFORNIA PIZZA KITCHEN'):                1.5,
-    ('WHERE THEY DINE', 'BENIHANA'):                                1.0,
+    ('QSR', 'FIVE GUYS'):              10.0,
+    ('QSR', 'SUBWAY'):                 22.0,
+    ('QSR', 'SHAKE SHACK'):            5.0,
+    ('QSR', 'DAIRY QUEEN'):           10.0,
+    ('QSR', 'RAISING CANES CHICKEN FINGERS'): 8.0,
+    ('QSR', 'KRISPY KREME'):           6.0,
+    ('QSR', 'ARBYS'):                  8.0,
+    ('QSR', 'WENDYS'):                15.0,
+    ('QSR', 'CRUMBL COOKIES'):         4.0,
+    ('QSR', 'IN-N-OUT BURGER'):        5.0,
+    ('QSR', 'CULVERS'):                3.0,
+    ('QSR', 'TROPICAL SMOOTHIE CAFE'): 3.0,
+    ('QSR', 'JACK IN THE BOX'):        5.0,
+    ('QSR', 'JOLLIBEE'):              1.5,
+    ('QSR', 'BASKIN ROBBINS'):         5.0,
+    ('QSR', 'CHURCHS TEXAS CHICKEN'):  2.0,
+    ('QSR', 'BUFFALO WILD WINGS'):     8.0,
+    ('QSR', 'JIMMY JOHNS'):            6.0,
+    ('QSR', 'DUTCH BROS COFFEE'):      4.0,
+    ('QSR', 'PANDA EXPRESS'):          8.0,
+    ('QSR', 'FIREHOUSE SUBS'):         4.0,
+    ('QSR', 'SMOOTHIE KING'):          3.0,
+    ('QSR', 'HARDEES'):                4.0,
+    ('QSR', 'BUONA ITALIAN BEEF'):     0.5,
+    ('QSR', 'CINNABON'):               3.0,
+    ('QSR', 'NESPRESSO'):              3.0,
+    ('QSR', 'MRBEAST BURGER'):         1.0,
+
+    # ══════════════════════════════════════════════════════════════════════
+    # TRAVEL  (round 2 — mid/lower tier still inflated)
+    # ══════════════════════════════════════════════════════════════════════
+    ('TRAVEL', 'WYNDHAM HOTELS & RESORTS'):    3.0,
+    ('TRAVEL', 'DOUBLETREE'):                  2.0,
+    ('TRAVEL', 'CHOICE HOTELS'):               3.0,
+    ('TRAVEL', 'BEST WESTERN'):                4.0,
+    ('TRAVEL', 'HOLIDAY INN'):                 5.0,
+    ('TRAVEL', 'WESTIN HOTELS & RESORTS'):     1.5,
+    ('TRAVEL', 'AIR CANADA'):                  1.5,
+    ('TRAVEL', 'FOUR POINTS HOTELS'):          1.0,
+    ('TRAVEL', 'HOTEL INDIGO'):                1.0,
+    ('TRAVEL', 'MSC CRUISES'):                 1.0,
+    ('TRAVEL', 'SILVERSEA CRUISE'):            0.3,
+    ('TRAVEL', 'WALDORF ASTORIA'):             0.3,
+    ('TRAVEL', 'ZIPCAR'):                      1.0,
+    ('TRAVEL', 'TRAVELOCITY'):                 3.0,
+    ('TRAVEL', 'TSA PRECHECK'):                5.0,
+    ('TRAVEL', 'VIRGIN VOYAGES'):              1.0,
+    ('TRAVEL', 'VIKING CRUISES'):              1.5,
+    ('TRAVEL', 'IHG HOTELS RESORTS'):          4.0,
+    ('TRAVEL', 'CLEAR TRAVEL'):                2.0,
+    ('TRAVEL', 'ALLEGIANT'):                   2.0,
+    ('TRAVEL', 'BUDGET'):                      2.0,
+    ('TRAVEL', 'MANDARIN ORIENTAL'):           0.2,
+    ('TRAVEL', 'CAESARS PALACE & ENTERTAINMENT'): 2.0,
+    ('TRAVEL', 'HAWAIIAN AIRLINES'):           0.5,
+    ('TRAVEL', 'SHERATON HOTELS AND RESORTS'):  3.0,
+    ('TRAVEL', 'COURTYARD BY MARRIOTT'):        3.0,
+    ('TRAVEL', 'JW MARRIOTT'):                  1.5,
+    ('TRAVEL', 'CELEBRITY CRUISES'):            1.0,
+    ('TRAVEL', 'PRINCESS CRUISES'):             1.0,
+    ('TRAVEL', 'METRA TRAIN'):                  1.0,
+    ('TRAVEL', 'ROSEWOOD HOTELS'):              0.2,
+    ('TRAVEL', 'BACCARAT HOTEL NEW YORK'):      0.1,
+    ('TRAVEL', 'RAFFLES HOTEL'):                0.1,
+    ('TRAVEL', 'CAPELLA HOTELS & RESORTS'):     0.1,
+    ('TRAVEL', 'AMAN RESORTS'):                 0.1,
+    ('TRAVEL', 'ARIZONA BILTMORE'):             0.3,
+    ('TRAVEL', 'ASPEN SNOWMASS'):               0.5,
+    ('TRAVEL', 'PARK CITY MOUNTAIN RESORT'):    0.5,
+    ('TRAVEL', 'IBEROSTAR RESORTS'):            0.5,
+    ('TRAVEL', 'MARGARITAVILLE AT SEA'):        0.5,
+    ('TRAVEL', 'ATLANTIS'):                     1.0,
+    ('TRAVEL', 'VISIT LAS VEGAS'):              2.0,
 }
 
 
@@ -284,14 +397,13 @@ def apply_corrections():
     print(f"  {corrected_count} direct corrections applied")
 
     # ── 2. Cross-category consistency ─────────────────────────────────
-    # Build lookup: VALUE -> corrected penetration (from corrections)
-    # If a VALUE appears in multiple categories, ALL should share values.
     value_to_pct: dict[str, float] = {}
     for (cat, val), pct in CORRECTIONS.items():
-        value_to_pct[val] = pct
+        if val not in value_to_pct:
+            value_to_pct[val] = pct
 
-    # Also include the prior corrections (from genpop_calibration.py)
-    PRIOR_CORRECTIONS = {
+    # Include all prior corrections for cross-cat matching
+    PRIOR = {
         'TWITCH': 8.5, 'DISCORD': 16.5, 'X': 27.5, 'PATREON': 4.0,
         'TUMBLR': 4.0, 'ONLYFANS': 2.5, 'SNAPCHAT': 37.5,
         'LETTERBOXD': 1.5, 'BLUESKY': 1.5,
@@ -313,8 +425,17 @@ def apply_corrections():
         'CHARLES SCHWAB': 11.0, 'FIDELITY': 13.0, 'ROBINHOOD': 7.5,
         'BMW': 9.0, 'MERCEDES-BENZ': 7.0, 'AUDI': 5.0,
         'PORSCHE': 1.5, 'FERRARI': 0.5, 'LAMBORGHINI': 0.3,
+        'NETFLIX': 67.0, 'HULU': 17.0, 'DISNEY+': 28.0,
+        'HBO MAX': 22.0, 'APPLE TV+': 13.0, 'PARAMOUNT+': 11.0,
+        'PEACOCK': 9.0, 'AMAZON PRIME VIDEO': 43.0,
+        'CHASE': 22.0, 'BANK OF AMERICA': 14.0, 'WELLS FARGO': 11.0,
+        'AMERICAN EXPRESS': 14.0, 'CAPITAL ONE': 18.0,
+        'GEICO': 15.0, 'STATE FARM': 17.0, 'PROGRESSIVE': 14.0,
+        'TARGET': 48.0, 'WALMART': 85.0, 'COSTCO': 28.0,
+        'STARBUCKS': 40.0, 'MCDONALDS': 37.0, 'DUNKIN': 23.0,
+        'CHICK-FIL-A': 32.0,
     }
-    for val, pct in PRIOR_CORRECTIONS.items():
+    for val, pct in PRIOR.items():
         if val not in value_to_pct:
             value_to_pct[val] = pct
 
@@ -326,58 +447,49 @@ def apply_corrections():
 
         if cat in SKIP_CATEGORIES:
             continue
-        # Skip if already directly corrected above
         if key in CORRECTIONS:
             continue
 
         if val in value_to_pct:
             new_pct = value_to_pct[val]
-            current_pct = float(str(row.get('Brand Penetration (Row)', 0)).replace(',', '') or 0)
+            try:
+                current_pct = float(str(row.get('Brand Penetration (Row)', 0)).replace(',', '') or 0)
+            except (ValueError, TypeError):
+                current_pct = 0
             if abs(current_pct - new_pct) > 0.01:
                 new_raw = int(round((new_pct / 100.0) * SAMPLE_SIZE))
                 new_genpop = int(round((new_raw / SAMPLE_SIZE) * US_POP))
-
                 df.at[idx, 'Brand Penetration (Row)'] = round(new_pct, 4)
                 df.at[idx, 'Original Raw Numbers'] = new_raw
                 df.at[idx, 'US Gen Pop Projection'] = new_genpop
                 consistency_count += 1
-                print(f"  Cross-cat consistency: {cat}/{val}  {current_pct:.2f}% -> {new_pct}%")
+                print(f"    Cross-cat: {cat}/{val}  {current_pct:.2f}% -> {new_pct}%")
 
-    print(f"  {consistency_count} cross-category consistency fixes applied")
+    print(f"  {consistency_count} cross-category consistency fixes")
 
-    # ── 3. Recalculate Category Share for ALL categories ──────────────
-    categories = df['Column'].unique()
-    for cat in categories:
+    # ── 3. Recalculate Category Share ─────────────────────────────────
+    for cat in df['Column'].unique():
         cat_upper = str(cat).strip().upper()
         if cat_upper in SKIP_CATEGORIES:
             continue
-
-        cat_mask = df['Column'] == cat
-        cat_df = df.loc[cat_mask]
-
+        mask = df['Column'] == cat
         raws = []
-        for idx in cat_df.index:
+        for i in df.loc[mask].index:
             try:
-                r = int(float(str(df.at[idx, 'Original Raw Numbers']).replace(',', '')))
+                r = int(float(str(df.at[i, 'Original Raw Numbers']).replace(',', '')))
             except (ValueError, TypeError):
                 r = 0
-            raws.append((idx, r))
+            raws.append((i, r))
+        total = sum(r for _, r in raws)
+        if total > 0:
+            for i, r in raws:
+                df.at[i, 'Category Share'] = round((r / total) * 100.0, 4)
 
-        total_raw = sum(r for _, r in raws)
-        if total_raw > 0:
-            for idx_val, raw in raws:
-                share = (raw / total_raw) * 100.0
-                df.at[idx_val, 'Category Share'] = round(share, 4)
+    print("  Category Share recalculated")
 
-    print("  Category Share recalculated for all categories")
-
-    # ── 4. Save ───────────────────────────────────────────────────────
     df.to_csv(CSV_PATH, index=False)
     print(f"  Saved to {CSV_PATH}")
-
-    # ── 5. Summary ────────────────────────────────────────────────────
-    total = corrected_count + consistency_count
-    print(f"\nDone: {total} values corrected ({corrected_count} direct + {consistency_count} cross-category)")
+    print(f"\nDone: {corrected_count + consistency_count} total corrections")
 
 
 if __name__ == '__main__':
