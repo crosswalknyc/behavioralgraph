@@ -9,6 +9,12 @@ Includes S3 caching for existing results.
 
 import os
 import sys
+
+# Force Snowflake connector to use JSON results instead of Arrow.
+# The nanoarrow C extension in snowflake-connector-python 3.12.0 crashes
+# on certain numeric values. Blocking it before import forces JSON fallback.
+sys.modules['snowflake.connector.nanoarrow_arrow_iterator'] = None
+
 import uuid
 import json
 import csv

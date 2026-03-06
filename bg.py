@@ -276,6 +276,12 @@ To modify behavior:
 import os
 import io
 import pandas as pd
+import sys
+# Block nanoarrow BEFORE snowflake.connector.cursor loads so it can never
+# use Arrow result format. This forces the connector to use JSON for all
+# query results, avoiding the 'Invalid value X for dtype float64' crash
+# in the nanoarrow C extension (snowflake-connector-python 3.12.0 bug).
+sys.modules['snowflake.connector.nanoarrow_arrow_iterator'] = None
 import snowflake.connector
 import snowflake.connector.cursor
 snowflake.connector.cursor.CAN_USE_ARROW_RESULT_FORMAT = False
@@ -1491,6 +1497,7 @@ def connect_snowflake():
 
     # insecure_mode=True skips OCSP cert validation; avoids 254007 when Snowflake uses
     # internal/customer-stage S3 URLs (e.g. sfc-va3-*-customer-stage.s3.amazonaws.com) with revoked certs
+    _json_session = {'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT': 'JSON'}
     try:
         conn = snowflake.connector.connect(
             user=_user,
@@ -1502,6 +1509,7 @@ def connect_snowflake():
             schema=_schema,
             role=_role,
             insecure_mode=True,
+            session_parameters=_json_session,
         )
         if not SILENCE_VERBOSE_OUTPUT:
             print("✅ Connected using programmatic access token")
@@ -1518,6 +1526,7 @@ def connect_snowflake():
             schema=_schema,
             role=_role,
             insecure_mode=True,
+            session_parameters=_json_session,
         )
         if not SILENCE_VERBOSE_OUTPUT:
             print("✅ Connected using password authentication")
