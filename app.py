@@ -14284,11 +14284,12 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 update_job_status(job_id, status='failed', error='No output file generated')
                 
         except Exception as e:
+            import traceback
+            tb_str = traceback.format_exc()
             error_msg = f'Analysis error: {str(e)}'
             print(f"❌ {error_msg}")
-            import traceback
-            traceback.print_exc()
-            update_job_status(job_id, status='failed', error=error_msg)
+            print(tb_str)
+            update_job_status(job_id, status='failed', error=f'{error_msg}\n\nTraceback:\n{tb_str[-500:]}')
             
         finally:
             try:

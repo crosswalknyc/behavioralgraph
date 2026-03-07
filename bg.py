@@ -281,29 +281,65 @@ import sys
 # ── Force Snowflake connector to ALWAYS use JSON results ────────────────
 # The nanoarrow C extension (snowflake-connector-python >=3.x) crashes on
 # certain integer values with 'Invalid value X for dtype float64'.
-# Previous fixes (blocking sys.modules, deleting .so files, session params,
-# CAN_USE_ARROW_RESULT_FORMAT=False) all failed on Render/eventlet.
 #
-# Definitive fix: monkey-patch SnowflakeCursor.execute so every query
-# includes _statement_params={'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT':'JSON'}.
-# This is a per-query directive that the Snowflake server MUST honour,
-# guaranteeing results come back as JSON regardless of client config.
+# Belt-and-suspenders strategy (6 layers):
+#   1. Block nanoarrow import via sys.modules
+#   2. Set CAN_USE_ARROW_RESULT_FORMAT = False
+#   3. Force JSON via _statement_params on every execute()
+#   4. Override _query_result_format to 'json' after every execute()
+#   5. Wrap fetchone/fetchall with try/except to catch arrow errors
+#   6. Replace fetch_pandas_all with JSON-safe alternative
 sys.modules['snowflake.connector.nanoarrow_arrow_iterator'] = None
 import snowflake.connector
 import snowflake.connector.cursor
 snowflake.connector.cursor.CAN_USE_ARROW_RESULT_FORMAT = False
 
 _ORIGINAL_SF_EXECUTE = snowflake.connector.cursor.SnowflakeCursor.execute
+_ORIGINAL_SF_FETCHONE = snowflake.connector.cursor.SnowflakeCursor.fetchone
+_ORIGINAL_SF_FETCHALL = snowflake.connector.cursor.SnowflakeCursor.fetchall
 _JSON_FMT_KEY = 'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT'
 
 def _force_json_execute(self, command, params=None, **kwargs):
     sp = kwargs.get('_statement_params') or {}
     sp[_JSON_FMT_KEY] = 'JSON'
     kwargs['_statement_params'] = sp
-    return _ORIGINAL_SF_EXECUTE(self, command, params, **kwargs)
+    result = _ORIGINAL_SF_EXECUTE(self, command, params, **kwargs)
+    # Layer 4: force result format to json after server response
+    if hasattr(self, '_query_result_format'):
+        self._query_result_format = 'json'
+    return result
+
+def _safe_fetchone(self):
+    try:
+        return _ORIGINAL_SF_FETCHONE(self)
+    except Exception as e:
+        if 'Invalid value' in str(e) and 'dtype' in str(e):
+            print(f"⚠️ Arrow fetchone error caught, retrying with JSON: {e}")
+            self._query_result_format = 'json'
+            return _ORIGINAL_SF_FETCHONE(self)
+        raise
+
+def _safe_fetchall(self):
+    try:
+        return _ORIGINAL_SF_FETCHALL(self)
+    except Exception as e:
+        if 'Invalid value' in str(e) and 'dtype' in str(e):
+            print(f"⚠️ Arrow fetchall error caught, retrying with JSON: {e}")
+            self._query_result_format = 'json'
+            return _ORIGINAL_SF_FETCHALL(self)
+        raise
+
+def _safe_fetch_pandas_all(self, **kwargs):
+    """JSON-safe replacement for fetch_pandas_all that works without arrow."""
+    cols = [desc.name for desc in self.description] if self.description else []
+    rows = _ORIGINAL_SF_FETCHALL(self)
+    return pd.DataFrame(rows, columns=cols) if cols else pd.DataFrame(rows)
 
 snowflake.connector.cursor.SnowflakeCursor.execute = _force_json_execute
-print("✅ Snowflake cursor patched: all queries forced to JSON result format")
+snowflake.connector.cursor.SnowflakeCursor.fetchone = _safe_fetchone
+snowflake.connector.cursor.SnowflakeCursor.fetchall = _safe_fetchall
+snowflake.connector.cursor.SnowflakeCursor.fetch_pandas_all = _safe_fetch_pandas_all
+print("✅ Snowflake cursor fully patched: JSON forced + arrow error safety net")
 import numpy as np
 import re
 import random
