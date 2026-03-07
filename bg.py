@@ -1340,7 +1340,129 @@ def validate_demographics(df, archetype, sample_size):
             except (ValueError, TypeError):
                 pass
 
+    # ── Census ceiling: no demographic group can project past reality ────
+    df = _enforce_demographic_census_ceiling(df, sample_size, pct_col, bp_col)
+
     print(f"✅ validate_demographics: {corrections} demographic corrections applied")
+    return df
+
+
+# ---------- Demographic Census Ceiling ----------
+
+# 2026 US Census Bureau estimates (total US population ~324.7M)
+_US_CENSUS_CAPS = {
+    'AGE': {
+        '17 AND UNDER':  71_434_000,
+        'UNDER 17':      71_434_000,
+        '18-24':         29_223_000,
+        '25-34':         43_834_500,
+        '35-44':         41_236_900,
+        '45-54':         40_587_500,
+        '55-64':         41_561_600,
+        '65 OR OLDER':   56_822_500,
+        '65+':           56_822_500,
+    },
+    'GENDER': {
+        'MALE':          159_103_000,
+        'FEMALE':        165_597_000,
+    },
+    'ETHNICITY': {
+        'WHITE':                        195_470_000,
+        'HISPANIC OR LATINO':            63_258_000,
+        'BLACK OR AFRICAN AMERICAN':     43_261_000,
+        'BLACK':                         43_261_000,
+        'ASIAN':                         20_860_000,
+        'ANOTHER RACE/ETHNICITY':        15_000_000,
+        'NATIVE AMERICAN':                3_000_000,
+        'PACIFIC ISLANDER':                 700_000,
+    },
+}
+_GENPOP_TOTAL = 324_700_000
+_GENPOP_PANEL = 10_000_000
+
+
+def _enforce_demographic_census_ceiling(df, sample_size, pct_col, bp_col):
+    """Cap demographic percentages so their US Gen Pop projection never exceeds
+    the actual number of people in that demographic group.
+
+    For example, if 18-24 year olds are 28% of an 8.4M-sample profile,
+    projecting to ~273M US viewers gives ~76M — but only 29.2M 18-24 year
+    olds exist.  This function iteratively caps and redistributes until no
+    group exceeds its census limit.
+    """
+    sample_size = max(1, int(float(sample_size)))
+    profile_projected_audience = (sample_size / _GENPOP_PANEL) * _GENPOP_TOTAL
+
+    total_capped = 0
+    for cat, caps in _US_CENSUS_CAPS.items():
+        cm = df['Column'].str.upper() == cat
+        if not cm.any():
+            continue
+
+        # Iterate: cap → redistribute uncapped share → repeat until stable
+        for iteration in range(10):
+            any_capped_this_round = False
+
+            # Identify which groups are locked (at ceiling) vs free
+            locked_indices = set()
+            locked_pct = 0.0
+            free_total = 0.0
+
+            for idx in df[cm].index:
+                val = str(df.at[idx, 'Value']).strip().upper()
+                census_cap = caps.get(val)
+                try:
+                    cur_pct = float(df.at[idx, pct_col])
+                except (ValueError, TypeError):
+                    continue
+
+                if census_cap is None:
+                    free_total += cur_pct
+                    continue
+
+                projected = (cur_pct / 100.0) * profile_projected_audience
+                if projected > census_cap:
+                    max_pct = (census_cap / profile_projected_audience) * 100.0
+                    df.at[idx, pct_col] = round(max_pct, 4)
+                    locked_indices.add(idx)
+                    locked_pct += max_pct
+                    any_capped_this_round = True
+                    total_capped += 1
+                else:
+                    free_total += cur_pct
+
+            if not any_capped_this_round:
+                break
+
+            # Redistribute: free (uncapped) groups expand to fill the
+            # remaining share, keeping their relative proportions
+            remaining_share = 100.0 - locked_pct
+            if free_total > 0 and remaining_share > 0:
+                scale = remaining_share / free_total
+                for idx in df[cm].index:
+                    if idx in locked_indices:
+                        continue
+                    try:
+                        old = float(df.at[idx, pct_col])
+                        df.at[idx, pct_col] = round(old * scale, 4)
+                    except (ValueError, TypeError):
+                        pass
+
+        # Final pass: update BP and raw numbers
+        for idx in df[cm].index:
+            try:
+                final_pct = float(df.at[idx, pct_col])
+                if bp_col and bp_col in df.columns:
+                    df.at[idx, bp_col] = final_pct
+                df.at[idx, 'Original Raw Numbers'] = str(
+                    max(1, int(round(final_pct / 100.0 * sample_size))))
+            except (ValueError, TypeError):
+                pass
+
+    if total_capped:
+        print(f"   📊 Census ceiling: capped {total_capped} demographic values "
+              f"(profile audience ~{int(profile_projected_audience):,})")
+
     return df
 
 
@@ -1586,27 +1708,8 @@ def final_behavioral_sanity_check(df, archetype=None):
 
     print(f"🔍 Final sanity check: profile BP {profile_bp_pct:.1f}%, "
           f"adaptive bounds [{MIN_IDX:.3f}, {MAX_IDX:.3f}]")
-    print(f"   Columns in df: {list(df.columns)}")
-    print(f"   cs_col resolved to: '{cs_col}', bp_col='{bp_col}'")
-    print(f"   sample_size={sample_size}")
-    print(f"   Gen Pop lookup has {len(gp_bp_lookup)} entries, "
-          f"LOCATION entries: {sum(1 for k in gp_bp_lookup if k[0]=='LOCATION')}")
-
-    # Debug: show first LOCATION row before corrections
-    loc_mask = df['Column'].str.upper() == 'LOCATION'
-    if loc_mask.any():
-        first_loc = df[loc_mask].iloc[0]
-        fval = str(first_loc['Value']).strip().upper()
-        fbp = first_loc.get(bp_col, 'N/A')
-        gp_match = gp_bp_lookup.get(('LOCATION', fval), 'NOT FOUND')
-        print(f"   First LOCATION row: val='{fval}', bp={fbp}, gp_match={gp_match}")
 
     corrections = 0
-    loc_corrections = 0
-    loc_skipped_zero_bp = 0
-    loc_skipped_no_gp = 0
-    loc_in_bounds = 0
-    loc_total = 0
     for idx, row in df.iterrows():
         cat = str(row.get('Column', '')).strip().upper()
         val = str(row.get('Value', '')).strip().upper()
@@ -1621,15 +1724,8 @@ def final_behavioral_sanity_check(df, archetype=None):
         if cur_bp <= 0:
             continue
 
-        if cat == 'LOCATION':
-            loc_total += 1
-
         gp_bp_val = gp_bp_lookup.get((cat, val))
         if gp_bp_val is None or gp_bp_val <= 0:
-            if cat == 'LOCATION' and loc_skipped_no_gp < 3:
-                print(f"   LOCATION skip (no GP): val='{val}', key in lookup={('LOCATION',val) in gp_bp_lookup}")
-            if cat == 'LOCATION':
-                loc_skipped_no_gp += 1
             continue
 
         cur_index = cur_bp / gp_bp_val
@@ -1643,10 +1739,6 @@ def final_behavioral_sanity_check(df, archetype=None):
             hi = min(hi, 1.1)
 
         if lo <= cur_index <= hi:
-            if cat == 'LOCATION' and loc_in_bounds < 3:
-                print(f"   LOCATION in-bounds: val='{val}', bp={cur_bp:.4f}, gp={gp_bp_val:.4f}, idx={cur_index:.4f}, bounds=[{lo:.4f},{hi:.4f}]")
-            if cat == 'LOCATION':
-                loc_in_bounds += 1
             continue
 
         # Clamp the index
@@ -1661,11 +1753,6 @@ def final_behavioral_sanity_check(df, archetype=None):
         if proj_col in df.columns:
             df.at[idx, proj_col] = str(new_proj)
         corrections += 1
-        if cat == 'LOCATION':
-            loc_corrections += 1
-            if loc_corrections <= 3:
-                print(f"   LOCATION fix: {val} idx {cur_index:.3f} → {target_index:.3f}, "
-                      f"BP {cur_bp:.2f} → {new_bp:.2f}")
 
     # Recalculate Category Share within each behavioral category
     if corrections > 0:
@@ -1691,20 +1778,7 @@ def final_behavioral_sanity_check(df, archetype=None):
                 except (ValueError, TypeError):
                     pass
 
-    print(f"✅ final_behavioral_sanity_check: {corrections} corrections applied "
-          f"(including {loc_corrections} LOCATION fixes)")
-
-    # Temporary debug: add a marker row so we can verify the function ran
-    import datetime as _dt
-    debug_row = pd.DataFrame([{
-        'Column': 'DEBUG_SANITY_CHECK',
-        'Value': f'ran={_dt.datetime.now().isoformat()},corr={corrections},loc_corr={loc_corrections},loc_total={loc_total},loc_no_gp={loc_skipped_no_gp},loc_inbounds={loc_in_bounds},maxidx={MAX_IDX:.4f}',
-        bp_col: 0.0,
-        cs_col: 0.0,
-        raw_col: '0',
-    }])
-    df = pd.concat([df, debug_row], ignore_index=True)
-
+    print(f"✅ final_behavioral_sanity_check: {corrections} corrections applied")
     return df
 
 
