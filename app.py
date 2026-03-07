@@ -14289,7 +14289,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
             error_msg = f'Analysis error: {str(e)}'
             print(f"❌ {error_msg}")
             print(tb_str)
-            update_job_status(job_id, status='failed', error=f'{error_msg}\n\nTraceback:\n{tb_str[-500:]}')
+            update_job_status(job_id, status='failed', error=f'{error_msg}\n\nTraceback:\n{tb_str[-2000:]}')
             
         finally:
             try:

@@ -4589,28 +4589,28 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"📊 Rerun: using reference sample size {final_sample_size:,} (ref={base_ref:,}, multiplier={multiplier})")
     
-    df_sample = pd.DataFrame([
-        {
-            "Column": normalize_category_name("Sample Size"),
-            "Value": f"Sample Size ({sample_start} to {sample_end}) | Behavior Study ({behavior_start} to {behavior_end})",
-            "Percentage": float(final_sample_size)
-        },
-        {
-            "Column": normalize_category_name("BRAND CATEGORY"),
-            "Value": brand_category if brand_category else "UNKNOWN",
-            "Percentage": 0.0
-        },
-        {
-            "Column": normalize_category_name("AVID FAN"),
-            "Value": f"{awareness_percentage}%",
-            "Percentage": awareness_percentage
-        },
-        {
-            "Column": normalize_category_name("CASUAL FAN"),
-            "Value": f"{casual_percentage}%",
-            "Percentage": casual_percentage
-        }
-    ])
+    final_sample_size = float(final_sample_size if final_sample_size is not None else 100000)
+    print(f"📐 df_sample Percentage dtype check: sample_size={final_sample_size} type={type(final_sample_size).__name__}")
+    df_sample = pd.DataFrame({
+        "Column": [
+            normalize_category_name("Sample Size"),
+            normalize_category_name("BRAND CATEGORY"),
+            normalize_category_name("AVID FAN"),
+            normalize_category_name("CASUAL FAN"),
+        ],
+        "Value": [
+            f"Sample Size ({sample_start} to {sample_end}) | Behavior Study ({behavior_start} to {behavior_end})",
+            brand_category if brand_category else "UNKNOWN",
+            f"{awareness_percentage}%",
+            f"{casual_percentage}%",
+        ],
+        "Percentage": pd.array([
+            final_sample_size,
+            0.0,
+            float(awareness_percentage),
+            float(casual_percentage),
+        ], dtype="float64"),
+    })
     
     # SAMPLE SIZE value verified - intelligent inflation (35x max down to 1x) and capped at 10M
 
