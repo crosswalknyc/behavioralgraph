@@ -1678,6 +1678,18 @@ def final_behavioral_sanity_check(df, archetype=None):
 
     print(f"✅ final_behavioral_sanity_check: {corrections} corrections applied "
           f"(including {loc_corrections} LOCATION fixes)")
+
+    # Temporary debug: add a marker row so we can verify the function ran
+    import datetime as _dt
+    debug_row = pd.DataFrame([{
+        'Column': 'DEBUG_SANITY_CHECK',
+        'Value': f'ran={_dt.datetime.now().isoformat()},corr={corrections},loc={loc_corrections},maxidx={MAX_IDX:.4f}',
+        bp_col: 0.0,
+        cs_col: 0.0,
+        raw_col: '0',
+    }])
+    df = pd.concat([df, debug_row], ignore_index=True)
+
     return df
 
 
