@@ -1377,7 +1377,7 @@ _US_CENSUS_CAPS = {
         'PACIFIC ISLANDER':                 700_000,
     },
 }
-_GENPOP_TOTAL = 324_700_000
+_GENPOP_TOTAL = 329_900_000   # must match add_us_gen_pop_projection's US_POPULATION
 _GENPOP_PANEL = 10_000_000
 
 
@@ -1448,6 +1448,21 @@ def _enforce_demographic_census_ceiling(df, sample_size, pct_col, bp_col):
                     except (ValueError, TypeError):
                         pass
 
+        # Hard final clamp: ensure no rounding drift pushes values over ceiling
+        for idx in df[cm].index:
+            val = str(df.at[idx, 'Value']).strip().upper()
+            census_cap = caps.get(val)
+            if census_cap is None:
+                continue
+            try:
+                cur_pct = float(df.at[idx, pct_col])
+            except (ValueError, TypeError):
+                continue
+            projected = (cur_pct / 100.0) * profile_projected_audience
+            if projected > census_cap:
+                df.at[idx, pct_col] = round(
+                    (census_cap / profile_projected_audience) * 100.0 * 0.999, 4)
+
         # Final pass: update BP and raw numbers
         for idx in df[cm].index:
             try:
@@ -1463,6 +1478,85 @@ def _enforce_demographic_census_ceiling(df, sample_size, pct_col, bp_col):
         print(f"   📊 Census ceiling: capped {total_capped} demographic values "
               f"(profile audience ~{int(profile_projected_audience):,})")
 
+    return df
+
+
+def cap_demographic_projections(df):
+    """Safety net: after US Gen Pop Projection is computed, ensure no
+    demographic group's projection exceeds the actual census population
+    for that group.  Works on the final projection column directly.
+    """
+    proj_col = 'US Gen Pop Projection'
+    bp_col = 'Brand Penetration (Row)'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    raw_col = 'Original Raw Numbers'
+
+    if proj_col not in df.columns:
+        return df
+
+    df = df.copy()
+    US_POP = 329_900_000
+    PANEL = 10_000_000
+
+    ss = 1
+    ss_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            ss = max(1, int(float(str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', ''))))
+        except (ValueError, TypeError):
+            pass
+
+    fixes = 0
+    for cat, caps in _US_CENSUS_CAPS.items():
+        cm = df['Column'].str.upper() == cat
+        for idx in df[cm].index:
+            val = str(df.at[idx, 'Value']).strip().upper()
+            census_cap = caps.get(val)
+            if census_cap is None:
+                continue
+            try:
+                cur_proj = int(float(str(df.at[idx, proj_col]).replace(',', '')))
+            except (ValueError, TypeError):
+                continue
+
+            if cur_proj > census_cap:
+                capped_proj = int(census_cap * 0.999)
+                capped_raw = max(1, int(round(capped_proj / (US_POP / PANEL))))
+                capped_bp = round((capped_raw / ss) * 100.0, 4)
+
+                df.at[idx, proj_col] = str(capped_proj)
+                df.at[idx, raw_col] = str(capped_raw)
+                if bp_col in df.columns:
+                    df.at[idx, bp_col] = capped_bp
+                df.at[idx, cs_col] = capped_bp
+                fixes += 1
+
+        # Renormalize category shares after capping
+        if fixes > 0:
+            total = 0.0
+            for idx in df[cm].index:
+                try:
+                    total += float(df.at[idx, cs_col])
+                except (ValueError, TypeError):
+                    pass
+            if total > 0 and total != 100.0:
+                scale = 100.0 / total
+                for idx in df[cm].index:
+                    try:
+                        old = float(df.at[idx, cs_col])
+                        new_val = round(old * scale, 4)
+                        df.at[idx, cs_col] = new_val
+                        if bp_col in df.columns:
+                            df.at[idx, bp_col] = new_val
+                        new_raw = max(1, int(round(new_val / 100.0 * ss)))
+                        df.at[idx, raw_col] = str(new_raw)
+                        new_proj = int(round(new_raw * (US_POP / PANEL)))
+                        df.at[idx, proj_col] = str(new_proj)
+                    except (ValueError, TypeError):
+                        pass
+
+    if fixes:
+        print(f"   📊 Projection cap: capped {fixes} demographic projections at census limits")
     return df
 
 
@@ -6785,6 +6879,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if not is_genpop:
         print("🔍 Running final behavioral sanity check on FINAL output...")
         df_final = final_behavioral_sanity_check(df_final, archetype=_archetype)
+
+    # ── Census ceiling on final projections ─────────────────────────────
+    if not is_genpop:
+        df_final = cap_demographic_projections(df_final)
 
     # Final row ordering and CSV save - using exact order from reference file
     CATEGORY_ORDER = [
