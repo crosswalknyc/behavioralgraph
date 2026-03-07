@@ -701,18 +701,42 @@ def estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=
     sample_size = (sample_size // 10) * 10
     return sample_size
 
+def _get_profile_genpop_penetration(df, gp_lookup):
+    """Determine the profile's Gen Pop Brand Penetration from the BRAND INPUT row.
+
+    Looks up the input brand in the Gen Pop lookup to find its BP.
+    Falls back to estimating from the sample size vs 10M Gen Pop panel.
+    """
+    GENPOP_PANEL = 10_000_000
+
+    brand_rows = df[df['Column'].str.upper() == 'BRAND INPUT']
+    if not brand_rows.empty:
+        brand_val = str(brand_rows.iloc[0].get('Value', '')).strip().upper()
+        for (cat, val), entry in gp_lookup.items():
+            if val == brand_val or brand_val in val or val in brand_val:
+                return entry['bp']
+
+    sample_rows = df[df['Column'].str.upper() == 'SAMPLE SIZE']
+    if not sample_rows.empty:
+        try:
+            raw = str(sample_rows.iloc[0].get('Original Raw Numbers', '0')).replace(',', '')
+            ss = int(float(raw))
+            return min(99.0, (ss / GENPOP_PANEL) * 100.0)
+        except (ValueError, TypeError):
+            pass
+
+    return 50.0
+
+
 def anchor_to_genpop(df, sample_size):
     """Anchor all profile values to the Gen Pop CSV baseline using index-and-anchor.
 
-    For each (Category, Value) in the profile:
-      1. Look up the same pair in Gen Pop to get the baseline Brand Penetration.
-      2. Compute an index from the raw Snowflake signal (profile category share
-         vs Gen Pop category share).  Clamp to reasonable bounds.
-      3. Anchored Brand Penetration = gen_pop_bp * clamped_index
-      4. Recalculate Original Raw Numbers, Category Share, and US Gen Pop Projection.
+    Index bounds are ADAPTIVE based on the profile's Gen Pop penetration:
+    - High-penetration profiles (YouTube at 84%) stay very close to Gen Pop
+    - Low-penetration profiles (niche 2% brand) can deviate significantly
 
-    Demographic categories use tighter index bounds (0.7x–1.5x).
-    Behavioral categories use wider bounds (0.3x–3.0x).
+    Formula: deviation = base_deviation * (1 - penetration/100)^2
+    e.g. YouTube@84%: max behavioral index = 1.05, YouTube@5%: max = 2.62
     """
     gp = _load_genpop_csv()
     if gp is None:
@@ -729,8 +753,6 @@ def anchor_to_genpop(df, sample_size):
         'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
         'CASUAL FAN', 'BRAND CATEGORY', 'LOCATION',
     }
-    DEMO_INDEX_LO, DEMO_INDEX_HI = 0.7, 1.5
-    BEHAV_INDEX_LO, BEHAV_INDEX_HI = 0.3, 3.0
 
     gp_col = gp.columns[0]   # Column
     gp_val = gp.columns[1]   # Value
@@ -750,19 +772,25 @@ def anchor_to_genpop(df, sample_size):
             continue
         gp_lookup[(cat, val)] = {'bp': bp, 'cs': cs}
 
-    gp_cat_avg_bp = {}
-    cat_counts = {}
-    for (cat, _), v in gp_lookup.items():
-        gp_cat_avg_bp[cat] = gp_cat_avg_bp.get(cat, 0.0) + v['bp']
-        cat_counts[cat] = cat_counts.get(cat, 0) + 1
-    for cat in gp_cat_avg_bp:
-        gp_cat_avg_bp[cat] /= max(cat_counts[cat], 1)
-
     pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
     bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
 
     sample_size = max(int(float(sample_size)), 1)
     GENPOP_TOTAL = 324_700_000
+
+    # Determine profile's Gen Pop penetration for adaptive bounds
+    profile_bp_pct = _get_profile_genpop_penetration(df, gp_lookup)
+    niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2  # 0 for Gen Pop, ~1 for niche
+
+    # Adaptive bounds: high-pen profiles ~1.0, niche profiles get wide range
+    BEHAV_HI = 1.0 + 2.0 * niche_factor       # YouTube@84%: 1.05, niche@5%: 2.80
+    BEHAV_LO = 1.0 - 0.7 * niche_factor       # YouTube@84%: 0.98, niche@5%: 0.37
+    DEMO_HI  = 1.0 + 0.8 * niche_factor       # YouTube@84%: 1.02, niche@5%: 1.72
+    DEMO_LO  = 1.0 - 0.5 * niche_factor       # YouTube@84%: 0.99, niche@5%: 0.55
+
+    print(f"   Profile Gen Pop penetration: {profile_bp_pct:.1f}% → "
+          f"behav bounds [{BEHAV_LO:.2f}, {BEHAV_HI:.2f}], "
+          f"demo bounds [{DEMO_LO:.2f}, {DEMO_HI:.2f}]")
 
     changes = 0
     for idx, row in df.iterrows():
@@ -773,7 +801,7 @@ def anchor_to_genpop(df, sample_size):
             continue
 
         is_demo = cat in DEMO_CATS
-        lo, hi = (DEMO_INDEX_LO, DEMO_INDEX_HI) if is_demo else (BEHAV_INDEX_LO, BEHAV_INDEX_HI)
+        lo, hi = (DEMO_LO, DEMO_HI) if is_demo else (BEHAV_LO, BEHAV_HI)
 
         gp_entry = gp_lookup.get((cat, val))
         if gp_entry is None:
