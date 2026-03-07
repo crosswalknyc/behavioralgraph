@@ -16791,6 +16791,9 @@ def finalize_original_raw_numbers_for_output(df):
         if brand in brand_adjusted_value:
             df.at[idx, final_col] = str(int(brand_adjusted_value[brand]))
 
+    # Reset index to avoid duplicate-index issues from concatenation
+    df = df.reset_index(drop=True)
+
     # Vectorized category-level de-duplication WITHOUT while-loops
     # Define excluded columns once for reuse
     excluded_cols = set(['INPUT_METADATA', 'SAMPLE SIZE', 'PURCHASE SHARE', 'BRAND PENETRATION'])
