@@ -346,6 +346,28 @@ import random
 import glob
 from datetime import datetime
 from genpop_calibration import calibrate_to_genpop
+import json as _json_mod
+
+# ============================================================================
+# OPENAI CLIENT FOR PIPELINE VALIDATION (archetype generation)
+# ============================================================================
+_bg_openai_client = None
+
+def _get_openai_client():
+    """Get or create OpenAI client for pipeline archetype generation."""
+    global _bg_openai_client
+    if _bg_openai_client is not None:
+        return _bg_openai_client
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return None
+    try:
+        from openai import OpenAI
+        _bg_openai_client = OpenAI(api_key=api_key)
+        return _bg_openai_client
+    except Exception as e:
+        print(f"⚠️ OpenAI client init failed in bg.py: {e}")
+        return None
 
 # Optional S3 support for caching
 try:
@@ -678,6 +700,682 @@ def estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=
     sample_size = min(sample_size, GENPOP_CAP)
     sample_size = (sample_size // 10) * 10
     return sample_size
+
+def anchor_to_genpop(df, sample_size):
+    """Anchor all profile values to the Gen Pop CSV baseline using index-and-anchor.
+
+    For each (Category, Value) in the profile:
+      1. Look up the same pair in Gen Pop to get the baseline Brand Penetration.
+      2. Compute an index from the raw Snowflake signal (profile category share
+         vs Gen Pop category share).  Clamp to reasonable bounds.
+      3. Anchored Brand Penetration = gen_pop_bp * clamped_index
+      4. Recalculate Original Raw Numbers, Category Share, and US Gen Pop Projection.
+
+    Demographic categories use tighter index bounds (0.7x–1.5x).
+    Behavioral categories use wider bounds (0.3x–3.0x).
+    """
+    gp = _load_genpop_csv()
+    if gp is None:
+        print("⚠️ Gen Pop CSV not available — skipping anchor_to_genpop")
+        return df
+
+    df = df.copy()
+
+    DEMO_CATS = {
+        'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+    }
+    SKIP_CATS = {
+        'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
+        'CASUAL FAN', 'BRAND CATEGORY', 'LOCATION',
+    }
+    DEMO_INDEX_LO, DEMO_INDEX_HI = 0.7, 1.5
+    BEHAV_INDEX_LO, BEHAV_INDEX_HI = 0.3, 3.0
+
+    gp_col = gp.columns[0]   # Column
+    gp_val = gp.columns[1]   # Value
+    gp_bp  = gp.columns[2]   # Brand Penetration (Row)
+    gp_cs  = gp.columns[3]   # Category Share
+
+    gp_lookup = {}
+    for _, row in gp.iterrows():
+        cat = str(row[gp_col]).strip().upper()
+        val = str(row[gp_val]).strip().upper()
+        if cat in SKIP_CATS:
+            continue
+        try:
+            bp = float(row[gp_bp])
+            cs = float(row[gp_cs])
+        except (ValueError, TypeError):
+            continue
+        gp_lookup[(cat, val)] = {'bp': bp, 'cs': cs}
+
+    gp_cat_avg_bp = {}
+    cat_counts = {}
+    for (cat, _), v in gp_lookup.items():
+        gp_cat_avg_bp[cat] = gp_cat_avg_bp.get(cat, 0.0) + v['bp']
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    for cat in gp_cat_avg_bp:
+        gp_cat_avg_bp[cat] /= max(cat_counts[cat], 1)
+
+    pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
+
+    sample_size = max(int(float(sample_size)), 1)
+    GENPOP_TOTAL = 324_700_000
+
+    changes = 0
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        val = str(row.get('Value', '')).strip().upper()
+
+        if cat in SKIP_CATS:
+            continue
+
+        is_demo = cat in DEMO_CATS
+        lo, hi = (DEMO_INDEX_LO, DEMO_INDEX_HI) if is_demo else (BEHAV_INDEX_LO, BEHAV_INDEX_HI)
+
+        gp_entry = gp_lookup.get((cat, val))
+        if gp_entry is None:
+            continue
+
+        gp_bp_val = gp_entry['bp']
+        gp_cs_val = gp_entry['cs']
+
+        if gp_bp_val <= 0 or gp_cs_val <= 0:
+            continue
+
+        try:
+            profile_cs = float(row[pct_col])
+        except (ValueError, TypeError):
+            continue
+
+        if profile_cs <= 0:
+            continue
+
+        # Bayesian shrinkage: blend raw index toward 1.0 when sample is small
+        try:
+            raw_count = int(float(str(row.get('Original Raw Numbers', '0')).replace(',', '')))
+        except (ValueError, TypeError):
+            raw_count = 0
+        confidence = min(1.0, raw_count / 500.0)
+        raw_ratio = profile_cs / gp_cs_val
+        raw_index = confidence * raw_ratio + (1.0 - confidence) * 1.0
+        clamped_index = max(lo, min(hi, raw_index))
+
+        new_bp = gp_bp_val * clamped_index
+        new_bp = min(new_bp, 99.99)
+        new_bp = round(new_bp, 4)
+
+        new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+        new_genpop = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+
+        if bp_col and bp_col in df.columns:
+            df.at[idx, bp_col] = new_bp
+        df.at[idx, 'Original Raw Numbers'] = str(new_raw)
+        if 'US Gen Pop Projection' in df.columns:
+            df.at[idx, 'US Gen Pop Projection'] = str(new_genpop)
+
+        changes += 1
+
+    for cat in df['Column'].str.upper().unique():
+        if cat in SKIP_CATS:
+            continue
+        cat_mask = df['Column'].str.upper() == cat
+        if not cat_mask.any():
+            continue
+
+        raw_col_name = 'Original Raw Numbers'
+        if raw_col_name not in df.columns:
+            continue
+
+        total_raw = 0
+        for cidx in df[cat_mask].index:
+            try:
+                total_raw += int(float(str(df.at[cidx, raw_col_name]).replace(',', '')))
+            except (ValueError, TypeError):
+                pass
+
+        if total_raw <= 0:
+            continue
+
+        for cidx in df[cat_mask].index:
+            try:
+                raw = int(float(str(df.at[cidx, raw_col_name]).replace(',', '')))
+                new_cs = round((raw / total_raw) * 100.0, 4)
+                df.at[cidx, pct_col] = f"{new_cs:.4f}" if isinstance(df.at[cidx, pct_col], str) else new_cs
+            except (ValueError, TypeError):
+                pass
+
+    print(f"✅ anchor_to_genpop: anchored {changes} rows to Gen Pop baseline")
+    return df
+
+
+# ============================================================================
+# AI-POWERED ARCHETYPE & VALIDATION (demographic + behavioral gut-check)
+# ============================================================================
+
+# Category-demographic correlation maps used by the behavioral gut-check
+_FEMALE_CORRELATED_CATS = {
+    'BEAUTY/WELLNESS', 'PHARMACY', 'APPAREL/FOOTWEAR', 'TOYS',
+}
+_MALE_CORRELATED_CATS = {
+    'HEAVY MACHINERY', 'BETTING', 'SPORTS', 'SPORTS ORGANIZATIONS',
+    'NFL', 'NBA', 'MLB', 'NHL', 'MLS', 'PREMIER LEAGUE', 'WNBA',
+    'NWSL', 'RUGBY', 'VOLLEYBALL', 'GOLF', 'TENNIS', 'UFC',
+    'LA LIGA', 'SERIE A', 'SOCCER', 'UEFA', 'WORKOUT FACILITY',
+}
+_YOUNG_CORRELATED_CATS = {
+    'SOCIAL MEDIA', 'GAMES', 'VIRTUAL MVPD FAST', 'STREAMING/PLATFORM',
+    'STREAMING/CHANNEL', 'APP/PLATFORM USAGE',
+}
+_OLD_CORRELATED_CATS = {
+    'BROADCAST/CABLE', 'MEDIA', 'INSURANCE',
+}
+
+
+def _category_matches_archetype(cat, archetype_cats):
+    """Fuzzy-match a data category against an archetype category list."""
+    cat_upper = cat.upper()
+    for arch_cat in archetype_cats:
+        arch_upper = arch_cat.upper()
+        if arch_upper == cat_upper:
+            return True
+        if arch_upper in cat_upper or cat_upper in arch_upper:
+            return True
+        arch_words = set(arch_upper.replace('/', ' ').split())
+        cat_words = set(cat_upper.replace('/', ' ').split())
+        if arch_words & cat_words:
+            return True
+    return False
+
+
+def get_brand_archetype(project_name, brands, brand_category=None):
+    """Get demographic + behavioral archetype for the profile subject.
+
+    Priority 1: existing S3 profile (free, fast, data-driven).
+    Priority 2: GPT-4o-mini (lightweight directional expectations).
+    Fallback:   balanced defaults (no corrections applied).
+    """
+    archetype = _try_s3_archetype(project_name, brands)
+    if archetype:
+        print(f"📊 Using S3 existing profile as archetype for {project_name}")
+        return archetype
+
+    archetype = _try_gpt_archetype(project_name, brands, brand_category)
+    if archetype:
+        print(f"🤖 Using GPT-generated archetype for {project_name}")
+        return archetype
+
+    print(f"⚠️ No archetype available for {project_name} — balanced defaults")
+    return {
+        'gender_skew': 'balanced',
+        'age_skew': 'balanced',
+        'ethnicity_over_index': [],
+        'income_skew': 'balanced',
+        'behavioral_high': [],
+        'behavioral_low': [],
+    }
+
+
+def _try_s3_archetype(project_name, brands):
+    """Build an archetype from an existing S3 profile CSV."""
+    s3 = get_s3_client()
+    if not s3:
+        return None
+
+    brand_search = (brands[0] if brands else project_name).lower().strip()
+    brand_clean = brand_search.replace('.', '').replace(' ', '').replace('_', '')
+
+    try:
+        best_match = None
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=''):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.csv') or '/' in key:
+                    continue
+                if 'Gen_Pop' in key:
+                    continue
+                fn_clean = key.lower().replace('.csv', '').replace('_', '').replace('-', '').replace(' ', '')
+                if brand_clean not in fn_clean:
+                    continue
+                if best_match is None or obj['LastModified'] > best_match['LastModified']:
+                    best_match = obj
+
+        if not best_match:
+            return None
+
+        resp = s3.get_object(Bucket=S3_BUCKET, Key=best_match['Key'])
+        df = pd.read_csv(io.BytesIO(resp['Body'].read()))
+        print(f"📂 Found existing S3 profile for archetype: {best_match['Key']}")
+        return _extract_archetype_from_df(df)
+    except Exception as e:
+        print(f"⚠️ S3 archetype lookup failed: {e}")
+        return None
+
+
+def _extract_archetype_from_df(df):
+    """Derive directional archetype signals from an existing profile DataFrame."""
+    archetype = {
+        'gender_skew': 'balanced', 'age_skew': 'balanced',
+        'ethnicity_over_index': [], 'income_skew': 'balanced',
+        'behavioral_high': [], 'behavioral_low': [],
+    }
+    gp = _load_genpop_csv()
+    gp_lookup = {}
+    if gp is not None:
+        for _, row in gp.iterrows():
+            cat = str(row.iloc[0]).strip().upper()
+            val = str(row.iloc[1]).strip().upper()
+            try:
+                cs = float(row.iloc[3])
+            except (ValueError, TypeError):
+                continue
+            gp_lookup[(cat, val)] = cs
+
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+
+    # --- Gender ---
+    gender_rows = df[df['Column'].str.upper() == 'GENDER']
+    male_cs, female_cs = 0.0, 0.0
+    for _, row in gender_rows.iterrows():
+        val = str(row.get('Value', '')).upper()
+        try:
+            cs = float(row.get(cs_col, 0))
+        except (ValueError, TypeError):
+            continue
+        if 'FEMALE' in val:
+            female_cs = cs
+        elif 'MALE' in val:
+            male_cs = cs
+    if male_cs > 55:
+        archetype['gender_skew'] = 'male'
+    elif female_cs > 55:
+        archetype['gender_skew'] = 'female'
+
+    # --- Age ---
+    age_rows = df[df['Column'].str.upper() == 'AGE']
+    young_total, old_total = 0.0, 0.0
+    for _, row in age_rows.iterrows():
+        val = str(row.get('Value', '')).upper()
+        try:
+            cs = float(row.get(cs_col, 0))
+        except (ValueError, TypeError):
+            continue
+        if any(x in val for x in ['18-24', '25-34', '18 -', '25 -']):
+            young_total += cs
+        elif any(x in val for x in ['55-64', '65+', '55 -', '65 ']):
+            old_total += cs
+    if young_total > 45:
+        archetype['age_skew'] = 'younger'
+    elif old_total > 35:
+        archetype['age_skew'] = 'older'
+
+    # --- Ethnicity ---
+    eth_rows = df[df['Column'].str.upper() == 'ETHNICITY']
+    for _, row in eth_rows.iterrows():
+        val = str(row.get('Value', '')).upper()
+        try:
+            cs = float(row.get(cs_col, 0))
+        except (ValueError, TypeError):
+            continue
+        gp_cs = gp_lookup.get(('ETHNICITY', val))
+        if gp_cs and gp_cs > 0 and cs / gp_cs > 1.15:
+            archetype['ethnicity_over_index'].append(val)
+
+    # --- Behavioral categories (average index vs Gen Pop) ---
+    DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                 'OCCUPATION', 'LOCATION'}
+    SKIP_CATS = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+                 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
+    cat_indices = {}
+    for _, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        val = str(row.get('Value', '')).strip().upper()
+        if cat in DEMO_CATS or cat in SKIP_CATS:
+            continue
+        try:
+            pcs = float(row.get(cs_col, 0))
+        except (ValueError, TypeError):
+            continue
+        gp_cs = gp_lookup.get((cat, val))
+        if gp_cs and gp_cs > 0 and pcs > 0:
+            cat_indices.setdefault(cat, []).append(pcs / gp_cs)
+
+    for cat, indices in cat_indices.items():
+        avg = sum(indices) / len(indices)
+        if avg > 1.3:
+            archetype['behavioral_high'].append(cat)
+        elif avg < 0.7:
+            archetype['behavioral_low'].append(cat)
+
+    return archetype
+
+
+def _try_gpt_archetype(project_name, brands, brand_category=None):
+    """Generate archetype expectations using GPT-4o-mini."""
+    client = _get_openai_client()
+    if not client:
+        return None
+
+    brand_name = brands[0] if brands else project_name
+    cat_hint = f" in the {brand_category} category" if brand_category else ""
+    CATS = (
+        "BEAUTY/WELLNESS, SPORTS, STREAMING/PLATFORM, SOCIAL MEDIA, "
+        "BROADCAST/CABLE, MEDIA, HEAVY MACHINERY, BETTING, GAMES, "
+        "WORKOUT FACILITY, WHERE THEY DINE, QSR, WHERE THEY SHOP, "
+        "MOST PURCHASED BRANDS, TRAVEL, INSURANCE, BANKING, "
+        "TECHNOLOGY/DEVICE, PHARMACY, APPAREL/FOOTWEAR, TOYS, "
+        "AUTOMOBILE, TELECOM, TALENT, EVENTS, VENUE, TICKETING, "
+        "SPORTS ORGANIZATIONS, NFL, NBA, MLB, NHL, MLS"
+    )
+    prompt = (
+        f'You are a US media research analyst. For the brand/talent/subject '
+        f'"{brand_name}"{cat_hint}, estimate the expected audience profile '
+        f'relative to the general US population.\n\n'
+        f'Return ONLY valid JSON with these exact keys:\n'
+        f'{{\n'
+        f'  "gender_skew": "male" | "female" | "balanced",\n'
+        f'  "age_skew": "younger" | "balanced" | "older",\n'
+        f'  "ethnicity_over_index": ["list of ethnicities, e.g. BLACK, HISPANIC"],\n'
+        f'  "income_skew": "lower" | "middle" | "upper" | "balanced",\n'
+        f'  "behavioral_high": ["categories whose audience should OVER-index"],\n'
+        f'  "behavioral_low": ["categories whose audience should UNDER-index"]\n'
+        f'}}\n\n'
+        f'Available behavioral categories: {CATS}\n\n'
+        f'Examples:\n'
+        f'- The Rock: male, diverse ethnicity, SPORTS/WORKOUT FACILITY high, BEAUTY/WELLNESS low\n'
+        f'- Taylor Swift: female, younger, BEAUTY/WELLNESS/APPAREL high, HEAVY MACHINERY low\n'
+        f'- YouTube: balanced, SOCIAL MEDIA/STREAMING high\n'
+        f'- NFL: male, SPORTS/BETTING high, BEAUTY/WELLNESS lower\n\n'
+        f'Return ONLY the JSON object.'
+    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert audience researcher. Return only valid JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=400,
+            temperature=0.3,
+        )
+        content = response.choices[0].message.content.strip()
+        if '```json' in content:
+            content = content.split('```json')[1].split('```')[0]
+        elif '```' in content:
+            content = content.split('```')[1].split('```')[0]
+        result = _json_mod.loads(content)
+        return {
+            'gender_skew': result.get('gender_skew', 'balanced'),
+            'age_skew': result.get('age_skew', 'balanced'),
+            'ethnicity_over_index': result.get('ethnicity_over_index', []),
+            'income_skew': result.get('income_skew', 'balanced'),
+            'behavioral_high': result.get('behavioral_high', []),
+            'behavioral_low': result.get('behavioral_low', []),
+        }
+    except Exception as e:
+        print(f"⚠️ GPT archetype generation failed: {e}")
+        return None
+
+
+# ---------- Demographic Validation ----------
+
+def validate_demographics(df, archetype, sample_size):
+    """Validate demographics against archetype; dampen contradictions toward Gen Pop."""
+    gp = _load_genpop_csv()
+    if gp is None:
+        return df
+
+    df = df.copy()
+    DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
+    pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    sample_size = max(int(float(sample_size)), 1)
+
+    gp_demo = {}
+    for _, row in gp.iterrows():
+        cat = str(row.iloc[0]).strip().upper()
+        val = str(row.iloc[1]).strip().upper()
+        if cat not in DEMO_CATS:
+            continue
+        try:
+            cs = float(row.iloc[3])
+        except (ValueError, TypeError):
+            continue
+        gp_demo.setdefault(cat, {})[val] = cs
+
+    corrections = 0
+
+    # --- Gender ---
+    if archetype.get('gender_skew', 'balanced') != 'balanced':
+        gm = df['Column'].str.upper() == 'GENDER'
+        for idx in df[gm].index:
+            val = str(df.at[idx, 'Value']).upper()
+            try:
+                cur = float(df.at[idx, pct_col])
+            except (ValueError, TypeError):
+                continue
+            gp_val = gp_demo.get('GENDER', {}).get(val, cur)
+            is_favored = (
+                (archetype['gender_skew'] == 'male' and 'MALE' in val and 'FEMALE' not in val) or
+                (archetype['gender_skew'] == 'female' and 'FEMALE' in val)
+            )
+            is_disfavored = (
+                (archetype['gender_skew'] == 'male' and 'FEMALE' in val) or
+                (archetype['gender_skew'] == 'female' and 'MALE' in val and 'FEMALE' not in val)
+            )
+            if is_disfavored and cur > gp_val * 1.1:
+                df.at[idx, pct_col] = round(gp_val * 0.7 + cur * 0.3, 4)
+                corrections += 1
+            elif is_favored and cur < gp_val * 0.8:
+                df.at[idx, pct_col] = round(gp_val * 0.5 + cur * 0.5, 4)
+                corrections += 1
+
+    # --- Age ---
+    if archetype.get('age_skew', 'balanced') != 'balanced':
+        am = df['Column'].str.upper() == 'AGE'
+        favored_young = archetype['age_skew'] == 'younger'
+        for idx in df[am].index:
+            val = str(df.at[idx, 'Value']).upper()
+            try:
+                cur = float(df.at[idx, pct_col])
+            except (ValueError, TypeError):
+                continue
+            gp_val = gp_demo.get('AGE', {}).get(val, cur)
+            is_young = any(x in val for x in ['18-24', '25-34', '18 -', '25 -'])
+            is_old = any(x in val for x in ['55-64', '65+', '55 -', '65 '])
+            if favored_young and is_old and cur > gp_val * 1.2:
+                df.at[idx, pct_col] = round(gp_val * 0.7 + cur * 0.3, 4)
+                corrections += 1
+            elif not favored_young and is_young and cur > gp_val * 1.2:
+                df.at[idx, pct_col] = round(gp_val * 0.7 + cur * 0.3, 4)
+                corrections += 1
+
+    # --- Ethnicity ---
+    expected_high = [e.upper() for e in archetype.get('ethnicity_over_index', [])]
+    em = df['Column'].str.upper() == 'ETHNICITY'
+    for idx in df[em].index:
+        val = str(df.at[idx, 'Value']).upper()
+        try:
+            cur = float(df.at[idx, pct_col])
+        except (ValueError, TypeError):
+            continue
+        gp_val = gp_demo.get('ETHNICITY', {}).get(val, cur)
+        if gp_val <= 0:
+            continue
+        is_expected = any(exp in val or val in exp for exp in expected_high)
+        if not is_expected and cur / gp_val > 2.0:
+            df.at[idx, pct_col] = round(gp_val * 0.6 + cur * 0.4, 4)
+            corrections += 1
+
+    # --- Renormalize each demo category to sum to 100% ---
+    for cat in DEMO_CATS:
+        cm = df['Column'].str.upper() == cat
+        if not cm.any():
+            continue
+        total = 0.0
+        for idx in df[cm].index:
+            try:
+                total += float(df.at[idx, pct_col])
+            except (ValueError, TypeError):
+                pass
+        if total <= 0:
+            continue
+        scale = 100.0 / total
+        for idx in df[cm].index:
+            try:
+                old = float(df.at[idx, pct_col])
+                new_val = round(old * scale, 4)
+                df.at[idx, pct_col] = new_val
+                df.at[idx, 'Original Raw Numbers'] = str(max(1, int(round(new_val / 100.0 * sample_size))))
+            except (ValueError, TypeError):
+                pass
+
+    print(f"✅ validate_demographics: {corrections} demographic corrections applied")
+    return df
+
+
+# ---------- Behavioral Gut-Check ----------
+
+def validate_behavioral_gut_check(df, archetype, sample_size):
+    """Final behavioral gut-check: ensure values make sense for the profile subject.
+
+    Uses the archetype's gender/age skew + category-demographic correlations
+    to cap or floor the effective index for each behavioral value.  Example:
+    Sephora at 3x Gen Pop for a heavily-male audience gets dampened.
+    """
+    gp = _load_genpop_csv()
+    if gp is None:
+        return df
+
+    df = df.copy()
+    DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                 'OCCUPATION', 'LOCATION'}
+    SKIP_CATS = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+                 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'LOCATION'}
+
+    pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
+    sample_size = max(int(float(sample_size)), 1)
+    GENPOP_TOTAL = 324_700_000
+
+    gp_lookup = {}
+    for _, row in gp.iterrows():
+        cat = str(row.iloc[0]).strip().upper()
+        val = str(row.iloc[1]).strip().upper()
+        try:
+            bp = float(row.iloc[2])
+        except (ValueError, TypeError):
+            continue
+        gp_lookup[(cat, val)] = bp
+
+    gender_skew = archetype.get('gender_skew', 'balanced')
+    age_skew = archetype.get('age_skew', 'balanced')
+    behav_high = archetype.get('behavioral_high', [])
+    behav_low = archetype.get('behavioral_low', [])
+
+    corrections = 0
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        val = str(row.get('Value', '')).strip().upper()
+        if cat in DEMO_CATS or cat in SKIP_CATS:
+            continue
+
+        gp_bp = gp_lookup.get((cat, val))
+        if not gp_bp or gp_bp <= 0:
+            continue
+
+        try:
+            cur_bp = float(row.get(bp_col, 0)) if bp_col else 0
+        except (ValueError, TypeError):
+            cur_bp = 0
+        if cur_bp <= 0:
+            continue
+
+        cur_index = cur_bp / gp_bp
+        max_idx = 3.0
+        min_idx = 0.3
+
+        # Gender-based constraints
+        if gender_skew == 'male':
+            if cat in _FEMALE_CORRELATED_CATS or _category_matches_archetype(cat, behav_low):
+                max_idx = min(max_idx, 1.15)
+            if cat in _MALE_CORRELATED_CATS or _category_matches_archetype(cat, behav_high):
+                min_idx = max(min_idx, 0.7)
+        elif gender_skew == 'female':
+            if cat in _MALE_CORRELATED_CATS or _category_matches_archetype(cat, behav_low):
+                max_idx = min(max_idx, 1.15)
+            if cat in _FEMALE_CORRELATED_CATS or _category_matches_archetype(cat, behav_high):
+                min_idx = max(min_idx, 0.7)
+
+        # Age-based constraints
+        if age_skew == 'younger':
+            if cat in _OLD_CORRELATED_CATS:
+                max_idx = min(max_idx, 1.2)
+            if cat in _YOUNG_CORRELATED_CATS:
+                min_idx = max(min_idx, 0.7)
+        elif age_skew == 'older':
+            if cat in _YOUNG_CORRELATED_CATS:
+                max_idx = min(max_idx, 1.2)
+            if cat in _OLD_CORRELATED_CATS:
+                min_idx = max(min_idx, 0.7)
+
+        # Direct archetype expectations
+        if _category_matches_archetype(cat, behav_high):
+            min_idx = max(min_idx, 0.8)
+        if _category_matches_archetype(cat, behav_low):
+            max_idx = min(max_idx, 1.1)
+
+        needs_fix = False
+        target = cur_index
+        if cur_index > max_idx:
+            target = min(max_idx, max_idx * 0.8 + cur_index * 0.2)
+            needs_fix = True
+        elif cur_index < min_idx:
+            target = max(min_idx, min_idx * 0.8 + cur_index * 0.2)
+            needs_fix = True
+
+        if needs_fix:
+            new_bp = round(min(gp_bp * target, 99.99), 4)
+            new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+            new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+            if bp_col and bp_col in df.columns:
+                df.at[idx, bp_col] = new_bp
+            df.at[idx, 'Original Raw Numbers'] = str(new_raw)
+            if 'US Gen Pop Projection' in df.columns:
+                df.at[idx, 'US Gen Pop Projection'] = str(new_proj)
+            corrections += 1
+
+    # Recalculate category shares after corrections
+    for cat in df['Column'].str.upper().unique():
+        if cat in DEMO_CATS or cat in SKIP_CATS:
+            continue
+        cm = df['Column'].str.upper() == cat
+        if not cm.any():
+            continue
+        total_raw = 0
+        for cidx in df[cm].index:
+            try:
+                total_raw += int(float(str(df.at[cidx, 'Original Raw Numbers']).replace(',', '')))
+            except (ValueError, TypeError):
+                pass
+        if total_raw <= 0:
+            continue
+        for cidx in df[cm].index:
+            try:
+                raw = int(float(str(df.at[cidx, 'Original Raw Numbers']).replace(',', '')))
+                new_cs = round((raw / total_raw) * 100.0, 4)
+                df.at[cidx, pct_col] = f"{new_cs:.4f}" if isinstance(df.at[cidx, pct_col], str) else new_cs
+            except (ValueError, TypeError):
+                pass
+
+    print(f"✅ validate_behavioral_gut_check: {corrections} behavioral corrections applied")
+    return df
+
 
 def extract_demographics_from_df(df):
     """Extract demographic distributions from a DataFrame for comparison."""
@@ -5610,203 +6308,70 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Add metadata to the dataframe for deterministic tracking
     df_final = add_input_metadata_to_dataframe(df_final, brands, sample_start, sample_end, behavior_start, behavior_end, deterministic_seed)
     
-    # ADD UNIQUE PURCHASE CONFIRMATIONS COLUMN - Add raw numbers for MOST PURCHASED BRANDS
+    # ADD UNIQUE PURCHASE CONFIRMATIONS COLUMN
     df_final = add_unique_purchase_confirmations_column(df_final, conn)
-    
-    # ADJUST PERCENTAGES TO ALIGN WITH RAW NUMBERS - Ensure directional relationship
-    df_final = adjust_percentages_to_raw_numbers(df_final)
-    
-    # Set BRAND INPUT raw number to SAMPLE SIZE (union of inputs)
-    df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
-    
-    # Keep Twitch/Discord/Bluesky out of top 4 in SOCIAL MEDIA
-    df_final = enforce_social_media_not_top4(df_final)
 
-    # Ensure TikTok/Facebook/YouTube/Instagram ARE in top 4 (with natural ranking)
-    df_final = enforce_social_media_top4(df_final)
-    
-    # Ensure Spotify/YouTube Music/Apple Music/Amazon Music/SiriusXM/Pandora Music are in top 6
-    df_final = enforce_streaming_music_top6(df_final)
-
-    # Raw number recalculations removed per user request - will calculate naturally from percentages
-    # Hard cap Original Raw to never exceed sample size
-    df_final = cap_original_raw_numbers_to_sample_size(df_final)
-    # Keep row ordering consistent per category (by Percentage desc)
-    df_final = sort_categories_by_percentage(df_final)
-    
-    # Skip PURCHASE SHARE & BRAND PENETRATION categories per request
-    df_final = df_final
-    
-    # (Moved) Add per-row Brand Penetration after final raw numbers are finalized
-    
-    # (Dropped) Sort of Actual Unique UID Count (DB) no longer needed
-    
-    # Convert all text values to uppercase for final CSV
+    # Uppercase text for consistency before anchoring
     df_final['Column'] = df_final['Column'].astype(str).str.upper()
     df_final['Value'] = df_final['Value'].str.upper()
 
-    # Create a non-destructive, display-only view of Original Raw Numbers
-    # that is sorted descending within each category without moving rows
-    df_final = add_original_raw_numbers_sorted_view(df_final)
-    # Finalize output raw numbers: rename view -> 'Original Raw Numbers',
-    # drop DB column, ensure not equal to sample size unless BRAND INPUT,
-    # and enforce uniqueness within each category
-    df_final = finalize_original_raw_numbers_for_output(df_final)
-    # Ensure BRAND INPUT has correct raw numbers after column renaming
+    # Set BRAND INPUT raw number to SAMPLE SIZE
     df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
-    # Ensure canonical streaming platforms exist even if missing from raw data
-    df_final = ensure_streaming_platforms_presence(df_final)
-    # Update demographics 'Original Raw Numbers' from Percentage and SAMPLE SIZE (conditional inflation)
-    try:
-        if is_genpop:
-            # For GenPop, use hardcoded demographics with exact 10M sample size
-            print("🎯 Attempting to apply hardcoded GenPop demographics...")
-            df_final = apply_hardcoded_genpop_demographics(df_final)
-            print("✅ Hardcoded demographics applied successfully")
-        else:
-            # For regular runs, calculate from percentages
-            df_final = set_demographic_original_raws_from_percentage(df_final)
-    except Exception as e:
-        print(f"❌ Error applying demographics: {e}")
-        print("🔄 Falling back to regular demographic calculation...")
-        df_final = set_demographic_original_raws_from_percentage(df_final)
-    
-    # Update behavioral categories 'Original Raw Numbers' from Percentage and SAMPLE SIZE (conditional inflation)
-    try:
-        print("📊 Setting behavioral original raw numbers...")
-        df_final = set_behavioral_original_raws_from_percentage(df_final)
-        print("✅ Behavioral raw numbers set successfully")
-    except Exception as e:
-        print(f"❌ Error setting behavioral raw numbers: {e}")
-        print("🔄 Continuing without behavioral raw number updates...")
-    
-    # BOOST ALL BEHAVIORAL CATEGORIES by 2x - DISABLED: Organic values only
-    # df_final = boost_all_behavioral_by_2x(df_final)
-    
-    # BOOST SPORTS CATEGORIES by additional 4.36x (except specific teams)
-    try:
-        print("🏈 Applying sports category boosting...")
-        df_final = boost_sports_categories_by_436x(df_final)
-        print("✅ Sports boosting applied successfully")
-    except Exception as e:
-        print(f"❌ Error applying sports boosting: {e}")
-        print("🔄 Continuing without sports boosting...")
-    
-    # DYNAMIC CATEGORY BOOSTING - Ensure top values meet thresholds - DISABLED: Organic values only
-    # df_final = boost_category_to_threshold(df_final, 'SEARCH ENGINE/AI', 65.0)  # DISABLED: Organic values only
-    # df_final = boost_category_to_threshold(df_final, 'STREAMING/MUSIC', 33.0)  # DISABLED: No boosts except sports/TALENT
-    # df_final = boost_category_to_threshold(df_final, 'VIRTUAL MVPD FAST', 9.0)  # DISABLED: No boosts except sports/TALENT
-    # df_final = boost_category_to_threshold(df_final, 'TECHNOLOGY/DEVICE', 26.0)  # DISABLED: No boosts except sports/TALENT
-    
-    # ADDITIONAL BOOST FOR SEARCH ENGINE/AI - Apply 5x on top of existing 2x (total: 10x) - DISABLED: Organic values only
-    # df_final = boost_search_engine_ai_additional_5x(df_final)  # DISABLED: Organic values only
-    
-    # ADDITIONAL BOOST FOR BETTING - Apply 2x on top of existing 3x (total: 6x)
-    # df_final = boost_betting_additional_2x(df_final)  # DISABLED: No extra 2x boost for BETTING
-    
-    # ADDITIONAL BOOST FOR DIGITAL BANKING - Apply 2x on top of existing 3x (total: 6x)
-    # df_final = boost_digital_banking_additional_2x(df_final)  # DISABLED: No extra 2x boost for DIGITAL BANKING
-    
-    # CUSTOM BOOSTS - ENABLED
-    df_final = boost_search_engine_ai_custom(df_final)  # Google @ 66x, top 4 @ 33x, others @ 5-11x
-    df_final = boost_streaming_platform_custom(df_final)  # Netflix 15x, Hulu 12x, others no boost
-    df_final = boost_virtual_mvpd_fast_3x(df_final)  # VIRTUAL MVPD FAST: multiply by 3 and recalc Brand Penetration, Category Share, US Gen Pop
-    df_final = multiply_category_by_factor(df_final, 'WHERE THEY DINE', 10)  # WHERE THEY DINE: 10x
-    df_final = multiply_category_by_factor(df_final, 'EVENTS', 10)  # EVENTS: 10x
-    df_final = multiply_category_by_factor(df_final, 'TICKETING', 3)  # TICKETING: 3x
-    
-    # DIVIDE STREAMING/PLATFORM VALUES BY 2 (except Netflix and ESPN)
-    df_final = divide_streaming_platform_except_netflix_espn(df_final)
-    # DIVIDE APP/PLATFORM USAGE BY 2
-    df_final = divide_app_platform_usage_by_2(df_final)
-    # DIVIDE BANKING, TRAVEL, BROADCAST/CABLE, AUTOMOBILE, GAMES, TELECOM, CREDIT PROVIDER, INVESTMENTS, INSURANCE, MEDIA, WHERE THEY SHOP, QSR BY 2
-    # Note: Amazon, Walmart, Target are excluded from division in WHERE THEY SHOP
-    df_final = divide_categories_by_2(df_final, [
-        'BANKING', 'TRAVEL', 'BROADCAST/CABLE', 'AUTOMOBILE', 'GAMES', 'TELECOM',
-        'CREDIT PROVIDER', 'INVESTMENTS', 'INSURANCE', 'MEDIA', 'WHERE THEY SHOP', 'QSR'
-    ], exclusions={
-        'WHERE THEY SHOP': ['AMAZON', 'WALMART', 'TARGET']
-    })
-    
-    # DIVIDE MOST PURCHASED BRANDS BY 1.6
-    df_final = divide_category_by_factor(df_final, 'MOST PURCHASED BRANDS', 1.6)
 
-    # ENSURE CROSS-CATEGORY BRAND CONSISTENCY - AFTER all boosts are applied
-    # This ensures Boston Celtics, Lakers, etc. have same boosted values across all categories
-    df_final = enforce_cross_category_brand_consistency(df_final)
-    
-    # Removed category-specific ordering rules per user request
-    df_final = df_final
+    # Compute initial raw numbers from percentages so anchor has something to work with
+    df_final = set_demographic_original_raws_from_percentage(df_final)
+    df_final = set_behavioral_original_raws_from_percentage(df_final)
+
+    # Finalize output raw numbers (rename DB column, enforce uniqueness)
+    df_final = add_original_raw_numbers_sorted_view(df_final)
+    df_final = finalize_original_raw_numbers_for_output(df_final)
+    df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
+
     # Normalize naming for streaming platforms
     df_final = rename_streaming_max_to_hbo_max_upper(df_final)
-    # Cleanup streaming/platforms: remove disallowed entries and dedupe HBO MAX
     df_final = cleanup_streaming_platforms(df_final)
-    # Skip rescaling from original raws per user request; preserve existing percentages
-    df_final = df_final
-    # Removed ordering rules post-rescale per user request
-    df_final = df_final
-    df_final = rename_streaming_max_to_hbo_max_upper(df_final)
-    df_final = cleanup_streaming_platforms(df_final)
-    # Resort after rescaling and enforcement for clean presentation
+
+    # ── ANCHOR TO GEN POP (the core calibration step) ──────────────────
+    # Replaces all previous boost/scale/divide transformations with a
+    # single, clean index-and-anchor against the calibrated Gen Pop CSV.
+    print("🎯 Anchoring all values to Gen Pop baseline...")
+    df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
+
+    # ── AI-powered validation (demographics + behavioral gut-check) ────
+    if not is_genpop:
+        print("🧠 Building audience archetype for validation...")
+        _archetype = get_brand_archetype(project_name, brands, brand_category)
+        print(f"   Archetype: gender={_archetype['gender_skew']}, age={_archetype['age_skew']}, "
+              f"behav_high={_archetype['behavioral_high'][:3]}, behav_low={_archetype['behavioral_low'][:3]}")
+        df_final = validate_demographics(df_final, _archetype, final_sample_size)
+        df_final = validate_behavioral_gut_check(df_final, _archetype, final_sample_size)
+
+    # ── Post-anchor consistency and formatting ─────────────────────────
+    df_final = enforce_cross_category_brand_consistency(df_final)
+
+    if not is_genpop:
+        df_final = enforce_input_brand_100(df_final, brands)
+
+    df_final = enforce_parental_status_sum_to_100(df_final)
+
     df_final = sort_categories_by_percentage(df_final)
-    # Ensure SEARCH ENGINE rows are finally ordered by Original Raw Numbers desc
-    df_final = sort_search_engine_by_raw_desc(df_final)
-    # Ensure STREAMING/PLATFORM(S) rows are finally ordered by Original Raw Numbers desc
-    df_final = sort_streaming_platform_by_raw_desc(df_final)
-    # Compute Brand Penetration (Row) from the FINAL 'Original Raw Numbers' after final sorts
+
     df_final = add_brand_penetration_column_using_final_raw(df_final)
-    # Compute US Gen Pop projection from finalized raw numbers
     df_final = add_us_gen_pop_projection(df_final)
-    # SEARCH ENGINE/AI: enforce Google ≥65% and ChatGPT ≥25% in Brand Penetration (Row); Category Share sums to 100%; reconfigure raw and US Gen Pop
-    df_final = enforce_search_engine_ai_google_chatgpt_minimums(df_final)
 
-    # INDEX-BASED GEN-POP CALIBRATION
-    # Anchors all behavioral categories to verified US general population
-    # penetration rates. Preserves each profile's relative signal (index)
-    # while bringing absolute values in line with reality.
-    # Correction factors live in genpop_calibration.py — add new entries
-    # there when additional ground-truth data becomes available.
-    df_final = calibrate_to_genpop(df_final)
-
-    # Cap high brand penetration values to randomized 80-90% range with brand consistency
-    df_final = cap_high_brand_penetration(df_final, cap_threshold=92.0, min_cap=80.0, max_cap=90.0)
-
-    # Drop columns per request
+    # Drop intermediate columns
     for col in ['Unique Purchase Confirmations', 'Raw Numbers', 'Actual Unique UID Count (DB)', 'Original Raw Numbers (Database)']:
         if col in df_final.columns:
             df_final = df_final.drop(columns=[col])
-    
-    # Format Percentage to 4 decimal places for final output
+
     df_final = ensure_percentage_four_decimals(df_final)
-    
-    # Enforce: no value in any numeric-like column has more than 4 decimals
     df_final = enforce_max_four_decimals_across_columns(df_final)
-    
-    # Final deduplication step to ensure no duplicates in LOCATION section
     df_final = deduplicate_location_data(df_final)
-    
-    # scale_raw_numbers_to_universe DISABLED - per user request
-    # SAMPLE SIZE uses intelligent inflation: 35x max down to 1x (capped at 10M)
-    # All raw numbers will calculate naturally from: (percentage/100) × sample_size
-    
-    # Recalculate percentages DISABLED - percentages stay as organic counts from database
-    
-    # DISABLED: fix_demographics_sum_to_sample_size - causes SAMPLE SIZE to be recalculated
-    # df_final = fix_demographics_sum_to_sample_size(df_final)
-    
-    sample_mask_after_fix = df_final['Column'].str.upper() == 'SAMPLE SIZE'
-    if sample_mask_after_fix.any():
-        val_after_fix = df_final.loc[sample_mask_after_fix, 'Percentage'].iloc[0] if 'Percentage' in df_final.columns else df_final.loc[sample_mask_after_fix, 'Category Share'].iloc[0]
-    
-    # Ensure BRAND INPUT has correct raw numbers after all other processing
+
     df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
-    
-    # Recalculate Brand Penetration from final Original Raw Numbers
     df_final = add_brand_penetration_column_using_final_raw(df_final)
-    
-    # Recalculate US Gen Pop Projection from final Original Raw Numbers
     df_final = add_us_gen_pop_projection(df_final)
-    
+
     # Final row ordering and CSV save - using exact order from reference file
     CATEGORY_ORDER = [
         "INPUT_METADATA", "BRAND INPUT", "SAMPLE SIZE", "AVID FAN", "CASUAL FAN",
@@ -5847,54 +6412,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if 'Percentage' in df_final.columns:
         df_final = df_final.rename(columns={'Percentage': 'Category Share'})
     
-    # Divide INTEREST category by 2 before saving - DISABLED: Organic values only
-    # df_final = divide_interest_category_by_2(df_final)
-    
-    # Divide STREAMING/MUSIC category by 2 before saving - DISABLED: Organic values only
-    # df_final = divide_streaming_music_category_by_2(df_final)
-    
-    # Divide additional categories by 2 as requested - DISABLED: Organic values only
-    # df_final = divide_most_purchased_brands_by_2(df_final)
-    # df_final = divide_travel_by_2(df_final)
-    # df_final = divide_qsr_by_2(df_final)
-    # df_final = divide_streaming_platform_by_2_except_espn_netflix(df_final)
-    # df_final = divide_telecom_by_2(df_final)
-    # df_final = divide_ticketing_by_2(df_final)
-    # df_final = divide_credit_provider_investments_by_2(df_final)
-    
-    # Final processing steps with error handling
-    try:
-        print("🔧 Applying final processing steps...")
-        
-        # Enforce top 9 streaming platforms
-        df_final = enforce_streaming_platform_top9(df_final)
-        
-        # Divide sports categories by 4
-        df_final = divide_sports_categories_by_4(df_final)
-        
-        # Enforce global brand consistency for sports categories
-        df_final = enforce_sports_global_brand_consistency(df_final)
-        
-        # FINAL ENFORCEMENT: ESPN consistency across ALL categories
-        df_final = enforce_espn_consistency_final(df_final)
-        
-        # DIVIDE ESPN BY 2 and ensure all metrics are consistent
-        df_final = divide_espn_by_2_final(df_final)
-        
-        # PROJECT-SPECIFIC: Boost Netflix by 3x for Rob Lowe project
-        df_final = boost_netflix_3x_rob_lowe(df_final, project_name)
-        
-        # FINAL ENFORCEMENT: Brand input always 100% (absolute last step before saving)
-        if not is_genpop:
-            df_final = enforce_input_brand_100(df_final, brands)
-        
-        # FINAL ENFORCEMENT: Ensure PARENTAL_STATUS sums to exactly 100%
-        df_final = enforce_parental_status_sum_to_100(df_final)
-        
-        print("✅ Final processing steps completed successfully")
-    except Exception as e:
-        print(f"❌ Error in final processing steps: {e}")
-        print("🔄 Continuing with basic processing...")
+    # Final enforcement (already handled by anchor chain above, just a safety net)
+    if not is_genpop:
+        df_final = enforce_input_brand_100(df_final, brands)
+    df_final = enforce_parental_status_sum_to_100(df_final)
     
     # Remove dash variants from output (keep only non-dash versions)
     # This allows dash variants to be found during parsing, but only non-dash appears in output
