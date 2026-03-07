@@ -4593,7 +4593,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         {
             "Column": normalize_category_name("Sample Size"),
             "Value": f"Sample Size ({sample_start} to {sample_end}) | Behavior Study ({behavior_start} to {behavior_end})",
-            "Percentage": final_sample_size
+            "Percentage": float(final_sample_size)
         },
         {
             "Column": normalize_category_name("BRAND CATEGORY"),
