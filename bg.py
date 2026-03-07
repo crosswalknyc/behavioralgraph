@@ -1603,6 +1603,10 @@ def final_behavioral_sanity_check(df, archetype=None):
 
     corrections = 0
     loc_corrections = 0
+    loc_skipped_zero_bp = 0
+    loc_skipped_no_gp = 0
+    loc_in_bounds = 0
+    loc_total = 0
     for idx, row in df.iterrows():
         cat = str(row.get('Column', '')).strip().upper()
         val = str(row.get('Value', '')).strip().upper()
@@ -1617,8 +1621,15 @@ def final_behavioral_sanity_check(df, archetype=None):
         if cur_bp <= 0:
             continue
 
+        if cat == 'LOCATION':
+            loc_total += 1
+
         gp_bp_val = gp_bp_lookup.get((cat, val))
         if gp_bp_val is None or gp_bp_val <= 0:
+            if cat == 'LOCATION' and loc_skipped_no_gp < 3:
+                print(f"   LOCATION skip (no GP): val='{val}', key in lookup={('LOCATION',val) in gp_bp_lookup}")
+            if cat == 'LOCATION':
+                loc_skipped_no_gp += 1
             continue
 
         cur_index = cur_bp / gp_bp_val
@@ -1632,6 +1643,10 @@ def final_behavioral_sanity_check(df, archetype=None):
             hi = min(hi, 1.1)
 
         if lo <= cur_index <= hi:
+            if cat == 'LOCATION' and loc_in_bounds < 3:
+                print(f"   LOCATION in-bounds: val='{val}', bp={cur_bp:.4f}, gp={gp_bp_val:.4f}, idx={cur_index:.4f}, bounds=[{lo:.4f},{hi:.4f}]")
+            if cat == 'LOCATION':
+                loc_in_bounds += 1
             continue
 
         # Clamp the index
@@ -1683,7 +1698,7 @@ def final_behavioral_sanity_check(df, archetype=None):
     import datetime as _dt
     debug_row = pd.DataFrame([{
         'Column': 'DEBUG_SANITY_CHECK',
-        'Value': f'ran={_dt.datetime.now().isoformat()},corr={corrections},loc={loc_corrections},maxidx={MAX_IDX:.4f}',
+        'Value': f'ran={_dt.datetime.now().isoformat()},corr={corrections},loc_corr={loc_corrections},loc_total={loc_total},loc_no_gp={loc_skipped_no_gp},loc_inbounds={loc_in_bounds},maxidx={MAX_IDX:.4f}',
         bp_col: 0.0,
         cs_col: 0.0,
         raw_col: '0',
