@@ -276,29 +276,7 @@ To modify behavior:
 import os
 import io
 import pandas as pd
-import pandas.core.internals.blocks as _pd_blocks
 import sys
-
-# ── Monkey-patch pandas to allow int → float64 assignment ────────────────
-# Pandas 2.x raises TypeError("Invalid value 'X' for dtype 'float64'")
-# when assigning an int to a float64 column via .loc[]. This patches the
-# coerce_to_target_dtype method to convert ints to float instead of raising.
-_original_coerce = _pd_blocks.Block.coerce_to_target_dtype
-
-def _patched_coerce(self, other, **kwargs):
-    try:
-        return _original_coerce(self, other, **kwargs)
-    except TypeError as e:
-        if "Invalid value" in str(e) and "float64" in str(e):
-            try:
-                kwargs.pop('raise_on_upcast', None)
-                return _original_coerce(self, float(other), **kwargs)
-            except Exception:
-                pass
-        raise
-
-_pd_blocks.Block.coerce_to_target_dtype = _patched_coerce
-print("✅ Pandas int→float64 coercion patch applied (bg.py v2026.03.07b)")
 
 # ── Force Snowflake connector to ALWAYS use JSON results ────────────────
 # The nanoarrow C extension (snowflake-connector-python >=3.x) crashes on

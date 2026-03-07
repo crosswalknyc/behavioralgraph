@@ -4,7 +4,7 @@ flask-socketio==5.3.6
 python-socketio==5.11.0
 python-engineio==4.8.1
 eventlet==0.35.1
-pandas>=2.2.0
+pandas==2.1.5
 numpy>=1.26.0
 setuptools>=70.0.0
 snowflake-connector-python==3.12.0
