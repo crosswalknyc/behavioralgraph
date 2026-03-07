@@ -4489,8 +4489,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 genpop_derived_sample = round(genpop_pct / 100 * GENPOP_SAMPLE_CAP)
                 genpop_derived_sample = (genpop_derived_sample // 10) * 10
                 genpop_derived_sample = max(genpop_derived_sample, 10_000)
-                if is_listener_watcher:
-                    genpop_derived_sample = max(1, genpop_derived_sample // 10)
                 final_sample_size = genpop_derived_sample
                 if not SILENCE_VERBOSE_OUTPUT:
                     print(f"📊 Gen Pop lookup: '{project_name}' found in {genpop_cat} at {genpop_pct:.4f}%")
@@ -4514,8 +4512,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 final_sample_size = estimate_sample_size_for_unknown_brand(
                     brand_category, actual_universe_size=actual_sample_size
                 )
-                if is_listener_watcher:
-                    final_sample_size = max(1, final_sample_size // 10)
                 if not SILENCE_VERBOSE_OUTPUT:
                     print(f"📊 '{project_name}' not in Gen Pop — digital panel estimate")
                     print(f"✅ Final SAMPLE SIZE (estimated): {final_sample_size:,}")
@@ -4544,8 +4540,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         break
                 final_sample_size = min(int(bounded * INFLATION_FACTOR), GENPOP_SAMPLE_CAP)
                 final_sample_size = (final_sample_size // 10) * 10
-                if is_listener_watcher:
-                    final_sample_size = max(1, final_sample_size // 10)
                 if not SILENCE_VERBOSE_OUTPUT:
                     print(f"📊 Fallback inflation: {actual_sample_size:,} x {INFLATION_FACTOR} = {final_sample_size:,}")
             except Exception as e:
