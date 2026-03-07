@@ -751,7 +751,7 @@ def anchor_to_genpop(df, sample_size):
     }
     SKIP_CATS = {
         'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
-        'CASUAL FAN', 'BRAND CATEGORY', 'LOCATION',
+        'CASUAL FAN', 'BRAND CATEGORY',
     }
     # Demographics are left unanchored -- raw Snowflake data passes through.
     # A separate AI-powered validate_demographics() step handles corrections.
@@ -1496,6 +1496,167 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
                 pass
 
     print(f"✅ validate_behavioral_gut_check: {corrections} behavioral corrections applied")
+    return df
+
+
+# ---------- FINAL Behavioral Sanity Check (runs AFTER all formatting) ----------
+
+def final_behavioral_sanity_check(df, archetype=None):
+    """Absolute last gate before CSV save.  Examines every behavioral row's
+    FINAL Brand Penetration against Gen Pop.  Corrects unreasonable values
+    and recalculates Category Share, Original Raw Numbers, and US Gen Pop
+    Projection from the corrected BP.
+
+    This catches anything that slipped through earlier pipeline steps
+    (cross-category consistency, BP recalculation from raw, etc.).
+    """
+    gp = _load_genpop_csv()
+    if gp is None:
+        print("⚠️  Gen Pop not available — skipping final_behavioral_sanity_check")
+        return df
+
+    df = df.copy()
+
+    DEMO_CATS = {
+        'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+    }
+    META_CATS = {
+        'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
+        'CASUAL FAN', 'BRAND CATEGORY',
+    }
+    GENPOP_TOTAL = 324_700_000
+
+    bp_col = 'Brand Penetration (Row)'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+
+    if bp_col not in df.columns:
+        print("⚠️  No Brand Penetration column — skipping final sanity check")
+        return df
+
+    # Resolve sample size
+    sample_size = 1
+    ss_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            ss_val = df.loc[ss_mask, cs_col].iloc[0]
+            sample_size = max(1, int(float(str(ss_val).replace(',', ''))))
+        except (ValueError, TypeError):
+            try:
+                ss_val = df.loc[ss_mask, raw_col].iloc[0]
+                sample_size = max(1, int(float(str(ss_val).replace(',', ''))))
+            except (ValueError, TypeError):
+                pass
+
+    # Build Gen Pop BP lookup
+    gp_col_name = gp.columns[0]
+    gp_val_name = gp.columns[1]
+    gp_bp_name = gp.columns[2]
+    gp_cs_name = gp.columns[3]
+
+    gp_bp_lookup = {}
+    for _, row in gp.iterrows():
+        cat = str(row[gp_col_name]).strip().upper()
+        val = str(row[gp_val_name]).strip().upper()
+        try:
+            gp_bp_lookup[(cat, val)] = float(row[gp_bp_name])
+        except (ValueError, TypeError):
+            continue
+
+    # Compute adaptive bounds from profile penetration
+    gp_full = {}
+    for _, row in gp.iterrows():
+        c = str(row[gp_col_name]).strip().upper()
+        v = str(row[gp_val_name]).strip().upper()
+        try:
+            gp_full[(c, v)] = {'bp': float(row[gp_bp_name]), 'cs': float(row[gp_cs_name])}
+        except (ValueError, TypeError):
+            pass
+    profile_bp_pct = _get_profile_genpop_penetration(df, gp_full)
+    niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2
+
+    MAX_IDX = 1.0 + 2.0 * niche_factor
+    MIN_IDX = 1.0 - 0.7 * niche_factor
+
+    # Apply archetype-aware adjustments to bounds per category
+    behav_high = [b.upper() for b in (archetype or {}).get('behavioral_high', [])]
+    behav_low = [b.upper() for b in (archetype or {}).get('behavioral_low', [])]
+
+    print(f"🔍 Final sanity check: profile BP {profile_bp_pct:.1f}%, "
+          f"adaptive bounds [{MIN_IDX:.3f}, {MAX_IDX:.3f}]")
+
+    corrections = 0
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        val = str(row.get('Value', '')).strip().upper()
+
+        if cat in DEMO_CATS or cat in META_CATS:
+            continue
+
+        try:
+            cur_bp = float(row.get(bp_col, 0))
+        except (ValueError, TypeError):
+            continue
+        if cur_bp <= 0:
+            continue
+
+        gp_bp_val = gp_bp_lookup.get((cat, val))
+        if gp_bp_val is None or gp_bp_val <= 0:
+            continue
+
+        cur_index = cur_bp / gp_bp_val
+
+        # Per-category archetype adjustments
+        hi = MAX_IDX
+        lo = MIN_IDX
+        if _category_matches_archetype(cat, behav_high):
+            lo = max(lo, 0.8)
+        if _category_matches_archetype(cat, behav_low):
+            hi = min(hi, 1.1)
+
+        if lo <= cur_index <= hi:
+            continue
+
+        # Clamp the index
+        target_index = max(lo, min(hi, cur_index))
+        new_bp = round(min(gp_bp_val * target_index, 99.99), 4)
+
+        new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+        new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+
+        df.at[idx, bp_col] = new_bp
+        df.at[idx, raw_col] = str(new_raw)
+        if proj_col in df.columns:
+            df.at[idx, proj_col] = str(new_proj)
+        corrections += 1
+
+    # Recalculate Category Share within each behavioral category
+    if corrections > 0:
+        for cat in df['Column'].str.upper().unique():
+            if cat in DEMO_CATS or cat in META_CATS:
+                continue
+            cm = df['Column'].str.upper() == cat
+            if not cm.any():
+                continue
+            total_raw = 0
+            for cidx in df[cm].index:
+                try:
+                    total_raw += int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                except (ValueError, TypeError):
+                    pass
+            if total_raw <= 0:
+                continue
+            for cidx in df[cm].index:
+                try:
+                    raw = int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                    new_cs = round((raw / total_raw) * 100.0, 4)
+                    df.at[cidx, cs_col] = new_cs
+                except (ValueError, TypeError):
+                    pass
+
+    print(f"✅ final_behavioral_sanity_check: {corrections} corrections applied")
     return df
 
 
@@ -6460,6 +6621,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
 
     # ── AI-powered validation (demographics + behavioral gut-check) ────
+    _archetype = None
     if not is_genpop:
         print("🧠 Building audience archetype for validation...")
         _archetype = get_brand_archetype(project_name, brands, brand_category)
@@ -6493,6 +6655,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
     df_final = add_brand_penetration_column_using_final_raw(df_final)
     df_final = add_us_gen_pop_projection(df_final)
+
+    # ── FINAL SANITY CHECK (absolute last behavioral gate) ──────────────
+    # Runs AFTER all formatting, consistency, and BP recalculation steps.
+    # Compares every behavioral row's FINAL BP against Gen Pop and corrects
+    # anything unreasonable, then recalculates CS/raw/projection.
+    if not is_genpop:
+        print("🔍 Running final behavioral sanity check on FINAL output...")
+        df_final = final_behavioral_sanity_check(df_final, archetype=_archetype)
 
     # Final row ordering and CSV save - using exact order from reference file
     CATEGORY_ORDER = [
