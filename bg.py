@@ -753,6 +753,9 @@ def anchor_to_genpop(df, sample_size):
         'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
         'CASUAL FAN', 'BRAND CATEGORY', 'LOCATION',
     }
+    # Demographics are left unanchored -- raw Snowflake data passes through.
+    # A separate AI-powered validate_demographics() step handles corrections.
+    SKIP_CATS = SKIP_CATS | DEMO_CATS
 
     gp_col = gp.columns[0]   # Column
     gp_val = gp.columns[1]   # Value
@@ -1152,7 +1155,12 @@ def _try_gpt_archetype(project_name, brands, brand_category=None):
 # ---------- Demographic Validation ----------
 
 def validate_demographics(df, archetype, sample_size):
-    """Validate demographics against archetype; dampen contradictions toward Gen Pop."""
+    """Validate raw demographics against archetype; reshape only when gut-check fails.
+
+    Demographics are NOT anchored to Gen Pop -- raw Snowflake data passes through.
+    This function only intervenes when the distribution clearly contradicts the
+    archetype (e.g. 65+ as #2 age group for a younger-skewing brand).
+    """
     gp = _load_genpop_csv()
     if gp is None:
         return df
@@ -1161,6 +1169,7 @@ def validate_demographics(df, archetype, sample_size):
     DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
                  'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
     pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
     sample_size = max(int(float(sample_size)), 1)
 
     gp_demo = {}
@@ -1177,52 +1186,119 @@ def validate_demographics(df, archetype, sample_size):
 
     corrections = 0
 
-    # --- Gender ---
-    if archetype.get('gender_skew', 'balanced') != 'balanced':
-        gm = df['Column'].str.upper() == 'GENDER'
-        for idx in df[gm].index:
-            val = str(df.at[idx, 'Value']).upper()
-            try:
-                cur = float(df.at[idx, pct_col])
-            except (ValueError, TypeError):
-                continue
-            gp_val = gp_demo.get('GENDER', {}).get(val, cur)
-            is_favored = (
-                (archetype['gender_skew'] == 'male' and 'MALE' in val and 'FEMALE' not in val) or
-                (archetype['gender_skew'] == 'female' and 'FEMALE' in val)
-            )
-            is_disfavored = (
-                (archetype['gender_skew'] == 'male' and 'FEMALE' in val) or
-                (archetype['gender_skew'] == 'female' and 'MALE' in val and 'FEMALE' not in val)
-            )
-            if is_disfavored and cur > gp_val * 1.1:
-                df.at[idx, pct_col] = round(gp_val * 0.7 + cur * 0.3, 4)
-                corrections += 1
-            elif is_favored and cur < gp_val * 0.8:
-                df.at[idx, pct_col] = round(gp_val * 0.5 + cur * 0.5, 4)
-                corrections += 1
+    # ── Helper: classify an age-group value ──────────────────────────────
+    def _age_bucket(val_upper):
+        if any(k in val_upper for k in ['17', 'UNDER']):
+            return 'teen'
+        if any(k in val_upper for k in ['18-24', '18 -']):
+            return 'young1'
+        if any(k in val_upper for k in ['25-34', '25 -']):
+            return 'young2'
+        if any(k in val_upper for k in ['35-44', '35 -']):
+            return 'mid1'
+        if any(k in val_upper for k in ['45-54', '45 -']):
+            return 'mid2'
+        if any(k in val_upper for k in ['55-64', '55 -']):
+            return 'old1'
+        if any(k in val_upper for k in ['65', 'OLDER']):
+            return 'old2'
+        return 'mid1'
 
-    # --- Age ---
-    if archetype.get('age_skew', 'balanced') != 'balanced':
+    AGE_MULT_YOUNGER = {
+        'teen': 1.15, 'young1': 1.50, 'young2': 1.40,
+        'mid1': 1.00, 'mid2': 0.80, 'old1': 0.65, 'old2': 0.45,
+    }
+    AGE_MULT_OLDER = {
+        'teen': 0.60, 'young1': 0.70, 'young2': 0.85,
+        'mid1': 1.00, 'mid2': 1.15, 'old1': 1.30, 'old2': 1.40,
+    }
+
+    # ── AGE reshaping ────────────────────────────────────────────────────
+    age_skew = archetype.get('age_skew', 'balanced')
+    if age_skew != 'balanced':
         am = df['Column'].str.upper() == 'AGE'
-        favored_young = archetype['age_skew'] == 'younger'
+        age_rows = {}
         for idx in df[am].index:
             val = str(df.at[idx, 'Value']).upper()
             try:
                 cur = float(df.at[idx, pct_col])
             except (ValueError, TypeError):
-                continue
-            gp_val = gp_demo.get('AGE', {}).get(val, cur)
-            is_young = any(x in val for x in ['18-24', '25-34', '18 -', '25 -'])
-            is_old = any(x in val for x in ['55-64', '65+', '55 -', '65 '])
-            if favored_young and is_old and cur > gp_val * 1.2:
-                df.at[idx, pct_col] = round(gp_val * 0.7 + cur * 0.3, 4)
-                corrections += 1
-            elif not favored_young and is_young and cur > gp_val * 1.2:
-                df.at[idx, pct_col] = round(gp_val * 0.7 + cur * 0.3, 4)
-                corrections += 1
+                cur = 0.0
+            age_rows[idx] = (val, cur)
 
-    # --- Ethnicity ---
+        sorted_ages = sorted(age_rows.items(), key=lambda x: x[1][1], reverse=True)
+        top2_vals = [v[0] for _, v in sorted_ages[:2]]
+
+        needs_age_fix = False
+        if age_skew == 'younger':
+            if any(any(k in v for k in ['65', 'OLDER', '55-64', '55 -']) for v in top2_vals):
+                needs_age_fix = True
+        elif age_skew == 'older':
+            if any(any(k in v for k in ['18-24', '18 -', '17', 'UNDER']) for v in top2_vals):
+                needs_age_fix = True
+
+        if needs_age_fix:
+            mult_map = AGE_MULT_YOUNGER if age_skew == 'younger' else AGE_MULT_OLDER
+            new_vals = {}
+            for idx, (val, cur) in age_rows.items():
+                bucket = _age_bucket(val)
+                new_vals[idx] = cur * mult_map.get(bucket, 1.0)
+            total = sum(new_vals.values())
+            if total > 0:
+                for idx in new_vals:
+                    new_pct = round(new_vals[idx] / total * 100.0, 4)
+                    df.at[idx, pct_col] = new_pct
+                corrections += len(new_vals)
+                print(f"   🔧 Age: reshaped for '{age_skew}' archetype "
+                      f"(top-2 had old-age groups)")
+
+    # ── GENDER reshaping ─────────────────────────────────────────────────
+    gender_skew = archetype.get('gender_skew', 'balanced')
+    if gender_skew != 'balanced':
+        gm = df['Column'].str.upper() == 'GENDER'
+        gender_rows = {}
+        for idx in df[gm].index:
+            val = str(df.at[idx, 'Value']).upper()
+            try:
+                cur = float(df.at[idx, pct_col])
+            except (ValueError, TypeError):
+                cur = 0.0
+            gender_rows[idx] = (val, cur)
+
+        favored_pct = disfavored_pct = 0.0
+        for idx, (val, cur) in gender_rows.items():
+            is_core_male = 'MALE' in val and 'FEMALE' not in val and 'NON' not in val and 'TRANS' not in val
+            is_core_female = val == 'FEMALE' or (val.startswith('FEMALE') and 'TRANS' not in val)
+            if gender_skew == 'male' and is_core_male:
+                favored_pct = cur
+            elif gender_skew == 'male' and is_core_female:
+                disfavored_pct = cur
+            elif gender_skew == 'female' and is_core_female:
+                favored_pct = cur
+            elif gender_skew == 'female' and is_core_male:
+                disfavored_pct = cur
+
+        if disfavored_pct > favored_pct:
+            new_vals = {}
+            for idx, (val, cur) in gender_rows.items():
+                is_core_male = 'MALE' in val and 'FEMALE' not in val and 'NON' not in val and 'TRANS' not in val
+                is_core_female = val == 'FEMALE' or (val.startswith('FEMALE') and 'TRANS' not in val)
+                if (gender_skew == 'male' and is_core_male) or (gender_skew == 'female' and is_core_female):
+                    new_vals[idx] = cur * 1.15
+                elif (gender_skew == 'male' and is_core_female) or (gender_skew == 'female' and is_core_male):
+                    new_vals[idx] = cur * 0.85
+                else:
+                    new_vals[idx] = cur
+            total = sum(new_vals.values())
+            if total > 0:
+                for idx in new_vals:
+                    new_pct = round(new_vals[idx] / total * 100.0, 4)
+                    df.at[idx, pct_col] = new_pct
+                corrections += len(new_vals)
+                print(f"   🔧 Gender: reshaped for '{gender_skew}' archetype "
+                      f"(disfavored gender was larger)")
+
+    # ── ETHNICITY (light touch -- only dampen extreme outliers) ───────────
     expected_high = [e.upper() for e in archetype.get('ethnicity_over_index', [])]
     em = df['Column'].str.upper() == 'ETHNICITY'
     for idx in df[em].index:
@@ -1239,7 +1315,7 @@ def validate_demographics(df, archetype, sample_size):
             df.at[idx, pct_col] = round(gp_val * 0.6 + cur * 0.4, 4)
             corrections += 1
 
-    # --- Renormalize each demo category to sum to 100% ---
+    # ── Renormalize each demo category to 100% and update raw numbers ────
     for cat in DEMO_CATS:
         cm = df['Column'].str.upper() == cat
         if not cm.any():
@@ -1258,6 +1334,8 @@ def validate_demographics(df, archetype, sample_size):
                 old = float(df.at[idx, pct_col])
                 new_val = round(old * scale, 4)
                 df.at[idx, pct_col] = new_val
+                if bp_col and bp_col in df.columns:
+                    df.at[idx, bp_col] = new_val
                 df.at[idx, 'Original Raw Numbers'] = str(max(1, int(round(new_val / 100.0 * sample_size))))
             except (ValueError, TypeError):
                 pass
@@ -1306,6 +1384,22 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
     behav_high = archetype.get('behavioral_high', [])
     behav_low = archetype.get('behavioral_low', [])
 
+    # Adaptive baseline bounds (same formula as anchor_to_genpop)
+    gp_bp_lookup = {}
+    for _, row in gp.iterrows():
+        c = str(row.iloc[0]).strip().upper()
+        v = str(row.iloc[1]).strip().upper()
+        try:
+            gp_bp_lookup[(c, v)] = {'bp': float(row.iloc[2]), 'cs': float(row.iloc[3])}
+        except (ValueError, TypeError):
+            pass
+    profile_bp_pct = _get_profile_genpop_penetration(df, gp_bp_lookup)
+    niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2
+    BASE_MAX = 1.0 + 2.0 * niche_factor
+    BASE_MIN = 1.0 - 0.7 * niche_factor
+    print(f"   Behavioral gut-check adaptive bounds: [{BASE_MIN:.2f}, {BASE_MAX:.2f}] "
+          f"(profile BP {profile_bp_pct:.1f}%)")
+
     corrections = 0
     for idx, row in df.iterrows():
         cat = str(row.get('Column', '')).strip().upper()
@@ -1325,8 +1419,8 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
             continue
 
         cur_index = cur_bp / gp_bp
-        max_idx = 3.0
-        min_idx = 0.3
+        max_idx = BASE_MAX
+        min_idx = BASE_MIN
 
         # Gender-based constraints
         if gender_skew == 'male':
