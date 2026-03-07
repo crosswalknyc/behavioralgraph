@@ -97,14 +97,17 @@ All categories are renormalized to 100% after reshaping.
 
 ### 7. Census Ceiling Constraint
 
-**Critical constraint:** After demographic reshaping, each demographic group's projected US Gen Pop number must not exceed the actual number of people in that group.
+**Critical constraint:** After demographic reshaping, each demographic group's projected US Gen Pop number must not exceed the Gen Pop baseline for that group.
 
-For example, if the profile has 8.4M sample (projecting to ~272.7M US viewers):
-- If 28% are aged 18-24, that projects to 76.4M — but only 29.2M 18-24 year-olds exist in the US
-- The percentage is capped so the projection equals the census limit (29.2M / 272.7M = 10.7%)
-- The category is then renormalized to maintain 100% total
+The caps are derived directly from the Gen Pop CSV: `Gen_Pop_BP% × 329,900,000`. For example, if Gen Pop says 18-24 is 9.77% Brand Penetration, the maximum number of 18-24 year olds in the US is `9.77% × 329.9M = 32.2M`. No profile can project more 18-24 year olds than that.
 
-This ensures the data is true to the underlying patterns while staying within real-world population limits.
+The algorithm iteratively caps and redistributes:
+1. Identify groups whose projection exceeds the Gen Pop cap
+2. Lock those groups at their maximum percentage
+3. Redistribute the freed share proportionally among uncapped groups
+4. Repeat until no group exceeds its cap (converges in ~5-10 iterations)
+
+This ensures the data is true to the underlying patterns while staying within real-world population limits derived from the Gen Pop baseline.
 
 ### 8. AI-Powered Behavioral Gut-Check
 
@@ -169,4 +172,4 @@ The estimated number of Americans represented by this value: `BP% × 324,700,000
 The allowable deviation from Gen Pop, calculated from profile penetration. High-penetration profiles stay close to Gen Pop; niche profiles can deviate significantly. This prevents YouTube (84% of panel) from showing wildly different values than Gen Pop, while allowing a niche brand (5% of panel) to have distinct characteristics.
 
 ### Census Ceiling
-A hard constraint ensuring demographic projections never exceed real-world population limits. Even if the underlying data shows 28% of an audience is aged 18-24, the projection to the full US population must not exceed the actual number of 18-24 year-olds (~29.2M).
+A hard constraint ensuring demographic projections never exceed the Gen Pop baseline. The cap for each demographic group is `Gen_Pop_BP% × 329,900,000`. Even if the underlying data shows 28% of an audience is aged 18-24, the projection must not exceed what the Gen Pop CSV says is the total 18-24 population. Caps update automatically when the Gen Pop CSV is recalibrated.

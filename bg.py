@@ -1349,52 +1349,67 @@ def validate_demographics(df, archetype, sample_size):
 
 # ---------- Demographic Census Ceiling ----------
 
-# 2026 US Census Bureau estimates (total US population ~324.7M)
-_US_CENSUS_CAPS = {
-    'AGE': {
-        '17 AND UNDER':  71_434_000,
-        'UNDER 17':      71_434_000,
-        '18-24':         29_223_000,
-        '25-34':         43_834_500,
-        '35-44':         41_236_900,
-        '45-54':         40_587_500,
-        '55-64':         41_561_600,
-        '65 OR OLDER':   56_822_500,
-        '65+':           56_822_500,
-    },
-    'GENDER': {
-        'MALE':          159_103_000,
-        'FEMALE':        165_597_000,
-    },
-    'ETHNICITY': {
-        'WHITE':                        195_470_000,
-        'HISPANIC OR LATINO':            63_258_000,
-        'BLACK OR AFRICAN AMERICAN':     43_261_000,
-        'BLACK':                         43_261_000,
-        'ASIAN':                         20_860_000,
-        'ANOTHER RACE/ETHNICITY':        15_000_000,
-        'NATIVE AMERICAN':                3_000_000,
-        'PACIFIC ISLANDER':                 700_000,
-    },
-}
 _GENPOP_TOTAL = 329_900_000   # must match add_us_gen_pop_projection's US_POPULATION
 _GENPOP_PANEL = 10_000_000
 
 
+def _build_census_caps_from_genpop():
+    """Build demographic population caps from the Gen Pop CSV.
+
+    For each demographic value in Gen Pop, the cap is:
+        Gen_Pop_BP% × 329,900,000
+
+    This is the maximum number of people in the US that belong to that
+    demographic group.  No profile projection should exceed it.
+    """
+    gp = _load_genpop_csv()
+    if gp is None:
+        return {}
+
+    DEMO_CATS = {
+        'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+    }
+
+    gp_col = gp.columns[0]
+    gp_val = gp.columns[1]
+    gp_bp = gp.columns[2]
+
+    caps = {}
+    for _, row in gp.iterrows():
+        cat = str(row[gp_col]).strip().upper()
+        if cat not in DEMO_CATS:
+            continue
+        val = str(row[gp_val]).strip().upper()
+        try:
+            bp = float(row[gp_bp])
+        except (ValueError, TypeError):
+            continue
+        if bp <= 0:
+            continue
+        cap = int(round((bp / 100.0) * _GENPOP_TOTAL))
+        caps.setdefault(cat, {})[val] = cap
+
+    return caps
+
+
 def _enforce_demographic_census_ceiling(df, sample_size, pct_col, bp_col):
     """Cap demographic percentages so their US Gen Pop projection never exceeds
-    the actual number of people in that demographic group.
+    the actual number of people in that demographic group (derived from Gen Pop CSV).
 
-    For example, if 18-24 year olds are 28% of an 8.4M-sample profile,
-    projecting to ~273M US viewers gives ~76M — but only 29.2M 18-24 year
-    olds exist.  This function iteratively caps and redistributes until no
-    group exceeds its census limit.
+    For example, if Gen Pop says 18-24 is 9.77% BP, the cap is
+    9.77% × 329.9M = 32.2M.  No profile can project more 18-24 year olds
+    than that.
     """
+    census_caps = _build_census_caps_from_genpop()
+    if not census_caps:
+        return df
+
     sample_size = max(1, int(float(sample_size)))
     profile_projected_audience = (sample_size / _GENPOP_PANEL) * _GENPOP_TOTAL
 
     total_capped = 0
-    for cat, caps in _US_CENSUS_CAPS.items():
+    for cat, caps in census_caps.items():
         cm = df['Column'].str.upper() == cat
         if not cm.any():
             continue
@@ -1483,9 +1498,13 @@ def _enforce_demographic_census_ceiling(df, sample_size, pct_col, bp_col):
 
 def cap_demographic_projections(df):
     """Safety net: after US Gen Pop Projection is computed, ensure no
-    demographic group's projection exceeds the actual census population
-    for that group.  Works on the final projection column directly.
+    demographic group's projection exceeds the Gen Pop baseline for
+    that group.  Works on the final projection column directly.
     """
+    census_caps = _build_census_caps_from_genpop()
+    if not census_caps:
+        return df
+
     proj_col = 'US Gen Pop Projection'
     bp_col = 'Brand Penetration (Row)'
     cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
@@ -1507,7 +1526,7 @@ def cap_demographic_projections(df):
             pass
 
     fixes = 0
-    for cat, caps in _US_CENSUS_CAPS.items():
+    for cat, caps in census_caps.items():
         cm = df['Column'].str.upper() == cat
         for idx in df[cm].index:
             val = str(df.at[idx, 'Value']).strip().upper()
