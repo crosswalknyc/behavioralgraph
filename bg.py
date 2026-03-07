@@ -16679,6 +16679,10 @@ def finalize_original_raw_numbers_for_output(df):
     if view_col not in df.columns:
         return df
 
+    # Drop existing final_col first to avoid duplicate column names after rename
+    if final_col in df.columns and view_col in df.columns:
+        df = df.drop(columns=[final_col])
+
     # Rename view -> final name
     df = df.rename(columns={view_col: final_col})
 
