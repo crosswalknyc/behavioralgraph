@@ -13206,7 +13206,7 @@ def scale_raw_numbers_to_universe(df, universe_size):
     
     # Update the SAMPLE SIZE row to show the universe size
     if sample_size_mask.any():
-        df.loc[sample_size_mask, 'Percentage'] = universe_size
+        df.loc[sample_size_mask, 'Percentage'] = float(universe_size)
         # Update the Value field to show the date range
         sample_value = df.loc[sample_size_mask, 'Value'].iloc[0]
         if 'SAMPLE_START' in str(sample_value):
