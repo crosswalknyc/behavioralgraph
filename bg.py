@@ -285,21 +285,20 @@ import sys
 # coerce_to_target_dtype method to convert ints to float instead of raising.
 _original_coerce = _pd_blocks.Block.coerce_to_target_dtype
 
-def _patched_coerce(self, other, warn_on_upcast=False, using_cow=False, raise_on_upcast=False):
+def _patched_coerce(self, other, **kwargs):
     try:
-        return _original_coerce(self, other, warn_on_upcast=warn_on_upcast,
-                                using_cow=using_cow, raise_on_upcast=raise_on_upcast)
+        return _original_coerce(self, other, **kwargs)
     except TypeError as e:
         if "Invalid value" in str(e) and "float64" in str(e):
             try:
-                return _original_coerce(self, float(other), warn_on_upcast=warn_on_upcast,
-                                        using_cow=using_cow, raise_on_upcast=False)
+                kwargs.pop('raise_on_upcast', None)
+                return _original_coerce(self, float(other), **kwargs)
             except Exception:
                 pass
         raise
 
 _pd_blocks.Block.coerce_to_target_dtype = _patched_coerce
-print("✅ Pandas int→float64 coercion patch applied (bg.py v2026.03.07)")
+print("✅ Pandas int→float64 coercion patch applied (bg.py v2026.03.07b)")
 
 # ── Force Snowflake connector to ALWAYS use JSON results ────────────────
 # The nanoarrow C extension (snowflake-connector-python >=3.x) crashes on
