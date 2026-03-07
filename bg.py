@@ -1586,8 +1586,23 @@ def final_behavioral_sanity_check(df, archetype=None):
 
     print(f"🔍 Final sanity check: profile BP {profile_bp_pct:.1f}%, "
           f"adaptive bounds [{MIN_IDX:.3f}, {MAX_IDX:.3f}]")
+    print(f"   Columns in df: {list(df.columns)}")
+    print(f"   cs_col resolved to: '{cs_col}', bp_col='{bp_col}'")
+    print(f"   sample_size={sample_size}")
+    print(f"   Gen Pop lookup has {len(gp_bp_lookup)} entries, "
+          f"LOCATION entries: {sum(1 for k in gp_bp_lookup if k[0]=='LOCATION')}")
+
+    # Debug: show first LOCATION row before corrections
+    loc_mask = df['Column'].str.upper() == 'LOCATION'
+    if loc_mask.any():
+        first_loc = df[loc_mask].iloc[0]
+        fval = str(first_loc['Value']).strip().upper()
+        fbp = first_loc.get(bp_col, 'N/A')
+        gp_match = gp_bp_lookup.get(('LOCATION', fval), 'NOT FOUND')
+        print(f"   First LOCATION row: val='{fval}', bp={fbp}, gp_match={gp_match}")
 
     corrections = 0
+    loc_corrections = 0
     for idx, row in df.iterrows():
         cat = str(row.get('Column', '')).strip().upper()
         val = str(row.get('Value', '')).strip().upper()
@@ -1631,6 +1646,11 @@ def final_behavioral_sanity_check(df, archetype=None):
         if proj_col in df.columns:
             df.at[idx, proj_col] = str(new_proj)
         corrections += 1
+        if cat == 'LOCATION':
+            loc_corrections += 1
+            if loc_corrections <= 3:
+                print(f"   LOCATION fix: {val} idx {cur_index:.3f} → {target_index:.3f}, "
+                      f"BP {cur_bp:.2f} → {new_bp:.2f}")
 
     # Recalculate Category Share within each behavioral category
     if corrections > 0:
@@ -1656,7 +1676,8 @@ def final_behavioral_sanity_check(df, archetype=None):
                 except (ValueError, TypeError):
                     pass
 
-    print(f"✅ final_behavioral_sanity_check: {corrections} corrections applied")
+    print(f"✅ final_behavioral_sanity_check: {corrections} corrections applied "
+          f"(including {loc_corrections} LOCATION fixes)")
     return df
 
 
