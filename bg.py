@@ -16796,9 +16796,11 @@ def finalize_original_raw_numbers_for_output(df):
     excluded_cols = set(['INPUT_METADATA', 'SAMPLE SIZE', 'PURCHASE SHARE', 'BRAND PENETRATION'])
     # Step A: apply current brand_adjusted_value globally
     mask_all = ~df['Column'].str.upper().isin(list(excluded_cols))
-    df.loc[mask_all, final_col] = (
-        df.loc[mask_all, 'Value'].astype(str).str.upper().map(lambda b: str(int(brand_adjusted_value.get(b, 1))))
+    mapped_raw = (
+        df.loc[mask_all, 'Value'].astype(str).str.upper()
+        .map(lambda b: str(int(brand_adjusted_value.get(b, 1))))
     )
+    df.loc[mask_all, final_col] = mapped_raw.values
 
     # Step B: detect duplicates per category on integers
     import pandas as pd
@@ -16834,9 +16836,11 @@ def finalize_original_raw_numbers_for_output(df):
         brand_adjusted_value = new_brand_value
 
         # Apply new mapping globally in one pass
-        df.loc[mask_all, final_col] = (
-            df.loc[mask_all, 'Value'].astype(str).str.upper().map(lambda b: str(int(brand_adjusted_value.get(b, 1))))
+        mapped_final = (
+            df.loc[mask_all, 'Value'].astype(str).str.upper()
+            .map(lambda b: str(int(brand_adjusted_value.get(b, 1))))
         )
+        df.loc[mask_all, final_col] = mapped_final.values
 
     # Ensure integers as strings (no decimals) and re-apply sample-size rule
     if sample_size is not None:
