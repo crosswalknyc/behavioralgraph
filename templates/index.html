@@ -3379,12 +3379,12 @@
             min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .demo-insight-item.insight-row-genpop > span:first-child {
-            overflow: visible;
-            text-overflow: unset;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .top-cat-header {
             flex-shrink: 0;
@@ -3414,6 +3414,9 @@
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 0.4rem;
+        }
+        .demo-insight-card .demo-insight-content {
+            grid-template-columns: 1fr;
         }
         .demo-insight-item {
             display: flex;
@@ -13549,11 +13552,11 @@
                                     <span>🎯 Demographic Profile Summary</span>
                                     <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('demographic-summary')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
                                 </h4>
-                                <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                                <div class="insight-col-header demo-summary-header" style="display: grid; grid-template-columns: minmax(0,1fr) 72px 72px 42px; gap: 0.4rem; padding: 0 0.6rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Characteristic: The dominant demographic trait in each category (gender, age, income, ethnicity).">Characteristic</span>
-                                    <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: left;">Profile</span>
-                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: left;">Gen Pop</span>
-                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: left;">Index</span>
+                                    <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: right;">Profile</span>
+                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: right;">Gen Pop</span>
+                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: right;">Index</span>
                                 </div>
                                 <div id="demoProfileSummary" class="demo-insight-content">
                                     <div class="loading-placeholder">Analyzing demographics...</div>
@@ -13564,11 +13567,11 @@
                                     <span>📊 Key Differentiators vs Gen Pop</span>
                                     <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('key-differentiators')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
                                 </h4>
-                                <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                                <div class="insight-col-header demo-summary-header" style="display: grid; grid-template-columns: minmax(0,1fr) 72px 72px 42px; gap: 0.4rem; padding: 0 0.6rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Segment: A specific demographic group (e.g., 18-24, Female, $100K+).">Segment</span>
-                                    <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: left;">Profile</span>
-                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: left;">Gen Pop</span>
-                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: left;">Index</span>
+                                    <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: right;">Profile</span>
+                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: right;">Gen Pop</span>
+                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: right;">Index</span>
                                 </div>
                                 <div id="demoDifferentiators" class="demo-insight-content">
                                     <div class="loading-placeholder">Loading...</div>
@@ -29514,11 +29517,11 @@
             if (profileSummaryEl) {
                 profileSummaryEl.innerHTML = summaryItems.length > 0
                     ? summaryItems.map(i => `
-                        <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
-                            <span style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;"><span class="icon">${i.icon}</span>${i.text}</span>
-                            <span class="diff-col-pct" style="text-align: left; font-size: 0.85rem;">${i.profilePct}</span>
-                            <span class="genpop-col diff-col-gp" style="text-align: left; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
-                            <span class="index-col value ${i.valueClass}" style="text-align: left;">${i.value}</span>
+                        <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: minmax(0,1fr) 72px 72px 42px; gap: 0.4rem; align-items: center; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border-color);">
+                            <span style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; overflow: hidden;" title="${(i.text || '').replace(/"/g, '&quot;')}"><span class="icon" style="flex-shrink:0;">${i.icon}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i.text}</span></span>
+                            <span class="diff-col-pct" style="text-align: right; font-size: 0.78rem;">${i.profilePct}</span>
+                            <span class="genpop-col diff-col-gp" style="text-align: right; font-size: 0.78rem; color: var(--text-secondary);">${i.genPopPct}</span>
+                            <span class="index-col value ${i.valueClass}" style="text-align: right; font-size: 0.78rem;">${i.value}</span>
                         </div>
                     `).join('')
                     : '<p style="color: var(--text-secondary);">No data available</p>';
@@ -29612,11 +29615,11 @@
             
             document.getElementById('demoDifferentiators').innerHTML = differentiators.length > 0
                 ? differentiators.map(i => `
-                    <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
-                        <span style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;"><span class="icon">${i.icon}</span>${i.text}</span>
-                        <span class="diff-col-pct" style="text-align: left; font-size: 0.85rem;">${i.profilePct}</span>
-                        <span class="genpop-col diff-col-gp" style="text-align: left; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
-                        <span class="index-col value ${i.valueClass}" style="text-align: left;">${i.value}</span>
+                    <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: minmax(0,1fr) 72px 72px 42px; gap: 0.4rem; align-items: center; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border-color);">
+                        <span style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; overflow: hidden;" title="${(i.text || '').replace(/"/g, '&quot;')}"><span class="icon" style="flex-shrink:0;">${i.icon}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i.text}</span></span>
+                        <span class="diff-col-pct" style="text-align: right; font-size: 0.78rem;">${i.profilePct}</span>
+                        <span class="genpop-col diff-col-gp" style="text-align: right; font-size: 0.78rem; color: var(--text-secondary);">${i.genPopPct}</span>
+                        <span class="index-col value ${i.valueClass}" style="text-align: right; font-size: 0.78rem;">${i.value}</span>
                     </div>
                 `).join('')
                 : '<p style="color: var(--text-secondary);">Similar to general population</p>';
