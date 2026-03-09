@@ -16256,7 +16256,7 @@
         // Format index as plain number on 100-based scale: 100 = 100, 1.33 = 133 (no decimals).
         // Backend sends 100-based scale (100 = 1.0, 133 = 1.33). Display as integer.
         function formatIndex(index) {
-            if (index === null || index === undefined || isNaN(index)) return 'N/A';
+            if (index === null || index === undefined || isNaN(index) || index === 0) return '';
             const n = Number(index);
             return String(Math.round(n));
         }
@@ -27342,7 +27342,7 @@
                         genPopPct = pct; // Use profile percentage as gen pop percentage
                     }
                 }
-                const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 100;
+                const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
 
                 // Sample size from SAMPLE SIZE row. If primary value is under 1000, use E3 (Original Raw Numbers) instead.
                 if (category === 'SAMPLE SIZE') {
@@ -28968,11 +28968,13 @@
                 const pctDisplay = item.pct.toFixed(2) + '%';
                 if (isGenPopAct) return `(${pctDisplay})`;
                 const gpDisplay = item.genPop < 0.01 ? 'N/A' : item.genPop.toFixed(2) + '%';
+                if (gpDisplay === 'N/A') return `(${pctDisplay} | GP: N/A)`;
                 return `(${pctDisplay} | GP: ${gpDisplay} | ${formatIndex(item.index)})`;
             };
             const formatActivationTooltip = (item) => {
                 if (isGenPopAct) return `${item.name} (${item.pct.toFixed(2)}%)`;
                 const gpDisplay = item.genPop < 0.01 ? 'N/A' : item.genPop.toFixed(2) + '%';
+                if (gpDisplay === 'N/A') return `${item.name} (${item.pct.toFixed(2)}% vs GP N/A)`;
                 return `${item.name} (${item.pct.toFixed(2)}% vs GP ${gpDisplay}, ${formatIndex(item.index)})`;
             };
             const US_POP_ACT = 329900000;
@@ -31148,12 +31150,13 @@
             container.innerHTML = sorted.map(item => {
                 const indexClass = item.index >= 150 ? 'high' : item.index >= 100 ? '' : 'low';
                 const categoryDisplay = (item.category || '').replace(/\//g, '/\u200B');
+                const hasGP = (item.genPopPct || 0) > 0;
                 return `
                 <div class="highlight-item">
                     <span class="label">${item.name}</span>
                     <span style="font-size: 0.75rem; color: var(--text-secondary);">${categoryDisplay}</span>
                     <span>${formatInsightPct(item.pct)}</span>
-                    <span class="differentiator-index ${indexClass}">${formatIndex(item.index)}</span>
+                    <span class="differentiator-index ${indexClass}">${hasGP ? formatIndex(item.index) : ''}</span>
                 </div>
             `;
             }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No interest data available</p>';
@@ -31274,12 +31277,13 @@
                     const profileDisplay = formatInsightPct(profilePct, isProjectionDiff ? { isProjection: true, sampleSize: US_POP_DIFF } : null);
                     const genPopDisplay = formatInsightPct(genPopPct, isProjectionDiff ? { isProjection: true, sampleSize: US_POP_DIFF } : null);
                     const indexClass = item.index >= 100 ? 'high' : 'low';
+                    const hasGP = genPopPct > 0;
                     return `
                         <div class="differentiator-grouped-item">
                             <span class="differentiator-grouped-name">${item.name}</span>
                             <span class="differentiator-grouped-pct">${profileDisplay}</span>
                             <span class="differentiator-grouped-gp">${genPopDisplay}</span>
-                            <span class="differentiator-grouped-index ${indexClass}">${formatIndex(item.index)}</span>
+                            <span class="differentiator-grouped-index ${indexClass}">${hasGP ? formatIndex(item.index) : ''}</span>
                         </div>
                     `;
                 }).join('');
@@ -32231,7 +32235,7 @@
                 const genPopDisplay = isProjection
                     ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                     : formatValueOrNA(genPopPct, true);
-                return (item.name || '') + ' · ' + profileDisplay + ' (' + genPopDisplay + ') · ' + formatIndex(item.index) + ' index';
+                return (item.name || '') + ' · ' + profileDisplay + ' (' + genPopDisplay + ')' + (genPopDisplay === 'N/A' ? '' : ' · ' + formatIndex(item.index) + ' index');
             }
             
             // Enhanced header with search
@@ -32276,9 +32280,10 @@
                 const tooltipSafe = buildItemTooltip(item).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const idxColor = item.index >= 100 ? '#10b981' : '#ef4444';
                 const categoryBadge = item.category ? `<span style="font-size: 0.6rem; background: rgba(255,255,255,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.5rem; color: var(--text-secondary);">${item.category}</span>` : '';
+                const hasGP = (item.genPopPct ?? 0) > 0;
                 return `<div class="quintile-result-card has-tooltip" data-name="${safeName.toLowerCase()}" data-index="${item.index}" style="border-left: 3px solid ${borderColor};" data-tooltip="${tooltipSafe}" onclick="filterInterestsByCategory('${safeCategory}')">
                     <span class="result-name">${safeName}${categoryBadge}</span>
-                    <span class="result-stats" style="color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
+                    <span class="result-stats" style="color: ${idxColor}; font-weight: 600;">${hasGP ? formatIndex(item.index) : ''}</span>
                 </div>`;
             }).join('');
             
@@ -32387,7 +32392,7 @@
                                     <span class="item-name" style="flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</span>
                                     <span style="min-width: 55px; text-align: left;">${profileDisplay}</span>
                                     <span class="genpop-col" style="min-width: 55px; text-align: left; color: var(--text-secondary);">(${genPopDisplay})</span>
-                                    <span class="index-col" style="min-width: 45px; text-align: left; color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
+                                    <span class="index-col" style="min-width: 45px; text-align: left; color: ${idxColor}; font-weight: 600;">${genPopDisplay === 'N/A' ? '' : formatIndex(item.index)}</span>
                                 </div>`;
                             }).join('')}
                         </div>
@@ -32464,7 +32469,7 @@
                         <span class="interest-name" title="${item.name}">${item.name}</span>
                         <span class="interest-pct">${profileDisplay}</span>
                         <span class="interest-genpop genpop-col" style="color: var(--text-secondary);">${genPopDisplay}</span>
-                        <span class="interest-index index-col" style="color: ${indexColor};">${formatIndex(item.index)}</span>
+                        <span class="interest-index index-col" style="color: ${indexColor};">${genPopDisplay === 'N/A' ? '' : formatIndex(item.index)}</span>
                     </div>
                 `;
             }).join('');
@@ -33951,7 +33956,7 @@
                         </div>
                         <span class="behavioral-pct" style="color: var(--text-primary);">${profileDisplay}</span>
                         <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(${genPopDisplay})</span>
-                        <span class="behavioral-index index-col" style="color: ${indexColor}; font-weight: 700;">${formatIndex(index)}</span>
+                        <span class="behavioral-index index-col" style="color: ${indexColor}; font-weight: 700;">${genPopDisplay === 'N/A' ? '' : formatIndex(index)}</span>
                     </div>
                 `;
             }).join('');
@@ -40170,7 +40175,7 @@
             // Calculate key metrics
             const sortedByIndex = [...allItems].sort((a, b) => b.index - a.index);
             const topOverIndexers = sortedByIndex.filter(i => i.index > 100 && (i.pct || 0) < 99.99).slice(0, 25);
-            const topUnderIndexers = sortedByIndex.filter(i => i.index < 100 && (i.pct || 0) < 99.99).sort((a, b) => a.index - b.index).slice(0, 25);
+            const topUnderIndexers = sortedByIndex.filter(i => i.index > 0 && i.index < 100 && (i.pct || 0) < 99.99).sort((a, b) => a.index - b.index).slice(0, 25);
             const avgOverIndex = topOverIndexers.length > 0 ? Math.round(topOverIndexers.reduce((s,i) => s + i.index, 0) / topOverIndexers.length) : 0;
             const uniquenessScore = Math.min(100, Math.round((topOverIndexers.filter(i => i.index > 150).length / Math.max(1, topOverIndexers.length)) * 100));
             const categoryCount = Object.keys(data.behavioral).length;
@@ -40351,6 +40356,7 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = formatInsightPct(profilePct, isProjectionInsights ? { isProjection: true, sampleSize: US_POP_INSIGHTS } : null);
                 const genPopDisplay = formatInsightPct(genPopPct, isProjectionInsights ? { isProjection: true, sampleSize: US_POP_INSIGHTS } : null);
+                const hasGenPop = genPopPct > 0;
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -40358,7 +40364,7 @@
                     <span class="category-tag">${item.category}</span>
                     <span class="item-pct">${profileDisplay}</span>
                     <span class="item-gp">${genPopDisplay}</span>
-                    <span class="index-badge high">${formatIndex(item.index)}</span>
+                    <span class="index-badge high">${hasGenPop ? formatIndex(item.index) : ''}</span>
                 </div>
                 `;
             }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No over-indexing items</p>';
@@ -40370,6 +40376,7 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = formatInsightPct(profilePct, isProjectionInsights ? { isProjection: true, sampleSize: US_POP_INSIGHTS } : null);
                 const genPopDisplay = formatInsightPct(genPopPct, isProjectionInsights ? { isProjection: true, sampleSize: US_POP_INSIGHTS } : null);
+                const hasGenPop = genPopPct > 0;
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -40377,7 +40384,7 @@
                     <span class="category-tag">${item.category}</span>
                     <span class="item-pct">${profileDisplay}</span>
                     <span class="item-gp">${genPopDisplay}</span>
-                    <span class="index-badge low">${formatIndex(item.index)}</span>
+                    <span class="index-badge low">${hasGenPop ? formatIndex(item.index) : ''}</span>
                 </div>
                 `;
             }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No under-indexing items</p>';
@@ -40401,6 +40408,7 @@
                     const genPopPct = item.genPopPct || 0;
                     const profileDisplay = formatInsightPct(profilePct, isProjectionChamp ? { isProjection: true, sampleSize: US_POP_CHAMP } : null);
                     const genPopDisplay = formatInsightPct(genPopPct, isProjectionChamp ? { isProjection: true, sampleSize: US_POP_CHAMP } : null);
+                    const hasGP = genPopPct > 0;
                     return `
                     <div class="champion-item">
                         <div class="champion-category">${cat}</div>
@@ -40415,7 +40423,7 @@
                                 <span>${genPopDisplay}</span>
                             </div>
                         </div>
-                        <div class="champion-index">${formatIndex(item.index)}</div>
+                        <div class="champion-index">${hasGP ? formatIndex(item.index) : ''}</div>
                     </div>
                 `;
                 }).join('');
@@ -40434,13 +40442,14 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = formatInsightPct(profilePct, isProjectionHidden ? { isProjection: true, sampleSize: US_POP_HIDDEN } : null);
                 const genPopDisplay = formatInsightPct(genPopPct, isProjectionHidden ? { isProjection: true, sampleSize: US_POP_HIDDEN } : null);
+                const hasGenPop = genPopPct > 0;
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
                     <span class="name">${item.name} <span class="category-tag">${item.category}</span></span>
                     <span class="item-pct">${profileDisplay}</span>
                     <span class="item-gp">${genPopDisplay}</span>
-                    <span class="index-badge high">${formatIndex(item.index)}</span>
+                    <span class="index-badge high">${hasGenPop ? formatIndex(item.index) : ''}</span>
                 </div>
             `;
             }).join('') || '<p style="color: var(--text-secondary);">No hidden gems found</p>';
@@ -40459,6 +40468,7 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = formatInsightPct(profilePct, isProjectionRising ? { isProjection: true, sampleSize: US_POP_RISING } : null);
                 const genPopDisplay = formatInsightPct(genPopPct, isProjectionRising ? { isProjection: true, sampleSize: US_POP_RISING } : null);
+                const hasGenPop = genPopPct > 0;
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -40466,7 +40476,7 @@
                     <span class="category-tag">${item.category}</span>
                     <span class="item-pct">${profileDisplay}</span>
                     <span class="item-gp">${genPopDisplay}</span>
-                    <span class="index-badge high">${formatIndex(item.index)}</span>
+                    <span class="index-badge high">${hasGenPop ? formatIndex(item.index) : ''}</span>
                 </div>
             `;
             }).join('') || '<p style="color: var(--text-secondary);">No rising behaviors detected</p>';
@@ -40497,6 +40507,7 @@
                 const genPopDisplay = isProjectionStream 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_STREAM))
                     : genPopPct.toFixed(2) + '%';
+                const hasGP = genPopPct > 0;
                 return `
                 <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -40507,7 +40518,7 @@
                     <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 0.5rem;">
                         <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span> <span style="font-weight: 600;">${profileDisplay}</span></div>
                         <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span> <span>${genPopDisplay}</span></div>
-                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Index:</span> <span style="font-weight: 600; color: var(--accent-lime);">${formatIndex(item.index)}</span></div>
+                        ${hasGP ? `<div><span style="color: var(--text-secondary); font-size: 0.7rem;">Index:</span> <span style="font-weight: 600; color: var(--accent-lime);">${formatIndex(item.index)}</span></div>` : ''}
                     </div>
                 </div>
             `;
@@ -40531,6 +40542,7 @@
                 const genPopDisplay = isProjectionSocial 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_SOCIAL))
                     : genPopPct.toFixed(2) + '%';
+                const hasGP = genPopPct > 0;
                 return `
                 <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -40541,7 +40553,7 @@
                     <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 0.5rem;">
                         <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span> <span style="font-weight: 600;">${profileDisplay}</span></div>
                         <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span> <span>${genPopDisplay}</span></div>
-                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Index:</span> <span style="font-weight: 600; color: var(--accent-lime);">${formatIndex(item.index)}</span></div>
+                        ${hasGP ? `<div><span style="color: var(--text-secondary); font-size: 0.7rem;">Index:</span> <span style="font-weight: 600; color: var(--accent-lime);">${formatIndex(item.index)}</span></div>` : ''}
                     </div>
                 </div>
             `;
@@ -40774,13 +40786,14 @@
                 const genPopDisplay = isProjectionShop 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_SHOP))
                     : genPopPct.toFixed(2) + '%';
+                const hasGenPop = genPopPct > 0;
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
                     <span class="name">${item.name}</span>
                     <span class="item-pct">${profileDisplay}</span>
                     <span class="item-gp">${genPopDisplay}</span>
-                    <span class="index-badge ${item.index >= 100 ? 'high' : 'low'}">${formatIndex(item.index)}</span>
+                    <span class="index-badge ${item.index >= 100 ? 'high' : 'low'}">${hasGenPop ? formatIndex(item.index) : ''}</span>
                 </div>
             `;
             }).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
