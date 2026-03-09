@@ -29755,19 +29755,19 @@
             
             // For numeric data (age, income), calculate weighted median
             if (categoryType === 'age') {
-                // Age range to numeric midpoint mapping
                 const ageToNumeric = (ageRange) => {
-                    const lower = ageRange.toLowerCase();
-                    if (lower.includes('<16') || lower.includes('under 16')) return 14;
-                    if (lower.includes('16-18') || lower.includes('17-18')) return 17.5;
-                    if (lower.includes('18-20') || lower.includes('19-20')) return 19.5;
-                    if (lower.includes('21-25')) return 23;
-                    if (lower.includes('26-30')) return 28;
-                    if (lower.includes('31-40')) return 35.5;
-                    if (lower.includes('41-59')) return 50;
-                    if (lower.includes('60+') || lower.includes('65+') || lower.includes('over 65')) return 67.5;
-                    // Try to parse range like "26-30"
-                    const match = ageRange.match(/(\d+)-(\d+)/);
+                    const lower = ageRange.toLowerCase().trim();
+                    if (lower.includes('under') || lower.includes('<')) {
+                        const m = lower.match(/(\d+)/);
+                        const cap = m ? parseInt(m[1], 10) : 17;
+                        return cap / 2;
+                    }
+                    if (lower.includes('or older') || lower.includes('or over') || lower.includes('and older') || lower.includes('+')) {
+                        const m = lower.match(/(\d+)/);
+                        const base = m ? parseInt(m[1], 10) : 65;
+                        return base + 12.5;
+                    }
+                    const match = ageRange.match(/(\d+)\s*[-–]\s*(\d+)/);
                     if (match) return (parseInt(match[1]) + parseInt(match[2])) / 2;
                     return null;
                 };
@@ -29812,38 +29812,34 @@
                 // Use interpolated median formula (same as age): find median group, then
                 // Median = Start + ( (50 - CumBefore) / PctInGroup ) * Width
                 const parseIncomeBracket = (key) => {
-                    const k = (key || '').replace(/\s/g, '');
+                    const k = (key || '').trim();
                     const lower = k.toLowerCase();
-                    // Strip commas; only treat as thousands when key has 'k' or number is small (e.g. "25" from "25k")
-                    const toNum = (numStr, isThousands) => {
+                    const toNum = (numStr) => {
                         const n = parseInt(String(numStr).replace(/[^\d]/g, ''), 10);
                         if (isNaN(n)) return 0;
-                        if (lower.includes('k') || (isThousands && n < 1000)) return n * 1000;
+                        if (lower.includes('k') && n < 1000) return n * 1000;
                         return n;
                     };
-                    // Allow commas in numbers: e.g. "25,000" or "Under $25,000" -> capture "25,000"
                     if (lower.includes('<') || lower.includes('under')) {
-                        const m = lower.match(/(\d[\d,]*)\s*[k]?/);
-                        const end = m ? toNum(m[1], true) : 40000;
+                        const m = lower.match(/(\d[\d,]*)/);
+                        const end = m ? toNum(m[1]) : 25000;
                         return { start: 0, width: end };
                     }
-                    // Range e.g. "$25,000-$49,999" or "$100,000-$149,999" (commas in numbers)
-                    const rangeMatch = lower.match(/(\d[\d,]*)\s*[k]?\s*-\s*\$?\s*(\d[\d,]*)\s*[k]?/);
-                    if (rangeMatch) {
-                        const low = toNum(rangeMatch[1], true);
-                        const high = toNum(rangeMatch[2], true);
-                        return { start: low, width: high - low };
+                    if (lower.includes('or more') || lower.includes('and over') || lower.includes('or over')) {
+                        const m = lower.match(/(\d[\d,]*)/);
+                        const start = m ? toNum(m[1]) : 250000;
+                        return { start, width: 150000 };
                     }
                     const overMatch = lower.match(/(\d[\d,]*)\s*[k]?\+/);
                     if (overMatch) {
-                        const start = toNum(overMatch[1], true);
-                        return { start, width: 150000 }; // assume 150k span for open-ended
-                    }
-                    // Gen Pop: "$250,000 or More" (no plus sign)
-                    if (lower.includes('or more') || lower.includes('and over')) {
-                        const m = lower.match(/(\d[\d,]*)\s*[k,]?\s*\d*/);
-                        const start = m ? toNum(m[1], true) : 250000;
+                        const start = toNum(overMatch[1]);
                         return { start, width: 150000 };
+                    }
+                    const rangeMatch = lower.match(/(\d[\d,]*)\s*[k]?\s*[-–]\s*\$?\s*(\d[\d,]*)\s*[k]?/);
+                    if (rangeMatch) {
+                        const low = toNum(rangeMatch[1]);
+                        const high = toNum(rangeMatch[2]);
+                        return { start: low, width: Math.max(1, high - low) };
                     }
                     return null;
                 };

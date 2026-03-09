@@ -2594,6 +2594,40 @@ def normalize_demo_value(s: str) -> str:
     s = s.strip().lower()
     return re.sub(r"\s*[-–]\s*", "-", s)
 
+_US_STATE_ABBREVS = {
+    'al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id','il','in','ia',
+    'ks','ky','la','me','md','ma','mi','mn','ms','mo','mt','ne','nv','nh','nj',
+    'nm','ny','nc','nd','oh','ok','or','pa','ri','sc','sd','tn','tx','ut','vt',
+    'va','wa','wv','wi','wy','dc','pr','vi','gu','as','mp',
+}
+
+def normalize_dma_for_display(s: str) -> str:
+    """Title-case city names and UPPERCASE state abbreviations in a DMA string.
+    
+    'washington dc hagerstown md' -> 'Washington DC Hagerstown MD'
+    'Los Angeles Ca'              -> 'Los Angeles CA'
+    'NEW YORK NY'                 -> 'New York NY'
+    'dallas ft worth tx'          -> 'Dallas Ft Worth TX'
+    """
+    if not s or not isinstance(s, str):
+        return s or ''
+    words = s.strip().split()
+    result = []
+    for w in words:
+        if w.lower() in _US_STATE_ABBREVS:
+            result.append(w.upper())
+        elif w.upper() == w and len(w) > 2:
+            result.append(w.title())
+        else:
+            result.append(w.title())
+    return ' '.join(result)
+
+def dma_match_key(s: str) -> str:
+    """Produce a lowercased, punctuation-stripped key for case-insensitive DMA matching."""
+    if not s:
+        return ''
+    return re.sub(r'[^a-z0-9 ]', '', s.strip().lower()).strip()
+
 def compute_noisy_sample_size(original_n: int) -> int:
     """
     1) If original_n < 100k, let base = original_n * 100; else base = original_n.
@@ -5416,7 +5450,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     # Normalize category names for consistent processing
     df["Column"] = df["Column"].astype(str).apply(normalize_category_name)
-    df["Value"] = df["Value"].astype(str).apply(normalize_demo_value)
+    loc_mask_norm = df["Column"].str.upper() == "LOCATION"
+    df.loc[~loc_mask_norm, "Value"] = df.loc[~loc_mask_norm, "Value"].astype(str).apply(normalize_demo_value)
+    df.loc[loc_mask_norm, "Value"] = df.loc[loc_mask_norm, "Value"].astype(str).apply(normalize_dma_for_display)
 
     # Consolidate ESPN+ into ESPN across all categories
     df = consolidate_espn_brands(df)
@@ -6376,7 +6412,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         for dma_name, pct in GENPOP_DMA_PERCENTAGES:
             genpop_demo_data.append({
                 "Column": "LOCATION",
-                "Value": normalize_demo_value(dma_name),
+                "Value": normalize_dma_for_display(dma_name),
                 "Percentage": pct
             })
         df_demo_clean = pd.DataFrame(genpop_demo_data)
@@ -14420,8 +14456,12 @@ def deduplicate_location_data(df):
     # Convert percentages to float for proper sorting
     location_df['Percentage'] = pd.to_numeric(location_df['Percentage'], errors='coerce')
     
-    # Group by Value (location name) and keep the one with highest percentage
-    location_deduplicated = location_df.sort_values('Percentage', ascending=False).groupby('Value').first().reset_index()
+    # Normalize display names and group case-insensitively
+    location_df['Value'] = location_df['Value'].apply(normalize_dma_for_display)
+    location_df['_match_key'] = location_df['Value'].apply(dma_match_key)
+    location_deduplicated = location_df.sort_values('Percentage', ascending=False).drop_duplicates(subset='_match_key', keep='first')
+    if '_match_key' in location_deduplicated.columns:
+        location_deduplicated = location_deduplicated.drop(columns=['_match_key'])
     
     # Count duplicates removed
     original_count = len(location_df)
@@ -14452,39 +14492,37 @@ def ensure_all_dmas_present(df):
     # First, deduplicate any existing LOCATION entries
     df = deduplicate_location_data(df)
     
-    # Find existing LOCATION entries
+    # Normalize existing LOCATION display names
     location_mask = df['Column'].str.upper() == 'LOCATION'
+    if location_mask.any():
+        df.loc[location_mask, 'Value'] = df.loc[location_mask, 'Value'].apply(normalize_dma_for_display)
+    
+    # Find existing LOCATION entries (use match keys for case-insensitive comparison)
     existing_locations = set()
+    existing_keys = set()
     
     if location_mask.any():
-        existing_locations = set(df[location_mask]['Value'].str.lower())
+        existing_locations = set(df[location_mask]['Value'])
+        existing_keys = set(df[location_mask]['Value'].apply(dma_match_key))
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"  📊 Found {len(existing_locations)} existing locations (after deduplication)")
     
-    # Find missing DMAs - more flexible matching
+    # Find missing DMAs using flexible matching
     missing_dmas = []
     for dma in major_dmas:
+        dma_key = dma_match_key(dma)
         dma_found = False
-        dma_lower = dma.lower()
         
-        # Try multiple matching strategies
-        for existing_loc in existing_locations:
-            existing_lower = existing_loc.lower()
-            
-            # Exact match
-            if dma_lower == existing_lower:
+        for existing_key in existing_keys:
+            if dma_key == existing_key:
                 dma_found = True
                 break
-                
-            # Substring match (either direction)
-            if dma_lower in existing_lower or existing_lower in dma_lower:
+            if dma_key in existing_key or existing_key in dma_key:
                 dma_found = True
                 break
-                
-            # Word-based matching (check if key words match)
-            dma_words = set(dma_lower.split())
-            existing_words = set(existing_lower.split())
-            if len(dma_words.intersection(existing_words)) >= 2:  # At least 2 words match
+            dma_words = set(dma_key.split())
+            existing_words = set(existing_key.split())
+            if len(dma_words.intersection(existing_words)) >= 2:
                 dma_found = True
                 break
         
@@ -15262,9 +15300,13 @@ def ensure_all_dmas_in_location_category(df, conn=None):
     # First, deduplicate any existing LOCATION entries
     df = deduplicate_location_data(df)
     
-    # Get current LOCATION entries
+    # Normalize existing LOCATION display names
     location_mask = df['Column'] == 'LOCATION'
-    current_locations = set(df[location_mask]['Value'].str.lower())
+    if location_mask.any():
+        df.loc[location_mask, 'Value'] = df.loc[location_mask, 'Value'].apply(normalize_dma_for_display)
+    
+    # Get current LOCATION entries (case-insensitive via match keys)
+    current_locations = set(df[location_mask]['Value'].apply(dma_match_key))
     
     # Comprehensive list of all possible DMAs (ensuring at least 210)
     all_dmas = [
