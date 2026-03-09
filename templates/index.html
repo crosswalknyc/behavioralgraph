@@ -27500,6 +27500,18 @@
             normalizeAgeBucketsForDashboard(result);
             normalizeIncomeBucketsForDashboard(result);
 
+            // Deduplicate behavioral items: keep highest-pct entry per name within each category
+            Object.keys(result.behavioral).forEach(cat => {
+                const seen = new Map();
+                result.behavioral[cat].forEach(item => {
+                    const key = (item.name || '').trim().toUpperCase();
+                    if (!seen.has(key) || item.pct > seen.get(key).pct) {
+                        seen.set(key, item);
+                    }
+                });
+                result.behavioral[cat] = Array.from(seen.values());
+            });
+
             // Sort behavioral by percentage
             Object.keys(result.behavioral).forEach(cat => {
                 result.behavioral[cat].sort((a, b) => b.pct - a.pct);
@@ -47086,6 +47098,18 @@
                         index: index
                     });
                 }
+            });
+
+            // Deduplicate behavioral items: keep highest-pct entry per name within each category
+            Object.keys(result.behavioral).forEach(cat => {
+                const seen = new Map();
+                result.behavioral[cat].forEach(item => {
+                    const key = (item.name || '').trim().toUpperCase();
+                    if (!seen.has(key) || item.pct > seen.get(key).pct) {
+                        seen.set(key, item);
+                    }
+                });
+                result.behavioral[cat] = Array.from(seen.values());
             });
 
             // Sort behavioral by percentage
