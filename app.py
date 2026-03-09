@@ -1724,7 +1724,7 @@ def admin_portal():
     user = get_current_user()
     current_role = _normalize_role(user.get('role', 'user') if user else 'user')
     default_profile_photo = load_default_profile_photo() or ''
-    return render_template('admin.html', current_user_role=current_role, current_username=session.get('username', ''), default_profile_photo=default_profile_photo)
+    return render_template('admin.html', current_user_role=current_role, current_username=session.get('username', ''), default_profile_photo=default_profile_photo, is_dev_env=IS_DEV_ENV)
 
 # ============================================================================
 # ADMIN CLOAK (super_admin only): log in as another user to act as them
