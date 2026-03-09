@@ -861,10 +861,17 @@ def anchor_to_genpop(df, sample_size):
         confidence = min(1.0, raw_count / 500.0)
         raw_ratio = profile_cs / gp_cs_val
         raw_index = confidence * raw_ratio + (1.0 - confidence) * 1.0
-        clamped_index = _soft_clamp_index(raw_index, lo, hi, cat, val)
+
+        # Per-item ceiling: tighten max index when GP BP is high so the
+        # resulting BP doesn't blow past a reasonable absolute ceiling.
+        ABS_BP_CEIL = 95.0
+        item_hi = hi
+        if gp_bp_val * hi > ABS_BP_CEIL:
+            item_hi = max(1.01, ABS_BP_CEIL / gp_bp_val)
+        clamped_index = _soft_clamp_index(raw_index, lo, item_hi, cat, val)
 
         new_bp = gp_bp_val * clamped_index
-        new_bp = min(new_bp, 99.99)
+        new_bp = min(new_bp, ABS_BP_CEIL)
         new_bp = round(new_bp, 4)
 
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
@@ -1716,11 +1723,16 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
         if _category_matches_archetype(cat, behav_low):
             max_idx = min(max_idx, 1.1)
 
+        # Per-item ceiling: tighten max index when GP BP is high
+        ABS_BP_CEIL = 95.0
+        if gp_bp * max_idx > ABS_BP_CEIL:
+            max_idx = max(1.01, ABS_BP_CEIL / gp_bp)
+
         needs_fix = cur_index > max_idx or cur_index < min_idx
 
         if needs_fix:
             target = _soft_clamp_index(cur_index, min_idx, max_idx, cat, val)
-            new_bp = round(min(gp_bp * target, 99.99), 4)
+            new_bp = round(min(gp_bp * target, ABS_BP_CEIL), 4)
             new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
             new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
             if bp_col and bp_col in df.columns:
@@ -1874,11 +1886,17 @@ def final_behavioral_sanity_check(df, archetype=None):
         if _category_matches_archetype(cat, behav_low):
             hi = min(hi, 1.1)
 
-        if lo <= cur_index <= hi:
+        # Per-item ceiling: tighten max index when GP BP is high
+        ABS_BP_CEIL = 95.0
+        if gp_bp_val * hi > ABS_BP_CEIL:
+            hi = max(1.01, ABS_BP_CEIL / gp_bp_val)
+
+        # Also catch any BP that already exceeds the ceiling from earlier steps
+        if lo <= cur_index <= hi and cur_bp <= ABS_BP_CEIL:
             continue
 
         target_index = _soft_clamp_index(cur_index, lo, hi, cat, val)
-        new_bp = round(min(gp_bp_val * target_index, 99.99), 4)
+        new_bp = round(min(gp_bp_val * target_index, ABS_BP_CEIL), 4)
 
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
         new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
