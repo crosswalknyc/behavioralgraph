@@ -19688,7 +19688,7 @@
                 overIndexing.slice(0, 20).forEach((loc, i) => {
                     html += `
                         <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #10b981;">
-                            <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${loc.name}</div>
+                            <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${normalizeDmaDisplay(loc.name)}</div>
                             <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
                                 ${(loc.pct || 0).toFixed(4)}% | Index: <span style="color: #10b981; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
                             </div>
@@ -19706,7 +19706,7 @@
                     underIndexing.slice(0, 20).forEach((loc, i) => {
                         html += `
                             <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #ef4444;">
-                                <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${loc.name}</div>
+                                <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${normalizeDmaDisplay(loc.name)}</div>
                                 <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
                                     ${(loc.pct || 0).toFixed(4)}% | Index: <span style="color: #ef4444; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
                                 </div>
@@ -34713,6 +34713,14 @@
             if (allSelect) allSelect.value = `${locationSortState.all.column}-${locationSortState.all.direction}`;
         }
         
+        const _STATE_ABBREVS = new Set(['al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id','il','in','ia','ks','ky','la','me','md','ma','mi','mn','ms','mo','mt','ne','nv','nh','nj','nm','ny','nc','nd','oh','ok','or','pa','ri','sc','sd','tn','tx','ut','vt','va','wa','wv','wi','wy','dc']);
+        function normalizeDmaDisplay(s) {
+            if (!s || typeof s !== 'string') return s || '';
+            return s.replace(/\b([A-Za-z]{2})\b/g, function(m) {
+                return _STATE_ABBREVS.has(m.toLowerCase()) ? m.toUpperCase() : m;
+            });
+        }
+
         // 2025 DMA Market Rankings (by Total Homes) - Nielsen DMA list
         const DMA_RANKS = {
             "New York NY": 1, "Los Angeles CA": 2, "Chicago IL": 3, "Dallas Ft. Worth TX": 4,
@@ -34907,7 +34915,7 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${loc.name}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
@@ -34957,7 +34965,7 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${loc.name}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
@@ -35007,7 +35015,7 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${loc.name}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
@@ -35972,7 +35980,7 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${loc.name}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
@@ -36040,7 +36048,7 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${loc.name}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
@@ -36133,7 +36141,7 @@
             
             if (data.locations) {
                 data.locations.forEach(loc => {
-                    csv += `"${loc.name}",${loc.pct.toFixed(4)},${(loc.genPopPct || 0).toFixed(4)},${loc.index || 0}\n`;
+                    csv += `"${normalizeDmaDisplay(loc.name)}",${loc.pct.toFixed(4)},${(loc.genPopPct || 0).toFixed(4)},${loc.index || 0}\n`;
                 });
             }
             return csv;
@@ -37391,7 +37399,7 @@
                     ? locations.filter(l => l.index < 100)
                     : locations;
                 filteredLocs.forEach(loc => {
-                    csvContent += `"${loc.name}",${loc.pct.toFixed(4)}%,${loc.genPopPct?.toFixed(4) || 0}%,${loc.index}\n`;
+                    csvContent += `"${normalizeDmaDisplay(loc.name)}",${loc.pct.toFixed(4)}%,${loc.genPopPct?.toFixed(4) || 0}%,${loc.index}\n`;
                 });
             } else if (type === 'interests') {
                 // Interests: same structure as page - object of name -> { pct, genPopPct, index }; use allInterestsData if populated (matches grid), else currentDashboardData.interests
@@ -38531,7 +38539,7 @@
                         if (item.data.items.length > 15) content += `  ... and ${item.data.items.length - 15} more\n`;
                     } else if (item.type === 'location' && item.data.locations) {
                         item.data.locations.slice(0, 10).forEach(loc => {
-                            content += `  ${loc.name}: ${loc.pct?.toFixed(2) || 0}% (Index: ${loc.index || 100})\n`;
+                            content += `  ${normalizeDmaDisplay(loc.name)}: ${loc.pct?.toFixed(2) || 0}% (Index: ${loc.index || 100})\n`;
                         });
                         if (item.data.locations.length > 10) content += `  ... and ${item.data.locations.length - 10} more DMAs\n`;
                     } else if (item.data.demographics) {
@@ -38585,7 +38593,7 @@
                         });
                     } else if (item.type === 'location' && item.data.locations) {
                         item.data.locations.forEach(loc => {
-                            csv += `${slideNum},"${profile}","Location","${loc.name}",${loc.pct?.toFixed(4) || 0},${loc.genPopPct?.toFixed(4) || 0},${loc.index || 100}\n`;
+                            csv += `${slideNum},"${profile}","Location","${normalizeDmaDisplay(loc.name)}",${loc.pct?.toFixed(4) || 0},${loc.genPopPct?.toFixed(4) || 0},${loc.index || 100}\n`;
                         });
                     } else if (item.data.demographics) {
                         Object.entries(item.data.demographics).forEach(([cat, vals]) => {
@@ -40846,7 +40854,7 @@
                     : genPopPct.toFixed(2) + '%';
                 return `
                 <div class="geo-opportunity">
-                    <div class="geo-name">${loc.name}</div>
+                    <div class="geo-name">${normalizeDmaDisplay(loc.name)}</div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; margin-top: 0.5rem;">
                         <div style="display: flex; justify-content: space-between;">
                             <span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span>
@@ -40891,7 +40899,7 @@
             // Geographic focus
             const geoFocusEl = document.getElementById('geoFocusRecs');
             if (geoFocusEl) geoFocusEl.innerHTML = topLocations.slice(0, 3).map(loc => `
-                <div class="activation-item">Focus on ${loc.name} (${loc.index} index)</div>
+                <div class="activation-item">Focus on ${normalizeDmaDisplay(loc.name)} (${loc.index} index)</div>
             `).join('') || '<div class="activation-item">National campaign recommended</div>';
             
             // Targeting checklist
@@ -44245,7 +44253,7 @@
                     </div>
                     ${topLocations.length > 0 ? topLocations.map(loc => `
                         <div class="seg-item">
-                            <span>${loc.name}</span>
+                            <span>${normalizeDmaDisplay(loc.name)}</span>
                             <span style="display: flex; gap: 0.5rem; align-items: center;">
                                 <span style="color: var(--accent-lime);">${loc.segmentPct.toFixed(2)}%</span>
                                 <span style="color: var(--text-secondary); font-size: 0.7rem;">(${loc.originalPct.toFixed(2)}%)</span>
@@ -44811,7 +44819,7 @@
                 
                 csvContent += `DMA,Audience %,Gen Pop %,Index\n`;
                 locations.forEach(loc => {
-                    csvContent += `"${loc.name}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}\n`;
+                    csvContent += `"${normalizeDmaDisplay(loc.name)}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}\n`;
                 });
                 filename = `${profileName}_Location.csv`;
                 

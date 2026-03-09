@@ -14507,27 +14507,14 @@ def ensure_all_dmas_present(df):
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"  📊 Found {len(existing_locations)} existing locations (after deduplication)")
     
-    # Find missing DMAs using flexible matching
     missing_dmas = []
     for dma in major_dmas:
         dma_key = dma_match_key(dma)
-        dma_found = False
-        
-        for existing_key in existing_keys:
-            if dma_key == existing_key:
-                dma_found = True
-                break
-            if dma_key in existing_key or existing_key in dma_key:
-                dma_found = True
-                break
-            dma_words = set(dma_key.split())
-            existing_words = set(existing_key.split())
-            if len(dma_words.intersection(existing_words)) >= 2:
-                dma_found = True
-                break
-        
-        if not dma_found:
-            missing_dmas.append(dma)
+        if dma_key in existing_keys:
+            continue
+        if any(dma_key in ek or ek in dma_key for ek in existing_keys):
+            continue
+        missing_dmas.append(dma)
     
     if missing_dmas:
         if not SILENCE_VERBOSE_OUTPUT:
@@ -14553,7 +14540,7 @@ def ensure_all_dmas_present(df):
             
             new_row = {
                 'Column': 'LOCATION',
-                'Value': dma,
+                'Value': normalize_dma_for_display(dma),
                 'Percentage': round(small_percentage, 4)
             }
             new_rows.append(new_row)
@@ -15405,31 +15392,7 @@ def ensure_all_dmas_in_location_category(df, conn=None):
     
     missing_dmas = []
     for dma in all_dmas:
-        dma_found = False
-        dma_lower = dma.lower()
-        
-        # Try multiple matching strategies
-        for existing_loc in current_locations:
-            existing_lower = existing_loc.lower()
-            
-            # Exact match
-            if dma_lower == existing_lower:
-                dma_found = True
-                break
-                
-            # Substring match (either direction)
-            if dma_lower in existing_lower or existing_lower in dma_lower:
-                dma_found = True
-                break
-                
-            # Word-based matching (check if key words match)
-            dma_words = set(dma_lower.split())
-            existing_words = set(existing_lower.split())
-            if len(dma_words.intersection(existing_words)) >= 2:  # At least 2 words match
-                dma_found = True
-                break
-        
-        if not dma_found:
+        if dma_match_key(dma) not in current_locations:
             missing_dmas.append(dma)
     
     if missing_dmas:
@@ -15439,11 +15402,10 @@ def ensure_all_dmas_in_location_category(df, conn=None):
         # Create new rows for missing DMAs with small jittered percentages
         new_rows = []
         for i, dma in enumerate(missing_dmas):
-            # Use very small but varied percentages (0.01% to 0.05%)
             small_pct = round(np.random.uniform(0.01, 0.05), 4)
             new_row = pd.DataFrame({
                 'Column': ['LOCATION'],
-                'Value': [dma],
+                'Value': [normalize_dma_for_display(dma)],
                 'Percentage': [small_pct]
             })
             new_rows.append(new_row)
