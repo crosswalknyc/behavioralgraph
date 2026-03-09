@@ -343,10 +343,37 @@ print("✅ Snowflake cursor fully patched: JSON forced + arrow error safety net"
 import numpy as np
 import re
 import random
+import math
+import hashlib
 import glob
 from datetime import datetime
 from genpop_calibration import calibrate_to_genpop
 import json as _json_mod
+
+
+def _soft_clamp_index(raw_index, lo, hi, cat, val):
+    """Soft-compress a raw index into [lo, hi] with organic variation.
+
+    Instead of a hard clamp (which pins every out-of-range value to the
+    exact same boundary), this uses tanh compression to smoothly squeeze
+    extreme values while preserving relative ordering.  A small amount of
+    deterministic per-item noise is added so no two items land on the
+    exact same index even when their raw indices are similar.
+    """
+    mid = (lo + hi) / 2.0
+    half = (hi - lo) / 2.0
+    if half <= 0:
+        return mid
+
+    deviation = raw_index - 1.0
+    scale = half * 2.5
+    compressed = mid + half * math.tanh(deviation / scale)
+
+    item_hash = int(hashlib.md5(f"{cat}:{val}".encode()).hexdigest()[:8], 16)
+    noise = ((item_hash / 0xFFFFFFFF) - 0.5) * half * 0.45
+    result = compressed + noise
+
+    return max(lo, min(hi, result))
 
 # ============================================================================
 # OPENAI CLIENT FOR PIPELINE VALIDATION (archetype generation)
@@ -785,11 +812,13 @@ def anchor_to_genpop(df, sample_size):
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2  # 0 for Gen Pop, ~1 for niche
 
-    # Adaptive bounds: high-pen profiles ~1.0, niche profiles get wide range
-    BEHAV_HI = 1.0 + 2.0 * niche_factor       # YouTube@84%: 1.05, niche@5%: 2.80
-    BEHAV_LO = 1.0 - 0.7 * niche_factor       # YouTube@84%: 0.98, niche@5%: 0.37
-    DEMO_HI  = 1.0 + 0.8 * niche_factor       # YouTube@84%: 1.02, niche@5%: 1.72
-    DEMO_LO  = 1.0 - 0.5 * niche_factor       # YouTube@84%: 0.99, niche@5%: 0.55
+    # Adaptive bounds: high-pen profiles stay closer to Gen Pop, niche profiles deviate more.
+    # Minimum floors prevent the range from collapsing so tight that every index
+    # rounds to the same value (the "all 105 / all 98" problem).
+    BEHAV_HI = max(1.15, 1.0 + 2.0 * niche_factor)
+    BEHAV_LO = min(0.88, 1.0 - 0.7 * niche_factor)
+    DEMO_HI  = max(1.10, 1.0 + 0.8 * niche_factor)
+    DEMO_LO  = min(0.92, 1.0 - 0.5 * niche_factor)
 
     print(f"   Profile Gen Pop penetration: {profile_bp_pct:.1f}% → "
           f"behav bounds [{BEHAV_LO:.2f}, {BEHAV_HI:.2f}], "
@@ -832,7 +861,7 @@ def anchor_to_genpop(df, sample_size):
         confidence = min(1.0, raw_count / 500.0)
         raw_ratio = profile_cs / gp_cs_val
         raw_index = confidence * raw_ratio + (1.0 - confidence) * 1.0
-        clamped_index = max(lo, min(hi, raw_index))
+        clamped_index = _soft_clamp_index(raw_index, lo, hi, cat, val)
 
         new_bp = gp_bp_val * clamped_index
         new_bp = min(new_bp, 99.99)
@@ -1630,8 +1659,8 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
             pass
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_bp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2
-    BASE_MAX = 1.0 + 2.0 * niche_factor
-    BASE_MIN = 1.0 - 0.7 * niche_factor
+    BASE_MAX = max(1.15, 1.0 + 2.0 * niche_factor)
+    BASE_MIN = min(0.88, 1.0 - 0.7 * niche_factor)
     print(f"   Behavioral gut-check adaptive bounds: [{BASE_MIN:.2f}, {BASE_MAX:.2f}] "
           f"(profile BP {profile_bp_pct:.1f}%)")
 
@@ -1687,16 +1716,10 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
         if _category_matches_archetype(cat, behav_low):
             max_idx = min(max_idx, 1.1)
 
-        needs_fix = False
-        target = cur_index
-        if cur_index > max_idx:
-            target = min(max_idx, max_idx * 0.8 + cur_index * 0.2)
-            needs_fix = True
-        elif cur_index < min_idx:
-            target = max(min_idx, min_idx * 0.8 + cur_index * 0.2)
-            needs_fix = True
+        needs_fix = cur_index > max_idx or cur_index < min_idx
 
         if needs_fix:
+            target = _soft_clamp_index(cur_index, min_idx, max_idx, cat, val)
             new_bp = round(min(gp_bp * target, 99.99), 4)
             new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
             new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
@@ -1812,8 +1835,8 @@ def final_behavioral_sanity_check(df, archetype=None):
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_full)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2
 
-    MAX_IDX = 1.0 + 2.0 * niche_factor
-    MIN_IDX = 1.0 - 0.7 * niche_factor
+    MAX_IDX = max(1.15, 1.0 + 2.0 * niche_factor)
+    MIN_IDX = min(0.88, 1.0 - 0.7 * niche_factor)
 
     # Apply archetype-aware adjustments to bounds per category
     behav_high = [b.upper() for b in (archetype or {}).get('behavioral_high', [])]
@@ -1854,8 +1877,7 @@ def final_behavioral_sanity_check(df, archetype=None):
         if lo <= cur_index <= hi:
             continue
 
-        # Clamp the index
-        target_index = max(lo, min(hi, cur_index))
+        target_index = _soft_clamp_index(cur_index, lo, hi, cat, val)
         new_bp = round(min(gp_bp_val * target_index, 99.99), 4)
 
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
