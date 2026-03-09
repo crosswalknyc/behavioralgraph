@@ -47056,9 +47056,17 @@
                 // Demographics - all categories (Age, Gender, Ethnicity, Income, Education, Relationship, Sexual Orientation, Parental Status, Occupation)
                 const demoKey = demoKeyByCategory[category];
                 if (demoKey && value && pct > 0) {
-                    const displayVal = (demoKey === 'ethnicity') ? displayDemographicLabel(value) : value;
-                    result.demographics[demoKey][displayVal] = pct;
-                    result.demographicsProjection[demoKey][displayVal] = usGenPop || 0;
+                    let displayVal = value;
+                    if (demoKey === 'ethnicity') displayVal = displayDemographicLabel(value);
+                    else if (demoKey === 'age') {
+                        const lo = String(value).trim().toLowerCase();
+                        if (lo.includes('under') || lo === '<16' || lo === '<17' || lo === '13-17') displayVal = '17 and Under';
+                        else if (lo === '65 or older' || lo === '65 and older' || lo === '65+' || lo === 'over 65' || lo === '60+') displayVal = '65 or Older';
+                        else if (lo === 'other') displayVal = 'Other';
+                        else { const rm = String(value).trim().match(/^(\d+)\s*[-–]\s*(\d+)$/); if (rm) displayVal = rm[1] + '-' + rm[2]; }
+                    }
+                    result.demographics[demoKey][displayVal] = (result.demographics[demoKey][displayVal] || 0) + pct;
+                    result.demographicsProjection[demoKey][displayVal] = (result.demographicsProjection[demoKey][displayVal] || 0) + (usGenPop || 0);
                     result.demographicsIndex[demoKey][displayVal] = index;
                 }
 
@@ -47974,11 +47982,23 @@
             // Dynamic label based on display mode
             const modeLabel = compDisplayMode === 'projection' ? 'US POP #' : 'US %';
 
-            // Helper to count unique values in a demographic category across all profiles
+            const _normDemoKey = (v, type) => {
+                if (!v) return v;
+                const s = String(v).trim();
+                const lo = s.toLowerCase();
+                if (type === 'age') {
+                    if (lo.includes('under') || lo === '<16' || lo === '<17' || lo === '13-17') return '17 and Under';
+                    if (lo === '65 or older' || lo === '65 and older' || lo === '65+' || lo === 'over 65' || lo === '60+' || lo === 'over 60') return '65 or Older';
+                    const rm = s.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+                    if (rm) return rm[1] + '-' + rm[2];
+                    if (lo === 'other') return 'Other';
+                }
+                return s;
+            };
             const countDemoValues = (demoType) => {
                 const allValues = new Set();
                 profiles.forEach(p => {
-                    Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(v));
+                    Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(_normDemoKey(v, demoType)));
                 });
                 return allValues.size;
             };
@@ -48706,6 +48726,15 @@
                 if (!val) return val;
                 const v = String(val).trim();
                 const lower = v.toLowerCase();
+                // Age normalization
+                if (type === 'age') {
+                    if (lower.includes('under') || lower === '<16' || lower === '<17' || lower === '13-17') return '17 and Under';
+                    if (lower === '65 or older' || lower === '65 and older' || lower === '65 or over' || lower === '65+' || lower === 'over 65') return '65 or Older';
+                    if (lower === '60+' || lower === 'over 60') return '65 or Older';
+                    const rm = v.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+                    if (rm) return rm[1] + '-' + rm[2];
+                    if (lower === 'other') return 'Other';
+                }
                 // Gender normalization
                 if (type === 'gender') {
                     if (lower === 'female') return 'Female';
@@ -48754,10 +48783,13 @@
                 // Income normalization
                 if (type === 'income') {
                     const noComma = lower.replace(/,/g, '');
-                    if (noComma.includes('250000') && (noComma.includes('+') || noComma.includes('or more'))) return '$250,000 or More';
-                    if (noComma.includes('40000') && noComma.includes('59')) return '$40,000 - $59,999';
-                    if (noComma.includes('60000') && noComma.includes('74')) return '$60,000 - $74,999';
-                    if (noComma.includes('under') && noComma.includes('25000')) return 'Under $25,000';
+                    if (noComma.includes('under') || (noComma.includes('<') && noComma.includes('25000'))) return 'Under $25,000';
+                    if (noComma.includes('25000') && noComma.includes('49')) return '$25,000 - $49,999';
+                    if (noComma.includes('50000') && noComma.includes('74')) return '$50,000 - $74,999';
+                    if (noComma.includes('75000') && noComma.includes('99')) return '$75,000 - $99,999';
+                    if (noComma.includes('100000') && noComma.includes('149')) return '$100,000 - $149,999';
+                    if (noComma.includes('150000') && noComma.includes('249')) return '$150,000 - $249,999';
+                    if (noComma.includes('250000') && (noComma.includes('+') || noComma.includes('or more') || noComma.includes('more'))) return '$250,000 or More';
                 }
                 return v;
             };
