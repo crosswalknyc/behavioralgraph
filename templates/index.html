@@ -3330,6 +3330,8 @@
             padding: 0.6rem 0.75rem;
             position: relative;
             max-width: 100%;
+            min-width: 0;
+            overflow: hidden;
         }
         
         .demo-insight-card.dragging {
@@ -3374,6 +3376,15 @@
         }
         .demo-insight-item.insight-row-genpop > span {
             text-align: left;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .demo-insight-item.insight-row-genpop > span:first-child {
+            overflow: visible;
+            text-overflow: unset;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         .top-cat-header {
             flex-shrink: 0;
@@ -3408,15 +3419,18 @@
             display: flex;
             align-items: flex-start;
             gap: 0.5rem;
+            min-width: 0;
             padding: 0.35rem 0.45rem;
             background: var(--bg-input);
             border-radius: 4px;
         }
-        .demo-insight-item .icon { font-size: 0.9rem; }
-        .demo-insight-item .text { flex: 1; }
+        .demo-insight-item .icon { font-size: 0.9rem; flex-shrink: 0; }
+        .demo-insight-item .text { flex: 1; min-width: 0; word-wrap: break-word; overflow-wrap: break-word; }
         .demo-insight-item .value {
             font-weight: 700;
-            white-space: nowrap;
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         .demo-insight-item .value.positive { color: #10b981; }
         .demo-insight-item .value.negative { color: #ef4444; }
@@ -5511,6 +5525,8 @@
             padding: 0.75rem;
             background: rgba(255,255,255,0.03);
             border-radius: 8px;
+            min-width: 0;
+            overflow: hidden;
         }
         
         /* Audience Takeaways */
@@ -5569,16 +5585,22 @@
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .snapshot-value {
             font-size: 1.1rem;
             font-weight: 700;
             color: var(--accent-lime);
             margin-top: 0.25rem;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         .snapshot-subtext {
             font-size: 0.75rem;
             color: var(--text-secondary);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         
         /* Metrics Row */
@@ -22350,10 +22372,10 @@
             container.innerHTML = insights.map(i => {
                 const pctColor = i.gp > 0.05 ? (i.overIndex ? '#10b981' : '#ef4444') : 'var(--text-primary)';
                 const pctHtml = i.gp > 0.05 ? `<span style="color:${pctColor};">${i.pct.toFixed(2)}%</span> (GP: ${i.gp.toFixed(2)}%)` : `${i.pct.toFixed(2)}%`;
-                return `<div class="snapshot-item has-tooltip" data-tooltip="${(snapshotTip||'').replace(/"/g,'&quot;')}" style="text-align:left;padding:0.75rem;background:rgba(255,255,255,0.03);border-radius:8px;">
-                    <div class="snapshot-label" style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">${(i.label||'').replace(/</g,'&lt;')}</div>
-                    <div class="snapshot-value" style="font-size:1.1rem;font-weight:700;color:var(--accent-lime);margin-top:0.25rem;">${(i.value||'').replace(/</g,'&lt;')}</div>
-                    <div class="snapshot-subtext" style="font-size:0.85rem;color:var(--text-primary);margin-top:0.25rem;">${pctHtml}</div>
+                return `<div class="snapshot-item has-tooltip" data-tooltip="${(snapshotTip||'').replace(/"/g,'&quot;')}" style="text-align:left;padding:0.75rem;background:rgba(255,255,255,0.03);border-radius:8px;min-width:0;overflow:hidden;">
+                    <div class="snapshot-label" style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;">${(i.label||'').replace(/</g,'&lt;')}</div>
+                    <div class="snapshot-value" style="font-size:clamp(0.8rem,1.1vw + 0.3rem,1.1rem);font-weight:700;color:var(--accent-lime);margin-top:0.25rem;word-wrap:break-word;overflow-wrap:break-word;">${(i.value||'').replace(/</g,'&lt;')}</div>
+                    <div class="snapshot-subtext" style="font-size:0.8rem;color:var(--text-primary);margin-top:0.25rem;word-wrap:break-word;overflow-wrap:break-word;">${pctHtml}</div>
                 </div>`;
             }).join('') || '<div style="padding:1rem;color:var(--text-secondary);">No demographic data</div>';
         }
