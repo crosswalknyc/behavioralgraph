@@ -32762,12 +32762,26 @@
                             ...item,
                             originalCategory: cat
                         })));
-                        delete aggregatedBehavioral[cat]; // Remove individual category
+                        delete aggregatedBehavioral[cat];
                     }
                 });
                 if (talentItems.length > 0) {
                     aggregatedBehavioral['TALENT'] = talentItems;
                 }
+                
+                // Deduplicate aggregated categories: same name across sub-categories keeps highest pct
+                ['SPORTS', 'TALENT'].forEach(aggCat => {
+                    if (aggregatedBehavioral[aggCat]) {
+                        const seen = new Map();
+                        aggregatedBehavioral[aggCat].forEach(item => {
+                            const key = (item.name || '').trim().toUpperCase();
+                            if (!seen.has(key) || item.pct > seen.get(key).pct) {
+                                seen.set(key, item);
+                            }
+                        });
+                        aggregatedBehavioral[aggCat] = Array.from(seen.values());
+                    }
+                });
                 
                 allBehavioralData = aggregatedBehavioral;
             }
