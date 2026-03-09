@@ -23,10 +23,10 @@ s3_client = boto3.client(
 )
 
 def calculate_gen_pop_projection(sample_size):
-    """Calculate US Gen Pop Projection: (sample_size / 10,000,000) * 324,700,000"""
+    """Calculate US Gen Pop Projection: (sample_size / 10,000,000) * 329,900,000"""
     try:
         sample_size_num = float(str(sample_size).replace(',', '').strip())
-        projection = int((sample_size_num / 10_000_000.0) * 324_700_000.0)
+        projection = int((sample_size_num / 10_000_000.0) * 329_900_000.0)
         return str(projection)
     except (ValueError, TypeError):
         return None

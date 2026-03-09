@@ -779,7 +779,7 @@ def anchor_to_genpop(df, sample_size):
     bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
 
     sample_size = max(int(float(sample_size)), 1)
-    GENPOP_TOTAL = 324_700_000
+    GENPOP_TOTAL = 329_900_000
 
     # Determine profile's Gen Pop penetration for adaptive bounds
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_lookup)
@@ -1602,7 +1602,7 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
     pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
     bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
     sample_size = max(int(float(sample_size)), 1)
-    GENPOP_TOTAL = 324_700_000
+    GENPOP_TOTAL = 329_900_000
 
     gp_lookup = {}
     for _, row in gp.iterrows():
@@ -1760,7 +1760,7 @@ def final_behavioral_sanity_check(df, archetype=None):
         'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
         'CASUAL FAN', 'BRAND CATEGORY',
     }
-    GENPOP_TOTAL = 324_700_000
+    GENPOP_TOTAL = 329_900_000
 
     bp_col = 'Brand Penetration (Row)'
     cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
@@ -3862,7 +3862,7 @@ def enforce_input_brand_100(df_behavior, input_brands):
                 
                 # Update US Gen Pop Projection if it exists
                 if 'US Gen Pop Projection' in df_behavior.columns:
-                    us_projection = (sample_size / 10_000_000) * 324_700_000
+                    us_projection = (sample_size / 10_000_000) * 329_900_000
                     df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
                 
                 brands_set_to_100 += 1
@@ -4203,7 +4203,7 @@ def divide_espn_by_2_final(df):
             
             # Update US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns:
-                genpop = int((divided_raw / 10_000_000) * 324_700_000)
+                genpop = int((divided_raw / 10_000_000) * 329_900_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
     
     # Recalculate Category Share within each category to maintain proper proportions
@@ -4311,7 +4311,7 @@ def boost_netflix_3x_rob_lowe(df, project_name):
                     
                     # Update US Gen Pop Projection
                     if 'US Gen Pop Projection' in df.columns:
-                        genpop = int((boosted_raw / 10_000_000) * 324_700_000)
+                        genpop = int((boosted_raw / 10_000_000) * 329_900_000)
                         df.at[idx, 'US Gen Pop Projection'] = str(genpop)
                 
                 if not SILENCE_VERBOSE_OUTPUT:
@@ -7118,9 +7118,9 @@ def adjust_platform_to_100_percent(df, platform_name):
         if 'Original Raw Numbers' in df.columns:
             df.loc[idx, 'Original Raw Numbers'] = int(sample_size)
         
-        # Calculate US Gen Pop Projection = (sample_size / 10,000,000) * 324,700,000
+        # Calculate US Gen Pop Projection = (sample_size / 10,000,000) * 329,900,000
         if 'US Gen Pop Projection' in df.columns:
-            us_population = 324_700_000
+            us_population = 329_900_000
             gen_pop = int((sample_size / 10_000_000) * us_population)
             df.loc[idx, 'US Gen Pop Projection'] = gen_pop
         
@@ -8737,7 +8737,7 @@ def divide_interest_category_by_2(df: pd.DataFrame) -> pd.DataFrame:
             
             # Recalculate US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns:
-                genpop = int((new_raw / 10_000_000) * 324_700_000)
+                genpop = int((new_raw / 10_000_000) * 329_900_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
             
             changes += 1
@@ -8873,7 +8873,7 @@ def divide_streaming_music_category_by_2(df: pd.DataFrame) -> pd.DataFrame:
             
             # Recalculate US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns:
-                genpop = int((new_raw / 10_000_000) * 324_700_000)
+                genpop = int((new_raw / 10_000_000) * 329_900_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
             
             changes += 1
@@ -9527,7 +9527,7 @@ def divide_sports_categories_by_4(df: pd.DataFrame) -> pd.DataFrame:
                 
                 # Recalculate US Gen Pop Projection
                 if 'US Gen Pop Projection' in df.columns:
-                    genpop = int((new_raw / 10_000_000) * 324_700_000)
+                    genpop = int((new_raw / 10_000_000) * 329_900_000)
                     df.at[idx, 'US Gen Pop Projection'] = str(genpop)
                 
                 changes += 1
@@ -9918,7 +9918,7 @@ def cap_high_brand_penetration(df: pd.DataFrame, cap_threshold=92.0, min_cap=80.
             if 'US Gen Pop Projection' in df.columns and raw_col:
                 try:
                     raw_val = int(float(str(df.at[idx, raw_col]).replace(',', '')))
-                    genpop = int((raw_val / 10_000_000) * 324_700_000)
+                    genpop = int((raw_val / 10_000_000) * 329_900_000)
                     df.at[idx, 'US Gen Pop Projection'] = str(genpop)
                 except:
                     pass

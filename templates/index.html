@@ -47054,7 +47054,7 @@
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && category !== 'LOCATION' && value && pct > 0) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
                     if (!result.behavioralProjection[category]) result.behavioralProjection[category] = [];
-                    // Calculate Gen Pop % from US Gen Pop Projection (projection / 324.7M US pop * 100)
+                    // Calculate Gen Pop % from US Gen Pop Projection (projection / 329.9M US pop * 100)
                     // Also check catShare as fallback and normalize if < 1
                     let genPopPct = usGenPop > 0 ? (usGenPop / 329900000) * 100 : 0;
                     if (genPopPct === 0 && catShare > 0) {

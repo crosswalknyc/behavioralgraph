@@ -11,14 +11,14 @@ import re
 # === Gen Pop Projection ===
 # =========================
 # US Population constant (same as BG.py)
-US_POPULATION = 324_700_000
+US_POPULATION = 329_900_000
 # Sample represents this many people
 SAMPLE_REPRESENTS = 10_000_000
 
 def gen_pop_projection(raw_number):
     """
     Project a raw number to the US general population.
-    Uses same methodology as BG.py: (raw_number / 10,000,000) * 324,700,000
+    Uses same methodology as BG.py: (raw_number / 10,000,000) * 329,900,000
     Returns value with 8 decimal places precision.
     """
     try:
