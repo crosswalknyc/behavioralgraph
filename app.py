@@ -10552,46 +10552,37 @@ def update_profile_mapping():
 @app.route('/api/profile/<path:filename>')
 @requires_auth
 def get_profile_data(filename):
-    """Get profile data from S3 dashboard-inputs bucket and return pre-signed URL for direct access."""
+    """Get profile data from S3 dashboard-inputs bucket and return as JSON."""
     try:
         print(f"📊 Loading profile: {filename}")
         
-        # Ensure filename has .csv extension
         if not filename.endswith('.csv'):
             filename = f"{filename}.csv"
         
-        # Check if file exists
         try:
-            s3_client.head_object(Bucket='dashboard-inputs', Key=filename)
+            obj = s3_client.get_object(Bucket='dashboard-inputs', Key=filename)
+            csv_bytes = obj['Body'].read()
+            csv_text = csv_bytes.decode('utf-8')
         except s3_client.exceptions.NoSuchKey:
             print(f"❌ Profile not found: {filename}")
             return jsonify({'success': False, 'error': f'Profile file not found: {filename}'}), 404
-        
-        # Generate a pre-signed URL for the file (valid for 1 hour)
-        try:
-            presigned_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={
-                    'Bucket': 'dashboard-inputs',
-                    'Key': filename,
-                    'ResponseContentType': 'text/csv'
-                },
-                ExpiresIn=3600  # 1 hour
-            )
-            
-            print(f"✅ Generated presigned URL for {filename}")
-            print(f"🔗 URL: {presigned_url[:100]}...")
-            
-            return jsonify({
-                'success': True,
-                'filename': filename,
-                'url': presigned_url
-            })
         except Exception as e:
-            print(f"❌ Error generating presigned URL: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({'success': False, 'error': f'Failed to generate URL: {str(e)}'}), 500
+            print(f"❌ Error reading profile from S3: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+        
+        import io
+        df = pd.read_csv(io.StringIO(csv_text))
+        df = df.fillna('')
+        
+        brand_name = filename.replace('.csv', '').split('_')[0]
+        
+        print(f"✅ Loaded profile {filename}: {len(df)} rows")
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'brand': brand_name,
+            'data': df.to_dict(orient='records')
+        })
         
     except Exception as e:
         print(f"❌ Error loading profile: {e}")
