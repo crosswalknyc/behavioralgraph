@@ -3080,6 +3080,21 @@ def apply_demographic_filters(filters):
         if filters.get(field):
             vals = ",".join(f"'{v}'" for v in filters[field])
             conditions.append(f"{field} IN ({vals})")
+
+    if filters.get("ZIP_CODES"):
+        zips = [z.strip().replace("'", "''") for z in filters["ZIP_CODES"] if z.strip()]
+        if zips:
+            vals = ",".join(f"'{z}'" for z in zips)
+            conditions.append(f"d.ZIP IN ({vals})")
+
+    if filters.get("DMA_FILTER"):
+        dma_vals = [d.strip().replace("'", "''") for d in filters["DMA_FILTER"] if d.strip()]
+        if dma_vals:
+            dma_conditions = []
+            for dv in dma_vals:
+                dma_conditions.append(f"LOWER(d.DMA) LIKE '%{dv.lower()}%'")
+            conditions.append(f"({' OR '.join(dma_conditions)})")
+
     return " AND ".join(conditions) if conditions else "1=1"
 
 def save_query_id(cur, query_description=""):
@@ -4426,7 +4441,7 @@ def boost_netflix_3x_rob_lowe(df, project_name):
     
     return df
 
-def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, behavior_start, behavior_end, filters, skew_settings, is_genpop, purchasers_only=False, previous_file_path=None, brand_category=None, is_listener_watcher=False, output_dir=None):
+def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, behavior_start, behavior_end, filters, skew_settings, is_genpop, purchasers_only=False, previous_file_path=None, brand_category=None, is_listener_watcher=False, output_dir=None, geo_zip_codes=None, geo_dma=None):
     from datetime import datetime
     import time
     
@@ -4470,14 +4485,26 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         previous_demo_lookup, previous_behavioral_lookup, previous_sample_dates, previous_behavior_dates, previous_brand_input, previous_sample_size_ref = load_previous_run_data(previous_file_path)
 
     print("📦 Creating sample UID group...")
-    cleaned_brands = [clean_brand(b) for b in brands]  # still used for any logic that needs normalized form
-    
-    # Show which processing approach will be used
-    if use_full_population_fastpath and not is_genpop:
-        print("🚀 Using FAST PATH: Streaming aggregation for 6X-Large warehouse optimization")
+    cleaned_brands = [clean_brand(b) for b in brands] if brands else []
+
+    is_geo_profile = bool(geo_zip_codes and geo_dma)
+
+    if is_geo_profile:
+        print("📍 GEOGRAPHIC PROFILE MODE: Building cohort from ZIP codes + DMA")
+        print(f"   ZIP codes: {', '.join(geo_zip_codes[:10])}{'...' if len(geo_zip_codes) > 10 else ''}")
+        print(f"   DMA: {geo_dma}")
+
+        safe_zips = [z.replace("'", "''") for z in geo_zip_codes]
+        zip_vals = ",".join(f"'{z}'" for z in safe_zips)
+        safe_dma = geo_dma.replace("'", "''")
+
     else:
-        print("📊 Using DEFAULT PATH: Traditional 100% sampling approach with 6X-Large warehouse")
-    
+        # Show which processing approach will be used
+        if use_full_population_fastpath and not is_genpop:
+            print("🚀 Using FAST PATH: Streaming aggregation for 6X-Large warehouse optimization")
+        else:
+            print("📊 Using DEFAULT PATH: Traditional 100% sampling approach with 6X-Large warehouse")
+
     # Initialize brand_filter from all variants (same as perform_full_universe_scan) with SQL escaping
     if not is_genpop and brands:
         clauses = []
@@ -4490,73 +4517,130 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     else:
         brand_filter = "1=1"
 
-    if use_full_population_fastpath and not is_genpop:
-        # Fast path: streaming aggregation - match COMMON_NAME against each variant with escaping
-        print("🚀 Fast path: streaming aggregation for full population...")
-        if brands:
-            fast_path_brand_filter = " OR ".join([f"LOWER(c.COMMON_NAME) = '{_escape_brand_for_sql(b)[1]}'" for b in brands])
+    if is_geo_profile or (use_full_population_fastpath and not is_genpop):
+        if is_geo_profile:
+            cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")
+
+            cur.execute(f"""
+                CREATE OR REPLACE TEMP TABLE GEO_UIDS AS
+                SELECT DISTINCT d.UID
+                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+                WHERE d.ZIP IN ({zip_vals})
+                  AND LOWER(d.DMA) LIKE '%{safe_dma.lower()}%'
+            """)
+            geo_uid_count = cur.execute("SELECT COUNT(*) FROM GEO_UIDS").fetchone()[0]
+            print(f"📊 Found {geo_uid_count:,} UIDs matching ZIP + DMA criteria")
+
+            if geo_uid_count == 0:
+                print("❌ No UIDs found matching the geographic criteria. Cannot proceed.")
+                return None
+
+            print(f"📊 Analyzing clickstream behavior for geo cohort ({behavior_start} to {behavior_end})...")
+            cur.execute(f"""
+                CREATE OR REPLACE TEMP TABLE MAPPED_EVENTS AS
+                WITH clickstream_activity AS (
+                    SELECT
+                        c.UID,
+                        c.COMMON_NAME,
+                        COUNT(*) as visit_count,
+                        MIN(c.DELIVERED) as first_visit,
+                        MAX(c.DELIVERED) as last_visit
+                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                    INNER JOIN GEO_UIDS g ON c.UID = g.UID
+                    WHERE c.DELIVERED >= '{behavior_start}'
+                      AND c.DELIVERED < '{behavior_end}'
+                      AND c.COMMON_NAME IS NOT NULL
+                      AND c.COMMON_NAME != ''
+                    GROUP BY 1, 2
+                ),
+                mapped_behavior AS (
+                    SELECT
+                        ca.UID,
+                        ca.COMMON_NAME,
+                        ca.visit_count,
+                        ca.first_visit,
+                        ca.last_visit,
+                        hm.Brand as Mapped_Brand,
+                        hm.Category as InterestRaw,
+                        hm.Section as HostSection,
+                        SPLIT_PART(hm."Most Purchased Categories", '-', 1) as MPC_TRIM
+                    FROM clickstream_activity ca
+                    LEFT JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING hm
+                        ON LOWER(ca.COMMON_NAME) = LOWER(hm.Brand)
+                    WHERE hm.Brand IS NOT NULL
+                )
+                SELECT * FROM mapped_behavior
+            """)
+            track_query_cost(cur, "Geographic cohort clickstream mapping")
+
+            cur.execute("""
+                CREATE OR REPLACE TEMP TABLE TEMP_SAMPLED_UIDS AS
+                SELECT DISTINCT UID FROM MAPPED_EVENTS
+            """)
+            geo_active_count = cur.execute("SELECT COUNT(*) FROM TEMP_SAMPLED_UIDS").fetchone()[0]
+            print(f"✅ {geo_active_count:,} UIDs have clickstream activity in date range")
+
         else:
-            fast_path_brand_filter = "c.COMMON_NAME IS NOT NULL"
-        
-        # Add date range optimization hints for 3XL warehouse
-        print(f"📅 Processing date range: {behavior_start} to {behavior_end}")
-        
-        # Convert string dates to datetime objects for calculation
-        try:
-            behavior_start_dt = datetime.strptime(behavior_start, '%Y-%m-%d')
-            behavior_end_dt = datetime.strptime(behavior_end, '%Y-%m-%d')
-            date_range_days = (behavior_end_dt - behavior_start_dt).days
-            
-            if date_range_days > 30:
-                print(f"⚠️ Large date range detected ({date_range_days} days) - using chunked processing hints")
-                # Add hints for large date ranges
-                cur.execute("ALTER SESSION SET STATEMENT_QUEUING_TIMEOUT_IN_SECONDS = 300")  # 5 min queue timeout
+            # Fast path: streaming aggregation - match COMMON_NAME against each variant with escaping
+            print("🚀 Fast path: streaming aggregation for full population...")
+            if brands:
+                fast_path_brand_filter = " OR ".join([f"LOWER(c.COMMON_NAME) = '{_escape_brand_for_sql(b)[1]}'" for b in brands])
             else:
-                print(f"📅 Date range: {date_range_days} days")
-        except ValueError as e:
-            print(f"⚠️ Date parsing warning: {e} - proceeding with default settings")
-            # Continue with default settings if date parsing fails
-        
-        # Single streaming query with CTEs - optimized for 3XL warehouse and millions of UIDs
-        print("📊 Computing per-UID brand presence in streaming mode...")
-        
-        # Add warehouse-specific optimizations for 6XL
-        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = FALSE")  # Disable result cache for large datasets
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")  # 4 hour timeout for large queries
-        
-        cur.execute(f"""
-            CREATE OR REPLACE TEMP TABLE MAPPED_EVENTS AS
-            WITH brand_presence AS (
-                SELECT 
-                    c.UID,
-                    c.COMMON_NAME,
-                    COUNT(*) as visit_count,
-                    MIN(c.DELIVERED) as first_visit,
-                    MAX(c.DELIVERED) as last_visit
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
-                WHERE c.DELIVERED >= '{behavior_start}' 
-                  AND c.DELIVERED < '{behavior_end}'
-                  AND ({fast_path_brand_filter})
-                GROUP BY 1,2
-            ),
-            mapped_behavior AS (
-                SELECT 
-                    bp.UID,
-                    bp.COMMON_NAME,
-                    bp.visit_count,
-                    bp.first_visit,
-                    bp.last_visit,
-                    hm.Brand as Mapped_Brand,
-                    hm.Category as InterestRaw,
-                    hm.Section as HostSection,
-                    SPLIT_PART(hm."Most Purchased Categories", '-', 1) as MPC_TRIM
-                FROM brand_presence bp
-                LEFT JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING hm 
-                    ON LOWER(bp.COMMON_NAME) = LOWER(hm.Brand)
-                WHERE hm.Brand IS NOT NULL
-            )
-            SELECT * FROM mapped_behavior
-        """)
+                fast_path_brand_filter = "c.COMMON_NAME IS NOT NULL"
+            
+            print(f"📅 Processing date range: {behavior_start} to {behavior_end}")
+            
+            try:
+                behavior_start_dt = datetime.strptime(behavior_start, '%Y-%m-%d')
+                behavior_end_dt = datetime.strptime(behavior_end, '%Y-%m-%d')
+                date_range_days = (behavior_end_dt - behavior_start_dt).days
+                
+                if date_range_days > 30:
+                    print(f"⚠️ Large date range detected ({date_range_days} days) - using chunked processing hints")
+                    cur.execute("ALTER SESSION SET STATEMENT_QUEUING_TIMEOUT_IN_SECONDS = 300")
+                else:
+                    print(f"📅 Date range: {date_range_days} days")
+            except ValueError as e:
+                print(f"⚠️ Date parsing warning: {e} - proceeding with default settings")
+            
+            print("📊 Computing per-UID brand presence in streaming mode...")
+            
+            cur.execute("ALTER SESSION SET USE_CACHED_RESULT = FALSE")
+            cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")
+            
+            cur.execute(f"""
+                CREATE OR REPLACE TEMP TABLE MAPPED_EVENTS AS
+                WITH brand_presence AS (
+                    SELECT 
+                        c.UID,
+                        c.COMMON_NAME,
+                        COUNT(*) as visit_count,
+                        MIN(c.DELIVERED) as first_visit,
+                        MAX(c.DELIVERED) as last_visit
+                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                    WHERE c.DELIVERED >= '{behavior_start}' 
+                      AND c.DELIVERED < '{behavior_end}'
+                      AND ({fast_path_brand_filter})
+                    GROUP BY 1,2
+                ),
+                mapped_behavior AS (
+                    SELECT 
+                        bp.UID,
+                        bp.COMMON_NAME,
+                        bp.visit_count,
+                        bp.first_visit,
+                        bp.last_visit,
+                        hm.Brand as Mapped_Brand,
+                        hm.Category as InterestRaw,
+                        hm.Section as HostSection,
+                        SPLIT_PART(hm."Most Purchased Categories", '-', 1) as MPC_TRIM
+                    FROM brand_presence bp
+                    LEFT JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING hm 
+                        ON LOWER(bp.COMMON_NAME) = LOWER(hm.Brand)
+                    WHERE hm.Brand IS NOT NULL
+                )
+                SELECT * FROM mapped_behavior
+            """)
         
         # Extract UIDs from the mapped events (this is our cohort)
         print("👥 Building UID cohort from mapped events...")
@@ -5159,14 +5243,24 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("✅ Behavioral processing complete - keeping 6X-Large for optimal performance")
         
         # Create TEMP_UIDS for downstream compatibility (using pre-sampled UIDs)
-        cur.execute(f"""
-            CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
-            SELECT UID FROM TEMP_SAMPLED_UIDS
-        """)
+        demo_filter_clause = apply_demographic_filters(filters)
+        has_geo_filter = filters.get("ZIP_CODES") or filters.get("DMA_FILTER")
+        if has_geo_filter:
+            print(f"📍 Geographic filters active - narrowing UID pool by zip/DMA")
+            cur.execute(f"""
+                CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
+                SELECT s.UID FROM TEMP_SAMPLED_UIDS s
+                INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON s.UID = d.UID
+                WHERE {demo_filter_clause}
+            """)
+        else:
+            cur.execute(f"""
+                CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
+                SELECT UID FROM TEMP_SAMPLED_UIDS
+            """)
         track_query_cost(cur, "TEMP_UIDS creation")
         
         # Create TEMP_DEMOS for downstream compatibility (OPTIMIZED with INNER JOIN)
-        demo_filter_clause = apply_demographic_filters(filters)
         print(f"🔧 Creating TEMP_DEMOS with demographic filters: {demo_filter_clause}")
         cur.execute(f"""
             CREATE OR REPLACE TEMP TABLE TEMP_DEMOS AS

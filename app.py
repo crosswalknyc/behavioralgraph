@@ -10916,8 +10916,11 @@ def submit_analysis():
         # Validate required fields (support both old and new date field names)
         if not data.get('project_name'):
             return jsonify({'error': 'Missing required field: project_name'}), 400
-        if not data.get('brands'):
-            return jsonify({'error': 'Missing required field: brands'}), 400
+        geo_zip_codes_raw = data.get('geo_zip_codes', '').strip()
+        geo_dma_raw = data.get('geo_dma', '').strip()
+        is_geo_profile = bool(geo_zip_codes_raw and geo_dma_raw)
+        if not is_geo_profile and not data.get('brands'):
+            return jsonify({'error': 'Missing required field: brands (or provide zip codes + DMA)'}), 400
         if not (data.get('sample_start') or data.get('start_date')):
             return jsonify({'error': 'Missing required field: start date'}), 400
         if not (data.get('sample_end') or data.get('end_date')):
@@ -10930,17 +10933,26 @@ def submit_analysis():
         project_name = data['project_name'].replace(' ', '_')
         project_name = re.sub(r'[<>:"/\\|?*]', '_', project_name)
         
-        # Parse brands (same as terminal: comma-separated, optional URL strip)
-        brands_raw = data['brands'].replace('\n', ',')
-        brands = []
-        for b in brands_raw.split(','):
-            b = b.strip()
-            if not b:
-                continue
-            match = re.search(r'https?://([^/]+)', b)
-            clean_brand = match.group(1).lower() if match else b.lower()
-            brands.append(clean_brand)
-        # Full expansion to all name combos (like terminal "Auto Format Inputs? Y") is done in run_analysis via bg.generate_brand_variations
+        # Parse geo parameters
+        geo_zip_codes = None
+        geo_dma = None
+        if is_geo_profile:
+            geo_zip_codes = [z.strip() for z in geo_zip_codes_raw.replace('\n', ',').split(',') if z.strip()]
+            geo_dma = geo_dma_raw
+            brands = []
+            print(f"📍 Geographic profile: {len(geo_zip_codes)} zip codes, DMA='{geo_dma}'")
+        else:
+            # Parse brands (same as terminal: comma-separated, optional URL strip)
+            brands_raw = data['brands'].replace('\n', ',')
+            brands = []
+            for b in brands_raw.split(','):
+                b = b.strip()
+                if not b:
+                    continue
+                match = re.search(r'https?://([^/]+)', b)
+                clean_brand = match.group(1).lower() if match else b.lower()
+                brands.append(clean_brand)
+            # Full expansion to all name combos (like terminal "Auto Format Inputs? Y") is done in run_analysis via bg.generate_brand_variations
         
         # Parse dates
         try:
@@ -10971,10 +10983,14 @@ def submit_analysis():
         reference_sample_size = None
         reference_file_key = None
         
-        # Search S3 for existing runs with same brand
+        # Search S3 for existing runs with same brand (skip for geo profiles)
         try:
-            print(f"🔍 Checking for existing runs of '{brands[0]}' for consistency validation...")
-            exact_match, similar_files = check_s3_for_existing(brands[0], start_date, end_date)
+            brand_label = brands[0] if brands else f"GEO_{geo_dma}"
+            if brands:
+                print(f"🔍 Checking for existing runs of '{brands[0]}' for consistency validation...")
+                exact_match, similar_files = check_s3_for_existing(brands[0], start_date, end_date)
+            else:
+                exact_match, similar_files = None, []
             
             # If there's a similar file (same brand, different dates), use it as reference
             if similar_files:
@@ -11018,7 +11034,7 @@ def submit_analysis():
             'message': 'Queued',
             'created_at': datetime.now().isoformat(),
             'project_name': project_name,
-            'brands': brands[0] if brands else project_name,
+            'brands': brand_label,
             'result_file': None,
             'error': None,
             'logs': [],
@@ -11037,13 +11053,14 @@ def submit_analysis():
                   behavior_start, behavior_end, filters, skew_settings, 
                   is_genpop, purchasers_only, brand_category, 
                   include_frequency, is_listener_watcher, platform_name, previous_file,
-                  reference_demographics, reference_sample_size, reference_file_key)
+                  reference_demographics, reference_sample_size, reference_file_key),
+            kwargs={'geo_zip_codes': geo_zip_codes, 'geo_dma': geo_dma}
         )
         thread.daemon = True
         thread.start()
         
         # Consume credits for this run (record what it was used for)
-        desc = f"{project_name} ({brands[0] if brands else project_name} {start_date}–{end_date})"
+        desc = f"{project_name} ({brand_label} {start_date}–{end_date})"
         consume_credit(username, description=desc, job_id=job_id, pull_type='Profile Analysis', credits_used=CREDITS_PROFILE_ANALYSIS)
 
         # Get updated credits
@@ -13942,7 +13959,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                  is_genpop, purchasers_only, brand_category,
                  include_frequency=False, is_listener_watcher=False, platform_name=None, 
                  previous_file_path=None, reference_demographics=None, reference_sample_size=None,
-                 reference_file_key=None):
+                 reference_file_key=None, geo_zip_codes=None, geo_dma=None):
     """Run the behavioral graph analysis pipeline with demographic consistency validation."""
     try:
         update_job_status(job_id, status='running', progress=5, message='Initializing...')
@@ -14011,23 +14028,26 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         # This is critical for getting correct sample sizes
         update_job_status(job_id, progress=18, message='Performing universe scan...')
         
-        try:
-            if hasattr(bg, 'perform_full_universe_scan'):
-                print("🔍 Performing full universe scan (matching terminal behavior)...")
-                universe_results = bg.perform_full_universe_scan(conn, brands, sample_start, sample_end, purchasers_only)
-                if universe_results:
-                    print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
-                    # Store universe size for use in pipeline (same as terminal)
-                    bg.run_full_pipeline.universe_size = universe_results['total_universe']
-                else:
-                    print("⚠️ Universe scan returned no results, using default")
-                    bg.run_full_pipeline.universe_size = 1000000
-            else:
-                print("⚠️ perform_full_universe_scan not available in bg module")
-                bg.run_full_pipeline.universe_size = 1000000
-        except Exception as e:
-            print(f"⚠️ Universe scan error: {e}, proceeding with default size")
+        if geo_zip_codes and geo_dma:
+            print("📍 Geographic profile - skipping brand universe scan (geo cohort will determine size)")
             bg.run_full_pipeline.universe_size = 1000000
+        else:
+            try:
+                if hasattr(bg, 'perform_full_universe_scan'):
+                    print("🔍 Performing full universe scan (matching terminal behavior)...")
+                    universe_results = bg.perform_full_universe_scan(conn, brands, sample_start, sample_end, purchasers_only)
+                    if universe_results:
+                        print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
+                        bg.run_full_pipeline.universe_size = universe_results['total_universe']
+                    else:
+                        print("⚠️ Universe scan returned no results, using default")
+                        bg.run_full_pipeline.universe_size = 1000000
+                else:
+                    print("⚠️ perform_full_universe_scan not available in bg module")
+                    bg.run_full_pipeline.universe_size = 1000000
+            except Exception as e:
+                print(f"⚠️ Universe scan error: {e}, proceeding with default size")
+                bg.run_full_pipeline.universe_size = 1000000
         
         update_job_status(job_id, progress=25, message='Running analysis...')
         
@@ -14053,7 +14073,9 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 previous_file_path=actual_previous_file,
                 brand_category=brand_category,
                 is_listener_watcher=is_listener_watcher,
-                output_dir=pipeline_out if pipeline_out else None
+                output_dir=pipeline_out if pipeline_out else None,
+                geo_zip_codes=geo_zip_codes,
+                geo_dma=geo_dma
             )
             
             update_job_status(job_id, progress=85, message='Processing results...')

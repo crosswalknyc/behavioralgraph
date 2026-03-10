@@ -12351,6 +12351,28 @@
                                             <input type="text" id="project_name" placeholder="e.g., Taylor Swift or Amazon" required>
                                         </div>
                                         <div class="form-group">
+                                            <label>Profile Type</label>
+                                            <div style="display: flex; gap: 0.5rem;">
+                                                <button type="button" class="btn btn-primary" id="profileTypeBrand" style="flex:1; font-size: 0.8rem; padding: 0.4rem 0.75rem;" onclick="switchProfileType('brand')">Brand / Search</button>
+                                                <button type="button" class="btn" id="profileTypeGeo" style="flex:1; font-size: 0.8rem; padding: 0.4rem 0.75rem; background: var(--bg-dark); color: var(--text-primary);" onclick="switchProfileType('geo')">Geographic</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="geoProfileFields" style="display: none;">
+                                        <div class="form-group" style="margin-bottom: 0.75rem;">
+                                            <label>ZIP Codes (comma-separated)</label>
+                                            <textarea id="geo_zip_codes" placeholder="10001, 10002, 10003, 90210" rows="2" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem; resize: vertical;"></textarea>
+                                            <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-top: 0.25rem;">Enter the zip codes you want to analyze, separated by commas.</small>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0.75rem;">
+                                            <label>DMA (Designated Market Area)</label>
+                                            <input type="text" id="geo_dma" placeholder="e.g., New York, Los Angeles, Chicago" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                            <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-top: 0.25rem;">Users must match BOTH the zip codes AND this DMA.</small>
+                                        </div>
+                                    </div>
+                                    <div id="brandProfileFields">
+                                    <div class="form-row">
+                                        <div class="form-group">
                                             <label>Category</label>
                                             <select id="brand_category" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                                                 <option value="">-- Select Category --</option>
@@ -12448,13 +12470,14 @@
                                     <div class="form-group">
                                         <label>Profile Subject (comma-separated)</label>
                                         <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter the name of the profile you want to pull. Consider adding all possible spellings and variations to yield best results. Ensure you have checked your spelling because once you click "Run Analysis" you can't go back to fix it. This is not case sensitive.</small>
-                                        <textarea id="brands" placeholder="Kevin O' Leary, Kevin O Leary, Kevin OLeary, Mr. Wonderful, Mr Wonderful" required></textarea>
+                                        <textarea id="brands" placeholder="Kevin O' Leary, Kevin O Leary, Kevin OLeary, Mr. Wonderful, Mr Wonderful"></textarea>
                                     </div>
                                     <div class="form-row">
                                         {% if role == 'super_admin' %}
                                         <label class="checkbox-group"><input type="checkbox" id="is_genpop" onchange="toggleGenPopOptions()"><span>Updating GenPop?</span></label>
                                         {% endif %}
                                         <label class="checkbox-group" id="purchasers_group"><input type="checkbox" id="purchasers_only"><span>Purchasers Only</span></label>
+                                    </div>
                                     </div>
                                 </div>
 
@@ -26220,6 +26243,34 @@
             document.getElementById('end_date').required = sameDates;
         }
 
+        let currentProfileType = 'brand';
+        function switchProfileType(type) {
+            currentProfileType = type;
+            const brandFields = document.getElementById('brandProfileFields');
+            const geoFields = document.getElementById('geoProfileFields');
+            const brandBtn = document.getElementById('profileTypeBrand');
+            const geoBtn = document.getElementById('profileTypeGeo');
+            if (type === 'geo') {
+                brandFields.style.display = 'none';
+                geoFields.style.display = 'block';
+                brandBtn.style.background = 'var(--bg-dark)';
+                brandBtn.style.color = 'var(--text-primary)';
+                brandBtn.classList.remove('btn-primary');
+                geoBtn.classList.add('btn-primary');
+                geoBtn.style.background = '';
+                geoBtn.style.color = '';
+            } else {
+                brandFields.style.display = 'block';
+                geoFields.style.display = 'none';
+                geoBtn.style.background = 'var(--bg-dark)';
+                geoBtn.style.color = 'var(--text-primary)';
+                geoBtn.classList.remove('btn-primary');
+                brandBtn.classList.add('btn-primary');
+                brandBtn.style.background = '';
+                brandBtn.style.color = '';
+            }
+        }
+
         function toggleGenPopOptions() {
             const isGenpop = document.getElementById('is_genpop').checked;
             // Hide "Purchasers Only" if GenPop is checked (GenPop doesn't use purchasers)
@@ -26320,14 +26371,23 @@
                 submitBtn.innerHTML = 'Checking...';
             }
             
-            const brands = brandsInput.value.trim();
+            const brands = brandsInput ? brandsInput.value.trim() : '';
             const startDate = startDateInput.value;
             const endDate = endDateInput.value;
+            const geoZipCodes = (document.getElementById('geo_zip_codes')?.value || '').trim();
+            const geoDma = (document.getElementById('geo_dma')?.value || '').trim();
+            const isGeoMode = currentProfileType === 'geo';
             
-            console.log('📋 Form values:', { brands, startDate, endDate });
+            console.log('📋 Form values:', { brands, startDate, endDate, isGeoMode, geoZipCodes, geoDma });
             
             // Validate required fields
-            if (!brands) {
+            if (isGeoMode) {
+                if (!geoZipCodes || !geoDma) {
+                    alert('Please enter both ZIP codes and a DMA for geographic profiles');
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '🚀 Run Analysis'; }
+                    return;
+                }
+            } else if (!brands) {
                 alert('Please enter at least one brand');
                 if (submitBtn) {
                     submitBtn.disabled = false;
@@ -26344,31 +26404,31 @@
                 return;
             }
 
-            // Check cache first
-            try {
-                console.log('🔍 Checking cache...');
-                const cacheResponse = await fetch('/api/check-cache', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ brands, start_date: startDate, end_date: endDate })
-                });
-                const cacheData = await cacheResponse.json();
-                console.log('📦 Cache response:', cacheData);
+            // Check cache first (skip for geographic profiles)
+            if (!isGeoMode) {
+                try {
+                    console.log('🔍 Checking cache...');
+                    const cacheResponse = await fetch('/api/check-cache', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ brands, start_date: startDate, end_date: endDate })
+                    });
+                    const cacheData = await cacheResponse.json();
+                    console.log('📦 Cache response:', cacheData);
 
-                // Only use cached result if it's an EXACT match (same brand AND same dates)
-                if (cacheData.found && cacheData.type === 'exact') {
-                    console.log('✅ Found exact cache match');
-                    await loadCachedResult(cacheData.file);
-                    if (submitBtn) {
-                        submitBtn.disabled = false;
-                        submitBtn.innerHTML = '🚀 Run Analysis';
+                    if (cacheData.found && cacheData.type === 'exact') {
+                        console.log('✅ Found exact cache match');
+                        await loadCachedResult(cacheData.file);
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = '🚀 Run Analysis';
+                        }
+                        return;
                     }
-                    return;
+                } catch (error) { 
+                    console.log('⚠️ Cache check failed:', error); 
                 }
-                // If only similar files found (different dates), proceed with new analysis
-            } catch (error) { 
-                console.log('⚠️ Cache check failed:', error); 
             }
 
             console.log('🚀 Submitting new analysis...');
@@ -26492,12 +26552,13 @@
                 behavior_end: behaviorEnd,
                 filters: filters,
                 skew_settings: skewSettings,
-                // Additional options matching bg.py terminal
                 include_frequency: getElement('include_frequency')?.checked || false,
                 is_listener_watcher: getElement('is_listener_watcher')?.checked || false,
                 platform_name: getElement('platform_name')?.value || '',
                 is_update: getElement('is_update')?.checked || false,
-                previous_file: getElement('previous_file')?.value || ''
+                previous_file: getElement('previous_file')?.value || '',
+                geo_zip_codes: (getElement('geo_zip_codes')?.value || '').trim(),
+                geo_dma: (getElement('geo_dma')?.value || '').trim()
             };
 
             console.log('📤 Sending form data:', formData);
