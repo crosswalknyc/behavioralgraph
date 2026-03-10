@@ -7223,6 +7223,33 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # This allows dash variants to be found during parsing, but only non-dash appears in output
     df_final = remove_dash_variants_from_output(df_final, brands)
     
+    # Geographic profile: replace LOCATION section with the single input DMA at 100%
+    if is_geo_profile and geo_dma:
+        import re as _re_loc
+        dma_display = geo_dma.strip().upper()
+        loc_mask = df_final['Column'].str.upper() == 'LOCATION'
+        df_final = df_final[~loc_mask]
+        sample_size_row = df_final[df_final['Column'].str.upper() == 'SAMPLE SIZE']
+        ss = 0
+        if not sample_size_row.empty:
+            try:
+                ss = int(float(str(sample_size_row.iloc[0].get('Original Raw Numbers', 0)).replace(',', '')))
+            except Exception:
+                pass
+        gp_proj = 329_900_000
+        pct_col = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
+        bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else pct_col
+        loc_row = pd.DataFrame({
+            'Column': ['LOCATION'],
+            'Value': [dma_display],
+            bp_col: [100.0],
+            pct_col: [100.0],
+            'Original Raw Numbers': [ss if ss > 0 else 0],
+            'US Gen Pop Projection': [gp_proj],
+        })
+        df_final = pd.concat([df_final, loc_row], ignore_index=True)
+        print(f"📍 Geographic profile: set LOCATION to '{dma_display}' at 100%")
+
     # Reorder columns
     column_order = ['Column', 'Value', 'Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers', 'US Gen Pop Projection']
     existing_columns = [col for col in column_order if col in df_final.columns]
