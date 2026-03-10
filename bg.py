@@ -4518,6 +4518,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         brand_filter = "1=1"
 
     if is_geo_profile or (use_full_population_fastpath and not is_genpop):
+        cur = conn.cursor()
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         if is_geo_profile:
             cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")
 
@@ -4664,7 +4666,100 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             if not SILENCE_VERBOSE_OUTPUT:
                 print(f"✅ Fast path complete: {uid_count:,} UIDs mapped")
 
+        # --- Behavioral processing for geo/fast path ---
+        clause = ",".join(f"'{s.lower().strip()}'" for s in RECLASSIFY_SECTIONS)
+        demo_filter_clause = apply_demographic_filters(filters)
 
+        print("⚡ Processing behavioral data (geo/fast path)...")
+        cur.execute("""
+            CREATE OR REPLACE TEMP TABLE BEHAVIOR_WITH_DEMOS AS
+            SELECT UID, InterestRaw, MPC_TRIM, HostSection, Mapped_Brand
+            FROM MAPPED_EVENTS
+        """)
+
+        cur.execute(f"""
+            CREATE OR REPLACE TEMP TABLE BEHAVIORAL_SPLIT AS
+                SELECT DISTINCT
+                    'Interest' AS "COLUMN",
+                    TRIM(v.value) AS "VALUE",
+                    UID
+                FROM BEHAVIOR_WITH_DEMOS,
+                     LATERAL FLATTEN(input => SPLIT(InterestRaw, ',')) v
+                WHERE InterestRaw IS NOT NULL
+                  AND TRIM(v.value) != 'hidden'
+                  AND TRIM(v.value) != ''
+
+                UNION ALL
+
+                SELECT DISTINCT
+                    'Most Purchased Categories' AS "COLUMN",
+                    TRIM(v.value) AS "VALUE",
+                    UID
+                FROM BEHAVIOR_WITH_DEMOS,
+                     LATERAL FLATTEN(input => SPLIT(MPC_TRIM, ',')) v
+                WHERE MPC_TRIM IS NOT NULL
+                  AND TRIM(v.value) != 'hidden'
+                  AND TRIM(v.value) != ''
+
+                UNION ALL
+
+                SELECT DISTINCT
+                    LOWER(TRIM(section.value)) AS "COLUMN",
+                    Mapped_Brand AS "VALUE",
+                    UID
+                FROM BEHAVIOR_WITH_DEMOS,
+                     LATERAL FLATTEN(input => SPLIT(HostSection, ',')) AS section
+                WHERE LOWER(TRIM(section.value)) IN ({clause})
+                  AND Mapped_Brand IS NOT NULL
+                  AND LOWER(Mapped_Brand) != 'hidden'
+        """)
+
+        cur.execute("""
+            CREATE OR REPLACE TEMP TABLE BEHAVIOR_FINAL AS
+                SELECT
+                    CASE
+                        WHEN LOWER(TRIM("COLUMN")) = 'app/platform usage' THEN 'app/platform usage'
+                        WHEN LOWER(TRIM("COLUMN")) = 'streaming/platform' THEN 'streaming/platform'
+                        WHEN LOWER(TRIM("COLUMN")) = 'streaming/music' THEN 'streaming/music'
+                        WHEN LOWER(TRIM("COLUMN")) = 'streaming/channel' THEN 'streaming/channel'
+                        WHEN LOWER(TRIM("COLUMN")) = 'where they shop' THEN 'where they shop'
+                        WHEN LOWER(TRIM("COLUMN")) = 'where they dine' THEN 'where they dine'
+                        WHEN LOWER(TRIM("COLUMN")) = 'most purchased brands' THEN 'most purchased brands'
+                        WHEN LOWER(TRIM("COLUMN")) = 'most purchased categories' THEN 'most purchased categories'
+                        WHEN LOWER(TRIM("COLUMN")) = 'credit provider' THEN 'credit provider'
+                        WHEN LOWER(TRIM("COLUMN")) = 'non profit/charity' THEN 'non profit/charity'
+                        WHEN LOWER(TRIM("COLUMN")) = 'education & learning' THEN 'education & learning'
+                        WHEN LOWER(TRIM("COLUMN")) = 'health & wellness' THEN 'health & wellness'
+                        WHEN LOWER(TRIM("COLUMN")) = 'sexual orientation' THEN 'sexual orientation'
+                        WHEN LOWER(TRIM("COLUMN")) = 'parental status' THEN 'parental status'
+                        ELSE LOWER(TRIM("COLUMN"))
+                    END AS "COLUMN",
+                    "VALUE",
+                    COUNT(DISTINCT UID) AS UID_COUNT
+                FROM BEHAVIORAL_SPLIT
+                WHERE LOWER("VALUE") != 'hidden'
+                GROUP BY "COLUMN", "VALUE"
+        """)
+        track_query_cost(cur, "Behavioral processing (geo/fast path)")
+
+        cur.execute("DROP TABLE IF EXISTS BEHAVIOR_WITH_DEMOS")
+        cur.execute("DROP TABLE IF EXISTS BEHAVIORAL_SPLIT")
+        print("✅ Behavioral processing complete for geo/fast path")
+
+        final_count = cur.execute("SELECT COUNT(*) FROM BEHAVIOR_FINAL").fetchone()[0]
+        print(f"📊 Final behavioral data rows: {final_count:,}")
+
+        print(f"🔧 Creating TEMP_DEMOS with demographic filters: {demo_filter_clause}")
+        cur.execute(f"""
+            CREATE OR REPLACE TEMP TABLE TEMP_DEMOS AS
+            SELECT d.* FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+            INNER JOIN TEMP_UIDS u ON d.UID = u.UID
+            WHERE {demo_filter_clause}
+        """)
+        track_query_cost(cur, "TEMP_DEMOS creation (geo/fast path)")
+
+        temp_demos_count = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_DEMOS").fetchone()[0]
+        print(f"📊 TEMP_DEMOS count: {temp_demos_count:,}")
 
 
 
