@@ -13892,7 +13892,9 @@ def _save_job_status_to_s3(job_id, job_data):
             'project_name': job_data.get('project_name'),
             'error': job_data.get('error'),
             's3_key': job_data.get('s3_key'),
-            'created_by': job_data.get('created_by'),
+            'created_by': job_data.get('created_by') or job_data.get('username'),
+            'type': job_data.get('type', 'profile_analysis'),
+            'brands': job_data.get('brands'),
         }
         all_jobs[job_id] = safe
         s3_client.put_object(Bucket=S3_BUCKET, Key=JOBS_STATUS_S3_KEY, Body=json.dumps(all_jobs), ContentType='application/json')
@@ -16164,6 +16166,46 @@ def fix_csv_genpop():
         return jsonify({'success': False, 'error': 'Script execution timed out'}), 500
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/active-jobs', methods=['GET'])
+@requires_super_admin
+def admin_active_jobs():
+    """Return all jobs (in-memory + S3) for the active jobs dashboard."""
+    merged = {}
+
+    s3_jobs = _load_jobs_status_from_s3()
+    for jid, jdata in s3_jobs.items():
+        merged[jid] = jdata
+
+    for jid, jdata in jobs.items():
+        merged[jid] = {
+            'status': jdata.get('status'),
+            'progress': jdata.get('progress', 0),
+            'message': jdata.get('message'),
+            'created_at': jdata.get('created_at'),
+            'project_name': jdata.get('project_name'),
+            'error': jdata.get('error'),
+            's3_key': jdata.get('s3_key'),
+            'created_by': jdata.get('created_by') or jdata.get('username'),
+            'type': jdata.get('type', 'profile_analysis'),
+            'brands': jdata.get('brands'),
+        }
+
+    job_list = []
+    for jid, jdata in merged.items():
+        entry = dict(jdata)
+        entry['job_id'] = jid
+        if not entry.get('type'):
+            entry['type'] = 'profile_analysis'
+        job_list.append(entry)
+
+    job_list.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+
+    active = [j for j in job_list if j.get('status') in ('queued', 'running', 'processing')]
+    recent = [j for j in job_list if j.get('status') not in ('queued', 'running', 'processing')][:50]
+
+    return jsonify({'success': True, 'active': active, 'recent': recent})
 
 
 def run_talent_theater(job_id):

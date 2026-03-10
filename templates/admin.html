@@ -978,6 +978,9 @@
             <button class="admin-tab" onclick="showAdminTab('images')">🖼️ Profile Images</button>
             <button class="admin-tab" onclick="showAdminTab('tickers')">📈 Tickers</button>
             <button class="admin-tab" onclick="showAdminTab('settings')">⚙️ Settings</button>
+            {% if current_user_role == 'super_admin' %}
+            <button class="admin-tab" onclick="showAdminTab('activeJobs')">🔄 Active Jobs</button>
+            {% endif %}
         </div>
 
         <!-- USERS SECTION -->
@@ -1790,6 +1793,35 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ACTIVE JOBS SECTION (Super Admin only) -->
+        <div id="section-activeJobs" class="admin-section">
+            <div class="card">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>🔄 Active Analysis Jobs</h2>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer;">
+                            <input type="checkbox" id="activeJobsAutoRefresh" checked onchange="toggleJobAutoRefresh()">
+                            Auto-refresh
+                        </label>
+                        <button class="btn btn-small btn-secondary" onclick="loadActiveJobs()">↻ Refresh</button>
+                    </div>
+                </div>
+
+                <div id="activeJobsContent">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading jobs...</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h2>📋 Recent Completed Jobs</h2>
+                </div>
+                <div id="recentJobsContent">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
                 </div>
             </div>
         </div>
@@ -2841,8 +2873,151 @@
             if (tabName === 'purgatory') {
                 loadPurgatoryItems();
             }
+            if (tabName === 'activeJobs') {
+                loadActiveJobs();
+                startJobAutoRefresh();
+            } else {
+                stopJobAutoRefresh();
+            }
         }
         
+        // ============================================================================
+        // ACTIVE JOBS FUNCTIONS
+        // ============================================================================
+        let _jobRefreshTimer = null;
+
+        function toggleJobAutoRefresh() {
+            if (document.getElementById('activeJobsAutoRefresh').checked) {
+                startJobAutoRefresh();
+            } else {
+                stopJobAutoRefresh();
+            }
+        }
+
+        function startJobAutoRefresh() {
+            stopJobAutoRefresh();
+            if (document.getElementById('activeJobsAutoRefresh') && document.getElementById('activeJobsAutoRefresh').checked) {
+                _jobRefreshTimer = setInterval(loadActiveJobs, 8000);
+            }
+        }
+
+        function stopJobAutoRefresh() {
+            if (_jobRefreshTimer) { clearInterval(_jobRefreshTimer); _jobRefreshTimer = null; }
+        }
+
+        function _jobTypeLabel(type) {
+            const map = {
+                'profile_analysis': 'Profile Analysis',
+                'talent_search': 'Talent Search',
+                'talent_theater': 'Talent Theater',
+                'ticket_sales_tracker': 'Ticket Sales Tracker',
+                'svod_acquisition': 'Subscriber IQ',
+                'campaign_roi': 'Campaign ROI',
+                'cross_show': 'Cross-Show',
+                'watch_time': 'Watch Time'
+            };
+            return map[type] || type || 'Profile Analysis';
+        }
+
+        function _statusBadge(status) {
+            const colors = {
+                'queued': '#f59e0b',
+                'running': '#3b82f6',
+                'processing': '#3b82f6',
+                'complete': '#10b981',
+                'completed': '#10b981',
+                'failed': '#ef4444',
+                'error': '#ef4444'
+            };
+            const color = colors[status] || '#6b7280';
+            return `<span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;color:#fff;background:${color};text-transform:uppercase;">${status}</span>`;
+        }
+
+        function _timeAgo(iso) {
+            if (!iso) return '--';
+            const d = new Date(iso);
+            const now = new Date();
+            const secs = Math.floor((now - d) / 1000);
+            if (secs < 60) return secs + 's ago';
+            if (secs < 3600) return Math.floor(secs / 60) + 'm ago';
+            if (secs < 86400) return Math.floor(secs / 3600) + 'h ago';
+            return Math.floor(secs / 86400) + 'd ago';
+        }
+
+        function _progressBar(pct) {
+            const p = Math.min(100, Math.max(0, pct || 0));
+            return `<div style="background:var(--bg-secondary);border-radius:6px;height:8px;width:100%;overflow:hidden;">` +
+                   `<div style="height:100%;width:${p}%;background:linear-gradient(90deg,#3b82f6,#06b6d4);border-radius:6px;transition:width .4s;"></div>` +
+                   `</div><span style="font-size:0.75rem;color:var(--text-secondary);">${p}%</span>`;
+        }
+
+        async function loadActiveJobs() {
+            try {
+                const res = await fetch('/api/admin/active-jobs');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error);
+
+                const activeEl = document.getElementById('activeJobsContent');
+                const recentEl = document.getElementById('recentJobsContent');
+
+                if (data.active.length === 0) {
+                    activeEl.innerHTML = `<div style="text-align:center;padding:2.5rem;color:var(--text-secondary);font-size:0.95rem;">No active jobs running right now.</div>`;
+                } else {
+                    let html = `<div style="display:flex;flex-direction:column;gap:0.75rem;">`;
+                    for (const j of data.active) {
+                        html += `<div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;padding:1rem 1.25rem;">` +
+                            `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">` +
+                            `<div style="display:flex;align-items:center;gap:0.75rem;">` +
+                            `<strong style="font-size:0.95rem;">${j.project_name || j.brands || j.job_id}</strong>` +
+                            `<span style="font-size:0.75rem;color:var(--text-secondary);background:var(--bg-primary);padding:2px 8px;border-radius:8px;">${_jobTypeLabel(j.type)}</span>` +
+                            `</div>` +
+                            `<div style="display:flex;align-items:center;gap:0.75rem;">` +
+                            `${_statusBadge(j.status)}` +
+                            `<span style="font-size:0.75rem;color:var(--text-secondary);">${_timeAgo(j.created_at)}</span>` +
+                            `</div></div>` +
+                            `<div style="margin-bottom:0.35rem;">${_progressBar(j.progress)}</div>` +
+                            `<div style="display:flex;justify-content:space-between;align-items:center;">` +
+                            `<span style="font-size:0.8rem;color:var(--text-secondary);">${j.message || ''}</span>` +
+                            `<span style="font-size:0.75rem;color:var(--text-secondary);">by ${j.created_by || 'unknown'}</span>` +
+                            `</div></div>`;
+                    }
+                    html += `</div>`;
+                    activeEl.innerHTML = html;
+                }
+
+                if (data.recent.length === 0) {
+                    recentEl.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text-secondary);">No recent jobs.</div>`;
+                } else {
+                    let html = `<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">` +
+                        `<thead><tr style="border-bottom:2px solid var(--border-color);text-align:left;">` +
+                        `<th style="padding:0.5rem 0.75rem;">Name</th>` +
+                        `<th style="padding:0.5rem 0.75rem;">Type</th>` +
+                        `<th style="padding:0.5rem 0.75rem;">Status</th>` +
+                        `<th style="padding:0.5rem 0.75rem;">User</th>` +
+                        `<th style="padding:0.5rem 0.75rem;">Started</th>` +
+                        `<th style="padding:0.5rem 0.75rem;">Error</th>` +
+                        `</tr></thead><tbody>`;
+                    for (const j of data.recent) {
+                        const errSnip = j.error ? `<span style="color:#ef4444;font-size:0.75rem;" title="${(j.error||'').replace(/"/g,'&quot;')}">${(j.error||'').slice(0,60)}${(j.error||'').length > 60 ? '…' : ''}</span>` : '--';
+                        html += `<tr style="border-bottom:1px solid var(--border-color);">` +
+                            `<td style="padding:0.5rem 0.75rem;font-weight:500;">${j.project_name || j.brands || j.job_id}</td>` +
+                            `<td style="padding:0.5rem 0.75rem;">${_jobTypeLabel(j.type)}</td>` +
+                            `<td style="padding:0.5rem 0.75rem;">${_statusBadge(j.status)}</td>` +
+                            `<td style="padding:0.5rem 0.75rem;">${j.created_by || '--'}</td>` +
+                            `<td style="padding:0.5rem 0.75rem;">${_timeAgo(j.created_at)}</td>` +
+                            `<td style="padding:0.5rem 0.75rem;">${errSnip}</td>` +
+                            `</tr>`;
+                    }
+                    html += `</tbody></table>`;
+                    recentEl.innerHTML = html;
+                }
+            } catch (e) {
+                console.error('Failed to load active jobs:', e);
+                document.getElementById('activeJobsContent').innerHTML =
+                    `<div style="text-align:center;padding:2rem;color:#ef4444;">Failed to load jobs: ${e.message}</div>`;
+            }
+        }
+
         // ============================================================================
         // PURGATORY FUNCTIONS
         // ============================================================================
