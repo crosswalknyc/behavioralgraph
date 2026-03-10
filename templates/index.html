@@ -48574,6 +48574,7 @@
                     i.name === value || normalizeNameForDedup(i.name) === normalizedValue
                 );
                 
+                const NEGLIGIBLE_PCT = 0.05;
                 const existsInProfile = profiles.map(p => {
                     const item = findItem(p.behavioral[category] || []);
                     return !!item;
@@ -48586,20 +48587,29 @@
                     const item = findItem(p.behavioral[category] || []);
                     return item ? (item.projection || 0) : 0;
                 });
-                // Index relative to Gen Pop: (profile pct / Gen Pop pct) * 100 (computed at render; fallback from item.index if no Gen Pop)
                 const genPopPct = genPopIdx >= 0 ? pctData[genPopIdx] : 0;
                 const indexData = profiles.map((p, i) => {
                     if (!existsInProfile[i]) return null;
                     const pct = pctData[i];
-                    if (pct <= 0) return 0;
-                    if (genPopIdx >= 0 && i === genPopIdx) return 100; // Gen Pop = baseline (not displayed)
-                    if (genPopPct > 0) return Math.round((pct / genPopPct) * 100);
-                    const item = findItem(p.behavioral[category] || []);
-                    return item ? (item.index || 0) : 0;
+                    if (pct < NEGLIGIBLE_PCT) return 0;
+                    if (genPopIdx >= 0 && i === genPopIdx) return 100;
+                    if (genPopPct >= NEGLIGIBLE_PCT) return Math.round((pct / genPopPct) * 100);
+                    return 'N/A';
                 });
                 
                 return { value: value, pctData, projData, indexData, existsInProfile };
             });
+
+            // Hide rows where ALL non-Gen Pop profiles have negligible data
+            {
+                const NEGLIGIBLE_PCT = 0.05;
+                dataRows = dataRows.filter(row => {
+                    return profiles.some((p, i) => {
+                        if (genPopIdx >= 0 && i === genPopIdx) return false;
+                        return row.pctData[i] >= NEGLIGIBLE_PCT;
+                    });
+                });
+            }
 
             // Determine which data to use for sorting based on sortType
             const getSortValue = (row, idx) => {
@@ -48661,7 +48671,8 @@
                         const primaryClass = isPrimary ? 'primary-col' : '';
                         const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
 
-                        if (missing && !isGenPopCol) {
+                        const NEGLIGIBLE_PCT_CELL = 0.05;
+                        if ((missing || (!isGenPopCol && pct < NEGLIGIBLE_PCT_CELL)) && !isGenPopCol) {
                             return `
                                 <td class="${primaryClass}">
                                     <div class="comp-bar-cell">
@@ -48673,10 +48684,17 @@
 
                         const displayVal = useProjection
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
-                            : (pct > 0 ? pct.toFixed(2) + '%' : '-');
+                            : (pct >= NEGLIGIBLE_PCT_CELL ? pct.toFixed(2) + '%' : '-');
                         
-                        const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                        const indexDisplay = (!isGenPopCol && index !== null && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
+                        const indexColor = (typeof index === 'number' && index >= 100) ? '#10b981' : '#ef4444';
+                        let indexDisplay = '';
+                        if (!isGenPopCol) {
+                            if (index === 'N/A') {
+                                indexDisplay = '<span class="index-badge" style="color: #888; font-style: italic;">N/A</span>';
+                            } else if (typeof index === 'number' && index !== null && index > 0) {
+                                indexDisplay = `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>`;
+                            }
+                        }
                         const section = sectionKey != null ? sectionKey : ('beh_' + category);
                         const isColumn = getComparisonChartType(section, i) === 'column';
                         const val = useProjection ? (proj || 0) : (pct || 0);
@@ -48747,18 +48765,29 @@
                     const loc = findLoc(p.locations || []);
                     return loc ? (loc.projection || 0) : 0;
                 });
+                const NEGLIGIBLE_PCT = 0.05;
                 const genPopPct = genPopIdx >= 0 ? pctData[genPopIdx] : 0;
                 const indexData = profiles.map((p, i) => {
                     if (!existsInProfile[i]) return null;
                     const pct = pctData[i];
-                    if (pct <= 0) return 0;
+                    if (pct < NEGLIGIBLE_PCT) return 0;
                     if (genPopIdx >= 0 && i === genPopIdx) return 100;
-                    if (genPopPct > 0) return Math.round((pct / genPopPct) * 100);
-                    const loc = findLoc(p.locations || []);
-                    return loc ? (loc.index || 0) : 0;
+                    if (genPopPct >= NEGLIGIBLE_PCT) return Math.round((pct / genPopPct) * 100);
+                    return 'N/A';
                 });
                 return { value: locName, pctData, projData, indexData, existsInProfile };
             });
+
+            // Hide rows where ALL non-Gen Pop profiles have negligible data
+            {
+                const NEGLIGIBLE_PCT = 0.05;
+                dataRows = dataRows.filter(row => {
+                    return profiles.some((p, i) => {
+                        if (genPopIdx >= 0 && i === genPopIdx) return false;
+                        return row.pctData[i] >= NEGLIGIBLE_PCT;
+                    });
+                });
+            }
 
             // Determine which data to use for sorting based on sortType
             const getSortValue = (row, idx) => {
@@ -48820,7 +48849,8 @@
                         const primaryClass = isPrimary ? 'primary-col' : '';
                         const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
 
-                        if (missing && !isGenPopCol) {
+                        const NEGLIGIBLE_PCT_CELL = 0.05;
+                        if ((missing || (!isGenPopCol && pct < NEGLIGIBLE_PCT_CELL)) && !isGenPopCol) {
                             return `
                                 <td class="${primaryClass}">
                                     <div class="comp-bar-cell">
@@ -48832,10 +48862,17 @@
 
                         const displayVal = useProjection
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
-                            : (pct > 0 ? pct.toFixed(2) + '%' : '-');
+                            : (pct >= NEGLIGIBLE_PCT_CELL ? pct.toFixed(2) + '%' : '-');
                         
-                        const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                        const indexDisplay = (!isGenPopCol && index !== null && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>` : '';
+                        const indexColor = (typeof index === 'number' && index >= 100) ? '#10b981' : '#ef4444';
+                        let indexDisplay = '';
+                        if (!isGenPopCol) {
+                            if (index === 'N/A') {
+                                indexDisplay = '<span class="index-badge" style="color: #888; font-style: italic;">N/A</span>';
+                            } else if (typeof index === 'number' && index !== null && index > 0) {
+                                indexDisplay = `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>`;
+                            }
+                        }
                         const isColumn = getComparisonChartType('location', i) === 'column';
                         const val = useProjection ? (proj || 0) : (pct || 0);
                         const fillPct = sectionMax > 0 ? Math.min((val / sectionMax) * 100, 100) : 0;
@@ -48983,18 +49020,29 @@
 
             // Build data array with values for sorting; compute index at render time from Gen Pop baseline
             // Use normalized keys for consistent matching across profiles
+            const NEGLIGIBLE_PCT = 0.05;
             let dataRows = Array.from(allValues).map(value => {
                 const pctData = profiles.map(p => getProfileValue(p, demoType, value));
                 const projData = profiles.map(p => getProfileProjection(p, demoType, value));
                 const genPopPct = getGenPopPct(value);
                 const indexData = profiles.map((p, i) => {
                     const pct = pctData[i];
-                    if (pct <= 0) return 0;
+                    if (pct < NEGLIGIBLE_PCT) return 0;
                     if (genPopProfile && profiles[i] === genPopProfile) return 100;
-                    if (genPopPct > 0) return Math.round((pct / genPopPct) * 100);
-                    return getProfileIndex(p, demoType, value);
+                    if (genPopPct >= NEGLIGIBLE_PCT) return Math.round((pct / genPopPct) * 100);
+                    return 'N/A';
                 });
                 return { value, pctData, projData, indexData };
+            });
+
+            // Hide rows where ALL non-Gen Pop profiles have negligible data
+            const genPopProfileRef = genPopProfile;
+            dataRows = dataRows.filter(row => {
+                const hasNonGenPopData = profiles.some((p, i) => {
+                    if (genPopProfileRef && p === genPopProfileRef) return false;
+                    return row.pctData[i] >= NEGLIGIBLE_PCT;
+                });
+                return hasNonGenPopData;
             });
 
             // Determine which data to use for sorting based on sortType
@@ -49058,7 +49106,6 @@
             if (sectionMax <= 0) sectionMax = 1;
 
             return dataRows.map(row => {
-                // Use display label for age ranges
                 const displayValue = demoType === 'age' ? getAgeDisplayLabel(row.value) : row.value.toUpperCase();
                 return `
                     <tr>
@@ -49069,15 +49116,33 @@
                             const index = row.indexData[i];
                             const isPrimary = i === primaryProfileIndex;
                             const primaryClass = isPrimary ? 'primary-col' : '';
-                            const displayVal = useProjection
-                                ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
-                                : (pct > 0 ? pct.toFixed(2) + '%' : '-');
-                            
-                            // Never show index for Gen Pop column (by reference or by name)
+
                             const pName = (profiles[i]?.name || '').toUpperCase();
                             const isGenPopCol = (genPopProfile && profiles[i] === genPopProfile) || pName.includes('GEN POP') || pName.includes('GENPOP');
-                            const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                            const indexBadge = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor};">${index}</span>` : '';
+
+                            if (!isGenPopCol && pct < NEGLIGIBLE_PCT) {
+                                return `
+                                    <td class="${primaryClass}">
+                                        <div class="comp-bar-cell">
+                                            <span class="comp-bar-pct" style="color: #888; font-style: italic;">N/A</span>
+                                        </div>
+                                    </td>
+                                `;
+                            }
+
+                            const displayVal = useProjection
+                                ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
+                                : (pct >= NEGLIGIBLE_PCT ? pct.toFixed(2) + '%' : '-');
+
+                            const indexColor = (typeof index === 'number' && index >= 100) ? '#10b981' : '#ef4444';
+                            let indexBadge = '';
+                            if (!isGenPopCol) {
+                                if (index === 'N/A') {
+                                    indexBadge = '<span class="index-badge" style="color: #888; font-style: italic;">N/A</span>';
+                                } else if (typeof index === 'number' && index > 0) {
+                                    indexBadge = `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>`;
+                                }
+                            }
                             
                             const isColumn = getComparisonChartType(demoType, i) === 'column';
                             const val = useProjection ? (proj || 0) : (pct || 0);
