@@ -915,6 +915,40 @@ def anchor_to_genpop(df, sample_size):
 
         changes += 1
 
+    # --- Pass 2: Cap items with NO Gen Pop match ---
+    # Items absent from Gen Pop are likely very niche (otherwise they'd appear
+    # in the survey of 36k+ people).  Apply a conservative ceiling so the
+    # pipeline doesn't emit 60-90% BP for single-location restaurants, obscure
+    # foreign sports teams, etc.  The item_level_ai_review can further refine.
+    UNMATCHED_CEILING = 15.0
+    unmatched_fixes = 0
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        val = str(row.get('Value', '')).strip().upper()
+        if cat in SKIP_CATS:
+            continue
+        gp_entry = gp_lookup.get((cat, val))
+        if gp_entry is not None:
+            continue
+        try:
+            cur_bp = float(row.get(bp_col, 0)) if bp_col else 0
+        except (ValueError, TypeError):
+            continue
+        if cur_bp <= UNMATCHED_CEILING or cur_bp <= 0:
+            continue
+        new_bp = round(soft_bp_ceiling(cur_bp, ceiling=UNMATCHED_CEILING), 4)
+        new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+        new_genpop = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+        if bp_col and bp_col in df.columns:
+            df.at[idx, bp_col] = new_bp
+        df.at[idx, 'Original Raw Numbers'] = str(new_raw)
+        if 'US Gen Pop Projection' in df.columns:
+            df.at[idx, 'US Gen Pop Projection'] = str(new_genpop)
+        unmatched_fixes += 1
+    if unmatched_fixes:
+        print(f"   ⚠️  Capped {unmatched_fixes} unmatched items (no Gen Pop benchmark) "
+              f"at ~{UNMATCHED_CEILING}%")
+
     for cat in df['Column'].str.upper().unique():
         if cat in SKIP_CATS:
             continue
@@ -1778,6 +1812,36 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
                 df.at[idx, 'US Gen Pop Projection'] = str(new_proj)
             corrections += 1
 
+    # Cap unmatched items (no Gen Pop benchmark)
+    UNMATCHED_CEILING = 15.0
+    unmatched_fixes = 0
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        val = str(row.get('Value', '')).strip().upper()
+        if cat in DEMO_CATS or cat in SKIP_CATS:
+            continue
+        gp_bp = gp_lookup.get((cat, val))
+        if gp_bp and gp_bp > 0:
+            continue
+        try:
+            cur_bp = float(row.get(bp_col, 0)) if bp_col else 0
+        except (ValueError, TypeError):
+            continue
+        if cur_bp <= UNMATCHED_CEILING or cur_bp <= 0:
+            continue
+        new_bp = round(soft_bp_ceiling(cur_bp, ceiling=UNMATCHED_CEILING), 4)
+        new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+        new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+        if bp_col and bp_col in df.columns:
+            df.at[idx, bp_col] = new_bp
+        df.at[idx, 'Original Raw Numbers'] = str(new_raw)
+        if 'US Gen Pop Projection' in df.columns:
+            df.at[idx, 'US Gen Pop Projection'] = str(new_proj)
+        unmatched_fixes += 1
+    if unmatched_fixes:
+        corrections += unmatched_fixes
+        print(f"   ⚠️  Gut-check capped {unmatched_fixes} unmatched items at ~{UNMATCHED_CEILING}%")
+
     # Recalculate category shares after corrections
     for cat in df['Column'].str.upper().unique():
         if cat in DEMO_CATS or cat in SKIP_CATS:
@@ -1948,6 +2012,35 @@ def final_behavioral_sanity_check(df, archetype=None):
         if proj_col in df.columns:
             df.at[idx, proj_col] = str(new_proj)
         corrections += 1
+
+    # Cap unmatched items (no Gen Pop benchmark)
+    UNMATCHED_CEILING = 15.0
+    unmatched_fixes = 0
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        val = str(row.get('Value', '')).strip().upper()
+        if cat in DEMO_CATS or cat in META_CATS:
+            continue
+        gp_bp_val = gp_bp_lookup.get((cat, val))
+        if gp_bp_val is not None and gp_bp_val > 0:
+            continue
+        try:
+            cur_bp = float(row.get(bp_col, 0))
+        except (ValueError, TypeError):
+            continue
+        if cur_bp <= UNMATCHED_CEILING or cur_bp <= 0:
+            continue
+        new_bp = round(soft_bp_ceiling(cur_bp, ceiling=UNMATCHED_CEILING), 4)
+        new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+        new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+        df.at[idx, bp_col] = new_bp
+        df.at[idx, raw_col] = str(new_raw)
+        if proj_col in df.columns:
+            df.at[idx, proj_col] = str(new_proj)
+        unmatched_fixes += 1
+    if unmatched_fixes:
+        corrections += unmatched_fixes
+        print(f"   ⚠️  Final sanity capped {unmatched_fixes} unmatched items at ~{UNMATCHED_CEILING}%")
 
     # Recalculate Category Share within each behavioral category
     if corrections > 0:
@@ -2138,9 +2231,6 @@ def item_level_ai_review(df, archetype, project_name, brands):
                 continue
 
             name, cur_bp, row_idx = matched[0]
-            gp_bp = gp_bp_lookup.get((f_cat, f_item), 0)
-            if gp_bp <= 0:
-                continue
 
             multiplier = 0.70 if direction == 'lower' else 1.30
             new_bp = round(soft_bp_ceiling(cur_bp * multiplier), 4)
