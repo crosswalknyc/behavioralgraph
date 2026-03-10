@@ -370,6 +370,23 @@ def get_user_input():
             break
         print("   Invalid. Choose a number 1-{} or one of: {}".format(len(ALLOWED_GENRES), ", ".join(ALLOWED_GENRES)))
     
+    # Content Cadence
+    print("\n📝 Content Cadence (how episodes are released):")
+    print("   1. Weekly")
+    print("   2. All at Once")
+    while True:
+        cadence_input = input("Enter number (1-2) or cadence name: ").strip()
+        if not cadence_input:
+            content_cadence = ""
+            break
+        if cadence_input == "1" or cadence_input.lower() == "weekly":
+            content_cadence = "Weekly"
+            break
+        if cadence_input == "2" or cadence_input.lower() in ("all at once", "all"):
+            content_cadence = "All at Once"
+            break
+        print("   Invalid. Choose 1 (Weekly) or 2 (All at Once).")
+
     if not show_search_terms:
         print("You must provide at least one show/content name.", file=sys.stderr)
         sys.exit(1)
@@ -418,6 +435,7 @@ def get_user_input():
         "show_search_terms": show_search_terms,
         "platform_name": platform_name,
         "genre": genre,
+        "content_cadence": content_cadence,
         "competitive_brands": competitive_brands,
         "auto_format": auto_format,
         "track_episodes": track_episodes,
@@ -1425,6 +1443,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         episode_date_display_lookup[ep['episode_num']] = f"{d.month}/{d.day}/{d.year % 100}"
 
     genre = p.get('genre', '')
+    content_cadence = p.get('content_cadence', '')
 
     # Build output rows matching Landman CSV format exactly (columns set on DataFrame below)
     rows = [
@@ -1436,6 +1455,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         ("Exclusion Window (days)", "", p['exclusion_days'], "", "", "", "", "", "", ""),
         ("Attribution Window (days)", "", p['attribution_window'], "", "", "", "", "", "", ""),
         ("Genre", "", "", genre, "", "", "", "", "", ""),
+        ("Content Cadence", "", "", content_cadence, "", "", "", "", "", ""),
         ("", "", "", "", "", "", "", "", "", ""),
         ("", "", "KEY METRICS", "", "", "", "", "", "", "Gen Pop Projection"),
         ("Total Show Watchers", "", total_watchers, "", "", "", "", "", "", format_gen_pop(gen_pop_projection(total_watchers))),

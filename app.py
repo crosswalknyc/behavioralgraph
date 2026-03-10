@@ -7263,6 +7263,11 @@ def parse_subscriber_iq_csv(csv_content):
                 parsed['metadata']['exclusion_window'] = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Attribution Window' in first_col:
                 parsed['metadata']['attribution_window'] = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+            elif 'Content Cadence' in first_col:
+                cadence_val = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+                parsed['metadata']['content_cadence'] = cadence_val
+                if cadence_val:
+                    print(f"   🔄 Found content cadence: '{cadence_val}' from row {i}")
             elif 'Genre' in first_col:
                 # New schema: Genre value in col 3 (e.g. "Genre,,,Serialized Drama"); fallback to col 2, then col 1
                 genre_val = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
@@ -16540,6 +16545,10 @@ def submit_svod_acquisition():
         if genre and genre not in SVOD_ALLOWED_GENRES:
             return jsonify({'error': f'Genre must be one of: {", ".join(SVOD_ALLOWED_GENRES)}'}), 400
         
+        content_cadence = (data.get('content_cadence') or '').strip()
+        if content_cadence and content_cadence not in ('Weekly', 'All at Once'):
+            content_cadence = ''
+        
         username = session.get('username', 'unknown')
         if not has_credits_for(username, CREDITS_SVOD):
             _, credits_left = check_user_credits(username)
@@ -16575,6 +16584,7 @@ def submit_svod_acquisition():
                 'is_new_show': data.get('is_new_show', False),
                 'platform_name': platform_name,
                 'genre': genre if genre else '',
+                'content_cadence': content_cadence if content_cadence else '',
                 'track_episodes': track_episodes,
                 'tracking_mode': tracking_mode,
                 'episode_dates': raw_episode_dates
@@ -16770,6 +16780,7 @@ def run_svod_acquisition(job_id):
             'platform_name': params['platform_name'],
             'competitive_brands': competitive_brands,
             'genre': params.get('genre', '') or '',
+            'content_cadence': params.get('content_cadence', '') or '',
             'output_dir': str(output_folder),
         }
         
