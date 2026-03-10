@@ -1818,7 +1818,7 @@
 
             <div class="card" style="margin-top: 1.5rem;">
                 <div class="card-header">
-                    <h2>📋 Recent Completed Jobs</h2>
+                    <h2>📋 Recent Completed Jobs <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 400;">(last 10)</span></h2>
                 </div>
                 <div id="recentJobsContent">
                     <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
@@ -2951,6 +2951,27 @@
                    `</div><span style="font-size:0.75rem;color:var(--text-secondary);">${p}%</span>`;
         }
 
+        async function killJob(jobId, jobName) {
+            if (!confirm(`Kill job "${jobName}"?\n\nThis will terminate the process and mark it as failed.`)) return;
+            try {
+                const res = await fetch('/api/admin/kill-job', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ job_id: jobId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (typeof showToast === 'function') showToast(`Job "${jobName}" killed`);
+                    loadActiveJobs();
+                } else {
+                    alert('Failed to kill job: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error killing job: ' + e.message);
+            }
+        }
+
         async function loadActiveJobs() {
             try {
                 const res = await fetch('/api/admin/active-jobs');
@@ -2965,15 +2986,17 @@
                 } else {
                     let html = `<div style="display:flex;flex-direction:column;gap:0.75rem;">`;
                     for (const j of data.active) {
+                        const jobName = j.project_name || j.brands || j.job_id;
                         html += `<div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;padding:1rem 1.25rem;">` +
                             `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">` +
                             `<div style="display:flex;align-items:center;gap:0.75rem;">` +
-                            `<strong style="font-size:0.95rem;">${j.project_name || j.brands || j.job_id}</strong>` +
+                            `<strong style="font-size:0.95rem;">${jobName}</strong>` +
                             `<span style="font-size:0.75rem;color:var(--text-secondary);background:var(--bg-primary);padding:2px 8px;border-radius:8px;">${_jobTypeLabel(j.type)}</span>` +
                             `</div>` +
                             `<div style="display:flex;align-items:center;gap:0.75rem;">` +
                             `${_statusBadge(j.status)}` +
                             `<span style="font-size:0.75rem;color:var(--text-secondary);">${_timeAgo(j.created_at)}</span>` +
+                            `<button onclick="killJob('${j.job_id}', '${jobName.replace(/'/g, "\\'")}')" style="background:#ef4444;color:#fff;border:none;padding:4px 12px;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">✕ Kill</button>` +
                             `</div></div>` +
                             `<div style="margin-bottom:0.35rem;">${_progressBar(j.progress)}</div>` +
                             `<div style="display:flex;justify-content:space-between;align-items:center;">` +

@@ -16203,9 +16203,48 @@ def admin_active_jobs():
     job_list.sort(key=lambda x: x.get('created_at') or '', reverse=True)
 
     active = [j for j in job_list if j.get('status') in ('queued', 'running', 'processing')]
-    recent = [j for j in job_list if j.get('status') not in ('queued', 'running', 'processing')][:50]
+    recent = [j for j in job_list if j.get('status') not in ('queued', 'running', 'processing')][:10]
 
     return jsonify({'success': True, 'active': active, 'recent': recent})
+
+
+@app.route('/api/admin/kill-job', methods=['POST'])
+@requires_super_admin
+def admin_kill_job():
+    """Kill a running job: mark it as failed, remove from in-memory jobs, update S3."""
+    data = request.get_json() or {}
+    job_id = data.get('job_id')
+    if not job_id:
+        return jsonify({'success': False, 'error': 'job_id is required'}), 400
+
+    killed = False
+
+    if job_id in jobs:
+        jobs[job_id]['status'] = 'failed'
+        jobs[job_id]['error'] = 'Killed by admin'
+        jobs[job_id]['message'] = 'Killed by admin'
+        _save_job_status_to_s3(job_id, jobs[job_id])
+        del jobs[job_id]
+        killed = True
+    else:
+        s3_jobs = _load_jobs_status_from_s3()
+        if job_id in s3_jobs:
+            s3_jobs[job_id]['status'] = 'failed'
+            s3_jobs[job_id]['error'] = 'Killed by admin'
+            try:
+                s3_client.put_object(
+                    Bucket=S3_BUCKET,
+                    Key=JOBS_STATUS_S3_KEY,
+                    Body=json.dumps(s3_jobs),
+                    ContentType='application/json'
+                )
+                killed = True
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Failed to update S3: {e}'}), 500
+
+    if killed:
+        return jsonify({'success': True, 'message': f'Job {job_id} killed'})
+    return jsonify({'success': False, 'error': 'Job not found'}), 404
 
 
 def run_talent_theater(job_id):
