@@ -29982,8 +29982,10 @@
             const ageMax = Math.max(...ageData) * 1.5; // 50% padding for horizontal labels
             
             // Calculate median for age using same interpolated formula as Compare feature
+            // For Gen Pop median, prefer the full Gen Pop baseline (all brackets) over profile-overlapping subset
             const profileMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(demographics.age || {}) : 0;
-            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(demographicsGenPop.age || {}) : 0;
+            const fullGpAge = (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.age) ? genPopBaselineData.demographics.age : (demographicsGenPop.age || {});
+            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(fullGpAge) : 0;
             
             // Update median display in chart header
             const ageMedianDisplay = document.getElementById('ageMedianDisplay');
@@ -30317,8 +30319,9 @@
             const incomeChartType = chartTypePrefs.income || 'bar';
             const incomeIsCircular = ['doughnut', 'pie', 'polarArea'].includes(incomeChartType);
             
-            // Calculate median for income
-            const incomeMedian = calculateDemographicMedian(demographics.income, demographicsGenPop.income, 'income');
+            // Calculate median for income — use full Gen Pop baseline for Gen Pop median (profile CSV may be missing low-end brackets)
+            const fullGpIncome = (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.income) ? genPopBaselineData.demographics.income : (demographicsGenPop.income || {});
+            const incomeMedian = calculateDemographicMedian(demographics.income, fullGpIncome, 'income');
             
             // Update median display in chart header (no Gen Pop comparison when Gen Pop selected)
             const incomeMedianDisplay = document.getElementById('incomeMedianDisplay');
@@ -47172,8 +47175,9 @@
                 return null;
             }
             
-            // Order for common age keys (others sorted by start); include Gen Pop labels (exact and lower)
-            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '17 and Under', '17 and under', 'under 17', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older', '65 or older', '65 and older', '65+'];
+            // Order for common age keys (case-insensitive lookup via orderLower)
+            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '17 and under', 'under 17', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or older', '65 and older', '65+'];
+            const orderLower = order.map(s => s.toLowerCase());
             const brackets = [];
             Object.entries(ageData).forEach(([key, pct]) => {
                 const val = parseFloat(pct);
@@ -47184,10 +47188,10 @@
             
             if (brackets.length === 0) return 0;
             
-            // Sort by start age (use order for known keys, else numeric)
+            // Sort by start age (case-insensitive order match, then numeric start)
             brackets.sort((a, b) => {
-                const idxA = order.indexOf(a.key);
-                const idxB = order.indexOf(b.key);
+                const idxA = orderLower.indexOf(a.key.toLowerCase());
+                const idxB = orderLower.indexOf(b.key.toLowerCase());
                 if (idxA >= 0 && idxB >= 0) return idxA - idxB;
                 if (idxA >= 0) return -1;
                 if (idxB >= 0) return 1;
