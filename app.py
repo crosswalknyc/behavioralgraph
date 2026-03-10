@@ -7494,6 +7494,15 @@ def parse_subscriber_iq_csv(csv_content):
         
         # Competitive platforms (platform in col A/B/C, percentage in col E or col H)
         elif current_section == 'competitive_platforms':
+            if 'MONTHLY' in combined_check and ('SIGNUP' in combined_check or 'SIGNUPS' in combined_check):
+                current_section = 'monthly_signups'
+                continue
+            elif 'MONTHLY' in combined_check and 'CHURN' in combined_check:
+                current_section = 'monthly_churn'
+                continue
+            elif 'DEMOGRAPHICS' in combined_check:
+                current_section = 'demographics'
+                continue
             platform = (first_col or second_col or (row[2].strip() if len(row) > 2 else '')).strip()
             if platform and 'COMPETITIVE' not in platform.upper() and 'PLATFORM' not in platform.upper():
                 percentage = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '') or (row[8].strip() if len(row) > 8 else '')
@@ -7501,12 +7510,15 @@ def parse_subscriber_iq_csv(csv_content):
                     'platform': platform,
                     'percentage': percentage
                 })
-            elif 'MONTHLY' in combined_check and ('SIGNUP' in combined_check or 'SIGNUPS' in combined_check):
-                current_section = 'monthly_signups'
-                continue
         
         # Monthly signups
         elif current_section == 'monthly_signups':
+            if 'MONTHLY' in combined_check and 'CHURN' in combined_check:
+                current_section = 'monthly_churn'
+                continue
+            elif 'DEMOGRAPHICS' in combined_check:
+                current_section = 'demographics'
+                continue
             if first_col and first_col not in ['', 'MONTHLY PLATFORM SIGNUPS -']:
                 if re.match(r'^\d{4}-\d{2}$', first_col):
                     parsed['monthly_signups'].append({
@@ -7516,9 +7528,6 @@ def parse_subscriber_iq_csv(csv_content):
                         'percentage': row[7].strip() if len(row) > 7 else '',
                         'gen_pop': row[8].strip() if len(row) > 8 else ''
                     })
-            elif 'MONTHLY PLATFORM CHURN' in first_col or 'MONTHLY PLATFORM CHURN' in second_col:
-                current_section = 'monthly_churn'
-                continue
         
         # Monthly churn
         elif current_section == 'monthly_churn':
