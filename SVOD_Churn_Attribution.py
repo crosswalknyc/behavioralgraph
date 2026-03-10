@@ -155,6 +155,7 @@ ALLOWED_GENRES = [
     "Multi Camera Sitcom",
     "Live Sports",
     "Single Event Telecast",
+    "Movies - Netflix",
 ]
 
 # List of all competitor streaming platforms
