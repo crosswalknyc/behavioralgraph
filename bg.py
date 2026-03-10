@@ -376,19 +376,19 @@ def _soft_clamp_index(raw_index, lo, hi, cat, val):
     return max(lo, min(hi, result))
 
 
-def soft_bp_ceiling(raw_bp, ceiling=95.0, sharpness=0.15):
+def soft_bp_ceiling(raw_bp, ceiling=95.0):
     """Smooth ceiling that compresses values approaching the cap.
 
-    Values below 85% of the ceiling are untouched.  Above that, exponential
-    compression smoothly squeezes values so no two items land on the same
-    hard cap, producing a natural cascading distribution.
+    Uses a hyperbolic curve (t / (1+t)) that has slope exactly 1.0 at the
+    knee point, guaranteeing monotonic compression — output is always <= input.
     """
     knee = ceiling * 0.85
     if raw_bp <= knee:
         return raw_bp
     overshoot = raw_bp - knee
     headroom = ceiling - knee
-    compressed = headroom * (1.0 - math.exp(-sharpness * overshoot))
+    t = overshoot / headroom
+    compressed = headroom * t / (1.0 + t)
     return round(knee + compressed, 4)
 
 # ============================================================================
@@ -828,9 +828,9 @@ def anchor_to_genpop(df, sample_size):
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2  # 0 for Gen Pop, ~1 for niche
 
-    # Adaptive bounds: wider ranges let the profile's intrinsic signal drive
-    # the output.  Gen Pop acts as a GUIDE, not a mandate.
-    BEHAV_HI = max(1.40, 1.0 + 3.0 * niche_factor)
+    # Adaptive bounds: wider than original [0.88,1.15] but not so wide that
+    # every item clusters at the ceiling.  Gen Pop is a guide, not a mandate.
+    BEHAV_HI = max(1.30, 1.0 + 2.0 * niche_factor)
     BEHAV_LO = min(0.30, 1.0 - 1.5 * niche_factor)
     DEMO_HI  = max(1.10, 1.0 + 0.8 * niche_factor)
     DEMO_LO  = min(0.92, 1.0 - 0.5 * niche_factor)
@@ -879,14 +879,20 @@ def anchor_to_genpop(df, sample_size):
 
         # Per-item adaptive floor: if the profile's raw signal is far below
         # Gen Pop, widen the lower bound so the item isn't forced upward.
-        # This prevents e.g. Hanes at 2% CS being pulled to 35% BP just
-        # because Gen Pop has Hanes high.
         lo = base_lo
         hi = base_hi
         if not is_demo and raw_ratio < base_lo:
             lo = max(0.05, raw_ratio * 0.7)
 
-        # Soft ceiling instead of hard ABS_BP_CEIL = 95
+        # Per-item popularity dampening: mass-market items (high GP BP) get
+        # tighter upper bounds.  Nike at 32% GP shouldn't reach 3x; a niche
+        # brand at 2% GP can.  Uses (1 - gp_bp/100)^2 so high-GP items are
+        # pulled closer to 1.0.
+        if not is_demo:
+            popularity_scale = (1.0 - gp_bp_val / 100.0) ** 2
+            hi = 1.0 + (hi - 1.0) * popularity_scale
+
+        # Soft ceiling on upper bound
         item_hi = hi
         raw_hi_bp = gp_bp_val * hi
         if raw_hi_bp > 80.0:
@@ -1690,7 +1696,7 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
             pass
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_bp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2
-    BASE_MAX = max(1.40, 1.0 + 3.0 * niche_factor)
+    BASE_MAX = max(1.30, 1.0 + 2.0 * niche_factor)
     BASE_MIN = min(0.30, 1.0 - 1.5 * niche_factor)
     print(f"   Behavioral gut-check adaptive bounds: [{BASE_MIN:.2f}, {BASE_MAX:.2f}] "
           f"(profile BP {profile_bp_pct:.1f}%)")
@@ -1746,6 +1752,10 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
             min_idx = max(min_idx, 0.8)
         if _category_matches_archetype(cat, behav_low):
             max_idx = min(max_idx, 1.1)
+
+        # Per-item popularity dampening: high-GP items get tighter max
+        popularity_scale = (1.0 - gp_bp / 100.0) ** 2
+        max_idx = 1.0 + (max_idx - 1.0) * popularity_scale
 
         # Soft ceiling: compress when GP BP * max_idx would breach ceiling
         raw_hi_bp = gp_bp * max_idx
@@ -1873,7 +1883,7 @@ def final_behavioral_sanity_check(df, archetype=None):
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_full)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2
 
-    MAX_IDX = max(1.40, 1.0 + 3.0 * niche_factor)
+    MAX_IDX = max(1.30, 1.0 + 2.0 * niche_factor)
     MIN_IDX = min(0.30, 1.0 - 1.5 * niche_factor)
 
     # Apply archetype-aware adjustments to bounds per category
@@ -1911,6 +1921,10 @@ def final_behavioral_sanity_check(df, archetype=None):
             lo = max(lo, 0.8)
         if _category_matches_archetype(cat, behav_low):
             hi = min(hi, 1.1)
+
+        # Per-item popularity dampening
+        popularity_scale = (1.0 - gp_bp_val / 100.0) ** 2
+        hi = 1.0 + (hi - 1.0) * popularity_scale
 
         # Soft ceiling: compress when GP BP * hi would breach ceiling zone
         raw_hi_bp = gp_bp_val * hi
