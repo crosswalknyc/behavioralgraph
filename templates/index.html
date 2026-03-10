@@ -29982,10 +29982,8 @@
             const ageMax = Math.max(...ageData) * 1.5; // 50% padding for horizontal labels
             
             // Calculate median for age using same interpolated formula as Compare feature
-            // For Gen Pop median, prefer the full Gen Pop baseline (all brackets) over profile-overlapping subset
             const profileMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(demographics.age || {}) : 0;
-            const fullGpAge = (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.age) ? genPopBaselineData.demographics.age : (demographicsGenPop.age || {});
-            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(fullGpAge) : 0;
+            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(demographicsGenPop.age || {}) : 0;
             
             // Update median display in chart header
             const ageMedianDisplay = document.getElementById('ageMedianDisplay');
@@ -30319,9 +30317,8 @@
             const incomeChartType = chartTypePrefs.income || 'bar';
             const incomeIsCircular = ['doughnut', 'pie', 'polarArea'].includes(incomeChartType);
             
-            // Calculate median for income — use full Gen Pop baseline for Gen Pop median (profile CSV may be missing low-end brackets)
-            const fullGpIncome = (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.income) ? genPopBaselineData.demographics.income : (demographicsGenPop.income || {});
-            const incomeMedian = calculateDemographicMedian(demographics.income, fullGpIncome, 'income');
+            // Calculate median for income
+            const incomeMedian = calculateDemographicMedian(demographics.income, demographicsGenPop.income, 'income');
             
             // Update median display in chart header (no Gen Pop comparison when Gen Pop selected)
             const incomeMedianDisplay = document.getElementById('incomeMedianDisplay');
@@ -47175,9 +47172,8 @@
                 return null;
             }
             
-            // Order for common age keys (case-insensitive lookup via orderLower)
-            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '17 and under', 'under 17', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or older', '65 and older', '65+'];
-            const orderLower = order.map(s => s.toLowerCase());
+            // Order for common age keys (others sorted by start); include Gen Pop labels (exact and lower)
+            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '17 and Under', '17 and under', 'under 17', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older', '65 or older', '65 and older', '65+'];
             const brackets = [];
             Object.entries(ageData).forEach(([key, pct]) => {
                 const val = parseFloat(pct);
@@ -47188,10 +47184,10 @@
             
             if (brackets.length === 0) return 0;
             
-            // Sort by start age (case-insensitive order match, then numeric start)
+            // Sort by start age (use order for known keys, else numeric)
             brackets.sort((a, b) => {
-                const idxA = orderLower.indexOf(a.key.toLowerCase());
-                const idxB = orderLower.indexOf(b.key.toLowerCase());
+                const idxA = order.indexOf(a.key);
+                const idxB = order.indexOf(b.key);
                 if (idxA >= 0 && idxB >= 0) return idxA - idxB;
                 if (idxA >= 0) return -1;
                 if (idxB >= 0) return 1;
@@ -48498,13 +48494,29 @@
                 });
             });
 
+            // Filter to only items that exist in Gen Pop (nothing to index against otherwise)
+            const gpCatItems = genPopBaselineData?.behavioral?.[category];
+            if (gpCatItems && gpCatItems.length > 0) {
+                const gpNames = new Set(gpCatItems.map(gp => (gp.name || '').toUpperCase().trim()));
+                for (const [name] of allValues) {
+                    if (!gpNames.has((name || '').toUpperCase().trim())) {
+                        allValues.delete(name);
+                    }
+                }
+            }
+
             // Build data rows with pct and projection; index will be computed from Gen Pop baseline at render
+            // Track per-profile existence so missing items render as N/A
             let dataRows = Array.from(allValues.keys()).map(value => {
                 const normalizedValue = normalizeNameForDedup(value);
                 const findItem = (items) => items.find(i => 
                     i.name === value || normalizeNameForDedup(i.name) === normalizedValue
                 );
                 
+                const existsInProfile = profiles.map(p => {
+                    const item = findItem(p.behavioral[category] || []);
+                    return !!item;
+                });
                 const pctData = profiles.map(p => {
                     const item = findItem(p.behavioral[category] || []);
                     return item ? item.pct : 0;
@@ -48516,6 +48528,7 @@
                 // Index relative to Gen Pop: (profile pct / Gen Pop pct) * 100 (computed at render; fallback from item.index if no Gen Pop)
                 const genPopPct = genPopIdx >= 0 ? pctData[genPopIdx] : 0;
                 const indexData = profiles.map((p, i) => {
+                    if (!existsInProfile[i]) return null;
                     const pct = pctData[i];
                     if (pct <= 0) return 0;
                     if (genPopIdx >= 0 && i === genPopIdx) return 100; // Gen Pop = baseline (not displayed)
@@ -48524,7 +48537,7 @@
                     return item ? (item.index || 0) : 0;
                 });
                 
-                return { value: value, pctData, projData, indexData };
+                return { value: value, pctData, projData, indexData, existsInProfile };
             });
 
             // Determine which data to use for sorting based on sortType
@@ -48582,16 +48595,27 @@
                         const pct = row.pctData[i];
                         const proj = row.projData[i];
                         const index = row.indexData[i];
+                        const missing = row.existsInProfile && !row.existsInProfile[i];
                         const isPrimary = i === primaryProfileIndex;
                         const primaryClass = isPrimary ? 'primary-col' : '';
+                        const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
+
+                        if (missing && !isGenPopCol) {
+                            return `
+                                <td class="${primaryClass}">
+                                    <div class="comp-bar-cell">
+                                        <span class="comp-bar-pct" style="color: #888; font-style: italic;">N/A</span>
+                                    </div>
+                                </td>
+                            `;
+                        }
+
                         const displayVal = useProjection
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         
-                        // Gen Pop is the baseline: never show index in its own column
-                        const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
                         const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                        const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
+                        const indexDisplay = (!isGenPopCol && index !== null && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
                         const section = sectionKey != null ? sectionKey : ('beh_' + category);
                         const isColumn = getComparisonChartType(section, i) === 'column';
                         const val = useProjection ? (proj || 0) : (pct || 0);
@@ -48633,12 +48657,27 @@
                 });
             });
 
+            // Filter locations to only those in Gen Pop baseline
+            const gpLocItems = genPopBaselineData?.locations;
+            if (gpLocItems && gpLocItems.length > 0) {
+                const gpLocNames = new Set(gpLocItems.map(l => (l.name || '').toUpperCase().trim()));
+                for (const locName of allLocations) {
+                    if (!gpLocNames.has((locName || '').toUpperCase().trim())) {
+                        allLocations.delete(locName);
+                    }
+                }
+            }
+
             // Build data rows; index = (profile% / Gen Pop%) * 100, never show for Gen Pop column
             let dataRows = Array.from(allLocations).map(locName => {
                 const normalizedLocName = normalizeNameForDedup(locName);
                 const findLoc = (locations) => locations.find(l => 
                     l.name === locName || normalizeNameForDedup(l.name) === normalizedLocName
                 );
+                const existsInProfile = profiles.map(p => {
+                    const loc = findLoc(p.locations || []);
+                    return !!loc;
+                });
                 const pctData = profiles.map(p => {
                     const loc = findLoc(p.locations || []);
                     return loc ? loc.pct : 0;
@@ -48649,6 +48688,7 @@
                 });
                 const genPopPct = genPopIdx >= 0 ? pctData[genPopIdx] : 0;
                 const indexData = profiles.map((p, i) => {
+                    if (!existsInProfile[i]) return null;
                     const pct = pctData[i];
                     if (pct <= 0) return 0;
                     if (genPopIdx >= 0 && i === genPopIdx) return 100;
@@ -48656,7 +48696,7 @@
                     const loc = findLoc(p.locations || []);
                     return loc ? (loc.index || 0) : 0;
                 });
-                return { value: locName, pctData, projData, indexData };
+                return { value: locName, pctData, projData, indexData, existsInProfile };
             });
 
             // Determine which data to use for sorting based on sortType
@@ -48714,15 +48754,27 @@
                         const pct = row.pctData[i];
                         const proj = row.projData[i];
                         const index = row.indexData[i];
+                        const missing = row.existsInProfile && !row.existsInProfile[i];
                         const isPrimary = i === primaryProfileIndex;
                         const primaryClass = isPrimary ? 'primary-col' : '';
+                        const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
+
+                        if (missing && !isGenPopCol) {
+                            return `
+                                <td class="${primaryClass}">
+                                    <div class="comp-bar-cell">
+                                        <span class="comp-bar-pct" style="color: #888; font-style: italic;">N/A</span>
+                                    </div>
+                                </td>
+                            `;
+                        }
+
                         const displayVal = useProjection
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         
-                        const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
                         const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                        const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>` : '';
+                        const indexDisplay = (!isGenPopCol && index !== null && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>` : '';
                         const isColumn = getComparisonChartType('location', i) === 'column';
                         const val = useProjection ? (proj || 0) : (pct || 0);
                         const fillPct = sectionMax > 0 ? Math.min((val / sectionMax) * 100, 100) : 0;
