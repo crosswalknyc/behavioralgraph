@@ -27120,6 +27120,39 @@
                     '60-74': [['$50,000 - $74,999', 1.0]],
                     '250+': [['$250,000 or More', 1.0]],
                 };
+
+                // Normalize K-abbreviated keys to standard Gen Pop bucket names
+                function standardizeIncomeKey(key) {
+                    const s = String(key).toLowerCase().replace(/,/g, '').replace(/\s+/g, '');
+                    // Expand $NNk to $NN000
+                    const expanded = s.replace(/\$(\d+)k/gi, (m, n) => '$' + n + '000');
+                    if (expanded.includes('under') || (expanded.includes('<') && expanded.includes('25000'))) return 'Under $25,000';
+                    if (expanded.includes('25000') && (expanded.includes('49') || expanded.includes('50000'))) return '$25,000 - $49,999';
+                    if (expanded.includes('50000') && (expanded.includes('74') || expanded.includes('75000'))) return '$50,000 - $74,999';
+                    if (expanded.includes('75000') && (expanded.includes('99') || expanded.includes('100000'))) return '$75,000 - $99,999';
+                    if (expanded.includes('100000') && (expanded.includes('149') || expanded.includes('150000'))) return '$100,000 - $149,999';
+                    if (expanded.includes('150000') && (expanded.includes('249') || expanded.includes('250000'))) return '$150,000 - $249,999';
+                    if (expanded.includes('250000')) return '$250,000 or More';
+                    return null;
+                }
+
+                // Pre-normalize income keys so K-abbreviated formats become standard
+                const rawIncome = res.demographics.income || {};
+                const rawIdx = res.demographicsIndex?.income || {};
+                const rawGp = res.demographicsGenPop?.income || {};
+                const rawProj = res.demographicsProjection?.income || {};
+                const normalizedIncome = {}, normalizedIdx = {}, normalizedGp = {}, normalizedProj = {};
+                for (const [oldKey, val] of Object.entries(rawIncome)) {
+                    const std = standardizeIncomeKey(oldKey) || oldKey;
+                    normalizedIncome[std] = (normalizedIncome[std] || 0) + val;
+                    normalizedIdx[std] = rawIdx[oldKey] != null ? rawIdx[oldKey] : (normalizedIdx[std] || 100);
+                    normalizedGp[std] = rawGp[oldKey] != null ? rawGp[oldKey] : (normalizedGp[std] || 0);
+                    normalizedProj[std] = (normalizedProj[std] || 0) + (rawProj[oldKey] || 0);
+                }
+                res.demographics.income = normalizedIncome;
+                if (res.demographicsIndex) res.demographicsIndex.income = normalizedIdx;
+                if (res.demographicsGenPop) res.demographicsGenPop.income = normalizedGp;
+                if (res.demographicsProjection) res.demographicsProjection.income = normalizedProj;
                 
                 const income = res.demographics.income || {};
                 if (Object.keys(income).length === 0) return;
@@ -48971,14 +49004,17 @@
                 }
                 // Income normalization
                 if (type === 'income') {
-                    const noComma = lower.replace(/,/g, '');
-                    if (noComma.includes('under') || (noComma.includes('<') && noComma.includes('25000'))) return 'Under $25,000';
-                    if (noComma.includes('25000') && noComma.includes('49')) return '$25,000 - $49,999';
-                    if (noComma.includes('50000') && noComma.includes('74')) return '$50,000 - $74,999';
-                    if (noComma.includes('75000') && noComma.includes('99')) return '$75,000 - $99,999';
-                    if (noComma.includes('100000') && noComma.includes('149')) return '$100,000 - $149,999';
-                    if (noComma.includes('150000') && noComma.includes('249')) return '$150,000 - $249,999';
-                    if (noComma.includes('250000') && (noComma.includes('+') || noComma.includes('or more') || noComma.includes('more'))) return '$250,000 or More';
+                    // Expand K-abbreviations: "$75k" → "$75000", "$100k" → "$100000"
+                    const expanded = lower.replace(/,/g, '').replace(/\$(\d+)k/gi, (m, n) => '$' + n + '000');
+                    if (expanded.includes('under') || expanded.includes('< ') || (expanded.includes('<') && expanded.includes('25000'))) return 'Under $25,000';
+                    if (expanded.includes('25000') && (expanded.includes('49') || expanded.includes('50000'))) return '$25,000 - $49,999';
+                    if (expanded.includes('50000') && (expanded.includes('74') || expanded.includes('75000'))) return '$50,000 - $74,999';
+                    if (expanded.includes('75000') && (expanded.includes('99') || expanded.includes('100000'))) return '$75,000 - $99,999';
+                    if (expanded.includes('100000') && (expanded.includes('149') || expanded.includes('150000'))) return '$100,000 - $149,999';
+                    if (expanded.includes('150000') && (expanded.includes('249') || expanded.includes('250000'))) return '$150,000 - $249,999';
+                    if (expanded.includes('250000') && (expanded.includes('+') || expanded.includes('or more') || expanded.includes('more'))) return '$250,000 or More';
+                    // Handle "$250k+" or "$250,000+"
+                    if (expanded.includes('250000')) return '$250,000 or More';
                 }
                 return v;
             };
