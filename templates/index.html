@@ -29982,10 +29982,10 @@
             const ageMax = Math.max(...ageData) * 1.5; // 50% padding for horizontal labels
             
             // Calculate median for age using same interpolated formula as Compare feature
-            // Use full Gen Pop baseline for Gen Pop median (profile CSV may be missing brackets)
+            // For Gen Pop median, prefer the full Gen Pop baseline (all brackets) over profile-overlapping subset
             const profileMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(demographics.age || {}) : 0;
-            const fullGenPopAge = (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.age) ? genPopBaselineData.demographics.age : (demographicsGenPop.age || {});
-            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(fullGenPopAge) : 0;
+            const fullGpAge = (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.age) ? genPopBaselineData.demographics.age : (demographicsGenPop.age || {});
+            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(fullGpAge) : 0;
             
             // Update median display in chart header
             const ageMedianDisplay = document.getElementById('ageMedianDisplay');
@@ -30319,9 +30319,9 @@
             const incomeChartType = chartTypePrefs.income || 'bar';
             const incomeIsCircular = ['doughnut', 'pie', 'polarArea'].includes(incomeChartType);
             
-            // Calculate median for income - use full Gen Pop baseline for Gen Pop median
-            const fullGenPopIncome = (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.income) ? genPopBaselineData.demographics.income : (demographicsGenPop.income || {});
-            const incomeMedian = calculateDemographicMedian(demographics.income, fullGenPopIncome, 'income');
+            // Calculate median for income — use full Gen Pop baseline for Gen Pop median (profile CSV may be missing low-end brackets)
+            const fullGpIncome = (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.income) ? genPopBaselineData.demographics.income : (demographicsGenPop.income || {});
+            const incomeMedian = calculateDemographicMedian(demographics.income, fullGpIncome, 'income');
             
             // Update median display in chart header (no Gen Pop comparison when Gen Pop selected)
             const incomeMedianDisplay = document.getElementById('incomeMedianDisplay');
@@ -47175,8 +47175,9 @@
                 return null;
             }
             
-            // Order for common age keys (others sorted by start); include Gen Pop labels (exact and lower)
-            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '17 and Under', '17 and under', 'under 17', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older', '65 or older', '65 and older', '65+'];
+            // Order for common age keys (case-insensitive lookup via orderLower)
+            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '17 and under', 'under 17', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or older', '65 and older', '65+'];
+            const orderLower = order.map(s => s.toLowerCase());
             const brackets = [];
             Object.entries(ageData).forEach(([key, pct]) => {
                 const val = parseFloat(pct);
@@ -47187,10 +47188,10 @@
             
             if (brackets.length === 0) return 0;
             
-            // Sort by start age (use order for known keys, else numeric)
+            // Sort by start age (case-insensitive order match, then numeric start)
             brackets.sort((a, b) => {
-                const idxA = order.indexOf(a.key);
-                const idxB = order.indexOf(b.key);
+                const idxA = orderLower.indexOf(a.key.toLowerCase());
+                const idxB = orderLower.indexOf(b.key.toLowerCase());
                 if (idxA >= 0 && idxB >= 0) return idxA - idxB;
                 if (idxA >= 0) return -1;
                 if (idxB >= 0) return 1;
@@ -47896,15 +47897,10 @@
                 Object.keys(p.behavioral || {}).forEach(cat => allBehavioralCats.add(cat));
             });
 
-            // Calculate median age and income from distributions if not available
+            // Calculate median age from age distribution if not available
             profiles.forEach(p => {
                 if (!p.medianAge || p.medianAge <= 0) {
                     p.medianAge = calculateMedianAgeFromDistribution(p.demographics?.age || {});
-                }
-                if (!p.medianIncome) {
-                    const fullGpIncome = (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.income) ? genPopBaselineData.demographics.income : {};
-                    const med = typeof calculateDemographicMedian === 'function' ? calculateDemographicMedian(p.demographics?.income || {}, fullGpIncome, 'income') : { profile: null };
-                    p.medianIncome = (med.profile && med.profile.value) ? parseFloat(String(med.profile.value).replace(/[^0-9.-]/g, '')) : 0;
                 }
             });
 
@@ -48015,11 +48011,7 @@
                             </tr>
                             <tr>
                                 <td>Median Age</td>
-                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">${p.medianAge > 0 ? p.medianAge.toFixed(2) + ' years' : '-'}</td>`).join('')}
-                            </tr>
-                            <tr>
-                                <td>Median Income</td>
-                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">${p.medianIncome > 0 ? '$' + formatNumber(Math.round(p.medianIncome)) : '-'}</td>`).join('')}
+                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">${p.medianAge > 0 ? 'Median: ' + p.medianAge.toFixed(2) : '-'}</td>`).join('')}
                             </tr>
                         </tbody>
                     </table>
@@ -50453,7 +50445,6 @@
                 csvContent += 'Crosswalk Respondents,' + profiles.map(p => p.sampleSize || 0).join(',') + '\n';
                 csvContent += 'Projected US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
                 csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
-                csvContent += 'Median Income,' + profiles.map(p => p.medianIncome > 0 ? '$' + formatNumber(Math.round(p.medianIncome)) : '-').join(',') + '\n';
             } else if (moduleType.startsWith('behavioral_')) {
                 const catName = moduleType.replace('behavioral_', '').replace(/_/g, ' ');
                 // Find the actual category name (case-insensitive match)
@@ -50728,7 +50719,6 @@
                     csvContent += 'Crosswalk Respondents,' + profiles.map(p => p.sampleSize || 0).join(',') + '\n';
                     csvContent += 'Projected US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
                     csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
-                    csvContent += 'Median Income,' + profiles.map(p => p.medianIncome > 0 ? '$' + formatNumber(Math.round(p.medianIncome)) : '-').join(',') + '\n';
                 } else if (moduleType === 'location') {
                     const headerRow = ['Value'];
                     profiles.forEach(p => { headerRow.push(`"${p.name} %"`); if (!isGenPopProfile(p)) headerRow.push(`"${p.name} Index"`); });
@@ -50818,7 +50808,6 @@
                     csvContent += 'Crosswalk Respondents,' + profiles.map(p => p.sampleSize || 0).join(',') + '\n';
                     csvContent += 'Projected US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
                     csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
-                    csvContent += 'Median Income,' + profiles.map(p => p.medianIncome > 0 ? '$' + formatNumber(Math.round(p.medianIncome)) : '-').join(',') + '\n';
                 } else if (moduleType === 'location') {
                     const headerRow = ['Value'];
                     profiles.forEach(p => { headerRow.push(`"${p.name} %"`); if (!isGenPopProfile(p)) headerRow.push(`"${p.name} Index"`); });
@@ -50939,7 +50928,7 @@
         
         // Returns only the values currently displayed in the section (respects limit/sort)
         function getComparisonSectionDisplayedValues(moduleType, profiles) {
-            if (moduleType === 'summary') return ['Crosswalk Respondents', 'Projected US', 'Median Age', 'Median Income'];
+            if (moduleType === 'summary') return ['Crosswalk Respondents', 'Projected US', 'Median Age'];
             
             const getSortProfileIdx = (sectionKey) => (typeof currentSortSection !== 'undefined' && currentSortSection === sectionKey && currentSortColumn != null) ? currentSortColumn : (primaryProfileIndex >= 0 ? primaryProfileIndex : 0);
             
@@ -51465,14 +51454,12 @@
                         const metricMap = {
                             'Crosswalk Respondents': 'sampleSize',
                             'Projected US': 'projectedUS',
-                            'Median Age': 'medianAge',
-                            'Median Income': 'medianIncome'
+                            'Median Age': 'medianAge'
                         };
                         const keep = selectedValues.map(v => metricMap[v]).filter(Boolean);
                         if (keep.includes('sampleSize')) baseData.sampleSize = profile.sampleSize;
                         if (keep.includes('projectedUS')) baseData.projectedUS = profile.projectedUS;
                         if (keep.includes('medianAge')) baseData.medianAge = profile.medianAge;
-                        if (keep.includes('medianIncome')) baseData.medianIncome = profile.medianIncome;
                     }
                     return baseData;
                 } else if (moduleType === 'location') {
@@ -58522,7 +58509,6 @@
                                 <tr><td>Respondents</td>${profiles.map(p => `<td>n=${formatNumber(p.sampleSize)}</td>`).join('')}</tr>
                                 <tr><td>Projected US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
                                 <tr><td>Median Age</td>${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '-'}</td>`).join('')}</tr>
-                                <tr><td>Median Income</td>${profiles.map(p => `<td>${p.medianIncome > 0 ? '$' + formatNumber(Math.round(p.medianIncome)) : '-'}</td>`).join('')}</tr>
                             </tbody>
                         </table>
                     `;
