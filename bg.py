@@ -375,6 +375,22 @@ def _soft_clamp_index(raw_index, lo, hi, cat, val):
 
     return max(lo, min(hi, result))
 
+
+def soft_bp_ceiling(raw_bp, ceiling=95.0, sharpness=0.15):
+    """Smooth ceiling that compresses values approaching the cap.
+
+    Values below 85% of the ceiling are untouched.  Above that, exponential
+    compression smoothly squeezes values so no two items land on the same
+    hard cap, producing a natural cascading distribution.
+    """
+    knee = ceiling * 0.85
+    if raw_bp <= knee:
+        return raw_bp
+    overshoot = raw_bp - knee
+    headroom = ceiling - knee
+    compressed = headroom * (1.0 - math.exp(-sharpness * overshoot))
+    return round(knee + compressed, 4)
+
 # ============================================================================
 # OPENAI CLIENT FOR PIPELINE VALIDATION (archetype generation)
 # ============================================================================
@@ -812,11 +828,10 @@ def anchor_to_genpop(df, sample_size):
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2  # 0 for Gen Pop, ~1 for niche
 
-    # Adaptive bounds: high-pen profiles stay closer to Gen Pop, niche profiles deviate more.
-    # Minimum floors prevent the range from collapsing so tight that every index
-    # rounds to the same value (the "all 105 / all 98" problem).
-    BEHAV_HI = max(1.15, 1.0 + 2.0 * niche_factor)
-    BEHAV_LO = min(0.88, 1.0 - 0.7 * niche_factor)
+    # Adaptive bounds: wider ranges let the profile's intrinsic signal drive
+    # the output.  Gen Pop acts as a GUIDE, not a mandate.
+    BEHAV_HI = max(1.40, 1.0 + 3.0 * niche_factor)
+    BEHAV_LO = min(0.30, 1.0 - 1.5 * niche_factor)
     DEMO_HI  = max(1.10, 1.0 + 0.8 * niche_factor)
     DEMO_LO  = min(0.92, 1.0 - 0.5 * niche_factor)
 
@@ -833,7 +848,7 @@ def anchor_to_genpop(df, sample_size):
             continue
 
         is_demo = cat in DEMO_CATS
-        lo, hi = (DEMO_LO, DEMO_HI) if is_demo else (BEHAV_LO, BEHAV_HI)
+        base_lo, base_hi = (DEMO_LO, DEMO_HI) if is_demo else (BEHAV_LO, BEHAV_HI)
 
         gp_entry = gp_lookup.get((cat, val))
         if gp_entry is None:
@@ -862,16 +877,25 @@ def anchor_to_genpop(df, sample_size):
         raw_ratio = profile_cs / gp_cs_val
         raw_index = confidence * raw_ratio + (1.0 - confidence) * 1.0
 
-        # Per-item ceiling: tighten max index when GP BP is high so the
-        # resulting BP doesn't blow past a reasonable absolute ceiling.
-        ABS_BP_CEIL = 95.0
+        # Per-item adaptive floor: if the profile's raw signal is far below
+        # Gen Pop, widen the lower bound so the item isn't forced upward.
+        # This prevents e.g. Hanes at 2% CS being pulled to 35% BP just
+        # because Gen Pop has Hanes high.
+        lo = base_lo
+        hi = base_hi
+        if not is_demo and raw_ratio < base_lo:
+            lo = max(0.05, raw_ratio * 0.7)
+
+        # Soft ceiling instead of hard ABS_BP_CEIL = 95
         item_hi = hi
-        if gp_bp_val * hi > ABS_BP_CEIL:
-            item_hi = max(1.01, ABS_BP_CEIL / gp_bp_val)
+        raw_hi_bp = gp_bp_val * hi
+        if raw_hi_bp > 80.0:
+            soft_max = soft_bp_ceiling(raw_hi_bp)
+            item_hi = max(1.01, soft_max / gp_bp_val)
         clamped_index = _soft_clamp_index(raw_index, lo, item_hi, cat, val)
 
         new_bp = gp_bp_val * clamped_index
-        new_bp = min(new_bp, ABS_BP_CEIL)
+        new_bp = soft_bp_ceiling(new_bp)
         new_bp = round(new_bp, 4)
 
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
@@ -1666,8 +1690,8 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
             pass
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_bp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2
-    BASE_MAX = max(1.15, 1.0 + 2.0 * niche_factor)
-    BASE_MIN = min(0.88, 1.0 - 0.7 * niche_factor)
+    BASE_MAX = max(1.40, 1.0 + 3.0 * niche_factor)
+    BASE_MIN = min(0.30, 1.0 - 1.5 * niche_factor)
     print(f"   Behavioral gut-check adaptive bounds: [{BASE_MIN:.2f}, {BASE_MAX:.2f}] "
           f"(profile BP {profile_bp_pct:.1f}%)")
 
@@ -1723,16 +1747,18 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
         if _category_matches_archetype(cat, behav_low):
             max_idx = min(max_idx, 1.1)
 
-        # Per-item ceiling: tighten max index when GP BP is high
-        ABS_BP_CEIL = 95.0
-        if gp_bp * max_idx > ABS_BP_CEIL:
-            max_idx = max(1.01, ABS_BP_CEIL / gp_bp)
+        # Soft ceiling: compress when GP BP * max_idx would breach ceiling
+        raw_hi_bp = gp_bp * max_idx
+        if raw_hi_bp > 80.0:
+            soft_max = soft_bp_ceiling(raw_hi_bp)
+            max_idx = max(1.01, soft_max / gp_bp)
 
         needs_fix = cur_index > max_idx or cur_index < min_idx
 
         if needs_fix:
             target = _soft_clamp_index(cur_index, min_idx, max_idx, cat, val)
-            new_bp = round(min(gp_bp * target, ABS_BP_CEIL), 4)
+            new_bp = soft_bp_ceiling(round(gp_bp * target, 4))
+            new_bp = round(new_bp, 4)
             new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
             new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
             if bp_col and bp_col in df.columns:
@@ -1847,8 +1873,8 @@ def final_behavioral_sanity_check(df, archetype=None):
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_full)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2
 
-    MAX_IDX = max(1.15, 1.0 + 2.0 * niche_factor)
-    MIN_IDX = min(0.88, 1.0 - 0.7 * niche_factor)
+    MAX_IDX = max(1.40, 1.0 + 3.0 * niche_factor)
+    MIN_IDX = min(0.30, 1.0 - 1.5 * niche_factor)
 
     # Apply archetype-aware adjustments to bounds per category
     behav_high = [b.upper() for b in (archetype or {}).get('behavioral_high', [])]
@@ -1886,17 +1912,19 @@ def final_behavioral_sanity_check(df, archetype=None):
         if _category_matches_archetype(cat, behav_low):
             hi = min(hi, 1.1)
 
-        # Per-item ceiling: tighten max index when GP BP is high
-        ABS_BP_CEIL = 95.0
-        if gp_bp_val * hi > ABS_BP_CEIL:
-            hi = max(1.01, ABS_BP_CEIL / gp_bp_val)
+        # Soft ceiling: compress when GP BP * hi would breach ceiling zone
+        raw_hi_bp = gp_bp_val * hi
+        if raw_hi_bp > 80.0:
+            soft_max = soft_bp_ceiling(raw_hi_bp)
+            hi = max(1.01, soft_max / gp_bp_val)
 
-        # Also catch any BP that already exceeds the ceiling from earlier steps
-        if lo <= cur_index <= hi and cur_bp <= ABS_BP_CEIL:
+        # Apply soft ceiling to current BP to see if it's actually in range
+        soft_cur_bp = soft_bp_ceiling(cur_bp)
+        if lo <= cur_index <= hi and abs(cur_bp - soft_cur_bp) < 0.01:
             continue
 
         target_index = _soft_clamp_index(cur_index, lo, hi, cat, val)
-        new_bp = round(min(gp_bp_val * target_index, ABS_BP_CEIL), 4)
+        new_bp = round(soft_bp_ceiling(gp_bp_val * target_index), 4)
 
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
         new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
@@ -1932,6 +1960,219 @@ def final_behavioral_sanity_check(df, archetype=None):
                     pass
 
     print(f"✅ final_behavioral_sanity_check: {corrections} corrections applied")
+    return df
+
+
+# ---------- ITEM-LEVEL AI ANOMALY DETECTION ----------
+
+_ITEM_REVIEW_CATEGORIES = {
+    'MOST PURCHASED BRANDS', 'WHERE THEY SHOP', 'WHERE THEY DINE',
+    'QSR', 'STREAMING/PLATFORM', 'SOCIAL MEDIA', 'APPAREL/FOOTWEAR',
+    'BEAUTY/WELLNESS', 'PHARMACY', 'TALENT',
+}
+
+
+def item_level_ai_review(df, archetype, project_name, brands):
+    """Second GPT pass: reviews top items per key category in the context
+    of the profile's demographics and flags specific contextual anomalies.
+
+    Example: "Hanes at 35% BP makes no sense for a 17-24 female beauty audience"
+    The category-level archetype can't catch this; item-level context is needed.
+    """
+    client = _get_openai_client()
+    if not client:
+        print("⚠️ OpenAI not available — skipping item-level AI review")
+        return df
+
+    gp = _load_genpop_csv()
+    if gp is None:
+        return df
+
+    bp_col = 'Brand Penetration (Row)'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    GENPOP_TOTAL = 329_900_000
+
+    if bp_col not in df.columns:
+        return df
+
+    sample_size = 1
+    ss_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_size = max(1, int(float(str(df.loc[ss_mask, cs_col].iloc[0]).replace(',', ''))))
+        except (ValueError, TypeError):
+            pass
+
+    gp_bp_lookup = {}
+    for _, row in gp.iterrows():
+        cat = str(row.iloc[0]).strip().upper()
+        val = str(row.iloc[1]).strip().upper()
+        try:
+            gp_bp_lookup[(cat, val)] = float(row.iloc[2])
+        except (ValueError, TypeError):
+            pass
+
+    gender = archetype.get('gender_skew', 'balanced')
+    age = archetype.get('age_skew', 'balanced')
+    brand_name = brands[0] if brands else project_name
+
+    age_desc = {'younger': '18-34', 'older': '45-65+', 'balanced': '18-65'}
+    gender_desc = {'male': 'predominantly male', 'female': 'predominantly female',
+                   'balanced': 'gender-balanced'}
+    profile_desc = (f"Audience of {brand_name}: {gender_desc.get(gender, 'balanced')}, "
+                    f"age range {age_desc.get(age, '18-65')}")
+
+    categories_to_review = {}
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat not in _ITEM_REVIEW_CATEGORIES:
+            continue
+        try:
+            bp_val = float(row.get(bp_col, 0))
+        except (ValueError, TypeError):
+            continue
+        if bp_val <= 0:
+            continue
+        val = str(row.get('Value', '')).strip()
+        categories_to_review.setdefault(cat, []).append((val, bp_val, idx))
+
+    if not categories_to_review:
+        return df
+
+    df = df.copy()
+
+    batches = []
+    current_batch = {}
+    current_items = 0
+    for cat, items in categories_to_review.items():
+        sorted_items = sorted(items, key=lambda x: -x[1])[:15]
+        current_batch[cat] = sorted_items
+        current_items += len(sorted_items)
+        if current_items >= 40:
+            batches.append(current_batch)
+            current_batch = {}
+            current_items = 0
+    if current_batch:
+        batches.append(current_batch)
+
+    total_adjustments = 0
+    for batch in batches:
+        items_text = []
+        for cat, items in batch.items():
+            lines = [f"  {name}: {bp:.1f}% BP" for name, bp, _ in items]
+            items_text.append(f"{cat}:\n" + "\n".join(lines))
+
+        prompt = (
+            f"You are a US consumer research analyst. A profile has been built "
+            f"for this audience: {profile_desc}.\n\n"
+            f"Below are the top items per category with their Brand Penetration (BP) values. "
+            f"BP represents what % of this audience engages with each item.\n\n"
+            + "\n\n".join(items_text) +
+            f"\n\nReview EACH item and flag any that seem contextually wrong for this "
+            f"specific audience. Only flag clear anomalies — items whose rank or BP value "
+            f"makes no sense given the audience demographics.\n\n"
+            f"Return ONLY a valid JSON array. Each element should be:\n"
+            f'{{"category": "CATEGORY_NAME", "item": "ITEM_NAME", '
+            f'"direction": "lower" or "higher", '
+            f'"reason": "brief explanation"}}\n\n'
+            f"If nothing looks wrong, return an empty array: []\n"
+            f"Be CONSERVATIVE — only flag items where the placement is clearly "
+            f"anomalous for this demographic. Minor deviations are fine."
+        )
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert consumer research analyst. Return only valid JSON."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=800,
+                temperature=0.2,
+            )
+            content = response.choices[0].message.content.strip()
+            if '```json' in content:
+                content = content.split('```json')[1].split('```')[0]
+            elif '```' in content:
+                content = content.split('```')[1].split('```')[0]
+            flags = _json_mod.loads(content)
+        except Exception as e:
+            print(f"⚠️ Item-level AI review GPT call failed: {e}")
+            continue
+
+        if not isinstance(flags, list):
+            continue
+
+        for flag in flags:
+            try:
+                f_cat = str(flag.get('category', '')).strip().upper()
+                f_item = str(flag.get('item', '')).strip().upper()
+                direction = str(flag.get('direction', '')).strip().lower()
+                reason = str(flag.get('reason', ''))
+            except (AttributeError, TypeError):
+                continue
+
+            if direction not in ('lower', 'higher'):
+                continue
+
+            cat_items = batch.get(f_cat, [])
+            matched = [(name, bp, idx) for name, bp, idx in cat_items
+                       if name.strip().upper() == f_item]
+            if not matched:
+                continue
+
+            name, cur_bp, row_idx = matched[0]
+            gp_bp = gp_bp_lookup.get((f_cat, f_item), 0)
+            if gp_bp <= 0:
+                continue
+
+            multiplier = 0.70 if direction == 'lower' else 1.30
+            new_bp = round(soft_bp_ceiling(cur_bp * multiplier), 4)
+            new_bp = max(0.01, new_bp)
+
+            new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+            new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+
+            df.at[row_idx, bp_col] = new_bp
+            df.at[row_idx, raw_col] = str(new_raw)
+            if proj_col in df.columns:
+                df.at[row_idx, proj_col] = str(new_proj)
+
+            print(f"   🤖 AI flag: {name} in {f_cat} {direction} "
+                  f"({cur_bp:.1f}% → {new_bp:.1f}%) — {reason}")
+            total_adjustments += 1
+
+    if total_adjustments > 0:
+        DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                     'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                     'OCCUPATION', 'LOCATION'}
+        META_CATS = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+                     'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
+        for cat in df['Column'].str.upper().unique():
+            if cat in DEMO_CATS or cat in META_CATS:
+                continue
+            cm = df['Column'].str.upper() == cat
+            if not cm.any():
+                continue
+            total_raw = 0
+            for cidx in df[cm].index:
+                try:
+                    total_raw += int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                except (ValueError, TypeError):
+                    pass
+            if total_raw <= 0:
+                continue
+            for cidx in df[cm].index:
+                try:
+                    raw = int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                    new_cs = round((raw / total_raw) * 100.0, 4)
+                    df.at[cidx, cs_col] = new_cs
+                except (ValueError, TypeError):
+                    pass
+
+    print(f"✅ item_level_ai_review: {total_adjustments} item-level adjustments applied")
     return df
 
 
@@ -7169,6 +7410,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if not is_genpop:
         print("🔍 Running final behavioral sanity check on FINAL output...")
         df_final = final_behavioral_sanity_check(df_final, archetype=_archetype)
+
+    # ── Item-level AI anomaly detection (second GPT pass) ───────────────
+    if not is_genpop and _archetype:
+        print("🤖 Running item-level AI anomaly detection...")
+        df_final = item_level_ai_review(df_final, _archetype, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
