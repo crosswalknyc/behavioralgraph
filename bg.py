@@ -4496,7 +4496,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
         safe_zips = [z.replace("'", "''") for z in geo_zip_codes]
         zip_vals = ",".join(f"'{z}'" for z in safe_zips)
-        safe_dma = geo_dma.replace("'", "''")
+        safe_dma = geo_dma.replace("'", "''").strip()
+        # Strip common state abbreviations so "New York NY" → "New York" for DMA-only matching
+        import re as _re
+        dma_core = _re.sub(r'\s+[A-Z]{2}\s*$', '', safe_dma).strip()
 
     else:
         # Show which processing approach will be used
@@ -4528,7 +4531,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 SELECT DISTINCT d.UID
                 FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
                 WHERE d.ZIP IN ({zip_vals})
-                  AND LOWER(d.DMA) LIKE '%{safe_dma.lower()}%'
+                  AND (
+                    LOWER(d.DMA) LIKE '%{dma_core.lower()}%'
+                    OR LOWER(CONCAT(d.DMA, ' ', COALESCE(d.DMA_PROVINCE, ''))) LIKE '%{safe_dma.lower()}%'
+                  )
             """)
             geo_uid_count = cur.execute("SELECT COUNT(*) FROM GEO_UIDS").fetchone()[0]
             print(f"📊 Found {geo_uid_count:,} UIDs matching ZIP + DMA criteria")
