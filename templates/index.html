@@ -33208,6 +33208,7 @@
                 
                 // Default sort by percentage descending
                 const sortedItems = filteredItems.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                sortedItems.forEach((item, i) => { item._rank = i + 1; });
                 // Apply item limit (default top 15)
                 const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
                 const displayItems = itemLimit === 'All' || itemLimit >= sortedItems.length ? sortedItems : sortedItems.slice(0, itemLimit);
@@ -34087,7 +34088,7 @@
                 
                 return `
                     <div class="behavioral-item">
-                        <span class="behavioral-rank">${idx + 1}</span>
+                        <span class="behavioral-rank">${item._rank || (idx + 1)}</span>
                         <div class="behavioral-name-wrapper">
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                         </div>
@@ -34188,13 +34189,7 @@
                 filtered = allBehavioralData[cat] || [];
             }
             
-            // Apply current search filter if any
-            const searchInput = listEl.closest('.behavioral-card').querySelector('input[type="text"]');
-            if (searchInput && searchInput.value.trim()) {
-                filtered = filtered.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
-            }
-            
-            // Apply current sort
+            // Sort first so ranks reflect the full sorted list
             const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
             if (sortSelect) {
                 const sortValue = sortSelect.value;
@@ -34208,6 +34203,14 @@
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 }
+            }
+            
+            filtered.forEach((item, i) => { item._rank = i + 1; });
+            
+            // Apply search filter after rank assignment
+            const searchInput = listEl.closest('.behavioral-card').querySelector('input[type="text"]');
+            if (searchInput && searchInput.value.trim()) {
+                filtered = filtered.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
             }
             
             // Apply item limit
@@ -34297,13 +34300,7 @@
                 }
             }
             
-            // Apply search filter
-            if (searchTerm.trim()) {
-                filtered = filtered.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
-            }
-            // Show all items, no limit
-            
-            // Apply current sort
+            // Sort first (before search) so ranks reflect the full sorted list
             const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
             if (sortSelect) {
                 const sortValue = sortSelect.value;
@@ -34317,6 +34314,14 @@
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 }
+            }
+            
+            // Assign ranks from the full sorted list before filtering by search
+            filtered.forEach((item, i) => { item._rank = i + 1; });
+            
+            // Apply search filter
+            if (searchTerm.trim()) {
+                filtered = filtered.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
             }
             
             // Apply item limit (but show all when searching)
