@@ -6402,9 +6402,8 @@ def get_profile_image(name):
     """Get profile image - only returns admin-uploaded custom images."""
     global profile_image_cache
     
-    # Load cache if empty
-    if not profile_image_cache:
-        load_profile_image_cache()
+    # Reload cache periodically so uploads from other workers are visible
+    load_profile_image_cache()
     
     # Normalize the cache key
     cache_key = name.lower().strip()
@@ -11169,15 +11168,22 @@ demographics_cache = {}
 # Profile image cache - stores image URLs to avoid repeated API calls
 profile_image_cache = {}
 profile_image_cache_dirty = False  # Track if cache needs saving
+_profile_image_cache_ts = 0  # last time cache was loaded from S3 (epoch seconds)
+_PROFILE_IMAGE_CACHE_TTL = 15  # reload from S3 at most every 15 seconds
 
-def load_profile_image_cache():
+def load_profile_image_cache(force=False):
     """Load profile image cache from S3."""
-    global profile_image_cache
+    global profile_image_cache, _profile_image_cache_ts
+    import time as _time
     if not s3_client:
         return False
+    now = _time.time()
+    if not force and profile_image_cache and (now - _profile_image_cache_ts) < _PROFILE_IMAGE_CACHE_TTL:
+        return True
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
         profile_image_cache = json.loads(response['Body'].read().decode('utf-8'))
+        _profile_image_cache_ts = now
         print(f"✅ Loaded profile image cache: {len(profile_image_cache)} images")
         return True
     except:
@@ -11186,7 +11192,7 @@ def load_profile_image_cache():
 
 def save_profile_image_cache():
     """Save profile image cache to S3. Retries up to 3 times on failure."""
-    global profile_image_cache, profile_image_cache_dirty
+    global profile_image_cache, profile_image_cache_dirty, _profile_image_cache_ts
     if not s3_client:
         print("⚠️ Cannot save profile image cache: S3 client not available")
         return False
@@ -11222,6 +11228,7 @@ def save_profile_image_cache():
                 ContentType='application/json'
             )
             profile_image_cache_dirty = False
+            _profile_image_cache_ts = time.time()
             print(f"   ✅ Successfully wrote cache to S3: {S3_IMAGE_CACHE_KEY} (attempt {attempt + 1})")
             print(f"💾 Saved profile image cache: {len(profile_image_cache)} images")
             sample_keys = list(profile_image_cache.keys())[:5]
@@ -11384,9 +11391,8 @@ def set_profile_image():
             print(f"   ⚠️ Warning: URL doesn't start with http/https/: {image_url[:50]}...")
             # Still allow it, but log the warning
         
-        # Ensure cache is loaded before updating (but preserve any entries we might have)
-        if not profile_image_cache:
-            load_profile_image_cache()
+        # Force-reload cache from S3 before updating so we merge with the latest state
+        load_profile_image_cache(force=True)
         
         # Update cache with custom image (normalize key consistently)
         cache_key = profile_name.lower().strip()
@@ -12994,8 +13000,7 @@ def debug_image_cache_for_profile(name):
 @requires_auth
 def get_all_profile_images():
     """Get all cached profile images at once for instant loading."""
-    if not profile_image_cache:
-        load_profile_image_cache()
+    load_profile_image_cache()
     
     # Return all images that have URLs (exclude not_found entries)
     images = {}
