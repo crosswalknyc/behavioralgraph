@@ -1860,7 +1860,28 @@
             <div id="companyListView">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
                     <h3 style="margin: 0; font-size: 1.1rem;">Companies</h3>
-                    <input type="text" id="companySearchInput" placeholder="Search companies..." oninput="filterCompanyList()" style="width: 250px; padding: 0.4rem 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="text" id="companySearchInput" placeholder="Search companies..." oninput="filterCompanyList()" style="width: 250px; padding: 0.4rem 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;">
+                        <button class="btn btn-primary btn-small" onclick="toggleCreateCompanyForm()">+ Create Company</button>
+                    </div>
+                </div>
+                <!-- Create Company Inline Form -->
+                <div id="createCompanyForm" style="display: none; margin-bottom: 1rem; padding: 0.75rem; border: 1px solid var(--accent-cyan); border-radius: 8px; background: var(--bg-card);">
+                    <h4 style="margin: 0 0 0.5rem; font-size: 0.9rem;">New Company</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <div>
+                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Company Name *</label>
+                            <input type="text" id="newCompanyName" placeholder="e.g. Acme Corp" style="width: 100%; padding: 0.35rem 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-primary); font-size: 0.85rem;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Credit Pool (0 = none, -1 = unlimited)</label>
+                            <input type="number" id="newCompanyCreditPool" value="0" style="width: 100%; padding: 0.35rem 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-primary); font-size: 0.85rem;">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary btn-small" onclick="createCompany()">Create</button>
+                        <button class="btn btn-secondary btn-small" onclick="toggleCreateCompanyForm()">Cancel</button>
+                    </div>
                 </div>
                 <div class="stats-grid" style="margin-bottom: 1rem;">
                     <div class="stat-card"><h3>Total Companies</h3><div class="stat-value blue" id="totalCompanies">0</div></div>
@@ -1873,6 +1894,7 @@
                         <tr>
                             <th style="cursor: pointer;" onclick="sortCompanyTable('name')">Company</th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('user_count')">Users</th>
+                            <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('credit_pool')">Credit Pool</th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('credits_used')">Credits Used</th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('total_sessions')">Sessions</th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('last_active')">Last Active</th>
@@ -1893,20 +1915,40 @@
 
                 <div class="stats-grid" style="margin-bottom: 1rem;">
                     <div class="stat-card"><h3>Users</h3><div class="stat-value blue" id="cdTotalUsers">0</div></div>
+                    <div class="stat-card"><h3>Credit Pool</h3><div class="stat-value green" id="cdPoolRemaining">--</div><div style="font-size:0.65rem;color:var(--text-secondary);margin-top:0.15rem;" id="cdPoolDetail"></div></div>
                     <div class="stat-card"><h3>Credits Used</h3><div class="stat-value orange" id="cdCreditsUsed">0</div></div>
-                    <div class="stat-card"><h3>Total Sessions</h3><div class="stat-value green" id="cdTotalSessions">0</div></div>
-                    <div class="stat-card"><h3>Avg Sessions/User</h3><div class="stat-value blue" id="cdAvgSessions">0</div></div>
+                    <div class="stat-card"><h3>Total Sessions</h3><div class="stat-value blue" id="cdTotalSessions">0</div></div>
+                </div>
+                <!-- Adjust Credits inline -->
+                <div id="adjustCreditsRow" style="display:none; margin-bottom:1rem; padding:0.5rem 0.75rem; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card);">
+                    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                        <label style="font-size:0.8rem;color:var(--text-secondary);">Set Pool Total:</label>
+                        <input type="number" id="adjustPoolTotal" style="width:100px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
+                        <button class="btn btn-primary btn-small" onclick="setCompanyPoolTotal()">Set</button>
+                        <span style="color:var(--text-secondary);font-size:0.75rem;">|</span>
+                        <label style="font-size:0.8rem;color:var(--text-secondary);">Add Credits:</label>
+                        <input type="number" id="addPoolCredits" value="10" min="1" style="width:80px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
+                        <button class="btn btn-small btn-secondary" onclick="addCompanyPoolCredits()">Add</button>
+                        <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display='none'">Close</button>
+                    </div>
                 </div>
 
                 <!-- Employee Table -->
                 <div style="margin-bottom: 1.5rem;">
-                    <h4 style="margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--text-primary);">Employees</h4>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+                        <h4 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">Employees</h4>
+                        <div style="display:flex;gap:0.4rem;">
+                            <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display=''">Adjust Credits</button>
+                            <button class="btn btn-small btn-primary" onclick="addUserToCompany()">+ Add User</button>
+                        </div>
+                    </div>
                     <table class="admin-table">
                         <thead>
                             <tr>
                                 <th>Username</th>
                                 <th>Name</th>
                                 <th style="text-align: center;">Role</th>
+                                <th style="text-align: center;">Personal Credits</th>
                                 <th style="text-align: center;">Credits Used</th>
                                 <th style="text-align: center;">Sessions</th>
                                 <th style="text-align: center;">Profiles Viewed</th>
@@ -3118,15 +3160,21 @@
             document.getElementById('companyTotalCredits').textContent = totalCredits.toLocaleString();
             document.getElementById('companyTotalSessions').textContent = totalSessions.toLocaleString();
             if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:2rem;">No companies found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:2rem;">No companies found.</td></tr>';
                 return;
             }
             tbody.innerHTML = list.map(c => {
                 const la = c.last_active ? new Date(c.last_active).toLocaleDateString() : 'Never';
                 const badge = c.has_custom_defaults ? '<span style="background:var(--accent-cyan);color:#000;font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:8px;">Custom</span>' : '<span style="font-size:0.65rem;color:var(--text-secondary);">Global</span>';
+                let poolCell = '<span style="color:var(--text-secondary);font-size:0.75rem;">--</span>';
+                if (c.credit_pool != null) {
+                    if (c.credit_pool === -1) poolCell = '<span style="color:var(--accent-cyan);">Unlimited</span>';
+                    else poolCell = `<span>${(c.credit_pool_remaining ?? 0).toLocaleString()} / ${c.credit_pool.toLocaleString()}</span>`;
+                }
                 return `<tr style="cursor:pointer;" onclick="openCompanyDetail('${c.name.replace(/'/g, "\\'")}')">
                     <td style="font-weight:600;">${c.name}</td>
                     <td style="text-align:center;">${c.user_count}</td>
+                    <td style="text-align:center;">${poolCell}</td>
                     <td style="text-align:center;">${c.credits_used.toLocaleString()}</td>
                     <td style="text-align:center;">${c.total_sessions.toLocaleString()}</td>
                     <td style="text-align:center;">${la}</td>
@@ -3158,6 +3206,7 @@
             document.getElementById('companyReportIcon').classList.add('rotated');
             document.getElementById('companyDefaultsContent').style.display = 'none';
             document.getElementById('companyDefaultsIcon').classList.add('rotated');
+            document.getElementById('adjustCreditsRow').style.display = 'none';
             loadCompanyEmployees(companyName);
             loadCompanyReport(companyName);
             loadCompanyDefaults(companyName);
@@ -3169,16 +3218,26 @@
                 const data = await resp.json();
                 if (!data.success) throw new Error(data.error);
                 const users = data.users || [];
+                const pool = data.pool;
                 let totalSessions = 0, totalCredits = 0;
                 users.forEach(u => { totalSessions += u.total_sessions; totalCredits += u.credits_used; });
                 document.getElementById('cdTotalUsers').textContent = users.length;
                 document.getElementById('cdCreditsUsed').textContent = totalCredits.toLocaleString();
                 document.getElementById('cdTotalSessions').textContent = totalSessions.toLocaleString();
-                document.getElementById('cdAvgSessions').textContent = users.length ? (totalSessions / users.length).toFixed(1) : '0';
                 document.getElementById('companyDetailBadge').textContent = `${users.length} user${users.length !== 1 ? 's' : ''}`;
+                const poolEl = document.getElementById('cdPoolRemaining');
+                const poolDetail = document.getElementById('cdPoolDetail');
+                if (pool) {
+                    if (pool.credit_pool === -1) { poolEl.textContent = 'Unlimited'; poolDetail.textContent = ''; }
+                    else { poolEl.textContent = (pool.credit_pool_remaining ?? 0).toLocaleString(); poolDetail.textContent = `${(pool.credit_pool_used || 0).toLocaleString()} used of ${pool.credit_pool.toLocaleString()}`; }
+                    document.getElementById('adjustPoolTotal').value = pool.credit_pool;
+                } else {
+                    poolEl.textContent = '--';
+                    poolDetail.textContent = 'No pool configured';
+                }
                 const tbody = document.getElementById('companyEmployeeTableBody');
                 if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:1rem;">No employees.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);padding:1rem;">No employees. Click "+ Add User" to add one.</td></tr>';
                     return;
                 }
                 tbody.innerHTML = users.map(u => {
@@ -3186,10 +3245,12 @@
                     const roleBadge = u.role === 'super_admin' ? 'SA' : u.role === 'admin' ? 'A' : 'U';
                     const roleColor = u.role === 'super_admin' ? 'var(--accent-red,#e74c3c)' : u.role === 'admin' ? 'var(--accent-cyan)' : 'var(--text-secondary)';
                     const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || '-';
+                    const personalCredits = u.credits === -1 ? 'Unlimited' : u.credits;
                     return `<tr>
                         <td><a href="#" onclick="event.preventDefault(); showAdminTab('users'); setTimeout(() => editUser('${u.username}'), 200);" style="color:var(--accent-cyan);text-decoration:none;">${u.username}</a></td>
                         <td>${name}</td>
                         <td style="text-align:center;"><span style="font-size:0.7rem;padding:0.1rem 0.3rem;border-radius:4px;background:${roleColor};color:#fff;">${roleBadge}</span></td>
+                        <td style="text-align:center;">${personalCredits}</td>
                         <td style="text-align:center;">${u.credits_used}</td>
                         <td style="text-align:center;">${u.total_sessions}</td>
                         <td style="text-align:center;">${u.profiles_viewed}</td>
@@ -3199,6 +3260,75 @@
             } catch (e) {
                 console.error('Failed to load company employees:', e);
             }
+        }
+
+        function toggleCreateCompanyForm() {
+            const el = document.getElementById('createCompanyForm');
+            el.style.display = el.style.display === 'none' ? '' : 'none';
+        }
+
+        async function createCompany() {
+            const name = (document.getElementById('newCompanyName')?.value || '').trim();
+            if (!name) { alert('Company name is required.'); return; }
+            const pool = parseInt(document.getElementById('newCompanyCreditPool')?.value) || 0;
+            try {
+                const resp = await fetch('/api/admin/companies', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, credit_pool: pool })
+                });
+                const data = await resp.json();
+                if (!data.success) { alert('Error: ' + (data.error || 'Unknown')); return; }
+                document.getElementById('newCompanyName').value = '';
+                document.getElementById('newCompanyCreditPool').value = '0';
+                document.getElementById('createCompanyForm').style.display = 'none';
+                loadCompanies();
+                alert(`Company "${name}" created.`);
+            } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        async function setCompanyPoolTotal() {
+            if (!_currentCompany) return;
+            const val = parseInt(document.getElementById('adjustPoolTotal')?.value);
+            if (isNaN(val)) { alert('Enter a valid number (-1 for unlimited).'); return; }
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/credits`, {
+                    method: 'PUT', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ credit_pool: val })
+                });
+                const data = await resp.json();
+                if (data.success) { loadCompanyEmployees(_currentCompany); loadCompanies(); }
+                else alert('Error: ' + (data.error || 'Unknown'));
+            } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        async function addCompanyPoolCredits() {
+            if (!_currentCompany) return;
+            const val = parseInt(document.getElementById('addPoolCredits')?.value);
+            if (!val || val < 1) { alert('Enter a positive number.'); return; }
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/credits`, {
+                    method: 'PUT', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ add_credits: val })
+                });
+                const data = await resp.json();
+                if (data.success) { loadCompanyEmployees(_currentCompany); loadCompanies(); }
+                else alert('Error: ' + (data.error || 'Unknown'));
+            } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        function addUserToCompany() {
+            if (!_currentCompany) return;
+            showAdminTab('users');
+            setTimeout(() => {
+                showAddUserModal();
+                setTimeout(() => {
+                    const companyInput = document.getElementById('newCompany');
+                    if (companyInput) companyInput.value = _currentCompany;
+                }, 100);
+            }, 200);
         }
 
         function toggleCompanyReport() {

@@ -1181,18 +1181,47 @@ CREDITS_SVOD = 10
 CREDITS_CAMPAIGN_ROI = 5
 CREDITS_WATCH_TIME = 1
 
+def _get_company_pool(data, company_name):
+    """Return the company pool dict if the company has one, else None."""
+    if not company_name:
+        return None
+    return data.get('companies', {}).get(company_name)
+
+
 def check_user_credits(username):
-    """Check if user has credits remaining. Returns (has_credits, credits_left)."""
+    """Check if user has credits remaining. Returns (has_credits, credits_left).
+    If the user belongs to a company with a credit pool, the effective balance is
+    the minimum of the user's personal balance and the company pool remaining."""
     data = load_users()
     user = data['users'].get(username)
     if not user:
         return False, 0
-    
-    # -1 means unlimited
-    if user['credits'] == -1:
+
+    user_credits = user['credits']
+    user_unlimited = user_credits == -1
+
+    company = (user.get('company') or '').strip()
+    pool = _get_company_pool(data, company)
+
+    if pool is not None:
+        pool_total = pool.get('credit_pool', 0)
+        pool_used = pool.get('credit_pool_used', 0)
+        pool_unlimited = pool_total == -1
+        pool_remaining = -1 if pool_unlimited else (pool_total - pool_used)
+
+        if user_unlimited and pool_unlimited:
+            return True, -1
+        if user_unlimited:
+            return pool_remaining > 0, pool_remaining
+        if pool_unlimited:
+            return user_credits > 0, user_credits
+        effective = min(user_credits, pool_remaining)
+        return effective > 0, effective
+
+    if user_unlimited:
         return True, -1
-    
-    return user['credits'] > 0, user['credits']
+    return user_credits > 0, user_credits
+
 
 def has_credits_for(username, amount):
     """Return True if user has at least `amount` credits (or unlimited)."""
@@ -1203,8 +1232,10 @@ def has_credits_for(username, amount):
         return True
     return credits_left >= amount
 
+
 def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1):
-    """Consume credits from user. Optionally record usage in history. Returns True if successful."""
+    """Consume credits from user and company pool (if applicable).
+    Returns True if successful."""
     data = load_users()
     user = data['users'].get(username)
     if not user:
@@ -1219,23 +1250,32 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         'credits_used': credits_used
     }
 
-    # -1 means unlimited
-    if user['credits'] == -1:
-        user['credits_used'] = user.get('credits_used', 0) + credits_used
-        history = user.setdefault('credit_usage_history', [])
-        history.insert(0, entry)
-        user['credit_usage_history'] = history[:500]  # cap at 500
-        save_users(data)
-        return True
+    user_unlimited = user['credits'] == -1
 
-    if user['credits'] < credits_used:
+    company = (user.get('company') or '').strip()
+    pool = _get_company_pool(data, company)
+
+    if pool is not None:
+        pool_total = pool.get('credit_pool', 0)
+        pool_used = pool.get('credit_pool_used', 0)
+        pool_unlimited = pool_total == -1
+        pool_remaining = -1 if pool_unlimited else (pool_total - pool_used)
+        if not pool_unlimited and pool_remaining < credits_used:
+            return False
+
+    if not user_unlimited and user['credits'] < credits_used:
         return False
 
-    user['credits'] -= credits_used
+    if not user_unlimited:
+        user['credits'] -= credits_used
     user['credits_used'] = user.get('credits_used', 0) + credits_used
     history = user.setdefault('credit_usage_history', [])
     history.insert(0, entry)
     user['credit_usage_history'] = history[:500]
+
+    if pool is not None and not (pool.get('credit_pool', 0) == -1):
+        pool['credit_pool_used'] = pool.get('credit_pool_used', 0) + credits_used
+
     save_users(data)
     return True
 
@@ -2751,7 +2791,19 @@ def api_list_companies():
         data = load_users()
         users = data.get('users', {})
         company_defaults = data.get('company_defaults', {})
+        company_entities = data.get('companies', {})
         companies = {}
+        # Include explicitly created companies even if they have no users yet
+        for co_name, co_data in company_entities.items():
+            pt = co_data.get('credit_pool', 0)
+            pu = co_data.get('credit_pool_used', 0)
+            companies[co_name] = {
+                'name': co_name, 'user_count': 0, 'credits_used': 0,
+                'total_sessions': 0, 'last_active': None,
+                'has_custom_defaults': co_name in company_defaults,
+                'credit_pool': pt, 'credit_pool_used': pu,
+                'credit_pool_remaining': -1 if pt == -1 else pt - pu,
+            }
         for username, user in users.items():
             co = (user.get('company') or '').strip()
             if not co:
@@ -2759,7 +2811,9 @@ def api_list_companies():
             if co not in companies:
                 companies[co] = {'name': co, 'user_count': 0, 'credits_used': 0,
                                  'total_sessions': 0, 'last_active': None,
-                                 'has_custom_defaults': co in company_defaults}
+                                 'has_custom_defaults': co in company_defaults,
+                                 'credit_pool': None, 'credit_pool_used': None,
+                                 'credit_pool_remaining': None}
             c = companies[co]
             c['user_count'] += 1
             c['credits_used'] += user.get('credits_used') or 0
@@ -2773,13 +2827,77 @@ def api_list_companies():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/companies', methods=['POST'])
+@requires_admin
+def api_create_company():
+    """Create a company entity with an optional credit pool and defaults."""
+    try:
+        req = request.get_json() or {}
+        name = (req.get('name') or '').strip()
+        if not name:
+            return jsonify({'success': False, 'error': 'Company name is required'}), 400
+        data = load_users()
+        companies = data.setdefault('companies', {})
+        if name in companies:
+            return jsonify({'success': False, 'error': f'Company "{name}" already exists'}), 400
+        companies[name] = {
+            'created_at': datetime.now().isoformat(),
+            'credit_pool': req.get('credit_pool', 0),
+            'credit_pool_used': 0,
+        }
+        defaults = req.get('defaults')
+        if defaults and isinstance(defaults, dict):
+            data.setdefault('company_defaults', {})[name] = defaults
+        save_users(data)
+        return jsonify({'success': True, 'message': f'Company "{name}" created'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/credits', methods=['PUT'])
+@requires_admin
+def api_update_company_credits(company_name):
+    """Update a company's credit pool total or add credits."""
+    try:
+        req = request.get_json() or {}
+        data = load_users()
+        companies = data.setdefault('companies', {})
+        if company_name not in companies:
+            companies[company_name] = {
+                'created_at': datetime.now().isoformat(),
+                'credit_pool': 0,
+                'credit_pool_used': 0,
+            }
+        pool = companies[company_name]
+        if 'credit_pool' in req:
+            pool['credit_pool'] = req['credit_pool']
+        if req.get('add_credits'):
+            current = pool.get('credit_pool', 0)
+            if current != -1:
+                pool['credit_pool'] = current + int(req['add_credits'])
+        save_users(data)
+        remaining = -1 if pool['credit_pool'] == -1 else pool['credit_pool'] - pool.get('credit_pool_used', 0)
+        return jsonify({'success': True, 'credit_pool': pool['credit_pool'],
+                        'credit_pool_used': pool.get('credit_pool_used', 0),
+                        'credit_pool_remaining': remaining})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/companies/<path:company_name>/users', methods=['GET'])
 @requires_admin
 def api_company_users(company_name):
-    """Return all users belonging to a company with their stats."""
+    """Return all users belonging to a company with their stats and pool info."""
     try:
         data = load_users()
         users = data.get('users', {})
+        pool = _get_company_pool(data, company_name)
+        pool_info = None
+        if pool:
+            pt = pool.get('credit_pool', 0)
+            pu = pool.get('credit_pool_used', 0)
+            pool_info = {'credit_pool': pt, 'credit_pool_used': pu,
+                         'credit_pool_remaining': -1 if pt == -1 else pt - pu}
         result = []
         for username, user in users.items():
             if (user.get('company') or '').strip().lower() != company_name.strip().lower():
@@ -2800,7 +2918,7 @@ def api_company_users(company_name):
                 'created_at': user.get('created_at'),
             })
         result.sort(key=lambda x: (x.get('last_login') or ''), reverse=True)
-        return jsonify({'success': True, 'users': result, 'company': company_name})
+        return jsonify({'success': True, 'users': result, 'company': company_name, 'pool': pool_info})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
