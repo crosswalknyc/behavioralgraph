@@ -4413,6 +4413,7 @@ def index():
         has_analysis_iq = True
         analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time', 'ticket_sales_tracker']
         allowed_behavioral_categories = ['*']
+        allowed_categories = ['*']
         has_rankers_iq = True
         rankers_iq_options = ['*']
         has_ticket_sales_iq = True
@@ -4425,6 +4426,7 @@ def index():
         has_analysis_iq = user.get('has_analysis_iq_access', False) if user else False
         analysis_iq_modules = user.get('analysis_iq_modules', []) if user else []
         allowed_behavioral_categories = user.get('allowed_behavioral_categories', ['*']) if user else ['*']
+        allowed_categories = user.get('allowed_categories', ['*']) if user else ['*']
         has_rankers_iq = user.get('has_rankers_iq_access', False) if user else False
         rankers_iq_options = user.get('rankers_iq_options', []) if user else []
         has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
@@ -4471,6 +4473,7 @@ def index():
                            has_analysis_iq_access=has_analysis_iq,
                            analysis_iq_modules=analysis_iq_modules,
                            allowed_behavioral_categories=allowed_behavioral_categories,
+                           allowed_categories=allowed_categories,
                            quick_select_behaviors_exclusions=quick_select_behaviors_exclusions,
                            has_rankers_iq_access=has_rankers_iq,
                            rankers_iq_options=rankers_iq_options,
@@ -6580,6 +6583,24 @@ def get_csv_data(s3_key):
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     if not s3_cache.get('jobs') and s3_client:
         load_persisted_cache()
+    
+    # Enforce category access: check if this profile's category is allowed for the user
+    try:
+        _u = get_current_user()
+        _allowed_cats = _u.get('allowed_categories', ['*']) if _u else ['*']
+        if _allowed_cats and not ('*' in _allowed_cats):
+            _allowed_upper = {c.upper() for c in _allowed_cats}
+            # Gen Pop is always accessible (needed for index calculations)
+            if 'gen_pop' not in s3_key.lower():
+                _profile_cat = None
+                for _j in (s3_cache.get('jobs') or []):
+                    if (_j.get('s3_key') or '') == s3_key:
+                        _profile_cat = (_j.get('category') or '').upper()
+                        break
+                if _profile_cat and _profile_cat not in _allowed_upper:
+                    return jsonify({'success': False, 'error': 'Access denied: you do not have permission to view this profile category.'}), 403
+    except Exception:
+        pass
     
     def _fetch_and_return(key):
         """Fetch CSV from S3 by key and return (content, brand_name, date_range) or raise."""
@@ -13376,9 +13397,10 @@ def list_jobs():
         
         # Restrict to runs the user is allowed to see (Run Access in Admin)
         allowed_runs = None
+        u = None
         try:
-            users = load_users()
-            u = users.get(session.get('username')) if session.get('username') else None
+            _users_data = load_users()
+            u = _users_data.get('users', {}).get(session.get('username')) if session.get('username') else None
             if u is not None:
                 allowed_runs = u.get('allowed_runs')
         except Exception:
@@ -13395,6 +13417,12 @@ def list_jobs():
                 return False
             job_list = [e for e in job_list if job_allowed(e)]
         
+        # Restrict to categories the user is allowed to see (Category Access in Admin)
+        allowed_cats = u.get('allowed_categories') if u else None
+        if allowed_cats is not None and not (isinstance(allowed_cats, list) and len(allowed_cats) == 1 and allowed_cats[0] == '*'):
+            allowed_cats_upper = {c.upper() for c in (allowed_cats or [])}
+            job_list = [e for e in job_list if (e.get('category') or '').upper() in allowed_cats_upper]
+
         categories = {e.get('category') for e in job_list if e.get('category')}
         
         # Sort by created_at descending (safe key for missing/None values)

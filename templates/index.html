@@ -15798,6 +15798,9 @@
         // Allowed behavioral categories for this user (controls which categories show in Behavioral tab)
         const allowedBehavioralCategories = {{ allowed_behavioral_categories | tojson | safe }};
         const hasAllBehavioralCategories = allowedBehavioralCategories.includes('*');
+        // Allowed profile categories (controls which profiles the user can see/open)
+        const allowedProfileCategories = {{ allowed_categories | tojson | safe }};
+        const hasAllProfileCategories = allowedProfileCategories.includes('*');
         // Quick-select exclusions: categories unchecked in Admin are hidden for ALL users
         const quickSelectBehaviorsExclusions = {{ quick_select_behaviors_exclusions | tojson | safe }};
         
@@ -27700,8 +27703,16 @@
                 seen.add(t.id);
                 return true;
             });
+            // Build allowed set for quick lookups during restore
+            const _allowedCatSet = hasAllProfileCategories ? null : new Set(allowedProfileCategories.map(c => (c || '').toUpperCase()));
+            
             for (const savedTab of deduped) {
                 if (openProfileTabs.some(t => t.id === savedTab.id)) continue;
+                // Skip tabs whose profile is outside allowed categories
+                if (_allowedCatSet) {
+                    const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === savedTab.id);
+                    if (profile && !_allowedCatSet.has((profile.category || '').toUpperCase())) continue;
+                }
                 try {
                     const response = await fetch(`/api/get-csv-data/${encodeURIComponent(savedTab.id)}`, { credentials: 'same-origin' });
                     if (response.status === 401) continue;
@@ -27750,13 +27761,19 @@
             profiles = profiles.filter(p => {
                 const s3Key = p.s3_key || p.key || '';
                 const category = (p.category || '').toUpperCase();
-                // Exclude anything in purgatory (current or previously)
                 if (s3Key.includes('purgatory/') || s3Key.startsWith('purgatory/')) return false;
                 if (p.in_purgatory || p.status === 'pending') return false;
-                // Exclude OTHER category
                 if (category === 'OTHER' || category === 'UNCATEGORIZED') return false;
                 return true;
             });
+            
+            // Enforce category access: only show profiles whose category the user is allowed to see
+            if (!hasAllProfileCategories && allowedProfileCategories.length > 0) {
+                const allowedUpper = new Set(allowedProfileCategories.map(c => (c || '').toUpperCase()));
+                profiles = profiles.filter(p => allowedUpper.has((p.category || '').toUpperCase()));
+            } else if (!hasAllProfileCategories && allowedProfileCategories.length === 0) {
+                profiles = [];
+            }
             
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase();
             
@@ -28218,6 +28235,18 @@
         }
 
         async function selectDashboardProfile(profileId, forceReload) {
+            // Enforce category access: block opening profiles outside allowed categories
+            if (!hasAllProfileCategories) {
+                const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
+                if (profile) {
+                    const allowedUpper = new Set(allowedProfileCategories.map(c => (c || '').toUpperCase()));
+                    if (!allowedUpper.has((profile.category || '').toUpperCase())) {
+                        console.warn('Access denied: profile category not in allowed list');
+                        return;
+                    }
+                }
+            }
+            
             // Check if profile is already open in a tab (skip if forceReload, e.g. after profile list refresh)
             if (!forceReload) {
                 const existingTab = openProfileTabs.find(t => t.id === profileId);
