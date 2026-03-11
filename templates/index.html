@@ -27146,15 +27146,16 @@
                 // Normalize K-abbreviated keys to standard Gen Pop bucket names
                 function standardizeIncomeKey(key) {
                     const s = String(key).toLowerCase().replace(/,/g, '').replace(/\s+/g, '');
-                    // Expand $NNk to $NN000
                     const expanded = s.replace(/\$(\d+)k/gi, (m, n) => '$' + n + '000');
                     if (expanded.includes('under') || (expanded.includes('<') && expanded.includes('25000'))) return 'Under $25,000';
-                    if (expanded.includes('25000') && (expanded.includes('49') || expanded.includes('50000'))) return '$25,000 - $49,999';
-                    if (expanded.includes('50000') && (expanded.includes('74') || expanded.includes('75000'))) return '$50,000 - $74,999';
-                    if (expanded.includes('75000') && (expanded.includes('99') || expanded.includes('100000'))) return '$75,000 - $99,999';
-                    if (expanded.includes('100000') && (expanded.includes('149') || expanded.includes('150000'))) return '$100,000 - $149,999';
-                    if (expanded.includes('150000') && (expanded.includes('249') || expanded.includes('250000'))) return '$150,000 - $249,999';
-                    if (expanded.includes('250000')) return '$250,000 or More';
+                    const nums = expanded.match(/\d+/g) || [];
+                    const hasNum = (n) => nums.some(x => x === String(n) || parseInt(x) === n);
+                    if (hasNum(250000) && !hasNum(150000)) return '$250,000 or More';
+                    if (hasNum(150000) && (hasNum(249999) || hasNum(250000))) return '$150,000 - $249,999';
+                    if (hasNum(100000) && (hasNum(149999) || hasNum(150000))) return '$100,000 - $149,999';
+                    if (hasNum(75000) && (hasNum(99999) || hasNum(100000))) return '$75,000 - $99,999';
+                    if (hasNum(50000) && (hasNum(74999) || hasNum(75000))) return '$50,000 - $74,999';
+                    if (hasNum(25000) && (hasNum(49999) || hasNum(50000))) return '$25,000 - $49,999';
                     return null;
                 }
 
