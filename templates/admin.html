@@ -1915,18 +1915,19 @@
 
                 <div class="stats-grid" style="margin-bottom: 1rem;">
                     <div class="stat-card"><h3>Users</h3><div class="stat-value blue" id="cdTotalUsers">0</div></div>
-                    <div class="stat-card"><h3>Credit Pool</h3><div class="stat-value green" id="cdPoolRemaining">--</div><div style="font-size:0.65rem;color:var(--text-secondary);margin-top:0.15rem;" id="cdPoolDetail"></div></div>
-                    <div class="stat-card"><h3>Credits Used</h3><div class="stat-value orange" id="cdCreditsUsed">0</div></div>
+                    <div class="stat-card"><h3>Company Credit Pool</h3><div class="stat-value green" id="cdPoolRemaining">--</div><div style="font-size:0.65rem;color:var(--text-secondary);margin-top:0.15rem;" id="cdPoolDetail"></div></div>
+                    <div class="stat-card"><h3>Total Used</h3><div class="stat-value orange" id="cdCreditsUsed">0</div></div>
                     <div class="stat-card"><h3>Total Sessions</h3><div class="stat-value blue" id="cdTotalSessions">0</div></div>
                 </div>
                 <!-- Adjust Credits inline -->
                 <div id="adjustCreditsRow" style="display:none; margin-bottom:1rem; padding:0.5rem 0.75rem; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card);">
+                    <div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.35rem;">Company-wide credit pool. All "Pool" users draw from this shared balance. Set -1 for unlimited.</div>
                     <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                         <label style="font-size:0.8rem;color:var(--text-secondary);">Set Pool Total:</label>
                         <input type="number" id="adjustPoolTotal" style="width:100px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
                         <button class="btn btn-primary btn-small" onclick="setCompanyPoolTotal()">Set</button>
                         <span style="color:var(--text-secondary);font-size:0.75rem;">|</span>
-                        <label style="font-size:0.8rem;color:var(--text-secondary);">Add Credits:</label>
+                        <label style="font-size:0.8rem;color:var(--text-secondary);">Add to Pool:</label>
                         <input type="number" id="addPoolCredits" value="10" min="1" style="width:80px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
                         <button class="btn btn-small btn-secondary" onclick="addCompanyPoolCredits()">Add</button>
                         <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display='none'">Close</button>
@@ -1935,24 +1936,29 @@
 
                 <!-- Employee Table -->
                 <div style="margin-bottom: 1.5rem;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">
                         <h4 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">Employees</h4>
                         <div style="display:flex;gap:0.4rem;">
-                            <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display=''">Adjust Credits</button>
+                            <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display=''">Adjust Pool</button>
                             <button class="btn btn-small btn-primary" onclick="addUserToCompany()">+ Add User</button>
                         </div>
                     </div>
-                    <table class="admin-table">
+                    <p style="margin:0 0 0.5rem;font-size:0.7rem;color:var(--text-secondary);">
+                        <b>Source</b>: Pool = draws from company pool, Personal = own credits. <b>Ceiling</b>: max credits a user can consume (-1 = no limit). Click values to edit.
+                    </p>
+                    <table class="admin-table" style="font-size:0.8rem;">
                         <thead>
                             <tr>
                                 <th>Username</th>
                                 <th>Name</th>
-                                <th style="text-align: center;">Role</th>
-                                <th style="text-align: center;">Personal Credits</th>
-                                <th style="text-align: center;">Credits Used</th>
-                                <th style="text-align: center;">Sessions</th>
-                                <th style="text-align: center;">Profiles Viewed</th>
-                                <th style="text-align: center;">Last Login</th>
+                                <th style="text-align:center;">Role</th>
+                                <th style="text-align:center;">Source</th>
+                                <th style="text-align:center;">Ceiling</th>
+                                <th style="text-align:center;">Credits Used</th>
+                                <th style="text-align:center;">Remaining</th>
+                                <th style="text-align:center;">Sessions</th>
+                                <th style="text-align:center;">Profiles Viewed</th>
+                                <th style="text-align:center;">Last Login</th>
                             </tr>
                         </thead>
                         <tbody id="companyEmployeeTableBody"></tbody>
@@ -3212,6 +3218,8 @@
             loadCompanyDefaults(companyName);
         }
 
+        let _companyPoolInfo = null;
+
         async function loadCompanyEmployees(companyName) {
             try {
                 const resp = await fetch(`/api/admin/companies/${encodeURIComponent(companyName)}/users`, { credentials: 'same-origin' });
@@ -3219,6 +3227,7 @@
                 if (!data.success) throw new Error(data.error);
                 const users = data.users || [];
                 const pool = data.pool;
+                _companyPoolInfo = pool;
                 let totalSessions = 0, totalCredits = 0;
                 users.forEach(u => { totalSessions += u.total_sessions; totalCredits += u.credits_used; });
                 document.getElementById('cdTotalUsers').textContent = users.length;
@@ -3237,7 +3246,7 @@
                 }
                 const tbody = document.getElementById('companyEmployeeTableBody');
                 if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);padding:1rem;">No employees. Click "+ Add User" to add one.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-secondary);padding:1rem;">No employees. Click "+ Add User" to add one.</td></tr>';
                     return;
                 }
                 tbody.innerHTML = users.map(u => {
@@ -3245,13 +3254,37 @@
                     const roleBadge = u.role === 'super_admin' ? 'SA' : u.role === 'admin' ? 'A' : 'U';
                     const roleColor = u.role === 'super_admin' ? 'var(--accent-red,#e74c3c)' : u.role === 'admin' ? 'var(--accent-cyan)' : 'var(--text-secondary)';
                     const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || '-';
-                    const personalCredits = u.credits === -1 ? 'Unlimited' : u.credits;
+                    const src = u.credit_source === 'personal' ? 'personal' : 'pool';
+                    const isPersonal = src === 'personal';
+                    const srcLabel = isPersonal
+                        ? `<span style="color:var(--accent-cyan);font-size:0.7rem;padding:0.1rem 0.35rem;border-radius:4px;background:rgba(0,188,212,0.15);">Personal</span>`
+                        : `<span style="color:var(--text-secondary);font-size:0.7rem;padding:0.1rem 0.35rem;border-radius:4px;background:rgba(255,255,255,0.05);">Pool</span>`;
+                    const ceiling = u.credit_ceiling ?? -1;
+                    const ceilingLabel = ceiling === -1 ? 'No limit' : ceiling.toLocaleString();
+                    const ceilingColor = ceiling === -1 ? 'var(--text-secondary)' : 'var(--text-primary)';
+
+                    let remaining = '-';
+                    if (isPersonal) {
+                        remaining = u.credits === -1 ? '∞' : Math.max(u.credits, 0).toLocaleString();
+                    } else if (pool) {
+                        if (ceiling !== -1) {
+                            const ceilLeft = Math.max(ceiling - (u.credits_used || 0), 0);
+                            const poolLeft = pool.credit_pool === -1 ? Infinity : Math.max((pool.credit_pool_remaining ?? 0), 0);
+                            const eff = Math.min(ceilLeft, poolLeft);
+                            remaining = eff === Infinity ? '∞' : eff.toLocaleString();
+                        } else {
+                            remaining = pool.credit_pool === -1 ? '∞' : Math.max((pool.credit_pool_remaining ?? 0), 0).toLocaleString();
+                        }
+                    }
+
                     return `<tr>
                         <td><a href="#" onclick="event.preventDefault(); showAdminTab('users'); setTimeout(() => editUser('${u.username}'), 200);" style="color:var(--accent-cyan);text-decoration:none;">${u.username}</a></td>
                         <td>${name}</td>
                         <td style="text-align:center;"><span style="font-size:0.7rem;padding:0.1rem 0.3rem;border-radius:4px;background:${roleColor};color:#fff;">${roleBadge}</span></td>
-                        <td style="text-align:center;">${personalCredits}</td>
+                        <td style="text-align:center;cursor:pointer;" onclick="toggleUserCreditSource('${u.username}', '${src}')" title="Click to toggle">${srcLabel}</td>
+                        <td style="text-align:center;cursor:pointer;color:${ceilingColor};" onclick="editUserCeiling('${u.username}', ${ceiling})" title="Click to edit">${ceilingLabel}</td>
                         <td style="text-align:center;">${u.credits_used}</td>
+                        <td style="text-align:center;font-weight:600;">${remaining}</td>
                         <td style="text-align:center;">${u.total_sessions}</td>
                         <td style="text-align:center;">${u.profiles_viewed}</td>
                         <td style="text-align:center;">${ll}</td>
@@ -3285,6 +3318,41 @@
                 loadCompanies();
                 alert(`Company "${name}" created.`);
             } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        async function _updateCompanyUserCredits(username, payload) {
+            if (!_currentCompany) return;
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/user-credits`, {
+                    method: 'PUT', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, ...payload })
+                });
+                const data = await resp.json();
+                if (!data.success) { alert('Error: ' + (data.error || 'Unknown')); return; }
+                loadCompanyEmployees(_currentCompany);
+            } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        async function toggleUserCreditSource(username, currentSrc) {
+            const newSrc = currentSrc === 'pool' ? 'personal' : 'pool';
+            if (newSrc === 'personal') {
+                const credits = prompt(`Switch ${username} to personal credits.\nEnter credit amount (-1 = unlimited):`, '5');
+                if (credits === null) return;
+                const val = parseInt(credits);
+                if (isNaN(val)) { alert('Enter a valid number.'); return; }
+                await _updateCompanyUserCredits(username, { credit_source: 'personal', credits: val });
+            } else {
+                await _updateCompanyUserCredits(username, { credit_source: 'pool' });
+            }
+        }
+
+        async function editUserCeiling(username, currentCeiling) {
+            const input = prompt(`Set usage ceiling for ${username}.\n-1 = no limit (use as many as pool allows)\nEnter max credits this user can consume:`, String(currentCeiling));
+            if (input === null) return;
+            const val = parseInt(input);
+            if (isNaN(val)) { alert('Enter a valid number.'); return; }
+            await _updateCompanyUserCredits(username, { credit_ceiling: val });
         }
 
         async function setCompanyPoolTotal() {

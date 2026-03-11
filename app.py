@@ -1189,15 +1189,23 @@ def _get_company_pool(data, company_name):
 
 
 def check_user_credits(username):
-    """Check if user has credits remaining. Returns (has_credits, credits_left).
-    If the user belongs to a company with a credit pool, the effective balance is
-    the minimum of the user's personal balance and the company pool remaining."""
+    """Check if user has credits remaining.  Returns (has_credits, credits_left).
+
+    Credit model (company users):
+      * The company credit pool is the primary source of credits.
+      * A per-user ``credit_ceiling`` (-1 = no limit) caps how many credits
+        the individual may ever consume from the pool.
+      * If a user has a personal ``credits`` override (> 0 or -1), that
+        balance is used *instead* of the pool.
+
+    Solo users (no company pool) just use their personal ``credits``.
+    """
     data = load_users()
     user = data['users'].get(username)
     if not user:
         return False, 0
 
-    user_credits = user['credits']
+    user_credits = user.get('credits', 0)
     user_unlimited = user_credits == -1
 
     company = (user.get('company') or '').strip()
@@ -1205,17 +1213,27 @@ def check_user_credits(username):
 
     if pool is not None:
         pool_total = pool.get('credit_pool', 0)
-        pool_used = pool.get('credit_pool_used', 0)
-        pool_unlimited = pool_total == -1
-        pool_remaining = -1 if pool_unlimited else (pool_total - pool_used)
+        pool_used  = pool.get('credit_pool_used', 0)
+        pool_unlimited  = pool_total == -1
+        pool_remaining  = -1 if pool_unlimited else max(pool_total - pool_used, 0)
 
-        if user_unlimited and pool_unlimited:
-            return True, -1
-        if user_unlimited:
-            return pool_remaining > 0, pool_remaining
-        if pool_unlimited:
+        has_personal_override = user.get('credit_source') == 'personal'
+        if has_personal_override:
+            if user_unlimited:
+                return True, -1
             return user_credits > 0, user_credits
-        effective = min(user_credits, pool_remaining)
+
+        ceiling = user.get('credit_ceiling', -1)
+        user_used = user.get('credits_used', 0)
+        ceiling_remaining = -1 if ceiling == -1 else max(ceiling - user_used, 0)
+
+        if pool_unlimited and ceiling == -1:
+            return True, -1
+        if pool_unlimited:
+            return ceiling_remaining > 0, ceiling_remaining
+        if ceiling == -1:
+            return pool_remaining > 0, pool_remaining
+        effective = min(pool_remaining, ceiling_remaining)
         return effective > 0, effective
 
     if user_unlimited:
@@ -1234,7 +1252,7 @@ def has_credits_for(username, amount):
 
 
 def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1):
-    """Consume credits from user and company pool (if applicable).
+    """Consume credits from user and/or company pool.
     Returns True if successful."""
     data = load_users()
     user = data['users'].get(username)
@@ -1250,20 +1268,39 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         'credits_used': credits_used
     }
 
-    user_unlimited = user['credits'] == -1
+    user_unlimited = user.get('credits', 0) == -1
 
     company = (user.get('company') or '').strip()
     pool = _get_company_pool(data, company)
+    has_personal_override = user.get('credit_source') == 'personal'
 
-    if pool is not None:
+    if pool is not None and not has_personal_override:
         pool_total = pool.get('credit_pool', 0)
-        pool_used = pool.get('credit_pool_used', 0)
+        pool_used  = pool.get('credit_pool_used', 0)
         pool_unlimited = pool_total == -1
         pool_remaining = -1 if pool_unlimited else (pool_total - pool_used)
+
+        ceiling = user.get('credit_ceiling', -1)
+        user_used = user.get('credits_used', 0)
+        ceiling_remaining = -1 if ceiling == -1 else (ceiling - user_used)
+
         if not pool_unlimited and pool_remaining < credits_used:
             return False
+        if ceiling != -1 and ceiling_remaining < credits_used:
+            return False
 
-    if not user_unlimited and user['credits'] < credits_used:
+        user['credits_used'] = user.get('credits_used', 0) + credits_used
+        history = user.setdefault('credit_usage_history', [])
+        history.insert(0, entry)
+        user['credit_usage_history'] = history[:500]
+
+        if not pool_unlimited:
+            pool['credit_pool_used'] = pool.get('credit_pool_used', 0) + credits_used
+
+        save_users(data)
+        return True
+
+    if not user_unlimited and user.get('credits', 0) < credits_used:
         return False
 
     if not user_unlimited:
@@ -1272,9 +1309,6 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
     history = user.setdefault('credit_usage_history', [])
     history.insert(0, entry)
     user['credit_usage_history'] = history[:500]
-
-    if pool is not None and not (pool.get('credit_pool', 0) == -1):
-        pool['credit_pool_used'] = pool.get('credit_pool_used', 0) + credits_used
 
     save_users(data)
     return True
@@ -2575,6 +2609,10 @@ def update_user(username):
                 user['role'] = _normalize_role(req_data['role'])
         if 'credits' in req_data:
             user['credits'] = req_data['credits']
+        if 'credit_ceiling' in req_data:
+            user['credit_ceiling'] = req_data['credit_ceiling']
+        if 'credit_source' in req_data:
+            user['credit_source'] = req_data['credit_source']
         if 'access_expires' in req_data:
             user['access_expires'] = req_data['access_expires']
         if 'allowed_categories' in req_data:
@@ -2884,6 +2922,31 @@ def api_update_company_credits(company_name):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/companies/<path:company_name>/user-credits', methods=['PUT'])
+@requires_admin
+def api_update_company_user_credits(company_name):
+    """Update credit_ceiling or credit_source for a single user in the company."""
+    try:
+        req = request.get_json() or {}
+        uname = req.get('username')
+        if not uname:
+            return jsonify({'success': False, 'error': 'username required'}), 400
+        data = load_users()
+        user = data['users'].get(uname)
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        if 'credit_ceiling' in req:
+            user['credit_ceiling'] = int(req['credit_ceiling'])
+        if 'credit_source' in req:
+            user['credit_source'] = req['credit_source']
+        if 'credits' in req:
+            user['credits'] = int(req['credits'])
+        save_users(data)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/companies/<path:company_name>/users', methods=['GET'])
 @requires_admin
 def api_company_users(company_name):
@@ -2912,6 +2975,8 @@ def api_company_users(company_name):
                 'role': user.get('role', 'user'),
                 'credits': user.get('credits', 0),
                 'credits_used': user.get('credits_used', 0),
+                'credit_ceiling': user.get('credit_ceiling', -1),
+                'credit_source': user.get('credit_source', 'pool'),
                 'total_sessions': activity.get('total_sessions') or 0,
                 'last_login': user.get('last_login'),
                 'profiles_viewed': len(profiles_viewed),
@@ -4911,13 +4976,14 @@ def index():
     profile_picture = (user.get('profile_picture') or '').strip() if user else ''
     if not profile_picture:
         profile_picture = load_default_profile_photo() or ''
+    _, effective_credits = check_user_credits(session.get('username')) if session.get('username') else (False, 0)
     return render_template('index.html', 
                            username=session.get('username'),
                            insights_quick_snapshot_icon=insights_quick_snapshot_icon,
                            insights_quick_snapshot_title=insights_quick_snapshot_title,
                            insights_quick_snapshot_desc=insights_quick_snapshot_desc,
                            role=role,
-                           credits=user.get('credits', 0) if user else 0,
+                           credits=effective_credits,
                            credits_used=user.get('credits_used', 0) if user else 0,
                            profile_picture=profile_picture,
                            default_profile_photo=load_default_profile_photo() or '',
