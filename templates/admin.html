@@ -981,6 +981,7 @@
         <!-- Admin Tabs -->
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="showAdminTab('users')">👥 Users</button>
+            <button class="admin-tab" onclick="showAdminTab('companies')">🏢 Companies</button>
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
             <button class="admin-tab" onclick="showAdminTab('purgatory')">⏳ Purgatory</button>
             <button class="admin-tab" onclick="showAdminTab('images')">🖼️ Profile Images</button>
@@ -1849,6 +1850,182 @@
                 </p>
                 <div id="secActualsList" style="max-height: 600px; overflow-y: auto;">
                     <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading SEC actuals...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- COMPANIES SECTION -->
+        <div id="section-companies" class="admin-section">
+            <!-- Company List View -->
+            <div id="companyListView">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; font-size: 1.1rem;">Companies</h3>
+                    <input type="text" id="companySearchInput" placeholder="Search companies..." oninput="filterCompanyList()" style="width: 250px; padding: 0.4rem 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;">
+                </div>
+                <div class="stats-grid" style="margin-bottom: 1rem;">
+                    <div class="stat-card"><h3>Total Companies</h3><div class="stat-value blue" id="totalCompanies">0</div></div>
+                    <div class="stat-card"><h3>Total Users</h3><div class="stat-value green" id="companyTotalUsers">0</div></div>
+                    <div class="stat-card"><h3>Total Credits Used</h3><div class="stat-value orange" id="companyTotalCredits">0</div></div>
+                    <div class="stat-card"><h3>Total Sessions</h3><div class="stat-value blue" id="companyTotalSessions">0</div></div>
+                </div>
+                <table class="admin-table" id="companyTable">
+                    <thead>
+                        <tr>
+                            <th style="cursor: pointer;" onclick="sortCompanyTable('name')">Company</th>
+                            <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('user_count')">Users</th>
+                            <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('credits_used')">Credits Used</th>
+                            <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('total_sessions')">Sessions</th>
+                            <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('last_active')">Last Active</th>
+                            <th style="text-align: center;">Defaults</th>
+                        </tr>
+                    </thead>
+                    <tbody id="companyTableBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Company Detail View -->
+            <div id="companyDetailView" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                    <button class="btn btn-small btn-secondary" onclick="showCompanyList()" style="font-size: 0.8rem;">← Back</button>
+                    <h3 style="margin: 0; font-size: 1.1rem;" id="companyDetailName"></h3>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary); background: var(--bg-input); padding: 0.15rem 0.5rem; border-radius: 10px;" id="companyDetailBadge"></span>
+                </div>
+
+                <div class="stats-grid" style="margin-bottom: 1rem;">
+                    <div class="stat-card"><h3>Users</h3><div class="stat-value blue" id="cdTotalUsers">0</div></div>
+                    <div class="stat-card"><h3>Credits Used</h3><div class="stat-value orange" id="cdCreditsUsed">0</div></div>
+                    <div class="stat-card"><h3>Total Sessions</h3><div class="stat-value green" id="cdTotalSessions">0</div></div>
+                    <div class="stat-card"><h3>Avg Sessions/User</h3><div class="stat-value blue" id="cdAvgSessions">0</div></div>
+                </div>
+
+                <!-- Employee Table -->
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--text-primary);">Employees</h4>
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Name</th>
+                                <th style="text-align: center;">Role</th>
+                                <th style="text-align: center;">Credits Used</th>
+                                <th style="text-align: center;">Sessions</th>
+                                <th style="text-align: center;">Profiles Viewed</th>
+                                <th style="text-align: center;">Last Login</th>
+                            </tr>
+                        </thead>
+                        <tbody id="companyEmployeeTableBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- Usage Report Panel -->
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.4rem 0;" onclick="toggleCompanyReport()">
+                        <span style="font-size: 0.85rem;">📊</span>
+                        <h4 style="margin: 0; font-size: 0.9rem; color: var(--accent-cyan);">Usage Report</h4>
+                        <span class="collapse-icon rotated" id="companyReportIcon" style="font-size: 0.7rem;">▼</span>
+                    </div>
+                    <div id="companyReportContent" style="display: none; margin-top: 0.5rem;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div>
+                                <h5 style="margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--text-secondary);">Feature Usage</h5>
+                                <div id="companyFeatureUsage" style="max-height: 250px; overflow-y: auto; font-size: 0.8rem;"></div>
+                            </div>
+                            <div>
+                                <h5 style="margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--text-secondary);">Top Profiles Viewed</h5>
+                                <div id="companyTopProfiles" style="max-height: 250px; overflow-y: auto; font-size: 0.8rem;"></div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 0.75rem;">
+                            <h5 style="margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--text-secondary);">Recent Activity</h5>
+                            <div id="companyRecentActivity" style="max-height: 200px; overflow-y: auto; font-size: 0.75rem;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Company Defaults Section -->
+                <div style="margin-bottom: 1.5rem; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;" onclick="toggleCompanyDefaults()">
+                        <span style="font-size: 0.85rem;">⚙️</span>
+                        <h4 style="margin: 0; font-size: 0.9rem; color: var(--accent-cyan);">Company Defaults</h4>
+                        <span class="collapse-icon rotated" id="companyDefaultsIcon" style="font-size: 0.7rem;">▼</span>
+                        <span id="companyDefaultsBadge" style="font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 8px; margin-left: 0.25rem;"></span>
+                    </div>
+                    <p style="color: var(--text-secondary); font-size: 0.72rem; margin: 0.25rem 0 0;">New users in this company will inherit these defaults. Also used when resetting users.</p>
+                    <div id="companyDefaultsContent" style="display: none; margin-top: 0.75rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+                            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" id="cdUseCustomDefaults" onchange="toggleCustomDefaults()">
+                                <span style="font-weight: 600;">Use Custom Defaults</span>
+                            </label>
+                        </div>
+                        <div id="cdCustomDefaultsForm" style="display: none;">
+                            <!-- Dashboard Module Toggles -->
+                            <div style="margin-bottom: 0.75rem;">
+                                <h5 style="margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--text-secondary);">Dashboard Modules</h5>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.3rem;">
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdProfileIQ" checked> Profile IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdSubscriberIQ"> Subscriber IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdImpactIQ" checked> Impact IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdHedgeFundIQ"> Hedge Fund IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAnalysisIQ"> Analysis IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdRankersIQ"> Rankers IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdTicketTracker"> Ticket Sales Tracker
+                                    </label>
+                                </div>
+                            </div>
+                            <!-- Default Credits -->
+                            <div style="margin-bottom: 0.75rem;">
+                                <label style="font-size: 0.8rem; color: var(--text-secondary);">Default Credits</label>
+                                <input type="number" id="cdDefaultCredits" value="5" min="0" style="width: 80px; margin-left: 0.5rem; padding: 0.25rem 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-primary); font-size: 0.8rem;">
+                            </div>
+                            <!-- Category Access (subscription) -->
+                            <div style="margin-bottom: 0.75rem;">
+                                <h5 style="margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--text-secondary);">Category Access (auto-subscribe to new profiles)</h5>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAllCategories" checked onchange="toggleCdAllCategories()"> All Categories
+                                    </label>
+                                </div>
+                                <div id="cdCategoryCheckboxes" style="max-height: 150px; overflow-y: auto; margin-left: 0.5rem;"></div>
+                            </div>
+                            <!-- Behavioral Category Access -->
+                            <div style="margin-bottom: 0.75rem;">
+                                <h5 style="margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--text-secondary);">Behavioral Category Access</h5>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAllBehavioral" checked onchange="toggleCdAllBehavioral()"> All Behavioral Categories
+                                    </label>
+                                </div>
+                                <div id="cdBehavioralCheckboxes" style="max-height: 150px; overflow-y: auto; margin-left: 0.5rem;"></div>
+                            </div>
+                            <!-- Save / Delete buttons -->
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                <button class="btn btn-primary btn-small" onclick="saveCompanyDefaults()">Save Defaults</button>
+                                <button class="btn btn-secondary btn-small" onclick="deleteCompanyDefaults()">Remove Custom Defaults</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reset All Users -->
+                <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <button class="btn btn-small" style="background: var(--accent-red, #e74c3c); color: #fff; border: none;" onclick="resetCompanyUsers()">Reset All Users</button>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Reset all users in this company to <span id="cdResetSource">default</span> access values.</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2885,6 +3062,9 @@
             if (tabName === 'purgatory') {
                 loadPurgatoryItems();
             }
+            if (tabName === 'companies') {
+                loadCompanies();
+            }
             if (tabName === 'activeJobs') {
                 loadActiveJobs();
                 startJobAutoRefresh();
@@ -2893,6 +3073,351 @@
             }
         }
         
+        // ============================================================================
+        // COMPANY MANAGEMENT FUNCTIONS
+        // ============================================================================
+        let _companyList = [];
+        let _companySort = { column: 'name', asc: true };
+        let _currentCompany = null;
+
+        async function loadCompanies() {
+            try {
+                const resp = await fetch('/api/admin/companies', { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error);
+                _companyList = data.companies || [];
+                renderCompanyList();
+            } catch (e) {
+                console.error('Failed to load companies:', e);
+            }
+        }
+
+        function renderCompanyList() {
+            const search = (document.getElementById('companySearchInput')?.value || '').toLowerCase();
+            let list = _companyList;
+            if (search) {
+                list = list.filter(c => c.name.toLowerCase().includes(search));
+            }
+            const col = _companySort.column;
+            const dir = _companySort.asc ? 1 : -1;
+            list.sort((a, b) => {
+                let va = a[col], vb = b[col];
+                if (col === 'name') { va = (va || '').toLowerCase(); vb = (vb || '').toLowerCase(); }
+                if (va == null) va = '';
+                if (vb == null) vb = '';
+                if (va < vb) return -1 * dir;
+                if (va > vb) return 1 * dir;
+                return 0;
+            });
+            const tbody = document.getElementById('companyTableBody');
+            if (!tbody) return;
+            let totalUsers = 0, totalCredits = 0, totalSessions = 0;
+            _companyList.forEach(c => { totalUsers += c.user_count; totalCredits += c.credits_used; totalSessions += c.total_sessions; });
+            document.getElementById('totalCompanies').textContent = _companyList.length;
+            document.getElementById('companyTotalUsers').textContent = totalUsers;
+            document.getElementById('companyTotalCredits').textContent = totalCredits.toLocaleString();
+            document.getElementById('companyTotalSessions').textContent = totalSessions.toLocaleString();
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:2rem;">No companies found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(c => {
+                const la = c.last_active ? new Date(c.last_active).toLocaleDateString() : 'Never';
+                const badge = c.has_custom_defaults ? '<span style="background:var(--accent-cyan);color:#000;font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:8px;">Custom</span>' : '<span style="font-size:0.65rem;color:var(--text-secondary);">Global</span>';
+                return `<tr style="cursor:pointer;" onclick="openCompanyDetail('${c.name.replace(/'/g, "\\'")}')">
+                    <td style="font-weight:600;">${c.name}</td>
+                    <td style="text-align:center;">${c.user_count}</td>
+                    <td style="text-align:center;">${c.credits_used.toLocaleString()}</td>
+                    <td style="text-align:center;">${c.total_sessions.toLocaleString()}</td>
+                    <td style="text-align:center;">${la}</td>
+                    <td style="text-align:center;">${badge}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function filterCompanyList() { renderCompanyList(); }
+
+        function sortCompanyTable(col) {
+            if (_companySort.column === col) _companySort.asc = !_companySort.asc;
+            else { _companySort.column = col; _companySort.asc = true; }
+            renderCompanyList();
+        }
+
+        function showCompanyList() {
+            document.getElementById('companyListView').style.display = '';
+            document.getElementById('companyDetailView').style.display = 'none';
+            _currentCompany = null;
+        }
+
+        async function openCompanyDetail(companyName) {
+            _currentCompany = companyName;
+            document.getElementById('companyListView').style.display = 'none';
+            document.getElementById('companyDetailView').style.display = '';
+            document.getElementById('companyDetailName').textContent = companyName;
+            document.getElementById('companyReportContent').style.display = 'none';
+            document.getElementById('companyReportIcon').classList.add('rotated');
+            document.getElementById('companyDefaultsContent').style.display = 'none';
+            document.getElementById('companyDefaultsIcon').classList.add('rotated');
+            loadCompanyEmployees(companyName);
+            loadCompanyReport(companyName);
+            loadCompanyDefaults(companyName);
+        }
+
+        async function loadCompanyEmployees(companyName) {
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(companyName)}/users`, { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error);
+                const users = data.users || [];
+                let totalSessions = 0, totalCredits = 0;
+                users.forEach(u => { totalSessions += u.total_sessions; totalCredits += u.credits_used; });
+                document.getElementById('cdTotalUsers').textContent = users.length;
+                document.getElementById('cdCreditsUsed').textContent = totalCredits.toLocaleString();
+                document.getElementById('cdTotalSessions').textContent = totalSessions.toLocaleString();
+                document.getElementById('cdAvgSessions').textContent = users.length ? (totalSessions / users.length).toFixed(1) : '0';
+                document.getElementById('companyDetailBadge').textContent = `${users.length} user${users.length !== 1 ? 's' : ''}`;
+                const tbody = document.getElementById('companyEmployeeTableBody');
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:1rem;">No employees.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = users.map(u => {
+                    const ll = u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never';
+                    const roleBadge = u.role === 'super_admin' ? 'SA' : u.role === 'admin' ? 'A' : 'U';
+                    const roleColor = u.role === 'super_admin' ? 'var(--accent-red,#e74c3c)' : u.role === 'admin' ? 'var(--accent-cyan)' : 'var(--text-secondary)';
+                    const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || '-';
+                    return `<tr>
+                        <td><a href="#" onclick="event.preventDefault(); showAdminTab('users'); setTimeout(() => editUser('${u.username}'), 200);" style="color:var(--accent-cyan);text-decoration:none;">${u.username}</a></td>
+                        <td>${name}</td>
+                        <td style="text-align:center;"><span style="font-size:0.7rem;padding:0.1rem 0.3rem;border-radius:4px;background:${roleColor};color:#fff;">${roleBadge}</span></td>
+                        <td style="text-align:center;">${u.credits_used}</td>
+                        <td style="text-align:center;">${u.total_sessions}</td>
+                        <td style="text-align:center;">${u.profiles_viewed}</td>
+                        <td style="text-align:center;">${ll}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                console.error('Failed to load company employees:', e);
+            }
+        }
+
+        function toggleCompanyReport() {
+            const el = document.getElementById('companyReportContent');
+            const icon = document.getElementById('companyReportIcon');
+            if (el.style.display === 'none') { el.style.display = ''; icon.classList.remove('rotated'); }
+            else { el.style.display = 'none'; icon.classList.add('rotated'); }
+        }
+
+        async function loadCompanyReport(companyName) {
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(companyName)}/report`, { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error);
+                const fuDiv = document.getElementById('companyFeatureUsage');
+                if ((data.feature_usage || []).length === 0) {
+                    fuDiv.innerHTML = '<span style="color:var(--text-secondary);">No feature usage data.</span>';
+                } else {
+                    const maxCount = data.feature_usage[0][1] || 1;
+                    fuDiv.innerHTML = data.feature_usage.slice(0, 15).map(([feat, count]) => {
+                        const pct = Math.round((count / maxCount) * 100);
+                        return `<div style="display:grid;grid-template-columns:1fr 50px;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">
+                            <div style="position:relative;height:20px;background:var(--bg-input);border-radius:3px;overflow:hidden;">
+                                <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:rgba(90,154,217,0.3);border-radius:3px;"></div>
+                                <span style="position:relative;padding:0 0.3rem;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${feat}</span>
+                            </div>
+                            <span style="text-align:right;color:var(--text-secondary);">${count}</span>
+                        </div>`;
+                    }).join('');
+                }
+                const tpDiv = document.getElementById('companyTopProfiles');
+                if ((data.top_profiles || []).length === 0) {
+                    tpDiv.innerHTML = '<span style="color:var(--text-secondary);">No profiles viewed.</span>';
+                } else {
+                    tpDiv.innerHTML = '<table style="width:100%;font-size:0.8rem;"><thead><tr><th style="text-align:left;">Profile</th><th style="text-align:right;">Views</th></tr></thead><tbody>' +
+                        data.top_profiles.slice(0, 15).map(([name, count]) => `<tr><td>${name}</td><td style="text-align:right;">${count}</td></tr>`).join('') +
+                        '</tbody></table>';
+                }
+                const raDiv = document.getElementById('companyRecentActivity');
+                if ((data.recent_actions || []).length === 0) {
+                    raDiv.innerHTML = '<span style="color:var(--text-secondary);">No recent activity.</span>';
+                } else {
+                    raDiv.innerHTML = data.recent_actions.slice(0, 30).map(a => {
+                        const ts = a.timestamp ? new Date(a.timestamp).toLocaleString() : '';
+                        return `<div style="display:grid;grid-template-columns:90px 80px 1fr;gap:0.3rem;padding:0.15rem 0;border-bottom:1px solid var(--border-color);">
+                            <span style="color:var(--text-secondary);">${ts}</span>
+                            <span style="color:var(--accent-cyan);">${a.username || ''}</span>
+                            <span>${a.action || ''} ${a.details ? '- ' + a.details : ''}</span>
+                        </div>`;
+                    }).join('');
+                }
+            } catch (e) {
+                console.error('Failed to load company report:', e);
+            }
+        }
+
+        function toggleCompanyDefaults() {
+            const el = document.getElementById('companyDefaultsContent');
+            const icon = document.getElementById('companyDefaultsIcon');
+            if (el.style.display === 'none') { el.style.display = ''; icon.classList.remove('rotated'); }
+            else { el.style.display = 'none'; icon.classList.add('rotated'); }
+        }
+
+        function toggleCustomDefaults() {
+            const on = document.getElementById('cdUseCustomDefaults').checked;
+            document.getElementById('cdCustomDefaultsForm').style.display = on ? '' : 'none';
+        }
+
+        function toggleCdAllCategories() {
+            const all = document.getElementById('cdAllCategories').checked;
+            document.querySelectorAll('#cdCategoryCheckboxes input[type="checkbox"]').forEach(cb => { cb.disabled = all; if (all) cb.checked = true; });
+        }
+
+        function toggleCdAllBehavioral() {
+            const all = document.getElementById('cdAllBehavioral').checked;
+            document.querySelectorAll('#cdBehavioralCheckboxes input[type="checkbox"]').forEach(cb => { cb.disabled = all; if (all) cb.checked = true; });
+        }
+
+        async function loadCompanyDefaults(companyName) {
+            const catContainer = document.getElementById('cdCategoryCheckboxes');
+            const behContainer = document.getElementById('cdBehavioralCheckboxes');
+            const categories = _companyList.length > 0 ? [] : [];
+            try {
+                const jobsResp = await fetch('/api/cached_files', { credentials: 'same-origin' });
+                const jobsData = await jobsResp.json();
+                const cats = new Set();
+                (jobsData.files || []).forEach(f => { if (f.category) cats.add(f.category.toUpperCase()); });
+                const sortedCats = Array.from(cats).sort();
+                catContainer.innerHTML = sortedCats.map(c => `<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;padding:0.1rem 0;cursor:pointer;"><input type="checkbox" class="cd-cat-cb" value="${c}" checked> ${c}</label>`).join('');
+            } catch (e) {
+                catContainer.innerHTML = '<span style="color:var(--text-secondary);font-size:0.75rem;">Failed to load categories.</span>';
+            }
+            const behavCats = (typeof MASTER_BEHAVIORAL_CATEGORIES !== 'undefined') ? MASTER_BEHAVIORAL_CATEGORIES : [];
+            behContainer.innerHTML = behavCats.map(c => `<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;padding:0.1rem 0;cursor:pointer;"><input type="checkbox" class="cd-beh-cb" value="${c}" checked> ${c}</label>`).join('');
+
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(companyName)}/defaults`, { credentials: 'same-origin' });
+                const data = await resp.json();
+                const d = data.defaults;
+                const hasCustom = !!d;
+                document.getElementById('cdUseCustomDefaults').checked = hasCustom;
+                document.getElementById('cdCustomDefaultsForm').style.display = hasCustom ? '' : 'none';
+                document.getElementById('companyDefaultsBadge').textContent = hasCustom ? 'Custom' : 'Global';
+                document.getElementById('companyDefaultsBadge').style.background = hasCustom ? 'var(--accent-cyan)' : 'var(--bg-input)';
+                document.getElementById('companyDefaultsBadge').style.color = hasCustom ? '#000' : 'var(--text-secondary)';
+                document.getElementById('cdResetSource').textContent = hasCustom ? 'company custom' : 'global';
+                if (d) {
+                    document.getElementById('cdProfileIQ').checked = d.has_profile_iq_access !== false;
+                    document.getElementById('cdSubscriberIQ').checked = !!d.has_subscriber_iq_access;
+                    document.getElementById('cdImpactIQ').checked = d.has_ticket_sales_iq_access !== false;
+                    document.getElementById('cdHedgeFundIQ').checked = !!d.has_hedge_fund_iq_access;
+                    document.getElementById('cdAnalysisIQ').checked = !!d.has_analysis_iq_access;
+                    document.getElementById('cdRankersIQ').checked = !!d.has_rankers_iq_access;
+                    document.getElementById('cdTicketTracker').checked = !!d.has_ticket_sales_tracker_access;
+                    document.getElementById('cdDefaultCredits').value = d.credits ?? 5;
+                    const allowedCats = d.allowed_categories || ['*'];
+                    const allCats = allowedCats.includes('*');
+                    document.getElementById('cdAllCategories').checked = allCats;
+                    if (!allCats) {
+                        const upper = new Set(allowedCats.map(c => c.toUpperCase()));
+                        document.querySelectorAll('.cd-cat-cb').forEach(cb => { cb.checked = upper.has(cb.value); cb.disabled = false; });
+                    }
+                    const allowedBeh = d.allowed_behavioral_categories || ['*'];
+                    const allBeh = allowedBeh.includes('*');
+                    document.getElementById('cdAllBehavioral').checked = allBeh;
+                    if (!allBeh) {
+                        const upper = new Set(allowedBeh.map(c => c.toUpperCase()));
+                        document.querySelectorAll('.cd-beh-cb').forEach(cb => { cb.checked = upper.has(cb.value); cb.disabled = false; });
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load company defaults:', e);
+            }
+        }
+
+        async function saveCompanyDefaults() {
+            if (!_currentCompany) return;
+            const allCats = document.getElementById('cdAllCategories').checked;
+            const cats = allCats ? ['*'] : Array.from(document.querySelectorAll('.cd-cat-cb:checked')).map(cb => cb.value);
+            const allBeh = document.getElementById('cdAllBehavioral').checked;
+            const behs = allBeh ? ['*'] : Array.from(document.querySelectorAll('.cd-beh-cb:checked')).map(cb => cb.value);
+            const body = {
+                allowed_categories: cats,
+                allowed_runs: ['*'],
+                allowed_behavioral_categories: behs,
+                has_profile_iq_access: document.getElementById('cdProfileIQ').checked,
+                has_subscriber_iq_access: document.getElementById('cdSubscriberIQ').checked,
+                has_ticket_sales_iq_access: document.getElementById('cdImpactIQ').checked,
+                has_hedge_fund_iq_access: document.getElementById('cdHedgeFundIQ').checked,
+                has_analysis_iq_access: document.getElementById('cdAnalysisIQ').checked,
+                has_rankers_iq_access: document.getElementById('cdRankersIQ').checked,
+                has_ticket_sales_tracker_access: document.getElementById('cdTicketTracker').checked,
+                credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
+            };
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/defaults`, {
+                    method: 'PUT', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert('Company defaults saved.');
+                    document.getElementById('companyDefaultsBadge').textContent = 'Custom';
+                    document.getElementById('companyDefaultsBadge').style.background = 'var(--accent-cyan)';
+                    document.getElementById('companyDefaultsBadge').style.color = '#000';
+                    document.getElementById('cdResetSource').textContent = 'company custom';
+                    loadCompanies();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown'));
+                }
+            } catch (e) { alert('Failed to save: ' + e.message); }
+        }
+
+        async function deleteCompanyDefaults() {
+            if (!_currentCompany) return;
+            if (!confirm(`Remove custom defaults for ${_currentCompany}? New users will use global defaults.`)) return;
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/defaults`, {
+                    method: 'DELETE', credentials: 'same-origin'
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert('Custom defaults removed.');
+                    document.getElementById('cdUseCustomDefaults').checked = false;
+                    document.getElementById('cdCustomDefaultsForm').style.display = 'none';
+                    document.getElementById('companyDefaultsBadge').textContent = 'Global';
+                    document.getElementById('companyDefaultsBadge').style.background = 'var(--bg-input)';
+                    document.getElementById('companyDefaultsBadge').style.color = 'var(--text-secondary)';
+                    document.getElementById('cdResetSource').textContent = 'global';
+                    loadCompanies();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown'));
+                }
+            } catch (e) { alert('Failed to remove: ' + e.message); }
+        }
+
+        async function resetCompanyUsers() {
+            if (!_currentCompany) return;
+            const hasCustom = document.getElementById('cdUseCustomDefaults').checked;
+            const src = hasCustom ? 'company custom defaults' : 'global defaults';
+            if (!confirm(`Reset ALL users in "${_currentCompany}" to ${src}?\n\nThis will overwrite each user's access settings.`)) return;
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/reset-users`, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert(data.message);
+                    loadCompanyEmployees(_currentCompany);
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown'));
+                }
+            } catch (e) { alert('Failed to reset: ' + e.message); }
+        }
+
+
         // ============================================================================
         // ACTIVE JOBS FUNCTIONS
         // ============================================================================

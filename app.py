@@ -2430,35 +2430,38 @@ def create_user():
         
         role = _normalize_role(req_data.get('role', 'user'))
         
+        company = req_data.get('company', '')
+        cd = data.get('company_defaults', {}).get(company) if company else None
+
         data['users'][username] = {
             'password_hash': hash_password(password),
             'email': email,
             'first_name': req_data.get('first_name', ''),
             'last_name': req_data.get('last_name', ''),
-            'company': req_data.get('company', ''),
+            'company': company,
             'department': req_data.get('department', ''),
             'role': role,
-            'credits': req_data.get('credits', 5),
+            'credits': req_data.get('credits', cd.get('credits', 5) if cd else 5),
             'credits_used': 0,
             'created_at': datetime.now().isoformat(),
             'last_login': None,
-            'access_expires': req_data.get('access_expires'),  # None = unlimited
-            'allowed_categories': req_data.get('allowed_categories', ['*']),
-            'allowed_runs': req_data.get('allowed_runs', ['*']),
-            'allowed_behavioral_categories': req_data.get('allowed_behavioral_categories', ['*']),
-            'has_profile_iq_access': req_data.get('has_profile_iq_access', True),
-            'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', False),
-            'has_ticket_sales_iq_access': req_data.get('has_ticket_sales_iq_access', True),
-            'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', False),
+            'access_expires': req_data.get('access_expires'),
+            'allowed_categories': req_data.get('allowed_categories', cd.get('allowed_categories', ['*']) if cd else ['*']),
+            'allowed_runs': req_data.get('allowed_runs', cd.get('allowed_runs', ['*']) if cd else ['*']),
+            'allowed_behavioral_categories': req_data.get('allowed_behavioral_categories', cd.get('allowed_behavioral_categories', ['*']) if cd else ['*']),
+            'has_profile_iq_access': req_data.get('has_profile_iq_access', cd.get('has_profile_iq_access', True) if cd else True),
+            'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', cd.get('has_subscriber_iq_access', False) if cd else False),
+            'has_ticket_sales_iq_access': req_data.get('has_ticket_sales_iq_access', cd.get('has_ticket_sales_iq_access', True) if cd else True),
+            'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', cd.get('has_hedge_fund_iq_access', False) if cd else False),
             'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
             'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
-            'has_analysis_iq_access': req_data.get('has_analysis_iq_access', False),
+            'has_analysis_iq_access': req_data.get('has_analysis_iq_access', cd.get('has_analysis_iq_access', False) if cd else False),
             'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
-            'has_ticket_sales_tracker_access': req_data.get('has_ticket_sales_tracker_access', False),
-            'has_rankers_iq_access': req_data.get('has_rankers_iq_access', False),
+            'has_ticket_sales_tracker_access': req_data.get('has_ticket_sales_tracker_access', cd.get('has_ticket_sales_tracker_access', False) if cd else False),
+            'has_rankers_iq_access': req_data.get('has_rankers_iq_access', cd.get('has_rankers_iq_access', False) if cd else False),
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
             'collab_team': req_data.get('collab_team', []),
-            'has_purgatory_approval': False  # Default to false, only super_admin can enable
+            'has_purgatory_approval': False
         }
         
         # Purgatory clearance: only super_admin can grant (or set on create)
@@ -2733,6 +2736,224 @@ def api_add_run_to_all():
         if changed:
             save_users(data)
         return jsonify({'success': True, 'message': f'Added to all users: {s3_key}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+
+# ── Company Management Endpoints ──────────────────────────────────────────────
+
+@app.route('/api/admin/companies', methods=['GET'])
+@requires_admin
+def api_list_companies():
+    """Derive companies from user data and return summary stats for each."""
+    try:
+        data = load_users()
+        users = data.get('users', {})
+        company_defaults = data.get('company_defaults', {})
+        companies = {}
+        for username, user in users.items():
+            co = (user.get('company') or '').strip()
+            if not co:
+                continue
+            if co not in companies:
+                companies[co] = {'name': co, 'user_count': 0, 'credits_used': 0,
+                                 'total_sessions': 0, 'last_active': None,
+                                 'has_custom_defaults': co in company_defaults}
+            c = companies[co]
+            c['user_count'] += 1
+            c['credits_used'] += user.get('credits_used') or 0
+            activity = user.get('activity') or {}
+            c['total_sessions'] += activity.get('total_sessions') or 0
+            ll = user.get('last_login')
+            if ll and (c['last_active'] is None or ll > c['last_active']):
+                c['last_active'] = ll
+        return jsonify({'success': True, 'companies': sorted(companies.values(), key=lambda x: x['name'].lower())})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/users', methods=['GET'])
+@requires_admin
+def api_company_users(company_name):
+    """Return all users belonging to a company with their stats."""
+    try:
+        data = load_users()
+        users = data.get('users', {})
+        result = []
+        for username, user in users.items():
+            if (user.get('company') or '').strip().lower() != company_name.strip().lower():
+                continue
+            activity = user.get('activity') or {}
+            profiles_viewed = activity.get('profiles_viewed') or []
+            result.append({
+                'username': username,
+                'first_name': user.get('first_name', ''),
+                'last_name': user.get('last_name', ''),
+                'email': user.get('email', ''),
+                'role': user.get('role', 'user'),
+                'credits': user.get('credits', 0),
+                'credits_used': user.get('credits_used', 0),
+                'total_sessions': activity.get('total_sessions') or 0,
+                'last_login': user.get('last_login'),
+                'profiles_viewed': len(profiles_viewed),
+                'created_at': user.get('created_at'),
+            })
+        result.sort(key=lambda x: (x.get('last_login') or ''), reverse=True)
+        return jsonify({'success': True, 'users': result, 'company': company_name})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/report', methods=['GET'])
+@requires_admin
+def api_company_report(company_name):
+    """Aggregated usage report for a company."""
+    try:
+        data = load_users()
+        users = data.get('users', {})
+        total_users = 0
+        active_users = 0
+        total_credits_used = 0
+        total_sessions = 0
+        feature_usage_agg = {}
+        top_profiles = {}
+        recent_actions = []
+        for username, user in users.items():
+            if (user.get('company') or '').strip().lower() != company_name.strip().lower():
+                continue
+            total_users += 1
+            total_credits_used += user.get('credits_used') or 0
+            activity = user.get('activity') or {}
+            sessions = activity.get('total_sessions') or 0
+            total_sessions += sessions
+            if sessions > 0:
+                active_users += 1
+            for feat, count in (activity.get('feature_usage') or {}).items():
+                feature_usage_agg[feat] = feature_usage_agg.get(feat, 0) + count
+            for p in (activity.get('profiles_viewed') or []):
+                pk = p.get('name') or p.get('key') or ''
+                if pk:
+                    top_profiles[pk] = top_profiles.get(pk, 0) + (p.get('view_count') or 1)
+            for a in (activity.get('recent_actions') or [])[-20:]:
+                recent_actions.append({**a, 'username': username})
+        recent_actions.sort(key=lambda x: x.get('timestamp') or '', reverse=True)
+        top_profiles_list = sorted(top_profiles.items(), key=lambda x: -x[1])[:20]
+        feature_usage_list = sorted(feature_usage_agg.items(), key=lambda x: -x[1])
+        return jsonify({
+            'success': True,
+            'company': company_name,
+            'total_users': total_users,
+            'active_users': active_users,
+            'total_credits_used': total_credits_used,
+            'total_sessions': total_sessions,
+            'avg_sessions': round(total_sessions / max(total_users, 1), 1),
+            'feature_usage': feature_usage_list,
+            'top_profiles': top_profiles_list,
+            'recent_actions': recent_actions[:50],
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/defaults', methods=['GET'])
+@requires_admin
+def api_get_company_defaults(company_name):
+    """Get custom defaults for a company, or null if none set."""
+    try:
+        data = load_users()
+        defaults = data.get('company_defaults', {}).get(company_name)
+        return jsonify({'success': True, 'company': company_name, 'defaults': defaults})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/defaults', methods=['PUT'])
+@requires_admin
+def api_set_company_defaults(company_name):
+    """Save custom defaults for a company."""
+    try:
+        req = request.get_json() or {}
+        data = load_users()
+        if 'company_defaults' not in data:
+            data['company_defaults'] = {}
+        data['company_defaults'][company_name] = {
+            'allowed_categories': req.get('allowed_categories', ['*']),
+            'allowed_runs': req.get('allowed_runs', ['*']),
+            'allowed_behavioral_categories': req.get('allowed_behavioral_categories', ['*']),
+            'has_profile_iq_access': req.get('has_profile_iq_access', True),
+            'has_subscriber_iq_access': req.get('has_subscriber_iq_access', False),
+            'has_ticket_sales_iq_access': req.get('has_ticket_sales_iq_access', True),
+            'has_hedge_fund_iq_access': req.get('has_hedge_fund_iq_access', False),
+            'has_analysis_iq_access': req.get('has_analysis_iq_access', False),
+            'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
+            'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
+            'credits': req.get('credits', 5),
+        }
+        save_users(data)
+        return jsonify({'success': True, 'message': f'Defaults saved for {company_name}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/defaults', methods=['DELETE'])
+@requires_admin
+def api_delete_company_defaults(company_name):
+    """Remove custom defaults for a company (revert to global)."""
+    try:
+        data = load_users()
+        cd = data.get('company_defaults', {})
+        if company_name in cd:
+            del cd[company_name]
+            save_users(data)
+        return jsonify({'success': True, 'message': f'Custom defaults removed for {company_name}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/reset-users', methods=['POST'])
+@requires_admin
+def api_reset_company_users(company_name):
+    """Reset all users in a company to either company defaults (if set) or global defaults."""
+    try:
+        req = request.get_json() or {}
+        data = load_users()
+        users = data.get('users', {})
+        cd = data.get('company_defaults', {}).get(company_name)
+        global_runs = req.get('allowed_runs', ['*'])
+        global_behavioral = req.get('allowed_behavioral_categories', ['*'])
+        count = 0
+        for username, user in users.items():
+            if (user.get('company') or '').strip().lower() != company_name.strip().lower():
+                continue
+            if cd:
+                user['allowed_categories'] = list(cd.get('allowed_categories', ['*']))
+                user['allowed_runs'] = list(cd.get('allowed_runs', ['*']))
+                user['allowed_behavioral_categories'] = list(cd.get('allowed_behavioral_categories', ['*']))
+                user['has_profile_iq_access'] = cd.get('has_profile_iq_access', True)
+                user['has_subscriber_iq_access'] = cd.get('has_subscriber_iq_access', False)
+                user['has_ticket_sales_iq_access'] = cd.get('has_ticket_sales_iq_access', True)
+                user['has_hedge_fund_iq_access'] = cd.get('has_hedge_fund_iq_access', False)
+                user['has_analysis_iq_access'] = cd.get('has_analysis_iq_access', False)
+                user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
+                user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
+                user['credits'] = cd.get('credits', 5)
+            else:
+                user['allowed_categories'] = ['*']
+                user['allowed_runs'] = list(global_runs) if isinstance(global_runs, list) else ['*']
+                user['allowed_behavioral_categories'] = list(global_behavioral) if isinstance(global_behavioral, list) else ['*']
+                user['has_profile_iq_access'] = True
+                user['has_subscriber_iq_access'] = False
+                user['has_ticket_sales_iq_access'] = True
+                user['has_hedge_fund_iq_access'] = False
+                user['has_analysis_iq_access'] = False
+                user['has_rankers_iq_access'] = False
+                user['has_ticket_sales_tracker_access'] = False
+                user['credits'] = 5
+            count += 1
+        save_users(data)
+        src = 'company defaults' if cd else 'global defaults'
+        return jsonify({'success': True, 'message': f'Reset {count} user(s) in {company_name} to {src}', 'count': count})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
