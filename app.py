@@ -1098,14 +1098,28 @@ def get_current_user():
     return data['users'].get(session['username'])
 
 
-def auto_add_runs_to_all_users(s3_keys):
-    """Auto-add new profile S3 keys to every user's allowed_runs so new profiles
-    are visible by default. Users with ['*'] already see everything; for users with
-    explicit lists, the new keys are appended."""
+def auto_add_runs_to_all_users(s3_keys, key_category_map=None):
+    """Auto-add new profile S3 keys to users' allowed_runs based on their
+    allowed_categories subscriptions. Users with allowed_runs=['*'] already see
+    everything. For users with explicit lists, a new key is added only if the
+    user's allowed_categories includes the profile's category (or '*').
+    If key_category_map is None, falls back to looking up categories from the
+    s3_cache; if that also fails the key is added to everyone (safe default)."""
     if not s3_keys:
         return
     if isinstance(s3_keys, str):
         s3_keys = [s3_keys]
+
+    # Build category lookup: s3_key -> uppercase category
+    cat_map = {}
+    if key_category_map:
+        cat_map = {k: (v or '').upper() for k, v in key_category_map.items()}
+    else:
+        for job in (s3_cache.get('jobs') or []):
+            sk = job.get('s3_key') or ''
+            if sk in s3_keys:
+                cat_map[sk] = (job.get('category') or '').upper()
+
     try:
         data = load_users()
         users = data.get('users', {})
@@ -1115,13 +1129,24 @@ def auto_add_runs_to_all_users(s3_keys):
             if isinstance(runs, list) and '*' in runs:
                 continue
             existing = set(runs or [])
-            added = [k for k in s3_keys if k not in existing]
+
+            user_cats = user.get('allowed_categories', ['*'])
+            has_all_cats = isinstance(user_cats, list) and '*' in user_cats
+            user_cats_upper = set() if has_all_cats else {c.upper() for c in (user_cats or [])}
+
+            added = []
+            for k in s3_keys:
+                if k in existing:
+                    continue
+                profile_cat = cat_map.get(k, '')
+                if has_all_cats or profile_cat in user_cats_upper or not profile_cat:
+                    added.append(k)
             if added:
                 user['allowed_runs'] = list(existing | set(added))
                 changed = True
         if changed:
             save_users(data)
-            print(f"✅ Auto-added {len(s3_keys)} new profile(s) to users' allowed_runs")
+            print(f"✅ Auto-added {len(s3_keys)} new profile(s) to qualifying users' allowed_runs")
     except Exception as e:
         print(f"⚠️ auto_add_runs_to_all_users error: {e}")
 
@@ -2688,13 +2713,28 @@ def api_remove_run_from_all():
 @app.route('/api/admin/runs/add-to-all', methods=['POST'])
 @requires_admin
 def api_add_run_to_all():
-    """Add a profile (S3 key) to every user's allowed_runs."""
+    """Add a profile (S3 key) to every user's allowed_runs (admin override, bypasses category check)."""
     req = request.get_json() or {}
     s3_key = req.get('s3_key')
     if not s3_key:
         return jsonify({'success': False, 'error': 'Missing s3_key'}), 400
-    auto_add_runs_to_all_users(s3_key)
-    return jsonify({'success': True, 'message': f'Added to all users: {s3_key}'})
+    try:
+        data = load_users()
+        users = data.get('users', {})
+        changed = False
+        for username, user in users.items():
+            runs = user.get('allowed_runs', ['*'])
+            if isinstance(runs, list) and '*' in runs:
+                continue
+            existing = set(runs or [])
+            if s3_key not in existing:
+                user['allowed_runs'] = list(existing | {s3_key})
+                changed = True
+        if changed:
+            save_users(data)
+        return jsonify({'success': True, 'message': f'Added to all users: {s3_key}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/admin/users/<username>/reset-password', methods=['POST'])
@@ -4550,7 +4590,6 @@ def index():
                            has_analysis_iq_access=has_analysis_iq,
                            analysis_iq_modules=analysis_iq_modules,
                            allowed_behavioral_categories=allowed_behavioral_categories,
-                           allowed_categories=allowed_categories,
                            allowed_runs=allowed_runs,
                            quick_select_behaviors_exclusions=quick_select_behaviors_exclusions,
                            has_rankers_iq_access=has_rankers_iq,
@@ -6661,24 +6700,6 @@ def get_csv_data(s3_key):
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     if not s3_cache.get('jobs') and s3_client:
         load_persisted_cache()
-    
-    # Enforce category access: check if this profile's category is allowed for the user
-    try:
-        _u = get_current_user()
-        _allowed_cats = _u.get('allowed_categories', ['*']) if _u else ['*']
-        if _allowed_cats and not ('*' in _allowed_cats):
-            _allowed_upper = {c.upper() for c in _allowed_cats}
-            # Gen Pop is always accessible (needed for index calculations)
-            if 'gen_pop' not in s3_key.lower():
-                _profile_cat = None
-                for _j in (s3_cache.get('jobs') or []):
-                    if (_j.get('s3_key') or '') == s3_key:
-                        _profile_cat = (_j.get('category') or '').upper()
-                        break
-                if _profile_cat and _profile_cat not in _allowed_upper:
-                    return jsonify({'success': False, 'error': 'Access denied: you do not have permission to view this profile category.'}), 403
-    except Exception:
-        pass
     
     def _fetch_and_return(key):
         """Fetch CSV from S3 by key and return (content, brand_name, date_range) or raise."""
@@ -12065,8 +12086,9 @@ def release_from_purgatory(purgatory_id):
         item['released_key'] = new_key
         save_purgatory_metadata(metadata)
         
-        # Auto-add to all users' allowed_runs so new profiles are visible by default
-        auto_add_runs_to_all_users(new_key)
+        # Auto-add to qualifying users' allowed_runs based on their category subscriptions
+        profile_category = item.get('category', '')
+        auto_add_runs_to_all_users(new_key, key_category_map={new_key: profile_category})
         
         print(f"✅ Released from purgatory: {old_key} -> {new_key}")
         return True, new_key
@@ -13498,12 +13520,6 @@ def list_jobs():
                 return False
             job_list = [e for e in job_list if job_allowed(e)]
         
-        # Restrict to categories the user is allowed to see (Category Access in Admin)
-        allowed_cats = u.get('allowed_categories') if u else None
-        if allowed_cats is not None and not (isinstance(allowed_cats, list) and len(allowed_cats) == 1 and allowed_cats[0] == '*'):
-            allowed_cats_upper = {c.upper() for c in (allowed_cats or [])}
-            job_list = [e for e in job_list if (e.get('category') or '').upper() in allowed_cats_upper]
-
         categories = {e.get('category') for e in job_list if e.get('category')}
         
         # Sort by created_at descending (safe key for missing/None values)
@@ -13750,6 +13766,7 @@ def smart_cache_update():
     updated_count = 0
     deleted_count = 0
     new_s3_keys = []  # Track newly discovered files for auto-adding to users
+    new_key_cats = {}  # s3_key -> category for category-aware auto-add
     
     try:
         paginator = s3_client.get_paginator('list_objects_v2')
@@ -13782,6 +13799,7 @@ def smart_cache_update():
                         s3_cache['categories'].append(job_data['category'])
                     new_count += 1
                     new_s3_keys.append(key)
+                    new_key_cats[key] = job_data.get('category', '')
                     print(f"   ➕ New: {key}")
                     
                 elif existing[key] != obj_modified:
@@ -13828,9 +13846,9 @@ def smart_cache_update():
         else:
             print(f"✅ No changes detected ({len(s3_cache['jobs'])} files cached)")
         
-        # Auto-add newly discovered profiles to all users' allowed_runs
+        # Auto-add newly discovered profiles to qualifying users based on category subscriptions
         if new_s3_keys:
-            auto_add_runs_to_all_users(new_s3_keys)
+            auto_add_runs_to_all_users(new_s3_keys, key_category_map=new_key_cats)
         
         return {'new': new_count, 'updated': updated_count, 'deleted': deleted_count, 'total': len(s3_cache['jobs'])}
         

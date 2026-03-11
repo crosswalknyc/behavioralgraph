@@ -15798,9 +15798,6 @@
         // Allowed behavioral categories for this user (controls which categories show in Behavioral tab)
         const allowedBehavioralCategories = {{ allowed_behavioral_categories | tojson | safe }};
         const hasAllBehavioralCategories = allowedBehavioralCategories.includes('*');
-        // Allowed profile categories (controls which profiles the user can see/open)
-        const allowedProfileCategories = {{ allowed_categories | tojson | safe }};
-        const hasAllProfileCategories = allowedProfileCategories.includes('*');
         // Allowed specific runs/profiles (controls which individual profiles can be clicked)
         const allowedRuns = {{ allowed_runs | tojson | safe }};
         const hasAllRuns = allowedRuns.includes('*');
@@ -27707,16 +27704,8 @@
                 seen.add(t.id);
                 return true;
             });
-            // Build allowed set for quick lookups during restore
-            const _allowedCatSet = hasAllProfileCategories ? null : new Set(allowedProfileCategories.map(c => (c || '').toUpperCase()));
-            
             for (const savedTab of deduped) {
                 if (openProfileTabs.some(t => t.id === savedTab.id)) continue;
-                // Skip tabs whose profile is outside allowed categories
-                if (_allowedCatSet) {
-                    const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === savedTab.id);
-                    if (profile && !_allowedCatSet.has((profile.category || '').toUpperCase())) continue;
-                }
                 // Skip tabs whose profile is not in allowed runs
                 if (_allowedRunsSet && !_allowedRunsSet.has(savedTab.id) && !(savedTab.id || '').toLowerCase().includes('gen_pop')) continue;
                 try {
@@ -27772,14 +27761,6 @@
                 if (category === 'OTHER' || category === 'UNCATEGORIZED') return false;
                 return true;
             });
-            
-            // Enforce category access: only show profiles whose category the user is allowed to see
-            if (!hasAllProfileCategories && allowedProfileCategories.length > 0) {
-                const allowedUpper = new Set(allowedProfileCategories.map(c => (c || '').toUpperCase()));
-                profiles = profiles.filter(p => allowedUpper.has((p.category || '').toUpperCase()));
-            } else if (!hasAllProfileCategories && allowedProfileCategories.length === 0) {
-                profiles = [];
-            }
             
             // Enforce run access: only show profiles the user is allowed to open
             if (_allowedRunsSet) {
@@ -28250,17 +28231,6 @@
         }
 
         async function selectDashboardProfile(profileId, forceReload) {
-            // Enforce category access: block opening profiles outside allowed categories
-            if (!hasAllProfileCategories) {
-                const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
-                if (profile) {
-                    const allowedUpper = new Set(allowedProfileCategories.map(c => (c || '').toUpperCase()));
-                    if (!allowedUpper.has((profile.category || '').toUpperCase())) {
-                        console.warn('Access denied: profile category not in allowed list');
-                        return;
-                    }
-                }
-            }
             // Enforce run access: block opening profiles not in allowed_runs
             if (_allowedRunsSet && !_allowedRunsSet.has(profileId)) {
                 // Gen Pop is always accessible
