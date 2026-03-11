@@ -538,6 +538,14 @@
             transform: rotate(-90deg);
         }
 
+        .run-item-row:hover .run-bulk-btn {
+            opacity: 1 !important;
+        }
+        .run-bulk-btn:hover {
+            color: var(--accent-red, #e74c3c) !important;
+            opacity: 1 !important;
+        }
+
         .category-group {
             margin-bottom: 0.75rem;
         }
@@ -6988,10 +6996,13 @@
                             const checked = _runAccessSelected.has(run.key);
                             const displayName = getRunDisplayName(run);
                             const escapedKey = run.key.replace(/'/g, "\\'");
-                            html += `<label style="display: flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.2rem 0.15rem 1.5rem; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer;">`;
+                            html += `<div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.2rem 0.15rem 1.5rem; font-size: 0.75rem; color: var(--text-secondary);" class="run-item-row">`;
+                            html += `<label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; flex: 1; min-width: 0;">`;
                             html += `<input type="checkbox" class="run-item-cb" data-master="${master}" data-sub="${sub}" value="${run.key}" ${checked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="onRunItemChange('${master}', '${sub}', '${escapedKey}', this.checked)">`;
-                            html += `<span>${displayName}</span>`;
+                            html += `<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>`;
                             html += `</label>`;
+                            html += `<button type="button" class="run-bulk-btn" onclick="event.stopPropagation(); removeRunFromAllUsers('${escapedKey}')" title="Remove from ALL users" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.65rem; padding: 0 0.2rem; opacity: 0; transition: opacity 0.15s;">✕ all</button>`;
+                            html += `</div>`;
                         });
                         html += `</div>`;
                     });
@@ -7065,6 +7076,43 @@
         
         function filterRunAccessTree() {
             _renderRunTree();
+        }
+        
+        async function removeRunFromAllUsers(s3Key) {
+            if (!confirm(`Remove this profile from ALL users' access?\n\n${s3Key.replace(/_/g, ' ').replace(/\.csv$/, '')}`)) return;
+            try {
+                const res = await fetch('/api/admin/runs/remove-from-all', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ s3_key: s3Key })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Removed from all users');
+                } else {
+                    showToast(data.error || 'Failed', true);
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, true);
+            }
+        }
+        
+        async function addRunToAllUsers(s3Key) {
+            try {
+                const res = await fetch('/api/admin/runs/add-to-all', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ s3_key: s3Key })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Added to all users');
+                } else {
+                    showToast(data.error || 'Failed', true);
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, true);
+            }
         }
         
         // Populate Behavioral Category Checkboxes in user modal (always show ALL options; default selection from quick select when adding new user)

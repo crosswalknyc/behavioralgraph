@@ -1097,6 +1097,57 @@ def get_current_user():
     data = load_users()
     return data['users'].get(session['username'])
 
+
+def auto_add_runs_to_all_users(s3_keys):
+    """Auto-add new profile S3 keys to every user's allowed_runs so new profiles
+    are visible by default. Users with ['*'] already see everything; for users with
+    explicit lists, the new keys are appended."""
+    if not s3_keys:
+        return
+    if isinstance(s3_keys, str):
+        s3_keys = [s3_keys]
+    try:
+        data = load_users()
+        users = data.get('users', {})
+        changed = False
+        for username, user in users.items():
+            runs = user.get('allowed_runs', ['*'])
+            if isinstance(runs, list) and '*' in runs:
+                continue
+            existing = set(runs or [])
+            added = [k for k in s3_keys if k not in existing]
+            if added:
+                user['allowed_runs'] = list(existing | set(added))
+                changed = True
+        if changed:
+            save_users(data)
+            print(f"✅ Auto-added {len(s3_keys)} new profile(s) to users' allowed_runs")
+    except Exception as e:
+        print(f"⚠️ auto_add_runs_to_all_users error: {e}")
+
+
+def remove_run_from_all_users(s3_key):
+    """Remove a specific profile S3 key from every user's allowed_runs."""
+    if not s3_key:
+        return
+    try:
+        data = load_users()
+        users = data.get('users', {})
+        changed = False
+        for username, user in users.items():
+            runs = user.get('allowed_runs', ['*'])
+            if isinstance(runs, list) and '*' in runs:
+                continue
+            if s3_key in (runs or []):
+                user['allowed_runs'] = [k for k in runs if k != s3_key]
+                changed = True
+        if changed:
+            save_users(data)
+            print(f"✅ Removed {s3_key} from all users' allowed_runs")
+    except Exception as e:
+        print(f"⚠️ remove_run_from_all_users error: {e}")
+
+
 # Credit cost per analysis type
 CREDITS_PROFILE_ANALYSIS = 5
 CREDITS_TICKET_SALES = 10
@@ -2621,6 +2672,30 @@ def restore_defaults_all_users():
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/runs/remove-from-all', methods=['POST'])
+@requires_admin
+def api_remove_run_from_all():
+    """Remove a profile (S3 key) from every user's allowed_runs."""
+    req = request.get_json() or {}
+    s3_key = req.get('s3_key')
+    if not s3_key:
+        return jsonify({'success': False, 'error': 'Missing s3_key'}), 400
+    remove_run_from_all_users(s3_key)
+    return jsonify({'success': True, 'message': f'Removed from all users: {s3_key}'})
+
+
+@app.route('/api/admin/runs/add-to-all', methods=['POST'])
+@requires_admin
+def api_add_run_to_all():
+    """Add a profile (S3 key) to every user's allowed_runs."""
+    req = request.get_json() or {}
+    s3_key = req.get('s3_key')
+    if not s3_key:
+        return jsonify({'success': False, 'error': 'Missing s3_key'}), 400
+    auto_add_runs_to_all_users(s3_key)
+    return jsonify({'success': True, 'message': f'Added to all users: {s3_key}'})
+
 
 @app.route('/api/admin/users/<username>/reset-password', methods=['POST'])
 @requires_admin
@@ -11990,6 +12065,9 @@ def release_from_purgatory(purgatory_id):
         item['released_key'] = new_key
         save_purgatory_metadata(metadata)
         
+        # Auto-add to all users' allowed_runs so new profiles are visible by default
+        auto_add_runs_to_all_users(new_key)
+        
         print(f"✅ Released from purgatory: {old_key} -> {new_key}")
         return True, new_key
     except Exception as e:
@@ -13671,6 +13749,7 @@ def smart_cache_update():
     new_count = 0
     updated_count = 0
     deleted_count = 0
+    new_s3_keys = []  # Track newly discovered files for auto-adding to users
     
     try:
         paginator = s3_client.get_paginator('list_objects_v2')
@@ -13702,6 +13781,7 @@ def smart_cache_update():
                     if job_data['category'] not in s3_cache['categories']:
                         s3_cache['categories'].append(job_data['category'])
                     new_count += 1
+                    new_s3_keys.append(key)
                     print(f"   ➕ New: {key}")
                     
                 elif existing[key] != obj_modified:
@@ -13747,6 +13827,10 @@ def smart_cache_update():
             print(f"✅ Smart update: {new_count} new, {updated_count} modified, {deleted_count} removed, {len(s3_cache['jobs'])} total")
         else:
             print(f"✅ No changes detected ({len(s3_cache['jobs'])} files cached)")
+        
+        # Auto-add newly discovered profiles to all users' allowed_runs
+        if new_s3_keys:
+            auto_add_runs_to_all_users(new_s3_keys)
         
         return {'new': new_count, 'updated': updated_count, 'deleted': deleted_count, 'total': len(s3_cache['jobs'])}
         
