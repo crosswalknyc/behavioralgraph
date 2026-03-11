@@ -27374,9 +27374,16 @@
                 }
             };
 
+            const _itemCategoryOverrides = { 'AOL': 'APP/PLATFORM USAGE' };
+
             csvData.forEach(row => {
-                const category = (row.Column || '').toUpperCase();
+                let category = (row.Column || '').toUpperCase();
                 const value = row.Value || '';
+                const valUpper = (value || '').trim().toUpperCase();
+                if (category === 'SEARCH ENGINE/AI' && _itemCategoryOverrides[valUpper]) {
+                    row.Column = _itemCategoryOverrides[valUpper];
+                    category = _itemCategoryOverrides[valUpper];
+                }
                 const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || row['Percentage'] || 0) || 0;
                 const catShare = parseFloat(row['Category Share'] || 0);
                 const rawNumbers = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, '')) || 0;
@@ -29110,7 +29117,7 @@
             const departmentStores = ['MACY\'S', 'NORDSTROM', 'BLOOMINGDALE\'S', 'NEIMAN MARCUS', 'SAKS', 'DILLARD\'S', 'JC PENNEY', 'JCPENNEY', 'BELK', 'VON MAUR', 'LORD & TAYLOR', 'BERGDORF', 'BARNEYS', 'SEARS', 'STAGE', 'BEALLS', 'BOSCOV\'S', 'STEIN MART'];
             const ecommerceStores = ['AMAZON', 'EBAY', 'ETSY', 'CHEWY', 'WAYFAIR', 'OVERSTOCK', 'ZAPPOS', 'WISH', 'SHEIN', 'TEMU', 'ALIBABA', 'ALIEXPRESS', 'MERCARI', 'POSHMARK', 'THREDDUP', 'DEPOP', 'OFFERUP', 'LETGO', 'CRAIGSLIST', 'FACEBOOK MARKETPLACE', 'NEXTDOOR', 'NEWEGG', 'B&H', 'ADORAMA', 'ZULILY', 'BOXED', 'JET.COM', 'RAKUTEN', 'GILT', 'HAUTELOOK', 'RUE LA LA', 'THREDUP', 'THE REALREAL', 'STOCKX', 'GOAT'];
             const groceryStores = ['PUBLIX', 'HEB', 'H-E-B', 'KROGER', 'SAFEWAY', 'ALBERTSONS', 'WHOLE FOODS', 'TRADER JOE\'S', 'ALDI', 'LIDL', 'WEGMANS', 'SPROUTS', 'FOOD LION', 'GIANT', 'STOP & SHOP', 'HARRIS TEETER', 'MEIJER', 'WINN-DIXIE', 'PIGGLY WIGGLY', 'SAVE-A-LOT', 'GROCERY OUTLET', 'FRESH MARKET', 'LUCKY\'S', 'NATURAL GROCERS', 'EARTH FARE', 'MARKET BASKET', 'PRICE CHOPPER', 'SHOPRITE', 'ACME', 'JEWEL-OSCO', 'VONS', 'RALPHS', 'FRED MEYER', 'QFC', 'KING SOOPERS', 'CITY MARKET', 'SMITH\'S', 'FRY\'S', 'DILLONS', 'BAKER\'S', 'GERBES', 'PAY LESS', 'MARIANO\'S', 'PICK N SAVE', 'METRO MARKET', 'COPPS', 'ROUNDY\'S', 'HANNAFORD', 'FOOD EMPORIUM', 'GRISTEDES', 'FAIRWAY', 'ZABAR\'S', 'CITARELLA', 'EREWHON', 'BRISTOL FARMS', 'GELSON\'S', 'LAZY ACRES', 'NEW SEASONS', 'NEW LEAF', 'CENTRAL MARKET', 'LUNDS', 'BYERLY\'S', 'KOWALSKI\'S', 'JERRY\'S', 'SENDIK\'S', 'HEINEN\'S', 'GIANT EAGLE', 'MARKET DISTRICT', 'INGLES', 'BI-LO', 'HARVEYS', 'FRESCO Y MAS', 'SEDANO\'S', 'PRESIDENTE', 'NORTHGATE', 'CARDENAS', 'VALLARTA', 'EL SUPER', 'FOOD 4 LESS', 'WINCO', 'GROCERY OUTLET', 'SMART & FINAL', 'RESTAURANT DEPOT', 'COSTCO', 'SAM\'S CLUB', 'BJ\'S'];
-            const searchEngines = ['GOOGLE', 'YAHOO', 'BING', 'DUCKDUCKGO', 'DUCK DUCK GO', 'ASK', 'AOL', 'BAIDU', 'YANDEX', 'ECOSIA', 'STARTPAGE', 'BRAVE SEARCH'];
+            const searchEngines = ['GOOGLE', 'YAHOO', 'BING', 'DUCKDUCKGO', 'DUCK DUCK GO', 'ASK', 'BAIDU', 'YANDEX', 'ECOSIA', 'STARTPAGE', 'BRAVE SEARCH'];
             
             // ============ RESTAURANT CATEGORIES ============
             // QSR / Fast Food

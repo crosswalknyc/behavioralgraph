@@ -8640,7 +8640,7 @@ def boost_search_engine_ai_custom(df: pd.DataFrame) -> pd.DataFrame:
     
     Google gets 66x boost.
     Top 5 values (Bing, ChatGPT, Yahoo, DuckDuckGo) get varied 30x-36x boost to ensure variation.
-    AOL, Perplexity, DeepSeek get random 20x-33x boost.
+    Perplexity, DeepSeek get random 20x-33x boost.
     All other values get standard 2x boost (same as default behavioral boost).
     """
     import random
@@ -8671,7 +8671,7 @@ def boost_search_engine_ai_custom(df: pd.DataFrame) -> pd.DataFrame:
     }
     
     # Brands that get random 20-33x boost
-    mid_tier_brands = {'AOL', 'PERPLEXITY', 'DEEPSEEK'}
+    mid_tier_brands = {'PERPLEXITY', 'DEEPSEEK'}
     
     changes = 0
     for idx in search_engine_indices:
@@ -8694,7 +8694,7 @@ def boost_search_engine_ai_custom(df: pd.DataFrame) -> pd.DataFrame:
                 # Fallback for any other top 5 value not in the dict
                 boost_multiplier = random.uniform(30, 36)
             elif value_upper in mid_tier_brands:
-                # Random boost between 20x-33x for AOL, Perplexity, DeepSeek
+                # Random boost between 20x-33x for Perplexity, DeepSeek
                 boost_multiplier = random.uniform(20, 33)
             else:
                 # Standard 2x boost for other values (same as default behavioral boost)
@@ -8712,7 +8712,7 @@ def boost_search_engine_ai_custom(df: pd.DataFrame) -> pd.DataFrame:
             continue
     
     if not SILENCE_VERBOSE_OUTPUT:
-        print(f"✅ Applied custom boost to SEARCH ENGINE/AI: {changes} entries updated (Google @ 66x, top 4 @ varied 30-36x, AOL/Perplexity/DeepSeek @ 20-33x, others @ 2x)")
+        print(f"✅ Applied custom boost to SEARCH ENGINE/AI: {changes} entries updated (Google @ 66x, top 4 @ varied 30-36x, Perplexity/DeepSeek @ 20-33x, others @ 2x)")
     
     return df
 
@@ -9138,8 +9138,8 @@ def enforce_search_engine_ai_google_chatgpt_minimums(df: pd.DataFrame) -> pd.Dat
             if not SILENCE_VERBOSE_OUTPUT:
                 print(f"📈 SEARCH ENGINE/AI: ChatGPT Brand Penetration (Row) {pct:.2f}% → {target:.2f}% (min 25%)")
 
-    # Ensure Yahoo, Copilot, Bing, Duck Duck Go, AOL, Perplexity, MSN, Quora, Gemini are always over 38% (never exactly 38)
-    SEARCH_ENGINE_AI_OVER_38 = {'YAHOO', 'COPILOT', 'BING', 'DUCK DUCK GO', 'DUCKDUCKGO', 'AOL', 'PERPLEXITY', 'MSN', 'QUORA', 'GEMINI'}
+    # Ensure Yahoo, Copilot, Bing, Duck Duck Go, Perplexity, MSN, Quora, Gemini are always over 38% (never exactly 38)
+    SEARCH_ENGINE_AI_OVER_38 = {'YAHOO', 'COPILOT', 'BING', 'DUCK DUCK GO', 'DUCKDUCKGO', 'PERPLEXITY', 'MSN', 'QUORA', 'GEMINI'}
     for idx in cat_indices:
         val_upper = str(df.at[idx, 'Value']).strip().upper()
         val_no_space = val_upper.replace(' ', '')
@@ -13064,7 +13064,7 @@ REQUIRED_BEHAVIORAL = {
     'STREAMING/MUSIC': [
         'Spotify', 'Apple Music', 'Amazon Music', 'YouTube Music', 'Pandora', 'SiriusXM', 'Tidal', 'Deezer', 'SoundCloud'
     ],
-    'SEARCH ENGINE': ['Google', 'Bing', 'Yahoo', 'DuckDuckGo', 'Baidu', 'You.Com', 'Start Page', 'Llama', 'Yandex', 'AOL'],
+    'SEARCH ENGINE': ['Google', 'Bing', 'Yahoo', 'DuckDuckGo', 'Baidu', 'You.Com', 'Start Page', 'Llama', 'Yandex'],
     'SOCIAL MEDIA': ['Instagram', 'Facebook', 'TikTok', 'Snapchat', 'LinkedIn', 'Pinterest', 'YouTube', 'Discord', 'Twitch'],
     'WHERE THEY SHOP': ['Amazon', 'Walmart', 'Target', 'Best Buy', 'Home Depot', 'Costco', 'eBay', 'Etsy', 'Wayfair', 'Lowe\'s', 'Macy\'s', 'Nordstrom'],
     'WHERE THEY DINE': ['McDonalds', 'Starbucks', 'Chick-fil-A']
