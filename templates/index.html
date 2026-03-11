@@ -16066,7 +16066,7 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             // Apply live feature visibility immediately (View Numbers stays hidden until API says on)
             if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
             
@@ -16078,8 +16078,8 @@
             // Load live features and apply visibility
             loadAndApplyLiveFeatures();
             
-            // Load Gen Pop baseline data
-            loadGenPopBaseline();
+            // Load Gen Pop baseline BEFORE profiles so index calculations have the data they need
+            await loadGenPopBaseline();
             
             loadJobs();
             // If user only has Hedge Fund IQ, show Hedge Fund landing; otherwise apply selected product view so dashboard/content shows
