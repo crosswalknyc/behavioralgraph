@@ -3828,96 +3828,213 @@
         }
         
         // Load Quick Select Profiles
+        let _qsExpandedMasters = new Set(); // Track which master categories are expanded in Quick Selects
+        
         async function loadQuickSelectProfiles() {
             const container = document.getElementById('quickSelectProfilesList');
-            if (!container) {
-                console.error('quickSelectProfilesList container not found');
-                return;
-            }
+            if (!container) return;
             
             container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading profiles...</div>';
             
             try {
-                const response = await fetch('/api/jobs', { credentials: 'same-origin' });
-                if (response.status === 404) {
-                    console.warn('Profile list API not available (backend may need redeploy).');
-                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Profile list unavailable. Refresh after the app has finished updating.</div>';
-                    return;
-                }
+                // Use /api/cached_files (unfiltered) so admin sees ALL profiles regardless of user access settings
+                const response = await fetch('/api/cached_files', { credentials: 'same-origin' });
                 if (!response.ok) {
-                    console.error('Failed to fetch profiles:', response.status, response.statusText);
                     container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red);">Failed to load profiles. Please try again.</div>';
                     return;
                 }
                 
                 const data = await response.json();
-                const profiles = data.jobs || [];
+                const files = data.files || [];
                 
-                console.log('API returned profiles:', profiles.length);
-                console.log('Sample profile:', profiles[0]);
+                quickSelectProfiles = files.filter(f => {
+                    const cat = (f.category || '').toUpperCase();
+                    return cat !== 'OTHER' && cat !== 'UNCATEGORIZED' && cat !== '';
+                }).map(f => ({
+                    s3_key: f.key,
+                    display_name: f.display_name || f.project_name || f.key,
+                    category: f.category || 'Uncategorized'
+                }));
                 
-                // Filter profiles - include all statuses, but prioritize cached/completed
-                quickSelectProfiles = profiles.filter(p => {
-                    // Include if status is cached or completed, or if status is undefined/null (legacy data)
-                    return !p.status || p.status === 'cached' || p.status === 'completed' || p.status === 'processing';
-                });
-                
-                // If no profiles match the filter, try including all profiles
-                if (quickSelectProfiles.length === 0 && profiles.length > 0) {
-                    console.warn('No profiles matched status filter, including all profiles');
-                    quickSelectProfiles = profiles;
-                }
-                
-                console.log(`Loaded ${quickSelectProfiles.length} profiles for quick select (from ${profiles.length} total)`);
-                
-                // Load saved selections
                 await loadQuickSelects();
-                
                 renderQuickSelectProfiles();
             } catch (error) {
-                console.error('Error loading profiles:', error);
                 container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red);">Error loading profiles: ' + error.message + '</div>';
             }
         }
         
-        // Render Quick Select Profiles
+        function _qsGetDisplayName(p) {
+            let name = p.display_name || p.s3_key || '';
+            name = name.replace(/_/g, ' ').replace(/\.csv$/i, '');
+            name = name.replace(/\s+\d{2}\s+\d{2}\s+\d{4}\s+\d{2}\s+\d{2}\s*$/, '');
+            return name.trim();
+        }
+        
+        function _qsGetMaster(cat) {
+            const upper = (cat || '').toUpperCase();
+            for (const [master, subs] of Object.entries(MASTER_CATEGORIES)) {
+                if (subs.some(s => s === upper || upper.includes(s) || s.includes(upper))) return master;
+            }
+            return 'OTHER';
+        }
+        
         function renderQuickSelectProfiles() {
             const container = document.getElementById('quickSelectProfilesList');
+            if (!container) return;
             const searchTerm = (document.getElementById('quickSelectProfileSearch')?.value || '').toLowerCase();
             
-            const filtered = quickSelectProfiles.filter(p => {
-                const name = (p.s3_key || p.job_id || '').toLowerCase();
-                return name.includes(searchTerm);
-            });
-            
-            if (filtered.length === 0) {
-                if (quickSelectProfiles.length === 0) {
-                    container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red); text-align: center;">No profiles available. Check that profiles exist and have been processed.</div>';
-                } else {
-                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center;">No profiles match your search. Try a different search term.</div>';
-                }
+            if (quickSelectProfiles.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red); text-align: center;">No profiles available.</div>';
                 return;
             }
             
-            container.innerHTML = filtered.map(p => {
-                const profileId = p.s3_key || p.job_id;
-                const profileName = profileId.replace('.csv', '').replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '').replace(/_/g, ' ');
-                const isSelected = quickSelectProfilesData[profileId] !== false; // Default to true if not explicitly set to false
+            // Group by master → sub-category
+            const grouped = {};
+            quickSelectProfiles.forEach(p => {
+                const cat = (p.category || 'Uncategorized').toUpperCase();
+                const master = _qsGetMaster(cat);
+                if (master === 'OTHER') return;
+                if (!grouped[master]) grouped[master] = {};
+                if (!grouped[master][cat]) grouped[master][cat] = [];
+                grouped[master][cat].push(p);
+            });
+            
+            // Sort profiles within each sub-category
+            for (const master of Object.keys(grouped)) {
+                for (const sub of Object.keys(grouped[master])) {
+                    grouped[master][sub].sort((a, b) => _qsGetDisplayName(a).localeCompare(_qsGetDisplayName(b)));
+                }
+            }
+            
+            const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'PLATFORMS', 'SPORT', 'TALENT', 'MUSIC', 'TRENDS'];
+            const sortedMasters = masterOrder.filter(m => grouped[m]);
+            Object.keys(grouped).forEach(m => { if (!sortedMasters.includes(m)) sortedMasters.push(m); });
+            
+            let html = '';
+            let totalProfiles = 0;
+            let selectedProfiles = 0;
+            
+            sortedMasters.forEach(master => {
+                const icon = MASTER_ICONS[master] || '📁';
+                const subs = grouped[master];
+                const allKeysInMaster = [];
+                Object.values(subs).forEach(profiles => profiles.forEach(p => allKeysInMaster.push(p.s3_key)));
                 
-                return `
-                    <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);">
-                        <input type="checkbox" class="quick-select-profile-checkbox" value="${profileId}" ${isSelected ? 'checked' : ''} onchange="updateQuickSelectProfile('${profileId}', this.checked)">
-                        <span style="font-size: 0.85rem;">${profileName}</span>
-                    </label>
-                `;
-            }).join('');
+                // If searching, only show masters with matching profiles
+                let hasVisibleProfiles = false;
+                if (searchTerm) {
+                    hasVisibleProfiles = allKeysInMaster.some(k => {
+                        const p = quickSelectProfiles.find(pr => pr.s3_key === k);
+                        return p && (_qsGetDisplayName(p).toLowerCase().includes(searchTerm) || (p.category || '').toLowerCase().includes(searchTerm));
+                    });
+                    if (!hasVisibleProfiles) return;
+                }
+                
+                const checkedInMaster = allKeysInMaster.filter(k => quickSelectProfilesData[k] !== false).length;
+                totalProfiles += allKeysInMaster.length;
+                selectedProfiles += checkedInMaster;
+                const masterAllChecked = checkedInMaster === allKeysInMaster.length;
+                const isExpanded = _qsExpandedMasters.has(master) || !!searchTerm;
+                
+                html += `<div style="margin-bottom: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">`;
+                html += `<div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(90,154,217,0.1); cursor: pointer;" onclick="toggleQSMaster('${master}')">`;
+                html += `<span class="collapse-icon ${isExpanded ? '' : 'rotated'}" style="font-size: 0.7rem;">▼</span>`;
+                html += `<input type="checkbox" class="qs-master-cb" data-master="${master}" ${masterAllChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleQSMasterCheck('${master}', this.checked);" style="margin: 0;">`;
+                html += `<span style="font-size: 0.9rem;">${icon}</span>`;
+                html += `<span style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">${master}</span>`;
+                html += `<span style="font-size: 0.7rem; color: var(--text-secondary); margin-left: auto;">${checkedInMaster}/${allKeysInMaster.length}</span>`;
+                html += `</div>`;
+                
+                if (isExpanded) {
+                    html += `<div style="padding: 0.35rem 0.75rem 0.5rem;">`;
+                    const sortedSubs = Object.keys(subs).sort();
+                    sortedSubs.forEach(sub => {
+                        const profiles = subs[sub];
+                        const visibleProfiles = searchTerm 
+                            ? profiles.filter(p => _qsGetDisplayName(p).toLowerCase().includes(searchTerm) || (p.category || '').toLowerCase().includes(searchTerm))
+                            : profiles;
+                        if (visibleProfiles.length === 0) return;
+                        
+                        const subKeys = profiles.map(p => p.s3_key);
+                        const subChecked = subKeys.filter(k => quickSelectProfilesData[k] !== false).length;
+                        const subAllChecked = subChecked === profiles.length;
+                        
+                        html += `<div style="margin-bottom: 0.3rem;">`;
+                        html += `<div style="display: flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0; margin-bottom: 0.15rem;">`;
+                        html += `<input type="checkbox" class="qs-sub-cb" data-master="${master}" data-sub="${sub}" ${subAllChecked ? 'checked' : ''} onclick="toggleQSSubCheck('${master}', '${sub}', this.checked);" style="margin: 0;">`;
+                        html += `<span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 500;">${sub}</span>`;
+                        html += `<span style="font-size: 0.65rem; color: var(--text-secondary); margin-left: auto;">${subChecked}/${profiles.length}</span>`;
+                        html += `</div>`;
+                        html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.3rem; margin-left: 1rem;">`;
+                        visibleProfiles.forEach(p => {
+                            const id = p.s3_key;
+                            const name = _qsGetDisplayName(p);
+                            const checked = quickSelectProfilesData[id] !== false;
+                            const escapedId = id.replace(/'/g, "\\'");
+                            html += `<label class="checkbox-group" style="padding: 0.35rem 0.5rem; background: var(--bg-card); border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.8rem;">`;
+                            html += `<input type="checkbox" class="quick-select-profile-checkbox" value="${id}" ${checked ? 'checked' : ''} onchange="updateQuickSelectProfile('${escapedId}', this.checked)">`;
+                            html += `<span>${name}</span>`;
+                            html += `</label>`;
+                        });
+                        html += `</div></div>`;
+                    });
+                    html += `</div>`;
+                }
+                html += `</div>`;
+            });
+            
+            container.innerHTML = html;
+            
+            // Set indeterminate states
+            sortedMasters.forEach(master => {
+                if (!grouped[master]) return;
+                const allKeys = [];
+                Object.values(grouped[master]).forEach(profs => profs.forEach(p => allKeys.push(p.s3_key)));
+                const checked = allKeys.filter(k => quickSelectProfilesData[k] !== false).length;
+                const cb = container.querySelector(`.qs-master-cb[data-master="${master}"]`);
+                if (cb) cb.indeterminate = checked > 0 && checked < allKeys.length;
+                
+                Object.entries(grouped[master]).forEach(([sub, profs]) => {
+                    const subCb = container.querySelector(`.qs-sub-cb[data-master="${master}"][data-sub="${sub}"]`);
+                    if (subCb) {
+                        const sc = profs.filter(p => quickSelectProfilesData[p.s3_key] !== false).length;
+                        subCb.indeterminate = sc > 0 && sc < profs.length;
+                    }
+                });
+            });
             
             // Update "Select All" checkbox
-            const allChecked = filtered.every(p => {
-                const profileId = p.s3_key || p.job_id;
-                return quickSelectProfilesData[profileId] !== false;
+            const allChecked = totalProfiles > 0 && selectedProfiles === totalProfiles;
+            const selectAllCb = document.getElementById('quickSelectAllProfiles');
+            if (selectAllCb) {
+                selectAllCb.checked = allChecked;
+                selectAllCb.indeterminate = selectedProfiles > 0 && selectedProfiles < totalProfiles;
+            }
+        }
+        
+        function toggleQSMaster(master) {
+            if (_qsExpandedMasters.has(master)) _qsExpandedMasters.delete(master);
+            else _qsExpandedMasters.add(master);
+            renderQuickSelectProfiles();
+        }
+        
+        function toggleQSMasterCheck(master, checked) {
+            quickSelectProfiles.forEach(p => {
+                const cat = (p.category || '').toUpperCase();
+                if (_qsGetMaster(cat) === master) {
+                    quickSelectProfilesData[p.s3_key] = checked;
+                }
             });
-            document.getElementById('quickSelectAllProfiles').checked = allChecked;
+            renderQuickSelectProfiles();
+        }
+        
+        function toggleQSSubCheck(master, sub, checked) {
+            quickSelectProfiles.forEach(p => {
+                if ((p.category || '').toUpperCase() === sub && _qsGetMaster(sub) === master) {
+                    quickSelectProfilesData[p.s3_key] = checked;
+                }
+            });
+            renderQuickSelectProfiles();
         }
         
         // Load Quick Select Tickers
@@ -3992,10 +4109,31 @@
             document.getElementById('quickSelectAllTickers').checked = allChecked;
         }
         
-        // Update Quick Select Profile
         function updateQuickSelectProfile(profileId, isSelected) {
             quickSelectProfilesData[profileId] = isSelected;
-            updateQuickSelectAllProfiles();
+            // Update parent checkboxes (indeterminate states) without full re-render for speed
+            const container = document.getElementById('quickSelectProfilesList');
+            if (!container) return;
+            // Find the item's master + sub from DOM
+            const cb = container.querySelector(`.quick-select-profile-checkbox[value="${CSS.escape(profileId)}"]`);
+            if (!cb) return;
+            const subGroup = cb.closest('[data-sub]');
+            const masterGroup = cb.closest('[data-master]');
+            // Update sub-category checkbox
+            if (subGroup) {
+                const subCbs = subGroup.querySelectorAll('.quick-select-profile-checkbox');
+                const total = subCbs.length;
+                const checked = Array.from(subCbs).filter(c => c.checked).length;
+                const sub = subGroup.dataset.sub;
+                const master = subGroup.dataset.master;
+                const subCb = container.querySelector(`.qs-sub-cb[data-master="${master}"][data-sub="${sub}"]`);
+                if (subCb) { subCb.checked = checked === total; subCb.indeterminate = checked > 0 && checked < total; }
+            }
+            // Update counts and "Select All" via quick recalc
+            let totalAll = 0, selectedAll = 0;
+            quickSelectProfiles.forEach(p => { totalAll++; if (quickSelectProfilesData[p.s3_key] !== false) selectedAll++; });
+            const selectAllCb = document.getElementById('quickSelectAllProfiles');
+            if (selectAllCb) { selectAllCb.checked = selectedAll === totalAll; selectAllCb.indeterminate = selectedAll > 0 && selectedAll < totalAll; }
         }
         
         // Update Quick Select Ticker
@@ -4004,14 +4142,12 @@
             updateQuickSelectAllTickers();
         }
         
-        // Toggle All Quick Select Profiles
         function toggleAllQuickSelectProfiles() {
             const allChecked = document.getElementById('quickSelectAllProfiles').checked;
-            document.querySelectorAll('.quick-select-profile-checkbox').forEach(cb => {
-                cb.checked = allChecked;
-                const profileId = cb.value;
-                quickSelectProfilesData[profileId] = allChecked;
+            quickSelectProfiles.forEach(p => {
+                quickSelectProfilesData[p.s3_key] = allChecked;
             });
+            renderQuickSelectProfiles();
         }
         
         // Toggle All Quick Select Tickers
