@@ -3936,13 +3936,12 @@
                 const masterAllChecked = checkedInMaster === allKeysInMaster.length;
                 const isExpanded = _qsExpandedMasters.has(master) || !!searchTerm;
                 
-                html += `<div style="margin-bottom: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">`;
-                html += `<div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(90,154,217,0.1); cursor: pointer;" onclick="toggleQSMaster('${master}')">`;
+                html += `<div style="margin-bottom: 0.25rem;">`;
+                html += `<div style="display: grid; grid-template-columns: 16px 18px 1fr auto; align-items: center; gap: 0.35rem; padding: 0.4rem 0.6rem; background: rgba(90,154,217,0.08); border-radius: 5px; cursor: pointer; margin-bottom: 0.1rem;" onclick="toggleQSMaster('${master}')">`;
                 html += `<span class="collapse-icon ${isExpanded ? '' : 'rotated'}" style="font-size: 0.7rem;">▼</span>`;
                 html += `<input type="checkbox" class="qs-master-cb" data-master="${master}" ${masterAllChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleQSMasterCheck('${master}', this.checked);" style="margin: 0;">`;
-                html += `<span style="font-size: 0.9rem;">${icon}</span>`;
-                html += `<span style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">${master}</span>`;
-                html += `<span style="font-size: 0.7rem; color: var(--text-secondary); margin-left: auto;">${checkedInMaster}/${allKeysInMaster.length}</span>`;
+                html += `<span style="display: flex; align-items: center; gap: 0.35rem;"><span style="font-size: 0.85rem;">${icon}</span><span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">${master}</span></span>`;
+                html += `<span style="font-size: 0.7rem; color: var(--text-secondary);">${checkedInMaster}/${allKeysInMaster.length}</span>`;
                 html += `</div>`;
                 
                 if (isExpanded) {
@@ -3960,10 +3959,10 @@
                         const subAllChecked = subChecked === profiles.length;
                         
                         html += `<div style="margin-bottom: 0.3rem;">`;
-                        html += `<div style="display: flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0; margin-bottom: 0.15rem;">`;
+                        html += `<div style="display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 0.35rem; padding: 0.2rem 0.4rem; margin-bottom: 0.15rem;">`;
                         html += `<input type="checkbox" class="qs-sub-cb" data-master="${master}" data-sub="${sub}" ${subAllChecked ? 'checked' : ''} onclick="toggleQSSubCheck('${master}', '${sub}', this.checked);" style="margin: 0;">`;
                         html += `<span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 500;">${sub}</span>`;
-                        html += `<span style="font-size: 0.65rem; color: var(--text-secondary); margin-left: auto;">${subChecked}/${profiles.length}</span>`;
+                        html += `<span style="font-size: 0.65rem; color: var(--text-secondary);">${subChecked}/${profiles.length}</span>`;
                         html += `</div>`;
                         html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.3rem; margin-left: 1rem;">`;
                         visibleProfiles.forEach(p => {
@@ -6947,22 +6946,19 @@
                 const allMasterChecked = checkedCount === cats.length;
                 
                 html += `
-                    <div class="master-category-group" style="margin-bottom: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
-                        <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem 0.5rem 0; background: var(--bg-input); cursor: pointer; text-align: left; justify-content: flex-start;" onclick="toggleMasterCategory('${master}')">
-                            <input type="checkbox" class="master-checkbox" data-master="${master}" ${allMasterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleMasterCheckbox('${master}', this.checked)">
-                            <span style="font-size: 1rem;">${icon}</span>
-                            <span style="font-weight: 600; text-align: left;">${master}</span>
-                            <span style="display: flex; align-items: center; gap: 0.25rem;">
-                                <span style="font-size: 0.75rem; color: var(--text-secondary);">${checkedCount}/${cats.length}</span>
-                                <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s; transform: rotate(0deg);">▼</span>
-                            </span>
+                    <div class="master-category-group" style="margin-bottom: 0.35rem;">
+                        <div class="master-category-header" style="display: grid; grid-template-columns: 18px 1fr auto 16px; align-items: center; gap: 0.35rem; padding: 0.4rem 0.6rem; background: rgba(90,154,217,0.08); border-radius: 5px; cursor: pointer;" onclick="toggleMasterCategory('${master}')">
+                            <input type="checkbox" class="master-checkbox" data-master="${master}" ${allMasterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleMasterCheckbox('${master}', this.checked)" style="margin: 0;">
+                            <span style="display: flex; align-items: center; gap: 0.35rem;"><span style="font-size: 0.85rem;">${icon}</span><span style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">${master}</span></span>
+                            <span style="font-size: 0.7rem; color: var(--text-secondary);">${checkedCount}/${cats.length}</span>
+                            <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s; transform: rotate(0deg); font-size: 0.7rem;">▼</span>
                         </div>
-                        <div class="master-category-items" id="items-${master}" style="display: none; padding: 0.5rem 0.75rem 0.5rem 0; background: var(--bg-card); max-height: 200px; overflow-y: auto; text-align: left;">
+                        <div class="master-category-items" id="items-${master}" style="display: none; padding: 0.25rem 0.5rem 0.25rem 2.2rem; background: var(--bg-card); max-height: 200px; overflow-y: auto;">
                             ${cats.sort().map(cat => `
-                                <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.85rem;">
-                                    <input type="checkbox" class="cat-checkbox" data-master="${master}" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="updateMasterCount('${master}')">
-                                    <span>${cat}</span>
-                                </label>
+                                <div style="display: grid; grid-template-columns: 18px 1fr; align-items: center; gap: 0.35rem; padding: 0.2rem 0.4rem; font-size: 0.85rem;">
+                                    <input type="checkbox" class="cat-checkbox" data-master="${master}" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="updateMasterCount('${master}')" style="margin: 0;">
+                                    <span style="cursor: pointer;" onclick="let cb = this.previousElementSibling; if(!cb.disabled){cb.checked=!cb.checked; cb.dispatchEvent(new Event('change'));}">${cat}</span>
+                                </div>
                             `).join('')}
                         </div>
                     </div>
@@ -7099,13 +7095,12 @@
                 const isExpanded = runAccessExpandedCats.has(master) || !!searchTerm;
                 const masterChecked = checkedCount === totalCount;
                 
-                html += `<div class="run-master-group" data-master="${master}" style="margin-bottom: 0.35rem;">`;
-                html += `<div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.25rem; cursor: pointer; background: rgba(90,154,217,0.08); border-radius: 5px; margin-bottom: 0.15rem;" onclick="toggleRunMasterExpand('${master}')">`;
+                html += `<div class="run-master-group" data-master="${master}" style="margin-bottom: 0.25rem;">`;
+                html += `<div style="display: grid; grid-template-columns: 16px 18px 1fr auto; align-items: center; gap: 0.35rem; padding: 0.4rem 0.6rem; cursor: pointer; background: rgba(90,154,217,0.08); border-radius: 5px; margin-bottom: 0.1rem;" onclick="toggleRunMasterExpand('${master}')">`;
                 html += `<span class="collapse-icon ${isExpanded ? '' : 'rotated'}" style="font-size: 0.7rem; transition: transform 0.15s;">▼</span>`;
                 html += `<input type="checkbox" class="run-master-cb" data-master="${master}" ${masterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleRunMaster('${master}', this.checked);" style="margin: 0;">`;
-                html += `<span style="font-size: 0.85rem;">${icon}</span>`;
-                html += `<span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">${master}</span>`;
-                html += `<span class="run-master-count" style="font-size: 0.7rem; color: var(--text-secondary); margin-left: auto;">${checkedCount}/${totalCount}</span>`;
+                html += `<span style="display: flex; align-items: center; gap: 0.35rem;"><span style="font-size: 0.85rem;">${icon}</span><span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">${master}</span></span>`;
+                html += `<span class="run-master-count" style="font-size: 0.7rem; color: var(--text-secondary);">${checkedCount}/${totalCount}</span>`;
                 html += `</div>`;
                 
                 if (isExpanded) {
@@ -7121,22 +7116,20 @@
                         const subChecked = subKeys.filter(k => _runAccessSelected.has(k)).length;
                         const subAllChecked = subChecked === runs.length;
                         
-                        html += `<div class="run-sub-group" data-sub="${sub}" style="margin-left: 1.2rem; margin-bottom: 0.15rem;">`;
-                        html += `<div style="display: flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.2rem;">`;
+                        html += `<div class="run-sub-group" data-sub="${sub}" style="margin-left: 2.2rem; margin-bottom: 0.15rem;">`;
+                        html += `<div style="display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 0.35rem; padding: 0.2rem 0.4rem;">`;
                         html += `<input type="checkbox" class="run-sub-cb" data-sub="${sub}" data-master="${master}" ${subAllChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="toggleRunSub('${master}', '${sub}', this.checked);" style="margin: 0;">`;
                         html += `<span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 500;">${sub}</span>`;
-                        html += `<span style="font-size: 0.65rem; color: var(--text-secondary); margin-left: auto;">${subChecked}/${runs.length}</span>`;
+                        html += `<span style="font-size: 0.65rem; color: var(--text-secondary);">${subChecked}/${runs.length}</span>`;
                         html += `</div>`;
                         
                         visibleRuns.forEach(run => {
                             const checked = _runAccessSelected.has(run.key);
                             const displayName = getRunDisplayName(run);
                             const escapedKey = run.key.replace(/'/g, "\\'");
-                            html += `<div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.2rem 0.15rem 1.5rem; font-size: 0.75rem; color: var(--text-secondary);" class="run-item-row">`;
-                            html += `<label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; flex: 1; min-width: 0;">`;
+                            html += `<div style="display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 0.3rem; padding: 0.15rem 0.4rem 0.15rem 1.5rem; font-size: 0.75rem; color: var(--text-secondary);" class="run-item-row">`;
                             html += `<input type="checkbox" class="run-item-cb" data-master="${master}" data-sub="${sub}" value="${run.key}" ${checked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="onRunItemChange('${master}', '${sub}', '${escapedKey}', this.checked)">`;
-                            html += `<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>`;
-                            html += `</label>`;
+                            html += `<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" onclick="let cb = this.previousElementSibling; if(!cb.disabled){cb.checked=!cb.checked; cb.dispatchEvent(new Event('change'));}">${displayName}</span>`;
                             html += `<button type="button" class="run-bulk-btn" onclick="event.stopPropagation(); removeRunFromAllUsers('${escapedKey}')" title="Remove from ALL users" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.65rem; padding: 0 0.2rem; opacity: 0; transition: opacity 0.15s;">✕ all</button>`;
                             html += `</div>`;
                         });
