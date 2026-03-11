@@ -2093,12 +2093,15 @@
                                         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                                             <label class="checkbox-group" style="margin: 0;">
                                                 <input type="checkbox" id="allRuns" checked onchange="toggleAllRuns()">
-                                                <span>All Runs</span>
+                                                <span>ALL RUNS</span>
                                             </label>
                                             <button type="button" class="btn btn-small btn-secondary" onclick="restoreRunAccessDefaults()">Restore Defaults</button>
                                         </div>
-                                        <div id="runCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
-                                            <!-- Populated by JS -->
+                                        <div style="margin-bottom: 0.5rem;">
+                                            <input type="text" id="runAccessSearchInput" placeholder="Search profiles..." oninput="filterRunAccessTree()" style="width: 100%; padding: 0.35rem 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-primary); font-size: 0.8rem;">
+                                        </div>
+                                        <div id="runCheckboxes" style="margin-top: 0.5rem; max-height: 350px; overflow-y: auto;">
+                                            <!-- Populated by JS as category-grouped tree -->
                                         </div>
                                     </div>
                                 </div>
@@ -5007,16 +5010,18 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Extract unique categories
                     const categories = new Set();
                     const runs = [];
                     
                     data.files.forEach(file => {
+                        const cat = (file.category || 'Uncategorized').toUpperCase();
+                        if (cat === 'OTHER' || cat === 'UNCATEGORIZED' || cat === '') return;
                         categories.add(file.category || 'Uncategorized');
                         runs.push({
                             key: file.key,
-                            name: file.project_name,
-                            category: file.category || 'Uncategorized'
+                            name: file.display_name || file.project_name,
+                            category: file.category || 'Uncategorized',
+                            profile_subject: file.profile_subject || ''
                         });
                     });
 
@@ -6719,8 +6724,7 @@
             const useAllRuns = selectedRunKeys.length >= allRuns.length || Object.keys(runsData).length === 0;
             runAccessDefaultKeys = useAllRuns ? ['*'] : selectedRunKeys; // Store for expandRunCheckboxes
             document.getElementById('allRuns').checked = useAllRuns;
-            // Show all runs so every checkbox gets the correct default state (not just the first 20)
-            populateRunCheckboxes(useAllRuns ? ['*'] : selectedRunKeys, true);
+            populateRunCheckboxes(useAllRuns ? ['*'] : selectedRunKeys);
         }
         
         async function restoreBehavioralCategoryDefaults() {
@@ -6732,10 +6736,13 @@
 
         function toggleAllRuns() {
             const allChecked = document.getElementById('allRuns').checked;
-            document.querySelectorAll('#runCheckboxes input[type="checkbox"]').forEach(cb => {
-                cb.checked = allChecked;
-                cb.disabled = allChecked;
-            });
+            _runAccessIsAll = allChecked;
+            if (allChecked) {
+                _runAccessSelected = new Set(allRuns.map(r => r.key));
+            } else {
+                _runAccessSelected.clear();
+            }
+            _renderRunTree();
         }
 
         // Master category mapping
@@ -6859,63 +6866,205 @@
             }
         }
 
-        function populateRunCheckboxes(selected = ['*'], showAll = false) {
-            const container = document.getElementById('runCheckboxes');
-            if (!container) return;
-            const isAll = selected?.includes('*');
-            const runsToShow = showAll ? allRuns : allRuns.slice(0, 20);
-            const hasMore = allRuns.length > 20;
-            
-            container.innerHTML = runsToShow.map(run => `
-                <label class="checkbox-group">
-                    <input type="checkbox" value="${run.key}" ${isAll || selected?.includes(run.key) ? 'checked' : ''} ${isAll ? 'disabled' : ''}>
-                    <span>${run.name}</span>
-                </label>
-            `).join('');
-            
-            if (hasMore) {
-                if (showAll) {
-                    container.innerHTML += `<p style="font-size: 0.75rem; margin-top: 0.5rem;"><button type="button" class="btn-link" onclick="collapseRunCheckboxes()" style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; padding: 0; text-decoration: underline;">Show less</button></p>`;
-                } else {
-                    container.innerHTML += `<p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;"><button type="button" class="btn-link" onclick="expandRunCheckboxes()" style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; padding: 0; text-decoration: underline;">+ ${allRuns.length - 20} more runs...</button></p>`;
+        // ── Run Access tree state ──
+        let runAccessExpandedCats = new Set();
+        let _runAccessIsAll = true;          // "ALL RUNS" is checked
+        let _runAccessSelected = new Set();  // source-of-truth set of selected run keys (only used when !isAll)
+        
+        function getRunMasterCategory(cat) {
+            const upper = (cat || '').toUpperCase();
+            for (const [master, subs] of Object.entries(MASTER_CATEGORIES)) {
+                if (subs.some(s => s === upper || upper.includes(s) || s.includes(upper))) return master;
+            }
+            return 'OTHER';
+        }
+        
+        function getRunDisplayName(run) {
+            let name = run.name || run.key || '';
+            name = name.replace(/_/g, ' ').replace(/\.\w+$/, '');
+            name = name.replace(/\s+\d{2}\s+\d{2}\s+\d{4}\s+\d{2}\s+\d{2}\s*$/, '');
+            return name.trim();
+        }
+        
+        function getRunAccessSelectedArray() {
+            if (_runAccessIsAll) return ['*'];
+            return Array.from(_runAccessSelected);
+        }
+        
+        function _buildRunGrouped() {
+            const grouped = {};
+            allRuns.forEach(run => {
+                const cat = (run.category || 'Uncategorized').toUpperCase();
+                if (cat === 'OTHER' || cat === 'UNCATEGORIZED' || cat === '') return;
+                const master = getRunMasterCategory(cat);
+                if (master === 'OTHER') return;
+                if (!grouped[master]) grouped[master] = {};
+                if (!grouped[master][cat]) grouped[master][cat] = [];
+                grouped[master][cat].push(run);
+            });
+            for (const master of Object.keys(grouped)) {
+                for (const sub of Object.keys(grouped[master])) {
+                    grouped[master][sub].sort((a, b) => getRunDisplayName(a).localeCompare(getRunDisplayName(b)));
                 }
             }
+            return grouped;
         }
         
-        function expandRunCheckboxes() {
-            const container = document.getElementById('runCheckboxes');
-            const isAll = document.getElementById('allRuns')?.checked;
-            let selected;
-            if (isAll) {
-                selected = ['*'];
+        function populateRunCheckboxes(selected = ['*']) {
+            // Update internal state from param
+            _runAccessIsAll = Array.isArray(selected) && selected.includes('*');
+            if (_runAccessIsAll) {
+                _runAccessSelected = new Set(allRuns.map(r => r.key));
             } else {
-                const selectedFromVisible = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-                selected = new Set(selectedFromVisible);
-                // For runs not in the first 20, use saved user data (edit) or defaults from Restore Defaults / quick select (new user)
-                const isEdit = !!document.getElementById('editUsername')?.value;
-                allRuns.slice(20).forEach(r => {
-                    if (isEdit) {
-                        const username = document.getElementById('editUsername').value;
-                        const user = allUsers[username];
-                        if (user && (user.allowed_runs?.includes('*') || user.allowed_runs?.includes(r.key)))
-                            selected.add(r.key);
-                    } else {
-                        // Use runAccessDefaultKeys from Restore Defaults, else quick select profiles (same key space)
-                        const fromDefaults = runAccessDefaultKeys && (runAccessDefaultKeys.includes('*') || runAccessDefaultKeys.includes(r.key));
-                        const fromQuickSelect = quickSelectProfilesData[r.key] !== false;
-                        if (fromDefaults || (runAccessDefaultKeys === null && fromQuickSelect)) selected.add(r.key);
+                _runAccessSelected = new Set(selected || []);
+            }
+            document.getElementById('allRuns').checked = _runAccessIsAll;
+            _renderRunTree();
+        }
+        
+        function _renderRunTree() {
+            const container = document.getElementById('runCheckboxes');
+            if (!container) return;
+            const grouped = _buildRunGrouped();
+            const isAll = _runAccessIsAll;
+            
+            const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'PLATFORMS', 'SPORT', 'TALENT', 'MUSIC', 'TRENDS'];
+            const sortedMasters = masterOrder.filter(m => grouped[m]);
+            Object.keys(grouped).forEach(m => { if (!sortedMasters.includes(m)) sortedMasters.push(m); });
+            
+            const searchTerm = (document.getElementById('runAccessSearchInput')?.value || '').toLowerCase().trim();
+            
+            let html = '';
+            sortedMasters.forEach(master => {
+                const icon = MASTER_ICONS[master] || '📁';
+                const subs = grouped[master];
+                const allKeysInMaster = [];
+                Object.values(subs).forEach(runs => runs.forEach(r => allKeysInMaster.push(r.key)));
+                
+                // If searching, skip masters with no matching runs
+                if (searchTerm) {
+                    const hasMatch = allKeysInMaster.some(k => {
+                        const run = allRuns.find(r => r.key === k);
+                        return run && (getRunDisplayName(run).toLowerCase().includes(searchTerm) || (run.category || '').toLowerCase().includes(searchTerm));
+                    });
+                    if (!hasMatch) return;
+                }
+                
+                const checkedCount = allKeysInMaster.filter(k => _runAccessSelected.has(k)).length;
+                const totalCount = allKeysInMaster.length;
+                const isExpanded = runAccessExpandedCats.has(master) || !!searchTerm;
+                const masterChecked = checkedCount === totalCount;
+                
+                html += `<div class="run-master-group" data-master="${master}" style="margin-bottom: 0.35rem;">`;
+                html += `<div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.25rem; cursor: pointer; background: rgba(90,154,217,0.08); border-radius: 5px; margin-bottom: 0.15rem;" onclick="toggleRunMasterExpand('${master}')">`;
+                html += `<span class="collapse-icon ${isExpanded ? '' : 'rotated'}" style="font-size: 0.7rem; transition: transform 0.15s;">▼</span>`;
+                html += `<input type="checkbox" class="run-master-cb" data-master="${master}" ${masterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleRunMaster('${master}', this.checked);" style="margin: 0;">`;
+                html += `<span style="font-size: 0.85rem;">${icon}</span>`;
+                html += `<span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">${master}</span>`;
+                html += `<span class="run-master-count" style="font-size: 0.7rem; color: var(--text-secondary); margin-left: auto;">${checkedCount}/${totalCount}</span>`;
+                html += `</div>`;
+                
+                if (isExpanded) {
+                    const sortedSubs = Object.keys(subs).sort();
+                    sortedSubs.forEach(sub => {
+                        const runs = subs[sub];
+                        
+                        // If searching, filter runs to only matching ones
+                        const visibleRuns = searchTerm ? runs.filter(r => getRunDisplayName(r).toLowerCase().includes(searchTerm) || (r.category || '').toLowerCase().includes(searchTerm)) : runs;
+                        if (visibleRuns.length === 0) return;
+                        
+                        const subKeys = runs.map(r => r.key);
+                        const subChecked = subKeys.filter(k => _runAccessSelected.has(k)).length;
+                        const subAllChecked = subChecked === runs.length;
+                        
+                        html += `<div class="run-sub-group" data-sub="${sub}" style="margin-left: 1.2rem; margin-bottom: 0.15rem;">`;
+                        html += `<div style="display: flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.2rem;">`;
+                        html += `<input type="checkbox" class="run-sub-cb" data-sub="${sub}" data-master="${master}" ${subAllChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="toggleRunSub('${master}', '${sub}', this.checked);" style="margin: 0;">`;
+                        html += `<span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 500;">${sub}</span>`;
+                        html += `<span style="font-size: 0.65rem; color: var(--text-secondary); margin-left: auto;">${subChecked}/${runs.length}</span>`;
+                        html += `</div>`;
+                        
+                        visibleRuns.forEach(run => {
+                            const checked = _runAccessSelected.has(run.key);
+                            const displayName = getRunDisplayName(run);
+                            const escapedKey = run.key.replace(/'/g, "\\'");
+                            html += `<label style="display: flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.2rem 0.15rem 1.5rem; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer;">`;
+                            html += `<input type="checkbox" class="run-item-cb" data-master="${master}" data-sub="${sub}" value="${run.key}" ${checked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="onRunItemChange('${master}', '${sub}', '${escapedKey}', this.checked)">`;
+                            html += `<span>${displayName}</span>`;
+                            html += `</label>`;
+                        });
+                        html += `</div>`;
+                    });
+                }
+                html += `</div>`;
+            });
+            
+            container.innerHTML = html;
+            
+            // Set indeterminate state on master and sub checkboxes
+            sortedMasters.forEach(master => {
+                if (!grouped[master]) return;
+                const subs = grouped[master];
+                const allKeysInMaster = [];
+                Object.values(subs).forEach(runs => runs.forEach(r => allKeysInMaster.push(r.key)));
+                const checkedCount = allKeysInMaster.filter(k => _runAccessSelected.has(k)).length;
+                const masterCb = container.querySelector(`.run-master-cb[data-master="${master}"]`);
+                if (masterCb && !isAll) {
+                    masterCb.indeterminate = checkedCount > 0 && checkedCount < allKeysInMaster.length;
+                }
+                // Sub-category indeterminate
+                Object.entries(subs).forEach(([sub, runs]) => {
+                    const subCb = container.querySelector(`.run-sub-cb[data-master="${master}"][data-sub="${sub}"]`);
+                    if (subCb && !isAll) {
+                        const subChecked = runs.filter(r => _runAccessSelected.has(r.key)).length;
+                        subCb.indeterminate = subChecked > 0 && subChecked < runs.length;
                     }
                 });
-                selected = Array.from(selected);
-            }
-            populateRunCheckboxes(selected, true);
+            });
         }
         
-        function collapseRunCheckboxes() {
-            const container = document.getElementById('runCheckboxes');
-            const isAll = document.getElementById('allRuns')?.checked;
-            const selected = isAll ? ['*'] : Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-            populateRunCheckboxes(selected, false);
+        function toggleRunMasterExpand(master) {
+            if (runAccessExpandedCats.has(master)) runAccessExpandedCats.delete(master);
+            else runAccessExpandedCats.add(master);
+            _renderRunTree();
+        }
+        
+        function toggleRunMaster(master, checked) {
+            const grouped = _buildRunGrouped();
+            if (!grouped[master]) return;
+            Object.values(grouped[master]).forEach(runs => {
+                runs.forEach(r => { if (checked) _runAccessSelected.add(r.key); else _runAccessSelected.delete(r.key); });
+            });
+            _syncAllRunsFromState();
+            _renderRunTree();
+        }
+        
+        function toggleRunSub(master, sub, checked) {
+            const grouped = _buildRunGrouped();
+            if (!grouped[master] || !grouped[master][sub]) return;
+            grouped[master][sub].forEach(r => { if (checked) _runAccessSelected.add(r.key); else _runAccessSelected.delete(r.key); });
+            _syncAllRunsFromState();
+            _renderRunTree();
+        }
+        
+        function onRunItemChange(master, sub, key, checked) {
+            if (checked) _runAccessSelected.add(key); else _runAccessSelected.delete(key);
+            _syncAllRunsFromState();
+            _renderRunTree();
+        }
+        
+        function _syncAllRunsFromState() {
+            const totalRuns = allRuns.filter(r => {
+                const cat = (r.category || '').toUpperCase();
+                return cat !== 'OTHER' && cat !== 'UNCATEGORIZED' && cat !== '' && getRunMasterCategory(cat) !== 'OTHER';
+            }).length;
+            const allChecked = _runAccessSelected.size >= totalRuns;
+            _runAccessIsAll = allChecked;
+            document.getElementById('allRuns').checked = allChecked;
+        }
+        
+        function filterRunAccessTree() {
+            _renderRunTree();
         }
         
         // Populate Behavioral Category Checkboxes in user modal (always show ALL options; default selection from quick select when adding new user)
@@ -6977,8 +7126,7 @@
                 access_expires: document.getElementById('unlimitedAccess').checked ? null : document.getElementById('accessExpires').value,
                 allowed_categories: document.getElementById('allCategories').checked ? ['*'] : 
                     Array.from(document.querySelectorAll('#categoryCheckboxes .cat-checkbox:checked')).map(cb => cb.value),
-                allowed_runs: document.getElementById('allRuns').checked ? ['*'] : 
-                    Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value),
+                allowed_runs: _runAccessIsAll ? ['*'] : getRunAccessSelectedArray(),
                 allowed_behavioral_categories: document.getElementById('allBehavioralCategories').checked ? ['*'] : 
                     Array.from(document.querySelectorAll('#behavioralCategoryCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,

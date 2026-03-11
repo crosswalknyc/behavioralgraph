@@ -15801,6 +15801,10 @@
         // Allowed profile categories (controls which profiles the user can see/open)
         const allowedProfileCategories = {{ allowed_categories | tojson | safe }};
         const hasAllProfileCategories = allowedProfileCategories.includes('*');
+        // Allowed specific runs/profiles (controls which individual profiles can be clicked)
+        const allowedRuns = {{ allowed_runs | tojson | safe }};
+        const hasAllRuns = allowedRuns.includes('*');
+        const _allowedRunsSet = hasAllRuns ? null : new Set(allowedRuns.map(r => r));
         // Quick-select exclusions: categories unchecked in Admin are hidden for ALL users
         const quickSelectBehaviorsExclusions = {{ quick_select_behaviors_exclusions | tojson | safe }};
         
@@ -27713,6 +27717,8 @@
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === savedTab.id);
                     if (profile && !_allowedCatSet.has((profile.category || '').toUpperCase())) continue;
                 }
+                // Skip tabs whose profile is not in allowed runs
+                if (_allowedRunsSet && !_allowedRunsSet.has(savedTab.id) && !(savedTab.id || '').toLowerCase().includes('gen_pop')) continue;
                 try {
                     const response = await fetch(`/api/get-csv-data/${encodeURIComponent(savedTab.id)}`, { credentials: 'same-origin' });
                     if (response.status === 401) continue;
@@ -27773,6 +27779,15 @@
                 profiles = profiles.filter(p => allowedUpper.has((p.category || '').toUpperCase()));
             } else if (!hasAllProfileCategories && allowedProfileCategories.length === 0) {
                 profiles = [];
+            }
+            
+            // Enforce run access: only show profiles the user is allowed to open
+            if (_allowedRunsSet) {
+                profiles = profiles.filter(p => {
+                    const sk = p.s3_key || p.job_id || '';
+                    if (sk.toLowerCase().includes('gen_pop')) return true;
+                    return _allowedRunsSet.has(sk);
+                });
             }
             
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase();
@@ -28244,6 +28259,14 @@
                         console.warn('Access denied: profile category not in allowed list');
                         return;
                     }
+                }
+            }
+            // Enforce run access: block opening profiles not in allowed_runs
+            if (_allowedRunsSet && !_allowedRunsSet.has(profileId)) {
+                // Gen Pop is always accessible
+                if (!profileId || !profileId.toLowerCase().includes('gen_pop')) {
+                    console.warn('Access denied: profile not in allowed runs');
+                    return;
                 }
             }
             

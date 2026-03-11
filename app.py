@@ -4414,6 +4414,7 @@ def index():
         analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time', 'ticket_sales_tracker']
         allowed_behavioral_categories = ['*']
         allowed_categories = ['*']
+        allowed_runs = ['*']
         has_rankers_iq = True
         rankers_iq_options = ['*']
         has_ticket_sales_iq = True
@@ -4427,6 +4428,7 @@ def index():
         analysis_iq_modules = user.get('analysis_iq_modules', []) if user else []
         allowed_behavioral_categories = user.get('allowed_behavioral_categories', ['*']) if user else ['*']
         allowed_categories = user.get('allowed_categories', ['*']) if user else ['*']
+        allowed_runs = user.get('allowed_runs', ['*']) if user else ['*']
         has_rankers_iq = user.get('has_rankers_iq_access', False) if user else False
         rankers_iq_options = user.get('rankers_iq_options', []) if user else []
         has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
@@ -4474,6 +4476,7 @@ def index():
                            analysis_iq_modules=analysis_iq_modules,
                            allowed_behavioral_categories=allowed_behavioral_categories,
                            allowed_categories=allowed_categories,
+                           allowed_runs=allowed_runs,
                            quick_select_behaviors_exclusions=quick_select_behaviors_exclusions,
                            has_rankers_iq_access=has_rankers_iq,
                            rankers_iq_options=rankers_iq_options,
@@ -13411,8 +13414,8 @@ def list_jobs():
                 sk = e.get('s3_key') or ''
                 if sk in allowed_set:
                     return True
-                # Gen Pop: if user has any gen_pop key in allowed_runs, allow the canonical Gen Pop entry
-                if sk == GEN_POP_CANONICAL_KEY and any('gen_pop' in (k or '').lower() for k in allowed_set):
+                # Gen Pop is always accessible (needed for index calculations)
+                if 'gen_pop' in sk.lower():
                     return True
                 return False
             job_list = [e for e in job_list if job_allowed(e)]
@@ -13521,7 +13524,9 @@ def get_cached_files():
         files.append({
             'key': job.get('s3_key', job.get('job_id')),
             'project_name': job.get('project_name', 'Unknown'),
+            'display_name': job.get('display_name') or job.get('project_name', 'Unknown'),
             'category': job.get('category', 'Uncategorized'),
+            'profile_subject': job.get('profile_subject', ''),
             'created_at': job.get('created_at', ''),
             'status': job.get('status', 'cached')
         })
