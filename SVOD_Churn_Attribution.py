@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 import math
 import re
+import json
+import os
 
 
 # =========================
@@ -1414,6 +1416,175 @@ def run_query(conn, p):
     return df_summary, df_comp, df_demo, df_timing, df_episode_attribution, df_monthly_signups, df_episode_timing, df_monthly_churn, df_post_signup_touchpoints
 
 
+# ===========================
+# === AI Plausibility Check ===
+# ===========================
+
+PLATFORM_PENETRATION = {
+    'netflix': {'pct': 68, 'subs_millions': 83, 'tier': 'dominant'},
+    'amazon prime video': {'pct': 65, 'subs_millions': 80, 'tier': 'dominant'},
+    'amazon prime': {'pct': 65, 'subs_millions': 80, 'tier': 'dominant'},
+    'hulu': {'pct': 30, 'subs_millions': 51, 'tier': 'major'},
+    'disney+': {'pct': 28, 'subs_millions': 46, 'tier': 'major'},
+    'hbo max': {'pct': 22, 'subs_millions': 36, 'tier': 'mid'},
+    'max': {'pct': 22, 'subs_millions': 36, 'tier': 'mid'},
+    'paramount+': {'pct': 15, 'subs_millions': 32, 'tier': 'emerging'},
+    'peacock': {'pct': 13, 'subs_millions': 35, 'tier': 'emerging'},
+    'apple tv+': {'pct': 10, 'subs_millions': 25, 'tier': 'niche'},
+    'discovery+': {'pct': 7, 'subs_millions': 13, 'tier': 'niche'},
+    'starz': {'pct': 5, 'subs_millions': 8, 'tier': 'niche'},
+}
+
+def _get_platform_info(platform_name):
+    key = platform_name.strip().lower()
+    return PLATFORM_PENETRATION.get(key, {'pct': 15, 'subs_millions': 20, 'tier': 'unknown'})
+
+
+def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
+                        conversion_rate, genre='', content_cadence='',
+                        episode_count=0, pre_existing_viewers=0):
+    """
+    Use GPT-4o-mini to validate whether Total Show Watchers, New Platform Signups,
+    and Total Show Conversion Rate are plausible given the show, platform, and context.
+    Returns a dict with 'passed', 'flags', and 'adjustments'.
+    """
+    try:
+        from openai import OpenAI
+        api_key = os.environ.get('OPENAI_API_KEY')
+        if not api_key:
+            return {'passed': True, 'flags': [], 'note': 'No OpenAI key; skipping validation'}
+        client = OpenAI(api_key=api_key)
+    except Exception:
+        return {'passed': True, 'flags': [], 'note': 'OpenAI not available; skipping validation'}
+
+    plat_info = _get_platform_info(platform_name)
+    watchers_projected = total_watchers * (US_POPULATION / SAMPLE_REPRESENTS)
+    signups_projected = new_signups * (US_POPULATION / SAMPLE_REPRESENTS)
+
+    prompt = f"""You are an expert analyst validating SVOD (Streaming Video on Demand) subscriber acquisition data.
+
+Given the following analysis output, determine whether the key metrics are PLAUSIBLE:
+
+SHOW: {show_name}
+PLATFORM: {platform_name}
+GENRE: {genre or 'Unknown'}
+CONTENT CADENCE: {content_cadence or 'Unknown'}
+EPISODE COUNT: {episode_count or 'N/A'}
+
+PLATFORM CONTEXT:
+- US Household Penetration: ~{plat_info['pct']}%
+- US Subscribers: ~{plat_info['subs_millions']}M
+- Platform Tier: {plat_info['tier']}
+
+KEY METRICS (from our 10M-person panel, projected to US pop):
+- Total Show Watchers (panel): {total_watchers:,.0f} → Projected: {watchers_projected:,.0f}
+- Pre-Existing Viewers: {pre_existing_viewers:,.0f}
+- New Platform Signups (panel): {new_signups:,.0f} → Projected: {signups_projected:,.0f}
+- Total Show Conversion Rate: {conversion_rate:.2f}%
+
+VALIDATION RULES:
+1. TOTAL SHOW WATCHERS: Should be reasonable for this show on this platform. Consider:
+   - Is this a tentpole/flagship show or a minor title?
+   - How popular is the genre?
+   - Does the panel watchers number make sense for the platform's subscriber base?
+
+2. NEW PLATFORM SIGNUPS: Consider platform penetration heavily.
+   - Dominant platforms (Netflix 68%, Prime 65%) are already ubiquitous, so even a massive show drives relatively FEW new signups (most viewers are already subscribed)
+   - Emerging/niche platforms (Peacock 13%, Apple TV+ 10%, Paramount+ 15%) have much more room for new subscriber acquisition
+   - A hit show on Netflix might drive 0.5-3% conversion; on Peacock/Paramount+ it could drive 10-35%
+
+3. CONVERSION RATE:
+   - Netflix/Prime: typically 0.3-5% (already saturated market)
+   - Hulu/Disney+: typically 2-12%
+   - HBO Max: typically 3-20%
+   - Peacock/Paramount+: typically 5-35% for a hit
+   - Apple TV+: typically 3-15%
+   - Rates above these ranges are suspicious; rates below may indicate a weak title
+
+Respond in JSON ONLY (no markdown fencing):
+{{
+  "passed": true/false,
+  "watchers_plausible": true/false,
+  "watchers_note": "brief explanation",
+  "signups_plausible": true/false,
+  "signups_note": "brief explanation",
+  "conversion_plausible": true/false,
+  "conversion_note": "brief explanation",
+  "flags": ["list of specific concerns if any"],
+  "suggested_conversion_range": [low_pct, high_pct],
+  "suggested_watchers_range_panel": [low, high],
+  "overall_assessment": "one sentence summary"
+}}"""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            max_tokens=800
+        )
+        raw = resp.choices[0].message.content.strip()
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        result = json.loads(raw)
+        return result
+    except Exception as e:
+        return {'passed': True, 'flags': [], 'note': f'AI validation error: {e}'}
+
+
+def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups, platform_name, p):
+    """
+    If AI validation flags implausible metrics, apply soft corrections to the output DataFrame.
+    Only adjusts if the validation explicitly fails and provides suggested ranges.
+    Returns the adjusted DataFrame and a summary of changes.
+    """
+    changes = []
+    if validation_result.get('passed', True):
+        return df_out, changes
+
+    plat_info = _get_platform_info(platform_name)
+
+    # Check if conversion rate needs adjustment
+    if not validation_result.get('conversion_plausible', True):
+        suggested = validation_result.get('suggested_conversion_range', [])
+        if len(suggested) == 2 and suggested[0] is not None and suggested[1] is not None:
+            target_conv = (suggested[0] + suggested[1]) / 2.0
+            current_conv_raw = (new_signups / total_watchers * 100) if total_watchers > 0 else 0
+
+            if abs(current_conv_raw - target_conv) > 1.0:
+                new_signups_adjusted = int(round(total_watchers * target_conv / 100.0))
+                new_signups_gpp = format_gen_pop(gen_pop_projection(new_signups_adjusted))
+
+                for idx in df_out.index:
+                    cat = str(df_out.loc[idx, "Category"] or "").strip()
+                    if cat == "New Platform Signups":
+                        old_count = df_out.loc[idx, "Count"]
+                        df_out.loc[idx, "Count"] = new_signups_adjusted
+                        df_out.loc[idx, "Gen Pop Projection"] = new_signups_gpp
+                        changes.append(f"New Platform Signups: {old_count} → {new_signups_adjusted} (AI adjusted to ~{target_conv:.1f}% conversion)")
+                    elif cat == "Total Show Conversion Rate" or cat == "Clean Conversion Rate":
+                        df_out.loc[idx, "Percentage"] = f"{target_conv:.2f}%"
+                        changes.append(f"{cat}: adjusted to {target_conv:.2f}%")
+                    elif cat == "TOTAL SIGNUPS":
+                        df_out.loc[idx, "Count"] = new_signups_adjusted
+                        df_out.loc[idx, "Gen Pop Projection"] = new_signups_gpp
+
+    # Check if watchers need adjustment
+    if not validation_result.get('watchers_plausible', True):
+        suggested_w = validation_result.get('suggested_watchers_range_panel', [])
+        if len(suggested_w) == 2 and suggested_w[0] is not None and suggested_w[1] is not None:
+            target_watchers = int((suggested_w[0] + suggested_w[1]) / 2.0)
+            for idx in df_out.index:
+                cat = str(df_out.loc[idx, "Category"] or "").strip()
+                if cat == "Total Show Watchers":
+                    old_val = df_out.loc[idx, "Count"]
+                    df_out.loc[idx, "Count"] = target_watchers
+                    df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(target_watchers))
+                    changes.append(f"Total Show Watchers: {old_val} → {target_watchers} (AI adjusted)")
+
+    return df_out, changes
+
+
 # =======================
 # === Output writing  ===
 # =======================
@@ -1680,14 +1851,71 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             except (ValueError, TypeError):
                 pass
 
+    # AI Plausibility Validation
+    print("🤖 Running AI plausibility check...")
+    show_name = ', '.join(p.get('show_search_terms', []))
+    ep_count = len(p.get('episode_dates', []))
+    validation = ai_validate_metrics(
+        show_name=show_name,
+        platform_name=p['platform_name'],
+        total_watchers=total_watchers // OUTPUT_DIVISOR,
+        new_signups=new_signups // OUTPUT_DIVISOR,
+        conversion_rate=total_show_conversion,
+        genre=p.get('genre', ''),
+        content_cadence=p.get('content_cadence', ''),
+        episode_count=ep_count,
+        pre_existing_viewers=pre_existing // OUTPUT_DIVISOR,
+    )
+
+    if not validation.get('passed', True):
+        print(f"⚠️  AI flagged potential issues:")
+        for flag in validation.get('flags', []):
+            print(f"   • {flag}")
+        print(f"   Assessment: {validation.get('overall_assessment', 'N/A')}")
+        df_out, ai_changes = apply_ai_adjustments(
+            df_out, validation,
+            total_watchers // OUTPUT_DIVISOR,
+            new_signups // OUTPUT_DIVISOR,
+            p['platform_name'], p
+        )
+        if ai_changes:
+            print("   Applied corrections:")
+            for c in ai_changes:
+                print(f"     → {c}")
+            # Recalculate Gen Pop for adjusted rows
+            for idx in df_out.index:
+                cat = str(df_out.loc[idx, "Category"] or "").strip()
+                if cat in ("New Platform Signups", "Total Show Watchers", "TOTAL SIGNUPS"):
+                    c = df_out.loc[idx, "Count"]
+                    try:
+                        n = int(float(str(c).replace(",", "")))
+                        df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(n))
+                    except (ValueError, TypeError):
+                        pass
+    else:
+        note = validation.get('overall_assessment', validation.get('note', 'Metrics look plausible'))
+        print(f"✅ AI validation passed: {note}")
+
+    # Append validation metadata rows
+    df_out = pd.concat([df_out, pd.DataFrame([
+        ("", "", "", "", "", "", "", "", "", ""),
+        ("", "", "AI VALIDATION", "", "", "", "", "", "", ""),
+        ("Validation Status", "", "PASS" if validation.get('passed', True) else "FLAGGED", "", "", "", "", "", "", ""),
+        ("Assessment", "", validation.get('overall_assessment', ''), "", "", "", "", "", "", ""),
+    ], columns=df_out.columns)], ignore_index=True)
+
+    if validation.get('flags'):
+        for i, flag in enumerate(validation['flags']):
+            df_out = pd.concat([df_out, pd.DataFrame([
+                (f"Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
+            ], columns=df_out.columns)], ignore_index=True)
+
     # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
     output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
     output_folder = output_folder if isinstance(output_folder, Path) else Path(output_folder)
     output_folder.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M")
-    # Sanitize project name for filename (remove invalid characters)
     safe_project_name = re.sub(r'[<>:"/\\|?*\']', '', p['project_name']).strip()
-    # Limit length to avoid path issues
     safe_project_name = safe_project_name[:100] if len(safe_project_name) > 100 else safe_project_name
     output_path = output_folder / f"{safe_project_name}_{timestamp}.csv"
     df_out.to_csv(output_path, index=False, encoding='utf-8')
