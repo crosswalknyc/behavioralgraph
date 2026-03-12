@@ -49105,6 +49105,10 @@
             profiles.forEach(p => {
                 Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(normalizeDemoLabel(v, demoType)));
             });
+            // Income: ensure all standard brackets are present so the full range always displays
+            if (demoType === 'income') {
+                ['Under $25,000','$25,000 - $49,999','$50,000 - $74,999','$75,000 - $99,999','$100,000 - $149,999','$150,000 - $249,999','$250,000 or More'].forEach(b => allValues.add(b));
+            }
 
             // Build data array with values for sorting; compute index at render time from Gen Pop baseline
             // Use normalized keys for consistent matching across profiles
@@ -49124,8 +49128,11 @@
             });
 
             // Hide rows where ALL non-Gen Pop profiles have negligible data
+            // Exception: income always shows all standard brackets so the full range is visible
+            const STANDARD_INCOME_BRACKETS = new Set(['Under $25,000','$25,000 - $49,999','$50,000 - $74,999','$75,000 - $99,999','$100,000 - $149,999','$150,000 - $249,999','$250,000 or More']);
             const genPopProfileRef = genPopProfile;
             dataRows = dataRows.filter(row => {
+                if (demoType === 'income' && STANDARD_INCOME_BRACKETS.has(row.value)) return true;
                 const hasNonGenPopData = profiles.some((p, i) => {
                     if (genPopProfileRef && p === genPopProfileRef) return false;
                     return row.pctData[i] >= NEGLIGIBLE_PCT;
