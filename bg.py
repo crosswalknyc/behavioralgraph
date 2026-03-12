@@ -905,7 +905,7 @@ def anchor_to_genpop(df, sample_size):
         new_bp = round(new_bp, 4)
 
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
-        new_genpop = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+        new_genpop = int(round((new_raw / 10_000_000) * 329_900_000))
 
         if bp_col and bp_col in df.columns:
             df.at[idx, bp_col] = new_bp
@@ -938,7 +938,7 @@ def anchor_to_genpop(df, sample_size):
             continue
         new_bp = round(soft_bp_ceiling(cur_bp, ceiling=UNMATCHED_CEILING), 4)
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
-        new_genpop = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+        new_genpop = int(round((new_raw / 10_000_000) * 329_900_000))
         if bp_col and bp_col in df.columns:
             df.at[idx, bp_col] = new_bp
         df.at[idx, 'Original Raw Numbers'] = str(new_raw)
@@ -1804,7 +1804,7 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
             new_bp = soft_bp_ceiling(round(gp_bp * target, 4))
             new_bp = round(new_bp, 4)
             new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
-            new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+            new_proj = int(round((new_raw / 10_000_000) * 329_900_000))
             if bp_col and bp_col in df.columns:
                 df.at[idx, bp_col] = new_bp
             df.at[idx, 'Original Raw Numbers'] = str(new_raw)
@@ -1831,7 +1831,7 @@ def validate_behavioral_gut_check(df, archetype, sample_size):
             continue
         new_bp = round(soft_bp_ceiling(cur_bp, ceiling=UNMATCHED_CEILING), 4)
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
-        new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+        new_proj = int(round((new_raw / 10_000_000) * 329_900_000))
         if bp_col and bp_col in df.columns:
             df.at[idx, bp_col] = new_bp
         df.at[idx, 'Original Raw Numbers'] = str(new_raw)
@@ -2005,7 +2005,7 @@ def final_behavioral_sanity_check(df, archetype=None):
         new_bp = round(soft_bp_ceiling(gp_bp_val * target_index), 4)
 
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
-        new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+        new_proj = int(round((new_raw / 10_000_000) * 329_900_000))
 
         df.at[idx, bp_col] = new_bp
         df.at[idx, raw_col] = str(new_raw)
@@ -2032,7 +2032,7 @@ def final_behavioral_sanity_check(df, archetype=None):
             continue
         new_bp = round(soft_bp_ceiling(cur_bp, ceiling=UNMATCHED_CEILING), 4)
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
-        new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+        new_proj = int(round((new_raw / 10_000_000) * 329_900_000))
         df.at[idx, bp_col] = new_bp
         df.at[idx, raw_col] = str(new_raw)
         if proj_col in df.columns:
@@ -2237,7 +2237,7 @@ def item_level_ai_review(df, archetype, project_name, brands):
             new_bp = max(0.01, new_bp)
 
             new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
-            new_proj = int(round(new_bp / 100.0 * GENPOP_TOTAL))
+            new_proj = int(round((new_raw / 10_000_000) * 329_900_000))
 
             df.at[row_idx, bp_col] = new_bp
             df.at[row_idx, raw_col] = str(new_raw)
@@ -4548,7 +4548,7 @@ def enforce_espn_consistency_final(df):
                 
             # Update US Gen Pop Projection
             if 'US Gen Pop Projection' in df.columns and max_raw_numbers > 0:
-                genpop = int((max_raw_numbers / 10_000_000) * 324_770_000)
+                genpop = int((max_raw_numbers / 10_000_000) * 329_900_000)
                 df.at[idx, 'US Gen Pop Projection'] = str(genpop)
         except:
             pass
@@ -7524,6 +7524,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if not is_genpop:
         df_final = cap_demographic_projections(df_final)
 
+    # ── Final GPP recalc: ensures every row's US Gen Pop Projection = (Raw / 10M) * 329.9M
+    df_final = add_us_gen_pop_projection(df_final)
+
     # Final row ordering and CSV save - using exact order from reference file
     CATEGORY_ORDER = [
         "INPUT_METADATA", "BRAND INPUT", "SAMPLE SIZE", "AVID FAN", "CASUAL FAN",
@@ -7586,7 +7589,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 ss = int(float(str(sample_size_row.iloc[0].get('Original Raw Numbers', 0)).replace(',', '')))
             except Exception:
                 pass
-        gp_proj = 329_900_000
+        gp_proj = int(round((ss / 10_000_000) * 329_900_000)) if ss > 0 else 0
         pct_col = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
         bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else pct_col
         loc_row = pd.DataFrame({
@@ -10817,12 +10820,14 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False):
                 matches.append(idx)
         
         if matches:
-            # Set both raw numbers and percentage for ALL instances of the brand
+            gpp = int(round((sample_size / 10_000_000) * 329_900_000))
             for idx in matches:
                 if 'Original Raw Numbers (Database)' in df.columns:
                     df.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
                 if 'Original Raw Numbers' in df.columns:
                     df.loc[idx, 'Original Raw Numbers'] = str(sample_size)
+                if 'US Gen Pop Projection' in df.columns:
+                    df.loc[idx, 'US Gen Pop Projection'] = str(gpp)
                 df.loc[idx, 'Percentage'] = 100.0
     
             total_instances += len(matches)
