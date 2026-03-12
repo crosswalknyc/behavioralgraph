@@ -1907,72 +1907,124 @@
 
             <!-- Company Detail View -->
             <div id="companyDetailView" style="display: none;">
-                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <!-- Header bar -->
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <button class="btn btn-small btn-secondary" onclick="showCompanyList()" style="font-size: 0.8rem;">← Back</button>
-                    <h3 style="margin: 0; font-size: 1.1rem;" id="companyDetailName"></h3>
-                    <span style="font-size: 0.75rem; color: var(--text-secondary); background: var(--bg-input); padding: 0.15rem 0.5rem; border-radius: 10px;" id="companyDetailBadge"></span>
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;" id="companyDetailName"></h3>
+                    </div>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary); background: var(--bg-input); padding: 0.2rem 0.6rem; border-radius: 10px; font-weight: 500;" id="companyDetailBadge"></span>
+                    <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display=document.getElementById('adjustCreditsRow').style.display==='none'?'':'none'" style="font-size: 0.75rem;">Adjust Pool</button>
+                    <button class="btn btn-small btn-primary" onclick="addUserToCompany()" style="font-size: 0.75rem;">+ Add User</button>
                 </div>
 
-                <div class="stats-grid" style="margin-bottom: 1rem;">
-                    <div class="stat-card"><h3>Users</h3><div class="stat-value blue" id="cdTotalUsers">0</div></div>
-                    <div class="stat-card"><h3>Company Credit Pool</h3><div class="stat-value green" id="cdPoolRemaining">--</div><div style="font-size:0.65rem;color:var(--text-secondary);margin-top:0.15rem;" id="cdPoolDetail"></div></div>
-                    <div class="stat-card"><h3>Total Used</h3><div class="stat-value orange" id="cdCreditsUsed">0</div></div>
-                    <div class="stat-card"><h3>Total Sessions</h3><div class="stat-value blue" id="cdTotalSessions">0</div></div>
+                <!-- Stats cards -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Users</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);" id="cdTotalUsers">0</div>
+                    </div>
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Credit Pool</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #2ecc71;" id="cdPoolRemaining">--</div>
+                        <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.1rem;" id="cdPoolDetail"></div>
+                    </div>
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Credits Used</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #e67e22;" id="cdCreditsUsed">0</div>
+                    </div>
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Sessions</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);" id="cdTotalSessions">0</div>
+                    </div>
                 </div>
-                <!-- Adjust Credits inline -->
-                <div id="adjustCreditsRow" style="display:none; margin-bottom:1rem; padding:0.5rem 0.75rem; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card);">
-                    <div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.35rem;">Company-wide credit pool. All "Pool" users draw from this shared balance. Set -1 for unlimited.</div>
+
+                <!-- Adjust Credits (hidden by default) -->
+                <div id="adjustCreditsRow" style="display:none; margin-bottom:1rem; padding:0.65rem 0.85rem; border:1px solid var(--accent-cyan); border-radius:8px; background:rgba(0,188,212,0.05);">
+                    <div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.4rem;">Company-wide credit pool. All "Pool" users draw from this shared balance. Set -1 for unlimited.</div>
                     <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                         <label style="font-size:0.8rem;color:var(--text-secondary);">Set Pool Total:</label>
                         <input type="number" id="adjustPoolTotal" style="width:100px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
                         <button class="btn btn-primary btn-small" onclick="setCompanyPoolTotal()">Set</button>
-                        <span style="color:var(--text-secondary);font-size:0.75rem;">|</span>
+                        <span style="color:var(--border-color);font-size:0.75rem;">|</span>
                         <label style="font-size:0.8rem;color:var(--text-secondary);">Add to Pool:</label>
                         <input type="number" id="addPoolCredits" value="10" min="1" style="width:80px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
                         <button class="btn btn-small btn-secondary" onclick="addCompanyPoolCredits()">Add</button>
-                        <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display='none'">Close</button>
+                        <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display='none'" style="margin-left:auto;">Close</button>
                     </div>
                 </div>
 
                 <!-- Employee Table -->
-                <div style="margin-bottom: 1.5rem;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">
-                        <h4 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">Employees</h4>
-                        <div style="display:flex;gap:0.4rem;">
-                            <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display=''">Adjust Pool</button>
-                            <button class="btn btn-small btn-primary" onclick="addUserToCompany()">+ Add User</button>
+                <div style="margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+                        <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-primary); font-weight: 600;">Employees</h4>
+                        <span style="font-size:0.68rem;color:var(--text-secondary);">
+                            <b>Source</b>: Pool = shared, Personal = own &nbsp;|&nbsp; <b>Ceiling</b>: max credits &nbsp;|&nbsp; Click values to edit
+                        </span>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="admin-table" style="font-size:0.8rem; margin-bottom: 0;">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Name</th>
+                                    <th style="text-align:center;">Role</th>
+                                    <th style="text-align:center;">Source</th>
+                                    <th style="text-align:center;">Ceiling</th>
+                                    <th style="text-align:center;">Credits Used</th>
+                                    <th style="text-align:center;">Remaining</th>
+                                    <th style="text-align:center;">Sessions</th>
+                                    <th style="text-align:center;">Profiles Viewed</th>
+                                    <th style="text-align:center;">Last Login</th>
+                                </tr>
+                            </thead>
+                            <tbody id="companyEmployeeTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Export Panel -->
+                <div style="margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0;" onclick="toggleCompanyExport()">
+                        <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-primary); font-weight: 600;">Export Usage Data</h4>
+                        <span class="collapse-icon" id="companyExportIcon" style="font-size: 0.7rem; transition: transform 0.2s;">▼</span>
+                    </div>
+                    <div id="companyExportContent" style="margin-top: 0.75rem;">
+                        <div style="display: flex; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                            <div>
+                                <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.15rem;">From</label>
+                                <input type="date" id="companyExportFrom" style="padding:0.3rem 0.5rem; background:var(--bg-input); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:0.8rem;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.15rem;">To</label>
+                                <input type="date" id="companyExportTo" style="padding:0.3rem 0.5rem; background:var(--bg-input); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:0.8rem;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.15rem;">Users</label>
+                                <select id="companyExportUserScope" onchange="toggleCompanyExportUserPicker()" style="padding:0.3rem 0.5rem; background:var(--bg-input); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:0.8rem; min-width:120px;">
+                                    <option value="all">All Users</option>
+                                    <option value="select">Select Users</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary btn-small" onclick="exportCompanyUsage()" style="padding: 0.35rem 1rem;">Export CSV</button>
+                        </div>
+                        <div id="companyExportUserPicker" style="display:none; padding:0.5rem 0.65rem; background:var(--bg-dark); border:1px solid var(--border-color); border-radius:8px; margin-bottom:0.5rem;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.35rem;">
+                                <span style="font-size:0.72rem; color:var(--text-secondary);">Select users to include:</span>
+                                <label style="font-size:0.72rem; cursor:pointer; color:var(--accent-cyan);" onclick="toggleAllExportUsers()">Toggle All</label>
+                            </div>
+                            <div id="companyExportUserList" style="display:flex; flex-wrap:wrap; gap:0.35rem; max-height:120px; overflow-y:auto;"></div>
                         </div>
                     </div>
-                    <p style="margin:0 0 0.5rem;font-size:0.7rem;color:var(--text-secondary);">
-                        <b>Source</b>: Pool = draws from company pool, Personal = own credits. <b>Ceiling</b>: max credits a user can consume (-1 = no limit). Click values to edit.
-                    </p>
-                    <table class="admin-table" style="font-size:0.8rem;">
-                        <thead>
-                            <tr>
-                                <th>Username</th>
-                                <th>Name</th>
-                                <th style="text-align:center;">Role</th>
-                                <th style="text-align:center;">Source</th>
-                                <th style="text-align:center;">Ceiling</th>
-                                <th style="text-align:center;">Credits Used</th>
-                                <th style="text-align:center;">Remaining</th>
-                                <th style="text-align:center;">Sessions</th>
-                                <th style="text-align:center;">Profiles Viewed</th>
-                                <th style="text-align:center;">Last Login</th>
-                            </tr>
-                        </thead>
-                        <tbody id="companyEmployeeTableBody"></tbody>
-                    </table>
                 </div>
 
                 <!-- Usage Report Panel -->
-                <div style="margin-bottom: 1.5rem;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.4rem 0;" onclick="toggleCompanyReport()">
-                        <span style="font-size: 0.85rem;">📊</span>
-                        <h4 style="margin: 0; font-size: 0.9rem; color: var(--accent-cyan);">Usage Report</h4>
-                        <span class="collapse-icon rotated" id="companyReportIcon" style="font-size: 0.7rem;">▼</span>
+                <div style="margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;" onclick="toggleCompanyReport()">
+                        <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-primary); font-weight: 600;">Usage Report</h4>
+                        <span class="collapse-icon rotated" id="companyReportIcon" style="font-size: 0.7rem; transition: transform 0.2s;">▼</span>
                     </div>
-                    <div id="companyReportContent" style="display: none; margin-top: 0.5rem;">
+                    <div id="companyReportContent" style="display: none; margin-top: 0.75rem;">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <div>
                                 <h5 style="margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--text-secondary);">Feature Usage</h5>
@@ -1991,11 +2043,10 @@
                 </div>
 
                 <!-- Company Defaults Section -->
-                <div style="margin-bottom: 1.5rem; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem;">
+                <div style="margin-bottom: 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem;">
                     <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;" onclick="toggleCompanyDefaults()">
-                        <span style="font-size: 0.85rem;">⚙️</span>
-                        <h4 style="margin: 0; font-size: 0.9rem; color: var(--accent-cyan);">Company Defaults</h4>
-                        <span class="collapse-icon rotated" id="companyDefaultsIcon" style="font-size: 0.7rem;">▼</span>
+                        <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-primary); font-weight: 600;">Company Defaults</h4>
+                        <span class="collapse-icon rotated" id="companyDefaultsIcon" style="font-size: 0.7rem; transition: transform 0.2s;">▼</span>
                         <span id="companyDefaultsBadge" style="font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 8px; margin-left: 0.25rem;"></span>
                     </div>
                     <p style="color: var(--text-secondary); font-size: 0.72rem; margin: 0.25rem 0 0;">New users in this company will inherit these defaults. Also used when resetting users.</p>
@@ -3213,6 +3264,9 @@
             document.getElementById('companyDefaultsContent').style.display = 'none';
             document.getElementById('companyDefaultsIcon').classList.add('rotated');
             document.getElementById('adjustCreditsRow').style.display = 'none';
+            document.getElementById('companyExportUserScope').value = 'all';
+            document.getElementById('companyExportUserPicker').style.display = 'none';
+            initCompanyExportDates();
             loadCompanyEmployees(companyName);
             loadCompanyReport(companyName);
             loadCompanyDefaults(companyName);
@@ -3234,6 +3288,7 @@
                 document.getElementById('cdCreditsUsed').textContent = totalCredits.toLocaleString();
                 document.getElementById('cdTotalSessions').textContent = totalSessions.toLocaleString();
                 document.getElementById('companyDetailBadge').textContent = `${users.length} user${users.length !== 1 ? 's' : ''}`;
+                populateCompanyExportUsers(users);
                 const poolEl = document.getElementById('cdPoolRemaining');
                 const poolDetail = document.getElementById('cdPoolDetail');
                 if (pool) {
@@ -3404,6 +3459,67 @@
             const icon = document.getElementById('companyReportIcon');
             if (el.style.display === 'none') { el.style.display = ''; icon.classList.remove('rotated'); }
             else { el.style.display = 'none'; icon.classList.add('rotated'); }
+        }
+
+        function toggleCompanyExport() {
+            const el = document.getElementById('companyExportContent');
+            const icon = document.getElementById('companyExportIcon');
+            if (el.style.display === 'none') { el.style.display = ''; icon.classList.remove('rotated'); }
+            else { el.style.display = 'none'; icon.classList.add('rotated'); }
+        }
+
+        let _companyExportUsers = [];
+
+        function initCompanyExportDates() {
+            const today = new Date();
+            const thirtyAgo = new Date(today);
+            thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+            const fmt = d => d.toISOString().split('T')[0];
+            const fromEl = document.getElementById('companyExportFrom');
+            const toEl = document.getElementById('companyExportTo');
+            if (fromEl && !fromEl.value) fromEl.value = fmt(thirtyAgo);
+            if (toEl && !toEl.value) toEl.value = fmt(today);
+        }
+
+        function populateCompanyExportUsers(users) {
+            _companyExportUsers = users || [];
+            const container = document.getElementById('companyExportUserList');
+            if (!container) return;
+            container.innerHTML = _companyExportUsers.map(u => {
+                const name = [u.first_name, u.last_name].filter(Boolean).join(' ');
+                const label = name ? `${u.username} (${name})` : u.username;
+                return `<label style="display:flex;align-items:center;gap:0.25rem;font-size:0.78rem;cursor:pointer;background:var(--bg-input);padding:0.2rem 0.5rem;border-radius:5px;white-space:nowrap;">
+                    <input type="checkbox" class="company-export-user-cb" value="${u.username}" checked>
+                    <span>${label}</span>
+                </label>`;
+            }).join('');
+        }
+
+        function toggleCompanyExportUserPicker() {
+            const scope = document.getElementById('companyExportUserScope').value;
+            document.getElementById('companyExportUserPicker').style.display = scope === 'select' ? '' : 'none';
+        }
+
+        function toggleAllExportUsers() {
+            const cbs = document.querySelectorAll('.company-export-user-cb');
+            const allChecked = Array.from(cbs).every(cb => cb.checked);
+            cbs.forEach(cb => cb.checked = !allChecked);
+        }
+
+        function exportCompanyUsage() {
+            if (!_currentCompany) return;
+            const dateFrom = document.getElementById('companyExportFrom').value;
+            const dateTo = document.getElementById('companyExportTo').value;
+            if (!dateFrom || !dateTo) { alert('Please select a date range.'); return; }
+            if (dateFrom > dateTo) { alert('From date must be on or before To date.'); return; }
+            const scope = document.getElementById('companyExportUserScope').value;
+            let url = `/api/admin/companies/${encodeURIComponent(_currentCompany)}/export?date_from=${dateFrom}&date_to=${dateTo}`;
+            if (scope === 'select') {
+                const selected = Array.from(document.querySelectorAll('.company-export-user-cb:checked')).map(cb => cb.value);
+                if (selected.length === 0) { alert('Select at least one user.'); return; }
+                url += `&usernames=${encodeURIComponent(selected.join(','))}`;
+            }
+            window.location.href = url;
         }
 
         async function loadCompanyReport(companyName) {

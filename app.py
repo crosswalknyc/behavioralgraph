@@ -3039,6 +3039,89 @@ def api_company_report(company_name):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/companies/<path:company_name>/export', methods=['GET'])
+@requires_admin
+def api_company_export(company_name):
+    """Export credit usage and activity for a company, filtered by date range and optional usernames."""
+    date_from_str = request.args.get('date_from', '').strip()
+    date_to_str = request.args.get('date_to', '').strip()
+    usernames_param = request.args.get('usernames', '').strip()
+    if not date_from_str or not date_to_str:
+        return jsonify({'success': False, 'error': 'date_from and date_to (YYYY-MM-DD) required'}), 400
+    try:
+        date_from = datetime.strptime(date_from_str, '%Y-%m-%d')
+        date_to = datetime.strptime(date_to_str, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid date format; use YYYY-MM-DD'}), 400
+    if date_from > date_to:
+        return jsonify({'success': False, 'error': 'date_from must be on or before date_to'}), 400
+    start = date_from.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = date_to.replace(hour=23, minute=59, second=59, microsecond=999999)
+    selected_users = set(u.strip() for u in usernames_param.split(',') if u.strip()) if usernames_param else None
+    data = load_users()
+    all_users = data.get('users', {})
+    rows = [['Username', 'Name', 'Email', 'Date', 'Description', 'Pull Type', 'Job ID', 'Credits Used']]
+    summary_rows = [['--- SUMMARY ---'], ['Company', company_name], ['Date Range', f'{date_from_str} to {date_to_str}'], []]
+    summary_rows.append(['Username', 'Name', 'Email', 'Role', 'Credits Used (Period)', 'Total Sessions', 'Last Login'])
+    total_credits_period = 0
+    for username, user in all_users.items():
+        if (user.get('company') or '').strip().lower() != company_name.strip().lower():
+            continue
+        if selected_users and username not in selected_users:
+            continue
+        name = ' '.join(filter(None, [user.get('first_name', ''), user.get('last_name', '')]))
+        email = user.get('email', '')
+        user_credits_period = 0
+        history = user.get('credit_usage_history') or []
+        for entry in history:
+            used_at_str = entry.get('used_at') or ''
+            if not used_at_str:
+                continue
+            try:
+                used_at = datetime.fromisoformat(used_at_str.replace('Z', '+00:00'))
+                if used_at.tzinfo:
+                    used_at = used_at.replace(tzinfo=None)
+            except (ValueError, TypeError):
+                continue
+            if not (start <= used_at <= end):
+                continue
+            cr = entry.get('credits_used') if entry.get('credits_used') is not None else 1
+            user_credits_period += cr
+            rows.append([
+                username, name, email,
+                used_at.strftime('%Y-%m-%d %H:%M:%S'),
+                entry.get('description') or entry.get('pull_type') or 'Analysis',
+                entry.get('pull_type') or '',
+                entry.get('job_id') or '',
+                str(cr)
+            ])
+        total_credits_period += user_credits_period
+        activity = user.get('activity') or {}
+        summary_rows.append([
+            username, name, email,
+            user.get('role', 'user'),
+            str(user_credits_period),
+            str(activity.get('total_sessions') or 0),
+            user.get('last_login') or 'Never'
+        ])
+    summary_rows.append([])
+    summary_rows.append(['Total Credits Used (Period)', str(total_credits_period)])
+    summary_rows.append([])
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerows(summary_rows)
+    writer.writerow([])
+    writer.writerow(['--- DETAILED CREDIT USAGE ---'])
+    writer.writerows(rows)
+    safe_name = company_name.replace(' ', '_').replace('/', '_')
+    filename = f'{safe_name}_usage_{date_from_str}_to_{date_to_str}.csv'
+    return Response(
+        out.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
+
+
 @app.route('/api/admin/companies/<path:company_name>/defaults', methods=['GET'])
 @requires_admin
 def api_get_company_defaults(company_name):
