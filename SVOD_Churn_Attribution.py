@@ -1442,7 +1442,8 @@ def _get_platform_info(platform_name):
 
 def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
                         conversion_rate, genre='', content_cadence='',
-                        episode_count=0, pre_existing_viewers=0):
+                        episode_count=0, pre_existing_viewers=0,
+                        analysis_date_range='', is_new_show=False):
     """
     Use GPT-4o-mini to validate whether Total Show Watchers, New Platform Signups,
     and Total Show Conversion Rate are plausible given the show, platform, and context.
@@ -1470,6 +1471,8 @@ PLATFORM: {platform_name}
 GENRE: {genre or 'Unknown'}
 CONTENT CADENCE: {content_cadence or 'Unknown'}
 EPISODE COUNT: {episode_count or 'N/A'}
+ANALYSIS DATE RANGE: {analysis_date_range or 'Unknown'}
+NEW SHOW (no prior seasons): {is_new_show}
 
 PLATFORM CONTEXT:
 - US Household Penetration: ~{plat_info['pct']}%
@@ -1500,6 +1503,20 @@ VALIDATION RULES:
    - Peacock/Paramount+: typically 5-35% for a hit
    - Apple TV+: typically 3-15%
    - Rates above these ranges are suspicious; rates below may indicate a weak title
+
+4. TIME FRAME MATTERS:
+   - A short analysis window (1-2 weeks) naturally produces LOWER watchers and signups. Very low conversion in a short window is expected and NOT suspicious.
+   - A longer window (3-12+ months) should produce proportionally more data. Very low conversion over months IS suspicious.
+   - A 1-week window for a minor/indie title could easily produce <0.1% conversion. That's plausible.
+   - Scale accordingly: a small indie film, stand-up special, or non-flagship content should have modest numbers.
+
+5. CONTENT SCALE:
+   - Major tentpole series (Stranger Things, The Boys) drive massive engagement and signups
+   - Mid-tier shows (reality TV, procedural dramas) drive moderate numbers
+   - Stand-up specials, indie films, minor titles drive low numbers -- this is EXPECTED
+   - Do NOT flag low conversion for small/niche content on a short time window. Only flag if numbers are clearly impossible.
+
+Be conservative with flags -- only flag things that are truly implausible, not just on the lower/higher side of normal.
 
 Respond in JSON ONLY (no markdown fencing):
 {{
@@ -1855,6 +1872,16 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     print("🤖 Running AI plausibility check...")
     show_name = ', '.join(p.get('show_search_terms', []))
     ep_count = len(p.get('episode_dates', []))
+    date_range_str = ''
+    if p.get('campaign_start') and p.get('campaign_end'):
+        try:
+            cs = p['campaign_start']
+            ce = p['campaign_end']
+            s_str = cs.strftime('%Y-%m-%d') if hasattr(cs, 'strftime') else str(cs)
+            e_str = ce.strftime('%Y-%m-%d') if hasattr(ce, 'strftime') else str(ce)
+            date_range_str = f"{s_str} to {e_str}"
+        except Exception:
+            pass
     validation = ai_validate_metrics(
         show_name=show_name,
         platform_name=p['platform_name'],
@@ -1865,6 +1892,8 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         content_cadence=p.get('content_cadence', ''),
         episode_count=ep_count,
         pre_existing_viewers=pre_existing // OUTPUT_DIVISOR,
+        analysis_date_range=date_range_str,
+        is_new_show=p.get('is_new_show', False),
     )
 
     if not validation.get('passed', True):
