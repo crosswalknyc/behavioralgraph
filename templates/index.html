@@ -49055,19 +49055,18 @@
                     if (lower === 'divorced' || lower === 'divorced or separated') return 'Divorced or Separated';
                     if (lower === 'prefer not to say') return 'Prefer Not to Say';
                 }
-                // Income normalization
+                // Income normalization (use exact number matching to avoid substring collisions)
                 if (type === 'income') {
-                    // Expand K-abbreviations: "$75k" → "$75000", "$100k" → "$100000"
-                    const expanded = lower.replace(/,/g, '').replace(/\$(\d+)k/gi, (m, n) => '$' + n + '000');
-                    if (expanded.includes('under') || expanded.includes('< ') || (expanded.includes('<') && expanded.includes('25000'))) return 'Under $25,000';
-                    if (expanded.includes('25000') && (expanded.includes('49') || expanded.includes('50000'))) return '$25,000 - $49,999';
-                    if (expanded.includes('50000') && (expanded.includes('74') || expanded.includes('75000'))) return '$50,000 - $74,999';
-                    if (expanded.includes('75000') && (expanded.includes('99') || expanded.includes('100000'))) return '$75,000 - $99,999';
-                    if (expanded.includes('100000') && (expanded.includes('149') || expanded.includes('150000'))) return '$100,000 - $149,999';
-                    if (expanded.includes('150000') && (expanded.includes('249') || expanded.includes('250000'))) return '$150,000 - $249,999';
-                    if (expanded.includes('250000') && (expanded.includes('+') || expanded.includes('or more') || expanded.includes('more'))) return '$250,000 or More';
-                    // Handle "$250k+" or "$250,000+"
-                    if (expanded.includes('250000')) return '$250,000 or More';
+                    const expanded = lower.replace(/,/g, '').replace(/\s+/g, '').replace(/\$(\d+)k/gi, (m, n) => '$' + n + '000');
+                    if (expanded.includes('under') || expanded.includes('less') || (expanded.includes('<') && expanded.includes('25000'))) return 'Under $25,000';
+                    const nums = expanded.match(/\d+/g) || [];
+                    const hasNum = (n) => nums.some(x => x === String(n) || parseInt(x) === n);
+                    if (hasNum(250000) && !hasNum(150000)) return '$250,000 or More';
+                    if (hasNum(150000) && (hasNum(249999) || hasNum(250000))) return '$150,000 - $249,999';
+                    if (hasNum(100000) && (hasNum(149999) || hasNum(150000))) return '$100,000 - $149,999';
+                    if (hasNum(75000) && (hasNum(99999) || hasNum(100000))) return '$75,000 - $99,999';
+                    if (hasNum(50000) && (hasNum(74999) || hasNum(75000))) return '$50,000 - $74,999';
+                    if (hasNum(25000) && (hasNum(49999) || hasNum(50000))) return '$25,000 - $49,999';
                 }
                 return v;
             };
