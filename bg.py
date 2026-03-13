@@ -3471,6 +3471,211 @@ Each corrected category sums to 100. JSON only, no markdown."""
         return df
 
 
+def ai_series_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for SERIES (TV show) profiles.
+
+    Covers all TV series across platforms — prestige drama, procedurals,
+    reality, comedy, action, teen/YA, Western, fantasy, and LGBTQ+-centered
+    shows — using genre, platform, cast, and theme-specific audience reasoning.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if 'SERIES' not in bc_upper:
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping series demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a premium-tier US television audience demographics analyst. Determine PRECISE VIEWER demographics for this TV show.
+
+SHOW: "{subject_clean}"
+CATEGORY: {brand_category}
+
+=== STEP 1: IDENTIFY THIS SHOW ===
+What show is this? Platform, genre, cast demographics, themes, target age, era.
+
+=== STEP 2: TV SHOW VIEWER RULES ===
+
+GENDER by genre:
+- Action/thriller/sci-fi: 60-72% MALE.
+- Prestige drama male leads: 55-65% MALE.
+- Western/rural: 55-65% MALE.
+- Procedural crime: 50-55% FEMALE.
+- Medical drama: 55-62% FEMALE.
+- Comedy/sitcom: 55-65% MALE (edgy) or 48-55% FEMALE (prestige).
+- Reality/dating: 65-80% FEMALE.
+- Teen/YA: 50-55% FEMALE.
+- Romance/period drama: 65-75% FEMALE.
+- Fantasy/epic: 55-65% MALE.
+
+ETHNICITY — cast and content drive viewership:
+- Predominantly Black casts: 40-55% Black, 25-35% White.
+- White casts in White settings: 65-78% White.
+- Diverse ensembles: 50-60% White, 15-25% Black.
+
+AGE:
+- Teen/YA: 10-20% under-18, peak 16-25.
+- Prestige drama: peak 25-45, under-18 <5%.
+- Procedurals: peak 35-60+, under-18 <3%.
+- Western: peak 35-60+.
+- Adult animation: peak 18-35.
+- Under-16 <5% for most shows.
+
+SEXUAL ORIENTATION:
+- LGBTQ+-centered: 25-40% YES.
+- Prominent LGBTQ+ characters: 12-18% YES.
+- Prestige with cultural cachet: 8-12% YES.
+- Mainstream procedurals/Westerns/action: 5-8% YES.
+- Conservative-coded: 4-6% YES.
+
+=== STEP 3: EVALUATE ===
+{demo_block}
+
+=== STEP 4: VERDICT ===
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.12,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"📺 Series demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"📺 Series demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  Series demographic review error: {e}")
+        return df
+
+
 def item_level_ai_review(df, archetype, project_name, brands):
     """Second GPT pass: reviews top items per key category in the context
     of the profile's demographics and flags specific contextual anomalies.
@@ -8921,6 +9126,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ai_musician_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_politics_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_creative_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_series_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
