@@ -30132,8 +30132,10 @@
             const ageMax = Math.max(...ageData) * 1.5; // 50% padding for horizontal labels
             
             // Calculate median for age using same interpolated formula as Compare feature
+            // ALWAYS use the global Gen Pop baseline for the Gen Pop median so it's consistent across all profiles
             const profileMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(demographics.age || {}) : 0;
-            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(demographicsGenPop.age || {}) : 0;
+            const _gpAgeForMedian = (genPopBaselineData?.demographics?.age) || demographicsGenPop.age || {};
+            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(_gpAgeForMedian) : 0;
             
             // Update median display in chart header
             const ageMedianDisplay = document.getElementById('ageMedianDisplay');
@@ -30467,8 +30469,9 @@
             const incomeChartType = chartTypePrefs.income || 'bar';
             const incomeIsCircular = ['doughnut', 'pie', 'polarArea'].includes(incomeChartType);
             
-            // Calculate median for income
-            const incomeMedian = calculateDemographicMedian(demographics.income, demographicsGenPop.income, 'income');
+            // Calculate median for income — use global Gen Pop baseline for consistent Gen Pop median
+            const _gpIncomeForMedian = (genPopBaselineData?.demographics?.income) || demographicsGenPop.income || {};
+            const incomeMedian = calculateDemographicMedian(demographics.income, _gpIncomeForMedian, 'income');
             
             // Update median display in chart header (no Gen Pop comparison when Gen Pop selected)
             const incomeMedianDisplay = document.getElementById('incomeMedianDisplay');
