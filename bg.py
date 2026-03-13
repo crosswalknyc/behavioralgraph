@@ -2492,6 +2492,210 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
         return df
 
 
+def ai_athlete_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for ATHLETE profiles.
+
+    When the brand category contains athlete, uses AI to evaluate and correct
+    all 8 demographic categories based on the specific athlete's sport, identity,
+    era, crossover appeal, and known audience composition.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if 'ATHLETE' not in bc_upper:
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping athlete demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a senior US sports audience demographics expert. Determine PRECISE digital audience demographics for this athlete.
+
+SUBJECT: "{subject_clean}"
+CATEGORY: {brand_category}
+
+STEP 1 — IDENTIFY THIS ATHLETE:
+Who is "{subject_clean}"? Determine their sport, race/ethnicity, gender, age, whether active or retired, peak era, mainstream fame level, whether openly LGBTQ+, and crossover appeal (media, business, endorsements).
+
+STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
+Every athlete is different. Reason about THIS specific person.
+
+GENDER — depends on the athlete and sport:
+- Most male athletes in male-dominated sports (NFL, NBA, MLB, NHL): 60-75% male.
+- Male heartthrob athletes can skew 50-55% female.
+- Female athletes: 45-55% female typically. Tennis/gymnastics female stars may have 50-60% male audience.
+- WWE/wrestling: 65-75% male. Golf: 70-80% male. Skateboarding: 70-80% male. Hockey: 70-80% male.
+- Athletes with major business/media crossover have broader, less male-dominated audiences.
+
+ETHNICITY — reflects the athlete's identity AND their sport:
+- Black NBA/NFL player: 35-50% Black audience. Mainstream icons: 30-40% Black with more White crossover.
+- White athlete in predominantly White sport (golf, hockey): 65-80% White.
+- Latino athlete: 20-40% Latinx depending on sport and cultural identity.
+- The athlete's OWN race/ethnicity draws elevated same-race audience.
+
+AGE — depends on career stage:
+- Active young athlete (20s): audience peaks 18-30.
+- Active veteran (30s): audience 25-40.
+- Recently retired: audience 25-45.
+- Long retired/legacy: audience skews 35-60+.
+- Under-16 typically <3% for athletes.
+
+SEXUAL ORIENTATION:
+- Openly LGBTQ+ athletes: 20-30% YES.
+- LGBTQ+-popular sports (women's soccer, figure skating): 10-15% YES.
+- Most mainstream male athletes: 5-7% YES.
+- Female athletes generally: 8-12% YES.
+
+EDUCATION: Golf/tennis fans = above average. NFL/NBA = mixed. INCOME: Golf/tennis = higher. NBA/NFL = middle.
+
+PARENTAL/RELATIONSHIP: Older audience = more married with kids. Family-oriented athletes = more parents.
+
+STEP 3 — EVALUATE CURRENT DATA:
+{demo_block}
+
+STEP 4 — VERDICT using EXACTLY these labels:
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.15,
+            max_tokens=2000
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"🏅 Athlete demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"🏅 Athlete demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  Athlete demographic review error: {e}")
+        return df
+
+
 def item_level_ai_review(df, archetype, project_name, brands):
     """Second GPT pass: reviews top items per key category in the context
     of the profile's demographics and flags specific contextual anomalies.
@@ -7937,6 +8141,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if not is_genpop and brand_category:
         df_final = ai_actor_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_creator_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_athlete_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
