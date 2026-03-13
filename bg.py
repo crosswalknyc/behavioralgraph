@@ -2079,6 +2079,208 @@ _ITEM_REVIEW_CATEGORIES = {
 }
 
 
+def ai_actor_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for ACTOR/ACTRESS profiles.
+
+    When the brand category is an actor/actress, uses AI to evaluate and correct
+    all 8 demographic categories based on the specific person's identity,
+    career, content, and known audience composition.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if 'ACTOR' not in bc_upper and 'ACTRESS' not in bc_upper:
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping actor demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a senior US entertainment audience demographics expert. Determine PRECISE audience demographics for this actor/actress.
+
+SUBJECT: "{subject_clean}"
+CATEGORY: {brand_category}
+
+STEP 1 — IDENTIFY THIS PERSON:
+Who is "{subject_clean}"? Determine their gender, race/ethnicity, approximate age, what they're known for, and career peak era.
+
+STEP 2 — DETERMINE THEIR DIGITAL AUDIENCE:
+
+*** CRITICAL GENDER RULES ***
+- Male actors: 48-55% MALE. Men watch and follow male actors. DO NOT default to female-majority.
+  Only young heartthrob types in romance content should be 55-60% female.
+- Male comedians: 52-58% MALE. Stand-up comedy skews male.
+- Female actresses: 55-65% female; action/superhero actresses closer to 50/50.
+
+*** CRITICAL ETHNICITY RULES ***
+- BLACK actor in mainstream crossover content: 28-38% Black audience
+- BLACK actor in Black-audience content: 40-55% Black
+- White percentage for a Black actor: 35-48%, NOT 50%+
+- Latino actors: 25-35% Latino audience
+- Asian actors: 15-25% Asian audience
+- White actors in mainstream: 55-65% White
+
+*** AGE RULES ***
+- Under 16: almost always under 4%
+- 16-18: under 7% unless in teen content
+- Career peak correlates with audience age
+- 60+ at least 8-12% for actors with 20+ year careers
+
+*** SEXUAL ORIENTATION ***
+- Openly LGBTQ+ actors: 18-28% YES
+- LGBTQ+ content actors: 15-22% YES
+- Otherwise ~7-8% baseline
+
+*** INCOME/EDUCATION ***
+- Prestige TV/film: higher education, moderate-high income
+- Blockbuster: middle income, average education
+
+STEP 3 — EVALUATE CURRENT DATA:
+{demo_block}
+
+STEP 4 — VERDICT using EXACTLY these labels:
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. Be precise. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.15,
+            max_tokens=1500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"🎭 Actor demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"🎭 Actor demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  Actor demographic review error: {e}")
+        return df
+
+
 def item_level_ai_review(df, archetype, project_name, brands):
     """Second GPT pass: reviews top items per key category in the context
     of the profile's demographics and flags specific contextual anomalies.
@@ -7519,6 +7721,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if not is_genpop and _archetype:
         print("🤖 Running item-level AI anomaly detection...")
         df_final = item_level_ai_review(df_final, _archetype, project_name, brands)
+
+    # ── Actor/Actress AI demographic review (GPT-4o) ──────────────────
+    if not is_genpop and brand_category:
+        df_final = ai_actor_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
