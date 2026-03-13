@@ -3714,6 +3714,206 @@ Each corrected category sums to 100. JSON only, no markdown."""
         return df
 
 
+def ai_podcast_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for PODCAST/PODCASTER profiles.
+
+    Covers all podcast types — bro/comedy, female lifestyle, true crime,
+    interview, kids, news/politics — using host identity, genre, platform,
+    and listener-base-specific reasoning.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if 'PODCAST' not in bc_upper:
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping podcast demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a premium-tier US podcast audience demographics analyst. Determine PRECISE LISTENER demographics for this podcast.
+
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY podcast.
+- ONLY increase above 10% if the podcast IS hosted by openly LGBTQ+ person(s) OR explicitly targets LGBTQ+ audiences.
+- HARD CAP: NEVER assign >15% unless the host IS openly LGBTQ+ or the podcast IS LGBTQ+-focused.
+- NEVER assign >30% to any podcast.
+- Conservative/bro podcasts (Joe Rogan, Barstool): 4-6%. DO NOT go above 6%.
+- Under-16 age: max 3% for adult podcasts. Only children's podcasts go to 15-25%.
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+
+PODCAST: "{subject_clean}"
+CATEGORY: {brand_category}
+
+=== STEP 1: IDENTIFY THIS PODCAST ===
+What podcast is this? Host(s), genre, platform, tone, target age, whether host is openly LGBTQ+.
+
+=== STEP 2: PODCAST LISTENER RULES ===
+
+GENDER:
+- Male bro/comedy/sports: 65-78% MALE. Female lifestyle/pop culture: 75-85% FEMALE.
+- True crime: 65-75% FEMALE. News/politics: 55-65% MALE.
+- Interview/culture: 50-58% MALE. Children's: ~50/50.
+
+ETHNICITY — host identity + content:
+- White hosts mainstream: 60-70% White. Black hosts: 30-45% Black. Latino: 25-40% Latinx.
+
+AGE — podcast audiences are ADULT:
+- Under-16: <3% for adult podcasts. Kids podcasts: 15-25%.
+- Young female (Call Her Daddy): peak 18-30. Bro (Rogan): peak 21-40.
+- Interview (SmartLess): peak 30-50. News: peak 35-60+.
+
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. Conservative/bro: 4-6%. Mainstream male: 5-7%.
+- Female lifestyle: 8-12%. LGBTQ+ hosts: 10-14%. LGBTQ+-focused: 25-35%.
+- DO NOT assign 10%+ without LGBTQ+ hosts or content.
+
+=== STEP 3: EVALUATE ===
+{demo_block}
+
+=== STEP 4: VERDICT ===
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.05,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"🎙️ Podcast demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"🎙️ Podcast demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  Podcast demographic review error: {e}")
+        return df
+
+
 def item_level_ai_review(df, archetype, project_name, brands):
     """Second GPT pass: reviews top items per key category in the context
     of the profile's demographics and flags specific contextual anomalies.
@@ -9165,6 +9365,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ai_politics_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_creative_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_series_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_podcast_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
