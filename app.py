@@ -13478,6 +13478,14 @@ def change_file_category():
             ContentType='text/csv'
         )
         
+        # Get the new LastModified timestamp so cache stays in sync
+        try:
+            head = s3_client.head_object(Bucket=S3_BUCKET, Key=file_key)
+            new_last_modified = head['LastModified'].isoformat()
+        except Exception:
+            from datetime import datetime, timezone
+            new_last_modified = datetime.now(timezone.utc).isoformat()
+        
         # If this is a purgatory file, update purgatory metadata so category persists in admin list
         if file_key.startswith(S3_PURGATORY_PREFIX):
             purgatory_id = f"{S3_BUCKET}:{file_key}"
@@ -13487,12 +13495,14 @@ def change_file_category():
                 save_purgatory_metadata(metadata)
                 print(f"🏷️ Updated purgatory metadata category for {file_key} to {new_category}")
         
-        # Update cache - find job in s3_cache and update its category (released files only; purgatory not in cache)
+        # Update cache - find job in s3_cache and update its category AND last_modified
+        # so smart_cache_update won't see it as "modified" and revert the category
         jobs = s3_cache.get('jobs', [])
         found = False
         for job in jobs:
             if job.get('key') == file_key or job.get('s3_key') == file_key:
                 job['category'] = new_category
+                job['last_modified'] = new_last_modified
                 found = True
                 break
         if not found and not file_key.startswith(S3_PURGATORY_PREFIX):
