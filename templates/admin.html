@@ -2873,6 +2873,7 @@
                         <option value="SERIES - HBO ENTERTAINMENT">SERIES - HBO ENTERTAINMENT</option>
                         <option value="SERIES - HBO MAX">SERIES - HBO MAX</option>
                         <option value="SERIES - HULU">Series - Hulu</option>
+                        <option value="SERIES - LIONSGATE TELEVISION">SERIES - LIONSGATE TELEVISION</option>
                         <option value="SERIES - NETFLIX">SERIES - NETFLIX</option>
                         <option value="SERIES - PARAMOUNT TV STUDIOS">SERIES - PARAMOUNT TV STUDIOS</option>
                         <option value="SERIES - SONY">SERIES - SONY</option>
@@ -3901,7 +3902,7 @@
             const sel = String(selectedCategory || 'Uncategorized').trim() || 'Uncategorized';
             const isSel = (v) => (v === sel || String(v).toUpperCase() === sel.toUpperCase());
             if (sourceType === 'svod_acquisition') {
-                const svodCats = ['Uncategorized', 'SERIES - AMAZON MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - FOX', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'];
+                const svodCats = ['Uncategorized', 'SERIES - AMAZON MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - FOX', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'];
                 return svodCats.map(c => `<option value="${c}" ${isSel(c) ? 'selected' : ''}>${c}</option>`).join('');
             }
             return `
@@ -3922,6 +3923,7 @@
                     <option value="SERIES - HBO ENTERTAINMENT" ${isSel('SERIES - HBO ENTERTAINMENT') ? 'selected' : ''}>SERIES - HBO ENTERTAINMENT</option>
                     <option value="SERIES - HBO MAX" ${isSel('SERIES - HBO MAX') ? 'selected' : ''}>SERIES - HBO MAX</option>
                     <option value="SERIES - HULU" ${isSel('SERIES - HULU') ? 'selected' : ''}>Series - Hulu</option>
+                    <option value="SERIES - LIONSGATE TELEVISION" ${isSel('SERIES - LIONSGATE TELEVISION') ? 'selected' : ''}>SERIES - LIONSGATE TELEVISION</option>
                     <option value="SERIES - NETFLIX" ${isSel('SERIES - NETFLIX') ? 'selected' : ''}>SERIES - NETFLIX</option>
                     <option value="SERIES - PARAMOUNT TV STUDIOS" ${isSel('SERIES - PARAMOUNT TV STUDIOS') ? 'selected' : ''}>SERIES - PARAMOUNT TV STUDIOS</option>
                     <option value="SERIES - SONY" ${isSel('SERIES - SONY') ? 'selected' : ''}>SERIES - SONY</option>
@@ -7731,7 +7733,7 @@
         // Master category mapping
         const MASTER_CATEGORIES = {
             'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'GROCERY', 'INTIMATES', 'JEWELRY', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
-            'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'MOVIE THEATER', 'PODCAST', 'SERIES - AMAZON MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - FOX', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
+            'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'MOVIE THEATER', 'PODCAST', 'SERIES - AMAZON MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - FOX', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
@@ -8457,7 +8459,7 @@
                 const svodCategoriesOnly = [
                     'Uncategorized',
                     'SERIES - AMAZON MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - FOX', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT',
-                    'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS',
+                    'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS',
                     'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'
                 ];
                 select.innerHTML = '<option value="">Select SVOD category...</option>';
@@ -8488,6 +8490,7 @@
                         <option value="SERIES - HBO ENTERTAINMENT">SERIES - HBO ENTERTAINMENT</option>
                         <option value="SERIES - HBO MAX">SERIES - HBO MAX</option>
                         <option value="SERIES - HULU">SERIES - HULU</option>
+                        <option value="SERIES - LIONSGATE TELEVISION">SERIES - LIONSGATE TELEVISION</option>
                         <option value="SERIES - NETFLIX">SERIES - NETFLIX</option>
                         <option value="SERIES - PARAMOUNT TV STUDIOS">SERIES - PARAMOUNT TV STUDIOS</option>
                         <option value="SERIES - SONY">SERIES - SONY</option>
