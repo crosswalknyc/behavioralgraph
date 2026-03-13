@@ -2157,50 +2157,45 @@ def ai_actor_demographic_review(df, brand_category, project_name, brands):
 
     prompt = f"""You are a senior US entertainment audience demographics expert. Determine PRECISE audience demographics for this actor/actress.
 
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
+- ONLY increase above 10% if the person IS openly LGBTQ+ or played an iconic LGBTQ+ role for years.
+- HARD CAP: NEVER assign >15% unless the person IS openly LGBTQ+. NEVER assign >30% to anyone.
+- Under-16 age: HARD CAP of 4% for adult content. Only Disney/Nickelodeon/children's stars go higher.
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
 STEP 1 — IDENTIFY THIS PERSON:
-Who is "{subject_clean}"? Determine their:
-- Gender, race/ethnicity, approximate age
-- What they are most known for (specific roles, shows, movies, genres)
-- Career peak era and current relevance
-- Whether they are openly LGBTQ+, or known for playing iconic LGBTQ+ characters
-- Whether they are considered a heartthrob, sex symbol, or have a fanbase that skews toward a particular gender
+Who is "{subject_clean}"? Determine their gender, race/ethnicity, approximate age, what they are most known for, career peak era, whether openly LGBTQ+ (MUST be documented/public), whether known for iconic LGBTQ+ characters, and heartthrob/gender appeal.
 
 STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
-Think about who ACTUALLY follows and digitally engages with THIS specific person. Every actor is different — do NOT apply generic rules. Reason about this individual:
 
-GENDER — depends entirely on the person:
-- Most male actors have roughly balanced audiences (48-55% male). But a male heartthrob or romantic lead (Timothée Chalamet, young Brad Pitt, Harry Styles type) can have 55-65% female audiences.
-- Male comedians doing stand-up often skew male (52-58%).
-- Female actresses typically skew 55-65% female, but action/superhero stars can be closer to 50/50.
-- Think about THIS person's specific appeal and content.
+GENDER — depends on the person:
+- Most male actors: 48-55% male. Male heartthrobs/romantic leads: 55-65% female.
+- Male comedians doing stand-up: 52-58% male.
+- Female actresses: 55-65% female. Action/superhero stars: closer to 50/50.
 
-ETHNICITY — must reflect the actor's identity and content:
-- A Black actor's audience has significantly higher Black representation than the US baseline of 13%. How much higher depends on their content: mainstream crossover (28-38%), primarily Black-audience content (40-55%), or general (25-35%).
-- The White percentage for a non-White actor should be LOWER than the US average of ~58%.
-- Latino, Asian, and other non-White actors similarly draw elevated same-ethnicity audiences.
-- White actors in mainstream content: typically 55-65% White.
+ETHNICITY — must reflect the actor's identity:
+- Black actor: mainstream crossover 28-38% Black, primarily Black content 40-55% Black.
+- White actors mainstream: 55-65% White.
+- Latino/Asian actors: elevated same-ethnicity audiences.
 
-AGE — depends on the person's career and content:
-- Under 16 is typically very low (<4%) but CAN be higher if the actor is in children's or family content (Disney stars, Nickelodeon actors, etc.).
-- 16-18 can be higher for actors in teen content (Stranger Things cast, teen dramas).
-- Age distribution correlates with career peak: a 90s star draws 40-60+ audiences; a current young star draws 18-30s.
+AGE — career peak drives age distribution:
+- Under-16: <4% unless children's/family content. 16-18: <5% unless teen content.
+- 90s stars: peak 40-60+. Current young stars: peak 18-30s.
 
-SEXUAL ORIENTATION — depends on the person:
-- Openly LGBTQ+ actors: 18-30% YES depending on how central that is to their public identity.
-- Actors famous for playing iconic LGBTQ+ characters (e.g., someone who played a beloved lesbian/gay character for multiple seasons): 15-25% YES even if the actor is straight, because the LGBTQ+ community deeply engages with that content.
-- Otherwise, US baseline is ~7-8%.
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. This is the starting point for ALL actors.
+- Straight actors with NO LGBTQ+ connection: 6-8%. DO NOT go above 8%.
+- Actors who played an iconic LGBTQ+ role (multi-season): 12-18%.
+- Openly LGBTQ+ actors: 18-28% depending on how central it is to their identity.
+- DO NOT assign 15%+ to any straight actor who has not played a major LGBTQ+ role.
 
-INCOME/EDUCATION — depends on the content type:
-- Prestige TV/indie film audiences: slightly more educated, moderate-high income.
-- Blockbuster/action: middle income, average education.
-- Comedy: middle income.
+INCOME/EDUCATION: Prestige TV/indie = educated, moderate-high income. Blockbuster = middle. Comedy = middle.
 
-PARENTAL STATUS/RELATIONSHIP — consider the audience age and content:
-- Older audiences = more likely married with kids.
-- Young audiences = more single, fewer kids.
+PARENTAL/RELATIONSHIP: Older audience = more married with kids. Young = single, fewer kids.
 
 STEP 3 — EVALUATE CURRENT DATA:
 {demo_block}
@@ -2215,7 +2210,7 @@ Each corrected category sums to 100. Be PRECISE with numbers. JSON only, no mark
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.15,
+            temperature=0.05,
             max_tokens=1500
         )
         text = resp.choices[0].message.content.strip()
@@ -2367,43 +2362,44 @@ def ai_creator_demographic_review(df, brand_category, project_name, brands):
 
     prompt = f"""You are a senior US digital audience demographics expert specializing in creators, influencers, and social media personalities. Determine PRECISE audience demographics for this creator/influencer.
 
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
+- ONLY increase above 10% if the person IS openly LGBTQ+ or creates explicitly LGBTQ+ content.
+- HARD CAP: NEVER assign >15% unless the person IS openly LGBTQ+. NEVER assign >30% to anyone.
+- Under-16 age: max 5% unless the creator specifically targets children/teens (then 8-15%).
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
 STEP 1 — IDENTIFY THIS PERSON:
-Who is "{subject_clean}"? Determine their gender, race/ethnicity, age, what platform(s) they're on, what content they create, whether they're LGBTQ+ or create LGBTQ+ content, and whether they appeal primarily to one gender.
+Who is "{subject_clean}"? Determine their gender, race/ethnicity, age, platform(s), content type, whether openly LGBTQ+ (MUST be documented), and gender appeal.
 
 STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
-Every creator is unique. Reason about THIS specific person — do NOT generalize.
 
-GENDER — depends on the creator and their content:
-- Beauty/fashion/lifestyle creators typically skew 65-80% female.
-- Gaming/tech creators typically skew 65-80% male.
-- Comedy varies: male bro humor skews male; female relatable content skews female.
-- Fitness depends: bodybuilding skews male, yoga/pilates skews female.
-- Think about THIS person's specific appeal.
+GENDER — depends on content type:
+- Beauty/fashion/lifestyle: 65-80% female. Gaming/tech: 65-80% male.
+- Comedy: male bro humor = male-skewing; pranks = 60-70% male. Female relatable = female.
+- Fitness: bodybuilding = male, yoga/pilates = female.
 
-ETHNICITY — reflects the creator's identity:
-- A Black creator's audience: culturally Black content = 40-55% Black; mainstream crossover = 25-38% Black.
-- Latino/Asian creators draw elevated same-ethnicity audiences.
-- The creator's OWN ethnicity heavily shapes their community.
+ETHNICITY — creator's OWN ethnicity is #1 factor:
+- Black creator: culturally Black content 40-55% Black; mainstream crossover 25-38% Black.
+- Latino/Asian: elevated same-ethnicity. White mainstream: 55-65% White.
 
-AGE — depends on platform and content:
-- TikTok-native: peak 16-25, under-16 can be 8-15% for teen-popular stars.
-- YouTube: broader 18-35 core.
-- Instagram: 18-34 core.
-- Twitch: 16-30, notable under-18.
-- Podcasters: older, 25-45.
+AGE — depends on platform:
+- TikTok-native: peak 16-25. YouTube: broader 18-35. Instagram: 18-34. Twitch: 16-30. Podcasters: 25-45.
+- Under-16: max 5% unless specifically teen-targeted content.
 
-SEXUAL ORIENTATION:
-- Openly LGBTQ+ creators: 20-35% YES.
-- Beauty/drag/fashion creators often have elevated LGBTQ+ audiences (12-18%).
-- Younger audiences trend higher (~10-12%).
-- Otherwise ~7-8% baseline.
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. This is the starting point for ALL creators.
+- Straight creators with mainstream content: 6-8%. DO NOT go above 8%.
+- Beauty/drag/fashion creators (not openly LGBTQ+): 10-14%.
+- Openly LGBTQ+ creators: 20-30%.
+- DO NOT assign 15%+ to any straight mainstream creator.
 
-INCOME/EDUCATION: Young audiences = lower income, less education. Luxury influencers = higher income audience. Consider audience age for education levels.
+INCOME/EDUCATION: Young audience = lower income/education. Luxury = higher income.
 
-PARENTAL STATUS/RELATIONSHIP: Young audiences = more single, fewer kids. Family/mommy creators = high parental %.
+PARENTAL/RELATIONSHIP: Young = single, fewer kids. Family/mommy creators = high parental %.
 
 STEP 3 — EVALUATE CURRENT DATA:
 {demo_block}
@@ -2418,7 +2414,7 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.15,
+            temperature=0.05,
             max_tokens=1500
         )
         text = resp.choices[0].message.content.strip()
@@ -2570,44 +2566,45 @@ def ai_athlete_demographic_review(df, brand_category, project_name, brands):
 
     prompt = f"""You are a senior US sports audience demographics expert. Determine PRECISE digital audience demographics for this athlete.
 
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
+- ONLY increase above 10% if the athlete IS openly LGBTQ+ or plays in a sport with documented elevated LGBTQ+ fandom.
+- HARD CAP: NEVER assign >12% unless the athlete IS openly LGBTQ+. NEVER assign >28% to anyone.
+- Under-16 age: HARD CAP of 3% for athletes. Sports audiences are adult.
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
 STEP 1 — IDENTIFY THIS ATHLETE:
-Who is "{subject_clean}"? Determine their sport, race/ethnicity, gender, age, whether active or retired, peak era, mainstream fame level, whether openly LGBTQ+, and crossover appeal (media, business, endorsements).
+Who is "{subject_clean}"? Sport, race/ethnicity, gender, age, active/retired, peak era, fame level, openly LGBTQ+ (MUST be documented/public), crossover appeal.
 
 STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
-Every athlete is different. Reason about THIS specific person.
 
-GENDER — depends on the athlete and sport:
-- Most male athletes in male-dominated sports (NFL, NBA, MLB, NHL): 60-75% male.
-- Male heartthrob athletes can skew 50-55% female.
-- Female athletes: 45-55% female typically. Tennis/gymnastics female stars may have 50-60% male audience.
-- WWE/wrestling: 65-75% male. Golf: 70-80% male. Skateboarding: 70-80% male. Hockey: 70-80% male.
-- Athletes with major business/media crossover have broader, less male-dominated audiences.
+GENDER — depends on sport and appeal:
+- Most male athletes in male sports (NFL, NBA, MLB, NHL): 60-75% male.
+- Male heartthrob athletes: 50-55% female. WWE/wrestling: 65-75% male.
+- Golf/skateboarding/hockey: 70-80% male. Female athletes: 45-55% female.
 
-ETHNICITY — reflects the athlete's identity AND their sport:
-- Black NBA/NFL player: 35-50% Black audience. Mainstream icons: 30-40% Black with more White crossover.
-- White athlete in predominantly White sport (golf, hockey): 65-80% White.
-- Latino athlete: 20-40% Latinx depending on sport and cultural identity.
-- The athlete's OWN race/ethnicity draws elevated same-race audience.
+ETHNICITY — athlete's identity + sport:
+- Black NBA/NFL: 35-50% Black. Mainstream icons: 30-40% Black.
+- White in White sport (golf, hockey): 65-80% White. Latino: 20-40% Latinx.
 
-AGE — depends on career stage:
-- Active young athlete (20s): audience peaks 18-30.
-- Active veteran (30s): audience 25-40.
-- Recently retired: audience 25-45.
-- Long retired/legacy: audience skews 35-60+.
-- Under-16 typically <3% for athletes.
+AGE — career stage:
+- Active young (20s): peak 18-30. Veteran (30s): 25-40. Retired: 25-45. Legacy: 35-60+.
+- Under-16: <3%. Under-18: <5%.
 
-SEXUAL ORIENTATION:
-- Openly LGBTQ+ athletes: 20-30% YES.
-- LGBTQ+-popular sports (women's soccer, figure skating): 10-15% YES.
-- Most mainstream male athletes: 5-7% YES.
-- Female athletes generally: 8-12% YES.
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. This is the starting point for ALL athletes.
+- Straight male athletes in mainstream sports: 5-7%. DO NOT go above 7%.
+- Female athletes generally: 7-10%.
+- LGBTQ+-popular sports (women's soccer, figure skating) for straight athletes: 8-12%.
+- Openly LGBTQ+ athletes: 18-25%.
+- DO NOT assign 12%+ to any straight male athlete.
 
-EDUCATION: Golf/tennis fans = above average. NFL/NBA = mixed. INCOME: Golf/tennis = higher. NBA/NFL = middle.
+EDUCATION/INCOME: Golf/tennis = above average. NBA/NFL = mixed.
 
-PARENTAL/RELATIONSHIP: Older audience = more married with kids. Family-oriented athletes = more parents.
+PARENTAL/RELATIONSHIP: Older = more married with kids.
 
 STEP 3 — EVALUATE CURRENT DATA:
 {demo_block}
@@ -2622,7 +2619,7 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.15,
+            temperature=0.05,
             max_tokens=2000
         )
         text = resp.choices[0].message.content.strip()
@@ -2774,34 +2771,43 @@ def ai_host_demographic_review(df, brand_category, project_name, brands):
 
     prompt = f"""You are a premium-tier US media audience demographics analyst. Determine PRECISE digital audience demographics for this host/personality.
 
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
+- ONLY increase above 10% if the person IS openly LGBTQ+ or works in a field with documented elevated LGBTQ+ audience.
+- HARD CAP: NEVER assign >15% unless the person IS openly LGBTQ+. NEVER assign >30% to anyone.
+- Under-16 age: HARD CAP of 3% for hosts/personalities. These audiences are adult.
+- Shark Tank panelists, chefs, and business figures skew OLDER (peak 35-60+).
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
 STEP 1 — IDENTIFY THIS PERSON:
-Who is "{subject_clean}"? Determine their identity, race/ethnicity, gender, age, platform, what type of personality they are (late night host, celebrity chef, business/investor, model/fashion icon, comedian, science/education, motivational/wellness, reality TV star, talk show host), whether openly LGBTQ+, and crossover appeal.
+Who is "{subject_clean}"? Type (late night, chef, investor, model, comedian, science, motivational, reality star, talk show), race/ethnicity, gender, age, platform, openly LGBTQ+ (MUST be documented).
 
 STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
 
 GENDER — depends on personality type:
-- Late night hosts: 55-65% male. Celebrity chefs (Food Network): 55-65% female.
+- Late night hosts: 55-65% male. Chefs (Food Network): 55-65% female.
 - Business/investor (Shark Tank): 55-62% male. Models/fashion: 70-85% female.
 - Male comedians: 60-70% male. Science/education: 60-70% male.
-- Motivational speakers: 55-65% male. Reality TV: 55-65% female.
+- Reality TV: 55-65% female.
 
 ETHNICITY — person's OWN ethnicity is #1 driver:
-- Black personality: 30-50% Black. Latino/a: 25-40% Latinx.
-- Asian personality: 15-25% Asian. Middle Eastern: elevated Asian/Other.
+- Black: 30-50% Black. Latino/a: 25-40% Latinx. Asian: 15-25% Asian.
 - White mainstream: 55-70% White.
 
-AGE — depends on platform and era:
-- Active TV hosts: late night 25-55, food TV 30-60+, daytime 35-65.
-- Models/fashion: 18-35 core. Business: 30-55+.
-- Under-16: almost always <3%.
+AGE — hosts/personalities skew ADULT:
+- Under-16: <3%. Under-18: <5%. These are adult audiences.
+- Shark Tank/business: peak 30-55+. Chefs: peak 30-60+. Late night: 25-55.
+- Models/fashion: 18-35. Older hosts/investors: skew 40-65+.
 
-SEXUAL ORIENTATION:
-- Openly LGBTQ+ (central to identity): 30-40% YES.
-- Fashion/beauty world: 12-18% YES. Models: 10-15%.
-- Most straight male personalities: 5-8% YES.
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. This is the starting point for ALL hosts/personalities.
+- Straight male hosts/chefs/investors: 5-7%. DO NOT go above 8%.
+- Fashion/beauty adjacent (not openly LGBTQ+): 8-12%.
+- Openly LGBTQ+ (central to their identity): 25-35%.
+- DO NOT assign 12%+ to any straight mainstream host/chef/investor.
 
 STEP 3 — EVALUATE CURRENT DATA:
 {demo_block}
@@ -2816,7 +2822,7 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.15,
+            temperature=0.05,
             max_tokens=2000
         )
         text = resp.choices[0].message.content.strip()
@@ -2966,45 +2972,50 @@ def ai_musician_demographic_review(df, brand_category, project_name, brands):
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a premium-tier US music audience demographics analyst with encyclopedic knowledge of artists, bands, and music genres. Determine PRECISE digital audience demographics for this musician/band.
+    prompt = f"""You are a premium-tier US music audience demographics analyst. Determine PRECISE digital audience demographics for this musician/band.
+
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY artist.
+- ONLY increase above 10% if the artist IS openly LGBTQ+ or is a documented LGBTQ+ icon (Gaga, Cher, Beyoncé level).
+- HARD CAP: NEVER assign >15% unless the artist IS openly LGBTQ+ or is a top-tier LGBTQ+ icon.
+- NEVER assign >30% to anyone — even Elton John's audience is not >30% LGBTQ+.
+- Straight mainstream artists: 5-8%. Country/rock/metal: 5-7%. DO NOT go above these.
+- Under-16 age: max 5% unless teen pop (Olivia Rodrigo, Sabrina Carpenter = 8-12%).
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
 
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
 === STEP 1: IDENTIFY THIS ARTIST ===
-Who is "{subject_clean}"? Determine: genre, race/ethnicity, gender, age, era (active/legacy/deceased), whether openly LGBTQ+, mainstream vs niche status, and crossover appeal.
+Who is "{subject_clean}"? Genre, race/ethnicity, gender, age, era, openly LGBTQ+ (MUST be documented/public), mainstream vs niche, crossover appeal.
 
 === STEP 2: GENRE-SPECIFIC AUDIENCE RULES ===
 
 GENDER by genre:
-- Pop female artists (Taylor, Beyoncé, Gaga): 65-80% female.
-- Pop male artists (JT, Bruno Mars): 50-60% female.
-- Hip-hop/rap: 55-70% MALE. Female rappers: still only 50-55% female.
-- Country: balanced 50-55%. Male heartthrobs: 55-60% female. Female country: 55-65% female.
-- Rock/metal: 65-80% MALE.
-- K-pop: 70-85% FEMALE.
-- EDM/electronic: 55-65% MALE.
-- R&B/soul: 55-65% female for male artists, 60-70% for female artists.
+- Pop female (Taylor, Beyoncé, Gaga): 65-80% female. Pop male (JT, Bruno): 50-60% female.
+- Hip-hop/rap: 55-70% MALE. Female rappers: 50-55% female.
+- Country: balanced 50-55%. Rock/metal: 65-80% MALE.
+- K-pop: 70-85% FEMALE. EDM: 55-65% MALE.
+- R&B/soul: 55-65% female (male artists), 60-70% female (female artists).
 
 ETHNICITY — artist's OWN ethnicity is #1 factor:
 - Black hip-hop/R&B: 35-50% Black. Massive crossover: 30-40% Black.
 - White country: 70-82% White. White rock/metal: 65-78% White.
-- Latino artists (Spanish-language): 55-65% Latinx. Crossover English: 35-45% Latinx.
-- K-pop: 30-40% Asian, 15-25% Latinx (huge in Latin America), 25-30% White, 5-8% Black.
-- Mixed-race artists draw from multiple communities.
+- Latino Spanish-language: 55-65% Latinx. Crossover English: 35-45% Latinx.
 
 AGE by era and genre:
-- Teen/young adult pop (Olivia Rodrigo, Sabrina Carpenter): under-16 can be 8-15%, peak 18-25.
-- Current mainstream (Drake, Kendrick, Beyoncé): peak 21-35, under-16 <5%.
-- Country: older audience, peak 30-55, minimal under-18.
-- Classic rock/legacy (AC/DC, Metallica, Tom Petty): peak 41-60+, very minimal youth.
-- Deceased/long-retired (Bill Withers, Tina Turner): audience 40-65+.
-- K-pop: young, peak 16-25. EDM: young, peak 18-30.
+- Teen pop: under-16 can be 8-12%, peak 18-25.
+- Current mainstream: peak 21-35, under-16 <5%.
+- Country: older, peak 30-55. Classic rock/legacy: peak 41-60+.
+- Deceased/retired: audience 40-65+.
 
-SEXUAL ORIENTATION:
-- Openly LGBTQ+ (Chappell Roan, Renee Rapp, Elton John, Brandi Carlile): 20-35% YES.
-- LGBTQ+ icons who are straight (Lady Gaga, Beyoncé, Charli XCX): 14-22% YES.
-- Straight mainstream: 5-8% YES. Country: 5-7%. Rock/metal: 5-7%.
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. This is the starting point for ALL musicians.
+- Straight mainstream pop/hip-hop/R&B: 6-8%. DO NOT go above 8%.
+- Country: 5-7%. Rock/metal: 5-7%.
+- LGBTQ+ icons who are STRAIGHT (Lady Gaga, Beyoncé, Cher, Charli XCX): 12-18%. MAX 18%.
+- Openly LGBTQ+ artists (Chappell Roan, Elton John, Brandi Carlile): 20-28%.
+- DO NOT assign 10%+ to any straight artist who is NOT a recognized LGBTQ+ icon.
 
 PARENTAL STATUS: Older audiences = more parents. Teen pop = fewer parents.
 
@@ -3022,7 +3033,7 @@ Each corrected category MUST sum to 100. JSON only, no markdown."""
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.12,
+            temperature=0.05,
             max_tokens=2500
         )
         text = resp.choices[0].message.content.strip()
@@ -3173,30 +3184,40 @@ def ai_politics_demographic_review(df, brand_category, project_name, brands):
 
     prompt = f"""You are a premium-tier US political audience demographics analyst. Determine PRECISE digital audience demographics for this political figure or activist.
 
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
+- ONLY increase above 10% if the person IS openly LGBTQ+ or is a documented strong LGBTQ+ ally.
+- HARD CAP: NEVER assign >15% unless the person IS openly LGBTQ+. NEVER assign >25% to anyone.
+- Under-16 age: HARD CAP of 3%. Political content is ADULT content. Even youth activists: <16 max 5%.
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
 === STEP 1: IDENTIFY THIS PERSON ===
-Who is "{subject_clean}"? Determine: role, party, orientation (progressive/moderate/conservative), race/ethnicity, gender, age, LGBTQ+ status, fame level, primary platform.
+Who is "{subject_clean}"? Role, party, progressive/moderate/conservative, race/ethnicity, gender, age, openly LGBTQ+ (MUST be documented), fame level.
 
 === STEP 2: POLITICAL AUDIENCE RULES ===
 
 GENDER:
 - Republican/conservative men: 55-65% MALE. Conservative women: 45-55% MALE.
 - Democratic/progressive men: 45-55% MALE. Progressive women: 55-70% FEMALE.
-- Trump: ~60% MALE.
 
 ETHNICITY — figure's OWN identity is key driver:
 - White Republican: 75-85% White, 5-8% Black. White Democrat: 55-65% White, 15-22% Black.
 - Black Democrat: 35-50% Black, 25-35% White. Latino/a: 30-45% Latinx.
-- South Asian: 10-18% Asian, broad coalition.
 
-AGE — political content is ADULT content:
-- Under-16: almost ALWAYS <3%. Conservative: peak 41-65+. Progressive: broader, youth-oriented can be 18-35 peak.
-- Youth activists (Greta Thunberg): 15-25% under-18 is acceptable.
+AGE — political audiences are ADULT:
+- Under-16: <3% always. 16-18: <5%. Conservative: peak 41-65+. Progressive: 18-45 peak.
+- Youth activists: under-18 max 10%.
 
-SEXUAL ORIENTATION:
-- Openly LGBTQ+: 20-30% YES. Strong progressive allies: 10-15%. Mainstream Democrats: 8-12%. Republicans: 5-7%.
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. This is the starting point for ALL political figures.
+- Republicans/conservatives: 5-6%. DO NOT go above 7%.
+- Mainstream Democrats: 7-9%. DO NOT go above 10%.
+- Strong progressive allies (AOC, Warren): 10-13%. MAX 13%.
+- Openly LGBTQ+ politicians: 18-25%.
+- DO NOT assign 12%+ to any straight politician who is not a documented strong LGBTQ+ ally.
 
 === STEP 3: EVALUATE ===
 {demo_block}
@@ -3211,7 +3232,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.12,
+            temperature=0.05,
             max_tokens=2500
         )
         text = resp.choices[0].message.content.strip()
@@ -3362,27 +3383,39 @@ def ai_creative_demographic_review(df, brand_category, project_name, brands):
 
     prompt = f"""You are a premium-tier US entertainment audience demographics analyst. Determine PRECISE digital audience demographics for this creative professional.
 
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
+- ONLY increase above 10% if the person IS openly LGBTQ+ or their work is explicitly LGBTQ+-centered.
+- HARD CAP: NEVER assign >12% unless the person IS openly LGBTQ+. NEVER assign >28% to anyone.
+- Under-16 age: HARD CAP of 3%. Behind-the-camera creative audiences are adult.
+- Male action/thriller/sci-fi directors: audiences are MALE-skewing (60-72%). Do NOT default to female.
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
 === STEP 1: IDENTIFY THIS PERSON ===
-Who is "{subject_clean}"? Determine: role, major works, genre, race/ethnicity, gender, age, LGBTQ+ status, mainstream vs niche.
+Who is "{subject_clean}"? Role, major works, genre, race/ethnicity, gender, age, openly LGBTQ+ (MUST be documented), mainstream vs niche.
 
 === STEP 2: CREATIVE AUDIENCE RULES ===
 
 GENDER:
-- Blockbuster action directors (Nolan, Cameron): 62-72% MALE.
-- Genre/cult directors (Tarantino): 65-75% MALE.
-- Female-skewing TV showrunners (Rhimes): 65-75% FEMALE.
-- Western/rural creators (Sheridan): 60-70% MALE.
-- Balanced mainstream (Levy, Spielberg): 52-58% MALE.
+- Action directors (Nolan, Cameron): 62-72% MALE. Genre/cult (Tarantino): 65-75% MALE.
+- Female-skewing showrunners (Rhimes): 65-75% FEMALE.
+- Western/rural (Sheridan): 60-70% MALE. Balanced mainstream: 52-58% MALE.
 - Procedural TV (Dick Wolf): 50-55% MALE.
 
-ETHNICITY: Creator's OWN ethnicity + audience of their works. Black directors of Black stories: 35-45% Black. White blockbuster: 60-70% White. Rural/Western: 75-82% White.
+ETHNICITY: Creator's OWN ethnicity + works. Black directors of Black stories: 35-45% Black. White blockbuster: 60-70% White. Rural/Western: 75-82% White.
 
-AGE: Under-16 <3%. Blockbuster: peak 25-45. Prestige TV: 30-55. Legacy: 35-60+. Procedural: 40-65+.
+AGE: Under-16 <3%. Under-18 <5%. Blockbuster: 25-45. Prestige: 30-55. Legacy: 35-60+. Procedural: 40-65+.
 
-SEXUAL ORIENTATION: Openly LGBTQ+: 20-30%. LGBTQ+-inclusive works: 12-16%. Mainstream male: 5-8%. Rural/conservative: 4-6%.
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. This is the starting point for ALL creative professionals.
+- Straight male directors/writers with mainstream work: 5-7%. DO NOT go above 8%.
+- Rural/conservative-themed creators (Sheridan): 4-6%.
+- Creators of LGBTQ+-inclusive works (not openly LGBTQ+ themselves): 10-14%.
+- Openly LGBTQ+ creators: 18-25%.
+- DO NOT assign 10%+ to any straight mainstream director/writer.
 
 === STEP 3: EVALUATE ===
 {demo_block}
@@ -3397,7 +3430,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.12,
+            temperature=0.05,
             max_tokens=2500
         )
         text = resp.choices[0].message.content.strip()
@@ -3549,45 +3582,50 @@ def ai_series_demographic_review(df, brand_category, project_name, brands):
 
     prompt = f"""You are a premium-tier US television audience demographics analyst. Determine PRECISE VIEWER demographics for this TV show.
 
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY show.
+- ONLY increase above 10% if the show HAS prominent LGBTQ+ characters or is LGBTQ+-centered.
+- HARD CAP: NEVER assign >18% unless the show IS explicitly LGBTQ+-centered (The L Word, Queer Eye, Will & Grace, Pose).
+- NEVER assign >35% to any show — even LGBTQ+-centered shows.
+- Procedurals, Westerns, action shows: 5-7%. DO NOT go above 8%.
+- Under-16 age: max 3% for adult dramas/procedurals/Westerns. Only teen/YA shows go to 8-12%.
+- Procedurals (L&O, FBI, Chicago franchise) skew OLD (peak 40-65+) and slightly FEMALE.
+- Western/Sheridan shows (Yellowstone, 1883, Landman) skew OLD (peak 35-60+) and MALE.
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+
 SHOW: "{subject_clean}"
 CATEGORY: {brand_category}
 
 === STEP 1: IDENTIFY THIS SHOW ===
-What show is this? Platform, genre, cast demographics, themes, target age, era.
+What show is this? Platform, genre, cast demographics, themes, target age, era. Is it LGBTQ+-centered? Does it have prominent LGBTQ+ characters?
 
 === STEP 2: TV SHOW VIEWER RULES ===
 
 GENDER by genre:
-- Action/thriller/sci-fi: 60-72% MALE.
-- Prestige drama male leads: 55-65% MALE.
-- Western/rural: 55-65% MALE.
-- Procedural crime: 50-55% FEMALE.
-- Medical drama: 55-62% FEMALE.
-- Comedy/sitcom: 55-65% MALE (edgy) or 48-55% FEMALE (prestige).
-- Reality/dating: 65-80% FEMALE.
-- Teen/YA: 50-55% FEMALE.
-- Romance/period drama: 65-75% FEMALE.
-- Fantasy/epic: 55-65% MALE.
+- Action/thriller/sci-fi: 60-72% MALE. Fantasy/epic: 55-65% MALE.
+- Prestige drama male leads: 55-65% MALE. Western/rural: 55-65% MALE.
+- Procedural crime: 50-55% FEMALE. Medical drama: 55-62% FEMALE.
+- Edgy comedy: 55-65% MALE. Prestige comedy: 48-55% FEMALE.
+- Reality/dating: 65-80% FEMALE. Romance/period: 65-75% FEMALE.
 
-ETHNICITY — cast and content drive viewership:
+ETHNICITY — cast and content:
 - Predominantly Black casts: 40-55% Black, 25-35% White.
-- White casts in White settings: 65-78% White.
-- Diverse ensembles: 50-60% White, 15-25% Black.
+- White casts/settings: 65-78% White. Diverse ensembles: 50-60% White.
 
 AGE:
-- Teen/YA: 10-20% under-18, peak 16-25.
-- Prestige drama: peak 25-45, under-18 <5%.
-- Procedurals: peak 35-60+, under-18 <3%.
-- Western: peak 35-60+.
-- Adult animation: peak 18-35.
-- Under-16 <5% for most shows.
+- Procedurals: peak 35-60+, under-16 <2%. Westerns: peak 35-60+, under-16 <2%.
+- Prestige: peak 25-45, under-16 <3%. Reality: varies by type, under-16 <3%.
+- Teen/YA only: under-18 can be 10-20%.
+- Adult animation: peak 18-35, under-16 <4%.
 
-SEXUAL ORIENTATION:
-- LGBTQ+-centered: 25-40% YES.
-- Prominent LGBTQ+ characters: 12-18% YES.
-- Prestige with cultural cachet: 8-12% YES.
-- Mainstream procedurals/Westerns/action: 5-8% YES.
-- Conservative-coded: 4-6% YES.
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. This is the starting point for ALL TV shows.
+- Conservative-coded shows (Yellowstone, Tulsa King, Lioness): 4-6%.
+- Procedurals, Westerns, action shows: 5-7%. DO NOT go above 8%.
+- Mainstream drama/comedy (no LGBTQ+ themes): 7-9%.
+- Shows with prominent LGBTQ+ characters/storylines (White Lotus, Last of Us, Sandman): 12-16%.
+- LGBTQ+-centered shows (The L Word, Queer Eye, Will & Grace, Hacks): 25-35%.
+- DO NOT assign 10%+ to any show without documented LGBTQ+ characters/themes.
 
 === STEP 3: EVALUATE ===
 {demo_block}
@@ -3602,7 +3640,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.12,
+            temperature=0.05,
             max_tokens=2500
         )
         text = resp.choices[0].message.content.strip()
