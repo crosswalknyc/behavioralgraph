@@ -412,6 +412,85 @@ def _get_openai_client():
         print(f"⚠️ OpenAI client init failed in bg.py: {e}")
         return None
 
+
+_demo_research_cache = {}
+
+def _research_brand_demographics(client, subject_name, brand_category):
+    """Use gpt-4o-search-preview to web-search real demographic data for a brand.
+
+    Returns a text summary of web-sourced demographic info, or "" on failure.
+    Results are cached in-memory so the same brand is never researched twice
+    in a single pipeline run.
+    """
+    if not client or not subject_name:
+        return ""
+
+    cache_key = f"{subject_name}||{brand_category}"
+    if cache_key in _demo_research_cache:
+        return _demo_research_cache[cache_key]
+
+    clean_name = subject_name.replace('_', ' ').replace('-', ' ').strip()
+
+    cat_context = {
+        'ACTOR': 'actor/celebrity fan base',
+        'CREATOR': 'content creator/influencer follower base',
+        'INFLUENCER': 'content creator/influencer follower base',
+        'ATHLETE': 'athlete/sports figure fan base',
+        'HOST': 'TV host/personality viewer base',
+        'MUSICIAN': 'musician/band fan and listener base',
+        'BAND': 'musician/band fan and listener base',
+        'POLITICS': 'political figure/activist supporter base',
+        'ACTIVIST': 'political figure/activist supporter base',
+        'WRITER': 'writer/director/author audience',
+        'DIRECTOR': 'writer/director/author audience',
+        'ARTIST': 'writer/director/author audience',
+        'SERIES': 'TV series viewer audience',
+        'PODCAST': 'podcast listener audience',
+        'APP': 'app/platform user base',
+        'PLATFORM': 'app/platform user base',
+        'BROADCAST': 'broadcast/cable TV network digital audience',
+        'CABLE': 'broadcast/cable TV network digital audience',
+    }
+    audience_type = 'audience'
+    bc_upper = (brand_category or '').upper()
+    for keyword, desc in cat_context.items():
+        if keyword in bc_upper:
+            audience_type = desc
+            break
+
+    prompt = (
+        f'Search the web for current demographic data about "{clean_name}" '
+        f'({audience_type}). Report what you find about:\n'
+        f'- Age distribution (median age, age brackets)\n'
+        f'- Gender split (% male vs female)\n'
+        f'- Ethnicity / racial composition\n'
+        f'- Income level of the audience\n'
+        f'- Education level\n'
+        f'- Any known data on LGBTQ+ representation\n'
+        f'- Relationship / marital status if available\n'
+        f'- Parental status if available\n\n'
+        f'Cite specific sources (Nielsen, Comscore, Pew Research, Statista, '
+        f'Morning Consult, YouGov, etc.). Be concise — just the key numbers '
+        f'and percentages. If no data is available for a category, say so.'
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-search-preview',
+            messages=[{'role': 'user', 'content': prompt}],
+            max_tokens=800,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        _demo_research_cache[cache_key] = text
+        if text:
+            print(f"🔍 Web research for '{clean_name}': {len(text)} chars retrieved")
+        return text
+    except Exception as e:
+        print(f"⚠️  Web research failed for '{clean_name}': {e}")
+        _demo_research_cache[cache_key] = ""
+        return ""
+
+
 # Optional S3 support for caching
 try:
     import boto3
@@ -2112,6 +2191,14 @@ def ai_actor_demographic_review(df, brand_category, project_name, brands):
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -2197,6 +2284,7 @@ INCOME/EDUCATION: Prestige TV/indie = educated, moderate-high income. Blockbuste
 
 PARENTAL/RELATIONSHIP: Older audience = more married with kids. Young = single, fewer kids.
 
+{research_block}
 STEP 3 — EVALUATE CURRENT DATA:
 {demo_block}
 
@@ -2317,6 +2405,14 @@ def ai_creator_demographic_review(df, brand_category, project_name, brands):
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -2401,6 +2497,7 @@ INCOME/EDUCATION: Young audience = lower income/education. Luxury = higher incom
 
 PARENTAL/RELATIONSHIP: Young = single, fewer kids. Family/mommy creators = high parental %.
 
+{research_block}
 STEP 3 — EVALUATE CURRENT DATA:
 {demo_block}
 
@@ -2521,6 +2618,14 @@ def ai_athlete_demographic_review(df, brand_category, project_name, brands):
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -2606,6 +2711,7 @@ EDUCATION/INCOME: Golf/tennis = above average. NBA/NFL = mixed.
 
 PARENTAL/RELATIONSHIP: Older = more married with kids.
 
+{research_block}
 STEP 3 — EVALUATE CURRENT DATA:
 {demo_block}
 
@@ -2726,6 +2832,14 @@ def ai_host_demographic_review(df, brand_category, project_name, brands):
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -2809,6 +2923,7 @@ SEXUAL ORIENTATION — STRICT RULES:
 - Openly LGBTQ+ (central to their identity): 25-35%.
 - DO NOT assign 12%+ to any straight mainstream host/chef/investor.
 
+{research_block}
 STEP 3 — EVALUATE CURRENT DATA:
 {demo_block}
 
@@ -2929,6 +3044,14 @@ def ai_musician_demographic_review(df, brand_category, project_name, brands):
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -3019,6 +3142,7 @@ SEXUAL ORIENTATION — STRICT RULES:
 
 PARENTAL STATUS: Older audiences = more parents. Teen pop = fewer parents.
 
+{research_block}
 === STEP 3: EVALUATE CURRENT DATA ===
 {demo_block}
 
@@ -3139,6 +3263,14 @@ def ai_politics_demographic_review(df, brand_category, project_name, brands):
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -3219,6 +3351,7 @@ SEXUAL ORIENTATION — STRICT RULES:
 - Openly LGBTQ+ politicians: 18-25%.
 - DO NOT assign 12%+ to any straight politician who is not a documented strong LGBTQ+ ally.
 
+{research_block}
 === STEP 3: EVALUATE ===
 {demo_block}
 
@@ -3338,6 +3471,14 @@ def ai_creative_demographic_review(df, brand_category, project_name, brands):
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -3417,6 +3558,7 @@ SEXUAL ORIENTATION — STRICT RULES:
 - Openly LGBTQ+ creators: 18-25%.
 - DO NOT assign 10%+ to any straight mainstream director/writer.
 
+{research_block}
 === STEP 3: EVALUATE ===
 {demo_block}
 
@@ -3537,6 +3679,14 @@ def ai_series_demographic_review(df, brand_category, project_name, brands):
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -3627,6 +3777,7 @@ SEXUAL ORIENTATION — STRICT RULES:
 - LGBTQ+-centered shows (The L Word, Queer Eye, Will & Grace, Hacks): 25-35%.
 - DO NOT assign 10%+ to any show without documented LGBTQ+ characters/themes.
 
+{research_block}
 === STEP 3: EVALUATE ===
 {demo_block}
 
@@ -3747,6 +3898,14 @@ def ai_podcast_demographic_review(df, brand_category, project_name, brands):
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -3827,6 +3986,7 @@ SEXUAL ORIENTATION — STRICT RULES:
 - Female lifestyle: 8-12%. LGBTQ+ hosts: 10-14%. LGBTQ+-focused: 25-35%.
 - DO NOT assign 10%+ without LGBTQ+ hosts or content.
 
+{research_block}
 === STEP 3: EVALUATE ===
 {demo_block}
 
@@ -3948,6 +4108,14 @@ def ai_app_platform_demographic_review(df, brand_category, project_name, brands)
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -4076,6 +4244,7 @@ SEXUAL ORIENTATION — STRICT RULES:
 - LGBTQ+-specific (Grindr, HER, Scruff): 85-95%.
 - DO NOT assign 10%+ without clear LGBTQ+ relevance.
 
+{research_block}
 === STEP 3: EVALUATE ===
 {demo_block}
 
@@ -4197,6 +4366,14 @@ def ai_broadcast_cable_demographic_review(df, brand_category, project_name, bran
 
     subject = project_name or (brands[0] if brands else 'Unknown')
     subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
 
     sample_raw = 0
     ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -4342,6 +4519,7 @@ SEXUAL ORIENTATION — STRICT RULES:
 - Bravo: 12-18% (strong LGBTQ+ following — Real Housewives, drag culture).
 - DO NOT assign 10%+ to mainstream broadcast networks without clear justification.
 
+{research_block}
 === STEP 3: EVALUATE ===
 {demo_block}
 
