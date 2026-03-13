@@ -28669,12 +28669,17 @@
         let dashboardProfilePolling = null;
         
         const SESSION_JOBS_CACHE_KEY = 'bg_jobs_session_cache';
+        const SESSION_JOBS_CACHE_TTL = 60000; // 60s — ensures admin changes appear after page refresh
         function getSessionJobsCache() {
             try {
                 const raw = sessionStorage.getItem(SESSION_JOBS_CACHE_KEY);
                 if (!raw) return null;
                 const data = JSON.parse(raw);
                 if (data.loading || !Array.isArray(data.jobs)) return null;
+                if (data._ts && Date.now() - data._ts > SESSION_JOBS_CACHE_TTL) {
+                    sessionStorage.removeItem(SESSION_JOBS_CACHE_KEY);
+                    return null;
+                }
                 return data;
             } catch (e) { return null; }
         }
@@ -28685,7 +28690,8 @@
                     jobs: data.jobs || [],
                     categories: data.categories || [],
                     cache_info: data.cache_info || null,
-                    loading: false
+                    loading: false,
+                    _ts: Date.now()
                 }));
             } catch (e) { /* quota or parse */ }
         }

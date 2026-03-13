@@ -13462,15 +13462,12 @@ def change_file_category():
             else:
                 new_lines.append(line)
         
-        # If no BRAND CATEGORY line found, add it at the beginning
+        # If no BRAND CATEGORY line found, append at end (cache rebuild reads last 200KB)
         if not updated:
-            # Find where to insert (after any header lines, before data)
-            insert_idx = 0
-            for i, line in enumerate(new_lines):
-                if line.strip() and not line.startswith('#'):
-                    insert_idx = i
-                    break
-            new_lines.insert(insert_idx, f'BRAND CATEGORY,{new_category}')
+            while new_lines and not new_lines[-1].strip():
+                new_lines.pop()
+            new_lines.append(f'BRAND CATEGORY,{new_category}')
+            new_lines.append('')
         
         # Upload updated content back to S3
         updated_content = '\n'.join(new_lines)
