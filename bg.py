@@ -2289,6 +2289,209 @@ Each corrected category sums to 100. Be PRECISE with numbers. JSON only, no mark
         return df
 
 
+def ai_creator_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for CREATOR/INFLUENCER profiles.
+
+    When the brand category contains creator or influencer, uses AI to evaluate
+    and correct all 8 demographic categories based on the specific person's
+    platform, content type, identity, and known audience composition.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if 'CREATOR' not in bc_upper and 'INFLUENCER' not in bc_upper:
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping creator demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a senior US digital audience demographics expert specializing in creators, influencers, and social media personalities. Determine PRECISE audience demographics for this creator/influencer.
+
+SUBJECT: "{subject_clean}"
+CATEGORY: {brand_category}
+
+STEP 1 — IDENTIFY THIS PERSON:
+Who is "{subject_clean}"? Determine their gender, race/ethnicity, age, what platform(s) they're on, what content they create, whether they're LGBTQ+ or create LGBTQ+ content, and whether they appeal primarily to one gender.
+
+STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
+Every creator is unique. Reason about THIS specific person — do NOT generalize.
+
+GENDER — depends on the creator and their content:
+- Beauty/fashion/lifestyle creators typically skew 65-80% female.
+- Gaming/tech creators typically skew 65-80% male.
+- Comedy varies: male bro humor skews male; female relatable content skews female.
+- Fitness depends: bodybuilding skews male, yoga/pilates skews female.
+- Think about THIS person's specific appeal.
+
+ETHNICITY — reflects the creator's identity:
+- A Black creator's audience: culturally Black content = 40-55% Black; mainstream crossover = 25-38% Black.
+- Latino/Asian creators draw elevated same-ethnicity audiences.
+- The creator's OWN ethnicity heavily shapes their community.
+
+AGE — depends on platform and content:
+- TikTok-native: peak 16-25, under-16 can be 8-15% for teen-popular stars.
+- YouTube: broader 18-35 core.
+- Instagram: 18-34 core.
+- Twitch: 16-30, notable under-18.
+- Podcasters: older, 25-45.
+
+SEXUAL ORIENTATION:
+- Openly LGBTQ+ creators: 20-35% YES.
+- Beauty/drag/fashion creators often have elevated LGBTQ+ audiences (12-18%).
+- Younger audiences trend higher (~10-12%).
+- Otherwise ~7-8% baseline.
+
+INCOME/EDUCATION: Young audiences = lower income, less education. Luxury influencers = higher income audience. Consider audience age for education levels.
+
+PARENTAL STATUS/RELATIONSHIP: Young audiences = more single, fewer kids. Family/mommy creators = high parental %.
+
+STEP 3 — EVALUATE CURRENT DATA:
+{demo_block}
+
+STEP 4 — VERDICT using EXACTLY these labels:
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.15,
+            max_tokens=1500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"🎬 Creator demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"🎬 Creator demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  Creator demographic review error: {e}")
+        return df
+
+
 def item_level_ai_review(df, archetype, project_name, brands):
     """Second GPT pass: reviews top items per key category in the context
     of the profile's demographics and flags specific contextual anomalies.
@@ -7730,9 +7933,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("🤖 Running item-level AI anomaly detection...")
         df_final = item_level_ai_review(df_final, _archetype, project_name, brands)
 
-    # ── Actor/Actress AI demographic review (GPT-4o) ──────────────────
+    # ── AI demographic review for people categories (GPT-4o) ───────────
     if not is_genpop and brand_category:
         df_final = ai_actor_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_creator_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
