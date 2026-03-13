@@ -3096,6 +3096,195 @@ Each corrected category MUST sum to 100. JSON only, no markdown."""
         return df
 
 
+def ai_politics_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for POLITICS/ACTIVIST profiles.
+
+    Covers politicians, activists, and political figures across the
+    political spectrum with party-specific audience reasoning.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if 'POLITIC' not in bc_upper and 'ACTIVIST' not in bc_upper:
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping politics demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a premium-tier US political audience demographics analyst. Determine PRECISE digital audience demographics for this political figure or activist.
+
+SUBJECT: "{subject_clean}"
+CATEGORY: {brand_category}
+
+=== STEP 1: IDENTIFY THIS PERSON ===
+Who is "{subject_clean}"? Determine: role, party, orientation (progressive/moderate/conservative), race/ethnicity, gender, age, LGBTQ+ status, fame level, primary platform.
+
+=== STEP 2: POLITICAL AUDIENCE RULES ===
+
+GENDER:
+- Republican/conservative men: 55-65% MALE. Conservative women: 45-55% MALE.
+- Democratic/progressive men: 45-55% MALE. Progressive women: 55-70% FEMALE.
+- Trump: ~60% MALE.
+
+ETHNICITY — figure's OWN identity is key driver:
+- White Republican: 75-85% White, 5-8% Black. White Democrat: 55-65% White, 15-22% Black.
+- Black Democrat: 35-50% Black, 25-35% White. Latino/a: 30-45% Latinx.
+- South Asian: 10-18% Asian, broad coalition.
+
+AGE — political content is ADULT content:
+- Under-16: almost ALWAYS <3%. Conservative: peak 41-65+. Progressive: broader, youth-oriented can be 18-35 peak.
+- Youth activists (Greta Thunberg): 15-25% under-18 is acceptable.
+
+SEXUAL ORIENTATION:
+- Openly LGBTQ+: 20-30% YES. Strong progressive allies: 10-15%. Mainstream Democrats: 8-12%. Republicans: 5-7%.
+
+=== STEP 3: EVALUATE ===
+{demo_block}
+
+=== STEP 4: VERDICT ===
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.12,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"🏛️ Politics demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"🏛️ Politics demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  Politics demographic review error: {e}")
+        return df
+
+
 def item_level_ai_review(df, archetype, project_name, brands):
     """Second GPT pass: reviews top items per key category in the context
     of the profile's demographics and flags specific contextual anomalies.
@@ -8544,6 +8733,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ai_athlete_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_host_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_musician_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_politics_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
