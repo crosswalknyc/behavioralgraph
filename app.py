@@ -14247,6 +14247,13 @@ def smart_cache_update():
     if not s3_client:
         return {'new': 0, 'updated': 0, 'deleted': 0, 'total': 0}
     
+    # Always load latest persisted cache first so admin changes from any
+    # worker/service are picked up before we compare timestamps.
+    try:
+        load_persisted_cache()
+    except Exception:
+        pass
+    
     # Ensure profile image cache is loaded for matching images to new files
     if not profile_image_cache:
         load_profile_image_cache()
