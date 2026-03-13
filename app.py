@@ -14294,11 +14294,12 @@ def smart_cache_update():
                     # Update in place, preserving custom metadata
                     for i, job in enumerate(s3_cache['jobs']):
                         if job.get('s3_key') == key:
-                            # Preserve custom image and manually set category if they exist
+                            # Preserve custom image
                             if job.get('custom_image'):
                                 job_data['custom_image'] = job['custom_image']
-                            # Keep existing category if it was manually set (not UNCATEGORIZED)
-                            if job.get('category') and job.get('category') != 'UNCATEGORIZED':
+                            # CSV's BRAND CATEGORY is source of truth (admin changes update the CSV).
+                            # Only fall back to cached category when CSV has no valid BRAND CATEGORY.
+                            if job_data.get('category') == 'UNCATEGORIZED' and job.get('category') and job.get('category') != 'UNCATEGORIZED':
                                 job_data['category'] = job['category']
                             # Preserve custom display_name if it was manually set
                             if job.get('display_name') and job.get('display_name') != job.get('project_name'):
