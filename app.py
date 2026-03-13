@@ -3224,6 +3224,29 @@ def api_reset_company_users(company_name):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/companies/<path:company_name>/reset-run-access', methods=['POST'])
+@requires_admin
+def api_reset_company_run_access(company_name):
+    """Reset run access (allowed_runs + allowed_behavioral_categories) for all users in a company to Quick Select defaults."""
+    try:
+        req = request.get_json() or {}
+        allowed_runs = req.get('allowed_runs', ['*'])
+        allowed_behavioral_categories = req.get('allowed_behavioral_categories', ['*'])
+        data = load_users()
+        users = data.get('users', {})
+        count = 0
+        for username, user in users.items():
+            if (user.get('company') or '').strip().lower() != company_name.strip().lower():
+                continue
+            user['allowed_runs'] = list(allowed_runs) if isinstance(allowed_runs, list) else ['*']
+            user['allowed_behavioral_categories'] = list(allowed_behavioral_categories) if isinstance(allowed_behavioral_categories, list) else ['*']
+            count += 1
+        save_users(data)
+        return jsonify({'success': True, 'message': f'Reset run access for {count} user(s) in {company_name} to Quick Select defaults', 'count': count})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/users/<username>/reset-password', methods=['POST'])
 @requires_admin
 def reset_user_password(username):

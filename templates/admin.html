@@ -2126,6 +2126,24 @@
                         <span style="font-size: 0.75rem; color: var(--text-secondary);">Reset all users in this company to <span id="cdResetSource">default</span> access values.</span>
                     </div>
                 </div>
+
+                <!-- Reset Run Access to Quick Select Defaults -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; margin-top: 0.75rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                        <span style="font-size: 1rem;">🔄</span>
+                        <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-primary); font-weight: 600;">Reset Run Access to Quick Select Defaults</h4>
+                    </div>
+                    <p style="color: var(--text-secondary); font-size: 0.72rem; margin: 0 0 0.75rem;">
+                        Resets <strong>Run Access</strong> and <strong>Behavioral Category Access</strong> for every user in this company to match the global Quick Select defaults (Settings → Quick Selects). Module access, credits, and category subscriptions are not changed.
+                    </p>
+                    <div id="companyQsPreview" style="display: none; margin-bottom: 0.75rem; padding: 0.6rem; background: var(--bg-input); border-radius: 6px; font-size: 0.75rem; max-height: 140px; overflow-y: auto;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <button class="btn btn-small" style="background: var(--accent-cyan, #00bcd4); color: #000; border: none; font-weight: 600;" onclick="resetCompanyRunAccessToQuickSelect()">Apply Quick Select Defaults</button>
+                        <button class="btn btn-small btn-secondary" onclick="previewCompanyQsDefaults()" style="font-size: 0.75rem;">Preview</button>
+                        <span id="companyQsStatus" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -3730,6 +3748,77 @@
                     alert('Error: ' + (data.error || 'Unknown'));
                 }
             } catch (e) { alert('Failed to reset: ' + e.message); }
+        }
+
+        async function _computeQuickSelectRunDefaults() {
+            await loadQuickSelects();
+            if (allRuns.length === 0) await loadCategoriesAndRuns();
+            const qsData = await fetch('/api/admin/quick-selects', { credentials: 'same-origin' }).then(r => r.json());
+            const runsData = qsData.runs || qsData.profiles || {};
+            const selectedRunKeys = allRuns.length === 0 ? ['*'] : allRuns.map(r => r.key).filter(key => runsData[key] !== false);
+            const useAllRuns = selectedRunKeys.length >= allRuns.length || Object.keys(runsData).length === 0;
+            const allowed_runs = useAllRuns ? ['*'] : selectedRunKeys;
+            const behSelected = MASTER_BEHAVIORAL_CATEGORIES.filter(cat => quickSelectBehaviorsData[cat] !== false);
+            const useAllBeh = behSelected.length >= MASTER_BEHAVIORAL_CATEGORIES.length;
+            const allowed_behavioral_categories = useAllBeh ? ['*'] : behSelected;
+            return { allowed_runs, allowed_behavioral_categories, useAllRuns, useAllBeh, runsCount: selectedRunKeys.length, totalRuns: allRuns.length, behCount: behSelected.length, totalBeh: MASTER_BEHAVIORAL_CATEGORIES.length };
+        }
+
+        async function previewCompanyQsDefaults() {
+            const preview = document.getElementById('companyQsPreview');
+            const status = document.getElementById('companyQsStatus');
+            status.textContent = 'Loading...';
+            try {
+                const d = await _computeQuickSelectRunDefaults();
+                const runLabel = d.useAllRuns ? `<strong>All Profiles</strong> (${d.totalRuns})` : `<strong>${d.runsCount}</strong> of ${d.totalRuns} profiles`;
+                const behLabel = d.useAllBeh ? `<strong>All Behavioral Categories</strong> (${d.totalBeh})` : `<strong>${d.behCount}</strong> of ${d.totalBeh} behavioral categories`;
+                let excludedRuns = '';
+                if (!d.useAllRuns) {
+                    const excluded = allRuns.filter(r => !d.allowed_runs.includes(r.key)).map(r => r.name || r.key.replace('.csv','').replace(/_/g,' ')).slice(0, 15);
+                    if (excluded.length) excludedRuns = `<div style="margin-top:0.4rem;color:var(--text-secondary);">Excluded profiles: ${excluded.join(', ')}${excluded.length < (d.totalRuns - d.runsCount) ? '...' : ''}</div>`;
+                }
+                let excludedBeh = '';
+                if (!d.useAllBeh) {
+                    const excluded = MASTER_BEHAVIORAL_CATEGORIES.filter(c => !d.allowed_behavioral_categories.includes(c));
+                    if (excluded.length) excludedBeh = `<div style="margin-top:0.4rem;color:var(--text-secondary);">Excluded behavioral: ${excluded.join(', ')}</div>`;
+                }
+                preview.innerHTML = `<div style="margin-bottom:0.3rem;">📂 Run Access: ${runLabel}</div><div>🧠 Behavioral Categories: ${behLabel}</div>${excludedRuns}${excludedBeh}`;
+                preview.style.display = 'block';
+                status.textContent = '';
+            } catch (e) {
+                status.textContent = 'Error loading preview';
+                console.error(e);
+            }
+        }
+
+        async function resetCompanyRunAccessToQuickSelect() {
+            if (!_currentCompany) return;
+            const status = document.getElementById('companyQsStatus');
+            status.textContent = 'Computing defaults...';
+            try {
+                const d = await _computeQuickSelectRunDefaults();
+                const runLabel = d.useAllRuns ? 'All Profiles' : `${d.runsCount} of ${d.totalRuns} profiles`;
+                const behLabel = d.useAllBeh ? 'All Behavioral Categories' : `${d.behCount} of ${d.totalBeh} categories`;
+                if (!confirm(`Reset run access for ALL users in "${_currentCompany}" to Quick Select defaults?\n\n• Run Access: ${runLabel}\n• Behavioral: ${behLabel}\n\nThis only changes Run Access and Behavioral Category Access. Module access, credits, and category subscriptions stay unchanged.`)) {
+                    status.textContent = '';
+                    return;
+                }
+                status.textContent = 'Applying...';
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/reset-run-access`, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ allowed_runs: d.allowed_runs, allowed_behavioral_categories: d.allowed_behavioral_categories })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    status.innerHTML = `<span style="color:var(--accent-green, #2ecc71);">✅ ${data.message}</span>`;
+                    loadCompanyEmployees(_currentCompany);
+                } else {
+                    status.innerHTML = `<span style="color:var(--accent-red, #e74c3c);">❌ ${data.error || 'Failed'}</span>`;
+                }
+            } catch (e) {
+                status.innerHTML = `<span style="color:var(--accent-red, #e74c3c);">❌ ${e.message}</span>`;
+            }
         }
 
 
