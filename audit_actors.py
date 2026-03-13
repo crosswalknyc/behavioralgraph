@@ -109,52 +109,51 @@ def process_file(f):
                 keys = list(all_shares[cat].keys())
                 key_block += f"- {cat} values: {json.dumps(keys)}\n"
 
-        prompt = f"""You are a senior US entertainment audience analyst specializing in celebrity fan demographics. Your task is to determine PRECISE audience demographics for the actor/actress below.
+        prompt = f"""You are a senior US entertainment audience demographics expert. Determine PRECISE audience demographics for this actor/actress.
 
 SUBJECT: "{subject}"
 CATEGORY: {bc}
 
-STEP 1 — WHO IS THIS PERSON?
-Identify "{subject}". What is their:
-- Gender (male/female/non-binary)?
-- Race/ethnicity?
-- Approximate age?
-- What are they most known for? (specific movies, TV shows, genres)
-- What era was their peak fame? (current, 2010s, 2000s, 90s, 80s, etc.)
+STEP 1 — IDENTIFY THIS PERSON:
+Who is "{subject}"? Determine their:
+- Gender, race/ethnicity, approximate age
+- What they are most known for (specific roles, shows, movies, genres)
+- Career peak era and current relevance
+- Whether they are openly LGBTQ+, or known for playing iconic LGBTQ+ characters
+- Whether they are considered a heartthrob, sex symbol, or have a fanbase that skews toward a particular gender
 
-STEP 2 — WHO IS THEIR ACTUAL FAN/AUDIENCE?
-Think carefully about who follows, watches, and engages with this actor digitally:
+STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
+Think about who ACTUALLY follows and digitally engages with THIS specific person. Every actor is different — do NOT apply generic rules. Reason about this individual:
 
-GENDER RULES FOR ACTORS — THIS IS CRITICAL:
-- Male actors generally have audiences that are 48-55% male. Men watch male actors in action, comedy, drama. DO NOT default male actors to female-majority audiences.
-- The ONLY male actors who should skew significantly female (60%+) are young heartthrob types (Timothée Chalamet, young Leonardo DiCaprio) or those in primarily romance content.
-- Female actresses generally skew 55-65% female, but action stars (Scarlett Johansson, Zendaya) may be closer to 50/50.
-- Comedians who are male should be 50-58% male. Stand-up comedy audiences skew male.
+GENDER — depends entirely on the person:
+- Most male actors have roughly balanced audiences (48-55% male). But a male heartthrob or romantic lead (Timothée Chalamet, young Brad Pitt, Harry Styles type) can have 55-65% female audiences.
+- Male comedians doing stand-up often skew male (52-58%).
+- Female actresses typically skew 55-65% female, but action/superhero stars can be closer to 50/50.
+- Think about THIS person's specific appeal and content.
 
-AGE RULES:
-- An actor's audience age correlates with their career peak. A 90s star (Chris Rock, Adam Sandler) has an audience heavy in 31-40 and 41-59.
-- Young actors in current shows (Ayo Edebiri, Sydney Sweeney) have audiences peaking in 21-30.
-- Under 16 should almost always be under 5% for actors unless they're in children's content.
-- 16-18 should be under 8% unless the actor is in teen content (e.g., Stranger Things cast).
+ETHNICITY — must reflect the actor's identity and content:
+- A Black actor's audience has significantly higher Black representation than the US baseline of 13%. How much higher depends on their content: mainstream crossover (28-38%), primarily Black-audience content (40-55%), or general (25-35%).
+- The White percentage for a non-White actor should be LOWER than the US average of ~58%.
+- Latino, Asian, and other non-White actors similarly draw elevated same-ethnicity audiences.
+- White actors in mainstream content: typically 55-65% White.
 
-ETHNICITY RULES — THIS IS CRITICAL:
-- A Black actor's audience will have SIGNIFICANTLY higher Black representation than the US average of 13%.
-- Specifically: A well-known Black actor should have 25-40%+ Black audience depending on their content.
-- A Black actor who primarily does Black-audience content (Tyler Perry films, BET shows) could be 40-55% Black.
-- A Black actor in mainstream crossover content (Marvel, prestige TV) might be 25-35% Black.
-- Similarly, Latino actors have higher Latino audience share, Asian actors higher Asian share.
-- White actors in mainstream content will be ~55-65% White.
-- DO NOT give every actor 48-55% White by default. Consider who this person actually is.
+AGE — depends on the person's career and content:
+- Under 16 is typically very low (<4%) but CAN be higher if the actor is in children's or family content (Disney stars, Nickelodeon actors, etc.).
+- 16-18 can be higher for actors in teen content (Stranger Things cast, teen dramas).
+- Age distribution correlates with career peak: a 90s star draws 40-60+ audiences; a current young star draws 18-30s.
 
-SEXUAL ORIENTATION:
-- If the actor is openly LGBTQ+, their LGBTQ+ audience share should be notably higher (15-25% YES).
-- If the actor is in LGBTQ+ content (Pose, The L Word, etc.), also higher.
-- Otherwise, US baseline is ~7-8% LGBTQ+.
+SEXUAL ORIENTATION — depends on the person:
+- Openly LGBTQ+ actors: 18-30% YES depending on how central that is to their public identity.
+- Actors famous for playing iconic LGBTQ+ characters (e.g., someone who played a beloved lesbian/gay character for multiple seasons): 15-25% YES even if the actor is straight, because the LGBTQ+ community deeply engages with that content.
+- Otherwise, US baseline is ~7-8%.
 
-INCOME/EDUCATION:
-- Audiences for prestige TV/film actors skew slightly more educated and higher income.
-- Audiences for mainstream blockbuster actors are more middle-income.
-- Comedy audiences tend to be middle-income.
+INCOME/EDUCATION — depends on the content type:
+- Prestige TV/indie film audiences: slightly more educated, moderate-high income.
+- Blockbuster/action: middle income, average education.
+
+PARENTAL STATUS/RELATIONSHIP — consider the audience age and content:
+- Older audiences = more likely married with kids.
+- Young audiences = more single, fewer kids.
 
 STEP 3 — EVALUATE CURRENT DATA:
 Current demographic shares for "{subject}":

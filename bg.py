@@ -2161,38 +2161,46 @@ SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
 STEP 1 — IDENTIFY THIS PERSON:
-Who is "{subject_clean}"? Determine their gender, race/ethnicity, approximate age, what they're known for, and career peak era.
+Who is "{subject_clean}"? Determine their:
+- Gender, race/ethnicity, approximate age
+- What they are most known for (specific roles, shows, movies, genres)
+- Career peak era and current relevance
+- Whether they are openly LGBTQ+, or known for playing iconic LGBTQ+ characters
+- Whether they are considered a heartthrob, sex symbol, or have a fanbase that skews toward a particular gender
 
-STEP 2 — DETERMINE THEIR DIGITAL AUDIENCE:
+STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
+Think about who ACTUALLY follows and digitally engages with THIS specific person. Every actor is different — do NOT apply generic rules. Reason about this individual:
 
-*** CRITICAL GENDER RULES ***
-- Male actors: 48-55% MALE. Men watch and follow male actors. DO NOT default to female-majority.
-  Only young heartthrob types in romance content should be 55-60% female.
-- Male comedians: 52-58% MALE. Stand-up comedy skews male.
-- Female actresses: 55-65% female; action/superhero actresses closer to 50/50.
+GENDER — depends entirely on the person:
+- Most male actors have roughly balanced audiences (48-55% male). But a male heartthrob or romantic lead (Timothée Chalamet, young Brad Pitt, Harry Styles type) can have 55-65% female audiences.
+- Male comedians doing stand-up often skew male (52-58%).
+- Female actresses typically skew 55-65% female, but action/superhero stars can be closer to 50/50.
+- Think about THIS person's specific appeal and content.
 
-*** CRITICAL ETHNICITY RULES ***
-- BLACK actor in mainstream crossover content: 28-38% Black audience
-- BLACK actor in Black-audience content: 40-55% Black
-- White percentage for a Black actor: 35-48%, NOT 50%+
-- Latino actors: 25-35% Latino audience
-- Asian actors: 15-25% Asian audience
-- White actors in mainstream: 55-65% White
+ETHNICITY — must reflect the actor's identity and content:
+- A Black actor's audience has significantly higher Black representation than the US baseline of 13%. How much higher depends on their content: mainstream crossover (28-38%), primarily Black-audience content (40-55%), or general (25-35%).
+- The White percentage for a non-White actor should be LOWER than the US average of ~58%.
+- Latino, Asian, and other non-White actors similarly draw elevated same-ethnicity audiences.
+- White actors in mainstream content: typically 55-65% White.
 
-*** AGE RULES ***
-- Under 16: almost always under 4%
-- 16-18: under 7% unless in teen content
-- Career peak correlates with audience age
-- 60+ at least 8-12% for actors with 20+ year careers
+AGE — depends on the person's career and content:
+- Under 16 is typically very low (<4%) but CAN be higher if the actor is in children's or family content (Disney stars, Nickelodeon actors, etc.).
+- 16-18 can be higher for actors in teen content (Stranger Things cast, teen dramas).
+- Age distribution correlates with career peak: a 90s star draws 40-60+ audiences; a current young star draws 18-30s.
 
-*** SEXUAL ORIENTATION ***
-- Openly LGBTQ+ actors: 18-28% YES
-- LGBTQ+ content actors: 15-22% YES
-- Otherwise ~7-8% baseline
+SEXUAL ORIENTATION — depends on the person:
+- Openly LGBTQ+ actors: 18-30% YES depending on how central that is to their public identity.
+- Actors famous for playing iconic LGBTQ+ characters (e.g., someone who played a beloved lesbian/gay character for multiple seasons): 15-25% YES even if the actor is straight, because the LGBTQ+ community deeply engages with that content.
+- Otherwise, US baseline is ~7-8%.
 
-*** INCOME/EDUCATION ***
-- Prestige TV/film: higher education, moderate-high income
-- Blockbuster: middle income, average education
+INCOME/EDUCATION — depends on the content type:
+- Prestige TV/indie film audiences: slightly more educated, moderate-high income.
+- Blockbuster/action: middle income, average education.
+- Comedy: middle income.
+
+PARENTAL STATUS/RELATIONSHIP — consider the audience age and content:
+- Older audiences = more likely married with kids.
+- Young audiences = more single, fewer kids.
 
 STEP 3 — EVALUATE CURRENT DATA:
 {demo_block}
@@ -2201,7 +2209,7 @@ STEP 4 — VERDICT using EXACTLY these labels:
 {key_block}
 If accurate: {{"status":"OK","notes":"reason"}}
 If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
-Each corrected category sums to 100. Be precise. JSON only, no markdown."""
+Each corrected category sums to 100. Be PRECISE with numbers. JSON only, no markdown."""
 
     try:
         resp = client.chat.completions.create(
