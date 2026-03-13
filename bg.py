@@ -3914,6 +3914,255 @@ Each corrected category sums to 100. JSON only, no markdown."""
         return df
 
 
+def ai_app_platform_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for APP/PLATFORM profiles.
+
+    Reasons about the actual USER BASE of each app or platform — age,
+    gender, income, education, ethnicity, relationship status, parental
+    status, and sexual orientation — based on the product's core use case,
+    pricing, and target market.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if 'APP' not in bc_upper and 'PLATFORM' not in bc_upper:
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping app/platform demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a premium-tier US digital product user demographics analyst. Determine PRECISE USER demographics for this app or platform.
+
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY app/platform.
+- ONLY increase above 10% if the app explicitly targets or is widely known in the LGBTQ+ community (e.g. Grindr, HER, Scruff).
+- HARD CAP: NEVER assign >15% unless the app IS a dedicated LGBTQ+ platform.
+- NEVER assign >30% to any app/platform — even LGBTQ+-focused ones.
+- General-purpose apps (Uber, DoorDash, Zoom, Zillow, Spotify): 5-7%. DO NOT exceed 8%.
+- Dating apps (Tinder, Bumble, Hinge): 8-12% — they have LGBTQ+ users but are majority straight.
+- Social media (Instagram, TikTok, Snapchat): 8-12% max — slightly over-index but still majority straight.
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+
+APP/PLATFORM: "{subject_clean}"
+CATEGORY: {brand_category}
+
+=== STEP 1: IDENTIFY THIS APP/PLATFORM ===
+What is this app/platform? Core use case, business model (free/paid/freemium), target market, typical user persona. Is it LGBTQ+-focused?
+
+=== STEP 2: APP/PLATFORM USER RULES ===
+
+GENDER by product type:
+- Social media / photo sharing (Instagram, Pinterest, Snapchat): 55-65% FEMALE.
+- Gaming / sports betting (DraftKings, FanDuel): 70-80% MALE.
+- Ride-hailing / delivery (Uber, DoorDash, Instacart): ~50/50, slight male lean.
+- Dating (Tinder, Bumble, Hinge): 60-70% MALE (more men use dating apps than women).
+- Finance / investing (Robinhood, Venmo, Cash App): 55-65% MALE.
+- Real estate (Zillow, Redfin): ~50/50.
+- Streaming / entertainment (Spotify, YouTube, Twitch): 52-58% MALE.
+- Anime / niche media (Crunchyroll, Funimation): 60-70% MALE.
+- Shopping / e-commerce (Amazon, eBay, Etsy): 55-65% FEMALE for Etsy, ~50/50 for Amazon.
+- Professional (LinkedIn, Slack): 52-58% MALE.
+- Kids / family (YouTube Kids, PBS Kids): ~50/50.
+
+AGE by product type:
+- Social media (TikTok, Snapchat): peak 16-30, under-16 can be 8-15%.
+- Dating (Tinder, Bumble): peak 18-34, very low under-18 (<2%), low 60+ (<5%).
+- Finance/investing: peak 25-45.
+- Ride-hailing/delivery: broad 18-54.
+- Real estate (Zillow): peak 28-55, skews older (homebuying age).
+- General-purpose (Uber, DoorDash): broad, 18-49 peak.
+- Gaming: peak 16-35.
+- Professional (LinkedIn): peak 25-50.
+- Streaming (Spotify): peak 16-35.
+
+INCOME by product type:
+- Premium/paid services (Apple products, subscription apps): higher income, 20-30% $100K+.
+- Free/ad-supported (TikTok, YouTube): broad income distribution.
+- Real estate (Zillow): higher income, peak $75K-$250K+.
+- Finance/investing: middle-to-upper, $60K-$150K peak.
+- Dating: middle income, $40K-$100K peak.
+- Delivery (DoorDash, Uber Eats): broad but middle class, users need disposable income.
+- Budget services: lower-to-middle income.
+
+ETHNICITY — US digital penetration:
+- General-purpose apps mirror US demographics: 55-65% White, 12-18% Latinx, 10-15% Black, 5-10% Asian.
+- Apps popular with younger demographics: more diverse (lower White %, higher Latinx/Black).
+- Professional/finance apps: may skew slightly more White/Asian.
+- Anime/Asian media (Crunchyroll, Funimation, VRV): 20-28% Asian — anime fans are HEAVILY Asian-skewing. White drops to 40-50%. This is a major distinguishing feature of anime platforms.
+
+EDUCATION:
+- Professional platforms (LinkedIn, Slack): 40-55% college+, 20-30% grad school.
+- General social media: broad, 35-45% HS only.
+- Finance/investing: 35-50% college+.
+- Gaming/entertainment: broad distribution.
+
+PARENTAL STATUS:
+- Dating apps (Tinder): 55-70% no kids (users are young/single).
+- Family-oriented apps (grocery delivery, real estate): 45-60% has kids.
+- General-purpose: ~50/50 or slightly more no-kids.
+- Kids platforms: 80-90% has kids.
+
+RELATIONSHIP:
+- Dating apps: 60-75% SINGLE. Very low married (<15% — married people don't typically use dating apps).
+- Real estate: 40-55% MARRIED (homebuyers). Low single.
+- General social media: 30-40% single, 25-35% married, 15-25% in relationship.
+- Family/delivery: higher married/in relationship.
+
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7%. This is the starting point for ALL apps/platforms.
+- General-purpose utility (Uber, Zoom, Zillow, DoorDash): 5-7%. DO NOT exceed 8%.
+- Social media (Instagram, TikTok): 8-12% — slight over-index but still overwhelmingly straight.
+- Dating (Tinder, Bumble, Hinge): 8-12% — they have LGBTQ+ features but majority straight.
+- LGBTQ+-specific (Grindr, HER, Scruff): 85-95%.
+- DO NOT assign 10%+ without clear LGBTQ+ relevance.
+
+=== STEP 3: EVALUATE ===
+{demo_block}
+
+=== STEP 4: VERDICT ===
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.05,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"📱 App/Platform demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"📱 App/Platform demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  App/Platform demographic review error: {e}")
+        return df
+
+
 def item_level_ai_review(df, archetype, project_name, brands):
     """Second GPT pass: reviews top items per key category in the context
     of the profile's demographics and flags specific contextual anomalies.
@@ -9366,6 +9615,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ai_creative_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_series_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_podcast_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_app_platform_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
