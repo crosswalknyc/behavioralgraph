@@ -4163,6 +4163,254 @@ Each corrected category sums to 100. JSON only, no markdown."""
         return df
 
 
+def ai_broadcast_cable_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for BROADCAST/CABLE profiles.
+
+    Reasons about the DIGITAL AUDIENCE of each broadcast or cable network —
+    who actually engages with the network's digital content (website, app,
+    social media) — based on network identity, programming slate, and
+    known audience composition from industry research.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if 'BROADCAST' not in bc_upper and 'CABLE' not in bc_upper:
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping broadcast/cable demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a premium-tier US broadcast/cable television audience demographics analyst. Determine PRECISE DIGITAL AUDIENCE demographics for this network.
+
+⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
+- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY network.
+- Broadcast networks are MASS MARKET — their digital audiences are close to US population averages.
+- ONLY increase above 8% if the network specifically programs for or is widely embraced by the LGBTQ+ community.
+- HARD CAP: NEVER assign >12% to any broadcast/cable network.
+- Conservative-leaning networks (Fox News, Newsmax, OAN): 3-5%. DO NOT exceed 5%.
+- Older-skewing networks (CBS, ABC): 5-7%. These are mainstream, not LGBTQ+-focused.
+- Young-skewing networks (CW, Freeform): 8-10% — younger audiences have slightly higher LGBTQ+ representation.
+- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+- EVERY category MUST sum to exactly 100%.
+
+NETWORK: "{subject_clean}"
+CATEGORY: {brand_category}
+
+=== STEP 1: IDENTIFY THIS NETWORK ===
+What network is this? Parent company, programming slate, signature shows, target demo, digital audience profile. Is it primarily entertainment, news, sports, or mixed?
+
+=== STEP 2: BROADCAST/CABLE DIGITAL AUDIENCE RULES ===
+
+AGE — digital audiences skew YOUNGER than linear TV audiences, but network identity still matters:
+- CBS digital: oldest-skewing of big 4. Peak 35-59, significant 60+. Under-16: <3%.
+- ABC digital: family-friendly (Disney-owned). Broad 25-54 peak. Under-16: 3-5%.
+- NBC digital: broad appeal, 25-54 peak. SNL/sports pull younger. Under-16: 2-4%.
+- Fox Broadcasting digital: 25-49 peak (animation like Simpsons/Family Guy, sports, reality). Under-16: 3-6%.
+- CW digital: youngest by far. 16-34 peak. Under-16: 5-10%.
+- Cable news (CNN, Fox News, MSNBC): 35-65+ heavy. Under-25: <10%.
+- Cable entertainment (USA, TNT, TBS): 25-54 core.
+- Sports networks (ESPN, FS1): 18-49 male-heavy peak.
+
+GENDER by network type:
+- Broadcast networks (ABC, CBS, NBC): slightly female-leaning (52-55% female) due to drama/reality programming.
+- Fox Broadcasting: closer to 50/50 or slight male lean (sports, animation).
+- CW: 55-60% female (teen/young adult dramas, romance).
+- Sports-focused (ESPN, FS1): 65-75% male.
+- Cable news: 48-55% male.
+- Lifestyle/reality (Bravo, E!, HGTV): 65-75% female.
+- NON-BINARY + TRANS: keep realistic. Total non-cis gender: 1-3% max for any network.
+
+ETHNICITY — broadcast networks are mass-market and roughly mirror US demographics:
+- General broadcast: 55-65% White, 12-18% Latinx, 10-15% Black, 5-8% Asian, 3-5% Other.
+- Networks with strong Black programming (BET, OWN, TV One): 60-80% Black.
+- Spanish-language (Telemundo, Univision): 80-90% Latinx.
+- CW/Freeform: slightly more diverse than average (younger audience).
+- CBS: slightly whiter/older demographic.
+
+EDUCATION:
+- Mass-market broadcast: 40-55% HS only, 28-38% college, 12-22% grad school.
+- News-focused networks: higher education (30-40% college, 15-25% grad school).
+- Young-skewing (CW): many still in school, lower grad school %.
+- Older-skewing (CBS): slightly higher education (completed degrees over time).
+
+INCOME:
+- Broadcast networks: broad middle-class distribution.
+- CBS: slightly higher income (older = more established careers).
+- CW: lower income (younger audience, early career).
+- News networks: moderate-to-higher income.
+- General broadcast: peak $40K-$100K, with 15-25% above $100K.
+
+PARENTAL STATUS:
+- Family-friendly networks (ABC, NBC): 40-55% has kids.
+- Older-skewing (CBS): 35-45% has kids (many with grown children who don't count).
+- Young-skewing (CW): 15-25% has kids (mostly childless young adults).
+- "Other" should be 5-10% max. NOT 25%+.
+
+RELATIONSHIP:
+- Older-skewing (CBS): 45-55% married, 15-25% single.
+- Young-skewing (CW): 40-55% single, 15-25% married.
+- General broadcast (ABC, NBC): 35-45% married, 25-35% single.
+- Divorced: 8-15% max for most networks. CBS slightly higher (older audience).
+- In a relationship: 10-20%.
+
+SEXUAL ORIENTATION — STRICT RULES:
+- DEFAULT: 7% for all broadcast networks. This is a mass-market medium.
+- CBS: 4-6% (oldest, most conservative-leaning audience).
+- ABC: 5-7% (mainstream family).
+- NBC: 5-7% (mainstream).
+- Fox Broadcasting: 5-7% (mainstream entertainment, NOT Fox News).
+- CW: 8-10% (youngest audience, significant LGBTQ+ programming like Batwoman, etc.).
+- Cable news conservative (Fox News): 3-5%.
+- Bravo: 12-18% (strong LGBTQ+ following — Real Housewives, drag culture).
+- DO NOT assign 10%+ to mainstream broadcast networks without clear justification.
+
+=== STEP 3: EVALUATE ===
+{demo_block}
+
+=== STEP 4: VERDICT ===
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.05,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"📺 Broadcast/Cable demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"📺 Broadcast/Cable demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  Broadcast/Cable demographic review error: {e}")
+        return df
+
+
 def item_level_ai_review(df, archetype, project_name, brands):
     """Second GPT pass: reviews top items per key category in the context
     of the profile's demographics and flags specific contextual anomalies.
@@ -9616,6 +9864,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ai_series_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_podcast_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_app_platform_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_broadcast_cable_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
