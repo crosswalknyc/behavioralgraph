@@ -4261,15 +4261,16 @@ What network is this? Parent company, programming slate, signature shows, target
 
 === STEP 2: BROADCAST/CABLE DIGITAL AUDIENCE RULES ===
 
-AGE — digital audiences skew YOUNGER than linear TV audiences, but network identity still matters:
-- CBS digital: oldest-skewing of big 4. Peak 35-59, significant 60+. Under-16: <3%.
-- ABC digital: family-friendly (Disney-owned). Broad 25-54 peak. Under-16: 3-5%.
-- NBC digital: broad appeal, 25-54 peak. SNL/sports pull younger. Under-16: 2-4%.
-- Fox Broadcasting digital: 25-49 peak (animation like Simpsons/Family Guy, sports, reality). Under-16: 3-6%.
-- CW digital: youngest by far. 16-34 peak. Under-16: 5-10%.
-- Cable news (CNN, Fox News, MSNBC): 35-65+ heavy. Under-25: <10%.
-- Cable entertainment (USA, TNT, TBS): 25-54 core.
-- Sports networks (ESPN, FS1): 18-49 male-heavy peak.
+AGE — CRITICAL: broadcast/cable audiences are MUCH OLDER than streaming/social media. Even digital audiences skew 35+.
+- CBS digital: OLDEST network. Median linear viewer is 65+. Digital is younger but still OLD. 41-59 should be 30-35%, 60+ should be 25-30%. Under-25 combined: <10%. Under-16: <2%.
+- ABC digital: median linear viewer ~58. Family-friendly (Disney-owned). 41-59 should be 28-32%, 60+ should be 18-22%, 31-40 should be 20-25%. Under-25 combined: <12%. Under-16: <3%.
+- NBC digital: median linear viewer ~56. 41-59 should be 28-32%, 60+ should be 18-22%, 31-40 should be 20-25%. Under-25 combined: <12%. Under-16: <3%.
+- Fox Broadcasting digital: median linear viewer ~53. Sports and animation pull slightly younger. 41-59 should be 25-30%, 31-40 should be 20-25%, 60+ should be 15-20%. Under-25 combined: <15%. Under-16: <3%.
+- CW digital: youngest by far but STILL older than you think (median ~42). 18-30 peak, 31-40 significant. Under-16: 5-8%. 60+: <8%.
+- Cable news (CNN, Fox News, MSNBC): 45-65+ HEAVY. 60+ should be 30-40%. Under-30: <8%.
+- Cable entertainment (USA, TNT, TBS): 30-54 core. 60+: 15-20%.
+- Sports networks (ESPN, FS1): 25-49 male-heavy peak.
+- RULE: For ABC/CBS/NBC/Fox, the COMBINED 41-59 + 60+ brackets MUST be at least 50% of the total. These are NOT young-audience platforms.
 
 GENDER by network type:
 - Broadcast networks (ABC, CBS, NBC): slightly female-leaning (52-55% female) due to drama/reality programming.
