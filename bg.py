@@ -11566,10 +11566,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("🔍 Running final behavioral sanity check on FINAL output...")
         df_final = final_behavioral_sanity_check(df_final, archetype=_archetype)
 
-    # ── Item-level AI anomaly detection (second GPT pass) ───────────────
-    if not is_genpop and _archetype:
-        print("🤖 Running item-level AI anomaly detection...")
-        df_final = item_level_ai_review(df_final, _archetype, project_name, brands)
+    # ── Legacy item-level AI review DISABLED ─────────────────────────────
+    # Superseded by ai_final_gut_check() which runs after demographic agents
+    # with full context (GPT-4o, web research, gen pop baselines, all categories).
+    # The old gpt-4o-mini pass had thin context and could cause gen-pop artifacts
+    # (e.g. boosting Hanes for audiences that wouldn't over-index on it).
 
     # ── AI demographic review for people categories (GPT-4o) ───────────
     if not is_genpop and brand_category:
