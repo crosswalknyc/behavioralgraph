@@ -1633,6 +1633,10 @@ OUR DATA:
      cautiously (e.g. 1B minutes over 10 episodes ÷ ~6 hrs avg watch = ~17M unique viewers).
 2. Our projected number ({watchers_projected:,.0f}) should be in the right ballpark of reality.
    If it is far off, flag it and suggest the correct panel number.
+3. CRITICAL: If the real viewer count is X and our projection is 2X or higher, set
+   "watchers_plausible" to FALSE and "passed" to FALSE. Do NOT say "passed: true"
+   while simultaneously suggesting a different number. If your suggested panel range
+   is significantly different from the actual {total_watchers:,.0f}, it MUST fail.
 
 === PHASE B: VALIDATE NEW SIGNUPS & REACTIVATIONS ===
 "New Platform Signups" includes BOTH brand-new subscribers AND reactivated/dormant accounts.
@@ -1705,6 +1709,36 @@ CRITICAL: Do NOT use commas in numbers inside JSON. Write 50000 not 50,000. Writ
         raw = _re.sub(r'//[^\n]*', '', raw)
         raw = _re.sub(r'(?<=\d),(?=\d{3}(?:\D|$))', '', raw)
         result = json.loads(raw)
+
+        # Post-AI sanity check: if AI suggests significantly different numbers
+        # but still said "passed", override to fail
+        suggested_w = result.get('suggested_watchers_range_panel', [])
+        if (len(suggested_w) == 2 and suggested_w[0] and suggested_w[1]
+                and total_watchers > 0):
+            suggested_mid = (suggested_w[0] + suggested_w[1]) / 2.0
+            if suggested_mid > 0:
+                ratio = total_watchers / suggested_mid
+                if ratio > 1.5 or ratio < 0.5:
+                    result['passed'] = False
+                    if result.get('watchers_plausible', True):
+                        result['watchers_plausible'] = False
+                        result['watchers_note'] = (
+                            result.get('watchers_note', '') +
+                            f' [Override: our panel {total_watchers:,} is {ratio:.1f}x the '
+                            f'suggested {int(suggested_mid):,}]'
+                        )
+                    if 'watchers significantly off' not in str(result.get('flags', [])):
+                        result.setdefault('flags', []).append(
+                            f'watchers {ratio:.1f}x off from research-based estimate')
+
+        suggested_s = result.get('suggested_signups_range_panel', [])
+        if (len(suggested_s) == 2 and suggested_s[0] and suggested_s[1]
+                and new_signups > 0):
+            suggested_mid_s = (suggested_s[0] + suggested_s[1]) / 2.0
+            if suggested_mid_s > 0 and new_signups / suggested_mid_s > 2.0:
+                result['passed'] = False
+                result['signups_plausible'] = False
+
         return result
     except Exception as e:
         return {'passed': True, 'flags': [], 'note': f'AI validation error: {e}'}
