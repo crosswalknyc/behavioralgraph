@@ -2306,7 +2306,7 @@ Each corrected category sums to 100. Be PRECISE with numbers. JSON only, no mark
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎭 Actor demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -2349,11 +2349,11 @@ Each corrected category sums to 100. Be PRECISE with numbers. JSON only, no mark
 
         notes = result.get('notes', '')[:80]
         print(f"🎭 Actor demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Actor demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_creator_demographic_review(df, brand_category, project_name, brands):
@@ -2501,7 +2501,7 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎬 Creator demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -2544,11 +2544,11 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎬 Creator demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Creator demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_athlete_demographic_review(df, brand_category, project_name, brands):
@@ -2696,7 +2696,7 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🏅 Athlete demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -2739,11 +2739,11 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🏅 Athlete demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Athlete demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_host_demographic_review(df, brand_category, project_name, brands):
@@ -2891,7 +2891,7 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎤 Host/personality demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -2934,11 +2934,11 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎤 Host/personality demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Host/personality demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_musician_demographic_review(df, brand_category, project_name, brands):
@@ -3087,7 +3087,7 @@ Each corrected category MUST sum to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎵 Musician demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3130,11 +3130,11 @@ Each corrected category MUST sum to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎵 Musician demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Musician demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_politics_demographic_review(df, brand_category, project_name, brands):
@@ -3281,7 +3281,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🏛️ Politics demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3324,11 +3324,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🏛️ Politics demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Politics demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_creative_demographic_review(df, brand_category, project_name, brands):
@@ -3475,7 +3475,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎬 Creative demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3518,11 +3518,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎬 Creative demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Creative demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_series_demographic_review(df, brand_category, project_name, brands):
@@ -3670,7 +3670,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"📺 Series demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3713,11 +3713,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"📺 Series demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Series demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_podcast_demographic_review(df, brand_category, project_name, brands):
@@ -3865,7 +3865,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎙️ Podcast demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3908,11 +3908,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎙️ Podcast demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Podcast demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_app_platform_demographic_review(df, brand_category, project_name, brands):
@@ -4061,7 +4061,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"📱 App/Platform demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -4104,11 +4104,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"📱 App/Platform demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  App/Platform demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_broadcast_cable_demographic_review(df, brand_category, project_name, brands):
@@ -4257,7 +4257,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"📺 Broadcast/Cable demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -4300,11 +4300,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"📺 Broadcast/Cable demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Broadcast/Cable demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 # ── Deterministic age calibration safety net ────────────────────────────
@@ -4338,6 +4338,84 @@ _AGE_CALIBRATION_TARGETS = {
     'REGAL':       {'range': (34, 40), 'dist': {'<16': 4, '16-18': 4, '18-20': 7, '21-25': 11, '26-30': 14, '31-40': 24, '41-59': 24, '60+': 12}},
     'ALAMO':       {'range': (33, 39), 'dist': {'<16': 3, '16-18': 4, '18-20': 7, '21-25': 14, '26-30': 18, '31-40': 27, '41-59': 20, '60+': 7}},
     'ALAMO DRAFTHOUSE': {'range': (33, 39), 'dist': {'<16': 3, '16-18': 4, '18-20': 7, '21-25': 14, '26-30': 18, '31-40': 27, '41-59': 20, '60+': 7}},
+    # ── BROADCAST/CABLE (Nielsen median ages, digital audience) ──
+    'CBS':         {'range': (52, 62), 'dist': {'<16': 1, '16-18': 1, '18-20': 2, '21-25': 3, '26-30': 5, '31-40': 10, '41-59': 35, '60+': 43}},
+    'NBC':         {'range': (46, 54), 'dist': {'<16': 2, '16-18': 2, '18-20': 3, '21-25': 5, '26-30': 7, '31-40': 16, '41-59': 35, '60+': 30}},
+    'ABC':         {'range': (46, 54), 'dist': {'<16': 2, '16-18': 2, '18-20': 3, '21-25': 5, '26-30': 7, '31-40': 16, '41-59': 35, '60+': 30}},
+    'FOX NEWS':    {'range': (58, 68), 'dist': {'<16': 0, '16-18': 1, '18-20': 1, '21-25': 2, '26-30': 3, '31-40': 6, '41-59': 30, '60+': 57}},
+    'MSNBC':       {'range': (55, 65), 'dist': {'<16': 0, '16-18': 1, '18-20': 1, '21-25': 2, '26-30': 3, '31-40': 8, '41-59': 32, '60+': 53}},
+    'CNN':         {'range': (52, 60), 'dist': {'<16': 1, '16-18': 1, '18-20': 2, '21-25': 3, '26-30': 5, '31-40': 10, '41-59': 35, '60+': 43}},
+    'ESPN':        {'range': (36, 44), 'dist': {'<16': 5, '16-18': 5, '18-20': 7, '21-25': 10, '26-30': 12, '31-40': 22, '41-59': 25, '60+': 14}},
+    'MTV':         {'range': (22, 30), 'dist': {'<16': 10, '16-18': 12, '18-20': 15, '21-25': 22, '26-30': 18, '31-40': 14, '41-59': 7, '60+': 2}},
+    'BET':         {'range': (30, 38), 'dist': {'<16': 5, '16-18': 6, '18-20': 10, '21-25': 15, '26-30': 18, '31-40': 22, '41-59': 18, '60+': 6}},
+    'BRAVO':       {'range': (36, 44), 'dist': {'<16': 2, '16-18': 3, '18-20': 5, '21-25': 10, '26-30': 14, '31-40': 24, '41-59': 28, '60+': 14}},
+    'HGTV':        {'range': (44, 54), 'dist': {'<16': 1, '16-18': 2, '18-20': 2, '21-25': 4, '26-30': 6, '31-40': 16, '41-59': 38, '60+': 31}},
+    'FOOD NETWORK': {'range': (40, 50), 'dist': {'<16': 2, '16-18': 2, '18-20': 3, '21-25': 5, '26-30': 8, '31-40': 18, '41-59': 36, '60+': 26}},
+    'DISCOVERY':   {'range': (42, 52), 'dist': {'<16': 2, '16-18': 2, '18-20': 3, '21-25': 5, '26-30': 7, '31-40': 16, '41-59': 36, '60+': 29}},
+    'TBS':         {'range': (36, 44), 'dist': {'<16': 3, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 12, '31-40': 22, '41-59': 28, '60+': 15}},
+    'TNT':         {'range': (40, 50), 'dist': {'<16': 2, '16-18': 3, '18-20': 4, '21-25': 6, '26-30': 8, '31-40': 18, '41-59': 34, '60+': 25}},
+    'USA NETWORK': {'range': (42, 52), 'dist': {'<16': 2, '16-18': 2, '18-20': 3, '21-25': 5, '26-30': 7, '31-40': 16, '41-59': 36, '60+': 29}},
+    'FX':          {'range': (32, 42), 'dist': {'<16': 3, '16-18': 4, '18-20': 7, '21-25': 12, '26-30': 15, '31-40': 24, '41-59': 24, '60+': 11}},
+    'PBS':         {'range': (52, 62), 'dist': {'<16': 1, '16-18': 1, '18-20': 2, '21-25': 3, '26-30': 5, '31-40': 10, '41-59': 35, '60+': 43}},
+    'CW':          {'range': (26, 36), 'dist': {'<16': 6, '16-18': 8, '18-20': 12, '21-25': 18, '26-30': 18, '31-40': 20, '41-59': 14, '60+': 4}},
+    'NICKELODEON': {'range': (14, 22), 'dist': {'<16': 35, '16-18': 15, '18-20': 10, '21-25': 10, '26-30': 10, '31-40': 12, '41-59': 6, '60+': 2}},
+    'DISNEY CHANNEL': {'range': (14, 22), 'dist': {'<16': 35, '16-18': 15, '18-20': 10, '21-25': 10, '26-30': 10, '31-40': 12, '41-59': 6, '60+': 2}},
+    'CARTOON NETWORK': {'range': (16, 24), 'dist': {'<16': 30, '16-18': 14, '18-20': 12, '21-25': 12, '26-30': 10, '31-40': 12, '41-59': 7, '60+': 3}},
+    'HALLMARK':    {'range': (50, 60), 'dist': {'<16': 1, '16-18': 1, '18-20': 2, '21-25': 3, '26-30': 4, '31-40': 10, '41-59': 36, '60+': 43}},
+    'LIFETIME':    {'range': (42, 52), 'dist': {'<16': 1, '16-18': 2, '18-20': 3, '21-25': 5, '26-30': 7, '31-40': 16, '41-59': 36, '60+': 30}},
+    'COMEDY CENTRAL': {'range': (26, 34), 'dist': {'<16': 5, '16-18': 8, '18-20': 12, '21-25': 20, '26-30': 18, '31-40': 20, '41-59': 13, '60+': 4}},
+    'HISTORY':     {'range': (44, 54), 'dist': {'<16': 2, '16-18': 2, '18-20': 3, '21-25': 5, '26-30': 6, '31-40': 14, '41-59': 36, '60+': 32}},
+    'A&E':         {'range': (42, 52), 'dist': {'<16': 2, '16-18': 2, '18-20': 3, '21-25': 5, '26-30': 7, '31-40': 16, '41-59': 36, '60+': 29}},
+    'PARAMOUNT NETWORK': {'range': (38, 48), 'dist': {'<16': 2, '16-18': 3, '18-20': 4, '21-25': 7, '26-30': 10, '31-40': 20, '41-59': 32, '60+': 22}},
+    'SYFY':        {'range': (34, 44), 'dist': {'<16': 3, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 14, '31-40': 22, '41-59': 28, '60+': 13}},
+    'FREEFORM':    {'range': (22, 30), 'dist': {'<16': 8, '16-18': 12, '18-20': 16, '21-25': 22, '26-30': 18, '31-40': 15, '41-59': 7, '60+': 2}},
+    'OWN':         {'range': (42, 52), 'dist': {'<16': 1, '16-18': 2, '18-20': 3, '21-25': 5, '26-30': 7, '31-40': 16, '41-59': 36, '60+': 30}},
+    'E!':          {'range': (28, 36), 'dist': {'<16': 4, '16-18': 6, '18-20': 10, '21-25': 16, '26-30': 18, '31-40': 22, '41-59': 18, '60+': 6}},
+    'VH1':         {'range': (30, 40), 'dist': {'<16': 4, '16-18': 5, '18-20': 8, '21-25': 14, '26-30': 16, '31-40': 22, '41-59': 22, '60+': 9}},
+    # ── APP/PLATFORM (Pew, Comscore, eMarketer digital audience) ──
+    'TIKTOK':      {'range': (22, 30), 'dist': {'<16': 12, '16-18': 12, '18-20': 14, '21-25': 20, '26-30': 16, '31-40': 14, '41-59': 9, '60+': 3}},
+    'INSTAGRAM':   {'range': (28, 36), 'dist': {'<16': 5, '16-18': 6, '18-20': 10, '21-25': 16, '26-30': 18, '31-40': 22, '41-59': 17, '60+': 6}},
+    'FACEBOOK':    {'range': (38, 46), 'dist': {'<16': 2, '16-18': 3, '18-20': 4, '21-25': 7, '26-30': 10, '31-40': 20, '41-59': 32, '60+': 22}},
+    'TWITTER':     {'range': (30, 38), 'dist': {'<16': 4, '16-18': 5, '18-20': 8, '21-25': 14, '26-30': 16, '31-40': 22, '41-59': 22, '60+': 9}},
+    'X ':          {'range': (30, 38), 'dist': {'<16': 4, '16-18': 5, '18-20': 8, '21-25': 14, '26-30': 16, '31-40': 22, '41-59': 22, '60+': 9}},
+    'SNAPCHAT':    {'range': (20, 28), 'dist': {'<16': 14, '16-18': 14, '18-20': 16, '21-25': 22, '26-30': 14, '31-40': 12, '41-59': 6, '60+': 2}},
+    'LINKEDIN':    {'range': (36, 44), 'dist': {'<16': 1, '16-18': 2, '18-20': 4, '21-25': 10, '26-30': 14, '31-40': 26, '41-59': 30, '60+': 13}},
+    'PINTEREST':   {'range': (32, 40), 'dist': {'<16': 3, '16-18': 4, '18-20': 7, '21-25': 12, '26-30': 16, '31-40': 24, '41-59': 24, '60+': 10}},
+    'REDDIT':      {'range': (26, 34), 'dist': {'<16': 5, '16-18': 7, '18-20': 12, '21-25': 20, '26-30': 18, '31-40': 20, '41-59': 14, '60+': 4}},
+    'WHATSAPP':    {'range': (30, 38), 'dist': {'<16': 3, '16-18': 4, '18-20': 7, '21-25': 14, '26-30': 18, '31-40': 24, '41-59': 22, '60+': 8}},
+    'YOUTUBE':     {'range': (30, 38), 'dist': {'<16': 6, '16-18': 6, '18-20': 8, '21-25': 12, '26-30': 14, '31-40': 20, '41-59': 22, '60+': 12}},
+    'SPOTIFY':     {'range': (26, 34), 'dist': {'<16': 6, '16-18': 8, '18-20': 12, '21-25': 18, '26-30': 18, '31-40': 20, '41-59': 14, '60+': 4}},
+    'NETFLIX':     {'range': (32, 40), 'dist': {'<16': 4, '16-18': 5, '18-20': 7, '21-25': 12, '26-30': 14, '31-40': 22, '41-59': 24, '60+': 12}},
+    'HULU':        {'range': (28, 36), 'dist': {'<16': 4, '16-18': 6, '18-20': 8, '21-25': 14, '26-30': 16, '31-40': 24, '41-59': 20, '60+': 8}},
+    'DISNEY PLUS': {'range': (28, 36), 'dist': {'<16': 8, '16-18': 6, '18-20': 8, '21-25': 12, '26-30': 14, '31-40': 22, '41-59': 22, '60+': 8}},
+    'DISNEY+':     {'range': (28, 36), 'dist': {'<16': 8, '16-18': 6, '18-20': 8, '21-25': 12, '26-30': 14, '31-40': 22, '41-59': 22, '60+': 8}},
+    'AMAZON PRIME': {'range': (36, 44), 'dist': {'<16': 3, '16-18': 3, '18-20': 5, '21-25': 8, '26-30': 12, '31-40': 22, '41-59': 30, '60+': 17}},
+    'TWITCH':      {'range': (20, 28), 'dist': {'<16': 12, '16-18': 14, '18-20': 16, '21-25': 22, '26-30': 16, '31-40': 12, '41-59': 6, '60+': 2}},
+    'DISCORD':     {'range': (20, 28), 'dist': {'<16': 14, '16-18': 14, '18-20': 16, '21-25': 20, '26-30': 14, '31-40': 12, '41-59': 7, '60+': 3}},
+    'UBER':        {'range': (28, 36), 'dist': {'<16': 3, '16-18': 4, '18-20': 8, '21-25': 16, '26-30': 20, '31-40': 24, '41-59': 18, '60+': 7}},
+    'LYFT':        {'range': (26, 34), 'dist': {'<16': 3, '16-18': 5, '18-20': 10, '21-25': 18, '26-30': 20, '31-40': 22, '41-59': 16, '60+': 6}},
+    'VENMO':       {'range': (24, 32), 'dist': {'<16': 5, '16-18': 8, '18-20': 14, '21-25': 22, '26-30': 20, '31-40': 18, '41-59': 10, '60+': 3}},
+    'CASH APP':    {'range': (24, 32), 'dist': {'<16': 5, '16-18': 8, '18-20': 14, '21-25': 22, '26-30': 20, '31-40': 18, '41-59': 10, '60+': 3}},
+    'PAYPAL':      {'range': (36, 44), 'dist': {'<16': 2, '16-18': 3, '18-20': 4, '21-25': 8, '26-30': 12, '31-40': 22, '41-59': 30, '60+': 19}},
+    'DOORDASH':    {'range': (26, 34), 'dist': {'<16': 4, '16-18': 6, '18-20': 10, '21-25': 18, '26-30': 20, '31-40': 22, '41-59': 15, '60+': 5}},
+    'UBER EATS':   {'range': (26, 34), 'dist': {'<16': 4, '16-18': 6, '18-20': 10, '21-25': 18, '26-30': 20, '31-40': 22, '41-59': 15, '60+': 5}},
+    'GRUBHUB':     {'range': (26, 34), 'dist': {'<16': 4, '16-18': 6, '18-20': 10, '21-25': 18, '26-30': 20, '31-40': 22, '41-59': 15, '60+': 5}},
+    'AIRBNB':      {'range': (28, 36), 'dist': {'<16': 3, '16-18': 4, '18-20': 8, '21-25': 16, '26-30': 20, '31-40': 24, '41-59': 18, '60+': 7}},
+    'ZOOM':        {'range': (34, 42), 'dist': {'<16': 3, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 14, '31-40': 22, '41-59': 28, '60+': 13}},
+    'SLACK':       {'range': (30, 38), 'dist': {'<16': 1, '16-18': 2, '18-20': 6, '21-25': 14, '26-30': 20, '31-40': 28, '41-59': 22, '60+': 7}},
+    'TELEGRAM':    {'range': (26, 34), 'dist': {'<16': 4, '16-18': 6, '18-20': 10, '21-25': 18, '26-30': 20, '31-40': 22, '41-59': 15, '60+': 5}},
+    'THREADS':     {'range': (26, 34), 'dist': {'<16': 4, '16-18': 6, '18-20': 10, '21-25': 18, '26-30': 18, '31-40': 22, '41-59': 16, '60+': 6}},
+    'BLUESKY':     {'range': (30, 38), 'dist': {'<16': 3, '16-18': 4, '18-20': 7, '21-25': 14, '26-30': 16, '31-40': 22, '41-59': 24, '60+': 10}},
+    'APPLE MUSIC': {'range': (24, 32), 'dist': {'<16': 6, '16-18': 8, '18-20': 14, '21-25': 22, '26-30': 18, '31-40': 18, '41-59': 10, '60+': 4}},
+    'AMAZON MUSIC': {'range': (32, 40), 'dist': {'<16': 3, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 14, '31-40': 22, '41-59': 28, '60+': 13}},
+    'PANDORA':     {'range': (34, 42), 'dist': {'<16': 3, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 12, '31-40': 20, '41-59': 28, '60+': 17}},
+    'TIDAL':       {'range': (24, 32), 'dist': {'<16': 5, '16-18': 8, '18-20': 12, '21-25': 20, '26-30': 20, '31-40': 20, '41-59': 12, '60+': 3}},
+    'HBO MAX':     {'range': (30, 38), 'dist': {'<16': 4, '16-18': 5, '18-20': 8, '21-25': 14, '26-30': 16, '31-40': 22, '41-59': 22, '60+': 9}},
+    'MAX':         {'range': (30, 38), 'dist': {'<16': 4, '16-18': 5, '18-20': 8, '21-25': 14, '26-30': 16, '31-40': 22, '41-59': 22, '60+': 9}},
+    'PEACOCK':     {'range': (34, 42), 'dist': {'<16': 3, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 12, '31-40': 20, '41-59': 28, '60+': 17}},
+    'PARAMOUNT PLUS': {'range': (36, 44), 'dist': {'<16': 3, '16-18': 4, '18-20': 5, '21-25': 8, '26-30': 10, '31-40': 20, '41-59': 30, '60+': 20}},
+    'PARAMOUNT+':  {'range': (36, 44), 'dist': {'<16': 3, '16-18': 4, '18-20': 5, '21-25': 8, '26-30': 10, '31-40': 20, '41-59': 30, '60+': 20}},
+    'APPLE TV':    {'range': (30, 38), 'dist': {'<16': 4, '16-18': 5, '18-20': 8, '21-25': 14, '26-30': 16, '31-40': 22, '41-59': 22, '60+': 9}},
 }
 
 
