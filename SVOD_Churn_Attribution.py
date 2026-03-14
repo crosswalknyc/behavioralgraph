@@ -1469,22 +1469,25 @@ def _research_show_viewership(client, show_name):
 
     prompt = (
         f'Search for real viewership data for the TV show/series "{search_query}". '
-        f'I need UNIQUE VIEWER COUNTS (number of people), NOT viewing minutes or hours.\n\n'
+        f'I need UNIQUE VIEWER COUNTS (number of individual people who watched), '
+        f'NOT viewing minutes or hours.\n\n'
+        f'PRIORITY ORDER for data sources:\n'
+        f'1. Nielsen "unique audience" or "reach" numbers (number of distinct people/households)\n'
+        f'2. Samba TV household reach data\n'
+        f'3. Platform-reported "accounts that watched" or "households that watched"\n'
+        f'4. Third-party estimates of unique viewers from Parrot Analytics, Antenna, etc.\n'
+        f'5. LAST RESORT: viewing hours/minutes (note clearly that this is NOT unique viewers)\n\n'
         f'Report:\n'
-        f'- Total unique US viewers for this show/season (MOST IMPORTANT — number of individual people who watched)\n'
-        f'- If only global viewers are available, report that AND estimate what percentage is US-based\n'
+        f'- Total unique US viewers/households for this show/season (number of people)\n'
+        f'- If only global numbers exist, report those AND estimate US share\n'
         f'- Premiere episode unique viewers\n'
-        f'- Average per-episode unique viewers\n'
-        f'- Peak episode unique viewers\n'
-        f'- If only viewing hours/minutes are available, note that but try to find or estimate unique viewer counts too\n'
         f'- Which platform it aired on and when\n'
-        f'- Total subscribers the platform had at that time\n\n'
-        f'IMPORTANT: I need PEOPLE, not minutes. Nielsen "unique audience" or "reach" numbers, '
-        f'Samba TV household counts, or platform-reported "accounts that watched" are what I need. '
-        f'Viewing minutes/hours are useful context but NOT a substitute for unique viewers.\n\n'
-        f'Cite specific sources (Nielsen, Luminate, Samba TV, Parrot Analytics, '
-        f'platform press releases, trade publications like Variety/Deadline/THR). '
-        f'Be concise — just the key numbers. If no data is available, say so.'
+        f'- Platform subscriber count at that time\n\n'
+        f'WARNING: Netflix, Disney+, etc. often report "viewing hours" which is NOT the same as '
+        f'unique viewers. One person watching 10 episodes = 10 hours but only 1 unique viewer. '
+        f'If only hours/minutes are available, say so explicitly and do NOT convert them to '
+        f'unique viewers — that conversion is unreliable.\n\n'
+        f'Cite specific sources. Be concise — just the key numbers.'
     )
 
     try:
@@ -1545,13 +1548,23 @@ We track UNIQUE INDIVIDUAL US VIEWERS (not minutes, not hours — actual people)
 
 CONVERSION FORMULAS:
 - Panel count × {projection_mult:.2f} = US Gen Pop Projection
-- To convert real-world US viewers to our panel: real_US_viewers × {panel_div:.10f} = panel count
-  (i.e. divide by {projection_mult:.2f})
+- Real-world US unique viewers / {projection_mult:.2f} = expected panel count
 
-IMPORTANT: If the research only reports GLOBAL viewers, you must estimate the US share.
-Typically US is 30-50% of global streaming viewership depending on the platform.
-If research reports viewing MINUTES/HOURS instead of unique viewers, that is NOT directly
-comparable — note this limitation but estimate unique viewers if possible.
+WORKED EXAMPLE — you MUST follow this math exactly:
+  If research says a show had 50,000,000 unique US viewers:
+  Panel count = 50000000 / {projection_mult:.2f} = {int(50000000 / projection_mult):,}
+  So suggested_watchers_range_panel should be around [{int(50000000 / projection_mult)}, {int(50000000 / projection_mult)}]
+  NOT [1515, 1515] — that would project to only ~50K viewers, not 50M.
+  The panel numbers should be in the HUNDREDS OF THOUSANDS for shows with millions of viewers.
+
+IMPORTANT RULES FOR INTERPRETING RESEARCH DATA:
+- If research reports GLOBAL viewers, estimate US share (typically 30-50% for English-language content).
+- If research reports viewing MINUTES/HOURS instead of unique viewers, DO NOT blindly divide
+  to get unique viewers. That math is unreliable because one viewer watches many hours.
+  Instead, look for any separate unique viewer/reach/household data. If ONLY hours data exists,
+  note this limitation and use your general knowledge of the show's popularity to estimate
+  a reasonable unique viewer count. For reference: a top-10 Netflix show typically reaches
+  20-60 million unique US viewers; a mid-tier show 5-15M; a niche show 1-5M.
 
 SHOW: {show_name}
 PLATFORM: {platform_name}
@@ -1584,15 +1597,27 @@ OUR DATA:
    If it is far off, flag it and suggest the correct panel number.
 
 === PHASE B: VALIDATE NEW SIGNUPS & REACTIVATIONS ===
-Judge whether new subscribers make sense for this platform's saturation level:
-- DOMINANT platforms (Netflix ~68%, Prime ~65%): Nearly everyone already subscribes. Even a
-  massive cultural event (Squid Game, final Stranger Things) drives relatively few truly NEW
-  signups. For most shows, new signups should be a tiny fraction of watchers.
-- EMERGING platforms (Peacock ~13%, Apple TV+ ~10%, Paramount+ ~15%): Large untapped market.
-  A hit exclusive can genuinely drive significant new subscriber acquisition.
-- If signups appear inflated for this platform's saturation, suggest a LOWER number.
-  NEVER suggest increasing signups — only reduce if inflated.
-- Reactivated accounts: dominant platforms have fewer dormant users to reactivate.
+"New Platform Signups" includes BOTH brand-new subscribers AND reactivated/dormant accounts.
+The pipeline later splits these into "Attributed Signups" (watched then signed up) and
+"Dormant to Reactive" (reactivated lapsed accounts). But the TOTAL must make sense first.
+
+CRITICAL REALITY CHECK: The vast majority of people who watch a show ALREADY HAVE the platform.
+Think about it — if someone watches Stranger Things on Netflix, they almost certainly already
+had a Netflix subscription. The conversion rate (new signups / total watchers) should reflect this:
+
+- DOMINANT platforms (Netflix ~68%, Prime ~65%): Conversion should be VERY LOW.
+  Typical show: 0.1-0.5% of watchers are new signups. Even a massive cultural phenomenon
+  might only reach 1-3%. A 5%+ conversion rate on Netflix is almost impossible.
+  Example: 10M watchers on Netflix → maybe 10K-50K genuinely new subscribers.
+- MAJOR platforms (Hulu ~30%, Disney+ ~28%): Conversion typically 0.5-3%.
+  Hit shows might reach 3-5% but rarely higher.
+- MID-TIER platforms (Max ~22%): Conversion typically 1-5%.
+- EMERGING/NICHE platforms (Peacock ~13%, Apple TV+ ~10%, Paramount+ ~15%):
+  Conversion can be higher (2-10%) because many viewers must sign up to watch.
+  A breakout exclusive could push 5-15% conversion on a truly niche platform.
+
+If the conversion rate seems too high for the platform tier, suggest lower signups.
+NEVER suggest increasing signups — only reduce if inflated.
 
 === PHASE C: TIME FRAME & CONTENT SCALE ===
 - Short windows (1-2 weeks) naturally produce lower numbers. Do NOT flag low numbers.
