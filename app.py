@@ -17421,11 +17421,15 @@ def run_svod_acquisition(job_id):
                 'display_label': raw.get('display_label') or (f"Episode {raw.get('episode_num', len(episode_dates) + 1)}" if params.get('tracking_mode') == 'episode' else air_date.strftime('%m/%d/%y'))
             })
         if episode_dates and params.get('track_episodes'):
+            # Sort episodes chronologically so date range is correct
+            episode_dates.sort(key=lambda ep: ep['air_date'])
             campaign_start = episode_dates[0]['air_date']
-            # Extend campaign_end so we capture all show watchers in the season window (not just on exact air dates).
-            # Otherwise a single-episode run uses one day and often returns 0 watchers.
             attr_days = int(params.get('attribution_window', 30))
             campaign_end = episode_dates[-1]['air_date'] + timedelta(days=attr_days)
+        
+        # Safety: ensure campaign_start <= campaign_end
+        if campaign_start > campaign_end:
+            campaign_start, campaign_end = campaign_end, campaign_start
         
         competitive_brands = module.get_competitive_platforms(params['platform_name']) if hasattr(module, 'get_competitive_platforms') else []
         from pathlib import Path

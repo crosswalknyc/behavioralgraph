@@ -341,6 +341,8 @@ def get_user_input():
                         except ValueError:
                             print("    ⚠️  Invalid date format. Please use MM-DD-YYYY")
         
+        # Sort episodes chronologically by air_date so campaign date range is correct
+        episode_dates.sort(key=lambda ep: ep['air_date'])
         # Update campaign_start and campaign_end based on episodes/dates
         campaign_start = episode_dates[0]['air_date']
         campaign_end = episode_dates[-1]['air_date']
@@ -589,6 +591,16 @@ def run_query(conn, p):
     platform_filter = format_search_term(p['platform_name'])
     track_episodes = p.get('track_episodes', False)
     episode_dates = p.get('episode_dates', [])
+
+    # Ensure episode dates are sorted chronologically
+    if episode_dates:
+        episode_dates.sort(key=lambda ep: ep['air_date'])
+        p['episode_dates'] = episode_dates
+
+    # Ensure campaign_start <= campaign_end (swap if reversed)
+    if p['campaign_start'] > p['campaign_end']:
+        print(f"⚠️  Date range reversed: {p['campaign_start'].date()} > {p['campaign_end'].date()}, swapping...")
+        p['campaign_start'], p['campaign_end'] = p['campaign_end'], p['campaign_start']
 
     # Step 1: Find all people who watched the show during the date range
     if track_episodes and episode_dates:
