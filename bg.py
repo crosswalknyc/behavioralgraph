@@ -4419,16 +4419,10 @@ def ai_broadcast_cable_demographic_review(df, brand_category, project_name, bran
 
     prompt = f"""You are a premium-tier US broadcast/cable television audience demographics analyst. Determine PRECISE DIGITAL AUDIENCE demographics for this network.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY network.
-- Broadcast networks are MASS MARKET — their digital audiences are close to US population averages.
-- ONLY increase above 8% if the network specifically programs for or is widely embraced by the LGBTQ+ community.
-- HARD CAP: NEVER assign >12% to any broadcast/cable network.
-- Conservative-leaning networks (Fox News, Newsmax, OAN): 3-5%. DO NOT exceed 5%.
-- Older-skewing networks (CBS, ABC): 5-7%. These are mainstream, not LGBTQ+-focused.
-- Young-skewing networks (CW, Freeform): 8-10% — younger audiences have slightly higher LGBTQ+ representation.
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
-- EVERY category MUST sum to exactly 100%.
+⚠️ CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 NETWORK: "{subject_clean}"
 CATEGORY: {brand_category}
@@ -4436,90 +4430,15 @@ CATEGORY: {brand_category}
 === STEP 1: IDENTIFY THIS NETWORK ===
 What network is this? Parent company, programming slate, signature shows, target demo, digital audience profile. Is it primarily entertainment, news, sports, or mixed?
 
-=== STEP 2: BROADCAST/CABLE DIGITAL AUDIENCE RULES ===
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-AGE — CRITICAL: broadcast/cable audiences are MUCH OLDER than streaming or social media. These are traditional TV networks whose digital audiences STILL skew heavily 40+. You MUST follow the exact ranges below. The distributions are calibrated so the MEDIAN AGE matches real Pew/Nielsen data. Do NOT deviate.
-
-IMPORTANT: If the REAL-WORLD RESEARCH section provides a median age, your output distribution MUST produce that median. Calculate it: the 50th-percentile age must land at the reported median.
-
-CBS digital (OLDEST network — Pew median age 58):
-  <16: 1%  |  16-18: 1%  |  18-20: 1%  |  21-25: 2%  |  26-30: 3%  |  31-40: 9%  |  41-59: 35%  |  60+: 48%
-  41+ MUST be 80-85%. Under-25 MUST be <6%. Median age ~58.
-
-ABC digital (Pew median age 55):
-  <16: 1%  |  16-18: 1%  |  18-20: 2%  |  21-25: 3%  |  26-30: 4%  |  31-40: 10%  |  41-59: 37%  |  60+: 42%
-  41+ MUST be 75-82%. Under-25 MUST be <8%. Median age ~55.
-
-NBC digital (Pew median age ~53):
-  <16: 1%  |  16-18: 1%  |  18-20: 2%  |  21-25: 3%  |  26-30: 5%  |  31-40: 12%  |  41-59: 37%  |  60+: 39%
-  41+ MUST be 73-80%. Under-25 MUST be <8%. Median age ~53.
-
-Fox Broadcasting digital (median age ~50 — sports/animation pull slightly younger):
-  <16: 2%  |  16-18: 2%  |  18-20: 3%  |  21-25: 4%  |  26-30: 5%  |  31-40: 14%  |  41-59: 36%  |  60+: 34%
-  41+ MUST be 66-74%. Under-25 MUST be <12%. Median age ~51.
-
-CW digital (youngest broadcast network — median age ~35):
-  <16: 4%  |  16-18: 5%  |  18-20: 10%  |  21-25: 13%  |  26-30: 13%  |  31-40: 25%  |  41-59: 20%  |  60+: 10%
-  CW is the ONLY broadcast network where under-30 can exceed 40%.
-
-Cable news (CNN, Fox News, MSNBC): median age 60+. 60+ should be 35-45%. Under-30: <6%.
-Cable entertainment (USA, TNT, TBS): median ~48. 30-54 core. 60+: 18-25%.
-Sports networks (ESPN, FS1): median ~42. 25-49 male-heavy peak.
-
-HARD RULE: For ABC/CBS/NBC/Fox, the COMBINED 41-59 + 60+ brackets MUST be at least 65% of the total. Violating this means the output is WRONG. These are NOT young-audience platforms. Traditional broadcast TV audiences are OLD. The under-30 combined brackets should NEVER exceed 15% for any Big 4 network.
-
-GENDER by network type:
-- Broadcast networks (ABC, CBS, NBC): slightly female-leaning (52-55% female) due to drama/reality programming.
-- Fox Broadcasting: closer to 50/50 or slight male lean (sports, animation).
-- CW: 55-60% female (teen/young adult dramas, romance).
-- Sports-focused (ESPN, FS1): 65-75% male.
-- Cable news: 48-55% male.
-- Lifestyle/reality (Bravo, E!, HGTV): 65-75% female.
-- NON-BINARY + TRANS: keep realistic. Total non-cis gender: 1-3% max for any network.
-
-ETHNICITY — broadcast networks are mass-market and roughly mirror US demographics:
-- General broadcast: 55-65% White, 12-18% Latinx, 10-15% Black, 5-8% Asian, 3-5% Other.
-- Networks with strong Black programming (BET, OWN, TV One): 60-80% Black.
-- Spanish-language (Telemundo, Univision): 80-90% Latinx.
-- CW/Freeform: slightly more diverse than average (younger audience).
-- CBS: slightly whiter/older demographic.
-
-EDUCATION:
-- Mass-market broadcast: 40-55% HS only, 28-38% college, 12-22% grad school.
-- News-focused networks: higher education (30-40% college, 15-25% grad school).
-- Young-skewing (CW): many still in school, lower grad school %.
-- Older-skewing (CBS): slightly higher education (completed degrees over time).
-
-INCOME:
-- Broadcast networks: broad middle-class distribution.
-- CBS: slightly higher income (older = more established careers).
-- CW: lower income (younger audience, early career).
-- News networks: moderate-to-higher income.
-- General broadcast: peak $40K-$100K, with 15-25% above $100K.
-
-PARENTAL STATUS:
-- Family-friendly networks (ABC, NBC): 40-55% has kids.
-- Older-skewing (CBS): 35-45% has kids (many with grown children who don't count).
-- Young-skewing (CW): 15-25% has kids (mostly childless young adults).
-- "Other" should be 5-10% max. NOT 25%+.
-
-RELATIONSHIP:
-- Older-skewing (CBS): 45-55% married, 15-25% single.
-- Young-skewing (CW): 40-55% single, 15-25% married.
-- General broadcast (ABC, NBC): 35-45% married, 25-35% single.
-- Divorced: 8-15% max for most networks. CBS slightly higher (older audience).
-- In a relationship: 10-20%.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7% for all broadcast networks. This is a mass-market medium.
-- CBS: 4-6% (oldest, most conservative-leaning audience).
-- ABC: 5-7% (mainstream family).
-- NBC: 5-7% (mainstream).
-- Fox Broadcasting: 5-7% (mainstream entertainment, NOT Fox News).
-- CW: 8-10% (youngest audience, significant LGBTQ+ programming like Batwoman, etc.).
-- Cable news conservative (Fox News): 3-5%.
-- Bravo: 12-18% (strong LGBTQ+ following — Real Housewives, drag culture).
-- DO NOT assign 10%+ to mainstream broadcast networks without clear justification.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this network's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the network's identity, programming, and target audience — but stay close to US population baselines for mass-market broadcast networks.
+5. Cross-check: does the overall profile make sense given the network's identity? Older-skewing networks should have higher marriage rates, more education (completed degrees), higher income. Younger-skewing networks should have more singles, lower income, more still in school.
 
 {research_block}
 === STEP 3: EVALUATE ===
