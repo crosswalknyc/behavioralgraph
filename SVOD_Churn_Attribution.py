@@ -1440,14 +1440,72 @@ def _get_platform_info(platform_name):
     return PLATFORM_PENETRATION.get(key, {'pct': 15, 'subs_millions': 20, 'tier': 'unknown'})
 
 
+_show_viewership_cache = {}
+
+def _research_show_viewership(client, show_name):
+    """Use gpt-4o-search-preview to look up real US viewership data for a show + season.
+
+    Parses season info from the show name (e.g. "Euphoria - Season 1") and searches
+    for actual Nielsen/Luminate/Samba TV viewer counts. Returns a text summary or ""
+    on failure. Results are cached in-memory.
+    """
+    if not client or not show_name:
+        return ""
+
+    cache_key = show_name.strip().lower()
+    if cache_key in _show_viewership_cache:
+        return _show_viewership_cache[cache_key]
+
+    clean = show_name.replace('_', ' ').replace('-', ' ').strip()
+    import re as _re
+    season_match = _re.search(r'(?i)(season\s*\d+|s\d+)', clean)
+    if season_match:
+        season_str = season_match.group(0)
+        show_part = clean[:season_match.start()].strip().rstrip(' -')
+        search_query = f'{show_part} {season_str}'
+    else:
+        show_part = clean
+        search_query = clean
+
+    prompt = (
+        f'Search for real US viewership data for the TV show/series "{search_query}". '
+        f'Report:\n'
+        f'- Total unique US viewers for this show/season (if available)\n'
+        f'- Premiere episode viewers\n'
+        f'- Average per-episode viewership\n'
+        f'- Peak episode viewership\n'
+        f'- Any streaming hours/completion data (e.g. Nielsen streaming top 10)\n'
+        f'- Which platform it aired on and when\n\n'
+        f'Cite specific sources (Nielsen, Luminate, Samba TV, Parrot Analytics, '
+        f'platform press releases, trade publications like Variety/Deadline/THR). '
+        f'Be concise — just the key numbers. If no data is available, say so.'
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-search-preview',
+            messages=[{'role': 'user', 'content': prompt}],
+            max_tokens=800,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        _show_viewership_cache[cache_key] = text
+        if text:
+            print(f"🔍 Viewership research for '{search_query}': {len(text)} chars retrieved")
+        return text
+    except Exception as e:
+        print(f"⚠️  Viewership research failed for '{search_query}': {e}")
+        _show_viewership_cache[cache_key] = ""
+        return ""
+
+
 def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
                         conversion_rate, genre='', content_cadence='',
                         episode_count=0, pre_existing_viewers=0,
                         analysis_date_range='', is_new_show=False):
     """
-    Use GPT-4o-mini to validate whether Total Show Watchers, New Platform Signups,
-    and Total Show Conversion Rate are plausible given the show, platform, and context.
-    Returns a dict with 'passed', 'flags', and 'adjustments'.
+    Use GPT-4o with web-researched viewership data to validate whether
+    Total Show Watchers, New Platform Signups, and conversion rates are
+    plausible. Adjusts only downward when numbers appear inflated.
     """
     try:
         from openai import OpenAI
@@ -1458,13 +1516,23 @@ def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
     except Exception:
         return {'passed': True, 'flags': [], 'note': 'OpenAI not available; skipping validation'}
 
+    viewership_research = _research_show_viewership(client, show_name)
+
     plat_info = _get_platform_info(platform_name)
     watchers_projected = total_watchers * (US_POPULATION / SAMPLE_REPRESENTS)
     signups_projected = new_signups * (US_POPULATION / SAMPLE_REPRESENTS)
 
-    prompt = f"""You are an expert analyst validating SVOD (Streaming Video on Demand) subscriber acquisition data.
+    research_block = ""
+    if viewership_research:
+        research_block = f"""
+=== REAL-WORLD VIEWERSHIP DATA (from web search) ===
+The following is current, web-sourced viewership information for this show.
+This is your PRIMARY reference for validating Total Show Watchers.
 
-Given the following analysis output, determine whether the key metrics are PLAUSIBLE:
+{viewership_research}
+"""
+
+    prompt = f"""You are an expert analyst validating SVOD subscriber acquisition data using REAL viewership research.
 
 SHOW: {show_name}
 PLATFORM: {platform_name}
@@ -1479,70 +1547,84 @@ PLATFORM CONTEXT:
 - US Subscribers: ~{plat_info['subs_millions']}M
 - Platform Tier: {plat_info['tier']}
 
-KEY METRICS (from our 10M-person panel, projected to US pop):
-- Total Show Watchers (panel): {total_watchers:,.0f} → Projected: {watchers_projected:,.0f}
-- Pre-Existing Viewers: {pre_existing_viewers:,.0f}
-- New Platform Signups (panel): {new_signups:,.0f} → Projected: {signups_projected:,.0f}
+OUR METRICS (from 10M-person panel, projected to US pop):
+- Total Show Watchers (panel): {total_watchers:,.0f} → US Gen Pop Projected: {watchers_projected:,.0f}
+- Pre-Existing Platform Viewers: {pre_existing_viewers:,.0f}
+- New Platform Signups (panel): {new_signups:,.0f} → US Gen Pop Projected: {signups_projected:,.0f}
 - Total Show Conversion Rate: {conversion_rate:.2f}%
+{research_block}
+=== PHASE A: VALIDATE TOTAL SHOW WATCHERS ===
+Compare our "US Gen Pop Projected" watchers number to the REAL viewership data above.
+- Our projected number should be in the same ballpark as the real-world viewer count.
+- If no real data was found, use your knowledge of this show's popularity to judge.
+- If our number is significantly higher than reality (e.g. we say 50M but Nielsen says 8M),
+  flag it and suggest what the panel number should be to produce a realistic projection.
+- The panel-to-projection formula is: panel × {US_POPULATION / SAMPLE_REPRESENTS:.2f} = US projection.
+  So to get a target projection, divide by {US_POPULATION / SAMPLE_REPRESENTS:.2f} to get the panel number.
 
-VALIDATION RULES:
-1. TOTAL SHOW WATCHERS: Should be reasonable for this show on this platform. Consider:
-   - Is this a tentpole/flagship show or a minor title?
-   - How popular is the genre?
-   - Does the panel watchers number make sense for the platform's subscriber base?
+=== PHASE B: VALIDATE NEW SIGNUPS & REACTIVATIONS ===
+Judge whether the new subscriber count makes sense given the platform's market position:
+- DOMINANT platforms (Netflix ~68%, Prime ~65%): Already ubiquitous. Almost everyone who
+  would watch a show already has the platform. Only a true cultural phenomenon (final season
+  of Stranger Things, Squid Game) drives meaningful NEW signups. For most shows, new signups
+  should be very low relative to watchers.
+- MAJOR platforms (Hulu ~30%, Disney+ ~28%): Moderate room for acquisition. A hit show can
+  drive some new subs, but most of the audience already has access.
+- MID-TIER platforms (Max ~22%): More room for growth. A flagship show can drive noticeable
+  new subscriber acquisition.
+- EMERGING/NICHE platforms (Peacock ~13%, Paramount+ ~15%, Apple TV+ ~10%): Significant room
+  for acquisition. A hit exclusive can genuinely drive large numbers of new subscribers because
+  many viewers do NOT already have the platform.
+- If signups seem inflated for the platform tier, suggest a LOWER number. Never adjust upward.
+- Reactivated accounts follow the same logic: dominant platforms have fewer truly dormant users.
 
-2. NEW PLATFORM SIGNUPS: Consider platform penetration heavily.
-   - Dominant platforms (Netflix 68%, Prime 65%) are already ubiquitous, so even a massive show drives relatively FEW new signups (most viewers are already subscribed)
-   - Emerging/niche platforms (Peacock 13%, Apple TV+ 10%, Paramount+ 15%) have much more room for new subscriber acquisition
-   - A hit show on Netflix might drive 0.5-3% conversion; on Peacock/Paramount+ it could drive 10-35%
-
-3. CONVERSION RATE:
-   - Netflix/Prime: typically 0.3-5% (already saturated market)
-   - Hulu/Disney+: typically 2-12%
-   - HBO Max: typically 3-20%
-   - Peacock/Paramount+: typically 5-35% for a hit
-   - Apple TV+: typically 3-15%
-   - Rates above these ranges are suspicious; rates below may indicate a weak title
-
-4. TIME FRAME MATTERS:
-   - A short analysis window (1-2 weeks) naturally produces LOWER watchers and signups. Very low conversion in a short window is expected and NOT suspicious.
-   - A longer window (3-12+ months) should produce proportionally more data. Very low conversion over months IS suspicious.
-   - A 1-week window for a minor/indie title could easily produce <0.1% conversion. That's plausible.
-   - Scale accordingly: a small indie film, stand-up special, or non-flagship content should have modest numbers.
-
-5. CONTENT SCALE:
-   - Major tentpole series (Stranger Things, The Boys) drive massive engagement and signups
-   - Mid-tier shows (reality TV, procedural dramas) drive moderate numbers
-   - Stand-up specials, indie films, minor titles drive low numbers -- this is EXPECTED
-   - Do NOT flag low conversion for small/niche content on a short time window. Only flag if numbers are clearly impossible.
-
-Be conservative with flags -- only flag things that are truly implausible, not just on the lower/higher side of normal.
+=== PHASE C: TIME FRAME & CONTENT SCALE ===
+- Short windows (1-2 weeks) naturally produce lower numbers. Do NOT flag low numbers on short windows.
+- Stand-up specials, indie films, minor titles have modest numbers — that is expected.
+- Only flag numbers that are clearly impossible or significantly inflated.
 
 Respond in JSON ONLY (no markdown fencing):
 {{
   "passed": true/false,
   "watchers_plausible": true/false,
-  "watchers_note": "brief explanation",
+  "watchers_note": "brief explanation referencing real data if available",
   "signups_plausible": true/false,
-  "signups_note": "brief explanation",
+  "signups_note": "brief explanation of platform-tier reasoning",
   "conversion_plausible": true/false,
   "conversion_note": "brief explanation",
   "flags": ["list of specific concerns if any"],
   "suggested_conversion_range": [low_pct, high_pct],
   "suggested_watchers_range_panel": [low, high],
+  "suggested_signups_range_panel": [low, high],
   "overall_assessment": "one sentence summary"
 }}"""
 
     try:
         resp = client.chat.completions.create(
-            model='gpt-4o-mini',
+            model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.2,
-            max_tokens=800
+            temperature=0.1,
+            max_tokens=1200
         )
         raw = resp.choices[0].message.content.strip()
         if raw.startswith('```'):
             raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        # Extract the outermost JSON object using brace matching
+        depth = 0
+        start = -1
+        end = -1
+        for i, c in enumerate(raw):
+            if c == '{':
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if start >= 0 and end > start:
+            raw = raw[start:end]
         result = json.loads(raw)
         return result
     except Exception as e:
@@ -1551,53 +1633,81 @@ Respond in JSON ONLY (no markdown fencing):
 
 def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups, platform_name, p):
     """
-    If AI validation flags implausible metrics, apply soft corrections to the output DataFrame.
-    Only adjusts if the validation explicitly fails and provides suggested ranges.
-    Returns the adjusted DataFrame and a summary of changes.
+    Apply corrections based on AI validation with web-researched viewership data.
+
+    Key rules:
+    - Watchers: adjust toward real-world viewership (can go up or down)
+    - Signups/reactivations: only adjust DOWNWARD (never inflate)
+    - Conversion rate: recalculated from adjusted signups/watchers
     """
     changes = []
     if validation_result.get('passed', True):
         return df_out, changes
 
-    plat_info = _get_platform_info(platform_name)
+    adjusted_watchers = total_watchers
+    adjusted_signups = new_signups
 
-    # Check if conversion rate needs adjustment
-    if not validation_result.get('conversion_plausible', True):
-        suggested = validation_result.get('suggested_conversion_range', [])
-        if len(suggested) == 2 and suggested[0] is not None and suggested[1] is not None:
-            target_conv = (suggested[0] + suggested[1]) / 2.0
-            current_conv_raw = (new_signups / total_watchers * 100) if total_watchers > 0 else 0
-
-            if abs(current_conv_raw - target_conv) > 1.0:
-                new_signups_adjusted = int(round(total_watchers * target_conv / 100.0))
-                new_signups_gpp = format_gen_pop(gen_pop_projection(new_signups_adjusted))
-
-                for idx in df_out.index:
-                    cat = str(df_out.loc[idx, "Category"] or "").strip()
-                    if cat == "New Platform Signups":
-                        old_count = df_out.loc[idx, "Count"]
-                        df_out.loc[idx, "Count"] = new_signups_adjusted
-                        df_out.loc[idx, "Gen Pop Projection"] = new_signups_gpp
-                        changes.append(f"New Platform Signups: {old_count} → {new_signups_adjusted} (AI adjusted to ~{target_conv:.1f}% conversion)")
-                    elif cat == "Total Show Conversion Rate" or cat == "Clean Conversion Rate":
-                        df_out.loc[idx, "Percentage"] = f"{target_conv:.2f}%"
-                        changes.append(f"{cat}: adjusted to {target_conv:.2f}%")
-                    elif cat == "TOTAL SIGNUPS":
-                        df_out.loc[idx, "Count"] = new_signups_adjusted
-                        df_out.loc[idx, "Gen Pop Projection"] = new_signups_gpp
-
-    # Check if watchers need adjustment
+    # Watchers: anchor to real-world data
     if not validation_result.get('watchers_plausible', True):
         suggested_w = validation_result.get('suggested_watchers_range_panel', [])
         if len(suggested_w) == 2 and suggested_w[0] is not None and suggested_w[1] is not None:
             target_watchers = int((suggested_w[0] + suggested_w[1]) / 2.0)
+            if target_watchers > 0:
+                adjusted_watchers = target_watchers
+                for idx in df_out.index:
+                    cat = str(df_out.loc[idx, "Category"] or "").strip()
+                    if cat == "Total Show Watchers":
+                        old_val = df_out.loc[idx, "Count"]
+                        df_out.loc[idx, "Count"] = target_watchers
+                        df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(target_watchers))
+                        changes.append(f"Total Show Watchers: {old_val} → {target_watchers} (anchored to real viewership data)")
+
+    # Signups: only adjust DOWNWARD
+    if not validation_result.get('signups_plausible', True):
+        suggested_s = validation_result.get('suggested_signups_range_panel', [])
+        if len(suggested_s) == 2 and suggested_s[0] is not None and suggested_s[1] is not None:
+            target_signups = int((suggested_s[0] + suggested_s[1]) / 2.0)
+            if 0 < target_signups < new_signups:
+                adjusted_signups = target_signups
+                signups_gpp = format_gen_pop(gen_pop_projection(target_signups))
+                for idx in df_out.index:
+                    cat = str(df_out.loc[idx, "Category"] or "").strip()
+                    if cat == "New Platform Signups":
+                        old_count = df_out.loc[idx, "Count"]
+                        df_out.loc[idx, "Count"] = target_signups
+                        df_out.loc[idx, "Gen Pop Projection"] = signups_gpp
+                        changes.append(f"New Platform Signups: {old_count} → {target_signups} (reduced — platform too saturated for this level)")
+                    elif cat == "TOTAL SIGNUPS":
+                        df_out.loc[idx, "Count"] = target_signups
+                        df_out.loc[idx, "Gen Pop Projection"] = signups_gpp
+        elif not validation_result.get('conversion_plausible', True):
+            suggested_c = validation_result.get('suggested_conversion_range', [])
+            if len(suggested_c) == 2 and suggested_c[0] is not None and suggested_c[1] is not None:
+                target_conv = (suggested_c[0] + suggested_c[1]) / 2.0
+                target_signups = int(round(adjusted_watchers * target_conv / 100.0))
+                if 0 < target_signups < new_signups:
+                    adjusted_signups = target_signups
+                    signups_gpp = format_gen_pop(gen_pop_projection(target_signups))
+                    for idx in df_out.index:
+                        cat = str(df_out.loc[idx, "Category"] or "").strip()
+                        if cat == "New Platform Signups":
+                            old_count = df_out.loc[idx, "Count"]
+                            df_out.loc[idx, "Count"] = target_signups
+                            df_out.loc[idx, "Gen Pop Projection"] = signups_gpp
+                            changes.append(f"New Platform Signups: {old_count} → {target_signups} (reduced to ~{target_conv:.1f}% conversion)")
+                        elif cat == "TOTAL SIGNUPS":
+                            df_out.loc[idx, "Count"] = target_signups
+                            df_out.loc[idx, "Gen Pop Projection"] = signups_gpp
+
+    # Recalculate conversion rate if either watchers or signups changed
+    if adjusted_watchers != total_watchers or adjusted_signups != new_signups:
+        if adjusted_watchers > 0:
+            new_conv = adjusted_signups / adjusted_watchers * 100.0
             for idx in df_out.index:
                 cat = str(df_out.loc[idx, "Category"] or "").strip()
-                if cat == "Total Show Watchers":
-                    old_val = df_out.loc[idx, "Count"]
-                    df_out.loc[idx, "Count"] = target_watchers
-                    df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(target_watchers))
-                    changes.append(f"Total Show Watchers: {old_val} → {target_watchers} (AI adjusted)")
+                if cat in ("Total Show Conversion Rate", "Clean Conversion Rate"):
+                    df_out.loc[idx, "Percentage"] = f"{new_conv:.2f}%"
+                    changes.append(f"{cat}: recalculated to {new_conv:.2f}%")
 
     return df_out, changes
 
