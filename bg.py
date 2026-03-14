@@ -4307,6 +4307,133 @@ Each corrected category sums to 100. JSON only, no markdown."""
         return df
 
 
+# ── Deterministic age calibration safety net ────────────────────────────
+# Called AFTER GPT-4o review to catch age distributions GPT failed to fix.
+# GPT doesn't actually compute weighted averages — it eyeballs them — so
+# this programmatic step enforces research-backed median ages.
+
+_AGE_MIDPOINTS = {
+    '<16': 12, '16-18': 17, '18-20': 19, '21-25': 23, '26-30': 28,
+    '31-40': 35, '41-59': 50, '60+': 68,
+}
+
+_AGE_CALIBRATION_TARGETS = {
+    # ── SEARCH ENGINE/AI ──
+    'GOOGLE':      {'range': (37, 43), 'dist': {'<16': 4, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 12, '31-40': 22, '41-59': 26, '60+': 16}},
+    'BING':        {'range': (43, 50), 'dist': {'<16': 2, '16-18': 3, '18-20': 3, '21-25': 6, '26-30': 8, '31-40': 18, '41-59': 35, '60+': 25}},
+    'YAHOO':       {'range': (48, 55), 'dist': {'<16': 1, '16-18': 2, '18-20': 2, '21-25': 4, '26-30': 5, '31-40': 12, '41-59': 38, '60+': 36}},
+    'DUCKDUCKGO':  {'range': (34, 40), 'dist': {'<16': 5, '16-18': 2, '18-20': 12, '21-25': 18, '26-30': 8, '31-40': 22, '41-59': 18, '60+': 15}},
+    'CHATGPT':     {'range': (30, 36), 'dist': {'<16': 3, '16-18': 5, '18-20': 12, '21-25': 18, '26-30': 22, '31-40': 20, '41-59': 10, '60+': 10}},
+    'CHAT GPT':    {'range': (30, 36), 'dist': {'<16': 3, '16-18': 5, '18-20': 12, '21-25': 18, '26-30': 22, '31-40': 20, '41-59': 10, '60+': 10}},
+    'CLAUDE':      {'range': (28, 34), 'dist': {'<16': 2, '16-18': 3, '18-20': 15, '21-25': 20, '26-30': 20, '31-40': 25, '41-59': 10, '60+': 5}},
+    'COPILOT':     {'range': (37, 44), 'dist': {'<16': 2, '16-18': 3, '18-20': 5, '21-25': 10, '26-30': 14, '31-40': 22, '41-59': 28, '60+': 16}},
+    'DEEPSEEK':    {'range': (30, 36), 'dist': {'<16': 3, '16-18': 5, '18-20': 12, '21-25': 18, '26-30': 22, '31-40': 20, '41-59': 10, '60+': 10}},
+    'DEEP SEEK':   {'range': (30, 36), 'dist': {'<16': 3, '16-18': 5, '18-20': 12, '21-25': 18, '26-30': 22, '31-40': 20, '41-59': 10, '60+': 10}},
+    'GEMINI':      {'range': (34, 40), 'dist': {'<16': 3, '16-18': 4, '18-20': 8, '21-25': 12, '26-30': 15, '31-40': 20, '41-59': 30, '60+': 8}},
+    'GROK':        {'range': (28, 34), 'dist': {'<16': 5, '16-18': 5, '18-20': 10, '21-25': 20, '26-30': 25, '31-40': 20, '41-59': 10, '60+': 5}},
+    'PERPLEXITY':  {'range': (28, 36), 'dist': {'<16': 3, '16-18': 4, '18-20': 8, '21-25': 18, '26-30': 22, '31-40': 22, '41-59': 18, '60+': 5}},
+    # ── MOVIE THEATER ──
+    'AMC':         {'range': (34, 40), 'dist': {'<16': 4, '16-18': 4, '18-20': 7, '21-25': 11, '26-30': 14, '31-40': 25, '41-59': 23, '60+': 12}},
+    'CINEMARK':    {'range': (34, 40), 'dist': {'<16': 6, '16-18': 5, '18-20': 7, '21-25': 10, '26-30': 14, '31-40': 24, '41-59': 23, '60+': 11}},
+    'REGAL':       {'range': (34, 40), 'dist': {'<16': 4, '16-18': 4, '18-20': 7, '21-25': 11, '26-30': 14, '31-40': 24, '41-59': 24, '60+': 12}},
+    'ALAMO':       {'range': (33, 39), 'dist': {'<16': 3, '16-18': 4, '18-20': 7, '21-25': 14, '26-30': 18, '31-40': 27, '41-59': 20, '60+': 7}},
+    'ALAMO DRAFTHOUSE': {'range': (33, 39), 'dist': {'<16': 3, '16-18': 4, '18-20': 7, '21-25': 14, '26-30': 18, '31-40': 27, '41-59': 20, '60+': 7}},
+}
+
+
+def _enforce_age_calibration(df, subject_clean, brand_category):
+    """Deterministic post-GPT check: if AGE weighted average is outside the
+    research-backed range for a known brand, override with calibrated distribution.
+    Returns the (possibly modified) DataFrame.
+    """
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    age_mask = df['Column'].str.upper().str.strip() == 'AGE'
+    if not age_mask.any():
+        return df
+
+    name_upper = (subject_clean or '').upper().strip()
+    target = None
+    for key, val in _AGE_CALIBRATION_TARGETS.items():
+        if key in name_upper:
+            target = val
+            break
+    if target is None:
+        return df
+
+    lo, hi = target['range']
+    target_dist = target['dist']
+
+    items = []
+    for idx, row in df[age_mask].iterrows():
+        val = str(row['Value']).strip()
+        try:
+            bp = float(str(row[bp_col]).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            bp = 0.0
+        items.append((val, bp, idx))
+
+    total_bp = sum(bp for _, bp, _ in items)
+    if total_bp <= 0:
+        return df
+
+    wavg = sum(
+        _AGE_MIDPOINTS.get(v.upper(), 35) * (bp / total_bp * 100)
+        for v, bp, _ in items
+    ) / 100.0
+
+    if lo <= wavg <= hi:
+        return df
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    changes = 0
+    for val, bp, idx in items:
+        key = val.strip().upper()
+        if key not in target_dist:
+            continue
+        new_pct = target_dist[key]
+        new_bp = new_pct * total_bp / 100.0
+        df.at[idx, bp_col] = f'{new_bp:.4f}%'
+        new_raw = round(sample_raw * new_bp / 100.0)
+        df.at[idx, raw_col] = str(new_raw)
+        df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+        changes += 1
+
+    all_idx = [idx for _, _, idx in items]
+    new_total = sum(
+        float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+        for ix in all_idx
+    )
+    if new_total > 0:
+        for ix in all_idx:
+            bp_v = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+            df.at[ix, cs_col] = f"{bp_v / new_total * 100.0:.4f}%"
+
+    new_wavg = sum(
+        _AGE_MIDPOINTS.get(str(df.at[idx, 'Value']).strip().upper(), 35)
+        * float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+        / total_bp * 100
+        for _, _, idx in items
+    ) / 100.0
+
+    print(f"   🔧 Age calibration: {name_upper} wavg {wavg:.0f}→{new_wavg:.0f} "
+          f"(target {lo}-{hi}), {changes} values fixed")
+    return df
+
+
 def ai_media_demographic_review(df, brand_category, project_name, brands):
     """GPT-4o powered demographic review for MEDIA (digital news/publications) profiles.
 
@@ -4480,7 +4607,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"📰 Media demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -4523,11 +4650,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"📰 Media demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Media demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_movie_theater_demographic_review(df, brand_category, project_name, brands):
@@ -4698,7 +4825,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎬 Movie Theater demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -4741,11 +4868,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎬 Movie Theater demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Movie Theater demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def ai_search_engine_ai_demographic_review(df, brand_category, project_name, brands):
@@ -4913,7 +5040,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🔍 Search Engine/AI demographic review: OK — {result.get('notes', '')[:80]}")
-            return df
+            return _enforce_age_calibration(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -4956,11 +5083,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🔍 Search Engine/AI demographic review: FIXED {changes} values — {notes}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Search Engine/AI demographic review error: {e}")
-        return df
+        return _enforce_age_calibration(df, subject_clean, brand_category)
 
 
 def item_level_ai_review(df, archetype, project_name, brands):
