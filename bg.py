@@ -450,6 +450,7 @@ def _research_brand_demographics(client, subject_name, brand_category):
         'PLATFORM': 'app/platform user base',
         'BROADCAST': 'broadcast/cable TV network digital audience',
         'CABLE': 'broadcast/cable TV network digital audience',
+        'MEDIA': 'digital news/media publication reader and user base',
     }
     audience_type = 'audience'
     bc_upper = (brand_category or '').upper()
@@ -4301,6 +4302,229 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
     except Exception as e:
         print(f"⚠️  Broadcast/Cable demographic review error: {e}")
+        return df
+
+
+def ai_media_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for MEDIA (digital news/publications) profiles.
+
+    Reasons about the READER/USER BASE of each digital media publication —
+    who actually reads, clicks, and subscribes to the outlet's digital content
+    (website, app, newsletters, social feeds) — based on editorial identity,
+    content focus, political lean, and known audience composition from
+    Pew Research, Comscore, Reuters Digital News Report, and similar sources.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if bc_upper != 'MEDIA':
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping media demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this publication's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a premium-tier US digital media audience demographics analyst. Determine PRECISE READER/USER demographics for this publication or media brand.
+
+⚠️ CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
+- KEY CONTEXT: This is a US digital media panel measuring who DIGITALLY ENGAGES with publications (reads articles, uses apps, clicks links). This skews younger and more educated than print audiences.
+
+PUBLICATION: "{subject_clean}"
+CATEGORY: {brand_category}
+
+=== STEP 1: IDENTIFY THIS MEDIA BRAND ===
+What is this publication? Determine its type from these subcategories:
+- NEWS AGGREGATOR (Google News, Apple News, Flipboard) — massive reach, mirrors general population
+- NATIONAL NEWSPAPER (NYT, USA Today, WaPo) — educated, higher income, urban
+- WIRE SERVICE (AP, Reuters) — broad, professional audience
+- BUSINESS/FINANCE (Forbes, Bloomberg, WSJ, CNBC) — male-skewing, high income, educated
+- TABLOID/CELEBRITY (TMZ, People, Page Six, Daily Mail) — female-skewing, broad demo
+- SPORTS MEDIA (Bleacher Report, Barstool, Yahoo Sports) — male-skewing, younger
+- TECH MEDIA (CNET, TechCrunch, Wired, Ars Technica) — male-skewing, younger, educated, higher income
+- LIFESTYLE/WOMEN'S (Cosmopolitan, Vogue, Elle, Good Housekeeping) — female-skewing, specific age bands
+- POLITICAL NEWS (The Hill, Politico, Mother Jones, Breitbart) — older, educated, politically engaged
+- ENTERTAINMENT (Entertainment Weekly, Variety, Screen Rant) — younger, gender-balanced
+- FOOD/HOME (Allrecipes, Food Network, HGTV, Bon Appetit) — female-skewing, 25-54
+- HEALTH/WELLNESS (Healthline, Psychology Today, WebMD) — female-skewing, educated
+- GENERAL INTEREST (HuffPost, BuzzFeed, Mashable) — younger, diverse, educated
+
+Also note: owner/parent company, editorial lean (if political), signature content, and digital platform presence (website, app, newsletter, social).
+
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Comscore, Reuters Digital News Report, Statista, Nielsen, and similar authoritative sources. This is your PRIMARY source of truth.
+
+IMPORTANT Pew Research benchmarks for US digital news audiences:
+- Median age of US digital news consumers: ~42
+- Major newspapers (NYT, WaPo) skew older (median ~48-52), more educated, higher income
+- News aggregators (Google News, Apple News) are close to general population
+- Business media skews male 60-65%, higher income, older (median ~48-55)
+- Sports media skews male 65-75%, younger (median ~34-38)
+- Celebrity/tabloid skews female 55-65%, broader age range
+- Tech media skews male 65-70%, younger (median ~32-38), very educated
+- Women's lifestyle is 80-90% female
+
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this publication's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the publication's type, editorial focus, and target audience — using the Pew benchmarks above as guardrails.
+5. Cross-check: does the overall profile make sense? Business publications should have higher income and education. Lifestyle publications should skew female. Tech publications should skew male and younger.
+
+{research_block}
+=== STEP 3: EVALUATE ===
+{demo_block}
+
+=== STEP 4: VERDICT ===
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.05,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"📰 Media demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"📰 Media demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  Media demographic review error: {e}")
         return df
 
 
@@ -9758,6 +9982,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ai_podcast_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_app_platform_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_broadcast_cable_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_media_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
