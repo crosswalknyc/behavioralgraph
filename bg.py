@@ -4452,6 +4452,11 @@ _AGE_CALIBRATION_TARGETS = {
     'TELEGRAM':    {'range': (26, 34), 'dist': {'<16': 4, '16-18': 6, '18-20': 10, '21-25': 18, '26-30': 20, '31-40': 22, '41-59': 15, '60+': 5}},
     'THREADS':     {'range': (26, 34), 'dist': {'<16': 4, '16-18': 6, '18-20': 10, '21-25': 18, '26-30': 18, '31-40': 22, '41-59': 16, '60+': 6}},
     'BLUESKY':     {'range': (30, 38), 'dist': {'<16': 3, '16-18': 4, '18-20': 7, '21-25': 14, '26-30': 16, '31-40': 22, '41-59': 24, '60+': 10}},
+    'X':           {'range': (30, 38), 'dist': {'<16': 4, '16-18': 5, '18-20': 8, '21-25': 14, '26-30': 16, '31-40': 22, '41-59': 22, '60+': 9}},
+    'ONLYFANS':    {'range': (24, 32), 'dist': {'<16': 2, '16-18': 6, '18-20': 14, '21-25': 26, '26-30': 22, '31-40': 18, '41-59': 10, '60+': 2}},
+    'TUMBLR':      {'range': (22, 30), 'dist': {'<16': 8, '16-18': 10, '18-20': 16, '21-25': 24, '26-30': 18, '31-40': 14, '41-59': 8, '60+': 2}},
+    'TRUTH SOCIAL': {'range': (48, 58), 'dist': {'<16': 1, '16-18': 1, '18-20': 2, '21-25': 4, '26-30': 5, '31-40': 10, '41-59': 34, '60+': 43}},
+    'TRUTHSOCIAL': {'range': (48, 58), 'dist': {'<16': 1, '16-18': 1, '18-20': 2, '21-25': 4, '26-30': 5, '31-40': 10, '41-59': 34, '60+': 43}},
     'APPLE MUSIC': {'range': (24, 32), 'dist': {'<16': 6, '16-18': 8, '18-20': 14, '21-25': 22, '26-30': 18, '31-40': 18, '41-59': 10, '60+': 4}},
     'AMAZON MUSIC': {'range': (32, 40), 'dist': {'<16': 3, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 14, '31-40': 22, '41-59': 28, '60+': 13}},
     'PANDORA':     {'range': (34, 42), 'dist': {'<16': 3, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 12, '31-40': 20, '41-59': 28, '60+': 17}},
@@ -5355,7 +5360,12 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
         if total_bp > 0:
             shares = {v: bp / total_bp * 100 for v, bp, _ in so_items}
             yes_pct = shares.get('YES', 0)
-            max_lgbtq = 10.0
+            subj_upper = subject_clean.upper()
+            # Tumblr has a known LGBTQ+ community (~12-15%)
+            if 'TUMBLR' in subj_upper:
+                max_lgbtq = 15.0
+            else:
+                max_lgbtq = 10.0
 
             if yes_pct > max_lgbtq:
                 sample_raw = 0
@@ -5368,7 +5378,7 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
                     except (ValueError, TypeError):
                         sample_raw = 1
 
-                target_yes = 7.0
+                target_yes = 13.0 if 'TUMBLR' in subj_upper else 7.0
                 pns_pct = shares.get('PREFER NOT TO SAY', 0)
                 target_no = 100.0 - target_yes - min(pns_pct, 3.0)
                 target_pns = 100.0 - target_yes - target_no
@@ -5482,7 +5492,223 @@ _SPECIFIC_AGENT_KEYWORDS = [
     'WRITER', 'DIRECTOR', 'AUTHOR', 'ARTIST', 'SERIES', 'PODCAST',
     'APP', 'PLATFORM', 'BROADCAST', 'CABLE', 'SEARCH ENGINE',
 ]
-_SPECIFIC_AGENT_EXACT = ['MEDIA', 'MOVIE THEATER']
+_SPECIFIC_AGENT_EXACT = ['MEDIA', 'MOVIE THEATER', 'SOCIAL MEDIA']
+
+
+def ai_social_media_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for SOCIAL MEDIA platform profiles.
+
+    Uses web research + platform-specific benchmarks to evaluate and correct
+    all 8 demographic categories for social media platforms like TikTok,
+    Instagram, Facebook, Snapchat, X/Twitter, LinkedIn, Pinterest, etc.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if bc_upper != 'SOCIAL MEDIA':
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping social media demographic review")
+        subject = project_name or (brands[0] if brands else 'Unknown')
+        subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+        return _enforce_all_demographics(df, subject_clean, brand_category)
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this platform's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        items = []
+        for idx, row in df[mask].iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return _enforce_all_demographics(df, subject_clean, brand_category)
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a premium-tier US social media platform demographics analyst. Determine PRECISE user demographics for this social media platform.
+
+⚠️ CRITICAL RULES — READ CAREFULLY:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start at 7% and ONLY adjust with hard evidence. Tumblr is an exception (~12-15% due to strong LGBTQ+ community). For all others, stay at or below 10%.
+- ETHNICITY: Start from US census (White ~58%, Hispanic/Latinx ~19%, Black ~13%, Asian ~6%, Other ~4%) and adjust based on platform-specific data.
+- AGE: Identify the MEDIAN AGE of this platform's user base from research. Construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+- Your job is to reflect REALITY based on authoritative research (Pew Research, Statista, eMarketer, Comscore, DataReportal, SimilarWeb), not to guess or apply stereotypes.
+
+PLATFORM: "{subject_clean}"
+CATEGORY: {brand_category}
+
+=== STEP 1: IDENTIFY THIS PLATFORM ===
+What social media platform is this? Key characteristics to determine:
+- Core use case (photo sharing, short video, professional networking, microblogging, etc.)
+- Target demographic and actual user base composition
+- Cultural/political leaning if any (e.g. Truth Social = conservative, Tumblr = progressive/LGBTQ+)
+- Growth trajectory (growing = younger base, mature/declining = older base)
+
+=== STEP 2: USE THE RESEARCH DATA ===
+{research_block}
+
+IMPORTANT benchmarks for US social media users (Pew Research 2024-2025):
+- TikTok: ~67% of US teens, 33% of adults use it. Median age ~25-27. Female slight majority (57%). Very diverse ethnicity. Younger, lower-income skew.
+- Instagram: ~47% of US adults. Median age ~30-32. Female skew (57%). Hispanic/Black audiences over-index. Broad income range.
+- Facebook: ~69% of US adults, most popular overall. Median age ~40-42. Slight female lean (53%). Broadest demo — mirrors general US closely but skews older than average social platform. Higher proportion 40+.
+- X/Twitter: ~22% of US adults. Median age ~33-36. Male lean (60-65%). Higher education. Urban. News/politics oriented.
+- Snapchat: ~27% of US adults, ~59% of teens. Median age ~22-25. Female lean (55%). Very young. Diverse.
+- LinkedIn: ~30% of US adults. Median age ~38-42. Male lean (55%). Highly educated. Higher income ($75K+). Professional/urban.
+- Pinterest: ~28% of US adults. Median age ~34-38. Strong female lean (76-80%). Higher education. Home/decor/fashion/DIY.
+- YouTube: ~83% of US adults. Median age ~35-38. Slight male lean (54%). Broadly mirrors US population.
+- Reddit: ~22% of US adults. Median age ~30-33. Strong male lean (64%). Higher education. Tech-savvy. White over-index.
+- Threads: New (Meta). Median age ~28-32. Similar demo to Instagram but slightly older/male. Growing.
+- Bluesky: Niche. Median age ~33-38. Male lean (55-60%). Highly educated. Progressive/tech. White over-index.
+- Tumblr: Niche/declining. Median age ~24-28. Female/non-binary lean (65%+). LGBTQ+ community (~12-15%). Young, diverse, creative.
+- OnlyFans: Median age ~26-30. Creator base female, consumer base male (70%+). Higher income. 18-34 core.
+- Truth Social: Niche/political. Median age ~52-58. Strong male lean (65-70%). White over-index (75%+). Older, conservative, lower education diversity.
+
+For each demographic category:
+1. Check what the research data says about this platform's user base.
+2. If research provides a median age, construct age distribution so 50th percentile lands there.
+3. If the research provides gender splits, use them directly.
+4. Cross-check: does the overall profile make sense for this specific platform's known user base?
+
+=== STEP 3: EVALUATE CURRENT DEMOGRAPHICS ===
+{demo_block}
+
+=== STEP 4: VERDICT ===
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.05,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"📱 Social media demographic review: OK — {result.get('notes', '')[:80]}")
+            return _enforce_all_demographics(df, subject_clean, brand_category)
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"📱 Social media demographic review: FIXED {changes} values — {notes}")
+        return _enforce_all_demographics(df, subject_clean, brand_category)
+
+    except Exception as e:
+        print(f"⚠️  Social media demographic review error: {e}")
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_universal_demographic_review(df, brand_category, project_name, brands):
@@ -11629,6 +11855,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ai_media_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_movie_theater_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_search_engine_ai_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_social_media_demographic_review(df_final, brand_category, project_name, brands)
 
         # Universal catch-all: handles ANY category not covered above
         df_final = ai_universal_demographic_review(df_final, brand_category, project_name, brands)
