@@ -4419,10 +4419,95 @@ _AGE_CALIBRATION_TARGETS = {
 }
 
 
+_age_median_cache = {}
+
+
+def _generate_age_distribution(target_median):
+    """Parametric age distribution: interpolate between young/mid/old archetypes
+    to produce an 8-bucket distribution whose weighted average ≈ target_median.
+    """
+    target = max(15, min(65, target_median))
+
+    young = {'<16': 12, '16-18': 12, '18-20': 16, '21-25': 22, '26-30': 16, '31-40': 12, '41-59': 7, '60+': 3}
+    middle = {'<16': 3, '16-18': 4, '18-20': 6, '21-25': 10, '26-30': 14, '31-40': 24, '41-59': 26, '60+': 13}
+    old = {'<16': 1, '16-18': 1, '18-20': 2, '21-25': 3, '26-30': 4, '31-40': 8, '41-59': 34, '60+': 47}
+
+    buckets = list(young.keys())
+    if target <= 22:
+        dist = dict(young)
+    elif target >= 58:
+        dist = dict(old)
+    elif target <= 38:
+        t = (target - 22) / (38 - 22)
+        dist = {k: young[k] * (1 - t) + middle[k] * t for k in buckets}
+    else:
+        t = (target - 38) / (58 - 38)
+        dist = {k: middle[k] * (1 - t) + old[k] * t for k in buckets}
+
+    raw = {k: max(0, v) for k, v in dist.items()}
+    total = sum(raw.values())
+    if total <= 0:
+        return middle
+    return {k: round(v / total * 100, 1) for k, v in raw.items()}
+
+
+def _gpt_median_age_lookup(subject_clean, brand_category):
+    """Lightweight GPT call: ask for the expected median age of a brand's
+    US audience. Returns a float or None. Cached per brand.
+    """
+    cache_key = f"median_age||{subject_clean}||{brand_category}"
+    if cache_key in _age_median_cache:
+        return _age_median_cache[cache_key]
+
+    client = _get_openai_client()
+    if not client:
+        return None
+
+    import json as _json
+
+    prompt = (
+        f'What is the median age of the US audience/user base for '
+        f'"{subject_clean}" (brand category: {brand_category})?\n\n'
+        f'Base your answer on Pew Research, Nielsen, Comscore, Statista, '
+        f'eMarketer, MPA, or similar authoritative sources.\n\n'
+        f'Return ONLY a JSON object: {{"median_age": <number>}}\n'
+        f'The number should be between 12 and 70. No explanation.'
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.0,
+            max_tokens=30,
+        )
+        text = resp.choices[0].message.content.strip()
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        result = _json.loads(text)
+        median = float(result.get('median_age', 0))
+        if 12 <= median <= 70:
+            _age_median_cache[cache_key] = median
+            return median
+        _age_median_cache[cache_key] = None
+        return None
+    except Exception as e:
+        print(f"   ⚠️ GPT median-age lookup failed for {subject_clean}: {e}")
+        _age_median_cache[cache_key] = None
+        return None
+
+
 def _enforce_age_calibration(df, subject_clean, brand_category):
-    """Deterministic post-GPT check: if AGE weighted average is outside the
-    research-backed range for a known brand, override with calibrated distribution.
-    Returns the (possibly modified) DataFrame.
+    """Post-GPT age validation. Two-tier approach:
+
+    1. HARDCODED TARGETS — if the brand is in _AGE_CALIBRATION_TARGETS, use
+       the pre-computed distribution (fastest, most reliable, zero API cost).
+    2. GPT FALLBACK — for unknown brands, ask GPT for the expected median age
+       (cheap 30-token call), then generate a calibrated distribution using
+       _generate_age_distribution() (pure math, no GPT guesswork).
+
+    Only overrides if the current weighted average is outside the acceptable
+    range. Returns the (possibly modified) DataFrame.
     """
     bp_col = 'Brand Penetration (Row)'
     raw_col = 'Original Raw Numbers'
@@ -4435,11 +4520,25 @@ def _enforce_age_calibration(df, subject_clean, brand_category):
         return df
 
     name_upper = (subject_clean or '').upper().strip()
+
+    # ── Tier 1: check hardcoded targets ──
     target = None
     for key, val in _AGE_CALIBRATION_TARGETS.items():
         if key in name_upper:
             target = val
             break
+
+    # ── Tier 2: GPT median-age lookup for unknown brands ──
+    gpt_median = None
+    if target is None:
+        gpt_median = _gpt_median_age_lookup(subject_clean, brand_category)
+        if gpt_median is not None:
+            tolerance = 4
+            target = {
+                'range': (gpt_median - tolerance, gpt_median + tolerance),
+                'dist': _generate_age_distribution(gpt_median),
+            }
+
     if target is None:
         return df
 
@@ -4465,6 +4564,8 @@ def _enforce_age_calibration(df, subject_clean, brand_category):
     ) / 100.0
 
     if lo <= wavg <= hi:
+        source = "hardcoded" if gpt_median is None else f"GPT median={gpt_median:.0f}"
+        print(f"   ✅ Age OK: {name_upper} wavg={wavg:.0f} within ({lo:.0f}-{hi:.0f}) [{source}]")
         return df
 
     sample_raw = 0
@@ -4482,7 +4583,7 @@ def _enforce_age_calibration(df, subject_clean, brand_category):
         key = val.strip().upper()
         if key not in target_dist:
             continue
-        new_pct = target_dist[key]
+        new_pct = float(target_dist[key])
         new_bp = new_pct * total_bp / 100.0
         df.at[idx, bp_col] = f'{new_bp:.4f}%'
         new_raw = round(sample_raw * new_bp / 100.0)
@@ -4507,8 +4608,9 @@ def _enforce_age_calibration(df, subject_clean, brand_category):
         for _, _, idx in items
     ) / 100.0
 
+    source = "hardcoded" if gpt_median is None else f"GPT median={gpt_median:.0f}"
     print(f"   🔧 Age calibration: {name_upper} wavg {wavg:.0f}→{new_wavg:.0f} "
-          f"(target {lo}-{hi}), {changes} values fixed")
+          f"(target {lo:.0f}-{hi:.0f}) [{source}], {changes} values fixed")
     return df
 
 
