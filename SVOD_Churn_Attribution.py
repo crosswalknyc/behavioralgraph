@@ -1528,6 +1528,32 @@ def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
     Total Show Watchers, New Platform Signups, and conversion rates are
     plausible. Adjusts only downward when numbers appear inflated.
     """
+    # Hard sanity check: catch obviously impossible numbers before calling AI
+    if conversion_rate > 30 and total_watchers > 0:
+        plat_info = _get_platform_info(platform_name)
+        reasonable_conv = min(5.0, 100.0 - plat_info['pct'])
+        suggested_signups = int(total_watchers * reasonable_conv / 100.0)
+        return {
+            'passed': False,
+            'watchers_plausible': True,
+            'watchers_note': 'Watchers not evaluated — conversion rate is the primary issue',
+            'signups_plausible': False,
+            'signups_note': f'Conversion rate of {conversion_rate:.1f}% is impossible. '
+                           f'This likely means the analysis window is too wide, capturing '
+                           f'coincidental signups unrelated to the show.',
+            'conversion_plausible': False,
+            'conversion_note': f'{conversion_rate:.1f}% conversion is physically impossible — '
+                              f'most viewers already had the platform to watch the show.',
+            'flags': [f'conversion rate {conversion_rate:.1f}% is impossible',
+                     'analysis window likely too wide',
+                     'pre-existing viewer filter may have no data'],
+            'suggested_conversion_range': [0.5, reasonable_conv],
+            'suggested_watchers_range_panel': [total_watchers, total_watchers],
+            'suggested_signups_range_panel': [suggested_signups // 2, suggested_signups],
+            'overall_assessment': f'Conversion rate of {conversion_rate:.1f}% is clearly wrong. '
+                                 f'Narrow the analysis window to the actual season dates.'
+        }
+
     try:
         from openai import OpenAI
         api_key = os.environ.get('OPENAI_API_KEY')
@@ -1633,6 +1659,15 @@ NEVER suggest increasing signups — only reduce if inflated.
 - Short windows (1-2 weeks) naturally produce lower numbers. Do NOT flag low numbers.
 - Minor titles, stand-up specials, indie films have modest numbers — that is expected.
 - Only flag numbers that are clearly impossible or significantly inflated.
+
+=== ABSOLUTE RULES (override everything else) ===
+- A conversion rate above 20% is ALWAYS implausible on ANY platform. Flag it immediately.
+- A conversion rate above 50% is physically impossible — it implies most viewers didn't have
+  the platform, which contradicts the fact that they watched the show ON the platform.
+- If the analysis date range spans more than 1 year, the data is almost certainly capturing
+  coincidental signups unrelated to the show. Flag this and suggest much lower signups.
+- If Pre-Existing Viewers is 0 but Total Watchers is high, the exclusion window likely had
+  no data — meaning EVERYONE is counted as "new" when most were actually pre-existing. Flag this.
 
 Show your math in the notes. Respond with ONLY a JSON object — no markdown code fences, no comments, no trailing commas, no text outside the JSON.
 CRITICAL: Do NOT use commas in numbers inside JSON. Write 50000 not 50,000. Write 1500000 not 1,500,000.
@@ -2021,6 +2056,26 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                     df_out.loc[idx, "Gen Pop Projection"] = f"{int(round(n / OUTPUT_DIVISOR)):,}"
             except (ValueError, TypeError):
                 pass
+
+    # Hard sanity checks before AI validation
+    date_range_days = 0
+    if p.get('campaign_start') and p.get('campaign_end'):
+        try:
+            date_range_days = (p['campaign_end'] - p['campaign_start']).days
+        except Exception:
+            pass
+
+    if date_range_days > 365:
+        print(f"⚠️  Analysis window is {date_range_days} days ({date_range_days/365:.1f} years).")
+        print("   Attribution works best with a single-season window (weeks to months).")
+        print("   A multi-year window captures coincidental signups unrelated to the show.")
+
+    if total_show_conversion > 25:
+        print(f"⚠️  Conversion rate is {total_show_conversion:.1f}% — almost certainly inflated.")
+        print("   Most platforms see <5% conversion even for hit shows.")
+        if date_range_days > 180:
+            print(f"   Likely cause: analysis window is too wide ({date_range_days} days).")
+            print("   Over a long period, people sign up for unrelated reasons.")
 
     # AI Plausibility Validation
     print("🤖 Running AI plausibility check...")
