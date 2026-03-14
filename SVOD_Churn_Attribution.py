@@ -1342,7 +1342,20 @@ def run_query(conn, p):
             raw_val = int(df_demo.loc[idx, 'COUNT']) if not pd.isna(df_demo.loc[idx, 'COUNT']) else 0
             if raw_val > 0:
                 df_demo.loc[idx, 'COUNT'] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
-    
+
+    # AI demographic validation: correct AGE/GENDER distributions using web research
+    show_name = ', '.join(p.get('show_search_terms', []))
+    print("🧬 Running AI demographic validation...")
+    df_demo, demo_changes = ai_validate_demographics(
+        show_name, p['platform_name'], df_demo, inflated_new_signups
+    )
+    if demo_changes:
+        print("   Applied demographic corrections:")
+        for dc in demo_changes:
+            print(f"     → {dc}")
+    else:
+        print("   ✅ Demographics look plausible (no corrections needed)")
+
     # Inflate timing counts with same inflation factor
     if 'SIGNUP_COUNT' in df_timing.columns:
         for idx in df_timing.index:
@@ -1825,6 +1838,185 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
     return df_out, changes
 
 
+# =========================================
+# === AI Demographic Validation (SVOD)  ===
+# =========================================
+_demo_research_cache = {}
+
+def ai_validate_demographics(show_name, platform_name, df_demo, new_signups):
+    """
+    Use GPT-4o with web research to validate and correct demographic distributions
+    for new platform signups attributed to a show. Returns corrected df_demo with
+    realistic AGE and GENDER distributions based on the show's known audience.
+    """
+    if df_demo.empty or new_signups <= 0:
+        return df_demo, []
+
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+    except Exception:
+        return df_demo, []
+
+    cache_key = show_name.strip().lower()
+    if cache_key in _demo_research_cache:
+        research = _demo_research_cache[cache_key]
+    else:
+        clean = show_name.replace('_', ' ').replace('-', ' ').strip()
+        season_match = re.search(r'(?i)(season\s*\d+|s\d+)', clean)
+        if season_match:
+            season_str = season_match.group(0)
+            show_part = clean[:season_match.start()].strip().rstrip(' -')
+            search_query = f'{show_part} {season_str}'
+        else:
+            search_query = clean
+
+        research_prompt = (
+            f'Search for the real audience demographics of the TV show "{search_query}". '
+            f'I need the actual demographic breakdown of viewers who watch this show.\n\n'
+            f'Report:\n'
+            f'- Gender split (% male vs female vs other)\n'
+            f'- Age distribution (% in each bracket: under 18, 18-24, 25-34, 35-44, 45-54, 55-64, 65+)\n'
+            f'- Cite Nielsen, Samba TV, YouGov, Morning Consult, or other audience measurement sources\n'
+            f'- Note if this show skews particularly young/old, male/female\n'
+            f'- Platform it airs on: {platform_name}\n\n'
+            f'Be specific with percentages. Cite sources.'
+        )
+        try:
+            resp = client.chat.completions.create(
+                model="gpt-4o-search-preview",
+                messages=[{"role": "user", "content": research_prompt}],
+                web_search_options={"search_context_size": "medium"},
+            )
+            research = resp.choices[0].message.content.strip() if resp.choices else ""
+        except Exception:
+            research = ""
+        _demo_research_cache[cache_key] = research
+
+    if not research:
+        return df_demo, []
+
+    current_age = {}
+    current_gender = {}
+    for _, row in df_demo.iterrows():
+        cat = str(row.get('CATEGORY', '')).strip()
+        val = str(row.get('VALUE', '')).strip()
+        count = int(row['COUNT']) if not pd.isna(row.get('COUNT')) else 0
+        if cat == 'AGE':
+            current_age[val] = count
+        elif cat == 'GENDER':
+            current_gender[val] = count
+
+    age_total = sum(current_age.values())
+    gender_total = sum(current_gender.values())
+
+    age_list = ', '.join(f'{k}: {v} ({v*100//age_total}%)' for k, v in current_age.items()) if age_total else 'none'
+    gender_list = ', '.join(f'{k}: {v} ({v*100//gender_total}%)' for k, v in current_gender.items()) if gender_total else 'none'
+
+    correction_prompt = (
+        f'You are a demographic data analyst. Based on real audience research for "{show_name}" '
+        f'on {platform_name}, correct the demographic distribution of new platform signups.\n\n'
+        f'RESEARCH DATA:\n{research}\n\n'
+        f'OUR CURRENT DATA (panel counts):\n'
+        f'AGE (total {age_total}): {age_list}\n'
+        f'GENDER (total {gender_total}): {gender_list}\n\n'
+        f'Using the research, provide corrected PERCENTAGE distributions that reflect '
+        f'the real audience of this show. The corrected percentages must sum to 100% for '
+        f'each category.\n\n'
+        f'IMPORTANT RULES:\n'
+        f'- Use the research data to determine realistic splits\n'
+        f'- These are people who signed up for {platform_name} because of this show, '
+        f'so the demographics should match the show\'s known audience profile\n'
+        f'- If the show skews female, female % should be higher than male\n'
+        f'- If the show skews young, younger age brackets should dominate\n'
+        f'- Keep Non-Binary/Trans/Other at realistic small percentages (1-3% total)\n'
+        f'- Keep "Prefer Not to Say" under 1%\n\n'
+        f'Return ONLY a JSON object with this exact structure (no comments, no commas in numbers):\n'
+        f'{{\n'
+        f'  "age": {{"17 and Under": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, '
+        f'"45-54": <pct>, "55-64": <pct>, "65 or Older": <pct>}},\n'
+        f'  "gender": {{"Male": <pct>, "Female": <pct>, "Non-Binary": <pct>, '
+        f'"Trans Male": <pct>, "Trans Female": <pct>, "Prefer Not to Say": <pct>}},\n'
+        f'  "reasoning": "brief explanation of why these percentages match the show"\n'
+        f'}}\n'
+        f'Percentages should be numbers (e.g. 35.0 not "35%"). Each category must sum to ~100.'
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": correction_prompt}],
+            temperature=0.2,
+        )
+        raw = resp.choices[0].message.content.strip()
+    except Exception:
+        return df_demo, []
+
+    try:
+        start = raw.find('{')
+        depth = 0
+        end = start
+        for i in range(start, len(raw)):
+            if raw[i] == '{':
+                depth += 1
+            elif raw[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        raw_json = raw[start:end]
+        raw_json = re.sub(r'//.*?$', '', raw_json, flags=re.MULTILINE)
+        raw_json = re.sub(r',\s*}', '}', raw_json)
+        raw_json = re.sub(r',\s*]', ']', raw_json)
+        result = json.loads(raw_json)
+    except Exception:
+        return df_demo, []
+
+    changes = []
+    age_corrections = result.get('age', {})
+    gender_corrections = result.get('gender', {})
+    reasoning = result.get('reasoning', '')
+
+    if age_corrections and age_total > 0:
+        assigned = 0
+        items = list(age_corrections.items())
+        for i, (bracket, pct) in enumerate(items):
+            if i == len(items) - 1:
+                new_count = age_total - assigned
+            else:
+                new_count = int(round(age_total * float(pct) / 100.0))
+                assigned += new_count
+            for idx in df_demo.index:
+                if str(df_demo.loc[idx, 'CATEGORY']).strip() == 'AGE' and str(df_demo.loc[idx, 'VALUE']).strip() == bracket:
+                    old_count = int(df_demo.loc[idx, 'COUNT']) if not pd.isna(df_demo.loc[idx, 'COUNT']) else 0
+                    df_demo.loc[idx, 'COUNT'] = new_count
+                    df_demo.loc[idx, 'PERCENTAGE'] = round(new_count * 100.0 / age_total, 1) if age_total > 0 else 0
+                    if old_count != new_count:
+                        changes.append(f"AGE {bracket}: {old_count} → {new_count}")
+
+    if gender_corrections and gender_total > 0:
+        assigned = 0
+        items = list(gender_corrections.items())
+        for i, (bracket, pct) in enumerate(items):
+            if i == len(items) - 1:
+                new_count = gender_total - assigned
+            else:
+                new_count = int(round(gender_total * float(pct) / 100.0))
+                assigned += new_count
+            for idx in df_demo.index:
+                if str(df_demo.loc[idx, 'CATEGORY']).strip() == 'GENDER' and str(df_demo.loc[idx, 'VALUE']).strip() == bracket:
+                    old_count = int(df_demo.loc[idx, 'COUNT']) if not pd.isna(df_demo.loc[idx, 'COUNT']) else 0
+                    df_demo.loc[idx, 'COUNT'] = new_count
+                    df_demo.loc[idx, 'PERCENTAGE'] = round(new_count * 100.0 / gender_total, 1) if gender_total > 0 else 0
+                    if old_count != new_count:
+                        changes.append(f"GENDER {bracket}: {old_count} → {new_count}")
+
+    if reasoning:
+        changes.append(f"Reasoning: {reasoning}")
+
+    return df_demo, changes
+
+
 # =======================
 # === Output writing  ===
 # =======================
@@ -2167,20 +2359,6 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     else:
         note = validation.get('overall_assessment', validation.get('note', 'Metrics look plausible'))
         print(f"✅ AI validation passed: {note}")
-
-    # Append validation metadata rows
-    df_out = pd.concat([df_out, pd.DataFrame([
-        ("", "", "", "", "", "", "", "", "", ""),
-        ("", "", "AI VALIDATION", "", "", "", "", "", "", ""),
-        ("Validation Status", "", "PASS" if validation.get('passed', True) else "FLAGGED", "", "", "", "", "", "", ""),
-        ("Assessment", "", validation.get('overall_assessment', ''), "", "", "", "", "", "", ""),
-    ], columns=df_out.columns)], ignore_index=True)
-
-    if validation.get('flags'):
-        for i, flag in enumerate(validation['flags']):
-            df_out = pd.concat([df_out, pd.DataFrame([
-                (f"Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
-            ], columns=df_out.columns)], ignore_index=True)
 
     # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
     output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
