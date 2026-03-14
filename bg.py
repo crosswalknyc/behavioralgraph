@@ -452,6 +452,7 @@ def _research_brand_demographics(client, subject_name, brand_category):
         'CABLE': 'broadcast/cable TV network digital audience',
         'MEDIA': 'digital news/media publication reader and user base',
         'MOVIE THEATER': 'movie theater chain patron and moviegoer base',
+        'SEARCH ENGINE': 'search engine and AI platform user base',
     }
     audience_type = 'audience'
     bc_upper = (brand_category or '').upper()
@@ -4744,6 +4745,221 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
     except Exception as e:
         print(f"⚠️  Movie Theater demographic review error: {e}")
+        return df
+
+
+def ai_search_engine_ai_demographic_review(df, brand_category, project_name, brands):
+    """GPT-4o powered demographic review for SEARCH ENGINE/AI profiles.
+
+    Reasons about the USER BASE of each search engine or AI platform —
+    who actually searches, browses, and interacts with these tools daily —
+    based on market share data, platform demographics from Pew Research,
+    Comscore, Statista, and similar authoritative sources.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if 'SEARCH ENGINE' not in bc_upper:
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping search engine/AI demographic review")
+        return df
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this platform's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        cat_df = df[mask]
+        items = []
+        for idx, row in cat_df.iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return df
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a premium-tier US search engine and AI platform audience demographics analyst. Determine PRECISE USER demographics for this search engine or AI platform.
+
+⚠️ CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
+- KEY CONTEXT: This is a US digital panel measuring who DIGITALLY ENGAGES with search engines and AI tools. These are among the most universal digital products — Google alone has 90%+ US market share.
+
+PLATFORM: "{subject_clean}"
+CATEGORY: {brand_category}
+
+=== STEP 1: IDENTIFY THIS PLATFORM ===
+What search engine or AI platform is this? Determine its type:
+- DOMINANT SEARCH ENGINE (Google, Google Search) — ~90% US market share, demographics mirror the online US population almost exactly. Slight young/educated lean from digital panel.
+- SECONDARY SEARCH ENGINE (Bing, Yahoo Search, DuckDuckGo) — Bing skews older (default on Windows, 40+ over-index), Yahoo Search skews older. DuckDuckGo skews younger, male, more educated, tech-savvy, privacy-conscious.
+- AI CHATBOT / ASSISTANT (ChatGPT, Gemini/Bard, Claude, Copilot, Perplexity) — skews younger (18-44 core), male (55-65%), more educated, higher income, early adopter profile. ChatGPT is the broadest AI tool. Perplexity/Claude skew even more tech-elite.
+- AI SEARCH (Google SGE, Bing Chat, SearchGPT, Perplexity) — similar to AI chatbot but slightly broader because integrated into existing search flows.
+- SPECIALIZED SEARCH (Pinterest search, Amazon search, YouTube search) — demographics match the parent platform.
+- VOICE ASSISTANT (Siri, Alexa, Google Assistant) — Siri skews iPhone owners (higher income, younger). Alexa skews family/home. Google Assistant mirrors Android (broader).
+
+Also note: parent company, market share, default status on major platforms/browsers, and whether usage requires opt-in vs comes pre-installed.
+
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Comscore, Statista, eMarketer, SimilarWeb, and similar authoritative sources. This is your PRIMARY source of truth.
+
+IMPORTANT benchmarks for US search/AI users:
+- Google Search: ~90% market share. User demo nearly mirrors US online population. Median user age ~38-40. Gender ~50/50. Ethnicity close to census.
+- Bing: ~3-4% market share. Skews older (median ~48-52) — default on Windows/Edge, many older users never switch. Slightly male. Higher income (enterprise users).
+- Yahoo Search: ~1-2%. Skews significantly older (median ~52-58). Legacy users.
+- DuckDuckGo: ~2-3%. Skews younger (median ~32-36), male (60-65%), highly educated, higher income, tech-savvy, privacy-focused.
+- ChatGPT: Largest AI chatbot. Skews young (median ~30-34), male (55-60%), college-educated, higher income. ~40% of 18-29 year olds have used it (Pew 2024).
+- Perplexity: Niche AI search. Very tech-elite. Young (median ~28-32), male (65-70%), very educated, high income.
+- Gemini/Bard: Google's AI. Similar to ChatGPT but slightly broader due to Google integration. Male lean (55-60%), younger.
+- Copilot: Microsoft's AI. Skews toward Bing's older demo but younger than Bing overall (median ~38-42). Male lean (60%).
+
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this platform's user base.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists, reason from the platform's type and market position using the benchmarks above.
+5. Cross-check: Google should look like America. AI tools should skew young/male/educated. Bing should skew older.
+
+{research_block}
+=== STEP 3: EVALUATE ===
+{demo_block}
+
+=== STEP 4: VERDICT ===
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.05,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"🔍 Search Engine/AI demographic review: OK — {result.get('notes', '')[:80]}")
+            return df
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"🔍 Search Engine/AI demographic review: FIXED {changes} values — {notes}")
+        return df
+
+    except Exception as e:
+        print(f"⚠️  Search Engine/AI demographic review error: {e}")
         return df
 
 
@@ -10203,6 +10419,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ai_broadcast_cable_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_media_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_movie_theater_demographic_review(df_final, brand_category, project_name, brands)
+        df_final = ai_search_engine_ai_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
