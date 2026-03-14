@@ -4548,6 +4548,62 @@ def _gpt_median_age_lookup(subject_clean, brand_category):
         return None
 
 
+_lgbtq_pct_cache = {}
+
+def _gpt_lgbtq_lookup(subject_clean, brand_category):
+    """Lightweight GPT call: ask what percentage of a brand's US audience
+    identifies as LGBTQ+. Returns a float (e.g. 7.0) or None. Cached.
+
+    Most brands return ~7% (US baseline). Brands with known LGBTQ+
+    affinity (Drag Race, Grindr, Tumblr, Bravo, certain artists) return
+    higher values. This replaces the hardcoded 10% cap.
+    """
+    cache_key = f"lgbtq||{subject_clean}||{brand_category}"
+    if cache_key in _lgbtq_pct_cache:
+        return _lgbtq_pct_cache[cache_key]
+
+    client = _get_openai_client()
+    if not client:
+        return 7.0
+
+    import json as _json
+
+    prompt = (
+        f'What percentage of the US audience/user base for '
+        f'"{subject_clean}" (brand category: {brand_category}) '
+        f'identifies as LGBTQ+?\n\n'
+        f'Context:\n'
+        f'- The US LGBTQ+ population is approximately 7.2% (Gallup 2023).\n'
+        f'- Most mainstream brands have an LGBTQ+ audience of 7-8%.\n'
+        f'- Brands with strong LGBTQ+ affinity (e.g. RuPaul\'s Drag Race, '
+        f'Grindr, Tumblr, Bravo, certain artists like Lil Nas X, Lady Gaga) '
+        f'can have 15-40%+ LGBTQ+ audiences.\n'
+        f'- Conservative/traditional brands may be slightly below 7%.\n\n'
+        f'Return ONLY a JSON object: {{"lgbtq_pct": <number>}}\n'
+        f'The number should be between 3 and 95. No explanation.'
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.0,
+            max_tokens=30,
+        )
+        text = resp.choices[0].message.content.strip()
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        result = _json.loads(text)
+        pct = float(result.get('lgbtq_pct', 7.0))
+        pct = max(3.0, min(95.0, pct))
+        _lgbtq_pct_cache[cache_key] = pct
+        return pct
+    except Exception as e:
+        print(f"   ⚠️ GPT LGBTQ+ lookup failed for {subject_clean}: {e}")
+        _lgbtq_pct_cache[cache_key] = 7.0
+        return 7.0
+
+
 def _enforce_age_calibration(df, subject_clean, brand_category):
     """Post-GPT age validation. Two-tier approach:
 
@@ -5344,7 +5400,7 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
 
     df = _enforce_age_calibration(df, subject_clean, brand_category)
 
-    # ── LGBTQ+ cap ──
+    # ── LGBTQ+ calibration (GPT-informed, not hardcoded) ──
     so_mask = df['Column'].str.upper().str.strip() == 'SEXUAL_ORIENTATION'
     if so_mask.any():
         so_items = []
@@ -5360,12 +5416,13 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
         if total_bp > 0:
             shares = {v: bp / total_bp * 100 for v, bp, _ in so_items}
             yes_pct = shares.get('YES', 0)
-            subj_upper = subject_clean.upper()
-            # Tumblr has a known LGBTQ+ community (~12-15%)
-            if 'TUMBLR' in subj_upper:
-                max_lgbtq = 15.0
-            else:
-                max_lgbtq = 10.0
+
+            # Ask GPT what the expected LGBTQ+ % is for this brand.
+            # Returns ~7% for most brands, higher for brands with known
+            # LGBTQ+ affinity (Tumblr, Drag Race, Grindr, Bravo, etc.)
+            expected_lgbtq = _gpt_lgbtq_lookup(subject_clean, brand_category)
+            # Allow up to 1.5x the expected value before clamping
+            max_lgbtq = min(expected_lgbtq * 1.5, 95.0)
 
             if yes_pct > max_lgbtq:
                 sample_raw = 0
@@ -5378,7 +5435,7 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
                     except (ValueError, TypeError):
                         sample_raw = 1
 
-                target_yes = 13.0 if 'TUMBLR' in subj_upper else 7.0
+                target_yes = expected_lgbtq
                 pns_pct = shares.get('PREFER NOT TO SAY', 0)
                 target_no = 100.0 - target_yes - min(pns_pct, 3.0)
                 target_pns = 100.0 - target_yes - target_no
@@ -5409,7 +5466,7 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
                         bp_v = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
                         df.at[ix, cs_col] = f"{bp_v / new_total * 100.0:.4f}%"
 
-                print(f"   🔧 LGBTQ+ cap: {subject_clean} YES {yes_pct:.0f}%→{target_yes:.0f}%")
+                print(f"   🔧 LGBTQ+ calibration: {subject_clean} YES {yes_pct:.0f}%→{target_yes:.0f}% (expected: {expected_lgbtq:.0f}%)")
 
     # ── ETHNICITY sanity check ──
     eth_mask = df['Column'].str.upper().str.strip() == 'ETHNICITY'
