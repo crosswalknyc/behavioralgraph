@@ -5705,12 +5705,437 @@ Each corrected category sums to 100. JSON only, no markdown."""
         return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
-def item_level_ai_review(df, archetype, project_name, brands):
-    """Second GPT pass: reviews top items per key category in the context
-    of the profile's demographics and flags specific contextual anomalies.
+# ─── COMPREHENSIVE FINAL GUT-CHECK AGENT ─────────────────────────────
+#
+# The final line of defense before a profile ships to S3.
+# Reviews the ENTIRE output — demographics, DMA/location, and every
+# behavioral category row by row — ensuring coherence with who the
+# audience actually is.  Uses GPT-4o + web research.
 
-    Example: "Hanes at 35% BP makes no sense for a 17-24 female beauty audience"
-    The category-level archetype can't catch this; item-level context is needed.
+def _build_profile_summary(df):
+    """Extract a compact natural-language summary of the profile's demographics."""
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    bp_col = 'Brand Penetration (Row)'
+    summary_parts = []
+
+    for demo_cat in ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION']:
+        mask = df['Column'].str.upper().str.strip() == demo_cat
+        if not mask.any():
+            continue
+        items = []
+        for _, row in df[mask].iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                cs = float(str(row.get(cs_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cs = 0
+            if cs > 0:
+                items.append(f"{val}: {cs:.1f}%")
+        if items:
+            summary_parts.append(f"{demo_cat}: {', '.join(items)}")
+
+    return '\n'.join(summary_parts) if summary_parts else 'No demographic data available'
+
+
+def ai_final_gut_check(df, brand_category, project_name, brands):
+    """Comprehensive final review of the entire profile output.
+
+    Reviews three dimensions:
+    1. LOCATION/DMA — does the geographic distribution make sense?
+       (e.g. Atlanta Hawks → Atlanta DMA should heavily over-index)
+    2. ALL behavioral categories — do the top items make sense for this
+       specific audience? (e.g. Taylor Swift fans shouldn't have NASCAR
+       at the top of their interests)
+    3. Cross-category coherence — does the profile tell a consistent story?
+
+    Runs AFTER all demographic agents and formatting steps, right before
+    the CSV save. Uses GPT-4o with web research for context.
+    """
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping final gut check")
+        return df
+
+    import json as _json
+
+    bp_col = 'Brand Penetration (Row)'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    bc = (brand_category or '').strip()
+
+    sample_raw = 1
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            pass
+
+    profile_summary = _build_profile_summary(df)
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+
+    gp = _load_genpop_csv()
+    gp_bp_lookup = {}
+    if gp is not None:
+        for _, row in gp.iterrows():
+            cat = str(row.iloc[0]).strip().upper()
+            val = str(row.iloc[1]).strip().upper()
+            try:
+                gp_bp_lookup[(cat, val)] = float(row.iloc[2])
+            except (ValueError, TypeError):
+                pass
+
+    DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                 'OCCUPATION'}
+    META_CATS = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+                 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
+
+    audience_context = (
+        f'BRAND/SUBJECT: "{subject_clean}"\n'
+        f'CATEGORY: {bc}\n\n'
+        f'AUDIENCE DEMOGRAPHICS:\n{profile_summary}\n\n'
+        f'WEB RESEARCH ON THIS BRAND\'S AUDIENCE:\n'
+        f'{web_research[:2000] if web_research else "No research available"}\n'
+    )
+
+    total_adjustments = 0
+
+    # ──────── PHASE 1: LOCATION / DMA REVIEW ────────
+    loc_mask = df['Column'].str.upper().str.strip() == 'LOCATION'
+    if loc_mask.any():
+        loc_items = []
+        for idx, row in df[loc_mask].iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0
+            try:
+                cs = float(str(row.get(cs_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cs = 0
+            if bp > 0:
+                loc_items.append((val, bp, cs, idx))
+
+        loc_items.sort(key=lambda x: -x[1])
+        top_locs = loc_items[:30]
+
+        if top_locs:
+            loc_lines = []
+            for dma, bp, cs, _ in top_locs:
+                gp_bp = gp_bp_lookup.get(('LOCATION', dma.upper()), 0)
+                idx_vs_gp = f" (GenPop: {gp_bp:.2f}%, index: {bp/gp_bp:.1f}x)" if gp_bp > 0 else ""
+                loc_lines.append(f"  {dma}: {bp:.2f}% BP, {cs:.1f}% share{idx_vs_gp}")
+
+            loc_prompt = (
+                f"You are a US consumer research analyst reviewing the GEOGRAPHIC "
+                f"DISTRIBUTION (DMA/metro) for a brand audience profile.\n\n"
+                f"{audience_context}\n"
+                f"=== LOCATION DATA (Top {len(top_locs)} DMAs by Brand Penetration) ===\n"
+                + "\n".join(loc_lines) +
+                f"\n\n=== YOUR TASK ===\n"
+                f"Review this geographic distribution. Key questions:\n"
+                f"1. If this is a REGIONAL brand/team/chain (e.g. Atlanta Hawks, In-N-Out, "
+                f"Wawa), does the home DMA/region HEAVILY over-index? It should — often "
+                f"2-5x the national average.\n"
+                f"2. If this is a NATIONAL brand, does the distribution roughly follow US "
+                f"population with reasonable regional variation?\n"
+                f"3. Are there DMAs that are way too high or low given this audience?\n"
+                f"4. For sports teams: the home city DMA should be in the top 3 with heavy "
+                f"over-indexing. Nearby DMAs should also over-index.\n"
+                f"5. For regional restaurant chains: markets where they operate should over-index.\n\n"
+                f"Return ONLY valid JSON:\n"
+                f'If OK: {{"status":"OK","notes":"reason"}}\n'
+                f'If corrections needed: {{"status":"FIX","notes":"what\'s wrong",'
+                f'"adjustments":[{{"dma":"DMA Name","direction":"higher" or "lower",'
+                f'"factor":1.5,"reason":"brief"}},...]}}\n\n'
+                f"factor: multiplier on current BP (e.g. 2.0 = double it, 0.5 = halve it).\n"
+                f"Only flag clear anomalies. Most DMAs should stay as-is.\n"
+                f"Be AGGRESSIVE for regional brands — the home DMA should dominate."
+            )
+
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': loc_prompt}],
+                    temperature=0.1,
+                    max_tokens=1500
+                )
+                text = resp.choices[0].message.content.strip()
+                if text.startswith('```'):
+                    text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+                depth = 0
+                end = 0
+                for i, c in enumerate(text):
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end = i + 1
+                            break
+                if end > 0:
+                    text = text[:end]
+
+                loc_result = _json.loads(text)
+
+                if loc_result.get('status') == 'FIX' and 'adjustments' in loc_result:
+                    dma_idx_map = {v.upper(): idx for v, _, _, idx in loc_items}
+                    for adj in loc_result['adjustments']:
+                        dma_name = str(adj.get('dma', '')).strip().upper()
+                        factor = float(adj.get('factor', 1.0))
+                        direction = adj.get('direction', '')
+                        reason = adj.get('reason', '')
+
+                        if dma_name not in dma_idx_map:
+                            close = [d for d in dma_idx_map if dma_name.split()[0] in d]
+                            if close:
+                                dma_name = close[0]
+                            else:
+                                continue
+
+                        row_idx = dma_idx_map[dma_name]
+                        try:
+                            cur_bp = float(str(df.at[row_idx, bp_col]).replace('%', '').replace(',', ''))
+                        except (ValueError, TypeError):
+                            continue
+
+                        factor = max(0.2, min(5.0, factor))
+                        new_bp = round(cur_bp * factor, 4)
+                        new_bp = min(new_bp, 25.0)
+
+                        new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
+                        df.at[row_idx, bp_col] = f'{new_bp:.4f}%' if isinstance(df.at[row_idx, bp_col], str) else new_bp
+                        df.at[row_idx, raw_col] = str(new_raw)
+                        df.at[row_idx, proj_col] = str(int(round(new_raw * MULT)))
+
+                        print(f"   📍 DMA fix: {adj.get('dma', dma_name)} {direction} "
+                              f"({cur_bp:.2f}%→{new_bp:.2f}%) — {reason}")
+                        total_adjustments += 1
+
+                    all_loc_idx = [idx for _, _, _, idx in loc_items]
+                    new_total = 0
+                    for ix in all_loc_idx:
+                        try:
+                            v = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                            new_total += v
+                        except (ValueError, TypeError):
+                            pass
+                    if new_total > 0:
+                        for ix in all_loc_idx:
+                            try:
+                                v = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                                new_cs = v / new_total * 100.0
+                                df.at[ix, cs_col] = f'{new_cs:.4f}%' if isinstance(df.at[ix, cs_col], str) else round(new_cs, 4)
+                            except (ValueError, TypeError):
+                                pass
+
+                    print(f"   📍 Location review: {total_adjustments} DMA adjustments")
+                else:
+                    print(f"   📍 Location review: OK — {loc_result.get('notes', '')[:80]}")
+
+            except Exception as e:
+                print(f"   ⚠️ Location gut-check error: {e}")
+
+    # ──────── PHASE 2: BEHAVIORAL CATEGORIES REVIEW ────────
+    categories_data = {}
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat in DEMO_CATS or cat in META_CATS or cat == 'LOCATION':
+            continue
+        val = str(row.get('Value', '')).strip()
+        try:
+            bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            bp = 0
+        try:
+            cs = float(str(row.get(cs_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            cs = 0
+        if bp > 0:
+            categories_data.setdefault(cat, []).append((val, bp, cs, idx))
+
+    if not categories_data:
+        print(f"🔍 Final gut check for {subject_clean}: {total_adjustments} total adjustments")
+        return df
+
+    batches = []
+    current_batch = {}
+    current_items = 0
+    for cat, items in sorted(categories_data.items()):
+        sorted_items = sorted(items, key=lambda x: -x[1])[:12]
+        current_batch[cat] = sorted_items
+        current_items += len(sorted_items)
+        if current_items >= 50:
+            batches.append(current_batch)
+            current_batch = {}
+            current_items = 0
+    if current_batch:
+        batches.append(current_batch)
+
+    for batch_num, batch in enumerate(batches, 1):
+        items_text = []
+        for cat, items in batch.items():
+            lines = []
+            for name, bp, cs, _ in items:
+                gp_bp = gp_bp_lookup.get((cat, name.upper()), 0)
+                idx_str = f" (GenPop BP: {gp_bp:.1f}%, index: {bp/gp_bp:.1f}x)" if gp_bp > 0 else ""
+                lines.append(f"  {name}: {bp:.1f}% BP, {cs:.1f}% share{idx_str}")
+            items_text.append(f"{cat}:\n" + "\n".join(lines))
+
+        behav_prompt = (
+            f"You are a US consumer research analyst doing a FINAL GUT CHECK on a "
+            f"brand audience profile. Your job is to ensure every item ranking makes "
+            f"sense for WHO this audience actually is.\n\n"
+            f"{audience_context}\n"
+            f"=== BEHAVIORAL DATA (batch {batch_num}/{len(batches)}) ===\n"
+            + "\n\n".join(items_text) +
+            f"\n\n=== CRITICAL RULES ===\n"
+            f"1. The audience is fans/users/customers of \"{subject_clean}\" ({bc}). "
+            f"EVERY top-ranked item should make sense for this specific audience.\n"
+            f"2. GenPop index shows how much this audience over/under-indexes vs "
+            f"the general population. An index of 1.0x = same as GenPop.\n"
+            f"3. Items that are just GenPop artifacts (high because everyone buys them, "
+            f"not because THIS audience specifically does) should be flagged if they're "
+            f"ranked above items that genuinely match this audience.\n"
+            f"4. BUT — some GenPop-heavy items ARE legitimate for most audiences "
+            f"(Walmart, Amazon, Netflix are genuinely popular everywhere). Don't flag those.\n"
+            f"5. Flag items that are CLEARLY mismatched:\n"
+            f"   - NASCAR ranking high for a young female pop-star audience\n"
+            f"   - Fox News ranking high for a young progressive audience\n"
+            f"   - Luxury brands ranking high for a low-income audience\n"
+            f"   - Brands that don't exist in the audience's region ranking high\n"
+            f"6. Also flag items that should be HIGHER but are surprisingly low:\n"
+            f"   - Country music for a country singer's fans\n"
+            f"   - Fitness brands for a workout facility's audience\n"
+            f"   - Local restaurants for a regional chain's audience\n"
+            f"7. Be CONSERVATIVE with adjustments. Only flag CLEAR mismatches. "
+            f"Minor oddities are fine — real data has quirks.\n\n"
+            f"Return ONLY valid JSON:\n"
+            f'If everything passes: {{"status":"OK","notes":"reason"}}\n'
+            f'If corrections needed: {{"status":"FIX","notes":"summary",'
+            f'"adjustments":[{{"category":"CAT","item":"ITEM",'
+            f'"direction":"lower" or "higher",'
+            f'"factor":0.6,"reason":"brief"}},...]}}\n\n'
+            f"factor: multiplier on current BP (0.3-0.6 = significant reduction, "
+            f"0.6-0.85 = moderate reduction, 1.2-1.5 = moderate boost, "
+            f"1.5-2.0 = significant boost). Stay in 0.3 to 2.5 range.\n"
+            f"JSON only, no markdown."
+        )
+
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': behav_prompt}],
+                temperature=0.1,
+                max_tokens=2000
+            )
+            text = resp.choices[0].message.content.strip()
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+            depth = 0
+            end = 0
+            for i, c in enumerate(text):
+                if c == '{':
+                    depth += 1
+                elif c == '}':
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if end > 0:
+                text = text[:end]
+
+            result = _json.loads(text)
+
+            if result.get('status') != 'FIX' or 'adjustments' not in result:
+                continue
+
+            for adj in result['adjustments']:
+                try:
+                    a_cat = str(adj.get('category', '')).strip().upper()
+                    a_item = str(adj.get('item', '')).strip().upper()
+                    factor = float(adj.get('factor', 1.0))
+                    direction = adj.get('direction', '')
+                    reason = adj.get('reason', '')
+                except (AttributeError, TypeError, ValueError):
+                    continue
+
+                cat_items = batch.get(a_cat, [])
+                matched = [(n, bp, cs, idx) for n, bp, cs, idx in cat_items
+                           if n.strip().upper() == a_item]
+                if not matched:
+                    matched = [(n, bp, cs, idx) for n, bp, cs, idx in cat_items
+                               if a_item in n.strip().upper() or n.strip().upper() in a_item]
+                if not matched:
+                    continue
+
+                name, cur_bp, cur_cs, row_idx = matched[0]
+                factor = max(0.2, min(3.0, factor))
+                new_bp = round(cur_bp * factor, 4)
+                new_bp = max(0.01, min(new_bp, 85.0))
+
+                new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
+                new_proj = int(round(new_raw * MULT))
+
+                df.at[row_idx, bp_col] = new_bp
+                df.at[row_idx, raw_col] = str(new_raw)
+                if proj_col in df.columns:
+                    df.at[row_idx, proj_col] = str(new_proj)
+
+                arrow = '↓' if factor < 1 else '↑'
+                print(f"   🔍 {a_cat} {arrow} {name}: {cur_bp:.1f}%→{new_bp:.1f}% — {reason}")
+                total_adjustments += 1
+
+            batch_cats_to_rebalance = set()
+            for adj in result['adjustments']:
+                a_cat = str(adj.get('category', '')).strip().upper()
+                if a_cat in batch:
+                    batch_cats_to_rebalance.add(a_cat)
+
+            for cat in batch_cats_to_rebalance:
+                all_cat_items = categories_data.get(cat, [])
+                all_cat_idx = [idx for _, _, _, idx in all_cat_items]
+                total_raw = 0
+                for ix in all_cat_idx:
+                    try:
+                        total_raw += int(float(str(df.at[ix, raw_col]).replace(',', '')))
+                    except (ValueError, TypeError):
+                        pass
+                if total_raw > 0:
+                    for ix in all_cat_idx:
+                        try:
+                            raw = int(float(str(df.at[ix, raw_col]).replace(',', '')))
+                            new_cs = round((raw / total_raw) * 100.0, 4)
+                            df.at[ix, cs_col] = new_cs
+                        except (ValueError, TypeError):
+                            pass
+
+        except Exception as e:
+            print(f"   ⚠️ Behavioral gut-check error (batch {batch_num}): {e}")
+            continue
+
+    print(f"🔍 Final gut check for {subject_clean}: {total_adjustments} total adjustments "
+          f"across {len(batches)} batch(es)")
+    return df
+
+
+def item_level_ai_review(df, archetype, project_name, brands):
+    """Legacy item-level review. Kept for backward compatibility but
+    superseded by ai_final_gut_check() which is more comprehensive.
     """
     client = _get_openai_client()
     if not client:
@@ -11169,6 +11594,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
         df_final = cap_demographic_projections(df_final)
+
+    # ── COMPREHENSIVE FINAL GUT CHECK (GPT-4o + web research) ─────────
+    # Reviews the ENTIRE profile: locations/DMA, all behavioral categories,
+    # and cross-category coherence. Ensures everything passes the gut check
+    # for who this audience actually is.
+    if not is_genpop and brand_category:
+        print("🔍 Running comprehensive final gut check (demographics + locations + behavioral)...")
+        df_final = ai_final_gut_check(df_final, brand_category, project_name, brands)
 
     # ── Final GPP recalc: ensures every row's US Gen Pop Projection = (Raw / 10M) * 329.9M
     df_final = add_us_gen_pop_projection(df_final)
