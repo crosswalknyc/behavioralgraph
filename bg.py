@@ -954,10 +954,12 @@ def anchor_to_genpop(df, sample_size):
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2  # 0 for Gen Pop, ~1 for niche
 
-    # Adaptive bounds: wider than original [0.88,1.15] but not so wide that
-    # every item clusters at the ceiling.  Gen Pop is a guide, not a mandate.
-    BEHAV_HI = max(1.30, 1.0 + 2.0 * niche_factor)
-    BEHAV_LO = min(0.30, 1.0 - 1.5 * niche_factor)
+    # Adaptive bounds: wide enough to preserve the original Snowflake signal.
+    # Gen Pop is a safety net (prevents 95% BP absurdities), NOT the rubric.
+    # The AI gut check (ai_final_gut_check) is the authoritative behavioral
+    # reviewer — this step just prevents raw-data outliers.
+    BEHAV_HI = max(1.80, 1.0 + 4.0 * niche_factor)
+    BEHAV_LO = min(0.10, 1.0 - 2.5 * niche_factor)
     DEMO_HI  = max(1.10, 1.0 + 0.8 * niche_factor)
     DEMO_LO  = min(0.92, 1.0 - 0.5 * niche_factor)
 
@@ -1010,12 +1012,12 @@ def anchor_to_genpop(df, sample_size):
         if not is_demo and raw_ratio < base_lo:
             lo = max(0.05, raw_ratio * 0.7)
 
-        # Per-item popularity dampening: mass-market items (high GP BP) get
-        # tighter upper bounds.  Nike at 32% GP shouldn't reach 3x; a niche
-        # brand at 2% GP can.  Uses (1 - gp_bp/100)^2 so high-GP items are
-        # pulled closer to 1.0.
+        # Per-item popularity dampening: prevents truly absurd BPs for
+        # mass-market items (YouTube@84% GP reaching 250%).  Uses a gentle
+        # linear scale with a floor so items can still meaningfully deviate
+        # from gen pop. The AI gut check handles nuanced corrections.
         if not is_demo:
-            popularity_scale = (1.0 - gp_bp_val / 100.0) ** 2
+            popularity_scale = max(0.4, 1.0 - gp_bp_val / 100.0)
             hi = 1.0 + (hi - 1.0) * popularity_scale
 
         # Soft ceiling on upper bound
@@ -1042,11 +1044,11 @@ def anchor_to_genpop(df, sample_size):
         changes += 1
 
     # --- Pass 2: Cap items with NO Gen Pop match ---
-    # Items absent from Gen Pop are likely very niche (otherwise they'd appear
-    # in the survey of 36k+ people).  Apply a conservative ceiling so the
-    # pipeline doesn't emit 60-90% BP for single-location restaurants, obscure
-    # foreign sports teams, etc.  The item_level_ai_review can further refine.
-    UNMATCHED_CEILING = 15.0
+    # Items absent from Gen Pop are likely niche (otherwise they'd appear
+    # in the survey of 36k+ people).  But some legitimately popular niche
+    # items (regional chains, emerging brands) deserve room.  The AI gut
+    # check handles nuanced evaluation; this is just a safety ceiling.
+    UNMATCHED_CEILING = 25.0
     unmatched_fixes = 0
     for idx, row in df.iterrows():
         cat = str(row.get('Column', '')).strip().upper()
@@ -1312,7 +1314,7 @@ def _extract_archetype_from_df(df):
 
 
 def _try_gpt_archetype(project_name, brands, brand_category=None):
-    """Generate archetype expectations using GPT-4o-mini."""
+    """Generate archetype expectations using GPT-4o."""
     client = _get_openai_client()
     if not client:
         return None
@@ -1351,13 +1353,13 @@ def _try_gpt_archetype(project_name, brands, brand_category=None):
     )
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert audience researcher. Return only valid JSON."},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=400,
-            temperature=0.3,
+            temperature=0.15,
         )
         content = response.choices[0].message.content.strip()
         if '```json' in content:
@@ -5901,11 +5903,19 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                         reason = adj.get('reason', '')
 
                         if dma_name not in dma_idx_map:
-                            close = [d for d in dma_idx_map if dma_name.split()[0] in d]
-                            if close:
+                            # Multi-word fuzzy match: require ALL significant words
+                            # to appear (avoids "NEW" matching both NY and NO)
+                            words = [w for w in dma_name.split() if len(w) > 1]
+                            close = [d for d in dma_idx_map
+                                     if all(w in d for w in words)] if words else []
+                            if len(close) == 1:
                                 dma_name = close[0]
-                            else:
+                            elif not close:
                                 continue
+                            else:
+                                best = max(close, key=lambda d: sum(
+                                    1 for w in words if w in d))
+                                dma_name = best
 
                         row_idx = dma_idx_map[dma_name]
                         try:
@@ -6127,6 +6137,31 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         except Exception as e:
             print(f"   ⚠️ Behavioral gut-check error (batch {batch_num}): {e}")
             continue
+
+    # ── Full Category Share recalculation across ALL categories ──
+    # Ensures BP and CS are consistent after all adjustments, not just
+    # for categories where corrections were made.
+    if total_adjustments > 0:
+        for cat in df['Column'].str.upper().str.strip().unique():
+            if cat in DEMO_CATS or cat in META_CATS or cat == 'LOCATION':
+                continue
+            cm = df['Column'].str.upper().str.strip() == cat
+            if not cm.any():
+                continue
+            total_raw = 0
+            for cidx in df[cm].index:
+                try:
+                    total_raw += int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                except (ValueError, TypeError):
+                    pass
+            if total_raw > 0:
+                for cidx in df[cm].index:
+                    try:
+                        raw = int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                        new_cs = round((raw / total_raw) * 100.0, 4)
+                        df.at[cidx, cs_col] = new_cs
+                    except (ValueError, TypeError):
+                        pass
 
     print(f"🔍 Final gut check for {subject_clean}: {total_adjustments} total adjustments "
           f"across {len(batches)} batch(es)")
@@ -11530,7 +11565,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print(f"   Archetype: gender={_archetype['gender_skew']}, age={_archetype['age_skew']}, "
               f"behav_high={_archetype['behavioral_high'][:3]}, behav_low={_archetype['behavioral_low'][:3]}")
         df_final = validate_demographics(df_final, _archetype, final_sample_size)
-        df_final = validate_behavioral_gut_check(df_final, _archetype, final_sample_size)
+        # validate_behavioral_gut_check DISABLED — it was the 2nd gen-pop tether
+        # using a thin archetype (gpt-4o-mini, "predominantly male, age 18-34").
+        # The AI gut check (ai_final_gut_check) handles this with full context:
+        # GPT-4o, web research, gen pop baselines, all categories.
 
     # ── Post-anchor consistency and formatting ─────────────────────────
     df_final = enforce_cross_category_brand_consistency(df_final)
@@ -11562,9 +11600,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Runs AFTER all formatting, consistency, and BP recalculation steps.
     # Compares every behavioral row's FINAL BP against Gen Pop and corrects
     # anything unreasonable, then recalculates CS/raw/projection.
-    if not is_genpop:
-        print("🔍 Running final behavioral sanity check on FINAL output...")
-        df_final = final_behavioral_sanity_check(df_final, archetype=_archetype)
+    # final_behavioral_sanity_check DISABLED — it was the 3rd gen-pop tether,
+    # clamping every behavioral row to gen-pop bounds AGAIN after anchor_to_genpop
+    # already did it. This triple-clamping crushed the original Snowflake signal
+    # and caused gen-pop artifacts (Hanes at top for every audience). The AI gut
+    # check (ai_final_gut_check) now serves as the single authoritative behavioral
+    # reviewer with full audience context, web research, and gen pop comparison.
 
     # ── Legacy item-level AI review DISABLED ─────────────────────────────
     # Superseded by ai_final_gut_check() which runs after demographic agents
