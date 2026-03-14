@@ -1601,22 +1601,20 @@ OUR DATA:
 The pipeline later splits these into "Attributed Signups" (watched then signed up) and
 "Dormant to Reactive" (reactivated lapsed accounts). But the TOTAL must make sense first.
 
-CRITICAL REALITY CHECK: The vast majority of people who watch a show ALREADY HAVE the platform.
-Think about it — if someone watches Stranger Things on Netflix, they almost certainly already
-had a Netflix subscription. The conversion rate (new signups / total watchers) should reflect this:
+REALITY CHECK: Most people who watch a show ALREADY HAVE the platform. The conversion rate
+(new signups / total watchers) should reflect this reality, but use the REAL DATA as your guide.
 
-- DOMINANT platforms (Netflix ~68%, Prime ~65%): Conversion should be VERY LOW.
-  Typical show: 0.1-0.5% of watchers are new signups. Even a massive cultural phenomenon
-  might only reach 1-3%. A 5%+ conversion rate on Netflix is almost impossible.
-  Example: 10M watchers on Netflix → maybe 10K-50K genuinely new subscribers.
-- MAJOR platforms (Hulu ~30%, Disney+ ~28%): Conversion typically 0.5-3%.
-  Hit shows might reach 3-5% but rarely higher.
-- MID-TIER platforms (Max ~22%): Conversion typically 1-5%.
-- EMERGING/NICHE platforms (Peacock ~13%, Apple TV+ ~10%, Paramount+ ~15%):
-  Conversion can be higher (2-10%) because many viewers must sign up to watch.
-  A breakout exclusive could push 5-15% conversion on a truly niche platform.
+Use platform penetration as a baseline anchor — higher penetration = fewer potential new subs.
+But let the actual data tell you what's reasonable. A breakout show on any platform can drive
+higher-than-typical conversion. Just catch numbers that are clearly absurd (e.g. 20-30% on
+Netflix is impossible since almost everyone already subscribes).
 
-If the conversion rate seems too high for the platform tier, suggest lower signups.
+Your job is NOT to force conversion into a narrow band. Your job is to catch obvious inflation.
+If the data supports a 3-5% conversion for a specific situation, that could be fine. But if
+the numbers imply 15-30% of watchers are new subscribers on a dominant platform, that is
+clearly wrong and should be adjusted down.
+
+If signups appear clearly inflated, suggest a lower number.
 NEVER suggest increasing signups — only reduce if inflated.
 
 === PHASE C: TIME FRAME & CONTENT SCALE ===
