@@ -5976,10 +5976,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     current_batch = {}
     current_items = 0
     for cat, items in sorted(categories_data.items()):
-        sorted_items = sorted(items, key=lambda x: -x[1])[:12]
+        sorted_items = sorted(items, key=lambda x: -x[1])[:25]
         current_batch[cat] = sorted_items
         current_items += len(sorted_items)
-        if current_items >= 50:
+        if current_items >= 100:
             batches.append(current_batch)
             current_batch = {}
             current_items = 0
