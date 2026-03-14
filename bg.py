@@ -2244,45 +2244,26 @@ def ai_actor_demographic_review(df, brand_category, project_name, brands):
 
     prompt = f"""You are a senior US entertainment audience demographics expert. Determine PRECISE audience demographics for this actor/actress.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
-- ONLY increase above 10% if the person IS openly LGBTQ+ or played an iconic LGBTQ+ role for years.
-- HARD CAP: NEVER assign >15% unless the person IS openly LGBTQ+. NEVER assign >30% to anyone.
-- Under-16 age: HARD CAP of 4% for adult content. Only Disney/Nickelodeon/children's stars go higher.
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
-STEP 1 — IDENTIFY THIS PERSON:
-Who is "{subject_clean}"? Determine their gender, race/ethnicity, approximate age, what they are most known for, career peak era, whether openly LGBTQ+ (MUST be documented/public), whether known for iconic LGBTQ+ characters, and heartthrob/gender appeal.
+=== STEP 1: IDENTIFY ===
+Who is "{subject_clean}"? Determine their gender, race/ethnicity, approximate age, career, peak era, cultural impact, and public identity. What are they most known for?
 
-STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER — depends on the person:
-- Most male actors: 48-55% male. Male heartthrobs/romantic leads: 55-65% female.
-- Male comedians doing stand-up: 52-58% male.
-- Female actresses: 55-65% female. Action/superhero stars: closer to 50/50.
-
-ETHNICITY — must reflect the actor's identity:
-- Black actor: mainstream crossover 28-38% Black, primarily Black content 40-55% Black.
-- White actors mainstream: 55-65% White.
-- Latino/Asian actors: elevated same-ethnicity audiences.
-
-AGE — career peak drives age distribution:
-- Under-16: <4% unless children's/family content. 16-18: <5% unless teen content.
-- 90s stars: peak 40-60+. Current young stars: peak 18-30s.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. This is the starting point for ALL actors.
-- Straight actors with NO LGBTQ+ connection: 6-8%. DO NOT go above 8%.
-- Actors who played an iconic LGBTQ+ role (multi-season): 12-18%.
-- Openly LGBTQ+ actors: 18-28% depending on how central it is to their identity.
-- DO NOT assign 15%+ to any straight actor who has not played a major LGBTQ+ role.
-
-INCOME/EDUCATION: Prestige TV/indie = educated, moderate-high income. Blockbuster = middle. Comedy = middle.
-
-PARENTAL/RELATIONSHIP: Older audience = more married with kids. Young = single, fewer kids.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this actor/actress's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the actor/actress's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this actor/actress?
 
 {research_block}
 STEP 3 — EVALUATE CURRENT DATA:
@@ -2456,46 +2437,28 @@ def ai_creator_demographic_review(df, brand_category, project_name, brands):
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a senior US digital audience demographics expert specializing in creators, influencers, and social media personalities. Determine PRECISE audience demographics for this creator/influencer.
+    prompt = f"""You are a senior US digital audience demographics expert specializing in creators and influencers. Determine PRECISE audience demographics for this creator/influencer.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
-- ONLY increase above 10% if the person IS openly LGBTQ+ or creates explicitly LGBTQ+ content.
-- HARD CAP: NEVER assign >15% unless the person IS openly LGBTQ+. NEVER assign >30% to anyone.
-- Under-16 age: max 5% unless the creator specifically targets children/teens (then 8-15%).
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
-STEP 1 — IDENTIFY THIS PERSON:
-Who is "{subject_clean}"? Determine their gender, race/ethnicity, age, platform(s), content type, whether openly LGBTQ+ (MUST be documented), and gender appeal.
+=== STEP 1: IDENTIFY ===
+Who is "{subject_clean}"? Determine their platform(s), content type, gender, race/ethnicity, age, cultural identity, and audience appeal.
 
-STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER — depends on content type:
-- Beauty/fashion/lifestyle: 65-80% female. Gaming/tech: 65-80% male.
-- Comedy: male bro humor = male-skewing; pranks = 60-70% male. Female relatable = female.
-- Fitness: bodybuilding = male, yoga/pilates = female.
-
-ETHNICITY — creator's OWN ethnicity is #1 factor:
-- Black creator: culturally Black content 40-55% Black; mainstream crossover 25-38% Black.
-- Latino/Asian: elevated same-ethnicity. White mainstream: 55-65% White.
-
-AGE — depends on platform:
-- TikTok-native: peak 16-25. YouTube: broader 18-35. Instagram: 18-34. Twitch: 16-30. Podcasters: 25-45.
-- Under-16: max 5% unless specifically teen-targeted content.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. This is the starting point for ALL creators.
-- Straight creators with mainstream content: 6-8%. DO NOT go above 8%.
-- Beauty/drag/fashion creators (not openly LGBTQ+): 10-14%.
-- Openly LGBTQ+ creators: 20-30%.
-- DO NOT assign 15%+ to any straight mainstream creator.
-
-INCOME/EDUCATION: Young audience = lower income/education. Luxury = higher income.
-
-PARENTAL/RELATIONSHIP: Young = single, fewer kids. Family/mommy creators = high parental %.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this creator/influencer's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the creator/influencer's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this creator/influencer?
 
 {research_block}
 STEP 3 — EVALUATE CURRENT DATA:
@@ -2669,47 +2632,28 @@ def ai_athlete_demographic_review(df, brand_category, project_name, brands):
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a senior US sports audience demographics expert. Determine PRECISE digital audience demographics for this athlete.
+    prompt = f"""You are a senior US sports audience demographics expert. Determine PRECISE audience demographics for this athlete.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
-- ONLY increase above 10% if the athlete IS openly LGBTQ+ or plays in a sport with documented elevated LGBTQ+ fandom.
-- HARD CAP: NEVER assign >12% unless the athlete IS openly LGBTQ+. NEVER assign >28% to anyone.
-- Under-16 age: HARD CAP of 3% for athletes. Sports audiences are adult.
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
-STEP 1 — IDENTIFY THIS ATHLETE:
-Who is "{subject_clean}"? Sport, race/ethnicity, gender, age, active/retired, peak era, fame level, openly LGBTQ+ (MUST be documented/public), crossover appeal.
+=== STEP 1: IDENTIFY ===
+Who is "{subject_clean}"? Determine their sport, gender, race/ethnicity, age, active/retired status, peak era, fame level, and crossover appeal.
 
-STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER — depends on sport and appeal:
-- Most male athletes in male sports (NFL, NBA, MLB, NHL): 60-75% male.
-- Male heartthrob athletes: 50-55% female. WWE/wrestling: 65-75% male.
-- Golf/skateboarding/hockey: 70-80% male. Female athletes: 45-55% female.
-
-ETHNICITY — athlete's identity + sport:
-- Black NBA/NFL: 35-50% Black. Mainstream icons: 30-40% Black.
-- White in White sport (golf, hockey): 65-80% White. Latino: 20-40% Latinx.
-
-AGE — career stage:
-- Active young (20s): peak 18-30. Veteran (30s): 25-40. Retired: 25-45. Legacy: 35-60+.
-- Under-16: <3%. Under-18: <5%.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. This is the starting point for ALL athletes.
-- Straight male athletes in mainstream sports: 5-7%. DO NOT go above 7%.
-- Female athletes generally: 7-10%.
-- LGBTQ+-popular sports (women's soccer, figure skating) for straight athletes: 8-12%.
-- Openly LGBTQ+ athletes: 18-25%.
-- DO NOT assign 12%+ to any straight male athlete.
-
-EDUCATION/INCOME: Golf/tennis = above average. NBA/NFL = mixed.
-
-PARENTAL/RELATIONSHIP: Older = more married with kids.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this athlete's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the athlete's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this athlete?
 
 {research_block}
 STEP 3 — EVALUATE CURRENT DATA:
@@ -2883,45 +2827,28 @@ def ai_host_demographic_review(df, brand_category, project_name, brands):
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a premium-tier US media audience demographics analyst. Determine PRECISE digital audience demographics for this host/personality.
+    prompt = f"""You are a premium-tier US media audience demographics analyst. Determine PRECISE audience demographics for this host/personality.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
-- ONLY increase above 10% if the person IS openly LGBTQ+ or works in a field with documented elevated LGBTQ+ audience.
-- HARD CAP: NEVER assign >15% unless the person IS openly LGBTQ+. NEVER assign >30% to anyone.
-- Under-16 age: HARD CAP of 3% for hosts/personalities. These audiences are adult.
-- Shark Tank panelists, chefs, and business figures skew OLDER (peak 35-60+).
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
-STEP 1 — IDENTIFY THIS PERSON:
-Who is "{subject_clean}"? Type (late night, chef, investor, model, comedian, science, motivational, reality star, talk show), race/ethnicity, gender, age, platform, openly LGBTQ+ (MUST be documented).
+=== STEP 1: IDENTIFY ===
+Who is "{subject_clean}"? Determine their type (late night, chef, investor, model, comedian, science, motivational, reality star, talk show), gender, race/ethnicity, age, and platform.
 
-STEP 2 — DETERMINE THEIR SPECIFIC DIGITAL AUDIENCE:
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER — depends on personality type:
-- Late night hosts: 55-65% male. Chefs (Food Network): 55-65% female.
-- Business/investor (Shark Tank): 55-62% male. Models/fashion: 70-85% female.
-- Male comedians: 60-70% male. Science/education: 60-70% male.
-- Reality TV: 55-65% female.
-
-ETHNICITY — person's OWN ethnicity is #1 driver:
-- Black: 30-50% Black. Latino/a: 25-40% Latinx. Asian: 15-25% Asian.
-- White mainstream: 55-70% White.
-
-AGE — hosts/personalities skew ADULT:
-- Under-16: <3%. Under-18: <5%. These are adult audiences.
-- Shark Tank/business: peak 30-55+. Chefs: peak 30-60+. Late night: 25-55.
-- Models/fashion: 18-35. Older hosts/investors: skew 40-65+.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. This is the starting point for ALL hosts/personalities.
-- Straight male hosts/chefs/investors: 5-7%. DO NOT go above 8%.
-- Fashion/beauty adjacent (not openly LGBTQ+): 8-12%.
-- Openly LGBTQ+ (central to their identity): 25-35%.
-- DO NOT assign 12%+ to any straight mainstream host/chef/investor.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this host/personality's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the host/personality's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this host/personality?
 
 {research_block}
 STEP 3 — EVALUATE CURRENT DATA:
@@ -3095,52 +3022,28 @@ def ai_musician_demographic_review(df, brand_category, project_name, brands):
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a premium-tier US music audience demographics analyst. Determine PRECISE digital audience demographics for this musician/band.
+    prompt = f"""You are a premium-tier US music audience demographics analyst. Determine PRECISE audience demographics for this musician/band.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY artist.
-- ONLY increase above 10% if the artist IS openly LGBTQ+ or is a documented LGBTQ+ icon (Gaga, Cher, Beyoncé level).
-- HARD CAP: NEVER assign >15% unless the artist IS openly LGBTQ+ or is a top-tier LGBTQ+ icon.
-- NEVER assign >30% to anyone — even Elton John's audience is not >30% LGBTQ+.
-- Straight mainstream artists: 5-8%. Country/rock/metal: 5-7%. DO NOT go above these.
-- Under-16 age: max 5% unless teen pop (Olivia Rodrigo, Sabrina Carpenter = 8-12%).
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
-=== STEP 1: IDENTIFY THIS ARTIST ===
-Who is "{subject_clean}"? Genre, race/ethnicity, gender, age, era, openly LGBTQ+ (MUST be documented/public), mainstream vs niche, crossover appeal.
+=== STEP 1: IDENTIFY ===
+Who is "{subject_clean}"? Determine their genre, gender, race/ethnicity, age, era, mainstream vs niche status, and cultural significance.
 
-=== STEP 2: GENRE-SPECIFIC AUDIENCE RULES ===
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER by genre:
-- Pop female (Taylor, Beyoncé, Gaga): 65-80% female. Pop male (JT, Bruno): 50-60% female.
-- Hip-hop/rap: 55-70% MALE. Female rappers: 50-55% female.
-- Country: balanced 50-55%. Rock/metal: 65-80% MALE.
-- K-pop: 70-85% FEMALE. EDM: 55-65% MALE.
-- R&B/soul: 55-65% female (male artists), 60-70% female (female artists).
-
-ETHNICITY — artist's OWN ethnicity is #1 factor:
-- Black hip-hop/R&B: 35-50% Black. Massive crossover: 30-40% Black.
-- White country: 70-82% White. White rock/metal: 65-78% White.
-- Latino Spanish-language: 55-65% Latinx. Crossover English: 35-45% Latinx.
-
-AGE by era and genre:
-- Teen pop: under-16 can be 8-12%, peak 18-25.
-- Current mainstream: peak 21-35, under-16 <5%.
-- Country: older, peak 30-55. Classic rock/legacy: peak 41-60+.
-- Deceased/retired: audience 40-65+.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. This is the starting point for ALL musicians.
-- Straight mainstream pop/hip-hop/R&B: 6-8%. DO NOT go above 8%.
-- Country: 5-7%. Rock/metal: 5-7%.
-- LGBTQ+ icons who are STRAIGHT (Lady Gaga, Beyoncé, Cher, Charli XCX): 12-18%. MAX 18%.
-- Openly LGBTQ+ artists (Chappell Roan, Elton John, Brandi Carlile): 20-28%.
-- DO NOT assign 10%+ to any straight artist who is NOT a recognized LGBTQ+ icon.
-
-PARENTAL STATUS: Older audiences = more parents. Teen pop = fewer parents.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this musician/band's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the musician/band's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this musician/band?
 
 {research_block}
 === STEP 3: EVALUATE CURRENT DATA ===
@@ -3314,42 +3217,28 @@ def ai_politics_demographic_review(df, brand_category, project_name, brands):
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a premium-tier US political audience demographics analyst. Determine PRECISE digital audience demographics for this political figure or activist.
+    prompt = f"""You are a premium-tier US political audience demographics analyst. Determine PRECISE audience demographics for this political figure or activist.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
-- ONLY increase above 10% if the person IS openly LGBTQ+ or is a documented strong LGBTQ+ ally.
-- HARD CAP: NEVER assign >15% unless the person IS openly LGBTQ+. NEVER assign >25% to anyone.
-- Under-16 age: HARD CAP of 3%. Political content is ADULT content. Even youth activists: <16 max 5%.
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
-=== STEP 1: IDENTIFY THIS PERSON ===
-Who is "{subject_clean}"? Role, party, progressive/moderate/conservative, race/ethnicity, gender, age, openly LGBTQ+ (MUST be documented), fame level.
+=== STEP 1: IDENTIFY ===
+Who is "{subject_clean}"? Determine their role, party affiliation, political position, gender, race/ethnicity, age, and fame level.
 
-=== STEP 2: POLITICAL AUDIENCE RULES ===
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER:
-- Republican/conservative men: 55-65% MALE. Conservative women: 45-55% MALE.
-- Democratic/progressive men: 45-55% MALE. Progressive women: 55-70% FEMALE.
-
-ETHNICITY — figure's OWN identity is key driver:
-- White Republican: 75-85% White, 5-8% Black. White Democrat: 55-65% White, 15-22% Black.
-- Black Democrat: 35-50% Black, 25-35% White. Latino/a: 30-45% Latinx.
-
-AGE — political audiences are ADULT:
-- Under-16: <3% always. 16-18: <5%. Conservative: peak 41-65+. Progressive: 18-45 peak.
-- Youth activists: under-18 max 10%.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. This is the starting point for ALL political figures.
-- Republicans/conservatives: 5-6%. DO NOT go above 7%.
-- Mainstream Democrats: 7-9%. DO NOT go above 10%.
-- Strong progressive allies (AOC, Warren): 10-13%. MAX 13%.
-- Openly LGBTQ+ politicians: 18-25%.
-- DO NOT assign 12%+ to any straight politician who is not a documented strong LGBTQ+ ally.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this political figure or activist's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the political figure or activist's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this political figure or activist?
 
 {research_block}
 === STEP 3: EVALUATE ===
@@ -3522,41 +3411,28 @@ def ai_creative_demographic_review(df, brand_category, project_name, brands):
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a premium-tier US entertainment audience demographics analyst. Determine PRECISE digital audience demographics for this creative professional.
+    prompt = f"""You are a premium-tier US entertainment audience demographics analyst. Determine PRECISE audience demographics for this creative professional.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY profile.
-- ONLY increase above 10% if the person IS openly LGBTQ+ or their work is explicitly LGBTQ+-centered.
-- HARD CAP: NEVER assign >12% unless the person IS openly LGBTQ+. NEVER assign >28% to anyone.
-- Under-16 age: HARD CAP of 3%. Behind-the-camera creative audiences are adult.
-- Male action/thriller/sci-fi directors: audiences are MALE-skewing (60-72%). Do NOT default to female.
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
 CATEGORY: {brand_category}
 
-=== STEP 1: IDENTIFY THIS PERSON ===
-Who is "{subject_clean}"? Role, major works, genre, race/ethnicity, gender, age, openly LGBTQ+ (MUST be documented), mainstream vs niche.
+=== STEP 1: IDENTIFY ===
+Who is "{subject_clean}"? Determine their role (director, writer, showrunner, author, artist), major works, genre, gender, race/ethnicity, age, and cultural reach.
 
-=== STEP 2: CREATIVE AUDIENCE RULES ===
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER:
-- Action directors (Nolan, Cameron): 62-72% MALE. Genre/cult (Tarantino): 65-75% MALE.
-- Female-skewing showrunners (Rhimes): 65-75% FEMALE.
-- Western/rural (Sheridan): 60-70% MALE. Balanced mainstream: 52-58% MALE.
-- Procedural TV (Dick Wolf): 50-55% MALE.
-
-ETHNICITY: Creator's OWN ethnicity + works. Black directors of Black stories: 35-45% Black. White blockbuster: 60-70% White. Rural/Western: 75-82% White.
-
-AGE: Under-16 <3%. Under-18 <5%. Blockbuster: 25-45. Prestige: 30-55. Legacy: 35-60+. Procedural: 40-65+.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. This is the starting point for ALL creative professionals.
-- Straight male directors/writers with mainstream work: 5-7%. DO NOT go above 8%.
-- Rural/conservative-themed creators (Sheridan): 4-6%.
-- Creators of LGBTQ+-inclusive works (not openly LGBTQ+ themselves): 10-14%.
-- Openly LGBTQ+ creators: 18-25%.
-- DO NOT assign 10%+ to any straight mainstream director/writer.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this creative professional's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the creative professional's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this creative professional?
 
 {research_block}
 === STEP 3: EVALUATE ===
@@ -3730,52 +3606,28 @@ def ai_series_demographic_review(df, brand_category, project_name, brands):
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a premium-tier US television audience demographics analyst. Determine PRECISE VIEWER demographics for this TV show.
+    prompt = f"""You are a premium-tier US television audience demographics analyst. Determine PRECISE audience demographics for this TV show.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY show.
-- ONLY increase above 10% if the show HAS prominent LGBTQ+ characters or is LGBTQ+-centered.
-- HARD CAP: NEVER assign >18% unless the show IS explicitly LGBTQ+-centered (The L Word, Queer Eye, Will & Grace, Pose).
-- NEVER assign >35% to any show — even LGBTQ+-centered shows.
-- Procedurals, Westerns, action shows: 5-7%. DO NOT go above 8%.
-- Under-16 age: max 3% for adult dramas/procedurals/Westerns. Only teen/YA shows go to 8-12%.
-- Procedurals (L&O, FBI, Chicago franchise) skew OLD (peak 40-65+) and slightly FEMALE.
-- Western/Sheridan shows (Yellowstone, 1883, Landman) skew OLD (peak 35-60+) and MALE.
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SHOW: "{subject_clean}"
 CATEGORY: {brand_category}
 
-=== STEP 1: IDENTIFY THIS SHOW ===
-What show is this? Platform, genre, cast demographics, themes, target age, era. Is it LGBTQ+-centered? Does it have prominent LGBTQ+ characters?
+=== STEP 1: IDENTIFY ===
+What show is "{subject_clean}"? Determine its platform, genre, cast demographics, themes, target audience, era, and cultural significance.
 
-=== STEP 2: TV SHOW VIEWER RULES ===
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER by genre:
-- Action/thriller/sci-fi: 60-72% MALE. Fantasy/epic: 55-65% MALE.
-- Prestige drama male leads: 55-65% MALE. Western/rural: 55-65% MALE.
-- Procedural crime: 50-55% FEMALE. Medical drama: 55-62% FEMALE.
-- Edgy comedy: 55-65% MALE. Prestige comedy: 48-55% FEMALE.
-- Reality/dating: 65-80% FEMALE. Romance/period: 65-75% FEMALE.
-
-ETHNICITY — cast and content:
-- Predominantly Black casts: 40-55% Black, 25-35% White.
-- White casts/settings: 65-78% White. Diverse ensembles: 50-60% White.
-
-AGE:
-- Procedurals: peak 35-60+, under-16 <2%. Westerns: peak 35-60+, under-16 <2%.
-- Prestige: peak 25-45, under-16 <3%. Reality: varies by type, under-16 <3%.
-- Teen/YA only: under-18 can be 10-20%.
-- Adult animation: peak 18-35, under-16 <4%.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. This is the starting point for ALL TV shows.
-- Conservative-coded shows (Yellowstone, Tulsa King, Lioness): 4-6%.
-- Procedurals, Westerns, action shows: 5-7%. DO NOT go above 8%.
-- Mainstream drama/comedy (no LGBTQ+ themes): 7-9%.
-- Shows with prominent LGBTQ+ characters/storylines (White Lotus, Last of Us, Sandman): 12-16%.
-- LGBTQ+-centered shows (The L Word, Queer Eye, Will & Grace, Hacks): 25-35%.
-- DO NOT assign 10%+ to any show without documented LGBTQ+ characters/themes.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this TV show's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the TV show's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this TV show?
 
 {research_block}
 === STEP 3: EVALUATE ===
@@ -3949,42 +3801,28 @@ def ai_podcast_demographic_review(df, brand_category, project_name, brands):
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a premium-tier US podcast audience demographics analyst. Determine PRECISE LISTENER demographics for this podcast.
+    prompt = f"""You are a premium-tier US podcast audience demographics analyst. Determine PRECISE audience demographics for this podcast.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY podcast.
-- ONLY increase above 10% if the podcast IS hosted by openly LGBTQ+ person(s) OR explicitly targets LGBTQ+ audiences.
-- HARD CAP: NEVER assign >15% unless the host IS openly LGBTQ+ or the podcast IS LGBTQ+-focused.
-- NEVER assign >30% to any podcast.
-- Conservative/bro podcasts (Joe Rogan, Barstool): 4-6%. DO NOT go above 6%.
-- Under-16 age: max 3% for adult podcasts. Only children's podcasts go to 15-25%.
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 PODCAST: "{subject_clean}"
 CATEGORY: {brand_category}
 
-=== STEP 1: IDENTIFY THIS PODCAST ===
-What podcast is this? Host(s), genre, platform, tone, target age, whether host is openly LGBTQ+.
+=== STEP 1: IDENTIFY ===
+What podcast is "{subject_clean}"? Determine its host(s), genre, platform, tone, target audience, and cultural reach.
 
-=== STEP 2: PODCAST LISTENER RULES ===
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER:
-- Male bro/comedy/sports: 65-78% MALE. Female lifestyle/pop culture: 75-85% FEMALE.
-- True crime: 65-75% FEMALE. News/politics: 55-65% MALE.
-- Interview/culture: 50-58% MALE. Children's: ~50/50.
-
-ETHNICITY — host identity + content:
-- White hosts mainstream: 60-70% White. Black hosts: 30-45% Black. Latino: 25-40% Latinx.
-
-AGE — podcast audiences are ADULT:
-- Under-16: <3% for adult podcasts. Kids podcasts: 15-25%.
-- Young female (Call Her Daddy): peak 18-30. Bro (Rogan): peak 21-40.
-- Interview (SmartLess): peak 30-50. News: peak 35-60+.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. Conservative/bro: 4-6%. Mainstream male: 5-7%.
-- Female lifestyle: 8-12%. LGBTQ+ hosts: 10-14%. LGBTQ+-focused: 25-35%.
-- DO NOT assign 10%+ without LGBTQ+ hosts or content.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this podcast's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the podcast's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this podcast?
 
 {research_block}
 === STEP 3: EVALUATE ===
@@ -4159,90 +3997,28 @@ def ai_app_platform_demographic_review(df, brand_category, project_name, brands)
             demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
             key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
 
-    prompt = f"""You are a premium-tier US digital product user demographics analyst. Determine PRECISE USER demographics for this app or platform.
+    prompt = f"""You are a premium-tier US digital product user demographics analyst. Determine PRECISE audience demographics for this app or platform.
 
-⚠️ CRITICAL ANTI-INFLATION RULES (MUST FOLLOW):
-- LGBTQ+ DEFAULT: 7% (US population baseline). Start here for EVERY app/platform.
-- ONLY increase above 10% if the app explicitly targets or is widely known in the LGBTQ+ community (e.g. Grindr, HER, Scruff).
-- HARD CAP: NEVER assign >15% unless the app IS a dedicated LGBTQ+ platform.
-- NEVER assign >30% to any app/platform — even LGBTQ+-focused ones.
-- General-purpose apps (Uber, DoorDash, Zoom, Zillow, Spotify): 5-7%. DO NOT exceed 8%.
-- Dating apps (Tinder, Bumble, Hinge): 8-12% — they have LGBTQ+ users but are majority straight.
-- Social media (Instagram, TikTok, Snapchat): 8-12% max — slightly over-index but still majority straight.
-- AI models consistently over-inflate LGBTQ+ — you MUST resist this tendency.
+\u26a0\ufe0f CRITICAL RULES:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 APP/PLATFORM: "{subject_clean}"
 CATEGORY: {brand_category}
 
-=== STEP 1: IDENTIFY THIS APP/PLATFORM ===
-What is this app/platform? Core use case, business model (free/paid/freemium), target market, typical user persona. Is it LGBTQ+-focused?
+=== STEP 1: IDENTIFY ===
+What is "{subject_clean}"? Determine its core use case, business model, target market, and typical user persona.
 
-=== STEP 2: APP/PLATFORM USER RULES ===
+=== STEP 2: USE THE RESEARCH DATA ===
+The REAL-WORLD RESEARCH section below contains web-sourced demographic data from Pew Research, Nielsen, Comscore, Statista, and similar authoritative sources. This is your PRIMARY source of truth.
 
-GENDER by product type:
-- Social media / photo sharing (Instagram, Pinterest, Snapchat): 55-65% FEMALE.
-- Gaming / sports betting (DraftKings, FanDuel): 70-80% MALE.
-- Ride-hailing / delivery (Uber, DoorDash, Instacart): ~50/50, slight male lean.
-- Dating (Tinder, Bumble, Hinge): 60-70% MALE (more men use dating apps than women).
-- Finance / investing (Robinhood, Venmo, Cash App): 55-65% MALE.
-- Real estate (Zillow, Redfin): ~50/50.
-- Streaming / entertainment (Spotify, YouTube, Twitch): 52-58% MALE.
-- Anime / niche media (Crunchyroll, Funimation): 60-70% MALE.
-- Shopping / e-commerce (Amazon, eBay, Etsy): 55-65% FEMALE for Etsy, ~50/50 for Amazon.
-- Professional (LinkedIn, Slack): 52-58% MALE.
-- Kids / family (YouTube Kids, PBS Kids): ~50/50.
-
-AGE by product type:
-- Social media (TikTok, Snapchat): peak 16-30, under-16 can be 8-15%.
-- Dating (Tinder, Bumble): peak 18-34, very low under-18 (<2%), low 60+ (<5%).
-- Finance/investing: peak 25-45.
-- Ride-hailing/delivery: broad 18-54.
-- Real estate (Zillow): peak 28-55, skews older (homebuying age).
-- General-purpose (Uber, DoorDash): broad, 18-49 peak.
-- Gaming: peak 16-35.
-- Professional (LinkedIn): peak 25-50.
-- Streaming (Spotify): peak 16-35.
-
-INCOME by product type:
-- Premium/paid services (Apple products, subscription apps): higher income, 20-30% $100K+.
-- Free/ad-supported (TikTok, YouTube): broad income distribution.
-- Real estate (Zillow): higher income, peak $75K-$250K+.
-- Finance/investing: middle-to-upper, $60K-$150K peak.
-- Dating: middle income, $40K-$100K peak.
-- Delivery (DoorDash, Uber Eats): broad but middle class, users need disposable income.
-- Budget services: lower-to-middle income.
-
-ETHNICITY — US digital penetration:
-- General-purpose apps mirror US demographics: 55-65% White, 12-18% Latinx, 10-15% Black, 5-10% Asian.
-- Apps popular with younger demographics: more diverse (lower White %, higher Latinx/Black).
-- Professional/finance apps: may skew slightly more White/Asian.
-- Anime/Asian media (Crunchyroll, Funimation, VRV): 20-28% Asian — anime fans are HEAVILY Asian-skewing. White drops to 40-50%. This is a major distinguishing feature of anime platforms.
-
-EDUCATION:
-- Professional platforms (LinkedIn, Slack): 40-55% college+, 20-30% grad school.
-- General social media: broad, 35-45% HS only.
-- Finance/investing: 35-50% college+.
-- Gaming/entertainment: broad distribution.
-
-PARENTAL STATUS:
-- Dating apps (Tinder): 55-70% no kids (users are young/single).
-- Family-oriented apps (grocery delivery, real estate): 45-60% has kids.
-- General-purpose: ~50/50 or slightly more no-kids.
-- Kids platforms: 80-90% has kids.
-
-RELATIONSHIP:
-- Dating apps: 60-75% SINGLE. Very low married (<15% — married people don't typically use dating apps).
-- Real estate: 40-55% MARRIED (homebuyers). Low single.
-- General social media: 30-40% single, 25-35% married, 15-25% in relationship.
-- Family/delivery: higher married/in relationship.
-
-SEXUAL ORIENTATION — STRICT RULES:
-- DEFAULT: 7%. This is the starting point for ALL apps/platforms.
-- General-purpose utility (Uber, Zoom, Zillow, DoorDash): 5-7%. DO NOT exceed 8%.
-- Social media (Instagram, TikTok): 8-12% — slight over-index but still overwhelmingly straight.
-- Dating (Tinder, Bumble, Hinge): 8-12% — they have LGBTQ+ features but majority straight.
-- LGBTQ+-specific (Grindr, HER, Scruff): 85-95%.
-- DO NOT assign 10%+ without clear LGBTQ+ relevance.
+For each demographic category (AGE, GENDER, ETHNICITY, EDUCATION, INCOME, SEXUAL_ORIENTATION, PARENTAL_STATUS, RELATIONSHIP):
+1. Check what the research data says about this app or platform's audience.
+2. If the research provides specific numbers (e.g. median age, gender split, racial breakdown), your output MUST match those numbers. Build your distribution around them.
+3. If the research provides a MEDIAN AGE, construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
+4. If no research data exists for a particular category, reason from the app or platform's identity, content, and audience profile — but stay grounded in realistic US population distributions.
+5. Cross-check: does the overall profile make sense for who actually follows/watches/listens to this app or platform?
 
 {research_block}
 === STEP 3: EVALUATE ===
