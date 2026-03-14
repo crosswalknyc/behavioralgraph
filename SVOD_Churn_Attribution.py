@@ -1468,14 +1468,20 @@ def _research_show_viewership(client, show_name):
         search_query = clean
 
     prompt = (
-        f'Search for real US viewership data for the TV show/series "{search_query}". '
+        f'Search for real viewership data for the TV show/series "{search_query}". '
+        f'I need UNIQUE VIEWER COUNTS (number of people), NOT viewing minutes or hours.\n\n'
         f'Report:\n'
-        f'- Total unique US viewers for this show/season (if available)\n'
-        f'- Premiere episode viewers\n'
-        f'- Average per-episode viewership\n'
-        f'- Peak episode viewership\n'
-        f'- Any streaming hours/completion data (e.g. Nielsen streaming top 10)\n'
-        f'- Which platform it aired on and when\n\n'
+        f'- Total unique US viewers for this show/season (MOST IMPORTANT — number of individual people who watched)\n'
+        f'- If only global viewers are available, report that AND estimate what percentage is US-based\n'
+        f'- Premiere episode unique viewers\n'
+        f'- Average per-episode unique viewers\n'
+        f'- Peak episode unique viewers\n'
+        f'- If only viewing hours/minutes are available, note that but try to find or estimate unique viewer counts too\n'
+        f'- Which platform it aired on and when\n'
+        f'- Total subscribers the platform had at that time\n\n'
+        f'IMPORTANT: I need PEOPLE, not minutes. Nielsen "unique audience" or "reach" numbers, '
+        f'Samba TV household counts, or platform-reported "accounts that watched" are what I need. '
+        f'Viewing minutes/hours are useful context but NOT a substitute for unique viewers.\n\n'
         f'Cite specific sources (Nielsen, Luminate, Samba TV, Parrot Analytics, '
         f'platform press releases, trade publications like Variety/Deadline/THR). '
         f'Be concise — just the key numbers. If no data is available, say so.'
@@ -1522,17 +1528,30 @@ def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
     watchers_projected = total_watchers * (US_POPULATION / SAMPLE_REPRESENTS)
     signups_projected = new_signups * (US_POPULATION / SAMPLE_REPRESENTS)
 
+    projection_mult = US_POPULATION / SAMPLE_REPRESENTS
+    panel_div = SAMPLE_REPRESENTS / US_POPULATION
+
     research_block = ""
     if viewership_research:
         research_block = f"""
 === REAL-WORLD VIEWERSHIP DATA (from web search) ===
-The following is current, web-sourced viewership information for this show.
-This is your PRIMARY reference for validating Total Show Watchers.
-
 {viewership_research}
 """
 
-    prompt = f"""You are an expert analyst validating SVOD subscriber acquisition data using REAL viewership research.
+    prompt = f"""You are an expert analyst validating SVOD subscriber acquisition data. You have access to REAL viewership research and must use it to validate our numbers.
+
+=== HOW OUR DATA WORKS ===
+We track UNIQUE INDIVIDUAL US VIEWERS (not minutes, not hours — actual people) from a panel of {SAMPLE_REPRESENTS:,} people representing the US population of {US_POPULATION:,}.
+
+CONVERSION FORMULAS:
+- Panel count × {projection_mult:.2f} = US Gen Pop Projection
+- To convert real-world US viewers to our panel: real_US_viewers × {panel_div:.10f} = panel count
+  (i.e. divide by {projection_mult:.2f})
+
+IMPORTANT: If the research only reports GLOBAL viewers, you must estimate the US share.
+Typically US is 30-50% of global streaming viewership depending on the platform.
+If research reports viewing MINUTES/HOURS instead of unique viewers, that is NOT directly
+comparable — note this limitation but estimate unique viewers if possible.
 
 SHOW: {show_name}
 PLATFORM: {platform_name}
@@ -1547,57 +1566,42 @@ PLATFORM CONTEXT:
 - US Subscribers: ~{plat_info['subs_millions']}M
 - Platform Tier: {plat_info['tier']}
 
-OUR METRICS (from 10M-person panel, projected to US pop):
+OUR DATA:
 - Total Show Watchers (panel): {total_watchers:,.0f} → US Gen Pop Projected: {watchers_projected:,.0f}
-- Pre-Existing Platform Viewers: {pre_existing_viewers:,.0f}
+- Pre-Existing Platform Viewers (panel): {pre_existing_viewers:,.0f}
 - New Platform Signups (panel): {new_signups:,.0f} → US Gen Pop Projected: {signups_projected:,.0f}
 - Total Show Conversion Rate: {conversion_rate:.2f}%
 {research_block}
 === PHASE A: VALIDATE TOTAL SHOW WATCHERS ===
-Compare our "US Gen Pop Projected" watchers number to the REAL viewership data above.
-- Our projected number should be in the same ballpark as the real-world viewer count.
-- If no real data was found, use your knowledge of this show's popularity to judge.
-- If our number is significantly higher than reality (e.g. we say 50M but Nielsen says 8M),
-  flag it and suggest what the panel number should be to produce a realistic projection.
-- The panel-to-projection formula is: panel × {US_POPULATION / SAMPLE_REPRESENTS:.2f} = US projection.
-  So to get a target projection, divide by {US_POPULATION / SAMPLE_REPRESENTS:.2f} to get the panel number.
+1. From the research, determine how many UNIQUE US VIEWERS this show/season actually had.
+   - If research says X million unique US viewers, our Gen Pop Projected number should be
+     close to X million. Convert to panel: X_million / {projection_mult:.2f} = target panel count.
+   - If research only has global numbers, estimate US share (typically 30-50% for US-centric
+     English-language content on major platforms, lower for non-English).
+   - If research only has viewing minutes/hours, note this and estimate unique viewers
+     cautiously (e.g. 1B minutes over 10 episodes ÷ ~6 hrs avg watch = ~17M unique viewers).
+2. Our projected number ({watchers_projected:,.0f}) should be in the right ballpark of reality.
+   If it is far off, flag it and suggest the correct panel number.
 
 === PHASE B: VALIDATE NEW SIGNUPS & REACTIVATIONS ===
-Judge whether the new subscriber count makes sense given the platform's market position:
-- DOMINANT platforms (Netflix ~68%, Prime ~65%): Already ubiquitous. Almost everyone who
-  would watch a show already has the platform. Only a true cultural phenomenon (final season
-  of Stranger Things, Squid Game) drives meaningful NEW signups. For most shows, new signups
-  should be very low relative to watchers.
-- MAJOR platforms (Hulu ~30%, Disney+ ~28%): Moderate room for acquisition. A hit show can
-  drive some new subs, but most of the audience already has access.
-- MID-TIER platforms (Max ~22%): More room for growth. A flagship show can drive noticeable
-  new subscriber acquisition.
-- EMERGING/NICHE platforms (Peacock ~13%, Paramount+ ~15%, Apple TV+ ~10%): Significant room
-  for acquisition. A hit exclusive can genuinely drive large numbers of new subscribers because
-  many viewers do NOT already have the platform.
-- If signups seem inflated for the platform tier, suggest a LOWER number. Never adjust upward.
-- Reactivated accounts follow the same logic: dominant platforms have fewer truly dormant users.
+Judge whether new subscribers make sense for this platform's saturation level:
+- DOMINANT platforms (Netflix ~68%, Prime ~65%): Nearly everyone already subscribes. Even a
+  massive cultural event (Squid Game, final Stranger Things) drives relatively few truly NEW
+  signups. For most shows, new signups should be a tiny fraction of watchers.
+- EMERGING platforms (Peacock ~13%, Apple TV+ ~10%, Paramount+ ~15%): Large untapped market.
+  A hit exclusive can genuinely drive significant new subscriber acquisition.
+- If signups appear inflated for this platform's saturation, suggest a LOWER number.
+  NEVER suggest increasing signups — only reduce if inflated.
+- Reactivated accounts: dominant platforms have fewer dormant users to reactivate.
 
 === PHASE C: TIME FRAME & CONTENT SCALE ===
-- Short windows (1-2 weeks) naturally produce lower numbers. Do NOT flag low numbers on short windows.
-- Stand-up specials, indie films, minor titles have modest numbers — that is expected.
+- Short windows (1-2 weeks) naturally produce lower numbers. Do NOT flag low numbers.
+- Minor titles, stand-up specials, indie films have modest numbers — that is expected.
 - Only flag numbers that are clearly impossible or significantly inflated.
 
-Respond in JSON ONLY (no markdown fencing):
-{{
-  "passed": true/false,
-  "watchers_plausible": true/false,
-  "watchers_note": "brief explanation referencing real data if available",
-  "signups_plausible": true/false,
-  "signups_note": "brief explanation of platform-tier reasoning",
-  "conversion_plausible": true/false,
-  "conversion_note": "brief explanation",
-  "flags": ["list of specific concerns if any"],
-  "suggested_conversion_range": [low_pct, high_pct],
-  "suggested_watchers_range_panel": [low, high],
-  "suggested_signups_range_panel": [low, high],
-  "overall_assessment": "one sentence summary"
-}}"""
+Show your math in the notes. Respond with ONLY a JSON object — no markdown code fences, no comments, no trailing commas, no text outside the JSON.
+CRITICAL: Do NOT use commas in numbers inside JSON. Write 50000 not 50,000. Write 1500000 not 1,500,000.
+{{"passed": true, "watchers_plausible": true, "watchers_note": "math here", "signups_plausible": true, "signups_note": "reasoning", "conversion_plausible": true, "conversion_note": "reasoning", "flags": [], "suggested_conversion_range": [0.0, 0.0], "suggested_watchers_range_panel": [0, 0], "suggested_signups_range_panel": [0, 0], "overall_assessment": "summary"}}"""
 
     try:
         resp = client.chat.completions.create(
@@ -1625,6 +1629,11 @@ Respond in JSON ONLY (no markdown fencing):
                     break
         if start >= 0 and end > start:
             raw = raw[start:end]
+        import re as _re
+        raw = _re.sub(r',\s*}', '}', raw)
+        raw = _re.sub(r',\s*]', ']', raw)
+        raw = _re.sub(r'//[^\n]*', '', raw)
+        raw = _re.sub(r'(?<=\d),(?=\d{3}(?:\D|$))', '', raw)
         result = json.loads(raw)
         return result
     except Exception as e:
