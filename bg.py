@@ -453,6 +453,50 @@ def _research_brand_demographics(client, subject_name, brand_category):
         'MEDIA': 'digital news/media publication reader and user base',
         'MOVIE THEATER': 'movie theater chain patron and moviegoer base',
         'SEARCH ENGINE': 'search engine and AI platform user base',
+        'BANKING': 'digital banking and financial services customer base',
+        'CREDIT': 'credit card/credit provider customer base',
+        'INSURANCE': 'insurance policy holder and customer base',
+        'INVESTMENT': 'investment platform and brokerage customer base',
+        'FINTECH': 'fintech app user base',
+        'QSR': 'quick service restaurant (fast food) customer and diner base',
+        'DINE': 'restaurant chain customer and diner base',
+        'SHOP': 'retail store shopper and customer base',
+        'AUTOMOBILE': 'automobile brand owner and buyer base',
+        'TELECOM': 'telecommunications service subscriber base',
+        'TECHNOLOGY': 'technology/device brand user base',
+        'STREAMING': 'streaming platform subscriber and viewer base',
+        'SOCIAL MEDIA': 'social media platform user base',
+        'BETTING': 'sports betting and gambling platform user base',
+        'TRAVEL': 'travel/hospitality brand customer base',
+        'PHARMACY': 'pharmacy chain customer base',
+        'WORKOUT': 'gym/fitness center member base',
+        'BEAUTY': 'beauty and wellness brand consumer base',
+        'APPAREL': 'apparel and footwear brand consumer base',
+        'CPG': 'consumer packaged goods brand buyer base',
+        'NON PROFIT': 'non-profit organization donor and supporter base',
+        'PET': 'pet brand/retailer customer base',
+        'HOME': 'home improvement and outdoor brand customer base',
+        'AMUSEMENT': 'amusement park and entertainment venue visitor base',
+        'SPORTS TEAM': 'sports team fan base',
+        'SPORTS ORG': 'sports organization/league fan base',
+        'NFL': 'NFL football fan base',
+        'NBA': 'NBA basketball fan base',
+        'MLB': 'MLB baseball fan base',
+        'MLS': 'MLS soccer fan base',
+        'WNBA': 'WNBA basketball fan base',
+        'NHL': 'NHL hockey fan base',
+        'GOLF': 'golf fan and player base',
+        'SOCCER': 'soccer/football fan base',
+        'EDUCATION': 'education platform student and learner base',
+        'GOVERNMENT': 'government service user base',
+        'GAMING': 'video game/gaming platform user base',
+        'GAMES': 'video game/gaming platform user base',
+        'TOYS': 'toy brand buyer and parent base',
+        'EVENT': 'event/venue attendee base',
+        'TICKETING': 'ticketing platform user base',
+        'FRANCHISE': 'franchise brand customer base',
+        'VIRTUAL MVPD': 'virtual MVPD and live TV streaming subscriber base',
+        'PORN': 'adult entertainment platform user base',
     }
     audience_type = 'audience'
     bc_upper = (brand_category or '').upper()
@@ -2306,7 +2350,7 @@ Each corrected category sums to 100. Be PRECISE with numbers. JSON only, no mark
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎭 Actor demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -2349,11 +2393,11 @@ Each corrected category sums to 100. Be PRECISE with numbers. JSON only, no mark
 
         notes = result.get('notes', '')[:80]
         print(f"🎭 Actor demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Actor demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_creator_demographic_review(df, brand_category, project_name, brands):
@@ -2501,7 +2545,7 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎬 Creator demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -2544,11 +2588,11 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎬 Creator demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Creator demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_athlete_demographic_review(df, brand_category, project_name, brands):
@@ -2696,7 +2740,7 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🏅 Athlete demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -2739,11 +2783,11 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🏅 Athlete demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Athlete demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_host_demographic_review(df, brand_category, project_name, brands):
@@ -2891,7 +2935,7 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎤 Host/personality demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -2934,11 +2978,11 @@ Each corrected category sums to 100. Be PRECISE. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎤 Host/personality demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Host/personality demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_musician_demographic_review(df, brand_category, project_name, brands):
@@ -3087,7 +3131,7 @@ Each corrected category MUST sum to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎵 Musician demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3130,11 +3174,11 @@ Each corrected category MUST sum to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎵 Musician demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Musician demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_politics_demographic_review(df, brand_category, project_name, brands):
@@ -3281,7 +3325,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🏛️ Politics demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3324,11 +3368,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🏛️ Politics demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Politics demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_creative_demographic_review(df, brand_category, project_name, brands):
@@ -3475,7 +3519,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎬 Creative demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3518,11 +3562,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎬 Creative demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Creative demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_series_demographic_review(df, brand_category, project_name, brands):
@@ -3670,7 +3714,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"📺 Series demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3713,11 +3757,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"📺 Series demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Series demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_podcast_demographic_review(df, brand_category, project_name, brands):
@@ -3865,7 +3909,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎙️ Podcast demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -3908,11 +3952,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎙️ Podcast demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Podcast demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_app_platform_demographic_review(df, brand_category, project_name, brands):
@@ -4061,7 +4105,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"📱 App/Platform demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -4104,11 +4148,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"📱 App/Platform demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  App/Platform demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_broadcast_cable_demographic_review(df, brand_category, project_name, brands):
@@ -4257,7 +4301,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"📺 Broadcast/Cable demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -4300,11 +4344,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"📺 Broadcast/Cable demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Broadcast/Cable demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 # ── Deterministic age calibration safety net ────────────────────────────
@@ -4787,7 +4831,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"📰 Media demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -4830,11 +4874,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"📰 Media demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Media demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_movie_theater_demographic_review(df, brand_category, project_name, brands):
@@ -5005,7 +5049,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🎬 Movie Theater demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -5048,11 +5092,11 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🎬 Movie Theater demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Movie Theater demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def ai_search_engine_ai_demographic_review(df, brand_category, project_name, brands):
@@ -5220,7 +5264,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         if result.get('status') != 'FIX' or 'corrections' not in result:
             print(f"🔍 Search Engine/AI demographic review: OK — {result.get('notes', '')[:80]}")
-            return _enforce_age_calibration(df, subject_clean, brand_category)
+            return _enforce_all_demographics(df, subject_clean, brand_category)
 
         corr = result['corrections']
         changes = 0
@@ -5263,11 +5307,402 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
         notes = result.get('notes', '')[:80]
         print(f"🔍 Search Engine/AI demographic review: FIXED {changes} values — {notes}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
     except Exception as e:
         print(f"⚠️  Search Engine/AI demographic review error: {e}")
-        return _enforce_age_calibration(df, subject_clean, brand_category)
+        return _enforce_all_demographics(df, subject_clean, brand_category)
+
+
+# ── Universal demographic calibration (all demographics, not just age) ──
+
+def _enforce_all_demographics(df, subject_clean, brand_category):
+    """Post-GPT validation for ALL demographics — not just age.
+
+    Runs after every demographic review (specific or universal).
+    Applies hard rules that GPT consistently gets wrong:
+
+    1. AGE — delegates to _enforce_age_calibration (hardcoded + GPT fallback)
+    2. LGBTQ+ — caps at ~10%, US baseline is ~7%, GPT over-inflates to 30-50%
+    3. ETHNICITY — sanity-checks against US census ± reasonable deviation
+    """
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = _enforce_age_calibration(df, subject_clean, brand_category)
+
+    # ── LGBTQ+ cap ──
+    so_mask = df['Column'].str.upper().str.strip() == 'SEXUAL_ORIENTATION'
+    if so_mask.any():
+        so_items = []
+        for idx, row in df[so_mask].iterrows():
+            val = str(row.get('Value', '')).strip().upper()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            so_items.append((val, bp, idx))
+
+        total_bp = sum(bp for _, bp, _ in so_items)
+        if total_bp > 0:
+            shares = {v: bp / total_bp * 100 for v, bp, _ in so_items}
+            yes_pct = shares.get('YES', 0)
+            max_lgbtq = 10.0
+
+            if yes_pct > max_lgbtq:
+                sample_raw = 0
+                ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+                if ss_mask.any():
+                    try:
+                        sample_raw = max(1, int(float(
+                            str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+                        )))
+                    except (ValueError, TypeError):
+                        sample_raw = 1
+
+                target_yes = 7.0
+                pns_pct = shares.get('PREFER NOT TO SAY', 0)
+                target_no = 100.0 - target_yes - min(pns_pct, 3.0)
+                target_pns = 100.0 - target_yes - target_no
+
+                new_shares = {}
+                for val, bp, idx in so_items:
+                    if val == 'YES':
+                        new_shares[idx] = target_yes
+                    elif val == 'NO':
+                        new_shares[idx] = target_no
+                    elif val == 'PREFER NOT TO SAY':
+                        new_shares[idx] = target_pns
+
+                for idx, pct in new_shares.items():
+                    new_bp = pct * total_bp / 100.0
+                    df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                    new_raw = round(sample_raw * new_bp / 100.0)
+                    df.at[idx, raw_col] = str(new_raw)
+                    df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+
+                all_idx = [idx for _, _, idx in so_items]
+                new_total = sum(
+                    float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    for ix in all_idx
+                )
+                if new_total > 0:
+                    for ix in all_idx:
+                        bp_v = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                        df.at[ix, cs_col] = f"{bp_v / new_total * 100.0:.4f}%"
+
+                print(f"   🔧 LGBTQ+ cap: {subject_clean} YES {yes_pct:.0f}%→{target_yes:.0f}%")
+
+    # ── ETHNICITY sanity check ──
+    eth_mask = df['Column'].str.upper().str.strip() == 'ETHNICITY'
+    if eth_mask.any():
+        eth_items = []
+        for idx, row in df[eth_mask].iterrows():
+            val = str(row.get('Value', '')).strip().upper()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            eth_items.append((val, bp, idx))
+
+        total_bp = sum(bp for _, bp, _ in eth_items)
+        if total_bp > 0:
+            shares = {v: bp / total_bp * 100 for v, bp, _ in eth_items}
+            white_pct = shares.get('WHITE', 0)
+            other_pct = shares.get('OTHER', 0)
+
+            needs_fix = False
+            if other_pct > 20:
+                needs_fix = True
+            if white_pct < 25 or white_pct > 85:
+                needs_fix = True
+
+            if needs_fix:
+                sample_raw = 0
+                ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+                if ss_mask.any():
+                    try:
+                        sample_raw = max(1, int(float(
+                            str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+                        )))
+                    except (ValueError, TypeError):
+                        sample_raw = 1
+
+                census = {'WHITE': 58.0, 'LATINX': 19.0, 'BLACK': 13.0,
+                          'ASIAN': 6.0, 'OTHER': 4.0}
+
+                existing_keys = {v for v, _, _ in eth_items}
+                final_dist = {}
+                for val, bp, idx in eth_items:
+                    if val in census:
+                        current = shares[val]
+                        target_val = census[val]
+                        final_dist[idx] = round((current + target_val) / 2, 1)
+                    else:
+                        final_dist[idx] = round(shares.get(val, 0), 1)
+
+                dist_total = sum(final_dist.values())
+                if dist_total > 0:
+                    final_dist = {k: v / dist_total * 100 for k, v in final_dist.items()}
+
+                for idx, pct in final_dist.items():
+                    new_bp = pct * total_bp / 100.0
+                    df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                    new_raw = round(sample_raw * new_bp / 100.0)
+                    df.at[idx, raw_col] = str(new_raw)
+                    df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+
+                all_idx = [idx for _, _, idx in eth_items]
+                new_total = sum(
+                    float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    for ix in all_idx
+                )
+                if new_total > 0:
+                    for ix in all_idx:
+                        bp_v = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                        df.at[ix, cs_col] = f"{bp_v / new_total * 100.0:.4f}%"
+
+                print(f"   🔧 Ethnicity fix: {subject_clean} OTHER was {other_pct:.0f}%, WHITE was {white_pct:.0f}%")
+
+    return df
+
+
+# ── Categories already covered by specific agents ──
+_SPECIFIC_AGENT_KEYWORDS = [
+    'ACTOR', 'ACTRESS', 'CREATOR', 'INFLUENCER', 'ATHLETE',
+    'HOST', 'PERSONALITY', 'MUSICIAN', 'BAND', 'POLITIC', 'ACTIVIST',
+    'WRITER', 'DIRECTOR', 'AUTHOR', 'ARTIST', 'SERIES', 'PODCAST',
+    'APP', 'PLATFORM', 'BROADCAST', 'CABLE', 'SEARCH ENGINE',
+]
+_SPECIFIC_AGENT_EXACT = ['MEDIA', 'MOVIE THEATER']
+
+
+def ai_universal_demographic_review(df, brand_category, project_name, brands):
+    """Universal catch-all demographic review for ANY brand category not
+    already handled by a specific agent.
+
+    Covers: digital banking, QSR, automobile, betting, insurance, telecom,
+    social media, streaming, sports teams, beauty/wellness, apparel,
+    where they shop, where they dine, travel, workout facility, and any
+    future category that doesn't have its own dedicated agent.
+
+    Uses web research + GPT-4o to evaluate all 8 demographic categories,
+    then applies _enforce_all_demographics() for hard programmatic checks.
+    """
+    bc_upper = (brand_category or '').strip().upper()
+    if not bc_upper:
+        return df
+
+    if bc_upper in _SPECIFIC_AGENT_EXACT:
+        return df
+    if any(kw in bc_upper for kw in _SPECIFIC_AGENT_KEYWORDS):
+        return df
+
+    client = _get_openai_client()
+    if not client:
+        print(f"⚠️  OpenAI not available — skipping universal demographic review for {bc_upper}")
+        subject = project_name or (brands[0] if brands else 'Unknown')
+        subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+        return _enforce_all_demographics(df, subject_clean, brand_category)
+
+    import json as _json
+
+    DEMO_CATS = ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+
+    subject = project_name or (brands[0] if brands else 'Unknown')
+    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = (
+        "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
+        "The following is current, web-sourced information about this brand's demographics.\n"
+        "Use this as your PRIMARY reference. Only deviate if the data clearly conflicts\n"
+        "with well-established facts.\n\n"
+        f"{web_research}\n"
+    ) if web_research else ""
+
+    sample_raw = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    all_shares = {}
+    all_indices = {}
+    for cat in DEMO_CATS:
+        mask = df['Column'].str.upper().str.strip() == cat
+        if not mask.any():
+            continue
+        items = []
+        for idx, row in df[mask].iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            items.append((val, bp, idx))
+        total = sum(bp for _, bp, _ in items)
+        if total <= 0:
+            continue
+        shares = {val: round(bp / total * 100, 2) for val, bp, _ in items}
+        all_shares[cat] = shares
+        all_indices[cat] = items
+
+    if not all_shares:
+        return _enforce_all_demographics(df, subject_clean, brand_category)
+
+    demo_block = ""
+    key_block = ""
+    for cat in DEMO_CATS:
+        if cat in all_shares:
+            demo_block += f"- {cat}: {_json.dumps(all_shares[cat])}\n"
+            key_block += f"- {cat} values: {_json.dumps(list(all_shares[cat].keys()))}\n"
+
+    prompt = f"""You are a premium-tier US brand/consumer demographics analyst. Determine PRECISE demographics for the audience, consumer, or user base of this brand.
+
+⚠️ CRITICAL RULES — READ CAREFULLY:
+- EVERY demographic category MUST sum to exactly 100%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start at 7% and ONLY adjust with hard evidence. AI models consistently inflate this to 20-50% — you MUST NOT do this. If unsure, use 7%.
+- ETHNICITY: Start from US census (White ~58%, Hispanic/Latinx ~19%, Black ~13%, Asian ~6%, Other ~4%) and adjust based on who this brand specifically serves. "Other" should almost never exceed 10%.
+- AGE: Identify the MEDIAN AGE of this brand's audience from research. Then construct your age distribution so the 50th percentile actually lands at that median. Calculate cumulative percentages to verify.
+- GENDER: Use research data. Most US consumer brands are 45-55% in either direction unless there's a strong gender skew (beauty = female, sports = male, etc.).
+- Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
+
+BRAND: "{subject_clean}"
+CATEGORY: {brand_category}
+
+=== STEP 1: IDENTIFY THIS BRAND ===
+What brand is this? What does it sell/do? Who is its target customer? Consider:
+- Market positioning (luxury vs mass-market vs value)
+- Geographic footprint (national, regional, urban, suburban, rural)
+- Price point and accessibility
+- Core consumer demographic (age, income, lifestyle)
+- Any known audience data from industry research
+
+=== STEP 2: USE THE RESEARCH DATA ===
+{research_block}
+
+IMPORTANT universal US consumer benchmarks:
+- US median age: ~38.5. Most mass-market brands' audiences are within ±8 years of this.
+- US gender: ~50/50. Adjust based on brand's known gender skew.
+- US ethnicity: White ~58%, Hispanic ~19%, Black ~13%, Asian ~6%, Other ~4%. Adjust based on the brand's customer base — e.g. Hispanic audiences over-index for certain QSR chains, Asian audiences over-index for tech.
+- US LGBTQ+: ~7%. Almost never above 10% for any brand.
+- US education: ~40% HS only, ~35% some college/degree, ~15% grad school, ~10% less than HS
+- US income distribution: broad — most brands' audiences cluster in $40K-$150K range
+- US parental status: ~40% have kids under 18
+- US relationship: ~50% married, ~30% single, ~10% in relationship, ~10% divorced/widowed
+
+For each demographic:
+1. Check the research data first — match specific numbers if available.
+2. If research provides a median age, construct age distribution so the 50th percentile lands there. This is non-negotiable.
+3. If no brand-specific research exists, reason from the brand's type, price point, and target market.
+4. Cross-check: does the overall profile make sense as a coherent consumer?
+
+=== STEP 3: EVALUATE CURRENT DEMOGRAPHICS ===
+{demo_block}
+
+=== STEP 4: VERDICT ===
+{key_block}
+If accurate: {{"status":"OK","notes":"reason"}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrections":{{"CAT":{{"label":num,...}},...}}}}
+Each corrected category sums to 100. JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.05,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+
+        if result.get('status') != 'FIX' or 'corrections' not in result:
+            print(f"🌐 Universal demographic review ({bc_upper}): OK — {result.get('notes', '')[:80]}")
+            return _enforce_all_demographics(df, subject_clean, brand_category)
+
+        corr = result['corrections']
+        changes = 0
+
+        for cat_name, new_shares in corr.items():
+            cat_upper = cat_name.upper()
+            if not isinstance(new_shares, dict) or cat_upper not in all_indices:
+                continue
+
+            items = all_indices[cat_upper]
+            total_bp = sum(bp for _, bp, _ in items)
+            if total_bp <= 0:
+                continue
+
+            idx_map = {val.upper(): idx for val, bp, idx in items}
+            if not any(l.strip().upper() in idx_map for l in new_shares):
+                continue
+
+            for label, new_pct in new_shares.items():
+                key = label.strip().upper()
+                if key not in idx_map:
+                    continue
+                idx = idx_map[key]
+                new_bp = float(new_pct) * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * new_bp / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                changes += 1
+
+            all_idx = [idx for _, _, idx in items]
+            new_total = sum(
+                float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                for ix in all_idx
+            )
+            if new_total > 0:
+                for ix in all_idx:
+                    bp = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[ix, cs_col] = f"{bp / new_total * 100.0:.4f}%"
+
+        notes = result.get('notes', '')[:80]
+        print(f"🌐 Universal demographic review ({bc_upper}): FIXED {changes} values — {notes}")
+        return _enforce_all_demographics(df, subject_clean, brand_category)
+
+    except Exception as e:
+        print(f"⚠️  Universal demographic review error ({bc_upper}): {e}")
+        return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
 def item_level_ai_review(df, archetype, project_name, brands):
@@ -10727,6 +11162,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ai_media_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_movie_theater_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_search_engine_ai_demographic_review(df_final, brand_category, project_name, brands)
+
+        # Universal catch-all: handles ANY category not covered above
+        df_final = ai_universal_demographic_review(df_final, brand_category, project_name, brands)
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
