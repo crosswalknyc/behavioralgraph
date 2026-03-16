@@ -445,6 +445,7 @@ def _research_brand_demographics(client, subject_name, brand_category):
         'DIRECTOR': 'writer/director/author audience',
         'ARTIST': 'writer/director/author audience',
         'SERIES': 'TV series viewer audience',
+        'MOVIE': 'movie viewer audience on streaming platforms',
         'PODCAST': 'podcast listener audience',
         'APP': 'app/platform user base',
         'PLATFORM': 'app/platform user base',
@@ -780,7 +781,7 @@ def get_genpop_penetration_for_brand(brand_name, brand_category=None, brands=Non
     search_cats = []
     if brand_category:
         bc_upper = brand_category.strip().upper()
-        if bc_upper.startswith('SERIES'):
+        if bc_upper.startswith('SERIES') or bc_upper.startswith('MOVIE'):
             search_cats = ['STREAMING/PLATFORM', 'FRANCHISE', 'MEDIA']
         elif bc_upper.startswith('GAMES'):
             search_cats = ['GAMES']
@@ -850,7 +851,7 @@ def estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=
     """
     GENPOP_CAP = 10_000_000
     bc_upper = (brand_category or '').strip().upper()
-    if bc_upper.startswith('SERIES'):
+    if bc_upper.startswith('SERIES') or bc_upper.startswith('MOVIE'):
         bc_upper = 'STREAMING/PLATFORM'
     elif bc_upper.startswith('GAMES'):
         bc_upper = 'GAMES'
@@ -3579,12 +3580,12 @@ def ai_series_demographic_review(df, brand_category, project_name, brands):
     shows — using genre, platform, cast, and theme-specific audience reasoning.
     """
     bc_upper = (brand_category or '').strip().upper()
-    if 'SERIES' not in bc_upper:
+    if 'SERIES' not in bc_upper and not bc_upper.startswith('MOVIE'):
         return df
 
     client = _get_openai_client()
     if not client:
-        print("⚠️  OpenAI not available — skipping series demographic review")
+        print("⚠️  OpenAI not available — skipping series/movie demographic review")
         return df
 
     import json as _json
@@ -5546,7 +5547,7 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
 _SPECIFIC_AGENT_KEYWORDS = [
     'ACTOR', 'ACTRESS', 'CREATOR', 'INFLUENCER', 'ATHLETE',
     'HOST', 'PERSONALITY', 'MUSICIAN', 'BAND', 'POLITIC', 'ACTIVIST',
-    'WRITER', 'DIRECTOR', 'AUTHOR', 'ARTIST', 'SERIES', 'PODCAST',
+    'WRITER', 'DIRECTOR', 'AUTHOR', 'ARTIST', 'SERIES', 'MOVIE', 'PODCAST',
     'APP', 'PLATFORM', 'BROADCAST', 'CABLE', 'SEARCH ENGINE',
 ]
 _SPECIFIC_AGENT_EXACT = ['MEDIA', 'MOVIE THEATER', 'SOCIAL MEDIA']
