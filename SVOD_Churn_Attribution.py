@@ -805,20 +805,16 @@ def run_query(conn, p):
     """
     df_summary = pd.read_sql(summary_sql, conn)
     # Apply same sample size inflation as bg.py: try 55x, 25x, 5x, 2.5x, or 1x (whichever keeps result ≤10M)
-    # Then apply additional 251x boost for Subscriber IQ / Analysis IQ before any other calculations
-    SUBSCRIBER_IQ_EXTRA_BOOST = 251
+    raw_show_watchers = 0
     if 'TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']):
         raw_show_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])
         inflation_factor = calculate_inflation_factor(raw_show_watchers)
         inflated_watchers = int(raw_show_watchers * inflation_factor)
-        # Additional 251x boost (current boost, then 251x, before rounding/cap)
-        inflated_watchers = inflated_watchers * SUBSCRIBER_IQ_EXTRA_BOOST
-        # Round to nearest 10 and cap at 10M (same as bg.py)
         inflated_watchers = min((inflated_watchers // 10) * 10, SAMPLE_REPRESENTS)
         df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = inflated_watchers
         print(f"   📊 Raw show watchers: {raw_show_watchers:,}")
         print(f"   📊 Inflation factor: {inflation_factor}x (chosen so result ≤ 10M)")
-        print(f"   📊 After {SUBSCRIBER_IQ_EXTRA_BOOST}x boost: {inflated_watchers:,}")
+        print(f"   📊 Inflated show watchers: {inflated_watchers:,}")
     print("   ✅ Summary stats calculated\n")
 
     # Step 6: Demographics for show watchers who signed up
@@ -1302,13 +1298,13 @@ def run_query(conn, p):
     # Uses consistent inflation factor (55x, 25x, 5x, 2.5x, or 1x) calculated from base sample
     # This ensures both Profile IQ and Subscriber IQ produce matching sample sizes
     
-    # TOTAL_SHOW_WATCHERS already inflated earlier - get the inflation factor that was used
+    # Use same inflation factor as TOTAL_SHOW_WATCHERS for ALL counts to preserve ratios
     inflated_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
     raw_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if ('NEW_SIGNUPS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS'])) else 0
     
-    # Calculate inflation factor for NEW_SIGNUPS (same logic as bg.py)
-    inflation_factor = calculate_inflation_factor(raw_new_signups) if raw_new_signups > 0 else 55
-    print(f"🔥 Applying {inflation_factor}x inflation factor to all count-based numbers (same as bg.py)...\n")
+    # Use the SAME inflation factor that was applied to total_show_watchers
+    inflation_factor = calculate_inflation_factor(raw_show_watchers) if raw_show_watchers > 0 else 55
+    print(f"🔥 Applying {inflation_factor}x inflation factor to all count-based numbers (consistent with total show watchers)...\n")
     
     # Inflate NEW_SIGNUPS with consistent inflation factor
     if 'NEW_SIGNUPS' in df_summary.columns and raw_new_signups > 0:
