@@ -16349,9 +16349,12 @@
             if (s == null || typeof s !== 'string') return s;
             const v = String(s).trim().toLowerCase();
             // Ethnicity
+            if (v === 'white') return 'White';
+            if (v === 'asian') return 'Asian';
             if (v === 'latinx' || v === 'latino') return 'Hispanic or Latino';
             if (v === 'black') return 'Black or African American';
             if (v === 'other') return 'Another Race/Ethnicity';
+            if (v === 'native american / alaska native' || v === 'native american/alaska native') return 'Native American / Alaska Native';
             // Education
             if (v === 'complete college/university' || v === 'completed college/university') return "Bachelor's Degree";
             if (v === 'complete grad school' || v === 'completed grad school') return 'Graduate or Professional Degree';
@@ -27481,8 +27484,8 @@
                     // Get from loaded Gen Pop baseline file (most recent year)
                     const demoKey = category.toLowerCase().replace('_', '_');
                     genPopPct = getGenPopValue(demoKey, value);
-                    // Fallback to hardcoded values ONLY if Gen Pop file not loaded
-                    if (genPopPct === 0 && !genPopBaselineData && GENPOP_DEMOGRAPHICS[category]) {
+                    // Fallback to hardcoded values if dynamic lookup returned 0
+                    if (genPopPct === 0 && GENPOP_DEMOGRAPHICS[category]) {
                         genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
                         if (genPopPct === 0) {
                             const valLower = (value || '').toLowerCase();
