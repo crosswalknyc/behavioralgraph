@@ -19520,7 +19520,7 @@
             // Sexual Orientation Chart
             if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
                 const soLabels = Object.keys(demographics.sexual_orientation);
-                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'Straight / Heterosexual'; if (upper === 'YES') return 'Gay or Lesbian'; if (upper === 'OTHER') return 'Another Sexual Orientation'; if (u.toLowerCase() === 'prefer not to say') return 'Prefer Not to Say'; return u; };
+                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
                 const soData = Object.values(demographics.sexual_orientation);
                 const ctx = document.getElementById('tickerSexualOrientationChart');
@@ -30841,7 +30841,7 @@
             // Sexual Orientation - doughnut with Gen Pop
             if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
                 const soLabels = Object.keys(demographics.sexual_orientation);
-                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'Straight / Heterosexual'; if (upper === 'YES') return 'Gay or Lesbian'; if (upper === 'OTHER') return 'Another Sexual Orientation'; if (u.toLowerCase() === 'prefer not to say') return 'Prefer Not to Say'; return u; };
+                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
                 const soGenPop = soLabels.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
                 const soPcts = Object.values(demographics.sexual_orientation);
@@ -37618,7 +37618,7 @@
                 const index = currentDashboardData.demographicsIndex[catKey] || {};
                 const genPop = currentDashboardData.demographicsGenPop[catKey] || {};
                 // Sexual Orientation: use same display labels as dashboard (YES->LGBTQ+, NO->HETEROSEXUAL, other->uppercase)
-                const displayLabel = (catKey === 'sexual_orientation') ? (raw) => { const u = (raw || '').trim(); if (!u) return u; const lower = u.toLowerCase(); if (lower === 'no') return 'Straight / Heterosexual'; if (lower === 'yes') return 'Gay or Lesbian'; if (lower === 'other') return 'Another Sexual Orientation'; if (lower === 'prefer not to say') return 'Prefer Not to Say'; return u; } : (l) => l;
+                const displayLabel = (catKey === 'sexual_orientation') ? (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; } : (l) => l;
                 csvContent = `${profileName} - ${category}\n`;
                 csvContent += `Label,Profile %,Gen Pop %,Index\n`;
                 Object.keys(data).forEach(label => {
@@ -45009,7 +45009,7 @@
                 // Export all demographics data; map display names to internal keys (sexual orientation -> sexual_orientation, etc.)
                 csvContent = `${profileName} - Demographics\n\n`;
                 const demoCategoryList = [{ key: 'age', title: 'Age' }, { key: 'gender', title: 'Gender' }, { key: 'ethnicity', title: 'Ethnicity' }, { key: 'income', title: 'Income' }, { key: 'education', title: 'Education' }, { key: 'relationship', title: 'Relationship Status' }, { key: 'sexual_orientation', title: 'Sexual Orientation' }, { key: 'parental_status', title: 'Parental Status' }, { key: 'occupation', title: 'Occupation' }];
-                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'Straight / Heterosexual'; if (upper === 'YES') return 'Gay or Lesbian'; if (upper === 'OTHER') return 'Another Sexual Orientation'; if (u.toLowerCase() === 'prefer not to say') return 'Prefer Not to Say'; return u; };
+                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 demoCategoryList.forEach(({ key: catKey, title: catTitle }) => {
                     const data = currentDashboardData.demographics[catKey] || {};
                     const index = currentDashboardData.demographicsIndex[catKey] || {};
