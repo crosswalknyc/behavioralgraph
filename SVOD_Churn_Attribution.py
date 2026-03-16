@@ -2329,6 +2329,69 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         except (ValueError, TypeError):
             pass
 
+    # Enforce demographics: each category (AGE, GENDER) sums to New Platform Signups
+    # Rescale counts proportionally, recalculate percentages and gen pop from final values
+    if new_platform_row is not None:
+        try:
+            nps_final = int(float(str(df_out.loc[new_platform_row, "Count"]).replace(",", "")))
+            if nps_final > 0:
+                current_section = None
+                section_rows = {'AGE': [], 'GENDER': []}
+                for idx in df_out.index:
+                    cat = str(df_out.loc[idx, "Category"] or "").strip()
+                    clabel = str(df_out.loc[idx, "Count Label"] or "").strip()
+                    if cat == "AGE":
+                        current_section = "AGE"
+                        continue
+                    elif cat == "GENDER":
+                        current_section = "GENDER"
+                        continue
+                    elif cat and clabel != "people":
+                        if current_section in section_rows and cat not in ("", "DEMOGRAPHICS - New Signups"):
+                            current_section = None
+                    if current_section and clabel == "people":
+                        section_rows[current_section].append(idx)
+
+                for demo_cat, indices in section_rows.items():
+                    if not indices:
+                        continue
+                    raw_counts = []
+                    for idx in indices:
+                        try:
+                            c = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+                        except (ValueError, TypeError):
+                            c = 0
+                        raw_counts.append(max(c, 0))
+
+                    current_sum = sum(raw_counts)
+                    if current_sum <= 0:
+                        continue
+
+                    scaled = []
+                    running = 0
+                    for i, c in enumerate(raw_counts):
+                        if i == len(raw_counts) - 1:
+                            scaled.append(nps_final - running)
+                        else:
+                            sc = int(round(c * nps_final / current_sum))
+                            scaled.append(sc)
+                            running += sc
+
+                    pct_running = 0.0
+                    for i, idx in enumerate(indices):
+                        sc = scaled[i]
+                        if i == len(indices) - 1:
+                            pct = round(100.0 - pct_running, 1)
+                        else:
+                            pct = round(sc * 100.0 / nps_final, 1) if nps_final > 0 else 0.0
+                            pct_running += pct
+                        gp = format_gen_pop(gen_pop_projection(sc))
+                        df_out.loc[idx, "Count"] = sc
+                        df_out.loc[idx, "Percentage"] = f"{pct:.1f}%"
+                        df_out.loc[idx, "Gen Pop Projection"] = gp
+        except (ValueError, TypeError):
+            pass
+
     # Hard sanity checks before AI validation
     date_range_days = 0
     if p.get('campaign_start') and p.get('campaign_end'):
