@@ -13024,7 +13024,14 @@
                                                 <option value="Multi Camera Sitcom">Multi Camera Sitcom</option>
                                                 <option value="Live Sports">Live Sports</option>
                                                 <option value="Single Event Telecast">Single Event Telecast</option>
-                                                <option value="Movies - Netflix">Movies - Netflix</option>
+                                                <option value="Movie - Drama">Movie - Drama</option>
+                                                <option value="Movie - Family & Animation">Movie - Family & Animation</option>
+                                                <option value="Movie - Action">Movie - Action</option>
+                                                <option value="Movie - Comedy">Movie - Comedy</option>
+                                                <option value="Movie - Horror">Movie - Horror</option>
+                                                <option value="Movie - Romcom">Movie - Romcom</option>
+                                                <option value="Movie - Documentary">Movie - Documentary</option>
+                                                <option value="Movie - SciFi">Movie - SciFi</option>
                                             </select>
                                             <small>Content genre for the report</small>
                                         </div>
@@ -24055,11 +24062,12 @@
             if (tabs) tabs.style.display = 'flex';
             if (actionRow) actionRow.style.display = 'flex';
             
-            // Hide Episodes tab for Stand Up Comedy genre (no episode-level data)
+            // Hide Episodes tab for Stand Up Comedy and Movie genres (no episode-level data)
             const episodesTabBtn = document.getElementById('subscriberEpisodesTabBtn');
             if (episodesTabBtn) {
-                const isStandUpComedy = genre && genre.toLowerCase().includes('stand up comedy');
-                episodesTabBtn.style.display = isStandUpComedy ? 'none' : '';
+                const genreLower = (genre || '').toLowerCase();
+                const hideEpisodes = genreLower.includes('stand up comedy') || genreLower.includes('movie');
+                episodesTabBtn.style.display = hideEpisodes ? 'none' : '';
             }
             
             // Load profile image if available
@@ -24106,11 +24114,18 @@
         
         // Hide/show subscriber tabs based on data availability
         function updateSubscriberTabVisibility(data) {
-            // Episodes tab - hide if no episode_attribution data
+            // Episodes tab - hide if no episode_attribution data OR if genre contains "movie"
             const episodesTabBtn = document.getElementById('subscriberEpisodesTabBtn');
             if (episodesTabBtn) {
-                const episodes = (data.episode_attribution || []).filter(ep => (Number(ep.signups) || 0) > 0);
-                episodesTabBtn.style.display = episodes.length > 0 ? '' : 'none';
+                const metaGenre = ((data.metadata && data.metadata.genre) || '').toLowerCase();
+                const isMovieGenre = metaGenre.includes('movie');
+                const isStandUp = metaGenre.includes('stand up comedy');
+                if (isMovieGenre || isStandUp) {
+                    episodesTabBtn.style.display = 'none';
+                } else {
+                    const episodes = (data.episode_attribution || []).filter(ep => (Number(ep.signups) || 0) > 0);
+                    episodesTabBtn.style.display = episodes.length > 0 ? '' : 'none';
+                }
             }
             
             // Timing tab - hide if no signup_timing data AND no episode_signup_timing data

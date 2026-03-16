@@ -157,7 +157,14 @@ ALLOWED_GENRES = [
     "Multi Camera Sitcom",
     "Live Sports",
     "Single Event Telecast",
-    "Movies - Netflix",
+    "Movie - Drama",
+    "Movie - Family & Animation",
+    "Movie - Action",
+    "Movie - Comedy",
+    "Movie - Horror",
+    "Movie - Romcom",
+    "Movie - Documentary",
+    "Movie - SciFi",
 ]
 
 # List of all competitor streaming platforms
