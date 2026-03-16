@@ -2279,6 +2279,56 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             except (ValueError, TypeError):
                 pass
 
+    # Enforce attribution summary consistency: Attributed + Dormant = Total Signups = New Platform Signups
+    # After OUTPUT_DIVISOR rounding, the sum can drift by ±1 — force alignment
+    new_platform_row = None
+    attributed_row = None
+    dormant_row = None
+    total_signups_row = None
+    total_watchers_row = None
+    for idx in df_out.index:
+        cat = str(df_out.loc[idx, "Category"] or "").strip()
+        if cat == "New Platform Signups":
+            new_platform_row = idx
+        elif cat == "Total Show Watchers":
+            total_watchers_row = idx
+        elif cat == "Attributed Signups":
+            attributed_row = idx
+        elif cat == "Dormant to Reactive":
+            dormant_row = idx
+        elif cat == "TOTAL SIGNUPS":
+            total_signups_row = idx
+
+    if new_platform_row is not None and attributed_row is not None and dormant_row is not None:
+        try:
+            nps_count = int(float(str(df_out.loc[new_platform_row, "Count"]).replace(",", "")))
+            attr_count = int(float(str(df_out.loc[attributed_row, "Count"]).replace(",", "")))
+            tw_count = int(float(str(df_out.loc[total_watchers_row, "Count"]).replace(",", ""))) if total_watchers_row is not None else 0
+
+            dorm_count = nps_count - attr_count
+            df_out.loc[dormant_row, "Count"] = dorm_count
+
+            if total_signups_row is not None:
+                df_out.loc[total_signups_row, "Count"] = nps_count
+
+            attr_pct = round((attr_count * 100.0) / tw_count, 2) if tw_count > 0 else 0.0
+            dorm_pct = round((dorm_count * 100.0) / tw_count, 2) if tw_count > 0 else 0.0
+            total_pct = round((nps_count * 100.0) / tw_count, 2) if tw_count > 0 else 0.0
+            df_out.loc[attributed_row, "Percentage"] = f"{attr_pct}%"
+            df_out.loc[dormant_row, "Percentage"] = f"{dorm_pct}%"
+            if total_signups_row is not None:
+                df_out.loc[total_signups_row, "Percentage"] = f"{total_pct}%"
+
+            attr_gp = format_gen_pop(gen_pop_projection(attr_count))
+            dorm_gp = format_gen_pop(gen_pop_projection(dorm_count))
+            total_gp = format_gen_pop(gen_pop_projection(nps_count))
+            df_out.loc[attributed_row, "Gen Pop Projection"] = attr_gp
+            df_out.loc[dormant_row, "Gen Pop Projection"] = dorm_gp
+            if total_signups_row is not None:
+                df_out.loc[total_signups_row, "Gen Pop Projection"] = total_gp
+        except (ValueError, TypeError):
+            pass
+
     # Hard sanity checks before AI validation
     date_range_days = 0
     if p.get('campaign_start') and p.get('campaign_end'):
