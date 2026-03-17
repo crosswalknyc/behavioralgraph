@@ -8482,7 +8482,8 @@ def parse_subscriber_iq_csv(csv_content):
             if demo_sub and first_col and first_col not in ('AGE', 'GENDER'):
                 _c = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _p = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
-                _g = (row[5].strip() if len(row) > 5 else '') or (row[8].strip() if len(row) > 8 else '')
+                # Prefer column 9 for US projected (gen_pop), then 8, then 5 (match main demographics section)
+                _g = (row[9].strip() if len(row) > 9 else '') or (row[8].strip() if len(row) > 8 else '') or (row[5].strip() if len(row) > 5 else '')
                 if demo_sub == 'age' and (any(c.isdigit() for c in first_col) or '-' in first_col or '+' in first_col):
                     parsed['demographics']['age'].append({'age_range': first_col, 'count': _c, 'percentage': _p, 'gen_pop': _g})
                 elif demo_sub == 'gender':

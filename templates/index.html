@@ -14860,16 +14860,16 @@
                             
                             <!-- Age Section - Separate Box -->
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
-                                <h3>👥 Age of New Signups</h3>
-                                <p class="section-description">Age distribution of people who signed up for the platform to watch this show</p>
+                                <h3>👥 Age of Reactivated + New Signups</h3>
+                                <p class="section-description">Age distribution of people who were reactivated or signed up for the platform to watch this show</p>
                                 <div id="subscriberAgeTable" class="demographics-table-container"></div>
 
                             </div>
                             
                             <!-- Gender Section - Separate Box -->
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem;">
-                                <h3>👥 Gender of New Signups</h3>
-                                <p class="section-description">Gender distribution of people who signed up for the platform to watch this show</p>
+                                <h3>👥 Gender of Reactivated + New Signups</h3>
+                                <p class="section-description">Gender distribution of people who were reactivated or signed up for the platform to watch this show</p>
                                 <div id="subscriberGenderTable" class="demographics-table-container"></div>
 
                             </div>
@@ -25782,30 +25782,28 @@
                 return formatNumber(value);
             };
             
-            // Get the value to display (actual or gen pop projection)
+            // Get the value to display (actual or gen pop projection). Demographics always prefer projected when available.
             const getDisplayValue = (actual, genPop) => {
-                if (subscriberGenPopMode) {
-                    // Check if genPop exists and is valid (not empty, not 'N/A')
-                    if (genPop !== null && genPop !== undefined && genPop !== '') {
-                        const genPopStr = String(genPop).trim();
-                        if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A') {
-                            const parsed = parseNumber(genPopStr);
-                            console.log(`🔄 Gen Pop toggle: genPop="${genPopStr}", parsed=${parsed}, isNaN=${isNaN(parsed)}`);
-                            // Return parsed value if valid (including 0), otherwise fall back to actual
-                            if (parsed !== null && parsed !== undefined && !isNaN(parsed)) {
-                                console.log(`✅ Using Gen Pop: ${parsed}`);
-                                return parsed;
-                            } else {
-                                console.log(`⚠️ Gen Pop invalid (parsed=${parsed}), falling back to actual: ${actual}`);
-                            }
-                        } else {
-                            console.log(`⚠️ Gen Pop is empty or N/A ("${genPopStr}"), falling back to actual: ${actual}`);
+                const useProjected = subscriberGenPopMode;
+                if (genPop !== null && genPop !== undefined && genPop !== '') {
+                    const genPopStr = String(genPop).trim();
+                    if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A') {
+                        const parsed = parseNumber(genPopStr);
+                        if (parsed !== null && parsed !== undefined && !isNaN(parsed)) {
+                            if (useProjected) return parsed;
                         }
-                    } else {
-                        console.log(`⚠️ Gen Pop is null/undefined/empty, falling back to actual: ${actual}`);
                     }
-                    // If no valid genPop, return actual as fallback
-                    return parseNumber(actual) || 0;
+                }
+                return parseNumber(actual) || 0;
+            };
+            // Demographics table: always show US projected when available (ignore global toggle for this section)
+            const getDemographicsDisplayValue = (actual, genPop) => {
+                if (genPop !== null && genPop !== undefined && genPop !== '') {
+                    const genPopStr = String(genPop).trim();
+                    if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A') {
+                        const parsed = parseNumber(genPopStr);
+                        if (parsed !== null && parsed !== undefined && !isNaN(parsed)) return parsed;
+                    }
                 }
                 return parseNumber(actual) || 0;
             };
@@ -25819,8 +25817,8 @@
                             <table class="demographics-table">
                                 <thead>
                                     <tr>
-                                        <th class="has-tooltip" data-tooltip="Age Range: Demographic age groups of people who signed up for the platform to watch this show">Age Range</th>
-                                        <th class="has-tooltip" data-tooltip="Accounts: Projected number of accounts for this age group">Accounts</th>
+                                        <th class="has-tooltip" data-tooltip="Age Range: Demographic age groups of people who were reactivated or signed up for the platform to watch this show">Age Range</th>
+                                        <th class="has-tooltip" data-tooltip="US projected number of accounts for this age group (scaled to US population)">Accounts (US projected)</th>
                                         <th class="has-tooltip" data-tooltip="Percentage: This age group's share of total new signups">Percentage</th>
                                     </tr>
                                 </thead>
@@ -25830,7 +25828,7 @@
                                         const displayAgeRange = getAgeDisplayLabel(ageRange);
                                         const percentage = item.percentage || 'N/A';
                                         const genPop = item.gen_pop || item.genPop || '';
-                                        const displayValue = getDisplayValue(item.count, genPop);
+                                        const displayValue = getDemographicsDisplayValue(item.count, genPop);
                                         return `
                                             <tr>
                                                 <td><strong>${displayAgeRange}</strong></td>
@@ -25860,8 +25858,8 @@
                             <table class="demographics-table">
                                 <thead>
                                     <tr>
-                                        <th class="has-tooltip" data-tooltip="Gender: Gender identity of people who signed up for the platform to watch this show">Gender</th>
-                                        <th class="has-tooltip" data-tooltip="Accounts: Projected number of accounts for this gender">Accounts</th>
+                                        <th class="has-tooltip" data-tooltip="Gender: Gender identity of people who were reactivated or signed up for the platform to watch this show">Gender</th>
+                                        <th class="has-tooltip" data-tooltip="US projected number of accounts for this gender (scaled to US population)">Accounts (US projected)</th>
                                         <th class="has-tooltip" data-tooltip="Percentage: This gender's share of total new signups">Percentage</th>
                                     </tr>
                                 </thead>
@@ -25870,8 +25868,8 @@
                                         const gender = item.gender;
                                         const count = item.count;
                                         const percentage = item.percentage; // Already calculated earlier
-                                        const genPop = item.genPop;
-                                        const displayValue = getDisplayValue(count, genPop);
+                                        const genPop = item.genPop || item.gen_pop;
+                                        const displayValue = getDemographicsDisplayValue(count, genPop);
                                         return `
                                             <tr>
                                                 <td><strong>${gender}</strong></td>
