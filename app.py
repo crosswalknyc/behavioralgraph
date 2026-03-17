@@ -8653,7 +8653,10 @@ def normalize_demographics_gen_pop_to_nps(parsed):
     def _num(g):
         if g is None:
             return 0
-        return parse_number(g) if isinstance(g, str) else (g if isinstance(g, (int, float)) else 0)
+        if isinstance(g, str):
+            n = parse_number(g)
+            return n if n is not None else 0
+        return g if isinstance(g, (int, float)) else 0
 
     for kind in ('age', 'gender'):
         buckets = (parsed.get('demographics') or {}).get(kind) or []
