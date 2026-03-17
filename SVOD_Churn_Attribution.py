@@ -2310,9 +2310,17 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         try:
             nps_count = int(float(str(df_out.loc[new_platform_row, "Count"]).replace(",", "")))
             attr_count = int(float(str(df_out.loc[attributed_row, "Count"]).replace(",", "")))
+            dorm_count_orig = int(float(str(df_out.loc[dormant_row, "Count"]).replace(",", "")))
             tw_count = int(float(str(df_out.loc[total_watchers_row, "Count"]).replace(",", ""))) if total_watchers_row is not None else 0
 
-            dorm_count = nps_count - attr_count
+            raw_sum = attr_count + dorm_count_orig
+            if raw_sum != nps_count and raw_sum > 0:
+                attr_count = int(round(attr_count * nps_count / raw_sum))
+                dorm_count = nps_count - attr_count
+            else:
+                dorm_count = dorm_count_orig
+
+            df_out.loc[attributed_row, "Count"] = attr_count
             df_out.loc[dormant_row, "Count"] = dorm_count
 
             if total_signups_row is not None:
