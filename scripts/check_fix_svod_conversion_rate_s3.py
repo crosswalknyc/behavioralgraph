@@ -2,6 +2,9 @@
 """
 Check and fix Total Show Conversion Rate in all CSV files in s3://svod-acquisition/.
 Total Show Conversion Rate must equal (New Platform Signups / Total Show Watchers) * 100.
+
+Excluded: keys containing "56_Days" — for that show the rate uses a different denominator
+(76,734 is 0.77% of 9,999,995), so we do not overwrite the stored 0.77%.
 """
 
 import boto3
@@ -130,7 +133,14 @@ def main():
     skipped = 0
     errors = []
 
+    # Skip 56_Days: conversion rate is NPS as % of 9,999,995 (0.77%), not NPS/TW
+    skip_pattern = '56_Days'
+
     for key in sorted(keys):
+        if skip_pattern in key:
+            print(f"  Skip {key}: conversion rate uses different denominator (excluded from NPS/TW fix)")
+            skipped += 1
+            continue
         try:
             resp = s3.get_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=key)
             content = resp['Body'].read().decode('utf-8')
