@@ -2033,7 +2033,8 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     new_signups = int(df_summary.loc[0, "NEW_SIGNUPS"]) if not pd.isna(df_summary.loc[0, "NEW_SIGNUPS"]) else 0
     avg_days = float(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) if not pd.isna(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) else 0
     clean_conversion = float(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) else 0
-    total_show_conversion = float(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) else 0
+    # Total Show Conversion Rate = percentage that New Platform Signups is of Total Show Watchers (always derived from same counts we write)
+    total_show_conversion = round((new_signups * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
     # For new shows, clean sample = all show watchers (no pre-existing viewers to exclude)
 
     # Get tracking mode and create lookup for display labels and episode dates (used for episode/date attribution)
