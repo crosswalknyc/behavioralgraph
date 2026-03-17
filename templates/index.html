@@ -2936,7 +2936,7 @@
             padding: 0.35rem 0.5rem;
             cursor: pointer;
             font-size: 0.7rem;
-            color: #ffffff;
+            color: var(--text-secondary);
             border-radius: 4px;
             white-space: nowrap;
             overflow: hidden;
@@ -2946,7 +2946,11 @@
             max-width: 100%;
         }
 
-        .profile-select-item:hover {
+        .profile-select-item:not(.locked) {
+            color: #ffffff;
+        }
+
+        .profile-select-item:not(.locked):hover {
             background: rgba(72, 199, 142, 0.15);
             color: #48c78e;
         }
@@ -2957,10 +2961,8 @@
         }
 
         .profile-select-item.locked {
-            opacity: 0.35;
             cursor: default;
             pointer-events: none;
-            color: var(--text-secondary);
         }
 
         /* Subscriber IQ: show names wrap so they fit and look nice */
