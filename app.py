@@ -14016,7 +14016,7 @@ def list_jobs():
             new_job_list.append(e)
         job_list = new_job_list
         
-        # Restrict to runs the user is allowed to see (Run Access in Admin)
+        # Mark run access: tag each profile with 'accessible' flag instead of filtering
         allowed_runs = None
         u = None
         try:
@@ -14026,17 +14026,18 @@ def list_jobs():
                 allowed_runs = u.get('allowed_runs')
         except Exception:
             pass
-        if allowed_runs is not None and not (isinstance(allowed_runs, list) and len(allowed_runs) == 1 and allowed_runs[0] == '*'):
+        has_all_access = allowed_runs is None or (isinstance(allowed_runs, list) and len(allowed_runs) == 1 and allowed_runs[0] == '*')
+        if has_all_access:
+            for e in job_list:
+                e['accessible'] = True
+        else:
             allowed_set = set(allowed_runs or [])
-            def job_allowed(e):
+            for e in job_list:
                 sk = e.get('s3_key') or ''
-                if sk in allowed_set:
-                    return True
-                # Gen Pop is always accessible (needed for index calculations)
-                if 'gen_pop' in sk.lower():
-                    return True
-                return False
-            job_list = [e for e in job_list if job_allowed(e)]
+                if sk in allowed_set or 'gen_pop' in sk.lower():
+                    e['accessible'] = True
+                else:
+                    e['accessible'] = False
         
         categories = {e.get('category') for e in job_list if e.get('category')}
         

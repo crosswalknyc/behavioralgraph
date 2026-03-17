@@ -2956,6 +2956,16 @@
             color: white;
         }
 
+        .profile-select-item.locked {
+            opacity: 0.4;
+            cursor: default;
+            pointer-events: none;
+        }
+        .profile-cat-count.has-locked {
+            color: var(--accent-blue);
+            opacity: 0.7;
+        }
+
         /* Subscriber IQ: show names wrap so they fit and look nice */
         .subscriber-shows-tree .profile-select-item.subscriber-show-item,
         .subscriber-shows-tree .subscriber-show-item {
@@ -27842,6 +27852,22 @@
             return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         }
 
+        function _profileItemHtml(profile, labelHtml, opts) {
+            const id = profile.s3_key || profile.job_id;
+            const idEsc = escapeIdForOnclick(id);
+            const isActive = selectedDashProfile === id;
+            const isLocked = profile.accessible === false;
+            let cls = 'profile-select-item';
+            if (opts && opts.extraClasses) cls += ' ' + opts.extraClasses;
+            if (isActive && !isLocked) cls += ' active';
+            if (isLocked) cls += ' locked';
+            const onclick = isLocked ? '' : ` onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')"`;
+            const skipLockIcon = opts && opts.skipLockIcon;
+            const lockIcon = (isLocked && !skipLockIcon) ? '🔒 ' : '';
+            const plainTitle = typeof labelHtml === 'string' ? labelHtml.replace(/<[^>]*>/g, '') : '';
+            return `<div class="${cls}"${onclick} title="${escapeAttr(plainTitle)}">${lockIcon}${labelHtml}</div>`;
+        }
+
         function renderDashboardProfileTree(profiles) {
             dashboardProfiles = profiles;
             const container = document.getElementById('dashProfileTree');
@@ -27857,14 +27883,8 @@
                 return true;
             });
             
-            // Enforce run access: only show profiles the user is allowed to open
-            if (_allowedRunsSet) {
-                profiles = profiles.filter(p => {
-                    const sk = p.s3_key || p.job_id || '';
-                    if (sk.toLowerCase().includes('gen_pop')) return true;
-                    return _allowedRunsSet.has(sk);
-                });
-            }
+            // Run access is now handled via the 'accessible' flag from the server
+            // All profiles are shown; inaccessible ones appear locked/dimmed
             
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase();
             
@@ -27907,18 +27927,10 @@
                     const subjectDisplayName = subj.replace(/_/g, ' ');
                     
                     if (runs.length === 1) {
-                        const id = first.s3_key || first.job_id;
-                        const idEsc = escapeIdForOnclick(id);
-                        const isActive = selectedDashProfile === id;
                         const fullName = getProfileFullName(first);
-                        html += `
-                        <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectDashboardProfile('${escapeIdForOnclick(id)}')" title="${escapeAttr(fullName)}">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="font-size: 0.9rem; opacity: 0.7;">${icon}</span>
-                                <span style="flex: 1;">${escapeAttr(fullName)}</span>
-                                <span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${getCategoryDisplayLabel(cat)}</span>
-                            </div>
-                        </div>`;
+                        const isLocked = first.accessible === false;
+                        const searchLabel = `<div style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 0.9rem; opacity: 0.7;">${isLocked ? '🔒' : icon}</span><span style="flex: 1;">${escapeAttr(fullName)}</span><span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${getCategoryDisplayLabel(cat)}</span></div>`;
+                        html += _profileItemHtml(first, searchLabel, { skipLockIcon: true });
                     } else {
                         html += `
                         <div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500; display: flex; align-items: center; gap: 0.5rem;">
@@ -27929,11 +27941,8 @@
                         </div>
                         <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 1.25rem;">
                             ${sortRunsByYearDesc(runs).map(p => {
-                                const id = p.s3_key || p.job_id;
-                                const idEsc = escapeIdForOnclick(id);
-                                const isActive = selectedDashProfile === id;
                                 const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
-                                return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
+                                return _profileItemHtml(p, escapeAttr(dateLabel));
                             }).join('')}
                         </div>`;
                     }
@@ -27975,15 +27984,22 @@
                 const masterId = 'master_' + master.replace(/[^a-zA-Z0-9]/g, '_');
                 const isMasterExpanded = expandedDashCategories.has(masterId);
                 
-                // Count total items in master category
+                // Count total and accessible items in master category
                 let totalInMaster = 0;
-                Object.values(subcats).forEach(items => totalInMaster += items.length);
+                let accessibleInMaster = 0;
+                Object.values(subcats).forEach(items => {
+                    totalInMaster += items.length;
+                    accessibleInMaster += items.filter(p => p.accessible !== false).length;
+                });
+                const hasLockedProfiles = accessibleInMaster < totalInMaster;
+                const countLabel = hasLockedProfiles ? `${accessibleInMaster} of ${totalInMaster}` : `${totalInMaster}`;
+                const countClass = hasLockedProfiles ? 'profile-cat-count has-locked' : 'profile-cat-count';
                 
                 html += `
                     <div class="profile-cat-item master-cat ${isMasterExpanded ? 'open' : ''}" onclick="toggleDashCategory('${masterId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
                         <span class="cat-arrow">▸</span>
                         <span class="profile-cat-label">${icon} ${master}</span>
-                        <span class="profile-cat-count">(${totalInMaster})</span>
+                        <span class="${countClass}">(${countLabel})</span>
                     </div>
                     <div class="profile-cat-children ${isMasterExpanded ? 'open' : ''}" id="cat-${masterId}" style="padding-left: 0.5rem;">
                 `;
@@ -28009,11 +28025,7 @@
                         const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
                         const subjectExpanded = expandedDashSubjects.has(subj);
                         if (runs.length === 1) {
-                            const id = first.s3_key || first.job_id;
-                            const idEsc = escapeIdForOnclick(id);
-                            const isActive = selectedDashProfile === id;
-                            const fullName = getProfileFullName(first);
-                            html += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(fullName)}">${escapeAttr(fullName)}</div>`;
+                            html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
                             const displayName = getProfileFullName(first);
                             html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
@@ -28023,11 +28035,8 @@
                             </div>
                             <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
                                 ${sortRunsByYearDesc(runs).map(p => {
-                                    const id = p.s3_key || p.job_id;
-                                    const idEsc = escapeIdForOnclick(id);
-                                    const isActive = selectedDashProfile === id;
                                     const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
-                                    return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
+                                    return _profileItemHtml(p, escapeAttr(dateLabel));
                                 }).join('')}
                             </div>`;
                         }
@@ -28055,11 +28064,7 @@
                         const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
                         const subjectExpanded = expandedDashSubjects.has(subj);
                         if (runs.length === 1) {
-                            const id = first.s3_key || first.job_id;
-                            const idEsc = escapeIdForOnclick(id);
-                            const isActive = selectedDashProfile === id;
-                            const fullName = getProfileFullName(first);
-                            html += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(fullName)}">${escapeAttr(fullName)}</div>`;
+                            html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
                             const displayName = getProfileFullName(first);
                             html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
@@ -28069,11 +28074,8 @@
                             </div>
                             <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
                                 ${sortRunsByYearDesc(runs).map(p => {
-                                    const id = p.s3_key || p.job_id;
-                                    const idEsc = escapeIdForOnclick(id);
-                                    const isActive = selectedDashProfile === id;
                                     const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
-                                    return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${escapeAttr(dateLabel)}">${escapeAttr(dateLabel)}</div>`;
+                                    return _profileItemHtml(p, escapeAttr(dateLabel));
                                 }).join('')}
                             </div>`;
                         }
@@ -28101,15 +28103,9 @@
                             const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
                             const subjectExpanded = expandedDashSubjects.has(subj);
                             if (runs.length === 1) {
-                                const id = first.s3_key || first.job_id;
-                                const idEsc = escapeIdForOnclick(id);
-                                const isActive = selectedDashProfile === id;
-                                const fullName = getProfileFullName(first);
-                                const fullNameAttr = escapeAttr(fullName);
-                                itemsHtml += `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${fullNameAttr}">${fullNameAttr}</div>`;
+                                itemsHtml += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                             } else {
-                                const displayName = getProfileFullName(first);
-                                const displayNameAttr = escapeAttr(displayName);
+                                const displayNameAttr = escapeAttr(getProfileFullName(first));
                                 itemsHtml += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                     <span class="cat-arrow">▸</span>
                                     <span class="profile-cat-label">${displayNameAttr}</span>
@@ -28117,12 +28113,8 @@
                                 </div>
                                 <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
                                     ${sortRunsByYearDesc(runs).map(p => {
-                                        const id = p.s3_key || p.job_id;
-                                        const idEsc = escapeIdForOnclick(id);
-                                        const isActive = selectedDashProfile === id;
                                         const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
-                                        const dateAttr = escapeAttr(dateLabel);
-                                        return `<div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${dateAttr}">${dateAttr}</div>`;
+                                        return _profileItemHtml(p, escapeAttr(dateLabel));
                                     }).join('')}
                                 </div>`;
                             }
