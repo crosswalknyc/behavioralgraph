@@ -14870,6 +14870,7 @@
                                 <div id="subscriberGenderTable" class="demographics-table-container"></div>
 
                             </div>
+                            <p style="color: var(--text-secondary); font-size: 0.8rem; font-style: italic; margin-top: 1.5rem; text-align: center;">*Values represented only show participants who agreed to share demographic data.</p>
                         </div>
 
                     </div>
@@ -24726,16 +24727,26 @@
                     return bSignups - aSignups;
                 });
                 
+                const _insightProject = (raw) => {
+                    const n = parseNumber(raw);
+                    return (n && n > 0) ? Math.round((n / 10000000) * 329900000) : 0;
+                };
+                const _insightDisplay = (ep) => {
+                    const gp = parseNumber(ep.gen_pop);
+                    if (gp && gp > 0) return gp;
+                    return _insightProject(ep.signups);
+                };
                 const insights = [];
                 if (episodes.length > 0) {
                     const topEpisode = episodes[0];
+                    const topProjected = _insightDisplay(topEpisode);
                     const top3Total = episodes.slice(0, 3).reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
                     const allTotal = episodes.reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
                     const top3Pct = allTotal > 0 ? ((top3Total / allTotal) * 100).toFixed(2) : 0;
                     
                     insights.push({
                         icon: '🎬',
-                        text: `<strong>Episode ${topEpisode.episode} drove the most signups</strong> with ${formatNumber(topEpisode.signups)} subscribers (${topEpisode.percentage || 'N/A'} of total).`
+                        text: `<strong>Episode ${topEpisode.episode} drove the most signups</strong> with ${formatNumber(topProjected)} projected US subscribers (${topEpisode.percentage || 'N/A'} of total).`
                     });
                     
                     if (episodes.length >= 3) {
@@ -24768,6 +24779,11 @@
                 return bSignups - aSignups;
             });
             
+            const _epProject = (raw) => {
+                const n = parseNumber(raw);
+                return (n && n > 0) ? Math.round((n / 10000000) * 329900000) : 0;
+            };
+            
             if (episodes.length === 0) {
                 container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode data available</p>';
             } else {
@@ -24779,12 +24795,18 @@
                     const hasNoValue = !(ep.signups && Number(ep.signups) > 0);
                     return (isDateEpisode && hasNoValue) ? 'Single Drop Day' : (isDateEpisode ? epStr : `Episode ${epStr}`);
                 };
+                const epDisplaySignups = (ep) => {
+                    const gp = parseNumber(ep.gen_pop);
+                    if (gp && gp > 0) return gp;
+                    return _epProject(ep.signups);
+                };
                 container.innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
                         ${episodes.map(ep => {
                             const epLabel = getEpLabel(ep);
+                            const projected = epDisplaySignups(ep);
                             return `
-                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="${epLabel}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${formatNumber(ep.signups)} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
+                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="${epLabel}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${formatNumber(projected)} projected US signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
                                 <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">${epLabel}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                                     ${ep.episode_date ? `
@@ -24793,9 +24815,9 @@
                                         <span style="color: var(--text-primary);">${ep.episode_date}</span>
                                     </div>
                                     ` : ''}
-                                    <div class="has-tooltip" data-tooltip="Signups: Number of people who signed up for the platform specifically to watch this episode" style="display: flex; justify-content: space-between;">
+                                    <div class="has-tooltip" data-tooltip="Projected US Gen Pop Signups: Projected number of US signups attributed to this episode (sample / 10M × 329.9M)" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">Signups:</span>
-                                        <span style="font-weight: 700; color: var(--accent-lime);">${formatNumber(ep.signups)}</span>
+                                        <span style="font-weight: 700; color: var(--accent-lime);">${formatNumber(projected)}</span>
                                     </div>
                                     <div class="has-tooltip" data-tooltip="% of Total: This episode's signups as a percentage of all signups across all episodes" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">% of Total:</span>
@@ -24805,12 +24827,6 @@
                                     <div class="has-tooltip" data-tooltip="Avg Days to Signup: Average number of days between when this episode became available and when users signed up for the platform" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">Avg Days to Signup:</span>
                                         <span style="color: var(--text-primary);">${ep.days_avg}</span>
-                                    </div>
-                                    ` : ''}
-                                    ${ep.min_avg_view ? `
-                                    <div class="has-tooltip" data-tooltip="Min avg view: Minimum average view metric for this episode" style="display: flex; justify-content: space-between;">
-                                        <span style="color: var(--text-secondary);">min avg view:</span>
-                                        <span style="color: var(--text-primary);">${ep.min_avg_view}</span>
                                     </div>
                                     ` : ''}
                                 </div>
@@ -25737,17 +25753,7 @@
                     });
                 }
                 
-                insightsContainer.innerHTML = insights.length > 0 ? `
-                    <h4>💡 Key Demographic Insights</h4>
-                    <div class="tab-insights-list">
-                        ${insights.map(i => `
-                            <div class="tab-insight-item">
-                                <span class="tab-insight-icon">${i.icon}</span>
-                                <div class="tab-insight-text">${i.text}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '';
+                insightsContainer.innerHTML = '';
             }
             
             // Format values based on display mode
