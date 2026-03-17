@@ -27991,9 +27991,8 @@
                     totalInMaster += items.length;
                     accessibleInMaster += items.filter(p => p.accessible !== false).length;
                 });
-                const hasLockedProfiles = accessibleInMaster < totalInMaster;
-                const countLabel = hasLockedProfiles ? `${accessibleInMaster} of ${totalInMaster}` : `${totalInMaster}`;
-                const countClass = hasLockedProfiles ? 'profile-cat-count has-locked' : 'profile-cat-count';
+                const countLabel = `${totalInMaster}`;
+                const countClass = 'profile-cat-count';
                 
                 html += `
                     <div class="profile-cat-item master-cat ${isMasterExpanded ? 'open' : ''}" onclick="toggleDashCategory('${masterId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
