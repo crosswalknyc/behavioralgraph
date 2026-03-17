@@ -1318,9 +1318,11 @@ def run_query(conn, p):
         inflated_new_signups = min(int(raw_new_signups * inflation_factor), SAMPLE_REPRESENTS)
         df_summary.loc[0, 'NEW_SIGNUPS'] = inflated_new_signups
         
-        # Recalculate TOTAL_SHOW_CONVERSION_RATE from inflated values
-        if inflated_total_watchers > 0:
-            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((inflated_new_signups * 100.0) / inflated_total_watchers, 2)
+        # Recalculate TOTAL_SHOW_CONVERSION_RATE from projected (Gen Pop) values
+        tw_proj = gen_pop_projection(inflated_total_watchers)
+        nps_proj = gen_pop_projection(inflated_new_signups)
+        if tw_proj > 0:
+            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((nps_proj / tw_proj) * 100.0, 2)
     else:
         inflated_new_signups = 0
     
@@ -2033,8 +2035,10 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     new_signups = int(df_summary.loc[0, "NEW_SIGNUPS"]) if not pd.isna(df_summary.loc[0, "NEW_SIGNUPS"]) else 0
     avg_days = float(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) if not pd.isna(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) else 0
     clean_conversion = float(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) else 0
-    # Total Show Conversion Rate = percentage that New Platform Signups is of Total Show Watchers (always derived from same counts we write)
-    total_show_conversion = round((new_signups * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
+    # Total Show Conversion Rate = (projected NPS / projected Total Show Watchers) * 100 (use Gen Pop projected numbers)
+    tw_projected = gen_pop_projection(total_watchers)
+    nps_projected = gen_pop_projection(new_signups)
+    total_show_conversion = round((nps_projected / tw_projected) * 100.0, 2) if tw_projected > 0 else 0.0
     # For new shows, clean sample = all show watchers (no pre-existing viewers to exclude)
 
     # Get tracking mode and create lookup for display labels and episode dates (used for episode/date attribution)

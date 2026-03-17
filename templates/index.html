@@ -23801,13 +23801,19 @@
             const summary = data.attribution_summary || {};
             const totalWatchers = Number(metrics.total_watchers?.count) || 0;
             const newSignups = Number(metrics.new_signups?.count) || 0;
+            const totalWatchersGenPop = metrics.total_watchers?.gen_pop;
+            const newSignupsGenPop = metrics.new_signups?.gen_pop;
             const totalSignups = Number(summary.total?.count) || Number(metrics.new_signups?.count) || 0;
             const attributedSignups = Number(summary.attributed?.count) || 0;
             const dormantReactive = Number(summary.dormant_reactive?.count) || 0;
             const totalConversionRate = metrics.total_conversion_rate || '';
+            const twProj = parseNumber(totalWatchersGenPop);
+            const npsProj = parseNumber(newSignupsGenPop);
             const conversionPct = (totalConversionRate && String(totalConversionRate).trim())
                 ? parseFloat(String(totalConversionRate).replace('%', ''))
-                : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
+                : (twProj != null && twProj > 0 && npsProj != null)
+                    ? (npsProj / twProj) * 100
+                    : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
             const avgDaysRaw = metrics.avg_days_to_signup;
             const avgDaysToSignup = (avgDaysRaw !== undefined && avgDaysRaw !== null && String(avgDaysRaw).trim() && String(avgDaysRaw) !== 'N/A')
                 ? parseFloat(String(avgDaysRaw).replace(/[^0-9.-]/g, '')) : null;
@@ -24489,10 +24495,13 @@
             const cleanConversionRate = metrics.clean_conversion_rate || '';
             const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
             
-            // Use CSV conversion rate when available, else compute from viewers/signups
-            const conversionPctDisplay = (totalConversionRate && String(totalConversionRate).trim()) 
-                ? (String(totalConversionRate).replace('%', '') + '%') 
-                : (totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) + '%' : '0%');
+            // Prefer rate from projected numbers so it always matches the two card values (Total Accounts Viewed, Accounts Acquired)
+            const twProj = parseNumber(totalWatchersGenPop);
+            const npsProj = parseNumber(newSignupsGenPop);
+            const conversionFromProjected = (twProj != null && twProj > 0 && npsProj != null) ? ((npsProj / twProj) * 100).toFixed(2) + '%' : null;
+            const conversionPctDisplay = conversionFromProjected
+                || (totalConversionRate && String(totalConversionRate).trim() ? (String(totalConversionRate).replace('%', '') + '%') : null)
+                || (totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) + '%' : '0%');
             
             // Format values based on display mode
             const formatValue = (value, genPop) => {
@@ -24517,9 +24526,11 @@
                 return `Actual: ${formatNumber(genPop)}`;
             };
             
-            // Calculate strategic metrics
+            // Calculate strategic metrics (use projected for conversion rate when available)
             const newViewerPct = cleanSample > 0 && totalWatchers > 0 ? ((cleanSample / totalWatchers) * 100).toFixed(2) : 0;
-            const conversionPct = totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) : 0;
+            const conversionPct = (twProj != null && twProj > 0 && npsProj != null)
+                ? ((npsProj / twProj) * 100).toFixed(2)
+                : (totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) : 0);
             const reactivationPct = totalSignups > 0 ? ((dormantReactive / totalSignups) * 100).toFixed(2) : 0;
             const attributionPct = totalSignups > 0 ? ((attributedSignups / totalSignups) * 100).toFixed(2) : 0;
             const newViewerConversionPct = cleanSample > 0 ? ((newSignups / cleanSample) * 100).toFixed(2) : 0;
@@ -24559,7 +24570,7 @@
                             <div class="exec-metric-label">Reactivated<br>Accounts</div>
                             <div class="exec-metric-value">${formatExecProjected(dormantReactive, dormantReactiveGenPop)}</div>
                         </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Acquired and Reactivated Accounts: Percentage of total show viewers who signed up or reactivated for the platform to watch this show.">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Total Show Conversion Rate: The percentage of Total Show Watchers who became New Platform Signups, using US projected (Gen Pop) numbers: (NPS projected ÷ Total Show Watchers projected) × 100.">
                             <div class="exec-metric-label">Acquired and<br>Reactivated Accounts</div>
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
                         </div>

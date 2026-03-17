@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 Check and fix Total Show Conversion Rate in all CSV files in s3://svod-acquisition/.
-Total Show Conversion Rate must equal (New Platform Signups / Total Show Watchers) * 100.
+Total Show Conversion Rate = (New Platform Signups Gen Pop / Total Show Watchers Gen Pop) * 100
+(uses projected numbers from col 9, not raw counts).
 
 Excluded: keys containing "56_Days" — for that show the rate uses a different denominator
-(76,734 is 0.77% of 9,999,995), so we do not overwrite the stored 0.77%.
+(0.77% of 9,999,995), so we do not overwrite the stored 0.77%.
 """
 
 import boto3
@@ -52,35 +53,36 @@ def ensure_cols(row, min_len):
 
 def check_and_fix_conversion_rate(rows):
     """
-    Find Total Show Watchers (col2), New Platform Signups (col2), Total Show Conversion Rate (col8).
-    If rate != (new_signups * 100 / total_watchers), set row[8] to correct value.
+    Find Total Show Watchers (col2 count, col9 gen_pop), New Platform Signups (col2 count, col9 gen_pop), Total Show Conversion Rate (col8).
+    Use projected (Gen Pop) numbers: rate = (NPS gen_pop / TW gen_pop) * 100.
     Returns (changed: bool, error: str|None, details: str).
     """
-    total_watchers = None
-    new_signups = None
+    total_watchers_proj = None   # col9 Gen Pop Projection
+    new_signups_proj = None
     conversion_row_idx = None
     MIN_COLS = 10
+    GEN_POP_COL = 9
 
     for i, row in enumerate(rows):
         if not row:
             continue
         first_col = (row[0].strip() if len(row) > 0 and row[0] else '').strip()
         if 'Total Show Watchers' in first_col:
-            total_watchers = parse_number(row[2]) if len(row) > 2 else None
+            total_watchers_proj = parse_number(row[GEN_POP_COL]) if len(row) > GEN_POP_COL else None
         elif 'New Platform Signups' in first_col:
-            new_signups = parse_number(row[2]) if len(row) > 2 else None
+            new_signups_proj = parse_number(row[GEN_POP_COL]) if len(row) > GEN_POP_COL else None
         elif 'Total Show Conversion Rate' in first_col:
             conversion_row_idx = i
             break
 
     if conversion_row_idx is None:
         return False, "Total Show Conversion Rate row not found", ""
-    if total_watchers is None:
-        return False, "Total Show Watchers not found", ""
-    if new_signups is None:
-        return False, "New Platform Signups not found", ""
+    if total_watchers_proj is None:
+        return False, "Total Show Watchers (Gen Pop) not found", ""
+    if new_signups_proj is None:
+        return False, "New Platform Signups (Gen Pop) not found", ""
 
-    expected_rate = round((new_signups * 100.0) / total_watchers, 2) if total_watchers > 0 else 0.0
+    expected_rate = round((new_signups_proj * 100.0) / total_watchers_proj, 2) if total_watchers_proj > 0 else 0.0
     row = rows[conversion_row_idx]
     row = ensure_cols(row, MIN_COLS)
     rows[conversion_row_idx] = row
@@ -88,7 +90,7 @@ def check_and_fix_conversion_rate(rows):
     current_val = row[8].strip() if len(row) > 8 else ''
     current_rate = parse_pct(current_val)
 
-    details = f"TW={total_watchers}, NPS={new_signups} => expected {expected_rate:.2f}%, current={current_val}"
+    details = f"TW_proj={total_watchers_proj}, NPS_proj={new_signups_proj} => expected {expected_rate:.2f}%, current={current_val}"
 
     if current_rate is not None and abs(current_rate - expected_rate) < 0.01:
         return False, None, details  # already correct (allow tiny float diff)
