@@ -8615,13 +8615,67 @@ def scale_subscriber_iq_values(parsed, divisor=10):
             elif isinstance(val, str) and parse_number(val) is not None:
                 m['gen_pop'] = _scale_num(val)
 
-    # demographics: scale count for age and gender
+    # demographics: scale count and gen_pop for age and gender
     for bucket in parsed.get('demographics', {}).get('age') or []:
         if bucket.get('count') is not None:
             bucket['count'] = _scale_num(bucket['count'])
+        if bucket.get('gen_pop') is not None:
+            val = bucket['gen_pop']
+            if isinstance(val, (int, float)):
+                bucket['gen_pop'] = _scale_num(val)
+            elif isinstance(val, str) and parse_number(val) is not None:
+                bucket['gen_pop'] = _scale_num(val)
     for bucket in parsed.get('demographics', {}).get('gender') or []:
         if bucket.get('count') is not None:
             bucket['count'] = _scale_num(bucket['count'])
+        if bucket.get('gen_pop') is not None:
+            val = bucket['gen_pop']
+            if isinstance(val, (int, float)):
+                bucket['gen_pop'] = _scale_num(val)
+            elif isinstance(val, str) and parse_number(val) is not None:
+                bucket['gen_pop'] = _scale_num(val)
+
+    normalize_demographics_gen_pop_to_nps(parsed)
+
+
+def normalize_demographics_gen_pop_to_nps(parsed):
+    """Rescale demographics age and gender gen_pop so each sum equals projected New Platform Signups (key_metrics.new_signups.gen_pop)."""
+    nps = parsed.get('key_metrics', {}).get('new_signups', {})
+    if not nps:
+        return
+    gp = nps.get('gen_pop')
+    if gp is None:
+        return
+    nps_val = parse_number(gp) if isinstance(gp, str) else (gp if isinstance(gp, (int, float)) else None)
+    if nps_val is None or nps_val < 0:
+        return
+
+    def _num(g):
+        if g is None:
+            return 0
+        return parse_number(g) if isinstance(g, str) else (g if isinstance(g, (int, float)) else 0)
+
+    for kind in ('age', 'gender'):
+        buckets = (parsed.get('demographics') or {}).get(kind) or []
+        if not buckets:
+            continue
+        total = sum(_num(b.get('gen_pop')) for b in buckets)
+        if total <= 0:
+            continue
+        # Largest-remainder apportionment so sum of gen_pop equals nps_val exactly
+        nps_int = int(round(nps_val))
+        shares = [_num(b.get('gen_pop')) * nps_int / total for b in buckets]
+        floors = [int(s) for s in shares]
+        remainders = [(i, shares[i] - floors[i]) for i in range(len(shares))]
+        remainder_sum = nps_int - sum(floors)
+        remainders.sort(key=lambda x: -x[1])
+        for k in range(remainder_sum):
+            i = remainders[k][0]
+            floors[i] += 1
+        for i, b in enumerate(buckets):
+            b['gen_pop'] = str(max(0, floors[i]))
+
+    return
 
 
 @app.route('/api/subscriber-iq/list')
@@ -8700,6 +8754,7 @@ def get_subscriber_iq_data(s3_key):
         print(f"📝 CSV content preview (first 500 chars): {csv_content[:500]}")
         parsed = parse_subscriber_iq_csv(csv_content)
         # Subscriber IQ: use raw values from CSV (no scaling at serve time)
+        normalize_demographics_gen_pop_to_nps(parsed)
 
         # Log what was parsed in detail
         print(f"📊 Parsed data summary:")

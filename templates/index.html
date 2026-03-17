@@ -14856,6 +14856,7 @@
 
                         <!-- Demographics Tab -->
                         <div id="subscriber-tab-demographics" class="tab-content">
+                            <p id="subscriberDemographicsProjectedNote" class="section-description" style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;"></p>
                             <div id="subscriberDemographicsInsights" class="tab-insights-section"></div>
                             
                             <!-- Age Section - Separate Box -->
@@ -25600,6 +25601,20 @@
             }
             
             console.log('📊 Demographics data:', data.demographics);
+            
+            // Show projected New Platform Signups and note that age/gender totals equal it
+            const projectedNoteEl = document.getElementById('subscriberDemographicsProjectedNote');
+            if (projectedNoteEl) {
+                const npsGenPop = data.key_metrics?.new_signups?.gen_pop;
+                const npsVal = npsGenPop !== undefined && npsGenPop !== null && npsGenPop !== '' ? parseNumber(String(npsGenPop).trim()) : null;
+                if (npsVal !== null && !isNaN(npsVal)) {
+                    projectedNoteEl.textContent = 'US projected New Platform Signups: ' + formatNumber(npsVal) + '. Age and gender account totals each equal this number.';
+                    projectedNoteEl.style.display = '';
+                } else {
+                    projectedNoteEl.textContent = '';
+                    projectedNoteEl.style.display = 'none';
+                }
+            }
             
             // Get demographics data - check multiple possible locations
             const insightsContainer = document.getElementById('subscriberDemographicsInsights');
