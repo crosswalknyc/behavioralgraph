@@ -8514,6 +8514,18 @@ def parse_subscriber_iq_csv(csv_content):
             parsed['key_metrics']['avg_days_to_signup'] = f"{(weighted / total):.1f}"
             print(f"   📊 Computed avg_days_to_signup from signup_timing: {parsed['key_metrics']['avg_days_to_signup']}")
 
+    # Total Show Conversion Rate = (New Platform Signups / Total Show Watchers) * 100
+    tw = parsed.get('key_metrics', {}).get('total_watchers', {})
+    nps = parsed.get('key_metrics', {}).get('new_signups', {})
+    tw_count = tw.get('count')
+    nps_count = nps.get('count')
+    tw_val = parse_number(tw_count) if isinstance(tw_count, str) else (tw_count if isinstance(tw_count, (int, float)) else None)
+    nps_val = parse_number(nps_count) if isinstance(nps_count, str) else (nps_count if isinstance(nps_count, (int, float)) else None)
+    if tw_val is not None and nps_val is not None and tw_val > 0:
+        pct = (nps_val / tw_val) * 100
+        parsed['key_metrics']['total_conversion_rate'] = f'{pct:.2f}%'
+        print(f"   📊 Set total_conversion_rate = NPS/TW = {nps_val}/{tw_val} = {parsed['key_metrics']['total_conversion_rate']}")
+
     # Log parsing summary
     print(f"📊 Parsing complete:")
     print(f"   Key metrics: {len(parsed['key_metrics'])} items")
