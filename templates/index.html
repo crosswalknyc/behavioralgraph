@@ -33526,6 +33526,69 @@
                     return a.localeCompare(b);
                 });
                 
+                // Filter slicer options: only show options that have matching items in the data
+                if (isMostPurchased) {
+                    const _mpMap = {'apparel/footwear':'APPAREL/FOOTWEAR','accessories':'ACCESSORIES','beauty/wellness':'BEAUTY/WELLNESS','cpg':'CPG','health & wellness':'HEALTH & WELLNESS','home/outdoor':'HOME/OUTDOOR','toys':'TOYS','pets':'PETS','technology brand':'TECHNOLOGY/DEVICE'};
+                    const _live = sliceOptions.filter(o => {
+                        if (o === 'all') return false;
+                        const mapped = _mpMap[o.toLowerCase()];
+                        if (!mapped) return false;
+                        return [mapped, mapped.replace('/',' '), mapped.replace('/','_')].some(v => (allBehavioralData[v] || []).length > 0);
+                    });
+                    sliceOptions.length = 0; sliceOptions.push('all', ..._live);
+                }
+                if (isWhereTheyShop) {
+                    const _wsMap = {'apparel/footwear':'APPAREL/FOOTWEAR','accessories':'ACCESSORIES','beauty/wellness':'BEAUTY/WELLNESS','health & wellness':'HEALTH & WELLNESS','home/outdoor':'HOME/OUTDOOR','toys':'TOYS'};
+                    const _live = whereTheyShopSliceOptions.filter(o => {
+                        if (o === 'all') return false;
+                        const mapped = _wsMap[o.toLowerCase()];
+                        if (!mapped) return false;
+                        return [mapped, mapped.replace('/',' '), mapped.replace('/','_')].some(v => (allBehavioralData[v] || []).length > 0);
+                    });
+                    whereTheyShopSliceOptions.length = 0; whereTheyShopSliceOptions.push('all', ..._live);
+                }
+                const _hasOrigCatItems = (opts, mapFn) => opts.filter(o => {
+                    if (o === 'all') return false;
+                    const keys = mapFn(o);
+                    return items.some(it => keys.some(k => (it.originalCategory || '').toUpperCase() === k.toUpperCase()));
+                });
+                const _hasGenericItems = (opts) => opts.filter(o => {
+                    if (o === 'all') return false;
+                    const u = o.toUpperCase();
+                    return items.some(it => {
+                        const n = (it.name || '').toUpperCase();
+                        const s = (it.subcategory || '').toUpperCase();
+                        const t = (it.tags || []).map(x => x.toUpperCase()).join(' ');
+                        return n.includes(u) || s.includes(u) || t.includes(u);
+                    });
+                });
+                if (isTalent) {
+                    const _tm = {'actor':['ACTOR'],'athlete':['ATHLETE'],'creator/influencer':['CREATOR/INFLUENCER'],'emerging talent':['EMERGING TALENT'],'host/personality':['HOST/PERSONALITY'],'influencer/creator':['INFLUENCER/CREATOR'],'mlb athlete':['MLB ATHLETE'],'musician/band':['MUSICIAN/BAND'],'nba athlete':['NBA ATHLETE'],'nfl athlete':['NFL ATHLETE'],'nhl athlete':['NHL ATHLETE'],'politics/activist':['POLITICS/ACTIVIST'],'soccer athlete':['SOCCER ATHLETE'],'wnba athlete':['WNBA ATHLETE'],'writer/director/author/artist':['WRITER/DIRECTOR/AUTHOR/ARTIST']};
+                    const _live = _hasOrigCatItems(talentSliceOptions, o => _tm[o.toLowerCase()] || [o.toUpperCase()]);
+                    talentSliceOptions.length = 0; talentSliceOptions.push('all', ..._live);
+                }
+                if (isSports) {
+                    const _sm = {'afc':['AFC'],'sports team':['SPORTS TEAM'],'la liga':['LA LIGA'],'metropolitan division':['METROPOLITAN DIVISION'],'mlb':['MLB'],'mls':['MLS'],'eastern conference':['EASTERN CONFERENCE'],'central division':['CENTRAL DIVISION'],'atlantic division':['ATLANTIC DIVISION'],'afc east':['AFC EAST'],'nba':['NBA'],'nfc east':['NFC EAST'],'nfc north':['NFC NORTH'],'nfc south':['NFC SOUTH'],'nfc west':['NFC WEST'],'nfl':['NFL'],'nfc':['NFC'],'afc north':['AFC NORTH'],'nwsl':['NWSL'],'premier league':['PREMIER LEAGUE'],'rugby':['RUGBY'],'serie a':['SERIE A'],'soccer':['SOCCER'],'pacific division':['PACIFIC DIVISION'],'afc south':['AFC SOUTH'],'afc west':['AFC WEST'],'al':['AL'],'wnba':['WNBA'],'al central':['AL CENTRAL'],'al east':['AL EAST'],'al west':['AL WEST'],'sports organizations':['SPORTS ORGANIZATIONS','SPORTS ORGANIZATION'],'horse racing':['HORSE RACING']};
+                    const _live = _hasOrigCatItems(sportsSliceOptions, o => _sm[o.toLowerCase()] || [o.toUpperCase()]);
+                    sportsSliceOptions.length = 0; sportsSliceOptions.push('all', ..._live);
+                }
+                if (isAppPlatform) { const _live = _hasGenericItems(appPlatformSliceOptions); appPlatformSliceOptions.length = 0; appPlatformSliceOptions.push('all', ..._live); }
+                if (isSearchAI) { const _live = _hasGenericItems(searchAISliceOptions); searchAISliceOptions.length = 0; searchAISliceOptions.push('all', ..._live); }
+                if (isQSR) { const _live = _hasGenericItems(qsrSliceOptions); qsrSliceOptions.length = 0; qsrSliceOptions.push('all', ..._live); }
+                if (isWhereTheyDine) { const _live = _hasGenericItems(whereTheyDineSliceOptions); whereTheyDineSliceOptions.length = 0; whereTheyDineSliceOptions.push('all', ..._live); }
+                if (isTravel) { const _live = _hasGenericItems(travelSliceOptions); travelSliceOptions.length = 0; travelSliceOptions.push('all', ..._live); }
+                if (isPets) { const _live = _hasGenericItems(petsSliceOptions); petsSliceOptions.length = 0; petsSliceOptions.push('all', ..._live); }
+                if (isPharmacy) { const _live = _hasGenericItems(pharmacySliceOptions); pharmacySliceOptions.length = 0; pharmacySliceOptions.push('all', ..._live); }
+                if (isTechDevice) { const _live = _hasGenericItems(techDeviceSliceOptions); techDeviceSliceOptions.length = 0; techDeviceSliceOptions.push('all', ..._live); }
+                if (isWorkoutFacility) { const _live = _hasGenericItems(workoutFacilitySliceOptions); workoutFacilitySliceOptions.length = 0; workoutFacilitySliceOptions.push('all', ..._live); }
+                if (isGames) { const _live = _hasGenericItems(gamesSliceOptions); gamesSliceOptions.length = 0; gamesSliceOptions.push('all', ..._live); }
+                if (isAutomobile) { const _live = _hasGenericItems(automobileSliceOptions); automobileSliceOptions.length = 0; automobileSliceOptions.push('all', ..._live); }
+                if (isInvestments) { const _live = _hasGenericItems(investmentsSliceOptions); investmentsSliceOptions.length = 0; investmentsSliceOptions.push('all', ..._live); }
+                if (isInsurance) { const _live = _hasGenericItems(insuranceSliceOptions); insuranceSliceOptions.length = 0; insuranceSliceOptions.push('all', ..._live); }
+                if (isEducation) { const _live = _hasGenericItems(educationSliceOptions); educationSliceOptions.length = 0; educationSliceOptions.push('all', ..._live); }
+                if (isFranchise) { const _live = _hasGenericItems(franchiseSliceOptions); franchiseSliceOptions.length = 0; franchiseSliceOptions.push('all', ..._live); }
+                if (isNonProfit) { const _live = _hasGenericItems(nonProfitSliceOptions); nonProfitSliceOptions.length = 0; nonProfitSliceOptions.push('all', ..._live); }
+
                 // Check if any slicer should be shown
                 const hasSlicers = isMostPurchased || isWhereTheyShop || isSports || isTalent || isAppPlatform || isSearchAI || isQSR || isWhereTheyDine || isTravel || isPets || isPharmacy || isTechDevice || isWorkoutFacility || isGames || isAutomobile || isInvestments || isInsurance || isEducation || isFranchise || isNonProfit;
                 
