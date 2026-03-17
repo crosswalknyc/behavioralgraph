@@ -24929,24 +24929,42 @@
                 }
             }
             
+            // Parse campaign start date from metadata.date_range (format: "YYYY-MM-DD to YYYY-MM-DD")
+            let campaignStartDate = null;
+            const dateRangeStr = (data.metadata && data.metadata.date_range) || '';
+            if (dateRangeStr) {
+                const drMatch = dateRangeStr.match(/(\d{4}-\d{1,2}-\d{1,2})/);
+                if (drMatch) {
+                    const parts = drMatch[1].split('-');
+                    campaignStartDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    if (isNaN(campaignStartDate.getTime())) campaignStartDate = null;
+                }
+            }
+            
+            // Convert relative timing labels to actual dates when possible
+            function relativeToDate(timingItems, baseDate) {
+                if (!baseDate) return null;
+                const byDate = {};
+                for (const t of timingItems) {
+                    const days = getDaysFromTiming(t);
+                    if (days >= 999) continue;
+                    const actual = addDays(baseDate, days);
+                    const lbl = formatDateLabel(actual);
+                    if (lbl) byDate[lbl] = (byDate[lbl] || 0) + (parseNumber(t.signups) || 0);
+                }
+                return Object.keys(byDate).length > 0 ? byDate : null;
+            }
+            
+            const sortByDateLabel = (a, b) => {
+                const parse = (lbl) => { const m = lbl.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (m) { let y = parseInt(m[3]); if (y < 100) y += 2000; return new Date(y, parseInt(m[1]) - 1, parseInt(m[2])); } return new Date(0); };
+                return parse(a) - parse(b);
+            };
+            
             // If we have actual dates, use them; otherwise fall back to relative labels
             if (hasActualDates && Object.keys(timingByDate).length > 0) {
-                // Sort by actual date
-                const sortedDates = Object.keys(timingByDate).sort((a, b) => {
-                    const parseLabel = (lbl) => {
-                        const m = lbl.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
-                        if (m) {
-                            let year = parseInt(m[3]);
-                            if (year < 100) year += 2000;
-                            return new Date(year, parseInt(m[1]) - 1, parseInt(m[2]));
-                        }
-                        return new Date(0);
-                    };
-                    return parseLabel(a) - parseLabel(b);
-                });
+                const sortedDates = Object.keys(timingByDate).sort(sortByDateLabel);
                 timingData = sortedDates.map(dateLabel => ({ timing: dateLabel, signups: String(timingByDate[dateLabel]) }));
             } else if (timingData.length === 0 && data.episode_signup_timing && typeof data.episode_signup_timing === 'object') {
-                // Fallback: aggregate by relative timing labels
                 const aggregated = {};
                 for (const epKey of Object.keys(data.episode_signup_timing)) {
                     const items = data.episode_signup_timing[epKey] || [];
@@ -24958,6 +24976,23 @@
                 }
                 timingData = Object.entries(aggregated).map(([timing, signups]) => ({ timing, signups: String(signups) }));
                 timingData.sort((a, b) => getDaysFromTiming(a) - getDaysFromTiming(b));
+                // Convert aggregated relative labels to actual dates
+                if (campaignStartDate) {
+                    const dateMap = relativeToDate(timingData, campaignStartDate);
+                    if (dateMap) {
+                        const sortedDates = Object.keys(dateMap).sort(sortByDateLabel);
+                        timingData = sortedDates.map(dl => ({ timing: dl, signups: String(dateMap[dl]) }));
+                    }
+                }
+            }
+            
+            // Final pass: if timingData still has relative labels and we have a campaign start, convert them
+            if (timingData.length > 0 && campaignStartDate && !/^\d{1,2}\/\d{1,2}\/\d{2}/.test(timingData[0].timing)) {
+                const dateMap = relativeToDate(timingData, campaignStartDate);
+                if (dateMap) {
+                    const sortedDates = Object.keys(dateMap).sort(sortByDateLabel);
+                    timingData = sortedDates.map(dl => ({ timing: dl, signups: String(dateMap[dl]) }));
+                }
             }
             let avgDaysToSignup = metrics.avg_days_to_signup;
             const parsedAvg = avgDaysToSignup != null && avgDaysToSignup !== '' ? parseFloat(String(avgDaysToSignup).replace(/\s*days?$/i, '')) : NaN;
@@ -25018,17 +25053,7 @@
                     }
                 }
                 
-                insightsContainer.innerHTML = insights.length > 0 ? `
-                    <h4>💡 Key Timing Insights</h4>
-                    <div class="tab-insights-list">
-                        ${insights.map(i => `
-                            <div class="tab-insight-item">
-                                <span class="tab-insight-icon">${i.icon}</span>
-                                <div class="tab-insight-text">${i.text}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '';
+                insightsContainer.innerHTML = '';
             }
             
             // Render Timing Metrics (show overview even when no distribution data, using avg_days_to_signup)
