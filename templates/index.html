@@ -25423,17 +25423,7 @@
                     }
                 }
                 
-                insightsContainer.innerHTML = insights.length > 0 ? `
-                    <h4>💡 Key Platform Insights</h4>
-                    <div class="tab-insights-list">
-                        ${insights.map(i => `
-                            <div class="tab-insight-item">
-                                <span class="tab-insight-icon">${i.icon}</span>
-                                <div class="tab-insight-text">${i.text}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '';
+                insightsContainer.innerHTML = '';
             }
             
             const platformsContainer = document.getElementById('subscriberCompetitivePlatforms');
