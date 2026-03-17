@@ -40581,15 +40581,18 @@
             };
             
             const audienceSnapshotEl2 = document.getElementById('audienceSnapshot');
+            const _isGP = isSelectedProfileGenPop();
             if (audienceSnapshotEl2) audienceSnapshotEl2.innerHTML = demoInsights.map(d => {
                 const idxDisplay = String(Math.round(Number(d.index)));
                 const idxColor = d.index >= 100 ? '#10b981' : '#ef4444';
+                const indexHtml = _isGP ? '' : `<div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxDisplay}</div>`;
+                const tooltipIdx = _isGP ? '' : ` Index: ${idxDisplay} vs Gen Pop (100 = same as Gen Pop).`;
                 return `
-                <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience. Index: ${idxDisplay} vs Gen Pop (100 = same as Gen Pop).">
+                <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience.${tooltipIdx}">
                     <div class="snapshot-label">${d.label}</div>
                     <div class="snapshot-value">${d.value}</div>
                     <div class="snapshot-subtext">${d.sub}</div>
-                    <div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxDisplay}</div>
+                    ${indexHtml}
                 </div>
             `}).join('') || '<div class="snapshot-loading">No demographic data</div>';
             
