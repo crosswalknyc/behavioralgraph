@@ -26407,7 +26407,7 @@
             let genderData = data.demographics?.gender || [];
             
             // Gender keywords to identify gender entries
-            const genderKeywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER'];
+            const genderKeywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY'];
             
             // Fallback: check if demographics is an array or object with different structure
             if (!ageData.length && !genderData.length && data.demographics) {
