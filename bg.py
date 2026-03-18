@@ -6205,6 +6205,42 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
 
     total_adjustments = 0
 
+    # ── Extract audience demographic skew for category-level alignment ──
+    cs_col_demo = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    male_pct = 0.0
+    female_pct = 0.0
+    young_pct = 0.0  # under-35
+    gender_mask = df['Column'].str.upper().str.strip() == 'GENDER'
+    for _, row in df[gender_mask].iterrows():
+        val = str(row.get('Value', '')).strip().upper()
+        try:
+            cs = float(str(row.get(cs_col_demo, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            cs = 0
+        if val == 'MALE':
+            male_pct += cs
+        elif val == 'TRANS MALE':
+            male_pct += cs
+        elif val == 'FEMALE':
+            female_pct += cs
+        elif val == 'TRANS FEMALE':
+            female_pct += cs
+    age_mask = df['Column'].str.upper().str.strip() == 'AGE'
+    for _, row in df[age_mask].iterrows():
+        val = str(row.get('Value', '')).strip().upper()
+        try:
+            cs = float(str(row.get(cs_col_demo, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            cs = 0
+        if any(bracket in val for bracket in ['18-24', '25-34', '18 -', '25 -',
+                                                '18-', '25-', 'GEN Z', 'MILLENNIAL']):
+            young_pct += cs
+    demo_skew_summary = (
+        f"Audience: {male_pct:.0f}% male / {female_pct:.0f}% female, "
+        f"{young_pct:.0f}% under-35"
+    )
+    print(f"   📋 Demographic skew: {demo_skew_summary}")
+
     # ──────── PHASE 1: LOCATION / DMA REVIEW ────────
     loc_mask = df['Column'].str.upper().str.strip() == 'LOCATION'
     if loc_mask.any():
@@ -6631,9 +6667,183 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             print(f"   ⚠️ Pass B error (batch {batch_num}): {e}")
             continue
 
+    # ──── PASS C: CATEGORY-LEVEL DEMOGRAPHIC ALIGNMENT ────
+    # Detect entire categories where participation bias causes most items
+    # to over-index despite the audience demographics pointing the other
+    # direction.  E.g. BEAUTY/WELLNESS 90% over-indexing for a 60% male
+    # audience.  Send the FULL category (not just top 25) to the AI.
+    pass_c_adjustments = 0
+    if male_pct > 0 or female_pct > 0:
+        # Refresh item lookup with current df values after Pass A+B
+        all_item_lookup.clear()
+        for cat, items in categories_data.items():
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = cs_orig
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        # Build summary of all categories with over-indexing stats
+        flagged_cats = {}  # cat -> (over_count, total, over_pct, items_with_index)
+        for cat, items in sorted(categories_data.items()):
+            over_count = 0
+            under_count = 0
+            total_with_gp = 0
+            cat_items_with_index = []
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                gp_bp = gp_bp_lookup.get((cat, name.strip().upper()), 0)
+                if gp_bp > 0 and cur_bp > 0:
+                    total_with_gp += 1
+                    idx_val = cur_bp / gp_bp
+                    if idx_val > 1.0:
+                        over_count += 1
+                    else:
+                        under_count += 1
+                    cat_items_with_index.append((name, cur_bp, gp_bp, idx_val, idx))
+            if total_with_gp < 5:
+                continue
+            over_pct = (over_count / total_with_gp) * 100
+            if over_pct >= 65 and (male_pct > 55 or female_pct > 55):
+                flagged_cats[cat] = (over_count, total_with_gp, over_pct,
+                                     cat_items_with_index)
+
+        # AI triage: one call to decide which flagged categories actually
+        # need item-level demographic correction (avoid wasting calls on
+        # sports categories that correctly over-index for a male audience).
+        cats_to_correct = set()
+        if flagged_cats:
+            triage_lines = []
+            for cat, (oc, tw, op, _) in sorted(flagged_cats.items()):
+                sample_items = sorted(flagged_cats[cat][3],
+                                      key=lambda x: -x[1])[:5]
+                top5 = ", ".join(n for n, *_ in sample_items)
+                triage_lines.append(
+                    f"  {cat}: {oc}/{tw} ({op:.0f}%) over-index. "
+                    f"Top items: {top5}")
+
+            triage_prompt = (
+                f"You are a consumer research analyst.\n"
+                f"Audience: {demo_skew_summary} — engages with \"{subject_clean}\".\n\n"
+                f"The following categories have >65% of items over-indexing "
+                f"Gen Pop, which may be participation bias:\n\n"
+                + "\n".join(triage_lines) +
+                f"\n\nWhich categories contain items that CONFLICT with the "
+                f"audience demographics? For example:\n"
+                f"- BEAUTY/WELLNESS for a 70% male audience → many female "
+                f"brands would incorrectly over-index\n"
+                f"- MOST PURCHASED BRANDS for a male audience → female brands "
+                f"like Free People, Lululemon mixed in\n"
+                f"- Sports categories for a male audience → CORRECT, no fix\n"
+                f"- GAMES for a young tech audience → CORRECT, no fix\n\n"
+                f"Return ONLY the category names that need demographic "
+                f"correction, as a JSON array. Example:\n"
+                f'["BEAUTY/WELLNESS","MOST PURCHASED BRANDS","ACCESSORIES"]\n'
+                f"If none need correction, return []. JSON only, no markdown."
+            )
+            try:
+                triage_resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': triage_prompt}],
+                    temperature=0.0,
+                    max_tokens=500
+                )
+                triage_text = triage_resp.choices[0].message.content.strip()
+                triage_text = triage_text.replace('```json', '').replace('```', '').strip()
+                triage_result = _json.loads(triage_text)
+                if isinstance(triage_result, list):
+                    cats_to_correct = {c.strip().upper() for c in triage_result}
+                print(f"   🏷️  Pass C triage: {len(flagged_cats)} flagged → "
+                      f"{len(cats_to_correct)} need demographic correction: "
+                      f"{', '.join(sorted(cats_to_correct)) or 'none'}")
+            except Exception as e:
+                print(f"   ⚠️ Pass C triage error: {e}")
+
+        for cat in sorted(cats_to_correct):
+            if cat not in flagged_cats:
+                continue
+            over_count, total_with_gp, over_pct, cat_items_with_index = flagged_cats[cat]
+            cat_items_sorted = sorted(cat_items_with_index, key=lambda x: -x[1])[:200]
+            lines = []
+            for name, bp, gp_bp, idx_val, _ in cat_items_sorted:
+                idx_int = int(round(idx_val * 100))
+                direction = "OVER" if idx_int > 100 else ("UNDER" if idx_int < 100 else "PARITY")
+                lines.append(f"  {name}: {bp:.1f}% BP [GenPop: {gp_bp:.1f}%, INDEX: {idx_int} {direction}]")
+
+            cat_prompt = (
+                f"You are a consumer research analyst checking for PARTICIPATION "
+                f"BIAS in a brand audience profile.\n\n"
+                f"{audience_context}\n"
+                f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n\n"
+                f"=== PROBLEM ===\n"
+                f"The category \"{cat}\" has {over_count}/{total_with_gp} items "
+                f"({over_pct:.0f}%) OVER-INDEXING Gen Pop. This is likely "
+                f"participation bias — digitally active panelists report higher "
+                f"brand interaction across the board, not real affinity.\n\n"
+                f"=== YOUR TASK ===\n"
+                f"For EACH item in this category, classify it based on the "
+                f"audience demographics ({demo_skew_summary}) and the persona "
+                f"of someone who engages with \"{subject_clean}\":\n\n"
+                f"A) DEMOGRAPHIC MISMATCH — brand skews opposite to this audience "
+                f"(e.g. makeup/cosmetics for a male audience, men's grooming for "
+                f"a female audience). These MUST under-index → factor 0.70-0.90\n\n"
+                f"B) GENDER-NEUTRAL / MASS-MARKET — used equally by all genders "
+                f"(e.g. CeraVe, Pantene, sunscreen). Keep near current level or "
+                f"slight reduction → factor 0.90-1.00\n\n"
+                f"C) DEMOGRAPHIC MATCH — brand matches this audience's demo "
+                f"(e.g. Dollar Shave Club for male audience, Sephora for female "
+                f"audience). Can stay at or above parity → factor 1.00-1.10\n\n"
+                f"Apply this thinking to ALL items in MOST PURCHASED BRANDS too — "
+                f"brands like Free People, Victoria's Secret, Lululemon are "
+                f"female-skewing even when they appear in a non-beauty category.\n\n"
+                f"=== {cat} ({len(cat_items_sorted)} items) ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== RULES ===\n"
+                f"1. Return a factor for EVERY item. No item should pass without "
+                f"classification.\n"
+                f"2. Makeup brands (MAC, NYX, Fenty Beauty, CoverGirl, Revlon, "
+                f"Urban Decay, Too Faced, Benefit, etc.) are female-skewing.\n"
+                f"3. Skincare CAN be gender-neutral (CeraVe, Neutrogena) or "
+                f"female-skewing (Glossier, Rare Beauty). Use judgment.\n"
+                f"4. Male grooming (Dollar Shave Club, Manscaped, Old Spice, "
+                f"Harry's, Gillette) should match a male audience.\n"
+                f"5. The goal: correct participation bias so the category's "
+                f"over/under distribution realistically reflects this audience.\n\n"
+                f"Return ONLY valid JSON:\n"
+                f'{{"status":"FIX","notes":"summary",'
+                f'"adjustments":[{{"category":"{cat}","item":"ITEM",'
+                f'"factor":0.85,"reason":"brief"}},...]}}\n'
+                f"JSON only, no markdown."
+            )
+
+            print(f"   🏷️  Pass C: {cat} — {over_pct:.0f}% over-indexing, "
+                  f"sending {len(cat_items_sorted)} items for demographic alignment")
+
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': cat_prompt}],
+                    temperature=0.1,
+                    max_tokens=12000
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    applied, _ = _apply_adjustments(
+                        result['adjustments'], all_item_lookup, '[DEMO]')
+                    pass_c_adjustments += applied
+                    print(f"   🏷️  Pass C: {cat} — {applied} demographic corrections")
+            except Exception as e:
+                print(f"   ⚠️ Pass C error ({cat}): {e}")
+
     # ── Full Category Share recalculation across ALL categories ──
-    # Ensures BP and CS are consistent after all adjustments, not just
-    # for categories where corrections were made.
     if total_adjustments > 0:
         for cat in df['Column'].str.upper().str.strip().unique():
             if cat in DEMO_CATS or cat in META_CATS or cat == 'LOCATION':
@@ -6657,7 +6867,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                         pass
 
     print(f"🔍 Final gut check for {subject_clean}: {total_adjustments} total adjustments "
-          f"(Pass A: outlier review, Pass B: {len(spot_batches)} persona spot-check batch(es))")
+          f"(Pass A: outlier, Pass B: {len(spot_batches)} spot-check, "
+          f"Pass C: {pass_c_adjustments} demographic alignment)")
     return df
 
 
