@@ -6990,6 +6990,37 @@ def llmo_iq_data():
         """, params)
         platform_rows = cur.fetchall()
 
+        # 8) Overall demographic breakdown for AI users
+        demo_categories = ['GENDER', 'AGE', 'ETHNICITY', 'INCOME', 'EDUCATION']
+        demo_results = {}
+        for dc in demo_categories:
+            cur.execute(f"""
+                SELECT d.{dc} AS val, COUNT(DISTINCT l.UID) AS cnt
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO l
+                INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON l.UID = d.UID
+                WHERE l.MATCH_TYPE = 'AI_AGENT' AND {date_where}
+                  AND d.{dc} IS NOT NULL AND TRIM(d.{dc}) != ''
+                  AND UPPER(TRIM(d.{dc})) NOT IN ('PREFER NOT TO SAY', 'NONE', 'N/A', '')
+                GROUP BY d.{dc}
+                ORDER BY cnt DESC
+            """, params)
+            demo_results[dc.lower()] = cur.fetchall()
+
+        # 9) Per-date demographic breakdown (for delta overlay)
+        demo_trend_results = {}
+        for dc in demo_categories:
+            cur.execute(f"""
+                SELECT l.DELIVERED::DATE AS d, d2.{dc} AS val, COUNT(DISTINCT l.UID) AS cnt
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO l
+                INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d2 ON l.UID = d2.UID
+                WHERE l.MATCH_TYPE = 'AI_AGENT' AND {date_where}
+                  AND d2.{dc} IS NOT NULL AND TRIM(d2.{dc}) != ''
+                  AND UPPER(TRIM(d2.{dc})) NOT IN ('PREFER NOT TO SAY', 'NONE', 'N/A', '')
+                GROUP BY d, d2.{dc}
+                ORDER BY d, cnt DESC
+            """, params)
+            demo_trend_results[dc.lower()] = cur.fetchall()
+
         conn.close()
 
         # Build payload
@@ -7053,6 +7084,36 @@ def llmo_iq_data():
         browsers = [{'name': r[0], 'unique_users': r[1]} for r in browser_rows]
         platforms = [{'name': r[0], 'unique_users': r[1]} for r in platform_rows]
 
+        # Build demographics payload
+        demographics = {}
+        for dc in demo_categories:
+            dc_lower = dc.lower()
+            rows = demo_results[dc_lower]
+            total_demo = sum(r[1] for r in rows)
+            demographics[dc_lower] = [
+                {'value': r[0], 'count': r[1], 'pct': round(r[1] / total_demo * 100, 2) if total_demo else 0}
+                for r in rows
+            ]
+
+        # Build per-date demographic trends (percentage per value per date)
+        demo_trend = {}
+        for dc in demo_categories:
+            dc_lower = dc.lower()
+            rows = demo_trend_results[dc_lower]
+            by_date = {}
+            for r in rows:
+                d_str = str(r[0])
+                if d_str not in by_date:
+                    by_date[d_str] = []
+                by_date[d_str].append({'value': r[1], 'count': r[2]})
+            # Convert counts to percentages per date
+            for d_str in by_date:
+                items = by_date[d_str]
+                total_d = sum(x['count'] for x in items)
+                for x in items:
+                    x['pct'] = round(x['count'] / total_d * 100, 2) if total_d else 0
+            demo_trend[dc_lower] = by_date
+
         return jsonify({
             'success': True,
             'date': date_str,
@@ -7070,6 +7131,8 @@ def llmo_iq_data():
             'trend_by_llm': trend_by_llm,
             'browsers': browsers,
             'platforms': platforms,
+            'demographics': demographics,
+            'demo_trend': demo_trend,
         })
     except Exception as e:
         import traceback; traceback.print_exc()
