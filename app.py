@@ -6941,22 +6941,32 @@ def _llmo_save_parquet(df):
         print(f"[LLMO S3] Failed to save parquet: {e}")
 
 
-def _llmo_build_from_raw():
-    """Download all raw CSVs, process, save parquet, return DataFrame."""
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import time as _time
+def _llmo_get_parquet_last_modified():
+    """Return the LastModified datetime of the processed parquet on S3, or None."""
+    try:
+        resp = s3_client.head_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_PROCESSED_KEY)
+        return resp['LastModified']
+    except Exception:
+        return None
 
-    _llmo_cache['stage'] = 'Discovering files...'
-    paginator = s3_client.get_paginator('list_objects_v2')
-    keys = []
-    for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
-        for obj in page.get('Contents', []):
-            if obj['Key'].endswith('.csv.gz'):
-                keys.append(obj['Key'])
+
+def _llmo_build_from_raw(keys=None):
+    """Download raw CSVs (all or a subset), process, return DataFrame."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if keys is None:
+        _llmo_cache['stage'] = 'Discovering files...'
+        paginator = s3_client.get_paginator('list_objects_v2')
+        keys = []
+        for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
+            for obj in page.get('Contents', []):
+                if obj['Key'].endswith('.csv.gz'):
+                    keys.append(obj['Key'])
+
     _llmo_cache['total_files'] = len(keys)
     _llmo_cache['loaded_files'] = 0
-    _llmo_cache['stage'] = 'Downloading raw files...'
-    print(f"[LLMO S3] Found {len(keys)} raw files to process")
+    _llmo_cache['stage'] = f'Downloading {len(keys)} raw files...'
+    print(f"[LLMO S3] Processing {len(keys)} raw files")
 
     dfs = []
     with ThreadPoolExecutor(max_workers=48) as pool:
@@ -6974,25 +6984,82 @@ def _llmo_build_from_raw():
     df = pd.concat(dfs, ignore_index=True)
     del dfs
     df = _llmo_process_raw_df(df)
-
-    _llmo_cache['stage'] = 'Saving processed file...'
-    _llmo_save_parquet(df)
     return df
 
 
-def _llmo_do_background_load(force_rebuild=False):
-    """Background worker: load from parquet (fast) or rebuild from raw CSVs."""
+def _llmo_incremental_update():
+    """Load existing parquet, find new raw files since it was built, merge, save."""
+    import time as _time
+
+    parquet_mtime = _llmo_get_parquet_last_modified()
+    if parquet_mtime is None:
+        print("[LLMO S3] No existing parquet -- doing full build")
+        df = _llmo_build_from_raw()
+        if df is not None:
+            _llmo_cache['stage'] = 'Saving processed file...'
+            _llmo_save_parquet(df)
+        return df
+
+    _llmo_cache['stage'] = 'Checking for new files...'
+    paginator = s3_client.get_paginator('list_objects_v2')
+    new_keys = []
+    total_keys = 0
+    for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
+        for obj in page.get('Contents', []):
+            if obj['Key'].endswith('.csv.gz'):
+                total_keys += 1
+                if obj['LastModified'] > parquet_mtime:
+                    new_keys.append(obj['Key'])
+
+    if not new_keys:
+        print(f"[LLMO S3] No new files since {parquet_mtime.strftime('%Y-%m-%d %H:%M')} (checked {total_keys} files) -- loading existing parquet")
+        return _llmo_load_from_parquet()
+
+    print(f"[LLMO S3] Found {len(new_keys)} new files (of {total_keys}) since {parquet_mtime.strftime('%Y-%m-%d %H:%M')}")
+
+    _llmo_cache['stage'] = 'Loading existing data...'
+    existing_df = _llmo_load_from_parquet()
+
+    _llmo_cache['stage'] = f'Processing {len(new_keys)} new files...'
+    new_df = _llmo_build_from_raw(keys=new_keys)
+
+    if new_df is not None and existing_df is not None:
+        _llmo_cache['stage'] = 'Merging new data...'
+        df = pd.concat([existing_df, new_df], ignore_index=True)
+        del existing_df, new_df
+        df.drop_duplicates(subset=['UID', 'DELIVERED', 'COMMON_NAME', 'VISIT_TS'], inplace=True)
+        for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
+            if col in df.columns:
+                df[col] = df[col].astype('category')
+        print(f"[LLMO S3] Merged: {len(df):,} rows total")
+    elif new_df is not None:
+        df = new_df
+    else:
+        df = existing_df
+
+    if df is not None:
+        _llmo_cache['stage'] = 'Saving updated file...'
+        _llmo_save_parquet(df)
+    return df
+
+
+def _llmo_do_background_load(incremental=False):
+    """Background worker: load from parquet (fast) or do incremental/full build."""
     import time as _time
 
     print("[LLMO S3] Background load starting...")
     t0 = _time.time()
     try:
         df = None
-        if not force_rebuild:
+        if incremental:
+            df = _llmo_incremental_update()
+        else:
             df = _llmo_load_from_parquet()
-
-        if df is None:
-            df = _llmo_build_from_raw()
+            if df is None:
+                df = _llmo_build_from_raw()
+                if df is not None:
+                    _llmo_cache['stage'] = 'Saving processed file...'
+                    _llmo_save_parquet(df)
 
         if df is None:
             print("[LLMO S3] No data loaded!")
@@ -7035,7 +7102,7 @@ def _llmo_ensure_loaded():
 
 
 def _llmo_scheduled_prewarm():
-    """Daily pre-warm: rebuild from raw CSVs and save fresh parquet."""
+    """Daily pre-warm: incremental update -- only process new files since last parquet build."""
     with _llmo_cache['lock']:
         if _llmo_cache['loading']:
             print("[LLMO Scheduler] Already loading, skipping pre-warm")
@@ -7045,9 +7112,9 @@ def _llmo_scheduled_prewarm():
         _llmo_cache['total_files'] = 0
         _llmo_cache['df'] = None
         _llmo_cache['loaded_at'] = 0
-        _llmo_cache['stage'] = 'Starting daily rebuild...'
-    print("[LLMO Scheduler] Starting daily pre-warm (full rebuild)...")
-    _llmo_do_background_load(force_rebuild=True)
+        _llmo_cache['stage'] = 'Starting daily update...'
+    print("[LLMO Scheduler] Starting daily pre-warm (incremental)...")
+    _llmo_do_background_load(incremental=True)
 
 
 def _llmo_daily_scheduler():
