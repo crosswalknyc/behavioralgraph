@@ -1161,6 +1161,45 @@ def anchor_to_genpop(df, sample_size):
         print(f"   🔄 Rank preservation: {rank_swaps} items reordered to "
               f"match raw profile signal")
 
+    # --- Cross-category harmonization ---
+    # Same brand in multiple categories (e.g. NBC in BROADCAST/CABLE + MEDIA)
+    # gets averaged to a single consistent BP value.
+    DEMO_CATS_SET = SKIP_CATS | {'LOCATION'}
+    val_occ = {}
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat in DEMO_CATS_SET:
+            continue
+        val = str(row.get('Value', '')).strip().upper()
+        if not val:
+            continue
+        try:
+            cur_bp = float(row.get(bp_col, 0)) if bp_col else 0
+        except (ValueError, TypeError):
+            continue
+        val_occ.setdefault(val, []).append((idx, cur_bp))
+    harm_count = 0
+    for val, entries in val_occ.items():
+        if len(entries) < 2:
+            continue
+        bps = [bp for _, bp in entries]
+        if max(bps) - min(bps) < 0.01:
+            continue
+        avg_bp = round(sum(bps) / len(bps), 4)
+        for ridx, old_bp in entries:
+            if abs(old_bp - avg_bp) < 0.01:
+                continue
+            if bp_col:
+                df.at[ridx, bp_col] = avg_bp
+            new_raw = max(1, int(round(avg_bp / 100.0 * sample_size)))
+            df.at[ridx, 'Original Raw Numbers'] = str(new_raw)
+            if 'US Gen Pop Projection' in df.columns:
+                df.at[ridx, 'US Gen Pop Projection'] = str(
+                    int(round((new_raw / 10_000_000) * 329_900_000)))
+            harm_count += 1
+    if harm_count:
+        print(f"   🔗 Cross-category harmonization: {harm_count} values aligned")
+
     for cat in df['Column'].str.upper().unique():
         if cat in SKIP_CATS:
             continue
@@ -7036,10 +7075,79 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 except (ValueError, TypeError):
                     pass
 
+    # ──── FINAL: CROSS-CATEGORY HARMONIZATION ────
+    # The same brand (e.g. NBC, Adidas) can appear in multiple categories.
+    # After all passes, their BP values may differ.  Harmonize so every
+    # occurrence of the same item name has the same BP, using the average.
+    MULT = 329_900_000 / 10_000_000
+    val_occurrences = {}
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat in DEMO_CATS or cat in META_CATS or cat == 'LOCATION':
+            continue
+        val = str(row.get('Value', '')).strip().upper()
+        if not val:
+            continue
+        try:
+            bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            continue
+        val_occurrences.setdefault(val, []).append((idx, cat, bp))
+
+    harmonized = 0
+    try:
+        sample_size = int(float(str(
+            df.loc[df['Column'].str.upper().str.strip() == 'SAMPLE SIZE',
+                   'Value'].iloc[0]).replace(',', '')))
+    except Exception:
+        sample_size = 10_000_000
+
+    for val, entries in val_occurrences.items():
+        if len(entries) < 2:
+            continue
+        bps = [bp for _, _, bp in entries]
+        if max(bps) - min(bps) < 0.01:
+            continue
+        avg_bp = round(sum(bps) / len(bps), 4)
+        for idx, cat, old_bp in entries:
+            if abs(old_bp - avg_bp) < 0.01:
+                continue
+            df.at[idx, bp_col] = avg_bp
+            new_raw = max(1, int(round(avg_bp / 100.0 * sample_size)))
+            df.at[idx, raw_col] = str(new_raw)
+            if proj_col in df.columns:
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+            harmonized += 1
+
+    # Recalculate CS one final time after harmonization
+    if harmonized > 0:
+        for cat in df['Column'].str.upper().str.strip().unique():
+            if cat in DEMO_CATS or cat in META_CATS or cat == 'LOCATION':
+                continue
+            cm = df['Column'].str.upper().str.strip() == cat
+            if not cm.any():
+                continue
+            total_raw = 0
+            for cidx in df[cm].index:
+                try:
+                    total_raw += int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                except (ValueError, TypeError):
+                    pass
+            if total_raw > 0:
+                for cidx in df[cm].index:
+                    try:
+                        raw = int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                        new_cs = round((raw / total_raw) * 100.0, 4)
+                        df.at[cidx, cs_col] = new_cs
+                    except (ValueError, TypeError):
+                        pass
+        print(f"   🔗 Cross-category harmonization: {harmonized} values aligned")
+
     print(f"🔍 Final gut check for {subject_clean}: {total_adjustments} total adjustments "
           f"(Pass A: outlier, Pass B: {len(spot_batches)} spot-check, "
           f"Pass C: {pass_c_adjustments} demographic, "
-          f"Pass D: {pass_d_adjustments} rank reorder)")
+          f"Pass D: {pass_d_adjustments} rank reorder, "
+          f"harmonized: {harmonized})")
     return df
 
 
