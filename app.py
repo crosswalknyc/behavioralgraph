@@ -6845,9 +6845,10 @@ LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000  # 32.99
 LLMO_S3_BUCKET = 'llmo'
 LLMO_S3_PREFIX = 'full_table/'
 LLMO_PROCESSED_KEY = 'processed/llmo_processed.parquet'
+LLMO_SUMMARY_KEY = 'processed/llmo_daily_summary.json.gz'
 LLMO_CACHE_TTL = 86400  # 24 hours
 import threading as _llmo_threading
-_llmo_cache = {'df': None, 'loaded_at': 0, 'loading': False,
+_llmo_cache = {'summary': None, 'loaded_at': 0, 'loading': False,
                'lock': _llmo_threading.Lock(),
                'total_files': 0, 'loaded_files': 0, 'stage': ''}
 
@@ -6859,146 +6860,193 @@ def _llmo_load_one_file(key):
         resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=key)
         raw = resp['Body'].read()
         text = gzip.decompress(raw).decode('utf-8')
-        df = pd.read_csv(
+        return pd.read_csv(
             io.StringIO(text),
             usecols=['UID', 'DELIVERED', 'COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM', 'URL', 'VISIT_TS'],
             dtype={'UID': 'str', 'COMMON_NAME': 'str', 'MATCH_TYPE': 'str', 'BROWSER': 'str', 'PLATFORM': 'str', 'URL': 'str'}
         )
-        return df
     except Exception as e:
         print(f"[LLMO S3] Error loading {key}: {e}")
         return None
 
 
-def _llmo_process_raw_df(df):
-    """Extract search terms, parse dates, optimise dtypes. Mutates df in place."""
+def _llmo_compute_daily_summary(df):
+    """Compute per-date dashboard metrics from a raw DataFrame. Returns dict keyed by date string."""
     import re as _re
     from urllib.parse import unquote_plus
-    search_pattern = _re.compile(r'[?&](?:q|query|p|search|prompt|text)=([^&]+)', _re.IGNORECASE)
 
+    search_pattern = _re.compile(r'[?&](?:q|query|p|search|prompt|text)=([^&]+)', _re.IGNORECASE)
     def _extract_search(url):
         if not isinstance(url, str):
             return None
         m = search_pattern.search(url)
         if m:
-            try:
-                return unquote_plus(m.group(1))[:200]
-            except Exception:
-                return m.group(1)[:200]
+            try: return unquote_plus(m.group(1))[:200]
+            except Exception: return m.group(1)[:200]
         return None
 
-    df['SEARCH_TERM'] = df['URL'].apply(_extract_search)
-    df.drop(columns=['URL'], inplace=True)
     df['DELIVERED'] = pd.to_datetime(df['DELIVERED'], errors='coerce').dt.date
     df['VISIT_TS'] = pd.to_datetime(df['VISIT_TS'], errors='coerce')
-    for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
-        df[col] = df[col].astype('category')
-    return df
+    df['SEARCH_TERM'] = df['URL'].apply(_extract_search)
+
+    summary = {}
+    for date_val, day_df in df.groupby('DELIVERED'):
+        if pd.isna(date_val):
+            continue
+        ds = str(date_val)
+        ai = day_df[day_df['MATCH_TYPE'] == 'AI_AGENT']
+        post = day_df[day_df['MATCH_TYPE'] == 'POST_AI_NON_AGENT']
+
+        total_ai_users = int(ai['UID'].nunique())
+        total_ai_clicks = int(len(ai))
+
+        llm_grp = ai.groupby('COMMON_NAME').agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
+        llm_grp = llm_grp.sort_values('uu', ascending=False)
+        llms = [{'name': str(r['COMMON_NAME'] or 'Unknown'), 'unique_users': int(r['uu']), 'total_clicks': int(r['cl'])}
+                for _, r in llm_grp.iterrows()]
+
+        post_v = post[post['COMMON_NAME'].notna() & (post['COMMON_NAME'] != '')]
+        att_grp = post_v.groupby('COMMON_NAME').agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
+        att_grp = att_grp.sort_values('uu', ascending=False).head(50)
+        attribution = [{'name': str(r['COMMON_NAME'] or 'Unknown'), 'unique_users': int(r['uu']), 'total_clicks': int(r['cl'])}
+                       for _, r in att_grp.iterrows()]
+
+        flow_df = day_df[['UID', 'VISIT_TS', 'COMMON_NAME', 'MATCH_TYPE']].sort_values(['UID', 'VISIT_TS'])
+        flow_df['prev_name'] = flow_df.groupby('UID')['COMMON_NAME'].shift(1)
+        flow_df['prev_type'] = flow_df.groupby('UID')['MATCH_TYPE'].shift(1)
+        mask = ((flow_df['MATCH_TYPE'] == 'POST_AI_NON_AGENT') & (flow_df['prev_type'] == 'AI_AGENT')
+                & flow_df['prev_name'].notna() & flow_df['COMMON_NAME'].notna() & (flow_df['COMMON_NAME'] != ''))
+        ff = flow_df[mask]
+        if not ff.empty:
+            fg = ff.groupby(['prev_name', 'COMMON_NAME']).agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
+            fg = fg.sort_values('uu', ascending=False).head(100)
+            flows = [{'source': str(r['prev_name']), 'destination': str(r['COMMON_NAME']),
+                      'unique_users': int(r['uu']), 'clicks': int(r['cl'])} for _, r in fg.iterrows()]
+        else:
+            flows = []
+
+        s_df = ai[ai['SEARCH_TERM'].notna() & (ai['SEARCH_TERM'] != '')]
+        if not s_df.empty:
+            sg = s_df.groupby('SEARCH_TERM').size().reset_index(name='count').sort_values('count', ascending=False).head(50)
+            searches = [{'term': str(r['SEARCH_TERM']), 'count': int(r['count'])} for _, r in sg.iterrows()]
+        else:
+            searches = []
+
+        br = ai[ai['BROWSER'].notna() & (ai['BROWSER'] != '')].groupby('BROWSER')['UID'].nunique().reset_index(name='uu').sort_values('uu', ascending=False)
+        browsers = [{'name': str(r['BROWSER']), 'unique_users': int(r['uu'])} for _, r in br.iterrows()]
+
+        pl = ai[ai['PLATFORM'].notna() & (ai['PLATFORM'] != '')].groupby('PLATFORM')['UID'].nunique().reset_index(name='uu').sort_values('uu', ascending=False)
+        platforms = [{'name': str(r['PLATFORM']), 'unique_users': int(r['uu'])} for _, r in pl.iterrows()]
+
+        summary[ds] = {
+            'total_ai_users': total_ai_users,
+            'total_ai_clicks': total_ai_clicks,
+            'llms': llms,
+            'attribution': attribution,
+            'flows': flows,
+            'searches': searches,
+            'browsers': browsers,
+            'platforms': platforms,
+        }
+        print(f"[LLMO Summary] {ds}: {total_ai_users:,} users, {total_ai_clicks:,} clicks")
+
+    return summary
 
 
-def _llmo_load_from_parquet():
-    """Try to load the pre-processed Parquet file from S3. Returns DataFrame or None."""
-    import time as _time
-    try:
-        _llmo_cache['stage'] = 'Downloading processed data...'
-        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_PROCESSED_KEY)
-        raw = resp['Body'].read()
-        buf = io.BytesIO(raw)
-        df = pd.read_parquet(buf)
-        df['DELIVERED'] = pd.to_datetime(df['DELIVERED'], errors='coerce').dt.date
-        df['VISIT_TS'] = pd.to_datetime(df['VISIT_TS'], errors='coerce')
-        for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
-            if col in df.columns:
-                df[col] = df[col].astype('category')
-        print(f"[LLMO S3] Loaded parquet: {len(df):,} rows ({df.memory_usage(deep=True).sum() / 1e9:.2f} GB)")
-        return df
-    except s3_client.exceptions.NoSuchKey:
-        print("[LLMO S3] No processed parquet found, will build from raw files")
-        return None
-    except Exception as e:
-        print(f"[LLMO S3] Parquet load failed ({e}), will build from raw files")
-        return None
-
-
-def _llmo_save_parquet(df):
-    """Save processed DataFrame as Parquet to S3."""
-    import time as _time
+def _llmo_save_summary(summary):
+    """Save pre-computed summary dict to S3 as gzipped JSON."""
+    import gzip, json, time as _time
     try:
         t0 = _time.time()
-        buf = io.BytesIO()
-        save_df = df.copy()
-        save_df['DELIVERED'] = pd.to_datetime(save_df['DELIVERED'].astype(str), errors='coerce')
-        for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
-            if col in save_df.columns:
-                save_df[col] = save_df[col].astype(str)
-        save_df.to_parquet(buf, index=False, engine='pyarrow', compression='snappy')
-        buf.seek(0)
-        size_mb = buf.getbuffer().nbytes / 1e6
-        s3_client.put_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_PROCESSED_KEY, Body=buf.getvalue())
+        data = {'dates': sorted(summary.keys(), reverse=True), 'by_date': summary}
+        raw = json.dumps(data, separators=(',', ':')).encode('utf-8')
+        compressed = gzip.compress(raw)
+        s3_client.put_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_SUMMARY_KEY,
+                             Body=compressed, ContentType='application/json',
+                             ContentEncoding='gzip')
         elapsed = _time.time() - t0
-        print(f"[LLMO S3] Saved parquet to s3://{LLMO_S3_BUCKET}/{LLMO_PROCESSED_KEY} ({size_mb:.0f} MB in {elapsed:.1f}s)")
+        print(f"[LLMO S3] Saved summary to s3://{LLMO_S3_BUCKET}/{LLMO_SUMMARY_KEY} "
+              f"({len(compressed)/1e6:.1f} MB, {len(summary)} dates, {elapsed:.1f}s)")
     except Exception as e:
-        print(f"[LLMO S3] Failed to save parquet: {e}")
+        print(f"[LLMO S3] Failed to save summary: {e}")
 
 
-def _llmo_get_parquet_last_modified():
-    """Return the LastModified datetime of the processed parquet on S3, or None."""
+def _llmo_load_summary():
+    """Download the pre-computed summary JSON from S3. Returns dict or None."""
+    import gzip, json, time as _time
     try:
-        resp = s3_client.head_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_PROCESSED_KEY)
+        t0 = _time.time()
+        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_SUMMARY_KEY)
+        raw = resp['Body'].read()
+        try:
+            text = gzip.decompress(raw).decode('utf-8')
+        except Exception:
+            text = raw.decode('utf-8')
+        data = json.loads(text)
+        elapsed = _time.time() - t0
+        print(f"[LLMO S3] Loaded summary: {len(data.get('dates', []))} dates in {elapsed:.1f}s")
+        return data
+    except Exception as e:
+        print(f"[LLMO S3] Summary load failed: {e}")
+        return None
+
+
+def _llmo_get_summary_last_modified():
+    """Return LastModified of summary JSON on S3, or None."""
+    try:
+        resp = s3_client.head_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_SUMMARY_KEY)
         return resp['LastModified']
     except Exception:
         return None
 
 
-def _llmo_build_from_raw(keys=None):
-    """Download raw CSVs (all or a subset), process, return DataFrame."""
+def _llmo_build_summary_from_raw():
+    """Full rebuild: download all raw CSVs, compute daily summaries, save."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    import time as _time
 
-    if keys is None:
-        _llmo_cache['stage'] = 'Discovering files...'
-        paginator = s3_client.get_paginator('list_objects_v2')
-        keys = []
-        for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
-            for obj in page.get('Contents', []):
-                if obj['Key'].endswith('.csv.gz'):
-                    keys.append(obj['Key'])
+    _llmo_cache['stage'] = 'Discovering files...'
+    paginator = s3_client.get_paginator('list_objects_v2')
+    keys = []
+    for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
+        for obj in page.get('Contents', []):
+            if obj['Key'].endswith('.csv.gz'):
+                keys.append(obj['Key'])
 
     _llmo_cache['total_files'] = len(keys)
     _llmo_cache['loaded_files'] = 0
     _llmo_cache['stage'] = f'Downloading {len(keys)} raw files...'
-    print(f"[LLMO S3] Processing {len(keys)} raw files")
+    print(f"[LLMO S3] Processing {len(keys)} raw files for summary build")
 
     dfs = []
     with ThreadPoolExecutor(max_workers=48) as pool:
         futures = {pool.submit(_llmo_load_one_file, k): k for k in keys}
         for fut in as_completed(futures):
             _llmo_cache['loaded_files'] = _llmo_cache.get('loaded_files', 0) + 1
-            result = fut.result()
-            if result is not None:
-                dfs.append(result)
+            r = fut.result()
+            if r is not None:
+                dfs.append(r)
 
     if not dfs:
         return None
 
-    _llmo_cache['stage'] = 'Processing...'
+    _llmo_cache['stage'] = 'Computing daily summaries...'
     df = pd.concat(dfs, ignore_index=True)
     del dfs
-    df = _llmo_process_raw_df(df)
-    return df
+    summary = _llmo_compute_daily_summary(df)
+    del df
+
+    _llmo_cache['stage'] = 'Saving summary...'
+    _llmo_save_summary(summary)
+    return {'dates': sorted(summary.keys(), reverse=True), 'by_date': summary}
 
 
-def _llmo_incremental_update():
-    """Load existing parquet, find new raw files since it was built, merge, save."""
-    import time as _time
-
-    parquet_mtime = _llmo_get_parquet_last_modified()
-    if parquet_mtime is None:
-        print("[LLMO S3] No existing parquet -- doing full build")
-        df = _llmo_build_from_raw()
-        if df is not None:
-            _llmo_cache['stage'] = 'Saving processed file...'
-            _llmo_save_parquet(df)
-        return df
+def _llmo_incremental_summary():
+    """Incremental: load existing summary, process only new raw files for new dates, merge."""
+    summary_mtime = _llmo_get_summary_last_modified()
+    if summary_mtime is None:
+        print("[LLMO S3] No existing summary -- doing full build")
+        return _llmo_build_summary_from_raw()
 
     _llmo_cache['stage'] = 'Checking for new files...'
     paginator = s3_client.get_paginator('list_objects_v2')
@@ -7008,60 +7056,67 @@ def _llmo_incremental_update():
         for obj in page.get('Contents', []):
             if obj['Key'].endswith('.csv.gz'):
                 total_keys += 1
-                if obj['LastModified'] > parquet_mtime:
+                if obj['LastModified'] > summary_mtime:
                     new_keys.append(obj['Key'])
 
     if not new_keys:
-        print(f"[LLMO S3] No new files since {parquet_mtime.strftime('%Y-%m-%d %H:%M')} (checked {total_keys} files) -- loading existing parquet")
-        return _llmo_load_from_parquet()
+        print(f"[LLMO S3] No new raw files since {summary_mtime.strftime('%Y-%m-%d %H:%M')} -- loading existing summary")
+        return _llmo_load_summary()
 
-    print(f"[LLMO S3] Found {len(new_keys)} new files (of {total_keys}) since {parquet_mtime.strftime('%Y-%m-%d %H:%M')}")
+    print(f"[LLMO S3] Found {len(new_keys)} new files since {summary_mtime.strftime('%Y-%m-%d %H:%M')}")
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    _llmo_cache['stage'] = 'Loading existing data...'
-    existing_df = _llmo_load_from_parquet()
+    _llmo_cache['stage'] = 'Loading existing summary...'
+    existing = _llmo_load_summary()
 
+    _llmo_cache['total_files'] = len(new_keys)
+    _llmo_cache['loaded_files'] = 0
     _llmo_cache['stage'] = f'Processing {len(new_keys)} new files...'
-    new_df = _llmo_build_from_raw(keys=new_keys)
 
-    if new_df is not None and existing_df is not None:
-        _llmo_cache['stage'] = 'Merging new data...'
-        df = pd.concat([existing_df, new_df], ignore_index=True)
-        del existing_df, new_df
-        df.drop_duplicates(subset=['UID', 'DELIVERED', 'COMMON_NAME', 'VISIT_TS'], inplace=True)
-        for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
-            if col in df.columns:
-                df[col] = df[col].astype('category')
-        print(f"[LLMO S3] Merged: {len(df):,} rows total")
-    elif new_df is not None:
-        df = new_df
-    else:
-        df = existing_df
+    dfs = []
+    with ThreadPoolExecutor(max_workers=48) as pool:
+        futures = {pool.submit(_llmo_load_one_file, k): k for k in new_keys}
+        for fut in as_completed(futures):
+            _llmo_cache['loaded_files'] = _llmo_cache.get('loaded_files', 0) + 1
+            r = fut.result()
+            if r is not None:
+                dfs.append(r)
 
-    if df is not None:
-        _llmo_cache['stage'] = 'Saving updated file...'
-        _llmo_save_parquet(df)
-    return df
+    if not dfs:
+        return existing
+
+    _llmo_cache['stage'] = 'Computing new date summaries...'
+    df = pd.concat(dfs, ignore_index=True)
+    del dfs
+    new_summary = _llmo_compute_daily_summary(df)
+    del df
+
+    merged = existing.get('by_date', {}) if existing else {}
+    for d, stats in new_summary.items():
+        merged[d] = stats
+
+    result = {'dates': sorted(merged.keys(), reverse=True), 'by_date': merged}
+    _llmo_cache['stage'] = 'Saving updated summary...'
+    _llmo_save_summary(merged)
+    return result
 
 
 def _llmo_do_background_load(incremental=False):
-    """Background worker: load from parquet (fast) or do incremental/full build."""
+    """Background worker: load summary JSON (fast) or rebuild from raw CSVs."""
     import time as _time
-
     print("[LLMO S3] Background load starting...")
     t0 = _time.time()
     try:
-        df = None
+        data = None
         if incremental:
-            df = _llmo_incremental_update()
+            data = _llmo_incremental_summary()
         else:
-            df = _llmo_load_from_parquet()
-            if df is None:
-                df = _llmo_build_from_raw()
-                if df is not None:
-                    _llmo_cache['stage'] = 'Saving processed file...'
-                    _llmo_save_parquet(df)
+            _llmo_cache['stage'] = 'Downloading summary...'
+            data = _llmo_load_summary()
+            if data is None:
+                data = _llmo_build_summary_from_raw()
 
-        if df is None:
+        if data is None:
             print("[LLMO S3] No data loaded!")
             with _llmo_cache['lock']:
                 _llmo_cache['loading'] = False
@@ -7069,10 +7124,9 @@ def _llmo_do_background_load(incremental=False):
             return
 
         elapsed = _time.time() - t0
-        print(f"[LLMO S3] Ready: {len(df):,} rows in {elapsed:.1f}s")
-
+        print(f"[LLMO S3] Ready: {len(data.get('dates', []))} dates in {elapsed:.1f}s")
         with _llmo_cache['lock']:
-            _llmo_cache['df'] = df
+            _llmo_cache['summary'] = data
             _llmo_cache['loaded_at'] = _time.time()
             _llmo_cache['loading'] = False
             _llmo_cache['stage'] = ''
@@ -7085,12 +7139,12 @@ def _llmo_do_background_load(incremental=False):
 
 
 def _llmo_ensure_loaded():
-    """Return cached DataFrame if ready, or kick off background load. Returns None while loading."""
+    """Return cached summary dict if ready, or kick off background load. Returns None while loading."""
     import time as _time
     now = _time.time()
     with _llmo_cache['lock']:
-        if _llmo_cache['df'] is not None and (now - _llmo_cache['loaded_at']) < LLMO_CACHE_TTL:
-            return _llmo_cache['df']
+        if _llmo_cache['summary'] is not None and (now - _llmo_cache['loaded_at']) < LLMO_CACHE_TTL:
+            return _llmo_cache['summary']
         if not _llmo_cache['loading']:
             _llmo_cache['loading'] = True
             _llmo_cache['loaded_files'] = 0
@@ -7102,7 +7156,7 @@ def _llmo_ensure_loaded():
 
 
 def _llmo_scheduled_prewarm():
-    """Daily pre-warm: incremental update -- only process new files since last parquet build."""
+    """Daily pre-warm: incremental summary update."""
     with _llmo_cache['lock']:
         if _llmo_cache['loading']:
             print("[LLMO Scheduler] Already loading, skipping pre-warm")
@@ -7110,7 +7164,7 @@ def _llmo_scheduled_prewarm():
         _llmo_cache['loading'] = True
         _llmo_cache['loaded_files'] = 0
         _llmo_cache['total_files'] = 0
-        _llmo_cache['df'] = None
+        _llmo_cache['summary'] = None
         _llmo_cache['loaded_at'] = 0
         _llmo_cache['stage'] = 'Starting daily update...'
     print("[LLMO Scheduler] Starting daily pre-warm (incremental)...")
@@ -7118,7 +7172,7 @@ def _llmo_scheduled_prewarm():
 
 
 def _llmo_daily_scheduler():
-    """Background thread that fires _llmo_scheduled_prewarm at 5:45 AM PST every day."""
+    """Background thread: fires pre-warm at 5:45 AM PST daily, and pre-warms on startup."""
     import time as _time
     from datetime import datetime, timedelta
     try:
@@ -7127,6 +7181,13 @@ def _llmo_daily_scheduler():
     except ImportError:
         from datetime import timezone
         pst = timezone(timedelta(hours=-8))
+
+    # Pre-warm immediately on startup
+    print("[LLMO Scheduler] Startup pre-warm: loading summary...")
+    try:
+        _llmo_do_background_load(incremental=False)
+    except Exception as e:
+        print(f"[LLMO Scheduler] Startup pre-warm failed: {e}")
 
     while True:
         now = datetime.now(pst)
@@ -7144,7 +7205,7 @@ def _llmo_daily_scheduler():
 
 _llmo_scheduler_thread = _llmo_threading.Thread(target=_llmo_daily_scheduler, daemon=True)
 _llmo_scheduler_thread.start()
-print("[LLMO Scheduler] Daily pre-warm thread started (5:45 AM PST)")
+print("[LLMO Scheduler] Background thread started (startup pre-warm + daily 5:45 AM PST)")
 
 
 @app.route('/api/cron/llmo-prewarm', methods=['POST'])
@@ -7165,29 +7226,125 @@ def cron_llmo_prewarm():
 @app.route('/api/llmo-iq/dates', methods=['GET'])
 @requires_auth
 def llmo_iq_dates():
-    """Return available DELIVERED dates from cached LLMO data."""
+    """Return available DELIVERED dates from pre-computed summary."""
     try:
-        df = _llmo_ensure_loaded()
-        if df is None:
+        data = _llmo_ensure_loaded()
+        if data is None:
             loaded = _llmo_cache.get('loaded_files', 0)
             total = _llmo_cache.get('total_files', 0)
             stage = _llmo_cache.get('stage', '')
             return jsonify({'success': True, 'loading': True, 'dates': [],
                             'loaded_files': loaded, 'total_files': total,
                             'stage': stage})
-        dates = sorted(df['DELIVERED'].dropna().unique(), reverse=True)
-        dates = [str(d) for d in dates]
-        return jsonify({'success': True, 'loading': False, 'dates': dates})
+        return jsonify({'success': True, 'loading': False, 'dates': data.get('dates', [])})
     except Exception as e:
         print(f"[LLMO IQ dates] Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _llmo_combine_date_range(summary_data, date_str, date_end):
+    """Combine pre-computed per-date stats for a date range. Returns API response dict."""
+    from collections import defaultdict
+    M = LLMO_PROJECTION_MULT
+    by_date = summary_data.get('by_date', {})
+
+    matching_dates = sorted(d for d in by_date if d >= date_str and d <= date_end)
+    if not matching_dates:
+        return {'success': True, 'loading': False, 'date': date_str, 'date_end': date_end,
+                'total_unique_users': 0, 'total_unique_users_projected': 0,
+                'total_clicks': 0, 'total_clicks_projected': 0,
+                'llm_count': 0, 'llms': [], 'attribution': [], 'flows': [],
+                'searches': [], 'trend_dates': [], 'trend_by_llm': {},
+                'browsers': [], 'platforms': []}
+
+    llm_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
+    att_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
+    flow_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
+    search_agg = defaultdict(int)
+    browser_agg = defaultdict(int)
+    platform_agg = defaultdict(int)
+    total_users = 0
+    total_clicks = 0
+    trend_by_llm = {}
+
+    for d in matching_dates:
+        day = by_date[d]
+        total_users += day.get('total_ai_users', 0)
+        total_clicks += day.get('total_ai_clicks', 0)
+
+        for llm in day.get('llms', []):
+            llm_agg[llm['name']]['uu'] += llm['unique_users']
+            llm_agg[llm['name']]['cl'] += llm['total_clicks']
+            nm = llm['name']
+            if nm not in trend_by_llm:
+                trend_by_llm[nm] = {}
+            trend_by_llm[nm][d] = {'unique_users': llm['unique_users'], 'total_clicks': llm['total_clicks']}
+
+        for att in day.get('attribution', []):
+            att_agg[att['name']]['uu'] += att['unique_users']
+            att_agg[att['name']]['cl'] += att['total_clicks']
+
+        for fl in day.get('flows', []):
+            key = (fl['source'], fl['destination'])
+            flow_agg[key]['uu'] += fl['unique_users']
+            flow_agg[key]['cl'] += fl['clicks']
+
+        for s in day.get('searches', []):
+            search_agg[s['term']] += s['count']
+
+        for b in day.get('browsers', []):
+            browser_agg[b['name']] += b['unique_users']
+
+        for p in day.get('platforms', []):
+            platform_agg[p['name']] += p['unique_users']
+
+    total_clicks_all = sum(v['cl'] for v in llm_agg.values())
+    llm_sorted = sorted(llm_agg.items(), key=lambda x: x[1]['uu'], reverse=True)
+    llm_data = []
+    for rank, (name, v) in enumerate(llm_sorted, 1):
+        uu, cl = v['uu'], v['cl']
+        llm_data.append({
+            'rank': rank, 'name': name,
+            'unique_users': uu, 'unique_users_projected': round(uu * M),
+            'pct_of_total': round(uu / total_users * 100, 2) if total_users else 0,
+            'total_clicks': cl, 'total_clicks_projected': round(cl * M),
+            'category_share': round(cl / total_clicks_all * 100, 2) if total_clicks_all else 0,
+        })
+
+    att_sorted = sorted(att_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:50]
+    attribution = [{'name': n, 'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
+                    'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M)}
+                   for n, v in att_sorted]
+
+    flow_sorted = sorted(flow_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
+    flows = [{'source': k[0], 'destination': k[1], 'unique_users': v['uu'], 'clicks': v['cl']}
+             for k, v in flow_sorted]
+
+    search_sorted = sorted(search_agg.items(), key=lambda x: x[1], reverse=True)[:50]
+    searches = [{'term': t, 'count': c} for t, c in search_sorted]
+
+    browsers = [{'name': n, 'unique_users': u} for n, u in sorted(browser_agg.items(), key=lambda x: x[1], reverse=True)]
+    platforms = [{'name': n, 'unique_users': u} for n, u in sorted(platform_agg.items(), key=lambda x: x[1], reverse=True)]
+
+    return {
+        'success': True, 'loading': False,
+        'date': date_str, 'date_end': date_end,
+        'total_unique_users': total_users,
+        'total_unique_users_projected': round(total_users * M),
+        'total_clicks': total_clicks,
+        'total_clicks_projected': round(total_clicks * M),
+        'llm_count': len(llm_data), 'llms': llm_data,
+        'attribution': attribution, 'flows': flows,
+        'searches': searches,
+        'trend_dates': matching_dates, 'trend_by_llm': trend_by_llm,
+        'browsers': browsers, 'platforms': platforms,
+    }
+
+
 @app.route('/api/llmo-iq/data', methods=['GET'])
 @requires_auth
 def llmo_iq_data():
-    """Return core LLMO IQ dashboard data from cached S3 DataFrame."""
-    import datetime as _dt
+    """Return core LLMO IQ dashboard data from pre-computed summary."""
     date_str = request.args.get('date')
     date_end = request.args.get('date_end')
     if not date_str:
@@ -7196,118 +7353,17 @@ def llmo_iq_data():
         date_end = date_str
 
     try:
-        full_df = _llmo_ensure_loaded()
-        if full_df is None:
+        summary = _llmo_ensure_loaded()
+        if summary is None:
             loaded = _llmo_cache.get('loaded_files', 0)
             total = _llmo_cache.get('total_files', 0)
             stage = _llmo_cache.get('stage', '')
             return jsonify({'success': True, 'loading': True,
                             'loaded_files': loaded, 'total_files': total,
                             'stage': stage})
-        if full_df.empty:
-            return jsonify({'success': True, 'loading': False, 'date': date_str, 'date_end': date_end,
-                            'total_unique_users': 0, 'total_unique_users_projected': 0,
-                            'total_clicks': 0, 'total_clicks_projected': 0,
-                            'llm_count': 0, 'llms': [], 'attribution': [], 'flows': [],
-                            'searches': [], 'trend_dates': [], 'trend_by_llm': {},
-                            'browsers': [], 'platforms': []})
 
-        d_start = _dt.date.fromisoformat(date_str)
-        d_end = _dt.date.fromisoformat(date_end)
-        df = full_df[(full_df['DELIVERED'] >= d_start) & (full_df['DELIVERED'] <= d_end)]
-
-        ai = df[df['MATCH_TYPE'] == 'AI_AGENT']
-        post = df[df['MATCH_TYPE'] == 'POST_AI_NON_AGENT']
-        M = LLMO_PROJECTION_MULT
-
-        # LLM usage
-        llm_grp = ai.groupby('COMMON_NAME').agg(unique_users=('UID', 'nunique'), total_clicks=('UID', 'size')).reset_index()
-        llm_grp = llm_grp.sort_values('unique_users', ascending=False).reset_index(drop=True)
-        total_unique = int(ai['UID'].nunique())
-        total_clicks_all = int(llm_grp['total_clicks'].sum())
-
-        llm_data = []
-        for i, row in llm_grp.iterrows():
-            uu = int(row['unique_users']); cl = int(row['total_clicks'])
-            llm_data.append({
-                'rank': i + 1,
-                'name': row['COMMON_NAME'] or 'Unknown',
-                'unique_users': uu,
-                'unique_users_projected': round(uu * M),
-                'pct_of_total': round(uu / total_unique * 100, 2) if total_unique else 0,
-                'total_clicks': cl,
-                'total_clicks_projected': round(cl * M),
-                'category_share': round(cl / total_clicks_all * 100, 2) if total_clicks_all else 0,
-            })
-
-        # Attribution destinations
-        post_valid = post[post['COMMON_NAME'].notna() & (post['COMMON_NAME'] != '')]
-        att_grp = post_valid.groupby('COMMON_NAME').agg(unique_users=('UID', 'nunique'), total_clicks=('UID', 'size')).reset_index()
-        att_grp = att_grp.sort_values('unique_users', ascending=False).head(50)
-        attribution = [{
-            'name': r['COMMON_NAME'] or 'Unknown', 'unique_users': int(r['unique_users']),
-            'unique_users_projected': round(int(r['unique_users']) * M),
-            'total_clicks': int(r['total_clicks']),
-            'total_clicks_projected': round(int(r['total_clicks']) * M),
-        } for _, r in att_grp.iterrows()]
-
-        # Source -> Destination flows (LAG equivalent)
-        flow_df = df[['UID', 'VISIT_TS', 'COMMON_NAME', 'MATCH_TYPE']].sort_values(['UID', 'VISIT_TS'])
-        flow_df['prev_name'] = flow_df.groupby('UID')['COMMON_NAME'].shift(1)
-        flow_df['prev_type'] = flow_df.groupby('UID')['MATCH_TYPE'].shift(1)
-        flow_mask = (flow_df['MATCH_TYPE'] == 'POST_AI_NON_AGENT') & (flow_df['prev_type'] == 'AI_AGENT') & flow_df['prev_name'].notna() & flow_df['COMMON_NAME'].notna() & (flow_df['COMMON_NAME'] != '')
-        flow_filtered = flow_df[flow_mask]
-        if not flow_filtered.empty:
-            flow_grp = flow_filtered.groupby(['prev_name', 'COMMON_NAME']).agg(unique_users=('UID', 'nunique'), clicks=('UID', 'size')).reset_index()
-            flow_grp = flow_grp.sort_values('unique_users', ascending=False).head(100)
-            flows = [{'source': r['prev_name'], 'destination': r['COMMON_NAME'], 'unique_users': int(r['unique_users']), 'clicks': int(r['clicks'])} for _, r in flow_grp.iterrows()]
-        else:
-            flows = []
-
-        # Top searches
-        search_df = ai[ai['SEARCH_TERM'].notna() & (ai['SEARCH_TERM'] != '')]
-        if not search_df.empty:
-            srch_grp = search_df.groupby('SEARCH_TERM').size().reset_index(name='count').sort_values('count', ascending=False).head(50)
-            searches = [{'term': r['SEARCH_TERM'], 'count': int(r['count'])} for _, r in srch_grp.iterrows()]
-        else:
-            searches = []
-
-        # Daily trend
-        trend_grp = ai.groupby([ai['DELIVERED'].astype(str), 'COMMON_NAME']).agg(unique_users=('UID', 'nunique'), total_clicks=('UID', 'size')).reset_index()
-        trend_grp.columns = ['date', 'name', 'unique_users', 'total_clicks']
-        trend_dates = sorted(trend_grp['date'].unique())
-        trend_by_llm = {}
-        for _, r in trend_grp.iterrows():
-            name = r['name'] or 'Unknown'
-            if name not in trend_by_llm:
-                trend_by_llm[name] = {}
-            trend_by_llm[name][r['date']] = {'unique_users': int(r['unique_users']), 'total_clicks': int(r['total_clicks'])}
-
-        # Browser / Platform
-        br_grp = ai[ai['BROWSER'].notna() & (ai['BROWSER'] != '')].groupby('BROWSER')['UID'].nunique().reset_index(name='unique_users').sort_values('unique_users', ascending=False)
-        browsers = [{'name': r['BROWSER'], 'unique_users': int(r['unique_users'])} for _, r in br_grp.iterrows()]
-
-        pl_grp = ai[ai['PLATFORM'].notna() & (ai['PLATFORM'] != '')].groupby('PLATFORM')['UID'].nunique().reset_index(name='unique_users').sort_values('unique_users', ascending=False)
-        platforms = [{'name': r['PLATFORM'], 'unique_users': int(r['unique_users'])} for _, r in pl_grp.iterrows()]
-
-        return jsonify({
-            'success': True,
-            'date': date_str,
-            'date_end': date_end,
-            'total_unique_users': total_unique,
-            'total_unique_users_projected': round(total_unique * M),
-            'total_clicks': total_clicks_all,
-            'total_clicks_projected': round(total_clicks_all * M),
-            'llm_count': len(llm_data),
-            'llms': llm_data,
-            'attribution': attribution,
-            'flows': flows,
-            'searches': searches,
-            'trend_dates': trend_dates,
-            'trend_by_llm': trend_by_llm,
-            'browsers': browsers,
-            'platforms': platforms,
-        })
+        result = _llmo_combine_date_range(summary, date_str, date_end)
+        return jsonify(result)
     except Exception as e:
         import traceback; traceback.print_exc()
         print(f"[LLMO IQ data] Error: {e}")

@@ -26489,10 +26489,10 @@
             const normalizeGenderKey = (gender) => {
                 const normalized = gender.toUpperCase().trim().replace(/\s+/g, ' ');
                 // Handle common variations
+                if (normalized.includes('TRANS') && normalized.includes('FEMALE')) return 'TRANS FEMALE';
+                if (normalized.includes('TRANS') && normalized.includes('MALE')) return 'TRANS MALE';
                 if (normalized === 'MALE' || normalized.startsWith('MALE')) return 'MALE';
                 if (normalized === 'FEMALE' || normalized.startsWith('FEMALE')) return 'FEMALE';
-                if (normalized.includes('TRANS') && normalized.includes('MALE')) return 'TRANS MALE';
-                if (normalized.includes('TRANS') && normalized.includes('FEMALE')) return 'TRANS FEMALE';
                 if (normalized.includes('NON') && normalized.includes('BINARY')) return 'NON-BINARY';
                 if (normalized.includes('PREFER') || normalized.includes('NOT') && normalized.includes('SAY')) return 'PREFER NOT TO SAY';
                 return normalized;
@@ -26537,8 +26537,6 @@
                 console.log(`📊 Aggregating gender: "${gender}" -> "${normalizedKey}" (${displayName}): count=${count}, total now=${genderGroups[normalizedKey].count}`);
             });
             
-            // Remove "Prefer Not to Say" before converting to array
-            delete genderGroups['PREFER NOT TO SAY'];
             // Convert to array and sort by count descending
             const validGenderData = Object.values(genderGroups)
                 .sort((a, b) => b.count - a.count);
@@ -26641,6 +26639,11 @@
             const bucketedAge = standardAgeOrder
                 .filter(b => (bucketedDisplay[b] || 0) > 0)
                 .map(b => ({ label: b, displayCount: Math.round(bucketedDisplay[b] || 0), pct: totalAgeDisplay > 0 ? (((bucketedDisplay[b] || 0) / totalAgeDisplay) * 100) : 0 }));
+            Object.keys(bucketedDisplay).forEach(b => {
+                if (!standardAgeOrder.includes(b) && (bucketedDisplay[b] || 0) > 0) {
+                    bucketedAge.push({ label: b, displayCount: Math.round(bucketedDisplay[b]), pct: totalAgeDisplay > 0 ? ((bucketedDisplay[b] / totalAgeDisplay) * 100) : 0 });
+                }
+            });
 
             // Destroy previous charts
             if (window._subDemoAgeChart) { window._subDemoAgeChart.destroy(); window._subDemoAgeChart = null; }
