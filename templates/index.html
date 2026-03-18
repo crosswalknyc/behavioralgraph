@@ -25758,11 +25758,13 @@
                 console.log(`📊 Aggregating gender: "${gender}" -> "${normalizedKey}" (${displayName}): count=${count}, total now=${genderGroups[normalizedKey].count}`);
             });
             
+            // Remove "Prefer Not to Say" before converting to array
+            delete genderGroups['PREFER NOT TO SAY'];
             // Convert to array and sort by count descending
             const validGenderData = Object.values(genderGroups)
                 .sort((a, b) => b.count - a.count);
             
-            // Calculate total for percentage recalculation
+            // Calculate total for percentage recalculation (rebased without PNTS)
             const genderTotalCount = validGenderData.reduce((sum, g) => sum + g.count, 0);
             validGenderData.forEach(g => {
                 g.percentage = genderTotalCount > 0 ? ((g.count / genderTotalCount) * 100).toFixed(2) + '%' : 'N/A';
@@ -26368,6 +26370,22 @@
                 }
 
                 // (projectedUS from BRAND INPUT row handled above)
+            });
+
+            // Remove "Prefer Not to Say" from demographics and rebase to 100%
+            const _pnts = (k) => ['prefer not to say', 'none'].includes((k || '').trim().toLowerCase());
+            Object.keys(demographics).forEach(demoCat => {
+                const obj = demographics[demoCat];
+                if (!obj) return;
+                const bad = Object.keys(obj).filter(_pnts);
+                if (!bad.length) return;
+                bad.forEach(k => { delete obj[k]; if (genPop[demoCat]) delete genPop[demoCat][k]; });
+                const vals = Object.values(obj);
+                const tot = vals.reduce((s, v) => s + v, 0);
+                if (tot > 0 && Math.abs(tot - 100) > 0.1) {
+                    const sc = 100.0 / tot;
+                    Object.keys(obj).forEach(k => { obj[k] = Math.round(obj[k] * sc * 100) / 100; });
+                }
             });
 
             return { sampleSize, projectedUS, medianAge, demographics, genPop };
@@ -27805,6 +27823,33 @@
             // Sort behavioral by percentage
             Object.keys(result.behavioral).forEach(cat => {
                 result.behavioral[cat].sort((a, b) => b.pct - a.pct);
+            });
+
+            // Remove "Prefer Not to Say" from all demographic categories
+            // and rebase remaining values to sum to 100%
+            const _pntsPatterns = ['prefer not to say', 'none'];
+            const _isPNTS = (k) => _pntsPatterns.includes((k || '').trim().toLowerCase());
+            ['age', 'gender', 'ethnicity', 'income', 'education',
+             'relationship', 'sexual_orientation', 'parental_status', 'occupation'
+            ].forEach(demoCat => {
+                const dataObj = result.demographics[demoCat];
+                if (!dataObj) return;
+                const pntsKeys = Object.keys(dataObj).filter(_isPNTS);
+                if (pntsKeys.length === 0) return;
+                pntsKeys.forEach(k => {
+                    delete dataObj[k];
+                    if (result.demographicsIndex[demoCat]) delete result.demographicsIndex[demoCat][k];
+                    if (result.demographicsGenPop[demoCat]) delete result.demographicsGenPop[demoCat][k];
+                    if (result.demographicsProjection[demoCat]) delete result.demographicsProjection[demoCat][k];
+                });
+                const remaining = Object.values(dataObj);
+                const total = remaining.reduce((s, v) => s + v, 0);
+                if (total > 0 && Math.abs(total - 100) > 0.1) {
+                    const scale = 100.0 / total;
+                    Object.keys(dataObj).forEach(k => {
+                        dataObj[k] = Math.round(dataObj[k] * scale * 100) / 100;
+                    });
+                }
             });
 
             return result;
