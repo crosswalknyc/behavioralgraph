@@ -6840,16 +6840,28 @@ def get_goodshort_ranker_data():
 
 # ============================================================================
 # LLMO IQ - Large Language Model Optimization dashboard
-# The server ONLY loads a small pre-computed summary JSON from S3.
-# Raw file processing is done externally (build_llmo_summary.py) and uploaded to S3.
+# The server ONLY loads a small pre-computed summary JSON from S3 (~2-5 MB).
+# Summary is built by Snowflake SP_BUILD_LLMO_SUMMARY (runs daily after data load).
 # ============================================================================
 LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000  # 32.99
 LLMO_S3_BUCKET = 'llmo'
-LLMO_SUMMARY_KEY = 'processed/llmo_daily_summary.json.gz'
+LLMO_SUMMARY_PREFIX = 'processed/llmo_daily_summary'
 LLMO_CACHE_TTL = 86400  # 24 hours
 import threading as _llmo_threading
 _llmo_cache = {'summary': None, 'loaded_at': 0, 'loading': False,
                'lock': _llmo_threading.Lock(), 'stage': ''}
+
+
+def _llmo_find_summary_key():
+    """Find the actual S3 key for the summary JSON (Snowflake may add suffixes)."""
+    try:
+        resp = s3_client.list_objects_v2(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_SUMMARY_PREFIX, MaxKeys=10)
+        for obj in resp.get('Contents', []):
+            if 'summary' in obj['Key'] and obj['Size'] > 100:
+                return obj['Key']
+    except Exception:
+        pass
+    return LLMO_SUMMARY_PREFIX + '.json.gz'
 
 
 def _llmo_load_summary():
@@ -6858,13 +6870,22 @@ def _llmo_load_summary():
     try:
         t0 = _time.time()
         _llmo_cache['stage'] = 'Downloading summary...'
-        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_SUMMARY_KEY)
+        key = _llmo_find_summary_key()
+        print(f"[LLMO S3] Loading summary from s3://{LLMO_S3_BUCKET}/{key}")
+        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=key)
         raw = resp['Body'].read()
         try:
             text = gzip.decompress(raw).decode('utf-8')
         except Exception:
             text = raw.decode('utf-8')
         data = json.loads(text)
+        if isinstance(data, list) and len(data) == 1:
+            data = data[0]
+        if 'dates' not in data and 'by_date' not in data:
+            for k, v in data.items():
+                if isinstance(v, dict) and 'dates' in v:
+                    data = v
+                    break
         elapsed = _time.time() - t0
         print(f"[LLMO S3] Loaded summary: {len(data.get('dates', []))} dates, "
               f"{len(raw)/1e6:.1f} MB in {elapsed:.1f}s")
