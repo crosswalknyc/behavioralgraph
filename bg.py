@@ -967,13 +967,15 @@ def anchor_to_genpop(df, sample_size):
     DEMO_HI  = max(1.10, 1.0 + 0.8 * niche_factor)
     DEMO_LO  = min(0.92, 1.0 - 0.5 * niche_factor)
 
-    # Absolute BP ceiling for behavioral categories
-    BP_CEILING = 40.0
+    # Base BP ceiling for niche items. For mass-market items (high GP BP),
+    # the ceiling is raised so they can still reach index ~100-120.
+    # Formula: max(40%, gp_bp * 1.15) — allows up to ~115% of Gen Pop BP.
+    BP_CEILING_BASE = 40.0
 
     print(f"   Profile Gen Pop penetration: {profile_bp_pct:.1f}% → "
           f"behav bounds [{BEHAV_LO:.2f}, {BEHAV_HI:.2f}], "
           f"demo bounds [{DEMO_LO:.2f}, {DEMO_HI:.2f}], "
-          f"BP ceiling: {BP_CEILING}%")
+          f"BP ceiling base: {BP_CEILING_BASE}%")
 
     changes = 0
     for idx, row in df.iterrows():
@@ -1004,6 +1006,11 @@ def anchor_to_genpop(df, sample_size):
         if profile_cs <= 0:
             continue
 
+        # Per-item adaptive ceiling: niche items cap at 40%, mass-market items
+        # (with high GP BP) can reach up to ~115% of their Gen Pop BP so they
+        # don't get artificially forced below index 100.
+        item_ceiling = max(BP_CEILING_BASE, gp_bp_val * 1.15)
+
         # Bayesian shrinkage: blend raw index toward 1.0 when sample is small
         try:
             raw_count = int(float(str(row.get('Original Raw Numbers', '0')).replace(',', '')))
@@ -1020,21 +1027,24 @@ def anchor_to_genpop(df, sample_size):
         if not is_demo and raw_ratio < base_lo:
             lo = max(0.20, raw_ratio * 0.8)
 
-        # Popularity dampening: mass-market items (high GP BP) stay closer to 1.0
+        # Popularity dampening: mass-market items (high GP BP) have a NARROW
+        # range centered on 1.0 (GP parity). Niche items keep the wide range.
+        # This is symmetric — both upper and lower bounds move toward 1.0.
         if not is_demo:
-            popularity_scale = max(0.30, 1.0 - gp_bp_val / 80.0)
+            popularity_scale = max(0.30, 1.0 - gp_bp_val / 100.0)
             hi = 1.0 + (hi - 1.0) * popularity_scale
+            lo = 1.0 - (1.0 - lo) * popularity_scale
 
-        # Enforce BP ceiling: if index * gp_bp would exceed ceiling, cap the index
+        # Enforce per-item ceiling: prevents unrealistic BP inflation
         if not is_demo and gp_bp_val > 0:
-            max_index_from_ceiling = BP_CEILING / gp_bp_val
+            max_index_from_ceiling = item_ceiling / gp_bp_val
             hi = min(hi, max_index_from_ceiling)
             hi = max(hi, 1.01)
 
         clamped_index = _soft_clamp_index(raw_index, lo, hi, cat, val)
 
         new_bp = gp_bp_val * clamped_index
-        new_bp = soft_bp_ceiling(new_bp, ceiling=BP_CEILING)
+        new_bp = soft_bp_ceiling(new_bp, ceiling=item_ceiling)
         new_bp = round(new_bp, 4)
 
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
