@@ -655,6 +655,7 @@
         }
         /* All product views: take remaining height when shown (flex: 1 1 0%, min-height: 0) */
         #subscriberIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
+        #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #rankerIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #ticketSalesIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
         #talentSearchIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
@@ -11900,6 +11901,7 @@
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
+                            <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
                             <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
@@ -14895,6 +14897,156 @@
             </div>
         </div>
 
+        <!-- LLMO IQ VIEW -->
+        <div id="llmoIQView">
+            <div class="llmo-iq-container" style="max-width: 1600px; margin: 0 auto; width: 100%;">
+                <!-- Header -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">Large Language Model Optimization</h2>
+                        <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">AI platform usage, attribution & search intelligence</p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Date:</label>
+                        <select id="llmoDateSelect" style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; cursor: pointer;">
+                            <option value="">Loading...</option>
+                        </select>
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">to</label>
+                        <select id="llmoDateEndSelect" style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; cursor: pointer;">
+                            <option value="">Loading...</option>
+                        </select>
+                        <button id="llmoRefreshBtn" onclick="loadLLMOIQData()" style="background: var(--accent-blue); color: #fff; border: none; border-radius: 6px; padding: 0.4rem 1rem; font-size: 0.8rem; cursor: pointer; font-weight: 600;">Load</button>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div id="llmoSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Users</div>
+                        <div id="llmoTotalUsers" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
+                        <div id="llmoTotalUsersProj" style="font-size: 0.8rem; color: var(--text-secondary);">US Gen Pop: --</div>
+                    </div>
+                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Clicks</div>
+                        <div id="llmoTotalClicks" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
+                        <div id="llmoTotalClicksProj" style="font-size: 0.8rem; color: var(--text-secondary);">US Gen Pop: --</div>
+                    </div>
+                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">LLMs Tracked</div>
+                        <div id="llmoLLMCount" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Unique platforms</div>
+                    </div>
+                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Top LLM</div>
+                        <div id="llmoTopLLM" style="font-size: 1.25rem; font-weight: 700; margin: 0.25rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">--</div>
+                        <div id="llmoTopLLMPct" style="font-size: 0.8rem; color: var(--text-secondary);">--</div>
+                    </div>
+                </div>
+
+                <!-- Main grid: Ranker table + Category Share chart -->
+                <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <!-- LLM Usage Ranker Table -->
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">LLM Usage Ranker</h3>
+                        <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
+                            <table id="llmoRankerTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
+                                        <th style="padding: 0.5rem; white-space: nowrap;">#</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap;">LLM</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Unique Users</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Proj. Users</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">% of Total</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Total Clicks</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Proj. Clicks</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Category Share</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="llmoRankerBody">
+                                    <tr><td colspan="8" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a date and click Load</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Category Share Doughnut -->
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; align-items: center;">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;">Category Share</h3>
+                        <canvas id="llmoCategoryShareChart" style="max-width: 320px; max-height: 320px;"></canvas>
+                    </div>
+                </div>
+
+                <!-- Usage Trend Line Chart -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (Unique Users by Date)</h3>
+                    <div style="position: relative; height: 350px;">
+                        <canvas id="llmoTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- First-Click Attribution + Top Searches -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <!-- First-Click Attribution -->
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">First-Click Attribution (Post-AI Destinations)</h3>
+                        <div style="position: relative; height: 400px;">
+                            <canvas id="llmoAttributionChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Top Searches -->
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Top AI Searches</h3>
+                        <div style="overflow-y: auto; max-height: 400px;">
+                            <table id="llmoSearchesTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
+                                        <th style="padding: 0.5rem;">#</th>
+                                        <th style="padding: 0.5rem;">Search Query</th>
+                                        <th style="padding: 0.5rem; text-align: right;">Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="llmoSearchesBody">
+                                    <tr><td colspan="3" style="padding: 2rem; text-align: center; color: var(--text-secondary);">No data loaded</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Source -> Destination Flows + Browser/Platform -->
+                <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <!-- Source LLM -> Destination Flows -->
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">AI Agent -> Destination Flows</h3>
+                        <div style="overflow-y: auto; max-height: 450px;">
+                            <table id="llmoFlowsTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
+                                        <th style="padding: 0.5rem;">Source LLM</th>
+                                        <th style="padding: 0.5rem;">Destination</th>
+                                        <th style="padding: 0.5rem; text-align: right;">Unique Users</th>
+                                        <th style="padding: 0.5rem; text-align: right;">Clicks</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="llmoFlowsBody">
+                                    <tr><td colspan="4" style="padding: 2rem; text-align: center; color: var(--text-secondary);">No data loaded</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Browser / Platform Breakdown -->
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                        <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Browser</h3>
+                        <canvas id="llmoBrowserChart" style="max-width: 300px; max-height: 180px; margin: 0 auto 1.5rem auto; display: block;"></canvas>
+                        <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Platform</h3>
+                        <canvas id="llmoPlatformChart" style="max-width: 300px; max-height: 180px; margin: 0 auto; display: block;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- RANKER IQ VIEW -->
         <div id="rankerIQView">
             <h2 style="margin: 0 0 1rem 0; font-size: 1.5rem;">📊 Ranker</h2>
@@ -16172,6 +16324,7 @@
             const navHandlers = {
                 profileIQ: showProfileIQ,
                 subscriberIQ: showSubscriberIQ,
+                llmoIQ: showLLMOIQ,
                 rankerIQ: showRankerIQ,
                 ticketSalesIQ: showTicketSalesIQ,
                 ticketSalesTracker: showTicketSalesTracker,
@@ -16206,12 +16359,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -16223,6 +16376,7 @@
             var viewNavProductTooltips = {
                 profileIQ: 'Profile IQ: Build and analyze custom audience profiles based on engagement and behavior.',
                 subscriberIQ: 'Subscriber IQ: Explore subscriber demographics, retention, and engagement metrics.',
+                llmoIQ: 'LLMO IQ: Analyze AI platform usage, attribution, and search behavior across LLMs.',
                 rankerIQ: 'Ranker: Compare and rank titles, genres, or properties by performance.',
                 ticketSalesIQ: 'Impact IQ: Measure impact and performance of titles via ticket sales and engagement.',
                 ticketSalesTracker: 'Ticket Sales Tracker: Track ticket sales and box office performance over time.',
@@ -16844,6 +16998,8 @@
             if (talentTheaterView) talentTheaterView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Update button states
             const formBtn = document.getElementById('formViewBtn');
@@ -16887,6 +17043,8 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Load profiles
             loadDashboardProfiles();
@@ -16923,6 +17081,8 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Load subscriber profiles
             loadSubscriberProfiles();
@@ -16981,6 +17141,8 @@
             }
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Load ranker data
             loadRankerIQNetflixData();
@@ -17009,6 +17171,8 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
             loadTicketSalesProfiles();
         }
         
@@ -17035,6 +17199,8 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
             if (typeof loadTSTProfiles === 'function') loadTSTProfiles();
             checkProfileReleasedNotifications();
         }
@@ -17064,6 +17230,8 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Load tickers
             loadHedgeFundTickers();
@@ -17096,6 +17264,8 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
         }
         
         window.showTalentTheaterIQ = function() {
@@ -17117,6 +17287,8 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
         }
         
         window.showCustomAnalysis = function() {
@@ -17132,6 +17304,8 @@
             if (talentSearchView) talentSearchView.style.display = 'none';
             const talentTheaterView = document.getElementById('talentTheaterIQView');
             if (talentTheaterView) talentTheaterView.style.display = 'none';
+            const llmoIQView = document.getElementById('llmoIQView');
+            if (llmoIQView) llmoIQView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) {
                 customAnalysisView.style.display = 'flex';
@@ -17147,6 +17321,337 @@
             }
         }
         
+        // ====================================================================
+        // LLMO IQ - Large Language Model Optimization Dashboard
+        // ====================================================================
+        var _llmoCategoryShareChart = null;
+        var _llmoTrendChart = null;
+        var _llmoAttributionChart = null;
+        var _llmoBrowserChart = null;
+        var _llmoPlatformChart = null;
+        var _llmoLoaded = false;
+
+        window.showLLMOIQ = function() {
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd ? dd.querySelector('option[value="llmoIQ"]') : null;
+            if (opt && opt.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('llmoIQ');
+
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            var llmoV = document.getElementById('llmoIQView');
+            if (llmoV) llmoV.style.display = 'flex';
+            var rv = document.getElementById('rankerIQView'); if (rv) rv.style.display = 'none';
+            var tv = document.getElementById('ticketSalesIQView'); if (tv) tv.style.display = 'none';
+            var ttv = document.getElementById('ticketSalesTrackerView'); if (ttv) ttv.style.display = 'none';
+            var hv = document.getElementById('hedgeFundIQView'); if (hv) hv.style.display = 'none';
+            var tsv = document.getElementById('talentSearchIQView'); if (tsv) tsv.style.display = 'none';
+            var tthv = document.getElementById('talentTheaterIQView'); if (tthv) tthv.style.display = 'none';
+            var fv = document.getElementById('formView'); if (fv) fv.style.display = 'none';
+            var cav = document.getElementById('customAnalysisView'); if (cav) cav.style.display = 'none';
+
+            if (!_llmoLoaded) {
+                _llmoLoaded = true;
+                loadLLMOIQDates();
+            }
+        };
+
+        function loadLLMOIQDates() {
+            fetch('/api/llmo-iq/dates')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success) { console.error('LLMO dates error:', data.error); return; }
+                    var sel = document.getElementById('llmoDateSelect');
+                    var selEnd = document.getElementById('llmoDateEndSelect');
+                    sel.innerHTML = '';
+                    selEnd.innerHTML = '';
+                    data.dates.forEach(function(d, i) {
+                        var o = document.createElement('option');
+                        o.value = d; o.textContent = d;
+                        sel.appendChild(o);
+                        var o2 = document.createElement('option');
+                        o2.value = d; o2.textContent = d;
+                        selEnd.appendChild(o2);
+                    });
+                    if (data.dates.length > 0) {
+                        sel.value = data.dates[0];
+                        selEnd.value = data.dates[0];
+                        loadLLMOIQData();
+                    }
+                })
+                .catch(function(e) { console.error('LLMO dates fetch error:', e); });
+        }
+
+        function loadLLMOIQData() {
+            var date = document.getElementById('llmoDateSelect').value;
+            var dateEnd = document.getElementById('llmoDateEndSelect').value;
+            if (!date) return;
+
+            var btn = document.getElementById('llmoRefreshBtn');
+            if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+
+            fetch('/api/llmo-iq/data?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd || date))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
+                    if (!data.success) { console.error('LLMO data error:', data.error); return; }
+                    renderLLMOSummaryCards(data);
+                    renderLLMOUsageTable(data.llms);
+                    renderLLMOCategoryShare(data.llms);
+                    renderLLMOTrend(data.trend_dates, data.trend_by_llm);
+                    renderLLMOAttribution(data.attribution);
+                    renderLLMOSearches(data.searches);
+                    renderLLMOFlows(data.flows);
+                    renderLLMOBrowserPlatform(data.browsers, data.platforms);
+                })
+                .catch(function(e) {
+                    if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
+                    console.error('LLMO data fetch error:', e);
+                });
+        }
+
+        function _llmoFmt(n) {
+            if (n == null) return '--';
+            return n.toLocaleString();
+        }
+
+        function renderLLMOSummaryCards(data) {
+            document.getElementById('llmoTotalUsers').textContent = _llmoFmt(data.total_unique_users);
+            document.getElementById('llmoTotalUsersProj').textContent = 'US Gen Pop: ' + _llmoFmt(data.total_unique_users_projected);
+            document.getElementById('llmoTotalClicks').textContent = _llmoFmt(data.total_clicks);
+            document.getElementById('llmoTotalClicksProj').textContent = 'US Gen Pop: ' + _llmoFmt(data.total_clicks_projected);
+            document.getElementById('llmoLLMCount').textContent = data.llm_count || '--';
+            if (data.llms && data.llms.length > 0) {
+                document.getElementById('llmoTopLLM').textContent = data.llms[0].name;
+                document.getElementById('llmoTopLLMPct').textContent = data.llms[0].pct_of_total + '% of users';
+            } else {
+                document.getElementById('llmoTopLLM').textContent = '--';
+                document.getElementById('llmoTopLLMPct').textContent = '--';
+            }
+        }
+
+        function renderLLMOUsageTable(llms) {
+            var tbody = document.getElementById('llmoRankerBody');
+            if (!llms || llms.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="padding:2rem;text-align:center;color:var(--text-secondary);">No data available</td></tr>';
+                return;
+            }
+            var html = '';
+            llms.forEach(function(r) {
+                html += '<tr style="border-bottom:1px solid var(--border-color);">'
+                    + '<td style="padding:0.5rem;">' + r.rank + '</td>'
+                    + '<td style="padding:0.5rem;font-weight:600;">' + r.name + '</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.unique_users) + '</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.unique_users_projected) + '</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">' + r.pct_of_total + '%</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.total_clicks) + '</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.total_clicks_projected) + '</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">' + r.category_share + '%</td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        function renderLLMOCategoryShare(llms) {
+            var ctx = document.getElementById('llmoCategoryShareChart');
+            if (!ctx) return;
+            if (_llmoCategoryShareChart) { _llmoCategoryShareChart.destroy(); _llmoCategoryShareChart = null; }
+            if (!llms || llms.length === 0) return;
+
+            var top = llms.slice(0, 10);
+            var otherShare = 0;
+            if (llms.length > 10) {
+                for (var i = 10; i < llms.length; i++) otherShare += llms[i].category_share;
+            }
+            var labels = top.map(function(r) { return r.name; });
+            var values = top.map(function(r) { return r.category_share; });
+            if (otherShare > 0) { labels.push('Other'); values.push(Math.round(otherShare * 100) / 100); }
+
+            var palette = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01','#46BDC6','#7B61FF','#F538A0','#00BFA5','#FF8A65','#90A4AE'];
+            _llmoCategoryShareChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: palette.slice(0, labels.length),
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 11 }, padding: 8, boxWidth: 12 } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderLLMOTrend(dates, byLLM) {
+            var ctx = document.getElementById('llmoTrendChart');
+            if (!ctx) return;
+            if (_llmoTrendChart) { _llmoTrendChart.destroy(); _llmoTrendChart = null; }
+            if (!dates || dates.length === 0) return;
+
+            var palette = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01','#46BDC6','#7B61FF','#F538A0','#00BFA5','#FF8A65'];
+            var llmNames = Object.keys(byLLM);
+            var totals = {};
+            llmNames.forEach(function(n) {
+                var total = 0;
+                Object.values(byLLM[n]).forEach(function(v) { total += v.unique_users; });
+                totals[n] = total;
+            });
+            llmNames.sort(function(a, b) { return totals[b] - totals[a]; });
+            var topNames = llmNames.slice(0, 10);
+
+            var datasets = topNames.map(function(name, i) {
+                return {
+                    label: name,
+                    data: dates.map(function(d) { return byLLM[name][d] ? byLLM[name][d].unique_users : 0; }),
+                    borderColor: palette[i % palette.length],
+                    backgroundColor: palette[i % palette.length] + '22',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: dates.length > 14 ? 0 : 3,
+                    borderWidth: 2
+                };
+            });
+
+            _llmoTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: dates, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top', labels: { color: 'var(--text-primary)', font: { size: 11 }, boxWidth: 12, padding: 8 } }
+                    },
+                    scales: {
+                        x: { ticks: { color: 'var(--text-secondary)', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                        y: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderLLMOAttribution(attribution) {
+            var ctx = document.getElementById('llmoAttributionChart');
+            if (!ctx) return;
+            if (_llmoAttributionChart) { _llmoAttributionChart.destroy(); _llmoAttributionChart = null; }
+            if (!attribution || attribution.length === 0) return;
+
+            var top = attribution.slice(0, 20);
+            var labels = top.map(function(r) { return r.name; });
+            var values = top.map(function(r) { return r.unique_users; });
+
+            _llmoAttributionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Unique Users',
+                        data: values,
+                        backgroundColor: '#4285F4',
+                        borderRadius: 4,
+                        barPercentage: 0.7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) { return _llmoFmt(ctx.parsed.x) + ' users'; }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
+                        y: { ticks: { color: 'var(--text-primary)', font: { size: 11 } }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderLLMOSearches(searches) {
+            var tbody = document.getElementById('llmoSearchesBody');
+            if (!searches || searches.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="padding:2rem;text-align:center;color:var(--text-secondary);">No search data extracted</td></tr>';
+                return;
+            }
+            var html = '';
+            searches.slice(0, 40).forEach(function(s, i) {
+                html += '<tr style="border-bottom:1px solid var(--border-color);">'
+                    + '<td style="padding:0.4rem 0.5rem;">' + (i + 1) + '</td>'
+                    + '<td style="padding:0.4rem 0.5rem; word-break: break-word;">' + (s.term || '').replace(/</g, '&lt;') + '</td>'
+                    + '<td style="padding:0.4rem 0.5rem; text-align:right;">' + _llmoFmt(s.count) + '</td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        function renderLLMOFlows(flows) {
+            var tbody = document.getElementById('llmoFlowsBody');
+            if (!flows || flows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="padding:2rem;text-align:center;color:var(--text-secondary);">No flow data available</td></tr>';
+                return;
+            }
+            var html = '';
+            flows.slice(0, 50).forEach(function(f) {
+                html += '<tr style="border-bottom:1px solid var(--border-color);">'
+                    + '<td style="padding:0.4rem 0.5rem;font-weight:600;">' + (f.source || '') + '</td>'
+                    + '<td style="padding:0.4rem 0.5rem;">' + (f.destination || '') + '</td>'
+                    + '<td style="padding:0.4rem 0.5rem;text-align:right;">' + _llmoFmt(f.unique_users) + '</td>'
+                    + '<td style="padding:0.4rem 0.5rem;text-align:right;">' + _llmoFmt(f.clicks) + '</td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        function renderLLMOBrowserPlatform(browsers, platforms) {
+            var palette = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01','#46BDC6','#7B61FF','#F538A0','#00BFA5','#FF8A65'];
+
+            var bCtx = document.getElementById('llmoBrowserChart');
+            if (bCtx) {
+                if (_llmoBrowserChart) { _llmoBrowserChart.destroy(); _llmoBrowserChart = null; }
+                if (browsers && browsers.length > 0) {
+                    _llmoBrowserChart = new Chart(bCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: browsers.slice(0, 8).map(function(b) { return b.name; }),
+                            datasets: [{ data: browsers.slice(0, 8).map(function(b) { return b.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } } } }
+                    });
+                }
+            }
+
+            var pCtx = document.getElementById('llmoPlatformChart');
+            if (pCtx) {
+                if (_llmoPlatformChart) { _llmoPlatformChart.destroy(); _llmoPlatformChart = null; }
+                if (platforms && platforms.length > 0) {
+                    _llmoPlatformChart = new Chart(pCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: platforms.slice(0, 8).map(function(p) { return p.name; }),
+                            datasets: [{ data: platforms.slice(0, 8).map(function(p) { return p.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } } } }
+                    });
+                }
+            }
+        }
+
         function switchCustomAnalysisTab(tabName) {
             // Update tab buttons - use optional chaining for tabs that may not exist
             const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater', 

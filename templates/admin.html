@@ -2083,6 +2083,9 @@
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdTicketTracker"> Ticket Sales Tracker
                                     </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdLLMOIQ"> LLMO IQ
+                                    </label>
                                 </div>
                             </div>
                             <!-- Default Credits -->
@@ -2450,6 +2453,16 @@
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasSubscriberIQAccess">
                                 <span style="font-weight: 600;">📊 SUBSCRIBER IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- LLMO IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasLLMOIQAccess">
+                                <span style="font-weight: 600;">🤖 LLMO IQ</span>
                             </label>
                         </div>
                     </div>
@@ -3642,6 +3655,7 @@
                     document.getElementById('cdHedgeFundIQ').checked = !!d.has_hedge_fund_iq_access;
                     document.getElementById('cdAnalysisIQ').checked = !!d.has_analysis_iq_access;
                     document.getElementById('cdRankersIQ').checked = !!d.has_rankers_iq_access;
+                    document.getElementById('cdLLMOIQ').checked = !!d.has_llmo_iq_access;
                     document.getElementById('cdTicketTracker').checked = !!d.has_ticket_sales_tracker_access;
                     document.getElementById('cdDefaultCredits').value = d.credits ?? 5;
                     const allowedCats = d.allowed_categories || ['*'];
@@ -3680,6 +3694,7 @@
                 has_hedge_fund_iq_access: document.getElementById('cdHedgeFundIQ').checked,
                 has_analysis_iq_access: document.getElementById('cdAnalysisIQ').checked,
                 has_rankers_iq_access: document.getElementById('cdRankersIQ').checked,
+                has_llmo_iq_access: document.getElementById('cdLLMOIQ').checked,
                 has_ticket_sales_tracker_access: document.getElementById('cdTicketTracker').checked,
                 credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
             };
@@ -6321,6 +6336,7 @@
             document.getElementById('hasTicketSalesIQAccess').checked = true;
             document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('hasAnalysisIQAccess').checked = false;
+            document.getElementById('hasLLMOIQAccess').checked = false;
             document.getElementById('hasTicketSalesTrackerView').checked = false;
             document.getElementById('hasTicketSalesTrackerRun').checked = false;
             
@@ -6427,6 +6443,7 @@
             document.getElementById('hasTicketSalesIQAccess').checked = user.has_ticket_sales_iq_access !== false; // Default true
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
+            document.getElementById('hasLLMOIQAccess').checked = user.has_llmo_iq_access === true; // Default false
             document.getElementById('hasTicketSalesTrackerView').checked = user.has_ticket_sales_tracker_access === true;
             syncTSTRunWithModule();
             
@@ -8240,6 +8257,7 @@
                 hedge_fund_iq_tickers: document.getElementById('allHedgeFundTickers').checked ? ['*'] : getHedgeFundIQTickers(),
                 has_analysis_iq_access: !!document.getElementById('hasAnalysisIQAccess').checked,
                 analysis_iq_modules: getAnalysisIQModules() || [],
+                has_llmo_iq_access: document.getElementById('hasLLMOIQAccess').checked,
                 has_ticket_sales_tracker_access: document.getElementById('hasTicketSalesTrackerView').checked,
                 has_rankers_iq_access: document.getElementById('hasRankersIQAccess').checked,
                 rankers_iq_options: getRankersIQOptions(),

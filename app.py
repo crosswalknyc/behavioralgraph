@@ -2533,6 +2533,7 @@ def create_user():
             'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
             'has_ticket_sales_tracker_access': req_data.get('has_ticket_sales_tracker_access', cd.get('has_ticket_sales_tracker_access', False) if cd else False),
             'has_rankers_iq_access': req_data.get('has_rankers_iq_access', cd.get('has_rankers_iq_access', False) if cd else False),
+            'has_llmo_iq_access': req_data.get('has_llmo_iq_access', cd.get('has_llmo_iq_access', False) if cd else False),
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False
@@ -2642,6 +2643,8 @@ def update_user(username):
             user['has_ticket_sales_tracker_access'] = bool(req_data['has_ticket_sales_tracker_access'])
         if 'has_rankers_iq_access' in req_data:
             user['has_rankers_iq_access'] = req_data['has_rankers_iq_access']
+        if 'has_llmo_iq_access' in req_data:
+            user['has_llmo_iq_access'] = req_data['has_llmo_iq_access']
         if 'rankers_iq_options' in req_data:
             user['rankers_iq_options'] = req_data['rankers_iq_options']
         if 'collab_team' in req_data:
@@ -2772,6 +2775,7 @@ def restore_defaults_all_users():
             user['has_analysis_iq_access'] = False
             user['analysis_iq_modules'] = user.get('analysis_iq_modules', [])
             user['has_rankers_iq_access'] = False
+            user['has_llmo_iq_access'] = False
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
             count += 1
         save_users(data)
@@ -3153,6 +3157,7 @@ def api_set_company_defaults(company_name):
             'has_hedge_fund_iq_access': req.get('has_hedge_fund_iq_access', False),
             'has_analysis_iq_access': req.get('has_analysis_iq_access', False),
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
+            'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
             'credits': req.get('credits', 5),
         }
@@ -3202,6 +3207,7 @@ def api_reset_company_users(company_name):
                 user['has_hedge_fund_iq_access'] = cd.get('has_hedge_fund_iq_access', False)
                 user['has_analysis_iq_access'] = cd.get('has_analysis_iq_access', False)
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
+                user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
                 user['credits'] = cd.get('credits', 5)
             else:
@@ -3214,6 +3220,7 @@ def api_reset_company_users(company_name):
                 user['has_hedge_fund_iq_access'] = False
                 user['has_analysis_iq_access'] = False
                 user['has_rankers_iq_access'] = False
+                user['has_llmo_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
                 user['credits'] = 5
             count += 1
@@ -5044,6 +5051,7 @@ def index():
         rankers_iq_options = ['*']
         has_ticket_sales_iq = True
         has_ticket_sales_tracker = True
+        has_llmo_iq = True
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
@@ -5058,6 +5066,7 @@ def index():
         rankers_iq_options = user.get('rankers_iq_options', []) if user else []
         has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
         has_ticket_sales_tracker = user.get('has_ticket_sales_tracker_access', False) if user else False
+        has_llmo_iq = user.get('has_llmo_iq_access', False) if user else False
     
     # When cloaked, grant Analysis IQ access so the admin can use it while acting as a user who may not have it
     if session.get('cloaked_from'):
@@ -5107,6 +5116,7 @@ def index():
                            rankers_iq_options=rankers_iq_options,
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
+                           has_llmo_iq_access=has_llmo_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -6823,6 +6833,248 @@ def get_goodshort_ranker_data():
     except Exception as e:
         print(f"[GoodShort Ranker] Error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# LLMO IQ - Large Language Model Optimization dashboard
+# ============================================================================
+LLMO_IQ_WAREHOUSE = 'BEHAVIORGRAPH6X'
+LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000  # 32.99
+
+
+@app.route('/api/llmo-iq/dates', methods=['GET'])
+@requires_auth
+def llmo_iq_dates():
+    """Return available DELIVERED dates from the LLMO table."""
+    try:
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        cur = conn.cursor()
+        cur.execute(f"USE WAREHOUSE {LLMO_IQ_WAREHOUSE}")
+        cur.execute("""
+            SELECT DISTINCT DELIVERED::DATE AS d
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            ORDER BY d DESC
+        """)
+        rows = cur.fetchall()
+        conn.close()
+        dates = [str(r[0]) for r in rows]
+        return jsonify({'success': True, 'dates': dates})
+    except Exception as e:
+        print(f"[LLMO IQ dates] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/llmo-iq/data', methods=['GET'])
+@requires_auth
+def llmo_iq_data():
+    """Return all LLMO IQ dashboard data for a date or date range."""
+    date_str = request.args.get('date')
+    date_end = request.args.get('date_end')
+    if not date_str:
+        date_str = datetime.now().strftime('%Y-%m-%d')
+    if not date_end:
+        date_end = date_str
+
+    try:
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        cur = conn.cursor()
+        cur.execute(f"USE WAREHOUSE {LLMO_IQ_WAREHOUSE}")
+
+        date_where = "DELIVERED::DATE BETWEEN %s AND %s"
+        params = (date_str, date_end)
+
+        # 1) Unique users per LLM (AI_AGENT only)
+        cur.execute(f"""
+            SELECT COMMON_NAME,
+                   COUNT(DISTINCT UID) AS unique_users,
+                   COUNT(*)            AS total_clicks
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            WHERE MATCH_TYPE = 'AI_AGENT' AND {date_where}
+            GROUP BY COMMON_NAME
+            ORDER BY unique_users DESC
+        """, params)
+        llm_rows = cur.fetchall()
+
+        # 2) Total unique AI users across all LLMs (for %)
+        cur.execute(f"""
+            SELECT COUNT(DISTINCT UID) AS total_unique
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            WHERE MATCH_TYPE = 'AI_AGENT' AND {date_where}
+        """, params)
+        total_unique = cur.fetchone()[0] or 0
+
+        # 3) First-click attribution destinations (POST_AI_NON_AGENT)
+        cur.execute(f"""
+            SELECT COMMON_NAME,
+                   COUNT(DISTINCT UID) AS unique_users,
+                   COUNT(*)            AS total_clicks
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            WHERE MATCH_TYPE = 'POST_AI_NON_AGENT' AND {date_where}
+              AND COMMON_NAME IS NOT NULL AND COMMON_NAME != ''
+            GROUP BY COMMON_NAME
+            ORDER BY unique_users DESC
+            LIMIT 50
+        """, params)
+        attrib_rows = cur.fetchall()
+
+        # 4) Source LLM -> Destination mapping (top flows)
+        cur.execute(f"""
+            WITH ordered AS (
+                SELECT UID, COMMON_NAME, MATCH_TYPE, VISIT_TS,
+                       LAG(COMMON_NAME) OVER (PARTITION BY UID ORDER BY VISIT_TS) AS prev_name,
+                       LAG(MATCH_TYPE)  OVER (PARTITION BY UID ORDER BY VISIT_TS) AS prev_type
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+                WHERE {date_where}
+            )
+            SELECT prev_name AS source_llm,
+                   COMMON_NAME AS destination,
+                   COUNT(DISTINCT UID) AS unique_users,
+                   COUNT(*) AS clicks
+            FROM ordered
+            WHERE MATCH_TYPE = 'POST_AI_NON_AGENT'
+              AND prev_type = 'AI_AGENT'
+              AND prev_name IS NOT NULL
+              AND COMMON_NAME IS NOT NULL AND COMMON_NAME != ''
+            GROUP BY prev_name, COMMON_NAME
+            ORDER BY unique_users DESC
+            LIMIT 100
+        """, params)
+        flow_rows = cur.fetchall()
+
+        # 5) Top search queries extracted from AI_AGENT URLs
+        cur.execute(f"""
+            SELECT REGEXP_SUBSTR(URL, '[?&](?:q|query|p|search|prompt|text)=([^&]+)', 1, 1, 'e') AS search_term,
+                   COUNT(*) AS cnt
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            WHERE MATCH_TYPE = 'AI_AGENT' AND {date_where}
+              AND search_term IS NOT NULL AND search_term != ''
+            GROUP BY search_term
+            ORDER BY cnt DESC
+            LIMIT 50
+        """, params)
+        search_rows = cur.fetchall()
+
+        # 6) Daily trend data (unique users + clicks per LLM per day)
+        cur.execute(f"""
+            SELECT DELIVERED::DATE AS d,
+                   COMMON_NAME,
+                   COUNT(DISTINCT UID) AS unique_users,
+                   COUNT(*)            AS total_clicks
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            WHERE MATCH_TYPE = 'AI_AGENT' AND {date_where}
+            GROUP BY d, COMMON_NAME
+            ORDER BY d, unique_users DESC
+        """, params)
+        trend_rows = cur.fetchall()
+
+        # 7) Browser / Platform breakdown
+        cur.execute(f"""
+            SELECT BROWSER, COUNT(DISTINCT UID) AS unique_users
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            WHERE MATCH_TYPE = 'AI_AGENT' AND {date_where}
+              AND BROWSER IS NOT NULL AND BROWSER != ''
+            GROUP BY BROWSER
+            ORDER BY unique_users DESC
+        """, params)
+        browser_rows = cur.fetchall()
+
+        cur.execute(f"""
+            SELECT PLATFORM, COUNT(DISTINCT UID) AS unique_users
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            WHERE MATCH_TYPE = 'AI_AGENT' AND {date_where}
+              AND PLATFORM IS NOT NULL AND PLATFORM != ''
+            GROUP BY PLATFORM
+            ORDER BY unique_users DESC
+        """, params)
+        platform_rows = cur.fetchall()
+
+        conn.close()
+
+        # Build payload
+        M = LLMO_PROJECTION_MULT
+        total_clicks_all = sum(r[2] for r in llm_rows)
+
+        llm_data = []
+        for i, r in enumerate(llm_rows):
+            name, uu, clicks = r
+            llm_data.append({
+                'rank': i + 1,
+                'name': name or 'Unknown',
+                'unique_users': uu,
+                'unique_users_projected': round(uu * M),
+                'pct_of_total': round(uu / total_unique * 100, 2) if total_unique else 0,
+                'total_clicks': clicks,
+                'total_clicks_projected': round(clicks * M),
+                'category_share': round(clicks / total_clicks_all * 100, 2) if total_clicks_all else 0,
+            })
+
+        attribution = []
+        for r in attrib_rows:
+            name, uu, clicks = r
+            attribution.append({
+                'name': name or 'Unknown',
+                'unique_users': uu,
+                'unique_users_projected': round(uu * M),
+                'total_clicks': clicks,
+                'total_clicks_projected': round(clicks * M),
+            })
+
+        flows = []
+        for r in flow_rows:
+            src, dst, uu, clicks = r
+            flows.append({
+                'source': src,
+                'destination': dst,
+                'unique_users': uu,
+                'clicks': clicks,
+            })
+
+        searches = []
+        for r in search_rows:
+            term, cnt = r
+            try:
+                from urllib.parse import unquote_plus
+                term = unquote_plus(str(term))
+            except Exception:
+                pass
+            searches.append({'term': term, 'count': cnt})
+
+        trend_dates = sorted(set(str(r[0]) for r in trend_rows))
+        trend_by_llm = {}
+        for r in trend_rows:
+            d, name, uu, clicks = r
+            name = name or 'Unknown'
+            if name not in trend_by_llm:
+                trend_by_llm[name] = {}
+            trend_by_llm[name][str(d)] = {'unique_users': uu, 'total_clicks': clicks}
+
+        browsers = [{'name': r[0], 'unique_users': r[1]} for r in browser_rows]
+        platforms = [{'name': r[0], 'unique_users': r[1]} for r in platform_rows]
+
+        return jsonify({
+            'success': True,
+            'date': date_str,
+            'date_end': date_end,
+            'total_unique_users': total_unique,
+            'total_unique_users_projected': round(total_unique * M),
+            'total_clicks': total_clicks_all,
+            'total_clicks_projected': round(total_clicks_all * M),
+            'llm_count': len(llm_data),
+            'llms': llm_data,
+            'attribution': attribution,
+            'flows': flows,
+            'searches': searches,
+            'trend_dates': trend_dates,
+            'trend_by_llm': trend_by_llm,
+            'browsers': browsers,
+            'platforms': platforms,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[LLMO IQ data] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ============================================================================
