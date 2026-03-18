@@ -1933,7 +1933,7 @@ def ai_validate_demographics(show_name, platform_name, df_demo, new_signups):
         f'- If the show skews female, female % should be higher than male\n'
         f'- If the show skews young, younger age brackets should dominate\n'
         f'- Keep Non-Binary/Trans/Other at realistic small percentages (1-3% total)\n'
-        f'- Keep "Prefer Not to Say" under 1%\n\n'
+        f'- Keep "Prefer Not to Say" under 5% (target 3-5%)\n\n'
         f'Return ONLY a JSON object with this exact structure (no comments, no commas in numbers):\n'
         f'{{\n'
         f'  "age": {{"17 and Under": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, '
@@ -2017,8 +2017,8 @@ def ai_validate_demographics(show_name, platform_name, df_demo, new_signups):
     if reasoning:
         changes.append(f"Reasoning: {reasoning}")
 
-    # Hard cap: "Prefer Not to Say" must not exceed 1% in any category
-    PNS_CAP = 1.0
+    # Hard cap: "Prefer Not to Say" must not exceed 5% in any category
+    PNS_CAP = 5.0
     for cat in ['AGE', 'GENDER']:
         cat_rows = df_demo[df_demo['CATEGORY'].str.strip() == cat]
         if cat_rows.empty:

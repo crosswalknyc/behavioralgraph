@@ -2348,7 +2348,7 @@ def ai_actor_demographic_review(df, brand_category, project_name, brands):
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
@@ -2544,7 +2544,7 @@ def ai_creator_demographic_review(df, brand_category, project_name, brands):
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
@@ -2740,7 +2740,7 @@ def ai_athlete_demographic_review(df, brand_category, project_name, brands):
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
@@ -2936,7 +2936,7 @@ def ai_host_demographic_review(df, brand_category, project_name, brands):
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
@@ -3132,7 +3132,7 @@ def ai_musician_demographic_review(df, brand_category, project_name, brands):
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
@@ -3328,7 +3328,7 @@ def ai_politics_demographic_review(df, brand_category, project_name, brands):
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
@@ -3523,7 +3523,7 @@ def ai_creative_demographic_review(df, brand_category, project_name, brands):
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SUBJECT: "{subject_clean}"
@@ -3719,7 +3719,7 @@ def ai_series_demographic_review(df, brand_category, project_name, brands):
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 SHOW: "{subject_clean}"
@@ -3915,7 +3915,7 @@ def ai_podcast_demographic_review(df, brand_category, project_name, brands):
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 PODCAST: "{subject_clean}"
@@ -4112,7 +4112,7 @@ def ai_app_platform_demographic_review(df, brand_category, project_name, brands)
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 APP/PLATFORM: "{subject_clean}"
@@ -4309,7 +4309,7 @@ def ai_broadcast_cable_demographic_review(df, brand_category, project_name, bran
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 NETWORK: "{subject_clean}"
@@ -4875,7 +4875,7 @@ def ai_media_demographic_review(df, brand_category, project_name, brands):
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 - KEY CONTEXT: This is a US digital media panel measuring who DIGITALLY ENGAGES with publications (reads articles, uses apps, clicks links). This skews younger and more educated than print audiences.
 
@@ -5099,7 +5099,7 @@ def ai_movie_theater_demographic_review(df, brand_category, project_name, brands
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 - KEY CONTEXT: This is a US digital panel measuring who DIGITALLY ENGAGES with movie theater brands (buys tickets online, uses apps, visits websites). This skews slightly younger and more digitally savvy than walk-up audiences.
 
@@ -5317,7 +5317,7 @@ def ai_search_engine_ai_demographic_review(df, brand_category, project_name, bra
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 - KEY CONTEXT: This is a US digital panel measuring who DIGITALLY ENGAGES with search engines and AI tools. These are among the most universal digital products — Google alone has 90%+ US market share.
 
@@ -5605,8 +5605,8 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
 
                 print(f"   🔧 Ethnicity fix: {subject_clean} OTHER was {other_pct:.0f}%, WHITE was {white_pct:.0f}%")
 
-    # ── Cap "Prefer Not to Say" at 1% across all demographic categories ──
-    PNS_CAP = 1.0
+    # ── Cap "Prefer Not to Say" at 5% across all demographic categories ──
+    PNS_CAP = 5.0
     for cat in ['AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']:
         cat_mask = df['Column'].str.upper().str.strip() == cat
@@ -5999,7 +5999,7 @@ def ai_universal_demographic_review(df, brand_category, project_name, brands):
 - ETHNICITY: Start from US census (White ~58%, Hispanic/Latinx ~19%, Black ~13%, Asian ~6%, Other ~4%) and adjust based on who this brand specifically serves. "Other" should almost never exceed 10%.
 - AGE: Identify the MEDIAN AGE of this brand's audience from research. Then construct your age distribution so the 50th percentile actually lands at that median. Calculate cumulative percentages to verify.
 - GENDER: Use research data. Most US consumer brands are 45-55% in either direction unless there's a strong gender skew (beauty = female, sports = male, etc.).
-- "Prefer Not to Say" MUST NEVER exceed 1% in ANY demographic category. Keep it at 0.5-1% maximum. Redistribute the rest to actual demographic values.
+- "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
 BRAND: "{subject_clean}"
