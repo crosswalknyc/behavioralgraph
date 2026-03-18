@@ -351,19 +351,13 @@ from genpop_calibration import calibrate_to_genpop
 import json as _json_mod
 
 
-def _soft_clamp_index(raw_index, lo, hi, cat, val):
+def _soft_clamp_index(raw_index, lo, hi):
     """Soft-compress a raw index into [lo, hi], centered on 1.0 (GP parity).
 
-    Three-step process:
-    1. Asymmetric tanh compression toward [lo, hi] centered on 1.0
-    2. Regression toward parity — pulls the compressed value 35% back
-       toward 1.0, so borderline items cluster near Gen Pop levels
-    3. Deterministic per-item noise (±15%) that crosses the 1.0 boundary
-       for borderline items, creating an organic mix of over/under indexing
-
-    This ensures items with STRONG affinity signals stay clearly over-indexed,
-    generic/borderline items scatter around 1.0, and items with no special
-    affinity naturally fall below 1.0.
+    Pure tanh compression — no parity pull, no noise injection.  The organic
+    signal goes in and a compressed-but-directionally-preserved signal comes
+    out.  Items above 1.0 stay above; items below stay below.  Extreme
+    values are smoothly squeezed toward the bounds without hard clipping.
     """
     center = 1.0
     half_hi = hi - center
@@ -376,26 +370,10 @@ def _soft_clamp_index(raw_index, lo, hi, cat, val):
 
     if deviation >= 0:
         scale = max(half_hi * 2.0, 0.01)
-        compressed = center + half_hi * math.tanh(deviation / scale)
+        return center + half_hi * math.tanh(deviation / scale)
     else:
         scale = max(half_lo * 2.0, 0.01)
-        compressed = center - half_lo * math.tanh(abs(deviation) / scale)
-
-    # Strong regression toward parity: pull 85% back toward 1.0.
-    # Anchoring should be CONSERVATIVE — most items land near Gen Pop
-    # parity. The AI gut check then provides intelligent differentiation
-    # based on persona research and brand relevance.
-    parity_pull = 0.85
-    regressed = compressed + (center - compressed) * parity_pull
-
-    # Small deterministic noise (±5%) for organic variation.
-    # Kept small so it doesn't override the AI's persona-based adjustments.
-    item_hash = int(hashlib.md5(f"{cat}:{val}".encode()).hexdigest()[:8], 16)
-    noise_amplitude = 0.05
-    noise = ((item_hash / 0xFFFFFFFF) - 0.5) * 2.0 * noise_amplitude
-    result = regressed + noise
-
-    return max(lo, min(hi, result))
+        return center - half_lo * math.tanh(abs(deviation) / scale)
 
 
 def soft_bp_ceiling(raw_bp, ceiling=40.0):
@@ -998,12 +976,12 @@ def anchor_to_genpop(df, sample_size):
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2  # 0 for Gen Pop, ~1 for niche
 
-    # --- Tight, realistic bounds ---
-    # Anchoring keeps everything within a narrow band around GP parity (1.0).
-    # The AI gut check selectively boosts items with genuine affinity.
-    # Max behavioral index: 1.25 (mainstream) to 1.50 (very niche).
-    BEHAV_HI = min(1.50, 1.0 + 0.25 + 0.50 * niche_factor)
-    BEHAV_LO = max(0.50, 1.0 - 0.25 - 0.30 * niche_factor)
+    # --- Organic-signal bounds ---
+    # Wide enough that the raw profile data's natural over/under-indexing
+    # survives compression.  The AI gut check then molds the result
+    # into a persona-consistent profile, correcting only what's wrong.
+    BEHAV_HI = min(2.20, 1.0 + 0.50 + 1.20 * niche_factor)
+    BEHAV_LO = max(0.40, 1.0 - 0.30 - 0.30 * niche_factor)
     DEMO_HI  = max(1.10, 1.0 + 0.8 * niche_factor)
     DEMO_LO  = min(0.92, 1.0 - 0.5 * niche_factor)
 
@@ -1082,7 +1060,7 @@ def anchor_to_genpop(df, sample_size):
             hi = min(hi, max_index_from_ceiling)
             hi = max(hi, 1.01)
 
-        clamped_index = _soft_clamp_index(raw_index, lo, hi, cat, val)
+        clamped_index = _soft_clamp_index(raw_index, lo, hi)
 
         new_bp = gp_bp_val * clamped_index
         new_bp = soft_bp_ceiling(new_bp, ceiling=item_ceiling)
@@ -6372,7 +6350,13 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             except Exception as e:
                 print(f"   ⚠️ Location gut-check error: {e}")
 
-    # ──────── PHASE 2: BEHAVIORAL CATEGORIES REVIEW ────────
+    # ──────── PHASE 2: BEHAVIORAL — ORGANIC-LED, AI-MOLDED ────────
+    # The raw data has already been anchored to Gen Pop (preserving organic
+    # signal).  The AI's job is quality control: mold the anchored data into
+    # a persona-consistent profile using external research + vetted
+    # demographics.  Two passes: (A) fix outlier swings, (B) persona spot
+    # check on top items per category.
+
     categories_data = {}
     for idx, row in df.iterrows():
         cat = str(row.get('Column', '')).strip().upper()
@@ -6394,87 +6378,238 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         print(f"🔍 Final gut check for {subject_clean}: {total_adjustments} total adjustments")
         return df
 
-    batches = []
+    # Helper: apply a list of AI adjustments to the dataframe
+    def _apply_adjustments(adjustments, item_lookup, label):
+        nonlocal total_adjustments
+        applied = 0
+        cats_touched = set()
+        for adj in adjustments:
+            try:
+                a_cat = str(adj.get('category', '')).strip().upper()
+                a_item = str(adj.get('item', '')).strip().upper()
+                factor = float(adj.get('factor', 1.0))
+                reason = adj.get('reason', '')
+            except (AttributeError, TypeError, ValueError):
+                continue
+
+            matched = item_lookup.get((a_cat, a_item))
+            if not matched:
+                for key, val_items in item_lookup.items():
+                    if key[0] == a_cat and (a_item in key[1] or key[1] in a_item):
+                        matched = val_items
+                        break
+            if not matched:
+                continue
+
+            name, cur_bp, cur_cs, row_idx = matched
+            factor = max(0.15, min(2.5, factor))
+            new_bp = round(cur_bp * factor, 4)
+            item_gp_bp = gp_bp_lookup.get((a_cat, a_item), 0)
+            bp_cap = max(40.0, item_gp_bp * 1.15) if item_gp_bp > 0 else 40.0
+            new_bp = max(0.01, min(new_bp, bp_cap))
+
+            new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
+            new_proj = int(round(new_raw * MULT))
+
+            df.at[row_idx, bp_col] = new_bp
+            df.at[row_idx, raw_col] = str(new_raw)
+            if proj_col in df.columns:
+                df.at[row_idx, proj_col] = str(new_proj)
+
+            arrow = '↓' if factor < 1 else '↑'
+            print(f"   🔍 {label} {a_cat} {arrow} {name}: {cur_bp:.1f}%→{new_bp:.1f}% — {reason}")
+            applied += 1
+            total_adjustments += 1
+            cats_touched.add(a_cat)
+        return applied, cats_touched
+
+    # Helper: parse JSON from an AI response
+    def _parse_ai_json(text):
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+        return _json.loads(text)
+
+    # Build flat lookup: (CAT, ITEM_UPPER) -> (name, bp, cs, row_idx)
+    all_item_lookup = {}
+    for cat, items in categories_data.items():
+        for name, bp, cs, idx in items:
+            all_item_lookup[(cat, name.strip().upper())] = (name, bp, cs, idx)
+
+    # ──── PASS A: OUTLIER SWING REVIEW ────
+    # Collect items with extreme indices vs Gen Pop (>160 or <50).
+    # Send to AI in small batches — "which of these are unrealistic?"
+    outliers = []
+    for cat, items in categories_data.items():
+        for name, bp, cs, idx in items:
+            gp_bp = gp_bp_lookup.get((cat, name.upper()), 0)
+            if gp_bp <= 0:
+                continue
+            index_val = bp / gp_bp
+            if index_val > 1.60 or index_val < 0.50:
+                outliers.append((cat, name, bp, gp_bp, index_val, idx))
+
+    if outliers:
+        print(f"   📊 Pass A: {len(outliers)} items with extreme indices (>160 or <50)")
+        outlier_batches = [outliers[i:i+80] for i in range(0, len(outliers), 80)]
+        for ob_num, ob in enumerate(outlier_batches, 1):
+            lines = []
+            for cat, name, bp, gp_bp, idx_val, _ in ob:
+                lines.append(f"  {cat} | {name}: {bp:.1f}% BP (GenPop: {gp_bp:.1f}%, index: {idx_val:.2f}x)")
+            outlier_prompt = (
+                f"You are a consumer research analyst reviewing a brand audience "
+                f"profile for quality control.\n\n"
+                f"{audience_context}\n"
+                f"The data below was derived from REAL behavioral signals and "
+                f"anchored to US Gen Pop.  These items have unusually high or low "
+                f"indices compared to Gen Pop.  Your job: using the persona "
+                f"research and demographics above, decide which of these swings "
+                f"are REALISTIC for this audience and which are NOT.\n\n"
+                f"=== ITEMS WITH EXTREME INDICES ({ob_num}/{len(outlier_batches)}) ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== RULES ===\n"
+                f"1. If the swing MAKES SENSE for this persona, LEAVE IT (do not "
+                f"include it in adjustments). E.g. Discord at 1.6x for a gaming "
+                f"audience is realistic — leave it.\n"
+                f"2. If the swing DOES NOT make sense, provide a correction factor "
+                f"to bring it to a realistic level. E.g. Lululemon at 1.5x for a "
+                f"male gaming audience is wrong — factor 0.5 to bring it to ~0.75x.\n"
+                f"3. High indices that match the persona are FINE. Low indices that "
+                f"match the persona are FINE. Only correct mismatches.\n"
+                f"4. The demographics have already been vetted by external research. "
+                f"Trust them.\n\n"
+                f"Return ONLY valid JSON:\n"
+                f'If all items pass: {{"status":"OK","notes":"reason"}}\n'
+                f'If corrections needed: {{"status":"FIX","notes":"summary",'
+                f'"adjustments":[{{"category":"CAT","item":"ITEM",'
+                f'"factor":0.6,"reason":"brief"}},...]}}\n'
+                f"factor: multiplier on current BP. Stay in 0.15 to 2.5 range.\n"
+                f"JSON only, no markdown."
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': outlier_prompt}],
+                    temperature=0.1,
+                    max_tokens=4000
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    applied, _ = _apply_adjustments(result['adjustments'], all_item_lookup, '[OUTLIER]')
+                    print(f"   📊 Pass A batch {ob_num}: {applied} outlier corrections")
+                else:
+                    print(f"   📊 Pass A batch {ob_num}: all outliers OK")
+            except Exception as e:
+                print(f"   ⚠️ Pass A error (batch {ob_num}): {e}")
+    else:
+        print(f"   📊 Pass A: no extreme outliers found")
+
+    # Refresh item lookup after Pass A corrections
+    all_item_lookup.clear()
+    for cat, items in categories_data.items():
+        for name, bp_orig, cs_orig, idx in items:
+            cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+            all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+    # ──── PASS B: PERSONA SPOT CHECK ────
+    # Send top items per category to AI with current indices. Ask it to
+    # spot-check: flag only items that are clearly wrong for this persona.
+    spot_batches = []
     current_batch = {}
     current_items = 0
     for cat, items in sorted(categories_data.items()):
-        sorted_items = sorted(items, key=lambda x: -x[1])[:25]
+        refreshed = []
+        for name, _, _, idx in items:
+            cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+            refreshed.append((name, cur_bp, cur_cs, idx))
+        sorted_items = sorted(refreshed, key=lambda x: -x[1])[:25]
         current_batch[cat] = sorted_items
         current_items += len(sorted_items)
         if current_items >= 100:
-            batches.append(current_batch)
+            spot_batches.append(current_batch)
             current_batch = {}
             current_items = 0
     if current_batch:
-        batches.append(current_batch)
+        spot_batches.append(current_batch)
 
-    for batch_num, batch in enumerate(batches, 1):
+    for batch_num, batch in enumerate(spot_batches, 1):
         items_text = []
         for cat, items in batch.items():
             lines = []
             for name, bp, cs, _ in items:
                 gp_bp = gp_bp_lookup.get((cat, name.upper()), 0)
-                idx_str = f" (GenPop BP: {gp_bp:.1f}%, index: {bp/gp_bp:.1f}x)" if gp_bp > 0 else ""
-                lines.append(f"  {name}: {bp:.1f}% BP, {cs:.1f}% share{idx_str}")
+                if gp_bp > 0:
+                    idx_int = int(round(bp / gp_bp * 100))
+                    direction = "OVER" if idx_int > 100 else ("UNDER" if idx_int < 100 else "PARITY")
+                    idx_str = f" [GenPop: {gp_bp:.1f}%, INDEX: {idx_int} {direction}]"
+                else:
+                    idx_str = ""
+                lines.append(f"  {name}: {bp:.1f}% BP{idx_str}")
             items_text.append(f"{cat}:\n" + "\n".join(lines))
 
-        behav_prompt = (
-            f"You are a US consumer research analyst doing a FINAL GUT CHECK on a "
-            f"brand audience profile.\n\n"
+        spot_prompt = (
+            f"You are a senior consumer research analyst molding a brand audience "
+            f"profile so it passes the sniff test.\n\n"
             f"{audience_context}\n"
+            f"The data below was derived from REAL behavioral signals and anchored "
+            f"to US Gen Pop. The organic data provides the BASE signal, but some "
+            f"items need correction because panel data has participation bias.\n\n"
             f"=== STEP 1: BUILD THE PERSONA ===\n"
-            f"Before evaluating ANY data, think about WHO digitally engages with "
-            f"\"{subject_clean}\". Use the web research and demographics above to "
-            f"construct a vivid consumer persona:\n"
-            f"- What kind of person uses/watches/buys \"{subject_clean}\"?\n"
-            f"- What are their core interests, hobbies, and lifestyle?\n"
-            f"- What brands, platforms, and media do they naturally gravitate toward?\n"
-            f"- What brands would they AVOID or have no interest in?\n"
-            f"- How do they spend their time and money?\n\n"
-            f"This persona is DIFFERENT for every profile subject. A Taylor Swift "
-            f"digital engager is a completely different consumer than a Fandom.com "
-            f"user, who is completely different from a Budweiser drinker or an AARP "
-            f"member or a Peloton subscriber. The persona drives EVERYTHING below.\n\n"
-            f"=== STEP 2: EVALUATE EVERY ITEM ===\n"
-            f"You MUST return an adjustment for EVERY SINGLE ITEM in the data below. "
-            f"No item should pass without evaluation. For each item, classify it:\n"
-            f"- STRONG AFFINITY → factor 1.15-1.80 (boost)\n"
-            f"- SLIGHT AFFINITY → factor 1.05-1.15 (small boost)\n"
-            f"- NEUTRAL/MASS-MARKET → factor 0.90-1.05 (near parity)\n"
-            f"- SLIGHT MISMATCH → factor 0.75-0.90 (small reduction)\n"
-            f"- PERSONA MISMATCH → factor 0.30-0.70 (significant reduction)\n\n"
-            f"=== BEHAVIORAL DATA (batch {batch_num}/{len(batches)}) ===\n"
+            f"Think about WHO digitally engages with \"{subject_clean}\":\n"
+            f"- What kind of person is this? Age, gender, lifestyle?\n"
+            f"- What are their core interests and hobbies?\n"
+            f"- What brands/platforms do they gravitate toward?\n"
+            f"- What brands/platforms are a POOR FIT for this person?\n\n"
+            f"=== STEP 2: CHECK EVERY ITEM'S INDEX DIRECTION ===\n"
+            f"Each item shows an INDEX number. INDEX > 100 = over-indexing "
+            f"Gen Pop. INDEX < 100 = under-indexing.\n\n"
+            f"For EACH item, verify the direction is correct:\n"
+            f"- Is it showing OVER when this persona would AVOID it? → FIX\n"
+            f"- Is it showing UNDER when this persona has AFFINITY? → FIX\n"
+            f"- Is it at PARITY when this persona has clear feelings? → FIX\n\n"
+            f"CRITICAL — DEMOGRAPHIC DIRECTION RULES:\n"
+            f"These MUST be enforced regardless of what the organic data shows:\n"
+            f"- MALE audience (>55%): female-skewing brands MUST under-index. "
+            f"Examples: Pinterest, Lululemon, Bath & Body Works, Sephora, "
+            f"Victoria's Secret, Pandora, Kate Spade, Ulta, NYX, etc.\n"
+            f"- FEMALE audience (>55%): male-skewing brands MUST under-index. "
+            f"Examples: Old Spice, ESPN, DraftKings, Barstool, etc.\n"
+            f"- YOUNG audience (<35): boomer-skewing brands MUST under-index. "
+            f"Examples: Facebook, Fox News, AARP, Macy's, PBS, etc.\n"
+            f"- OLDER audience (>45): Gen-Z brands MUST under-index. "
+            f"Examples: TikTok, Roblox, Discord, Snapchat, etc.\n"
+            f"Even INDEX 101-110 is WRONG if the brand clearly mismatches "
+            f"the demographic. A 104 for a female brand in a male audience "
+            f"should be corrected to ~85-95.\n\n"
+            f"=== BEHAVIORAL DATA (batch {batch_num}/{len(spot_batches)}) ===\n"
             + "\n\n".join(items_text) +
-            f"\n\n=== CRITICAL RULES ===\n"
-            f"1. ADJUST EVERY ITEM. The data currently sits near Gen Pop parity "
-            f"(index ~1.0) because the anchoring was conservative. YOUR JOB is to "
-            f"differentiate: push items UP that this persona has affinity for, and "
-            f"push items DOWN that don't match. Every item needs a factor.\n"
-            f"2. PERSONA FIRST, DEMOGRAPHICS SECOND. The persona from Step 1 is "
-            f"your primary guide. A young male gamer has different brand affinities "
-            f"than a young male finance bro, even with identical demographics.\n"
-            f"3. EVERY PROFILE IS UNIQUE. Think about what makes the "
-            f"\"{subject_clean}\" audience special — which brands align with their "
-            f"specific identity, not just their age/gender bucket.\n"
-            f"4. BE OPINIONATED AND SPECIFIC. Examples of what good adjustments "
-            f"look like for a gaming/tech audience:\n"
-            f"   - Discord: 1.5 (core gaming platform → strong affinity)\n"
-            f"   - YouTube: 1.2 (massive gaming content → above parity)\n"
-            f"   - Twitch: 1.5 (gaming streaming → strong affinity)\n"
-            f"   - Pinterest: 0.6 (female-skewing crafts platform → mismatch)\n"
-            f"   - LinkedIn: 0.7 (professional networking → not this persona)\n"
-            f"   - Old Spice: 1.15 (male grooming → slight affinity)\n"
-            f"   - Lululemon: 0.5 (women's activewear → demographic mismatch)\n"
-            f"   These are EXAMPLES only — use the actual persona you built.\n"
-            f"5. FOCUS ON INDEX, NOT ABSOLUTE BP. Mass-market items with high "
-            f"GenPop BP SHOULD have high absolute BP. Index = profile BP / GenPop BP.\n"
-            f"6. The goal: someone looking at the final data should be able to guess "
-            f"what \"{subject_clean}\" is just from the brand affinities.\n\n"
-            f"Return ONLY valid JSON — you MUST include an adjustment for every item:\n"
-            f'{{"status":"FIX","notes":"summary",'
+            f"\n\n=== RULES ===\n"
+            f"1. Organic data is the base. Keep items that are directionally "
+            f"correct. Correct items where INDEX direction is WRONG.\n"
+            f"2. Small corrections matter. Flipping a 104 to a 92 for a "
+            f"demographic mismatch makes the profile more realistic.\n"
+            f"3. Core affinity items that sit at parity (95-105) when they "
+            f"should strongly over-index also need correction.\n"
+            f"4. The goal: a market researcher sees this data and immediately "
+            f"knows this is a \"{subject_clean}\" audience.\n\n"
+            f"Return ONLY valid JSON:\n"
+            f'If everything passes: {{"status":"OK","notes":"reason"}}\n'
+            f'If corrections needed: {{"status":"FIX","notes":"summary",'
             f'"adjustments":[{{"category":"CAT","item":"ITEM",'
-            f'"direction":"lower" or "higher" or "neutral",'
-            f'"factor":0.6,"reason":"brief"}},...]}}\n\n'
+            f'"factor":0.6,"reason":"brief"}},...]}}\n'
             f"factor: multiplier on current BP. Stay in 0.15 to 2.5 range.\n"
             f"JSON only, no markdown."
         )
@@ -6482,95 +6617,18 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         try:
             resp = client.chat.completions.create(
                 model='gpt-4o',
-                messages=[{'role': 'user', 'content': behav_prompt}],
+                messages=[{'role': 'user', 'content': spot_prompt}],
                 temperature=0.15,
-                max_tokens=8000
+                max_tokens=4000
             )
-            text = resp.choices[0].message.content.strip()
-            if text.startswith('```'):
-                text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-            depth = 0
-            end = 0
-            for i, c in enumerate(text):
-                if c == '{':
-                    depth += 1
-                elif c == '}':
-                    depth -= 1
-                    if depth == 0:
-                        end = i + 1
-                        break
-            if end > 0:
-                text = text[:end]
-
-            result = _json.loads(text)
-
-            if result.get('status') != 'FIX' or 'adjustments' not in result:
-                continue
-
-            for adj in result['adjustments']:
-                try:
-                    a_cat = str(adj.get('category', '')).strip().upper()
-                    a_item = str(adj.get('item', '')).strip().upper()
-                    factor = float(adj.get('factor', 1.0))
-                    direction = adj.get('direction', '')
-                    reason = adj.get('reason', '')
-                except (AttributeError, TypeError, ValueError):
-                    continue
-
-                cat_items = batch.get(a_cat, [])
-                matched = [(n, bp, cs, idx) for n, bp, cs, idx in cat_items
-                           if n.strip().upper() == a_item]
-                if not matched:
-                    matched = [(n, bp, cs, idx) for n, bp, cs, idx in cat_items
-                               if a_item in n.strip().upper() or n.strip().upper() in a_item]
-                if not matched:
-                    continue
-
-                name, cur_bp, cur_cs, row_idx = matched[0]
-                factor = max(0.15, min(2.5, factor))
-                new_bp = round(cur_bp * factor, 4)
-                item_gp_bp = gp_bp_lookup.get((a_cat, a_item), 0)
-                bp_cap = max(40.0, item_gp_bp * 1.15)
-                new_bp = max(0.01, min(new_bp, bp_cap))
-
-                new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
-                new_proj = int(round(new_raw * MULT))
-
-                df.at[row_idx, bp_col] = new_bp
-                df.at[row_idx, raw_col] = str(new_raw)
-                if proj_col in df.columns:
-                    df.at[row_idx, proj_col] = str(new_proj)
-
-                arrow = '↓' if factor < 1 else '↑'
-                print(f"   🔍 {a_cat} {arrow} {name}: {cur_bp:.1f}%→{new_bp:.1f}% — {reason}")
-                total_adjustments += 1
-
-            batch_cats_to_rebalance = set()
-            for adj in result['adjustments']:
-                a_cat = str(adj.get('category', '')).strip().upper()
-                if a_cat in batch:
-                    batch_cats_to_rebalance.add(a_cat)
-
-            for cat in batch_cats_to_rebalance:
-                all_cat_items = categories_data.get(cat, [])
-                all_cat_idx = [idx for _, _, _, idx in all_cat_items]
-                total_raw = 0
-                for ix in all_cat_idx:
-                    try:
-                        total_raw += int(float(str(df.at[ix, raw_col]).replace(',', '')))
-                    except (ValueError, TypeError):
-                        pass
-                if total_raw > 0:
-                    for ix in all_cat_idx:
-                        try:
-                            raw = int(float(str(df.at[ix, raw_col]).replace(',', '')))
-                            new_cs = round((raw / total_raw) * 100.0, 4)
-                            df.at[ix, cs_col] = new_cs
-                        except (ValueError, TypeError):
-                            pass
-
+            result = _parse_ai_json(resp.choices[0].message.content.strip())
+            if result.get('status') == 'FIX' and 'adjustments' in result:
+                applied, _ = _apply_adjustments(result['adjustments'], all_item_lookup, '[SPOT]')
+                print(f"   🔍 Pass B batch {batch_num}/{len(spot_batches)}: {applied} spot corrections")
+            else:
+                print(f"   🔍 Pass B batch {batch_num}/{len(spot_batches)}: all items OK")
         except Exception as e:
-            print(f"   ⚠️ Behavioral gut-check error (batch {batch_num}): {e}")
+            print(f"   ⚠️ Pass B error (batch {batch_num}): {e}")
             continue
 
     # ── Full Category Share recalculation across ALL categories ──
@@ -6599,7 +6657,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                         pass
 
     print(f"🔍 Final gut check for {subject_clean}: {total_adjustments} total adjustments "
-          f"across {len(batches)} batch(es)")
+          f"(Pass A: outlier review, Pass B: {len(spot_batches)} persona spot-check batch(es))")
     return df
 
 
