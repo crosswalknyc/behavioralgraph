@@ -995,6 +995,20 @@ def anchor_to_genpop(df, sample_size):
           f"demo bounds [{DEMO_LO:.2f}, {DEMO_HI:.2f}], "
           f"BP ceiling base: {BP_CEILING_BASE}%")
 
+    # Capture original profile CS ranking per category before anchoring.
+    # Used later to enforce rank-order preservation.
+    _orig_cs_by_cat = {}
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat in SKIP_CATS:
+            continue
+        val = str(row.get('Value', '')).strip().upper()
+        try:
+            orig_cs = float(row.get(pct_col, 0))
+        except (ValueError, TypeError):
+            orig_cs = 0
+        _orig_cs_by_cat.setdefault(cat, []).append((val, orig_cs, idx))
+
     changes = 0
     for idx, row in df.iterrows():
         cat = str(row.get('Column', '')).strip().upper()
@@ -1106,6 +1120,46 @@ def anchor_to_genpop(df, sample_size):
     if unmatched_fixes:
         print(f"   ⚠️  Capped {unmatched_fixes} unmatched items (no Gen Pop benchmark) "
               f"at ~{UNMATCHED_CEILING}%")
+
+    # --- Rank-order preservation ---
+    # After anchoring, the BP values may be reordered relative to the
+    # raw profile's CS ranking because the formula new_bp = gp_bp * index
+    # is dominated by gp_bp when indices compress toward 1.0.
+    # Restore the raw profile's CS rank ordering: if the raw profile
+    # ranked item A above item B (by CS), ensure A's anchored BP >= B's.
+    rank_swaps = 0
+    for cat, orig_items in _orig_cs_by_cat.items():
+        if cat in DEMO_CATS:
+            continue
+        # Sort by original CS descending — this is the profile's rank
+        profile_order = sorted(orig_items, key=lambda x: -x[1])
+        # Get current anchored BPs for these items
+        anchored_bps = []
+        for val, orig_cs, ridx in profile_order:
+            try:
+                cur_bp = float(df.at[ridx, bp_col]) if bp_col else 0
+            except (ValueError, TypeError):
+                cur_bp = 0
+            anchored_bps.append(cur_bp)
+        # Sort the anchored BP values descending — these are the
+        # magnitude slots we'll assign to maintain realistic levels.
+        bp_slots = sorted(anchored_bps, reverse=True)
+        # Assign BP slots to items in profile rank order
+        for i, (val, orig_cs, ridx) in enumerate(profile_order):
+            if i < len(bp_slots) and bp_col:
+                old_bp = anchored_bps[i]
+                new_bp_val = bp_slots[i]
+                if abs(old_bp - new_bp_val) > 0.001:
+                    df.at[ridx, bp_col] = round(new_bp_val, 4)
+                    new_raw = max(1, int(round(new_bp_val / 100.0 * sample_size)))
+                    df.at[ridx, 'Original Raw Numbers'] = str(new_raw)
+                    if 'US Gen Pop Projection' in df.columns:
+                        df.at[ridx, 'US Gen Pop Projection'] = str(
+                            int(round((new_raw / 10_000_000) * 329_900_000)))
+                    rank_swaps += 1
+    if rank_swaps:
+        print(f"   🔄 Rank preservation: {rank_swaps} items reordered to "
+              f"match raw profile signal")
 
     for cat in df['Column'].str.upper().unique():
         if cat in SKIP_CATS:
@@ -6843,32 +6897,149 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             except Exception as e:
                 print(f"   ⚠️ Pass C error ({cat}): {e}")
 
+    # ──── PASS D: PERSONA RANK REORDERING ────
+    # The anchoring produces rank orders largely matching Gen Pop because
+    # indices compress toward 1.0.  Pass D asks the AI to identify items
+    # whose RANK should be different for this persona, then applies
+    # factors that create meaningful ordering changes.
+    pass_d_adjustments = 0
+    RANK_CATEGORIES = [
+        'SOCIAL MEDIA', 'STREAMING/PLATFORM', 'MOST PURCHASED BRANDS',
+        'BEAUTY/WELLNESS', 'GAMES', 'TECHNOLOGY/DEVICE', 'SEARCH ENGINE/AI',
+        'BROADCAST/CABLE', 'APP/PLATFORM USAGE', 'MEDIA', 'APPAREL/FOOTWEAR',
+        'DIGITAL BANKING', 'WHERE THEY SHOP', 'INTEREST', 'CPG',
+        'FRANCHISE', 'HOME/OUTDOOR', 'BETTING',
+    ]
+    # Refresh item lookup with current values
+    all_item_lookup.clear()
+    for cat, items in categories_data.items():
+        for name, bp_orig, cs_orig, idx in items:
+            try:
+                cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cur_bp = bp_orig
+            try:
+                cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cur_cs = cs_orig
+            all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+    for cat in RANK_CATEGORIES:
+        if cat not in categories_data:
+            continue
+        items = categories_data[cat]
+        # Get current BPs and Gen Pop BPs for top 40 by current BP
+        cat_ranked = []
+        for name, bp_orig, cs_orig, idx in items:
+            try:
+                cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cur_bp = bp_orig
+            gp_bp = gp_bp_lookup.get((cat, name.strip().upper()), 0)
+            cat_ranked.append((name, cur_bp, gp_bp, idx))
+        cat_ranked.sort(key=lambda x: -x[1])
+        top_items = cat_ranked[:40]
+        if len(top_items) < 5:
+            continue
+
+        lines = []
+        for rank, (name, bp, gp_bp, _) in enumerate(top_items, 1):
+            gp_rank = '?'
+            if gp_bp > 0:
+                gp_sorted = sorted(
+                    [(n, gb) for n, _, gb, _ in cat_ranked if gb > 0],
+                    key=lambda x: -x[1])
+                for gi, (gn, _) in enumerate(gp_sorted, 1):
+                    if gn.strip().upper() == name.strip().upper():
+                        gp_rank = str(gi)
+                        break
+            idx_int = int(round((bp / gp_bp) * 100)) if gp_bp > 0 else 0
+            lines.append(
+                f"  #{rank}: {name} — {bp:.1f}% BP "
+                f"(GenPop rank: #{gp_rank}, index: {idx_int})")
+
+        rank_prompt = (
+            f"You are a consumer research analyst building an audience "
+            f"profile for people who engage with \"{subject_clean}\".\n\n"
+            f"{audience_context}\n"
+            f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n\n"
+            f"=== CURRENT RANK ORDER: {cat} (top {len(top_items)}) ===\n"
+            + "\n".join(lines) +
+            f"\n\n=== YOUR TASK ===\n"
+            f"The rank order above mostly mirrors US Gen Pop because the "
+            f"underlying data has similar popularity distributions. But a "
+            f"\"{subject_clean}\" audience has a DISTINCT persona that should "
+            f"be reflected in which items rank higher or lower.\n\n"
+            f"Think about who engages with \"{subject_clean}\" — their age, "
+            f"gender, interests, lifestyle. Then identify:\n\n"
+            f"1. ITEMS THAT SHOULD RANK HIGHER (strong persona affinity) — "
+            f"boost factor 1.10-1.50\n"
+            f"   Example: Discord for a gaming/fandom audience\n\n"
+            f"2. ITEMS THAT SHOULD RANK LOWER (weak persona affinity) — "
+            f"reduce factor 0.60-0.90\n"
+            f"   Example: LinkedIn for a young gaming audience\n\n"
+            f"3. ITEMS ALREADY CORRECTLY RANKED — factor 1.00 (skip them)\n\n"
+            f"Focus on the 5-15 items where the rank is MOST WRONG for this "
+            f"persona. Don't adjust every item — only change what needs "
+            f"to move to reflect the persona.\n\n"
+            f"=== RULES ===\n"
+            f"1. The persona's interests should drive ranking, not just "
+            f"demographics.\n"
+            f"2. A Fandom/gaming audience should have Discord, Reddit, Twitch "
+            f"ranked much higher than the general population.\n"
+            f"3. Niche-but-relevant items should punch above their weight.\n"
+            f"4. Mass-market items that everyone uses (Google, YouTube, "
+            f"Netflix) stay near the top — don't over-adjust those.\n\n"
+            f"Return ONLY valid JSON:\n"
+            f'{{"status":"FIX","notes":"summary",'
+            f'"adjustments":[{{"category":"{cat}","item":"ITEM",'
+            f'"factor":1.25,"reason":"brief"}},...]}}\n'
+            f"Only include items that need adjustment. JSON only, no markdown."
+        )
+
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': rank_prompt}],
+                temperature=0.2,
+                max_tokens=4000
+            )
+            result = _parse_ai_json(resp.choices[0].message.content.strip())
+            if result.get('status') == 'FIX' and 'adjustments' in result:
+                applied, _ = _apply_adjustments(
+                    result['adjustments'], all_item_lookup, '[RANK]')
+                pass_d_adjustments += applied
+                if applied > 0:
+                    print(f"   🔀 Pass D: {cat} — {applied} rank adjustments")
+        except Exception as e:
+            print(f"   ⚠️ Pass D error ({cat}): {e}")
+
     # ── Full Category Share recalculation across ALL categories ──
-    if total_adjustments > 0:
-        for cat in df['Column'].str.upper().str.strip().unique():
-            if cat in DEMO_CATS or cat in META_CATS or cat == 'LOCATION':
-                continue
-            cm = df['Column'].str.upper().str.strip() == cat
-            if not cm.any():
-                continue
-            total_raw = 0
+    for cat in df['Column'].str.upper().str.strip().unique():
+        if cat in DEMO_CATS or cat in META_CATS or cat == 'LOCATION':
+            continue
+        cm = df['Column'].str.upper().str.strip() == cat
+        if not cm.any():
+            continue
+        total_raw = 0
+        for cidx in df[cm].index:
+            try:
+                total_raw += int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+            except (ValueError, TypeError):
+                pass
+        if total_raw > 0:
             for cidx in df[cm].index:
                 try:
-                    total_raw += int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                    raw = int(float(str(df.at[cidx, raw_col]).replace(',', '')))
+                    new_cs = round((raw / total_raw) * 100.0, 4)
+                    df.at[cidx, cs_col] = new_cs
                 except (ValueError, TypeError):
                     pass
-            if total_raw > 0:
-                for cidx in df[cm].index:
-                    try:
-                        raw = int(float(str(df.at[cidx, raw_col]).replace(',', '')))
-                        new_cs = round((raw / total_raw) * 100.0, 4)
-                        df.at[cidx, cs_col] = new_cs
-                    except (ValueError, TypeError):
-                        pass
 
     print(f"🔍 Final gut check for {subject_clean}: {total_adjustments} total adjustments "
           f"(Pass A: outlier, Pass B: {len(spot_batches)} spot-check, "
-          f"Pass C: {pass_c_adjustments} demographic alignment)")
+          f"Pass C: {pass_c_adjustments} demographic, "
+          f"Pass D: {pass_d_adjustments} rank reorder)")
     return df
 
 
