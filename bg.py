@@ -376,13 +376,17 @@ def _soft_clamp_index(raw_index, lo, hi, cat, val):
     return max(lo, min(hi, result))
 
 
-def soft_bp_ceiling(raw_bp, ceiling=95.0):
+def soft_bp_ceiling(raw_bp, ceiling=40.0):
     """Smooth ceiling that compresses values approaching the cap.
 
     Uses a hyperbolic curve (t / (1+t)) that has slope exactly 1.0 at the
     knee point, guaranteeing monotonic compression — output is always <= input.
+
+    Default ceiling is 40% — no single brand should realistically have 70%+
+    penetration in any audience. Even mass-market brands like Amazon/Walmart
+    rarely exceed 35-40% Brand Penetration in real consumer panels.
     """
-    knee = ceiling * 0.85
+    knee = ceiling * 0.80
     if raw_bp <= knee:
         return raw_bp
     overshoot = raw_bp - knee
@@ -901,12 +905,15 @@ def _get_profile_genpop_penetration(df, gp_lookup):
 def anchor_to_genpop(df, sample_size):
     """Anchor all profile values to the Gen Pop CSV baseline using index-and-anchor.
 
-    Index bounds are ADAPTIVE based on the profile's Gen Pop penetration:
-    - High-penetration profiles (YouTube at 84%) stay very close to Gen Pop
-    - Low-penetration profiles (niche 2% brand) can deviate significantly
+    Produces ORGANIC variation: some items over-index, some under-index, some
+    are near parity — just like real consumer panel data.  No audience buys
+    every brand more than the general population.
 
-    Formula: deviation = base_deviation * (1 - penetration/100)^2
-    e.g. YouTube@84%: max behavioral index = 1.05, YouTube@5%: max = 2.62
+    Key design principles:
+    - Tight bounds centered near Gen Pop (typical index range ~70-180)
+    - Per-item deterministic noise creates organic scatter (some under, some over)
+    - Absolute BP ceiling of 40% — no single brand realistically captures 70%+
+    - Niche profiles get slightly wider bounds (up to ~2.2x) but never absurd
     """
     gp = _load_genpop_csv()
     if gp is None:
@@ -923,8 +930,6 @@ def anchor_to_genpop(df, sample_size):
         'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
         'CASUAL FAN', 'BRAND CATEGORY',
     }
-    # Demographics are left unanchored -- raw Snowflake data passes through.
-    # A separate AI-powered validate_demographics() step handles corrections.
     SKIP_CATS = SKIP_CATS | DEMO_CATS
 
     gp_col = gp.columns[0]   # Column
@@ -949,24 +954,26 @@ def anchor_to_genpop(df, sample_size):
     bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
 
     sample_size = max(int(float(sample_size)), 1)
-    GENPOP_TOTAL = 329_900_000
 
-    # Determine profile's Gen Pop penetration for adaptive bounds
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2  # 0 for Gen Pop, ~1 for niche
 
-    # Adaptive bounds: wide enough to preserve the original Snowflake signal.
-    # Gen Pop is a safety net (prevents 95% BP absurdities), NOT the rubric.
-    # The AI gut check (ai_final_gut_check) is the authoritative behavioral
-    # reviewer — this step just prevents raw-data outliers.
-    BEHAV_HI = max(1.80, 1.0 + 4.0 * niche_factor)
-    BEHAV_LO = min(0.10, 1.0 - 2.5 * niche_factor)
+    # --- Tight, realistic bounds ---
+    # Even very niche profiles shouldn't produce 4x over-indexing on generic brands.
+    # Max behavioral index: 1.50 (mainstream) to 2.20 (very niche) — the AI gut
+    # check can selectively boost items that genuinely deserve higher.
+    BEHAV_HI = min(2.20, 1.0 + 0.50 + 1.20 * niche_factor)
+    BEHAV_LO = max(0.40, 1.0 - 0.30 - 0.30 * niche_factor)
     DEMO_HI  = max(1.10, 1.0 + 0.8 * niche_factor)
     DEMO_LO  = min(0.92, 1.0 - 0.5 * niche_factor)
 
+    # Absolute BP ceiling for behavioral categories
+    BP_CEILING = 40.0
+
     print(f"   Profile Gen Pop penetration: {profile_bp_pct:.1f}% → "
           f"behav bounds [{BEHAV_LO:.2f}, {BEHAV_HI:.2f}], "
-          f"demo bounds [{DEMO_LO:.2f}, {DEMO_HI:.2f}]")
+          f"demo bounds [{DEMO_LO:.2f}, {DEMO_HI:.2f}], "
+          f"BP ceiling: {BP_CEILING}%")
 
     changes = 0
     for idx, row in df.iterrows():
@@ -1006,31 +1013,28 @@ def anchor_to_genpop(df, sample_size):
         raw_ratio = profile_cs / gp_cs_val
         raw_index = confidence * raw_ratio + (1.0 - confidence) * 1.0
 
-        # Per-item adaptive floor: if the profile's raw signal is far below
-        # Gen Pop, widen the lower bound so the item isn't forced upward.
         lo = base_lo
         hi = base_hi
-        if not is_demo and raw_ratio < base_lo:
-            lo = max(0.05, raw_ratio * 0.7)
 
-        # Per-item popularity dampening: prevents truly absurd BPs for
-        # mass-market items (YouTube@84% GP reaching 250%).  Uses a gentle
-        # linear scale with a floor so items can still meaningfully deviate
-        # from gen pop. The AI gut check handles nuanced corrections.
+        # Per-item adaptive floor: preserve genuine under-indexing signal
+        if not is_demo and raw_ratio < base_lo:
+            lo = max(0.20, raw_ratio * 0.8)
+
+        # Popularity dampening: mass-market items (high GP BP) stay closer to 1.0
         if not is_demo:
-            popularity_scale = max(0.4, 1.0 - gp_bp_val / 100.0)
+            popularity_scale = max(0.30, 1.0 - gp_bp_val / 80.0)
             hi = 1.0 + (hi - 1.0) * popularity_scale
 
-        # Soft ceiling on upper bound
-        item_hi = hi
-        raw_hi_bp = gp_bp_val * hi
-        if raw_hi_bp > 80.0:
-            soft_max = soft_bp_ceiling(raw_hi_bp)
-            item_hi = max(1.01, soft_max / gp_bp_val)
-        clamped_index = _soft_clamp_index(raw_index, lo, item_hi, cat, val)
+        # Enforce BP ceiling: if index * gp_bp would exceed ceiling, cap the index
+        if not is_demo and gp_bp_val > 0:
+            max_index_from_ceiling = BP_CEILING / gp_bp_val
+            hi = min(hi, max_index_from_ceiling)
+            hi = max(hi, 1.01)
+
+        clamped_index = _soft_clamp_index(raw_index, lo, hi, cat, val)
 
         new_bp = gp_bp_val * clamped_index
-        new_bp = soft_bp_ceiling(new_bp)
+        new_bp = soft_bp_ceiling(new_bp, ceiling=BP_CEILING)
         new_bp = round(new_bp, 4)
 
         new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
@@ -1045,11 +1049,7 @@ def anchor_to_genpop(df, sample_size):
         changes += 1
 
     # --- Pass 2: Cap items with NO Gen Pop match ---
-    # Items absent from Gen Pop are likely niche (otherwise they'd appear
-    # in the survey of 36k+ people).  But some legitimately popular niche
-    # items (regional chains, emerging brands) deserve room.  The AI gut
-    # check handles nuanced evaluation; this is just a safety ceiling.
-    UNMATCHED_CEILING = 25.0
+    UNMATCHED_CEILING = 15.0
     unmatched_fixes = 0
     for idx, row in df.iterrows():
         cat = str(row.get('Column', '')).strip().upper()
@@ -6369,41 +6369,55 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
 
         behav_prompt = (
             f"You are a US consumer research analyst doing a FINAL GUT CHECK on a "
-            f"brand audience profile. Your job is to ensure every item ranking makes "
-            f"sense for WHO this audience actually is.\n\n"
+            f"brand audience profile. Your job is to ensure every item's Brand "
+            f"Penetration (BP) and ranking feels ORGANIC and realistic for WHO this "
+            f"audience actually is.\n\n"
             f"{audience_context}\n"
             f"=== BEHAVIORAL DATA (batch {batch_num}/{len(batches)}) ===\n"
             + "\n\n".join(items_text) +
             f"\n\n=== CRITICAL RULES ===\n"
             f"1. The audience is fans/users/customers of \"{subject_clean}\" ({bc}). "
-            f"EVERY top-ranked item should make sense for this specific audience.\n"
-            f"2. GenPop index shows how much this audience over/under-indexes vs "
-            f"the general population. An index of 1.0x = same as GenPop.\n"
-            f"3. Items that are just GenPop artifacts (high because everyone buys them, "
-            f"not because THIS audience specifically does) should be flagged if they're "
-            f"ranked above items that genuinely match this audience.\n"
-            f"4. BUT — some GenPop-heavy items ARE legitimate for most audiences "
-            f"(Walmart, Amazon, Netflix are genuinely popular everywhere). Don't flag those.\n"
-            f"5. Flag items that are CLEARLY mismatched:\n"
+            f"Items should reflect what THIS SPECIFIC audience would realistically "
+            f"engage with more or less than the general population.\n"
+            f"2. ORGANIC DATA HAS BOTH OVER AND UNDER INDEXING. In real consumer "
+            f"panels, roughly 30-50% of items under-index for any given audience. "
+            f"If everything is over-indexing (all indices > 1.0x), that is a RED "
+            f"FLAG — you MUST push some items below 1.0x. Generic mass-market "
+            f"brands that have no special affinity with this audience should sit "
+            f"near or below 1.0x.\n"
+            f"3. REALISTIC BP CEILINGS: No single brand should have >35% Brand "
+            f"Penetration unless it is an absolute category monopoly for this "
+            f"specific audience (e.g. Netflix for a streaming-focused profile). "
+            f"Most items should be in the 2-25% range. If you see items at 30%+ "
+            f"BP, strongly consider reducing them.\n"
+            f"4. BRAND RELEVANCE TO SUBJECT: The top-ranked items in each category "
+            f"should make intuitive sense for \"{subject_clean}\". Ask yourself: "
+            f"\"Would a fan/customer of {subject_clean} realistically over-index "
+            f"on this brand?\" If the answer is \"not really, it's just popular in "
+            f"general,\" push it DOWN toward or below GenPop (factor 0.5-0.8).\n"
+            f"5. Items that SHOULD over-index for this audience but are too low "
+            f"should be boosted. Think about what brands/behaviors logically "
+            f"correlate with {subject_clean}'s audience (demographics, interests, "
+            f"lifestyle, geography, culture).\n"
+            f"6. Items that are CLEARLY mismatched should be aggressively reduced:\n"
             f"   - NASCAR ranking high for a young female pop-star audience\n"
             f"   - Fox News ranking high for a young progressive audience\n"
             f"   - Luxury brands ranking high for a low-income audience\n"
-            f"   - Brands that don't exist in the audience's region ranking high\n"
-            f"6. Also flag items that should be HIGHER but are surprisingly low:\n"
-            f"   - Country music for a country singer's fans\n"
-            f"   - Fitness brands for a workout facility's audience\n"
-            f"   - Local restaurants for a regional chain's audience\n"
-            f"7. Be CONSERVATIVE with adjustments. Only flag CLEAR mismatches. "
-            f"Minor oddities are fine — real data has quirks.\n\n"
+            f"   - Niche regional brands ranking high for a national audience\n"
+            f"7. EXPECT TO MAKE ADJUSTMENTS. It is rare that all data passes "
+            f"without corrections. Be thorough — review every item and ensure "
+            f"the overall picture tells a coherent story about this audience.\n\n"
             f"Return ONLY valid JSON:\n"
             f'If everything passes: {{"status":"OK","notes":"reason"}}\n'
             f'If corrections needed: {{"status":"FIX","notes":"summary",'
             f'"adjustments":[{{"category":"CAT","item":"ITEM",'
             f'"direction":"lower" or "higher",'
             f'"factor":0.6,"reason":"brief"}},...]}}\n\n'
-            f"factor: multiplier on current BP (0.3-0.6 = significant reduction, "
-            f"0.6-0.85 = moderate reduction, 1.2-1.5 = moderate boost, "
-            f"1.5-2.0 = significant boost). Stay in 0.3 to 2.5 range.\n"
+            f"factor: multiplier on current BP (0.3-0.5 = significant reduction, "
+            f"0.5-0.8 = moderate reduction, 0.8-0.95 = slight reduction, "
+            f"1.1-1.3 = moderate boost, 1.3-1.8 = significant boost). "
+            f"Stay in 0.2 to 2.0 range. Prefer reductions for inflated values "
+            f"over boosts.\n"
             f"JSON only, no markdown."
         )
 
@@ -6455,9 +6469,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     continue
 
                 name, cur_bp, cur_cs, row_idx = matched[0]
-                factor = max(0.2, min(3.0, factor))
+                factor = max(0.15, min(2.0, factor))
                 new_bp = round(cur_bp * factor, 4)
-                new_bp = max(0.01, min(new_bp, 85.0))
+                new_bp = max(0.01, min(new_bp, 40.0))
 
                 new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
                 new_proj = int(round(new_raw * MULT))
