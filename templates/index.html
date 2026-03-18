@@ -26616,23 +26616,31 @@
             const oldToNew = { '<16': [['17 and Under', 1]], 'under 16': [['17 and Under', 1]], '16-18': [['17 and Under', 0.67], ['18-24', 0.33]], '17-18': [['17 and Under', 0.67], ['18-24', 0.33]], '19-20': [['18-24', 1]], '18-20': [['18-24', 1]], '21-25': [['18-24', 0.8], ['25-34', 0.2]], '26-30': [['25-34', 1]], '31-40': [['25-34', 0.4], ['35-44', 0.6]], '41-49': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '41-59': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '60+': [['55-64', 0.25], ['65 or Older', 0.75]], '65+': [['55-64', 0.25], ['65 or Older', 0.75]], 'over 65': [['55-64', 0.25], ['65 or Older', 0.75]] };
             const standardAgeOrder = ['17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older'];
             const bucketedRaw = {};
+            const bucketedGP = {};
             validAgeData.forEach(item => {
                 const rawKey = (item.age_range || item.age || '').trim();
                 const normKey = rawKey.toLowerCase().replace(/\s*-\s*/g, '-').replace(/\s+/g, ' ');
                 const count = parseNumber(item.count) || 0;
-                if (count <= 0) return;
+                const gp = parseNumber(item.gen_pop || item.genPop || '') || 0;
+                if (count <= 0 && gp <= 0) return;
                 const mapping = oldToNew[normKey] || oldToNew[rawKey] || oldToNew[rawKey.toLowerCase()];
                 if (mapping) {
-                    mapping.forEach(([bucket, ratio]) => { bucketedRaw[bucket] = (bucketedRaw[bucket] || 0) + count * ratio; });
+                    mapping.forEach(([bucket, ratio]) => {
+                        bucketedRaw[bucket] = (bucketedRaw[bucket] || 0) + count * ratio;
+                        bucketedGP[bucket] = (bucketedGP[bucket] || 0) + gp * ratio;
+                    });
                 } else {
                     const displayBucket = getAgeDisplayLabel(rawKey);
                     bucketedRaw[displayBucket] = (bucketedRaw[displayBucket] || 0) + count;
+                    bucketedGP[displayBucket] = (bucketedGP[displayBucket] || 0) + gp;
                 }
             });
-            const totalAgeRaw = Object.values(bucketedRaw).reduce((a, b) => a + b, 0);
+            const useGP = subscriberGenPopMode;
+            const bucketedDisplay = useGP ? bucketedGP : bucketedRaw;
+            const totalAgeDisplay = Object.values(bucketedDisplay).reduce((a, b) => a + b, 0);
             const bucketedAge = standardAgeOrder
-                .filter(b => bucketedRaw[b] > 0)
-                .map(b => ({ label: b, count: Math.round(bucketedRaw[b]), pct: totalAgeRaw > 0 ? ((bucketedRaw[b] / totalAgeRaw) * 100) : 0 }));
+                .filter(b => (bucketedDisplay[b] || 0) > 0)
+                .map(b => ({ label: b, displayCount: Math.round(bucketedDisplay[b] || 0), pct: totalAgeDisplay > 0 ? (((bucketedDisplay[b] || 0) / totalAgeDisplay) * 100) : 0 }));
 
             // Destroy previous charts
             if (window._subDemoAgeChart) { window._subDemoAgeChart.destroy(); window._subDemoAgeChart = null; }
@@ -26678,7 +26686,7 @@
                                     <th>Age Range</th><th>Accounts</th><th>Percentage</th>
                                 </tr></thead>
                                 <tbody>
-                                    ${bucketedAge.map(b => `<tr><td><strong>${b.label}</strong></td><td>${formatNumber(b.count)}</td><td>${b.pct.toFixed(2)}%</td></tr>`).join('')}
+                                    ${bucketedAge.map(b => `<tr><td><strong>${b.label}</strong></td><td>${formatNumber(b.displayCount)}</td><td>${b.pct.toFixed(2)}%</td></tr>`).join('')}
                                 </tbody>
                             </table>
                         </div>`;
@@ -26687,14 +26695,20 @@
                 }
             }
 
-            // Gender Chart
+            // Gender Chart - use projected numbers when in gen pop mode
             const genderChartCanvas = document.getElementById('subscriberGenderChart');
             const genderChartWrap = document.getElementById('subscriberGenderChartWrap');
             const genderColors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff'];
-            if (genderChartCanvas && validGenderData.length > 0) {
+            const genderDisplayData = validGenderData.map(g => {
+                const gpVal = parseNumber(g.genPop) || 0;
+                return { gender: g.gender, displayCount: useGP && gpVal > 0 ? gpVal : g.count, count: g.count, genPop: g.genPop, percentage: g.percentage };
+            });
+            const genderDisplayTotal = genderDisplayData.reduce((s, g) => s + g.displayCount, 0);
+            genderDisplayData.forEach(g => { g.displayPct = genderDisplayTotal > 0 ? ((g.displayCount / genderDisplayTotal) * 100).toFixed(2) + '%' : 'N/A'; });
+            if (genderChartCanvas && genderDisplayData.length > 0) {
                 if (genderChartWrap) genderChartWrap.style.display = '';
-                const genderLabelsChart = validGenderData.map(g => g.gender);
-                const genderCountsChart = validGenderData.map(g => g.count);
+                const genderLabelsChart = genderDisplayData.map(g => g.gender);
+                const genderCountsChart = genderDisplayData.map(g => g.displayCount);
                 window._subDemoGenderChart = new Chart(genderChartCanvas, {
                     type: 'doughnut',
                     data: { labels: genderLabelsChart, datasets: [{ data: genderCountsChart, backgroundColor: genderColors.slice(0, genderLabelsChart.length) }] },
@@ -26716,7 +26730,7 @@
             // Gender Table
             const genderTableContainer = document.getElementById('subscriberGenderTable');
             if (genderTableContainer) {
-                if (validGenderData.length > 0) {
+                if (genderDisplayData.length > 0) {
                     genderTableContainer.innerHTML = `
                         <div class="demographics-table-wrapper">
                             <table class="demographics-table">
@@ -26724,7 +26738,7 @@
                                     <th>Gender</th><th>Accounts</th><th>Percentage</th>
                                 </tr></thead>
                                 <tbody>
-                                    ${validGenderData.map(item => `<tr><td><strong>${item.gender}</strong></td><td>${formatNumber(item.count)}</td><td>${item.percentage}</td></tr>`).join('')}
+                                    ${genderDisplayData.map(item => `<tr><td><strong>${item.gender}</strong></td><td>${formatNumber(item.displayCount)}</td><td>${item.displayPct}</td></tr>`).join('')}
                                 </tbody>
                             </table>
                         </div>`;
