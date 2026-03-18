@@ -26537,13 +26537,6 @@
                 console.log(`📊 Aggregating gender: "${gender}" -> "${normalizedKey}" (${displayName}): count=${count}, total now=${genderGroups[normalizedKey].count}`);
             });
             
-            // Merge "Prefer Not to Say" into "Other"
-            if (genderGroups['PREFER NOT TO SAY']) {
-                if (!genderGroups['OTHER']) genderGroups['OTHER'] = { gender: 'Other', count: 0, percentage: 0, genPop: 0 };
-                genderGroups['OTHER'].count += genderGroups['PREFER NOT TO SAY'].count;
-                genderGroups['OTHER'].genPop += genderGroups['PREFER NOT TO SAY'].genPop;
-                delete genderGroups['PREFER NOT TO SAY'];
-            }
             // Convert to array and sort by count descending
             const validGenderData = Object.values(genderGroups)
                 .sort((a, b) => b.count - a.count);
