@@ -6380,7 +6380,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         behav_prompt = (
             f"You are a US consumer research analyst doing a FINAL GUT CHECK on a "
             f"brand audience profile. Your job is to ensure every item's Brand "
-            f"Penetration (BP) and ranking feels ORGANIC and realistic for WHO this "
+            f"Penetration (BP) and INDEX feels ORGANIC and realistic for WHO this "
             f"audience actually is.\n\n"
             f"{audience_context}\n"
             f"=== BEHAVIORAL DATA (batch {batch_num}/{len(batches)}) ===\n"
@@ -6395,26 +6395,34 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"FLAG — you MUST push some items below 1.0x. Generic mass-market "
             f"brands that have no special affinity with this audience should sit "
             f"near or below 1.0x.\n"
-            f"3. REALISTIC BP CEILINGS: No single brand should have >35% Brand "
-            f"Penetration unless it is an absolute category monopoly for this "
-            f"specific audience (e.g. Netflix for a streaming-focused profile). "
-            f"Most items should be in the 2-25% range. If you see items at 30%+ "
-            f"BP, strongly consider reducing them.\n"
-            f"4. BRAND RELEVANCE TO SUBJECT: The top-ranked items in each category "
+            f"3. FOCUS ON INDEX, NOT ABSOLUTE BP. The index (profile BP / GenPop BP) "
+            f"is what matters. Mass-market items with high GenPop BP (e.g. Google "
+            f"at ~68%, Netflix at ~90%, Amazon at ~41%) SHOULD have high absolute "
+            f"BP in every audience — that is normal. An item with 70% BP and 90% "
+            f"GenPop BP (index 0.78) is UNDER-indexing, which is fine. An item "
+            f"with 30% BP but only 5% GenPop BP (index 6.0) is wildly inflated.\n"
+            f"4. MASS-MARKET UNIVERSAL ITEMS MUST NOT BE UNREALISTICALLY LOW. "
+            f"If Google (GenPop ~68%) shows up at 20% BP for a digital/tech "
+            f"audience, that is WRONG — boost it. If Netflix (GenPop ~90%) is at "
+            f"30% for any audience, that is WRONG — boost it. Universal services "
+            f"(Google, Amazon, YouTube, Netflix, Walmart) should generally have "
+            f"indices between 0.7 and 1.2 for most audiences.\n"
+            f"5. NICHE ITEM BP CEILING: For items with GenPop BP < 40%, profile "
+            f"BP should not exceed ~35% unless strongly justified. No niche brand "
+            f"should appear at 60-80% penetration. But for items with GenPop BP "
+            f"> 40%, the profile BP can legitimately be 40-90%.\n"
+            f"6. BRAND RELEVANCE TO SUBJECT: The top-ranked items in each category "
             f"should make intuitive sense for \"{subject_clean}\". Ask yourself: "
             f"\"Would a fan/customer of {subject_clean} realistically over-index "
             f"on this brand?\" If the answer is \"not really, it's just popular in "
-            f"general,\" push it DOWN toward or below GenPop (factor 0.5-0.8).\n"
-            f"5. Items that SHOULD over-index for this audience but are too low "
-            f"should be boosted. Think about what brands/behaviors logically "
-            f"correlate with {subject_clean}'s audience (demographics, interests, "
-            f"lifestyle, geography, culture).\n"
-            f"6. Items that are CLEARLY mismatched should be aggressively reduced:\n"
+            f"general,\" push it DOWN toward or below GenPop (factor 0.5-0.8). "
+            f"If the item has CLEAR affinity with this audience, boost it.\n"
+            f"7. Items that are CLEARLY mismatched should be aggressively reduced:\n"
             f"   - NASCAR ranking high for a young female pop-star audience\n"
             f"   - Fox News ranking high for a young progressive audience\n"
             f"   - Luxury brands ranking high for a low-income audience\n"
             f"   - Niche regional brands ranking high for a national audience\n"
-            f"7. EXPECT TO MAKE ADJUSTMENTS. It is rare that all data passes "
+            f"8. EXPECT TO MAKE ADJUSTMENTS. It is rare that all data passes "
             f"without corrections. Be thorough — review every item and ensure "
             f"the overall picture tells a coherent story about this audience.\n\n"
             f"Return ONLY valid JSON:\n"
@@ -6426,8 +6434,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"factor: multiplier on current BP (0.3-0.5 = significant reduction, "
             f"0.5-0.8 = moderate reduction, 0.8-0.95 = slight reduction, "
             f"1.1-1.3 = moderate boost, 1.3-1.8 = significant boost). "
-            f"Stay in 0.2 to 2.0 range. Prefer reductions for inflated values "
-            f"over boosts.\n"
+            f"Stay in 0.2 to 2.5 range.\n"
             f"JSON only, no markdown."
         )
 
@@ -6479,9 +6486,11 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     continue
 
                 name, cur_bp, cur_cs, row_idx = matched[0]
-                factor = max(0.15, min(2.0, factor))
+                factor = max(0.15, min(2.5, factor))
                 new_bp = round(cur_bp * factor, 4)
-                new_bp = max(0.01, min(new_bp, 40.0))
+                item_gp_bp = gp_bp_lookup.get((a_cat, a_item), 0)
+                bp_cap = max(40.0, item_gp_bp * 1.15)
+                new_bp = max(0.01, min(new_bp, bp_cap))
 
                 new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
                 new_proj = int(round(new_raw * MULT))
