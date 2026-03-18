@@ -6839,29 +6839,134 @@ def get_goodshort_ranker_data():
 
 
 # ============================================================================
-# LLMO IQ - Large Language Model Optimization dashboard
+# LLMO IQ - Large Language Model Optimization dashboard (S3-backed)
 # ============================================================================
-LLMO_IQ_WAREHOUSE = 'BEHAVIORGRAPH6X'
 LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000  # 32.99
+LLMO_S3_BUCKET = 'llmo'
+LLMO_S3_PREFIX = 'full_table/'
+LLMO_CACHE_TTL = 3600  # 1 hour
+import threading as _llmo_threading
+_llmo_cache = {'df': None, 'loaded_at': 0, 'loading': False, 'lock': _llmo_threading.Lock()}
+
+
+def _llmo_load_one_file(key):
+    """Download and parse a single gzipped CSV from S3."""
+    import gzip
+    try:
+        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=key)
+        raw = resp['Body'].read()
+        text = gzip.decompress(raw).decode('utf-8')
+        df = pd.read_csv(
+            io.StringIO(text),
+            usecols=['UID', 'DELIVERED', 'COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM', 'URL', 'VISIT_TS'],
+            dtype={'UID': 'str', 'COMMON_NAME': 'str', 'MATCH_TYPE': 'str', 'BROWSER': 'str', 'PLATFORM': 'str', 'URL': 'str'}
+        )
+        return df
+    except Exception as e:
+        print(f"[LLMO S3] Error loading {key}: {e}")
+        return None
+
+
+def _llmo_ensure_loaded():
+    """Load LLMO data from S3 if not cached or stale. Returns the DataFrame."""
+    import time as _time
+    now = _time.time()
+    with _llmo_cache['lock']:
+        if _llmo_cache['df'] is not None and (now - _llmo_cache['loaded_at']) < LLMO_CACHE_TTL:
+            return _llmo_cache['df']
+        if _llmo_cache['loading']:
+            # Another thread is loading; wait for it
+            pass
+        else:
+            _llmo_cache['loading'] = True
+
+    # If already loaded and fresh, return
+    if _llmo_cache['df'] is not None and (now - _llmo_cache['loaded_at']) < LLMO_CACHE_TTL:
+        return _llmo_cache['df']
+
+    import re as _re
+    from urllib.parse import unquote_plus
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import time as _time
+
+    print("[LLMO S3] Loading data from S3...")
+    t0 = _time.time()
+
+    # List all files
+    paginator = s3_client.get_paginator('list_objects_v2')
+    keys = []
+    for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
+        for obj in page.get('Contents', []):
+            if obj['Key'].endswith('.csv.gz'):
+                keys.append(obj['Key'])
+    print(f"[LLMO S3] Found {len(keys)} files to load")
+
+    # Parallel download and parse
+    dfs = []
+    with ThreadPoolExecutor(max_workers=48) as pool:
+        futures = {pool.submit(_llmo_load_one_file, k): k for k in keys}
+        done_count = 0
+        for fut in as_completed(futures):
+            done_count += 1
+            if done_count % 50 == 0:
+                print(f"[LLMO S3] Loaded {done_count}/{len(keys)} files...")
+            result = fut.result()
+            if result is not None:
+                dfs.append(result)
+
+    if not dfs:
+        print("[LLMO S3] No data loaded!")
+        with _llmo_cache['lock']:
+            _llmo_cache['loading'] = False
+        return None
+
+    df = pd.concat(dfs, ignore_index=True)
+    del dfs
+
+    # Extract search terms from URL before dropping it
+    search_pattern = _re.compile(r'[?&](?:q|query|p|search|prompt|text)=([^&]+)', _re.IGNORECASE)
+    def _extract_search(url):
+        if not isinstance(url, str):
+            return None
+        m = search_pattern.search(url)
+        if m:
+            try:
+                return unquote_plus(m.group(1))[:200]
+            except Exception:
+                return m.group(1)[:200]
+        return None
+
+    df['SEARCH_TERM'] = df['URL'].apply(_extract_search)
+    df.drop(columns=['URL'], inplace=True)
+
+    # Parse dates and timestamps
+    df['DELIVERED'] = pd.to_datetime(df['DELIVERED'], errors='coerce').dt.date
+    df['VISIT_TS'] = pd.to_datetime(df['VISIT_TS'], errors='coerce')
+
+    # Convert to categories to save memory
+    for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
+        df[col] = df[col].astype('category')
+
+    elapsed = _time.time() - t0
+    print(f"[LLMO S3] Loaded {len(df):,} rows in {elapsed:.1f}s  ({df.memory_usage(deep=True).sum() / 1e9:.2f} GB)")
+
+    with _llmo_cache['lock']:
+        _llmo_cache['df'] = df
+        _llmo_cache['loaded_at'] = _time.time()
+        _llmo_cache['loading'] = False
+    return df
 
 
 @app.route('/api/llmo-iq/dates', methods=['GET'])
 @requires_auth
 def llmo_iq_dates():
-    """Return available DELIVERED dates from the LLMO table."""
+    """Return available DELIVERED dates from cached LLMO data."""
     try:
-        import bg as _bg
-        conn = _bg.connect_snowflake()
-        cur = conn.cursor()
-        cur.execute(f"USE WAREHOUSE {LLMO_IQ_WAREHOUSE}")
-        cur.execute("""
-            SELECT DISTINCT DELIVERED::DATE AS d
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
-            ORDER BY d DESC
-        """)
-        rows = cur.fetchall()
-        conn.close()
-        dates = [str(r[0]) for r in rows]
+        df = _llmo_ensure_loaded()
+        if df is None:
+            return jsonify({'success': True, 'dates': []})
+        dates = sorted(df['DELIVERED'].dropna().unique(), reverse=True)
+        dates = [str(d) for d in dates]
         return jsonify({'success': True, 'dates': dates})
     except Exception as e:
         print(f"[LLMO IQ dates] Error: {e}")
