@@ -6867,94 +6867,91 @@ def _llmo_load_one_file(key):
         return None
 
 
-def _llmo_ensure_loaded():
-    """Load LLMO data from S3 if not cached or stale. Returns the DataFrame."""
-    import time as _time
-    now = _time.time()
-    with _llmo_cache['lock']:
-        if _llmo_cache['df'] is not None and (now - _llmo_cache['loaded_at']) < LLMO_CACHE_TTL:
-            return _llmo_cache['df']
-        if _llmo_cache['loading']:
-            # Another thread is loading; wait for it
-            pass
-        else:
-            _llmo_cache['loading'] = True
-
-    # If already loaded and fresh, return
-    if _llmo_cache['df'] is not None and (now - _llmo_cache['loaded_at']) < LLMO_CACHE_TTL:
-        return _llmo_cache['df']
-
+def _llmo_do_background_load():
+    """Background worker: download all S3 files, build DataFrame, update cache."""
     import re as _re
     from urllib.parse import unquote_plus
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import time as _time
 
-    print("[LLMO S3] Loading data from S3...")
+    print("[LLMO S3] Background load starting...")
     t0 = _time.time()
+    try:
+        paginator = s3_client.get_paginator('list_objects_v2')
+        keys = []
+        for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
+            for obj in page.get('Contents', []):
+                if obj['Key'].endswith('.csv.gz'):
+                    keys.append(obj['Key'])
+        _llmo_cache['total_files'] = len(keys)
+        _llmo_cache['loaded_files'] = 0
+        print(f"[LLMO S3] Found {len(keys)} files to load")
 
-    # List all files
-    paginator = s3_client.get_paginator('list_objects_v2')
-    keys = []
-    for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
-        for obj in page.get('Contents', []):
-            if obj['Key'].endswith('.csv.gz'):
-                keys.append(obj['Key'])
-    print(f"[LLMO S3] Found {len(keys)} files to load")
+        dfs = []
+        with ThreadPoolExecutor(max_workers=48) as pool:
+            futures = {pool.submit(_llmo_load_one_file, k): k for k in keys}
+            for fut in as_completed(futures):
+                _llmo_cache['loaded_files'] = _llmo_cache.get('loaded_files', 0) + 1
+                result = fut.result()
+                if result is not None:
+                    dfs.append(result)
 
-    # Parallel download and parse
-    dfs = []
-    with ThreadPoolExecutor(max_workers=48) as pool:
-        futures = {pool.submit(_llmo_load_one_file, k): k for k in keys}
-        done_count = 0
-        for fut in as_completed(futures):
-            done_count += 1
-            if done_count % 50 == 0:
-                print(f"[LLMO S3] Loaded {done_count}/{len(keys)} files...")
-            result = fut.result()
-            if result is not None:
-                dfs.append(result)
+        if not dfs:
+            print("[LLMO S3] No data loaded!")
+            with _llmo_cache['lock']:
+                _llmo_cache['loading'] = False
+            return
 
-    if not dfs:
-        print("[LLMO S3] No data loaded!")
+        df = pd.concat(dfs, ignore_index=True)
+        del dfs
+
+        search_pattern = _re.compile(r'[?&](?:q|query|p|search|prompt|text)=([^&]+)', _re.IGNORECASE)
+        def _extract_search(url):
+            if not isinstance(url, str):
+                return None
+            m = search_pattern.search(url)
+            if m:
+                try:
+                    return unquote_plus(m.group(1))[:200]
+                except Exception:
+                    return m.group(1)[:200]
+            return None
+
+        df['SEARCH_TERM'] = df['URL'].apply(_extract_search)
+        df.drop(columns=['URL'], inplace=True)
+        df['DELIVERED'] = pd.to_datetime(df['DELIVERED'], errors='coerce').dt.date
+        df['VISIT_TS'] = pd.to_datetime(df['VISIT_TS'], errors='coerce')
+        for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
+            df[col] = df[col].astype('category')
+
+        elapsed = _time.time() - t0
+        print(f"[LLMO S3] Loaded {len(df):,} rows in {elapsed:.1f}s  ({df.memory_usage(deep=True).sum() / 1e9:.2f} GB)")
+
+        with _llmo_cache['lock']:
+            _llmo_cache['df'] = df
+            _llmo_cache['loaded_at'] = _time.time()
+            _llmo_cache['loading'] = False
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[LLMO S3] Background load failed: {e}")
         with _llmo_cache['lock']:
             _llmo_cache['loading'] = False
-        return None
 
-    df = pd.concat(dfs, ignore_index=True)
-    del dfs
 
-    # Extract search terms from URL before dropping it
-    search_pattern = _re.compile(r'[?&](?:q|query|p|search|prompt|text)=([^&]+)', _re.IGNORECASE)
-    def _extract_search(url):
-        if not isinstance(url, str):
-            return None
-        m = search_pattern.search(url)
-        if m:
-            try:
-                return unquote_plus(m.group(1))[:200]
-            except Exception:
-                return m.group(1)[:200]
-        return None
-
-    df['SEARCH_TERM'] = df['URL'].apply(_extract_search)
-    df.drop(columns=['URL'], inplace=True)
-
-    # Parse dates and timestamps
-    df['DELIVERED'] = pd.to_datetime(df['DELIVERED'], errors='coerce').dt.date
-    df['VISIT_TS'] = pd.to_datetime(df['VISIT_TS'], errors='coerce')
-
-    # Convert to categories to save memory
-    for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
-        df[col] = df[col].astype('category')
-
-    elapsed = _time.time() - t0
-    print(f"[LLMO S3] Loaded {len(df):,} rows in {elapsed:.1f}s  ({df.memory_usage(deep=True).sum() / 1e9:.2f} GB)")
-
+def _llmo_ensure_loaded():
+    """Return cached DataFrame if ready, or kick off background load. Returns None while loading."""
+    import time as _time
+    now = _time.time()
     with _llmo_cache['lock']:
-        _llmo_cache['df'] = df
-        _llmo_cache['loaded_at'] = _time.time()
-        _llmo_cache['loading'] = False
-    return df
+        if _llmo_cache['df'] is not None and (now - _llmo_cache['loaded_at']) < LLMO_CACHE_TTL:
+            return _llmo_cache['df']
+        if not _llmo_cache['loading']:
+            _llmo_cache['loading'] = True
+            _llmo_cache['loaded_files'] = 0
+            _llmo_cache['total_files'] = 0
+            t = _llmo_threading.Thread(target=_llmo_do_background_load, daemon=True)
+            t.start()
+        return None  # still loading
 
 
 @app.route('/api/llmo-iq/dates', methods=['GET'])
@@ -6964,10 +6961,13 @@ def llmo_iq_dates():
     try:
         df = _llmo_ensure_loaded()
         if df is None:
-            return jsonify({'success': True, 'dates': []})
+            loaded = _llmo_cache.get('loaded_files', 0)
+            total = _llmo_cache.get('total_files', 0)
+            return jsonify({'success': True, 'loading': True, 'dates': [],
+                            'loaded_files': loaded, 'total_files': total})
         dates = sorted(df['DELIVERED'].dropna().unique(), reverse=True)
         dates = [str(d) for d in dates]
-        return jsonify({'success': True, 'dates': dates})
+        return jsonify({'success': True, 'loading': False, 'dates': dates})
     except Exception as e:
         print(f"[LLMO IQ dates] Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -6987,8 +6987,13 @@ def llmo_iq_data():
 
     try:
         full_df = _llmo_ensure_loaded()
-        if full_df is None or full_df.empty:
-            return jsonify({'success': True, 'date': date_str, 'date_end': date_end,
+        if full_df is None:
+            loaded = _llmo_cache.get('loaded_files', 0)
+            total = _llmo_cache.get('total_files', 0)
+            return jsonify({'success': True, 'loading': True,
+                            'loaded_files': loaded, 'total_files': total})
+        if full_df.empty:
+            return jsonify({'success': True, 'loading': False, 'date': date_str, 'date_end': date_end,
                             'total_unique_users': 0, 'total_unique_users_projected': 0,
                             'total_clicks': 0, 'total_clicks_projected': 0,
                             'llm_count': 0, 'llms': [], 'attribution': [], 'flows': [],

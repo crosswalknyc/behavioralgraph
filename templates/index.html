@@ -14899,7 +14899,17 @@
 
         <!-- LLMO IQ VIEW -->
         <div id="llmoIQView">
-            <div class="llmo-iq-container" style="max-width: 1600px; margin: 0 auto; width: 100%;">
+            <!-- Loading overlay shown while S3 data loads -->
+            <div id="llmoLoadingOverlay" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:4rem 2rem; text-align:center;">
+                <div style="font-size:2.5rem; margin-bottom:1rem;">🤖</div>
+                <h2 style="margin:0 0 0.5rem; font-size:1.3rem; font-weight:700;">Loading LLMO Data</h2>
+                <p id="llmoLoadingMsg" style="margin:0 0 1.5rem; color:var(--text-secondary); font-size:0.9rem;">Initializing...</p>
+                <div style="width:300px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                    <div id="llmoLoadingBar" style="width:0%; height:100%; background:linear-gradient(90deg,#34d399,#06b6d4); border-radius:3px; transition:width 0.3s ease;"></div>
+                </div>
+                <p id="llmoLoadingPct" style="margin:0.5rem 0 0; color:var(--text-secondary); font-size:0.8rem;">0%</p>
+            </div>
+            <div class="llmo-iq-container" id="llmoIQContent" style="max-width: 1600px; margin: 0 auto; width: 100%; display:none;">
                 <!-- Header -->
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
                     <div>
@@ -17410,11 +17420,51 @@
             }
         };
 
+        var _llmoPollingTimer = null;
+
+        function _llmoShowLoading() {
+            var overlay = document.getElementById('llmoLoadingOverlay');
+            var content = document.getElementById('llmoIQContent');
+            if (overlay) overlay.style.display = 'flex';
+            if (content) content.style.display = 'none';
+        }
+
+        function _llmoHideLoading() {
+            var overlay = document.getElementById('llmoLoadingOverlay');
+            var content = document.getElementById('llmoIQContent');
+            if (overlay) overlay.style.display = 'none';
+            if (content) content.style.display = 'block';
+        }
+
+        function _llmoUpdateProgress(loaded, total) {
+            var msg = document.getElementById('llmoLoadingMsg');
+            var bar = document.getElementById('llmoLoadingBar');
+            var pct = document.getElementById('llmoLoadingPct');
+            if (total > 0) {
+                var p = Math.round((loaded / total) * 100);
+                if (msg) msg.textContent = 'Downloading ' + loaded + ' of ' + total + ' data files from S3...';
+                if (bar) bar.style.width = p + '%';
+                if (pct) pct.textContent = p + '%';
+            } else {
+                if (msg) msg.textContent = 'Discovering data files...';
+                if (bar) bar.style.width = '5%';
+                if (pct) pct.textContent = '';
+            }
+        }
+
         function loadLLMOIQDates() {
+            _llmoShowLoading();
             fetch('/api/llmo-iq/dates')
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (!data.success) { console.error('LLMO dates error:', data.error); return; }
+                    if (data.loading) {
+                        _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0);
+                        if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
+                        _llmoPollingTimer = setTimeout(loadLLMOIQDates, 2000);
+                        return;
+                    }
+                    _llmoHideLoading();
                     var sel = document.getElementById('llmoDateSelect');
                     var selEnd = document.getElementById('llmoDateEndSelect');
                     sel.innerHTML = '';
@@ -17433,7 +17483,11 @@
                         loadLLMOIQData();
                     }
                 })
-                .catch(function(e) { console.error('LLMO dates fetch error:', e); });
+                .catch(function(e) {
+                    console.error('LLMO dates fetch error:', e);
+                    if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
+                    _llmoPollingTimer = setTimeout(loadLLMOIQDates, 3000);
+                });
         }
 
         function loadLLMOIQData() {
@@ -17447,8 +17501,17 @@
             fetch('/api/llmo-iq/data?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd || date))
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
+                    if (!data.success) { if (btn) { btn.textContent = 'Load'; btn.disabled = false; } console.error('LLMO data error:', data.error); return; }
+                    if (data.loading) {
+                        _llmoShowLoading();
+                        _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0);
+                        if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
+                        _llmoLoaded = false;
+                        if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
+                        _llmoPollingTimer = setTimeout(loadLLMOIQDates, 2000);
+                        return;
+                    }
                     if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
-                    if (!data.success) { console.error('LLMO data error:', data.error); return; }
                     renderLLMOSummaryCards(data);
                     renderLLMOUsageTable(data.llms);
                     renderLLMOCategoryShare(data.llms);
