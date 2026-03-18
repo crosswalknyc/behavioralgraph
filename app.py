@@ -6844,9 +6844,12 @@ def get_goodshort_ranker_data():
 LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000  # 32.99
 LLMO_S3_BUCKET = 'llmo'
 LLMO_S3_PREFIX = 'full_table/'
-LLMO_CACHE_TTL = 86400  # 24 hours -- refreshed daily by scheduled pre-warm
+LLMO_PROCESSED_KEY = 'processed/llmo_processed.parquet'
+LLMO_CACHE_TTL = 86400  # 24 hours
 import threading as _llmo_threading
-_llmo_cache = {'df': None, 'loaded_at': 0, 'loading': False, 'lock': _llmo_threading.Lock()}
+_llmo_cache = {'df': None, 'loaded_at': 0, 'loading': False,
+               'lock': _llmo_threading.Lock(),
+               'total_files': 0, 'loaded_files': 0, 'stage': ''}
 
 
 def _llmo_load_one_file(key):
@@ -6867,75 +6870,151 @@ def _llmo_load_one_file(key):
         return None
 
 
-def _llmo_do_background_load():
-    """Background worker: download all S3 files, build DataFrame, update cache."""
+def _llmo_process_raw_df(df):
+    """Extract search terms, parse dates, optimise dtypes. Mutates df in place."""
     import re as _re
     from urllib.parse import unquote_plus
+    search_pattern = _re.compile(r'[?&](?:q|query|p|search|prompt|text)=([^&]+)', _re.IGNORECASE)
+
+    def _extract_search(url):
+        if not isinstance(url, str):
+            return None
+        m = search_pattern.search(url)
+        if m:
+            try:
+                return unquote_plus(m.group(1))[:200]
+            except Exception:
+                return m.group(1)[:200]
+        return None
+
+    df['SEARCH_TERM'] = df['URL'].apply(_extract_search)
+    df.drop(columns=['URL'], inplace=True)
+    df['DELIVERED'] = pd.to_datetime(df['DELIVERED'], errors='coerce').dt.date
+    df['VISIT_TS'] = pd.to_datetime(df['VISIT_TS'], errors='coerce')
+    for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
+        df[col] = df[col].astype('category')
+    return df
+
+
+def _llmo_load_from_parquet():
+    """Try to load the pre-processed Parquet file from S3. Returns DataFrame or None."""
+    import time as _time
+    try:
+        _llmo_cache['stage'] = 'Downloading processed data...'
+        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_PROCESSED_KEY)
+        raw = resp['Body'].read()
+        buf = io.BytesIO(raw)
+        df = pd.read_parquet(buf)
+        df['DELIVERED'] = pd.to_datetime(df['DELIVERED'], errors='coerce').dt.date
+        df['VISIT_TS'] = pd.to_datetime(df['VISIT_TS'], errors='coerce')
+        for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
+            if col in df.columns:
+                df[col] = df[col].astype('category')
+        print(f"[LLMO S3] Loaded parquet: {len(df):,} rows ({df.memory_usage(deep=True).sum() / 1e9:.2f} GB)")
+        return df
+    except s3_client.exceptions.NoSuchKey:
+        print("[LLMO S3] No processed parquet found, will build from raw files")
+        return None
+    except Exception as e:
+        print(f"[LLMO S3] Parquet load failed ({e}), will build from raw files")
+        return None
+
+
+def _llmo_save_parquet(df):
+    """Save processed DataFrame as Parquet to S3."""
+    import time as _time
+    try:
+        t0 = _time.time()
+        buf = io.BytesIO()
+        save_df = df.copy()
+        save_df['DELIVERED'] = pd.to_datetime(save_df['DELIVERED'].astype(str), errors='coerce')
+        for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
+            if col in save_df.columns:
+                save_df[col] = save_df[col].astype(str)
+        save_df.to_parquet(buf, index=False, engine='pyarrow', compression='snappy')
+        buf.seek(0)
+        size_mb = buf.getbuffer().nbytes / 1e6
+        s3_client.put_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_PROCESSED_KEY, Body=buf.getvalue())
+        elapsed = _time.time() - t0
+        print(f"[LLMO S3] Saved parquet to s3://{LLMO_S3_BUCKET}/{LLMO_PROCESSED_KEY} ({size_mb:.0f} MB in {elapsed:.1f}s)")
+    except Exception as e:
+        print(f"[LLMO S3] Failed to save parquet: {e}")
+
+
+def _llmo_build_from_raw():
+    """Download all raw CSVs, process, save parquet, return DataFrame."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    import time as _time
+
+    _llmo_cache['stage'] = 'Discovering files...'
+    paginator = s3_client.get_paginator('list_objects_v2')
+    keys = []
+    for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
+        for obj in page.get('Contents', []):
+            if obj['Key'].endswith('.csv.gz'):
+                keys.append(obj['Key'])
+    _llmo_cache['total_files'] = len(keys)
+    _llmo_cache['loaded_files'] = 0
+    _llmo_cache['stage'] = 'Downloading raw files...'
+    print(f"[LLMO S3] Found {len(keys)} raw files to process")
+
+    dfs = []
+    with ThreadPoolExecutor(max_workers=48) as pool:
+        futures = {pool.submit(_llmo_load_one_file, k): k for k in keys}
+        for fut in as_completed(futures):
+            _llmo_cache['loaded_files'] = _llmo_cache.get('loaded_files', 0) + 1
+            result = fut.result()
+            if result is not None:
+                dfs.append(result)
+
+    if not dfs:
+        return None
+
+    _llmo_cache['stage'] = 'Processing...'
+    df = pd.concat(dfs, ignore_index=True)
+    del dfs
+    df = _llmo_process_raw_df(df)
+
+    _llmo_cache['stage'] = 'Saving processed file...'
+    _llmo_save_parquet(df)
+    return df
+
+
+def _llmo_do_background_load(force_rebuild=False):
+    """Background worker: load from parquet (fast) or rebuild from raw CSVs."""
     import time as _time
 
     print("[LLMO S3] Background load starting...")
     t0 = _time.time()
     try:
-        paginator = s3_client.get_paginator('list_objects_v2')
-        keys = []
-        for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
-            for obj in page.get('Contents', []):
-                if obj['Key'].endswith('.csv.gz'):
-                    keys.append(obj['Key'])
-        _llmo_cache['total_files'] = len(keys)
-        _llmo_cache['loaded_files'] = 0
-        print(f"[LLMO S3] Found {len(keys)} files to load")
+        df = None
+        if not force_rebuild:
+            df = _llmo_load_from_parquet()
 
-        dfs = []
-        with ThreadPoolExecutor(max_workers=48) as pool:
-            futures = {pool.submit(_llmo_load_one_file, k): k for k in keys}
-            for fut in as_completed(futures):
-                _llmo_cache['loaded_files'] = _llmo_cache.get('loaded_files', 0) + 1
-                result = fut.result()
-                if result is not None:
-                    dfs.append(result)
+        if df is None:
+            df = _llmo_build_from_raw()
 
-        if not dfs:
+        if df is None:
             print("[LLMO S3] No data loaded!")
             with _llmo_cache['lock']:
                 _llmo_cache['loading'] = False
+                _llmo_cache['stage'] = ''
             return
 
-        df = pd.concat(dfs, ignore_index=True)
-        del dfs
-
-        search_pattern = _re.compile(r'[?&](?:q|query|p|search|prompt|text)=([^&]+)', _re.IGNORECASE)
-        def _extract_search(url):
-            if not isinstance(url, str):
-                return None
-            m = search_pattern.search(url)
-            if m:
-                try:
-                    return unquote_plus(m.group(1))[:200]
-                except Exception:
-                    return m.group(1)[:200]
-            return None
-
-        df['SEARCH_TERM'] = df['URL'].apply(_extract_search)
-        df.drop(columns=['URL'], inplace=True)
-        df['DELIVERED'] = pd.to_datetime(df['DELIVERED'], errors='coerce').dt.date
-        df['VISIT_TS'] = pd.to_datetime(df['VISIT_TS'], errors='coerce')
-        for col in ['COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM']:
-            df[col] = df[col].astype('category')
-
         elapsed = _time.time() - t0
-        print(f"[LLMO S3] Loaded {len(df):,} rows in {elapsed:.1f}s  ({df.memory_usage(deep=True).sum() / 1e9:.2f} GB)")
+        print(f"[LLMO S3] Ready: {len(df):,} rows in {elapsed:.1f}s")
 
         with _llmo_cache['lock']:
             _llmo_cache['df'] = df
             _llmo_cache['loaded_at'] = _time.time()
             _llmo_cache['loading'] = False
+            _llmo_cache['stage'] = ''
     except Exception as e:
         import traceback; traceback.print_exc()
         print(f"[LLMO S3] Background load failed: {e}")
         with _llmo_cache['lock']:
             _llmo_cache['loading'] = False
+            _llmo_cache['stage'] = ''
 
 
 def _llmo_ensure_loaded():
@@ -6949,14 +7028,14 @@ def _llmo_ensure_loaded():
             _llmo_cache['loading'] = True
             _llmo_cache['loaded_files'] = 0
             _llmo_cache['total_files'] = 0
+            _llmo_cache['stage'] = 'Starting...'
             t = _llmo_threading.Thread(target=_llmo_do_background_load, daemon=True)
             t.start()
-        return None  # still loading
+        return None
 
 
 def _llmo_scheduled_prewarm():
-    """Daily pre-warm: force-refresh the LLMO S3 cache regardless of TTL."""
-    import time as _time
+    """Daily pre-warm: rebuild from raw CSVs and save fresh parquet."""
     with _llmo_cache['lock']:
         if _llmo_cache['loading']:
             print("[LLMO Scheduler] Already loading, skipping pre-warm")
@@ -6966,8 +7045,9 @@ def _llmo_scheduled_prewarm():
         _llmo_cache['total_files'] = 0
         _llmo_cache['df'] = None
         _llmo_cache['loaded_at'] = 0
-    print("[LLMO Scheduler] Starting daily pre-warm...")
-    _llmo_do_background_load()
+        _llmo_cache['stage'] = 'Starting daily rebuild...'
+    print("[LLMO Scheduler] Starting daily pre-warm (full rebuild)...")
+    _llmo_do_background_load(force_rebuild=True)
 
 
 def _llmo_daily_scheduler():
@@ -7009,8 +7089,10 @@ def llmo_iq_dates():
         if df is None:
             loaded = _llmo_cache.get('loaded_files', 0)
             total = _llmo_cache.get('total_files', 0)
+            stage = _llmo_cache.get('stage', '')
             return jsonify({'success': True, 'loading': True, 'dates': [],
-                            'loaded_files': loaded, 'total_files': total})
+                            'loaded_files': loaded, 'total_files': total,
+                            'stage': stage})
         dates = sorted(df['DELIVERED'].dropna().unique(), reverse=True)
         dates = [str(d) for d in dates]
         return jsonify({'success': True, 'loading': False, 'dates': dates})
@@ -7036,8 +7118,10 @@ def llmo_iq_data():
         if full_df is None:
             loaded = _llmo_cache.get('loaded_files', 0)
             total = _llmo_cache.get('total_files', 0)
+            stage = _llmo_cache.get('stage', '')
             return jsonify({'success': True, 'loading': True,
-                            'loaded_files': loaded, 'total_files': total})
+                            'loaded_files': loaded, 'total_files': total,
+                            'stage': stage})
         if full_df.empty:
             return jsonify({'success': True, 'loading': False, 'date': date_str, 'date_end': date_end,
                             'total_unique_users': 0, 'total_unique_users_projected': 0,

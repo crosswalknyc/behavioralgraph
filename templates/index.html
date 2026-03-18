@@ -17436,17 +17436,25 @@
             if (content) content.style.display = 'block';
         }
 
-        function _llmoUpdateProgress(loaded, total) {
+        function _llmoUpdateProgress(loaded, total, stage) {
             var msg = document.getElementById('llmoLoadingMsg');
             var bar = document.getElementById('llmoLoadingBar');
             var pct = document.getElementById('llmoLoadingPct');
-            if (total > 0) {
+            if (stage && stage.indexOf('Downloading processed') >= 0) {
+                if (msg) msg.textContent = 'Loading pre-processed data...';
+                if (bar) bar.style.width = '60%';
+                if (pct) pct.textContent = '';
+            } else if (total > 0 && loaded > 0) {
                 var p = Math.round((loaded / total) * 100);
-                if (msg) msg.textContent = 'Downloading ' + loaded + ' of ' + total + ' data files from S3...';
+                if (msg) msg.textContent = 'Processing ' + loaded + ' of ' + total + ' raw data files...';
                 if (bar) bar.style.width = p + '%';
                 if (pct) pct.textContent = p + '%';
+            } else if (stage) {
+                if (msg) msg.textContent = stage;
+                if (bar) bar.style.width = '10%';
+                if (pct) pct.textContent = '';
             } else {
-                if (msg) msg.textContent = 'Discovering data files...';
+                if (msg) msg.textContent = 'Initializing...';
                 if (bar) bar.style.width = '5%';
                 if (pct) pct.textContent = '';
             }
@@ -17459,7 +17467,7 @@
                 .then(function(data) {
                     if (!data.success) { console.error('LLMO dates error:', data.error); return; }
                     if (data.loading) {
-                        _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0);
+                        _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0, data.stage || '');
                         if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
                         _llmoPollingTimer = setTimeout(loadLLMOIQDates, 2000);
                         return;
@@ -17504,7 +17512,7 @@
                     if (!data.success) { if (btn) { btn.textContent = 'Load'; btn.disabled = false; } console.error('LLMO data error:', data.error); return; }
                     if (data.loading) {
                         _llmoShowLoading();
-                        _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0);
+                        _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0, data.stage || '');
                         if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                         _llmoLoaded = false;
                         if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
