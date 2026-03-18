@@ -381,17 +381,17 @@ def _soft_clamp_index(raw_index, lo, hi, cat, val):
         scale = max(half_lo * 2.0, 0.01)
         compressed = center - half_lo * math.tanh(abs(deviation) / scale)
 
-    # Regression toward parity: pull 72% back toward 1.0.
-    # Source data is often uniformly inflated (all items 50-87% BP), so real
-    # differentiation must come from (a) items with genuinely high affinity
-    # surviving the pull, and (b) the AI gut check boosting/lowering items.
-    parity_pull = 0.72
+    # Strong regression toward parity: pull 85% back toward 1.0.
+    # Anchoring should be CONSERVATIVE — most items land near Gen Pop
+    # parity. The AI gut check then provides intelligent differentiation
+    # based on persona research and brand relevance.
+    parity_pull = 0.85
     regressed = compressed + (center - compressed) * parity_pull
 
-    # Deterministic per-item noise (±20%) that crosses the 1.0 boundary
-    # for borderline items, creating organic over/under distribution.
+    # Small deterministic noise (±5%) for organic variation.
+    # Kept small so it doesn't override the AI's persona-based adjustments.
     item_hash = int(hashlib.md5(f"{cat}:{val}".encode()).hexdigest()[:8], 16)
-    noise_amplitude = 0.20
+    noise_amplitude = 0.05
     noise = ((item_hash / 0xFFFFFFFF) - 0.5) * 2.0 * noise_amplitude
     result = regressed + noise
 
@@ -6435,54 +6435,47 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"digital engager is a completely different consumer than a Fandom.com "
             f"user, who is completely different from a Budweiser drinker or an AARP "
             f"member or a Peloton subscriber. The persona drives EVERYTHING below.\n\n"
-            f"=== STEP 2: EVALUATE THE DATA ===\n"
-            f"Now review each item against your persona. For each item, ask:\n"
-            f"\"Would THIS specific person — the {subject_clean} engager — "
-            f"realistically over-index, under-index, or be at parity on this brand?\"\n\n"
+            f"=== STEP 2: EVALUATE EVERY ITEM ===\n"
+            f"You MUST return an adjustment for EVERY SINGLE ITEM in the data below. "
+            f"No item should pass without evaluation. For each item, classify it:\n"
+            f"- STRONG AFFINITY → factor 1.15-1.80 (boost)\n"
+            f"- SLIGHT AFFINITY → factor 1.05-1.15 (small boost)\n"
+            f"- NEUTRAL/MASS-MARKET → factor 0.90-1.05 (near parity)\n"
+            f"- SLIGHT MISMATCH → factor 0.75-0.90 (small reduction)\n"
+            f"- PERSONA MISMATCH → factor 0.30-0.70 (significant reduction)\n\n"
             f"=== BEHAVIORAL DATA (batch {batch_num}/{len(batches)}) ===\n"
             + "\n\n".join(items_text) +
             f"\n\n=== CRITICAL RULES ===\n"
-            f"1. PERSONA FIRST, DEMOGRAPHICS SECOND. The persona from Step 1 is "
-            f"your primary guide. Demographics (age, gender, income) inform the "
-            f"persona but the persona is richer — it captures lifestyle, interests, "
-            f"and behavioral patterns that demographics alone miss. A young male "
-            f"gamer has different brand affinities than a young male finance bro, "
-            f"even though their demographics are identical.\n"
-            f"2. EVERY PROFILE IS UNIQUE. The {subject_clean} persona would have "
-            f"specific brand affinities that differ from ANY other profile. Think "
-            f"about what makes THIS audience special and which brands align with "
-            f"their specific identity, not just their age/gender bucket.\n"
-            f"3. ORGANIC DATA HAS BOTH OVER AND UNDER INDEXING. In real consumer "
-            f"panels, roughly 40-60% of items under-index for any given audience. "
-            f"If most items are over-indexing, that is a RED FLAG. Only items with "
-            f"CLEAR persona-driven affinity should over-index.\n"
-            f"4. FOCUS ON INDEX, NOT ABSOLUTE BP. Mass-market items with high "
-            f"GenPop BP SHOULD have high absolute BP. An item with 70% BP and "
-            f"90% GenPop BP is UNDER-indexing (index 0.78), which is fine.\n"
-            f"5. THREE-TIER EVALUATION for each item:\n"
-            f"   - STRONG AFFINITY (boost 1.1-1.8): Brands that THIS persona would "
-            f"specifically seek out. E.g. Discord for a gaming audience, Sephora "
-            f"for a beauty/fashion audience, ESPN for a sports audience.\n"
-            f"   - NEUTRAL/MASS-MARKET (keep near 0.85-1.1): Brands everyone uses "
-            f"regardless of persona. E.g. Google, Amazon, Walmart, Netflix.\n"
-            f"   - PERSONA MISMATCH (reduce 0.3-0.7): Brands that conflict with "
-            f"this persona's identity, interests, or demographics. E.g. beauty "
-            f"brands for a male gaming audience, hunting brands for an urban "
-            f"fashion audience, luxury brands for a value-conscious audience.\n"
-            f"6. EXPECT TO MAKE MANY ADJUSTMENTS. Be thorough and opinionated. "
-            f"The goal is a profile that tells a coherent story: someone looking "
-            f"at the final data should be able to guess what \"{subject_clean}\" "
-            f"is just from the brand affinities.\n\n"
-            f"Return ONLY valid JSON:\n"
-            f'If everything passes: {{"status":"OK","notes":"reason"}}\n'
-            f'If corrections needed: {{"status":"FIX","notes":"summary",'
+            f"1. ADJUST EVERY ITEM. The data currently sits near Gen Pop parity "
+            f"(index ~1.0) because the anchoring was conservative. YOUR JOB is to "
+            f"differentiate: push items UP that this persona has affinity for, and "
+            f"push items DOWN that don't match. Every item needs a factor.\n"
+            f"2. PERSONA FIRST, DEMOGRAPHICS SECOND. The persona from Step 1 is "
+            f"your primary guide. A young male gamer has different brand affinities "
+            f"than a young male finance bro, even with identical demographics.\n"
+            f"3. EVERY PROFILE IS UNIQUE. Think about what makes the "
+            f"\"{subject_clean}\" audience special — which brands align with their "
+            f"specific identity, not just their age/gender bucket.\n"
+            f"4. BE OPINIONATED AND SPECIFIC. Examples of what good adjustments "
+            f"look like for a gaming/tech audience:\n"
+            f"   - Discord: 1.5 (core gaming platform → strong affinity)\n"
+            f"   - YouTube: 1.2 (massive gaming content → above parity)\n"
+            f"   - Twitch: 1.5 (gaming streaming → strong affinity)\n"
+            f"   - Pinterest: 0.6 (female-skewing crafts platform → mismatch)\n"
+            f"   - LinkedIn: 0.7 (professional networking → not this persona)\n"
+            f"   - Old Spice: 1.15 (male grooming → slight affinity)\n"
+            f"   - Lululemon: 0.5 (women's activewear → demographic mismatch)\n"
+            f"   These are EXAMPLES only — use the actual persona you built.\n"
+            f"5. FOCUS ON INDEX, NOT ABSOLUTE BP. Mass-market items with high "
+            f"GenPop BP SHOULD have high absolute BP. Index = profile BP / GenPop BP.\n"
+            f"6. The goal: someone looking at the final data should be able to guess "
+            f"what \"{subject_clean}\" is just from the brand affinities.\n\n"
+            f"Return ONLY valid JSON — you MUST include an adjustment for every item:\n"
+            f'{{"status":"FIX","notes":"summary",'
             f'"adjustments":[{{"category":"CAT","item":"ITEM",'
-            f'"direction":"lower" or "higher",'
+            f'"direction":"lower" or "higher" or "neutral",'
             f'"factor":0.6,"reason":"brief"}},...]}}\n\n'
-            f"factor: multiplier on current BP (0.3-0.5 = significant reduction, "
-            f"0.5-0.8 = moderate reduction, 0.8-0.95 = slight reduction, "
-            f"1.1-1.3 = moderate boost, 1.3-1.8 = significant boost). "
-            f"Stay in 0.15 to 2.5 range.\n"
+            f"factor: multiplier on current BP. Stay in 0.15 to 2.5 range.\n"
             f"JSON only, no markdown."
         )
 
@@ -6491,7 +6484,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 model='gpt-4o',
                 messages=[{'role': 'user', 'content': behav_prompt}],
                 temperature=0.15,
-                max_tokens=3000
+                max_tokens=8000
             )
             text = resp.choices[0].message.content.strip()
             if text.startswith('```'):
