@@ -533,8 +533,9 @@ def _research_brand_demographics(client, subject_name, brand_category):
             break
 
     prompt = (
-        f'Search the web for current demographic data about "{clean_name}" '
-        f'({audience_type}). Report what you find about:\n'
+        f'Search the web for current data about "{clean_name}" '
+        f'({audience_type}). Report TWO sections:\n\n'
+        f'SECTION 1 — DEMOGRAPHICS:\n'
         f'- Age distribution (median age, age brackets)\n'
         f'- Gender split (% male vs female)\n'
         f'- Ethnicity / racial composition\n'
@@ -543,16 +544,33 @@ def _research_brand_demographics(client, subject_name, brand_category):
         f'- Any known data on LGBTQ+ representation\n'
         f'- Relationship / marital status if available\n'
         f'- Parental status if available\n\n'
-        f'Cite specific sources (Nielsen, Comscore, Pew Research, Statista, '
-        f'Morning Consult, YouGov, etc.). Be concise — just the key numbers '
-        f'and percentages. If no data is available for a category, say so.'
+        f'SECTION 2 — PERSONA & BEHAVIORAL PROFILE:\n'
+        f'Describe WHO this person is as a consumer. Based on what '
+        f'"{clean_name}" is and who engages with it:\n'
+        f'- What are their core interests and hobbies?\n'
+        f'- What is their lifestyle like? (urban/suburban, active/sedentary, '
+        f'tech-savvy/traditional)\n'
+        f'- What other brands, platforms, and media would they naturally '
+        f'gravitate toward? What would they avoid?\n'
+        f'- What are their spending habits? (frugal/premium, online/in-store, '
+        f'impulse/considered)\n'
+        f'- How do they consume media? (streaming-heavy, social-first, '
+        f'traditional TV, gaming)\n'
+        f'- What social media platforms do they actually use vs. skip?\n'
+        f'- What QSR/dining habits would they have?\n'
+        f'- What shopping patterns? (Amazon-heavy, thrift, fast fashion, '
+        f'specialty retail)\n\n'
+        f'Be specific and opinionated — paint a clear picture of this person '
+        f'so that a researcher could predict their brand affinities. '
+        f'Cite sources where possible (Nielsen, Comscore, Pew, Statista, '
+        f'Morning Consult, YouGov, etc.).'
     )
 
     try:
         resp = client.chat.completions.create(
             model='gpt-4o-search-preview',
             messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=800,
+            max_tokens=1500,
         )
         text = (resp.choices[0].message.content or '').strip()
         _demo_research_cache[cache_key] = text
@@ -6202,9 +6220,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     audience_context = (
         f'BRAND/SUBJECT: "{subject_clean}"\n'
         f'CATEGORY: {bc}\n\n'
-        f'AUDIENCE DEMOGRAPHICS:\n{profile_summary}\n\n'
-        f'WEB RESEARCH ON THIS BRAND\'S AUDIENCE:\n'
-        f'{web_research[:2000] if web_research else "No research available"}\n'
+        f'AUDIENCE DEMOGRAPHICS (from profile data):\n{profile_summary}\n\n'
+        f'WEB RESEARCH — DEMOGRAPHICS + PERSONA:\n'
+        f'{web_research[:4000] if web_research else "No research available"}\n'
     )
 
     total_adjustments = 0
@@ -6402,51 +6420,59 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
 
         behav_prompt = (
             f"You are a US consumer research analyst doing a FINAL GUT CHECK on a "
-            f"brand audience profile. Your job is to ensure every item's Brand "
-            f"Penetration (BP) and INDEX feels ORGANIC and realistic for WHO this "
-            f"audience actually is.\n\n"
+            f"brand audience profile.\n\n"
             f"{audience_context}\n"
+            f"=== STEP 1: BUILD THE PERSONA ===\n"
+            f"Before evaluating ANY data, think about WHO digitally engages with "
+            f"\"{subject_clean}\". Use the web research and demographics above to "
+            f"construct a vivid consumer persona:\n"
+            f"- What kind of person uses/watches/buys \"{subject_clean}\"?\n"
+            f"- What are their core interests, hobbies, and lifestyle?\n"
+            f"- What brands, platforms, and media do they naturally gravitate toward?\n"
+            f"- What brands would they AVOID or have no interest in?\n"
+            f"- How do they spend their time and money?\n\n"
+            f"This persona is DIFFERENT for every profile subject. A Taylor Swift "
+            f"digital engager is a completely different consumer than a Fandom.com "
+            f"user, who is completely different from a Budweiser drinker or an AARP "
+            f"member or a Peloton subscriber. The persona drives EVERYTHING below.\n\n"
+            f"=== STEP 2: EVALUATE THE DATA ===\n"
+            f"Now review each item against your persona. For each item, ask:\n"
+            f"\"Would THIS specific person — the {subject_clean} engager — "
+            f"realistically over-index, under-index, or be at parity on this brand?\"\n\n"
             f"=== BEHAVIORAL DATA (batch {batch_num}/{len(batches)}) ===\n"
             + "\n\n".join(items_text) +
             f"\n\n=== CRITICAL RULES ===\n"
-            f"1. USE THE DEMOGRAPHICS ABOVE. The audience demographics (age, gender, "
-            f"ethnicity, income) are the MOST IMPORTANT signal for what brands this "
-            f"audience would engage with. A predominantly male audience should "
-            f"UNDER-INDEX on women's beauty brands (Sephora, Bath & Body Works, "
-            f"Ulta, Victoria's Secret, Lululemon). A young audience should "
-            f"under-index on brands popular with older demographics (Fox News, "
-            f"AARP, Cracker Barrel). An older audience should under-index on "
-            f"youth brands (Roblox, Fortnite, TikTok). APPLY THIS LOGIC to every "
-            f"item in the data.\n"
-            f"2. ORGANIC DATA HAS BOTH OVER AND UNDER INDEXING. In real consumer "
+            f"1. PERSONA FIRST, DEMOGRAPHICS SECOND. The persona from Step 1 is "
+            f"your primary guide. Demographics (age, gender, income) inform the "
+            f"persona but the persona is richer — it captures lifestyle, interests, "
+            f"and behavioral patterns that demographics alone miss. A young male "
+            f"gamer has different brand affinities than a young male finance bro, "
+            f"even though their demographics are identical.\n"
+            f"2. EVERY PROFILE IS UNIQUE. The {subject_clean} persona would have "
+            f"specific brand affinities that differ from ANY other profile. Think "
+            f"about what makes THIS audience special and which brands align with "
+            f"their specific identity, not just their age/gender bucket.\n"
+            f"3. ORGANIC DATA HAS BOTH OVER AND UNDER INDEXING. In real consumer "
             f"panels, roughly 40-60% of items under-index for any given audience. "
-            f"If most items are over-indexing, that is a RED FLAG — you MUST push "
-            f"items that don't match this audience's demographics and interests "
-            f"below 1.0x. Only items with CLEAR affinity should over-index.\n"
-            f"3. FOCUS ON INDEX, NOT ABSOLUTE BP. The index (profile BP / GenPop BP) "
-            f"is what matters. Mass-market items with high GenPop BP SHOULD have "
-            f"high absolute BP. An item with 70% BP and 90% GenPop BP is "
-            f"UNDER-indexing (index 0.78), which is fine.\n"
-            f"4. BRAND RELEVANCE = SUBJECT + DEMOGRAPHICS. Two-part test for each "
-            f"item: (a) Does it relate to \"{subject_clean}\"? (b) Does it match "
-            f"the audience's age, gender, income, and lifestyle? Both must pass "
-            f"for an over-index. Examples:\n"
-            f"   - Fandom.com (male tech/gaming) → Discord OVER, Sephora UNDER\n"
-            f"   - Taylor Swift (young female pop) → Sephora OVER, ESPN UNDER\n"
-            f"   - AARP (older 65+) → Fox News OVER, Roblox UNDER\n"
-            f"5. DEMOGRAPHIC MISMATCHES — aggressively reduce these:\n"
-            f"   - Beauty/cosmetics brands over-indexing for a male-heavy audience\n"
-            f"   - Women's fashion brands over-indexing for a male-heavy audience\n"
-            f"   - Sports/hunting brands over-indexing for a female-heavy audience\n"
-            f"   - Youth gaming brands over-indexing for an older audience\n"
-            f"   - Luxury brands over-indexing for a low-income audience\n"
-            f"   - Conservative media over-indexing for a young progressive audience\n"
-            f"   Use factor 0.4-0.7 for clear demographic mismatches.\n"
-            f"6. MASS-MARKET UNIVERSAL ITEMS should be near Gen Pop parity (index "
-            f"0.8-1.1). Google, Amazon, Walmart, Netflix are used by nearly everyone.\n"
-            f"7. EXPECT TO MAKE MANY ADJUSTMENTS. Review every single item. It is "
-            f"rare that all data passes without corrections. Push at least 30-40% "
-            f"of items below 1.0x if they are currently above.\n\n"
+            f"If most items are over-indexing, that is a RED FLAG. Only items with "
+            f"CLEAR persona-driven affinity should over-index.\n"
+            f"4. FOCUS ON INDEX, NOT ABSOLUTE BP. Mass-market items with high "
+            f"GenPop BP SHOULD have high absolute BP. An item with 70% BP and "
+            f"90% GenPop BP is UNDER-indexing (index 0.78), which is fine.\n"
+            f"5. THREE-TIER EVALUATION for each item:\n"
+            f"   - STRONG AFFINITY (boost 1.1-1.8): Brands that THIS persona would "
+            f"specifically seek out. E.g. Discord for a gaming audience, Sephora "
+            f"for a beauty/fashion audience, ESPN for a sports audience.\n"
+            f"   - NEUTRAL/MASS-MARKET (keep near 0.85-1.1): Brands everyone uses "
+            f"regardless of persona. E.g. Google, Amazon, Walmart, Netflix.\n"
+            f"   - PERSONA MISMATCH (reduce 0.3-0.7): Brands that conflict with "
+            f"this persona's identity, interests, or demographics. E.g. beauty "
+            f"brands for a male gaming audience, hunting brands for an urban "
+            f"fashion audience, luxury brands for a value-conscious audience.\n"
+            f"6. EXPECT TO MAKE MANY ADJUSTMENTS. Be thorough and opinionated. "
+            f"The goal is a profile that tells a coherent story: someone looking "
+            f"at the final data should be able to guess what \"{subject_clean}\" "
+            f"is just from the brand affinities.\n\n"
             f"Return ONLY valid JSON:\n"
             f'If everything passes: {{"status":"OK","notes":"reason"}}\n'
             f'If corrections needed: {{"status":"FIX","notes":"summary",'
@@ -6464,8 +6490,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             resp = client.chat.completions.create(
                 model='gpt-4o',
                 messages=[{'role': 'user', 'content': behav_prompt}],
-                temperature=0.1,
-                max_tokens=2000
+                temperature=0.15,
+                max_tokens=3000
             )
             text = resp.choices[0].message.content.strip()
             if text.startswith('```'):
