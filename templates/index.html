@@ -15804,6 +15804,9 @@
         let currentS3Key = null;
         let charts = {};
         let genPopBaselineData = null; // Parsed Gen Pop file - resolved to file with most recent year in filename; used for Gen Pop % everywhere
+        let _genPopReadyResolve = null;
+        let _genPopReady = new Promise(resolve => { _genPopReadyResolve = resolve; });
+        let _genPopLoaded = false; // flipped once genPopBaselineData is set
         
         // Subscriber IQ state variables (declared early for tooltip system access)
         let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
@@ -16083,6 +16086,8 @@
                     const data = await response.json();
                     if (data.success && data.data) {
                         genPopBaselineData = parseAllData(data.data);
+                        _genPopLoaded = true;
+                        if (_genPopReadyResolve) { _genPopReadyResolve(); _genPopReadyResolve = null; }
                         console.log('✅ Gen Pop baseline loaded successfully');
                         if (currentDashboardData && Array.isArray(currentDashboardData.locations) && currentDashboardData.locations.length > 0) {
                             renderLocationTable(currentDashboardData.locations);
@@ -16112,6 +16117,20 @@
             
             // Load Gen Pop baseline BEFORE profiles so index calculations have the data they need
             await loadGenPopBaseline();
+            
+            // If first attempt failed (no jobs cache yet), the job list load below will
+            // trigger a second attempt. Resolve the gate anyway after a timeout so the
+            // app doesn't hang forever if the Gen Pop file truly doesn't exist.
+            if (!_genPopLoaded) {
+                console.warn('⚠️ Gen Pop not loaded on first try — will retry after job list loads');
+                setTimeout(() => {
+                    if (!_genPopLoaded && _genPopReadyResolve) {
+                        console.warn('⚠️ Gen Pop load timed out — proceeding without baseline');
+                        _genPopReadyResolve();
+                        _genPopReadyResolve = null;
+                    }
+                }, 15000);
+            }
             
             loadJobs();
             // If user only has Hedge Fund IQ, show Hedge Fund landing; otherwise apply selected product view so dashboard/content shows
@@ -27578,11 +27597,15 @@
                             genPopPct = genPopItem.pct || 0;
                             genPopProjection = genPopItem.projection || 0;
                         }
-                    }
-                    
-                    // Fallback: Use Category Share if Gen Pop baseline not available
-                    if (genPopPct === 0) {
-                        genPopPct = catShare > 0 ? catShare : 0;
+                        // Case-insensitive fallback if exact match failed
+                        if (genPopPct === 0) {
+                            const valUpper = (value || '').trim().toUpperCase();
+                            const gpItem = genPopBaselineData.behavioral[category].find(item => (item.name || '').trim().toUpperCase() === valUpper);
+                            if (gpItem) {
+                                genPopPct = gpItem.pct || 0;
+                                genPopProjection = gpItem.projection || 0;
+                            }
+                        }
                     }
                     
                     // Fallback for genPopProjection: calculate from genPopPct if not available
@@ -27595,7 +27618,7 @@
                                            currentS3Key?.toUpperCase().includes('GENPOP') ||
                                            currentProfileData?.name?.toUpperCase().includes('GEN POP');
                     if (isGenPopProfile && genPopPct === 0) {
-                        genPopPct = pct; // Use profile percentage as gen pop percentage
+                        genPopPct = pct;
                     }
                 }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
@@ -27834,6 +27857,11 @@
         async function restoreSavedTabs() {
             const { savedTabs, savedActiveId } = loadSavedTabs();
             if (savedTabs.length === 0) return;
+            // Wait for Gen Pop baseline before parsing any profile so indices are correct
+            if (!_genPopLoaded) {
+                console.log('⏳ Waiting for Gen Pop baseline before restoring tabs...');
+                await _genPopReady;
+            }
             const seen = new Set();
             const deduped = savedTabs.filter(t => {
                 if (seen.has(t.id)) return false;
@@ -28422,6 +28450,11 @@
                         switchToProfileTab(effectiveId);
                         return;
                     }
+                    // Wait for Gen Pop baseline before parsing so indices are correct
+                    if (!_genPopLoaded) {
+                        console.log('⏳ Waiting for Gen Pop baseline before parsing profile...');
+                        await _genPopReady;
+                    }
                     const parsed = parseAllData(data.data);
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === effectiveId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
@@ -28880,13 +28913,24 @@
                 }
                 
                 // Reload Gen Pop baseline so new/updated Gen Pop file in S3 is used (e.g. after upload)
+                // Then RE-PARSE all open tabs with correct gen pop data (not just re-render stale parsed data)
                 if (typeof loadGenPopBaseline === 'function') {
                     loadGenPopBaseline().then(() => {
-                        if (currentDashboardData && genPopBaselineData) {
-                            renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, genPopBaselineData.demographics || {});
-                            if (currentDashboardData.behavioral) renderBehavioralCards(currentDashboardData.behavioral);
-                            if (Array.isArray(currentDashboardData.locations)) renderLocationTable(currentDashboardData.locations);
-                            if (typeof renderDemoInsights === 'function') renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, genPopBaselineData.demographics || {});
+                        if (!genPopBaselineData) return;
+                        // Re-parse every open tab's raw CSV data with the now-available gen pop baseline
+                        let reParsedActive = false;
+                        openProfileTabs.forEach(tab => {
+                            if (tab.data && tab.data.data) {
+                                tab.parsed = parseAllData(tab.data.data);
+                                if (tab.id === activeProfileTabId) reParsedActive = true;
+                            }
+                        });
+                        // Re-display the active tab with corrected indices
+                        if (reParsedActive) {
+                            const activeTab = openProfileTabs.find(t => t.id === activeProfileTabId);
+                            if (activeTab) {
+                                try { displayProfileTabData(activeTab); } catch (e) { console.error('Re-display after Gen Pop load error:', e); }
+                            }
                         }
                     });
                 }
