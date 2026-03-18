@@ -993,17 +993,16 @@ def anchor_to_genpop(df, sample_size):
             continue
 
         gp_bp_val = gp_entry['bp']
-        gp_cs_val = gp_entry['cs']
 
-        if gp_bp_val <= 0 or gp_cs_val <= 0:
+        if gp_bp_val <= 0:
             continue
 
         try:
-            profile_cs = float(row[pct_col])
+            profile_bp_val = float(row.get(bp_col, 0)) if bp_col else 0
         except (ValueError, TypeError):
-            continue
+            profile_bp_val = 0
 
-        if profile_cs <= 0:
+        if profile_bp_val <= 0:
             continue
 
         # Per-item adaptive ceiling: niche items cap at 40%, mass-market items
@@ -1011,13 +1010,15 @@ def anchor_to_genpop(df, sample_size):
         # don't get artificially forced below index 100.
         item_ceiling = max(BP_CEILING_BASE, gp_bp_val * 1.15)
 
-        # Bayesian shrinkage: blend raw index toward 1.0 when sample is small
+        # Raw ratio = profile BP / Gen Pop BP — the standard consumer index.
+        # This preserves the organic signal from the underlying data.
+        # Bayesian shrinkage blends toward 1.0 when raw count is small.
         try:
             raw_count = int(float(str(row.get('Original Raw Numbers', '0')).replace(',', '')))
         except (ValueError, TypeError):
             raw_count = 0
         confidence = min(1.0, raw_count / 500.0)
-        raw_ratio = profile_cs / gp_cs_val
+        raw_ratio = profile_bp_val / gp_bp_val
         raw_index = confidence * raw_ratio + (1.0 - confidence) * 1.0
 
         lo = base_lo
