@@ -4394,14 +4394,17 @@ def get_admin_content():
                     # Get category from metadata, default to 'SVOD Acquisition'
                     # SVOD files can have subcategories (TALENT, CONTENT, etc.) but they're always under SVOD ACQUISITION master
                     category = 'SVOD Acquisition'
-                    if key in svod_metadata and svod_metadata[key].get('category'):
-                        category = svod_metadata[key]['category']
+                    file_meta = svod_metadata.get(key, {})
+                    if file_meta.get('category'):
+                        category = file_meta['category']
+                    content_cadence = file_meta.get('content_cadence', '')
                     
                     svod_files.append({
                         'key': f'svod-acquisition/{key}',  # Prefix to identify bucket
                         'filename': filename,
                         'project_name': show_name,
                         'category': category,
+                        'content_cadence': content_cadence,
                         'size': obj.get('Size', 0),
                         'last_modified': last_modified,
                         'created_at': last_modified,
@@ -9157,6 +9160,12 @@ def get_subscriber_iq_data(s3_key):
         if parsed.get('metadata') and parsed['metadata'].get('platform'):
             parsed['metadata']['platform'] = str(parsed['metadata']['platform']).upper()
         
+        # Override content_cadence from svod_metadata if set (CMS editable)
+        svod_meta = load_svod_metadata()
+        meta_cadence = svod_meta.get(s3_key, {}).get('content_cadence', '')
+        if meta_cadence:
+            parsed['metadata']['content_cadence'] = meta_cadence
+        
         response_data = {
             'success': True,
             'data': parsed,
@@ -13873,6 +13882,44 @@ def change_file_category():
         
     except Exception as e:
         print(f"❌ Category change error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/change-cadence', methods=['POST'])
+@requires_admin
+def change_file_cadence():
+    """Change the Content Cadence for an SVOD file in svod_metadata."""
+    try:
+        data = request.get_json()
+        file_key = data.get('file_key', '').strip()
+        new_cadence = data.get('content_cadence', '').strip()
+
+        if not file_key:
+            return jsonify({'success': False, 'error': 'File key is required'})
+
+        if new_cadence and new_cadence not in ('Weekly', 'All at Once'):
+            return jsonify({'success': False, 'error': 'Content cadence must be "Weekly" or "All at Once"'})
+
+        if not file_key.startswith('svod-acquisition/'):
+            return jsonify({'success': False, 'error': 'Content cadence can only be set for SVOD files'})
+
+        actual_key = file_key.replace('svod-acquisition/', '')
+        metadata = load_svod_metadata()
+        if actual_key not in metadata:
+            metadata[actual_key] = {}
+        metadata[actual_key]['content_cadence'] = new_cadence
+        save_svod_metadata(metadata)
+
+        print(f"🔄 Changed content cadence for {actual_key} to '{new_cadence}'")
+        return jsonify({
+            'success': True,
+            'content_cadence': new_cadence,
+            'message': f'Content cadence updated to {new_cadence or "(cleared)"}'
+        })
+    except Exception as e:
+        print(f"❌ Cadence change error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})

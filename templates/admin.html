@@ -8720,6 +8720,28 @@
             }
         }
         
+        async function changeCadence(fileKey, newCadence) {
+            try {
+                const response = await fetch('/api/admin/change-cadence', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_key: fileKey, content_cadence: newCadence })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    const fileIndex = contentFiles.findIndex(f => f.key === fileKey);
+                    if (fileIndex !== -1) contentFiles[fileIndex].content_cadence = newCadence;
+                    showToast(data.message || 'Cadence updated');
+                } else {
+                    showToast(data.error || 'Failed to update cadence', true);
+                }
+            } catch (e) {
+                console.error('Cadence change error:', e);
+                showToast('Error updating cadence: ' + e.message, true);
+            }
+        }
+        
         function previewProfileImage(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
@@ -9144,13 +9166,14 @@
                                                         <th style="width: 40px;"><input type="checkbox" onchange="toggleCategorySelection('${subcat}', this.checked, true)"></th>
                                                         <th>File Name</th>
                                                         <th>Project</th>
+                                                        <th>Cadence</th>
                                                         <th>Date</th>
                                                         <th>Size</th>
                                                         <th>Actions</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    ${subcatFiles.map(file => renderFileRow(file)).join('')}
+                                                    ${subcatFiles.map(file => renderFileRow(file, false, false, true)).join('')}
                                                 </tbody>
                                             </table>
                                         </div>
@@ -9294,7 +9317,7 @@
             return icons[category.toUpperCase()] || icons[category] || '📁';
         }
 
-        function renderFileRow(file, isTicketSales = false, isTicketSalesTracker = false) {
+        function renderFileRow(file, isTicketSales = false, isTicketSalesTracker = false, isSvodRow = false) {
             const isSelected = selectedFiles.has(file.key);
             const dateStr = file.last_modified ? formatDateTimePST(file.last_modified) : '--';
             const hasCustomImage = file.custom_image ? true : false;
@@ -9313,6 +9336,16 @@
                     + '<button class="btn btn-small btn-danger btn-icon" onclick="deleteFile(\'' + escapedKey + '\')" title="Delete permanently">🗑️</button>';
             }
             
+            const currentCadence = file.content_cadence || '';
+            const cadenceCell = isSvodRow ? `
+                    <td>
+                        <select class="cadence-select" onchange="changeCadence('${escapedKey}', this.value)" style="padding: 0.25rem 0.4rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 90px;">
+                            <option value=""${!currentCadence ? ' selected' : ''}>-- None --</option>
+                            <option value="Weekly"${currentCadence === 'Weekly' ? ' selected' : ''}>Weekly</option>
+                            <option value="All at Once"${currentCadence === 'All at Once' ? ' selected' : ''}>All at Once</option>
+                        </select>
+                    </td>` : '';
+            
             return `
                 <tr data-key="${file.key}" class="${isSelected ? 'selected' : ''}">
                     <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleFileSelection('${escapedKey}')"></td>
@@ -9325,6 +9358,7 @@
                         </div>
                     </td>
                     <td>${file.project_name || '--'}</td>
+                    ${cadenceCell}
                     <td style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</td>
                     <td style="font-size: 0.75rem;">${formatBytes(file.size)}</td>
                     <td>
