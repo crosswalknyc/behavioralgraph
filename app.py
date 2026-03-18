@@ -6844,7 +6844,7 @@ def get_goodshort_ranker_data():
 LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000  # 32.99
 LLMO_S3_BUCKET = 'llmo'
 LLMO_S3_PREFIX = 'full_table/'
-LLMO_CACHE_TTL = 3600  # 1 hour
+LLMO_CACHE_TTL = 86400  # 24 hours -- refreshed daily by scheduled pre-warm
 import threading as _llmo_threading
 _llmo_cache = {'df': None, 'loaded_at': 0, 'loading': False, 'lock': _llmo_threading.Lock()}
 
@@ -6952,6 +6952,52 @@ def _llmo_ensure_loaded():
             t = _llmo_threading.Thread(target=_llmo_do_background_load, daemon=True)
             t.start()
         return None  # still loading
+
+
+def _llmo_scheduled_prewarm():
+    """Daily pre-warm: force-refresh the LLMO S3 cache regardless of TTL."""
+    import time as _time
+    with _llmo_cache['lock']:
+        if _llmo_cache['loading']:
+            print("[LLMO Scheduler] Already loading, skipping pre-warm")
+            return
+        _llmo_cache['loading'] = True
+        _llmo_cache['loaded_files'] = 0
+        _llmo_cache['total_files'] = 0
+        _llmo_cache['df'] = None
+        _llmo_cache['loaded_at'] = 0
+    print("[LLMO Scheduler] Starting daily pre-warm...")
+    _llmo_do_background_load()
+
+
+def _llmo_daily_scheduler():
+    """Background thread that fires _llmo_scheduled_prewarm at 5:45 AM PST every day."""
+    import time as _time
+    from datetime import datetime, timedelta
+    try:
+        import pytz
+        pst = pytz.timezone('US/Pacific')
+    except ImportError:
+        from datetime import timezone
+        pst = timezone(timedelta(hours=-8))
+
+    while True:
+        now = datetime.now(pst)
+        target = now.replace(hour=5, minute=45, second=0, microsecond=0)
+        if now >= target:
+            target += timedelta(days=1)
+        wait_secs = (target - now).total_seconds()
+        print(f"[LLMO Scheduler] Next pre-warm at {target.strftime('%Y-%m-%d %H:%M %Z')} ({wait_secs/3600:.1f}h from now)")
+        _time.sleep(wait_secs)
+        try:
+            _llmo_scheduled_prewarm()
+        except Exception as e:
+            print(f"[LLMO Scheduler] Pre-warm error: {e}")
+
+
+_llmo_scheduler_thread = _llmo_threading.Thread(target=_llmo_daily_scheduler, daemon=True)
+_llmo_scheduler_thread.start()
+print("[LLMO Scheduler] Daily pre-warm thread started (5:45 AM PST)")
 
 
 @app.route('/api/llmo-iq/dates', methods=['GET'])
