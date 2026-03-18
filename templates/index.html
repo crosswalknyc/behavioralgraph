@@ -14862,20 +14862,20 @@
                         <div id="subscriber-tab-demographics" class="tab-content">
                             <div id="subscriberDemographicsInsights" class="tab-insights-section"></div>
                             
-                            <!-- Age Section - Separate Box -->
+                            <!-- Age Section -->
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
                                 <h3>👥 Age of New Signups</h3>
                                 <p class="section-description">Age distribution of people who signed up for the platform to watch this show</p>
+                                <div id="subscriberAgeChartWrap" style="position: relative; height: 320px; margin-bottom: 1rem;"><canvas id="subscriberAgeChart"></canvas></div>
                                 <div id="subscriberAgeTable" class="demographics-table-container"></div>
-
                             </div>
                             
-                            <!-- Gender Section - Separate Box -->
+                            <!-- Gender Section -->
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem;">
                                 <h3>👥 Gender of New Signups</h3>
                                 <p class="section-description">Gender distribution of people who signed up for the platform to watch this show</p>
+                                <div id="subscriberGenderChartWrap" style="position: relative; height: 260px; margin-bottom: 1rem;"><canvas id="subscriberGenderChart"></canvas></div>
                                 <div id="subscriberGenderTable" class="demographics-table-container"></div>
-
                             </div>
                             <p style="color: var(--text-secondary); font-size: 0.8rem; font-style: italic; margin-top: 1.5rem; text-align: left;">*Values represented only show participants who agreed to share demographic data.</p>
                         </div>
@@ -26612,82 +26612,123 @@
                 return parseNumber(actual) || 0;
             };
             
-            // Age Table
+            // Bucket age data into standard groups (same logic as normalizeAgeBucketsForDashboard)
+            const oldToNew = { '<16': [['17 and Under', 1]], 'under 16': [['17 and Under', 1]], '16-18': [['17 and Under', 0.67], ['18-24', 0.33]], '17-18': [['17 and Under', 0.67], ['18-24', 0.33]], '19-20': [['18-24', 1]], '18-20': [['18-24', 1]], '21-25': [['18-24', 0.8], ['25-34', 0.2]], '26-30': [['25-34', 1]], '31-40': [['25-34', 0.4], ['35-44', 0.6]], '41-49': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '41-59': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '60+': [['55-64', 0.25], ['65 or Older', 0.75]], '65+': [['55-64', 0.25], ['65 or Older', 0.75]], 'over 65': [['55-64', 0.25], ['65 or Older', 0.75]] };
+            const standardAgeOrder = ['17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older'];
+            const bucketedRaw = {};
+            validAgeData.forEach(item => {
+                const rawKey = (item.age_range || item.age || '').trim();
+                const normKey = rawKey.toLowerCase().replace(/\s*-\s*/g, '-').replace(/\s+/g, ' ');
+                const count = parseNumber(item.count) || 0;
+                if (count <= 0) return;
+                const mapping = oldToNew[normKey] || oldToNew[rawKey] || oldToNew[rawKey.toLowerCase()];
+                if (mapping) {
+                    mapping.forEach(([bucket, ratio]) => { bucketedRaw[bucket] = (bucketedRaw[bucket] || 0) + count * ratio; });
+                } else {
+                    const displayBucket = getAgeDisplayLabel(rawKey);
+                    bucketedRaw[displayBucket] = (bucketedRaw[displayBucket] || 0) + count;
+                }
+            });
+            const totalAgeRaw = Object.values(bucketedRaw).reduce((a, b) => a + b, 0);
+            const bucketedAge = standardAgeOrder
+                .filter(b => bucketedRaw[b] > 0)
+                .map(b => ({ label: b, count: Math.round(bucketedRaw[b]), pct: totalAgeRaw > 0 ? ((bucketedRaw[b] / totalAgeRaw) * 100) : 0 }));
+
+            // Destroy previous charts
+            if (window._subDemoAgeChart) { window._subDemoAgeChart.destroy(); window._subDemoAgeChart = null; }
+            if (window._subDemoGenderChart) { window._subDemoGenderChart.destroy(); window._subDemoGenderChart = null; }
+
+            // Age Chart
+            const ageChartCanvas = document.getElementById('subscriberAgeChart');
+            const ageChartWrap = document.getElementById('subscriberAgeChartWrap');
+            if (ageChartCanvas && bucketedAge.length > 0) {
+                if (ageChartWrap) ageChartWrap.style.display = '';
+                const ageLabelsChart = bucketedAge.map(b => b.label);
+                const agePctData = bucketedAge.map(b => Math.round(b.pct * 100) / 100);
+                window._subDemoAgeChart = new Chart(ageChartCanvas, {
+                    type: 'bar',
+                    data: { labels: ageLabelsChart, datasets: [{ data: agePctData, backgroundColor: '#5a9ad9', borderRadius: 4 }] },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: { display: true, anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 11, weight: 600 }, formatter: v => v.toFixed(1) + '%' }
+                        },
+                        scales: {
+                            x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#8b949e', callback: v => v + '%' }, max: Math.max(...agePctData) * 1.4 },
+                            y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 12 } } }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            } else if (ageChartWrap) {
+                ageChartWrap.style.display = 'none';
+            }
+
+            // Age Table (bucketed)
             const ageTableContainer = document.getElementById('subscriberAgeTable');
             if (ageTableContainer) {
-                if (validAgeData.length > 0) {
+                if (bucketedAge.length > 0) {
                     ageTableContainer.innerHTML = `
                         <div class="demographics-table-wrapper">
                             <table class="demographics-table">
-                                <thead>
-                                    <tr>
-                                        <th class="has-tooltip" data-tooltip="Age Range: Demographic age groups of people who signed up for the platform to watch this show">Age Range</th>
-                                        <th class="has-tooltip" data-tooltip="Accounts: Projected number of accounts for this age group">Accounts</th>
-                                        <th class="has-tooltip" data-tooltip="Percentage: This age group's share of total new signups">Percentage</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr>
+                                    <th>Age Range</th><th>Accounts</th><th>Percentage</th>
+                                </tr></thead>
                                 <tbody>
-                                    ${validAgeData.map(item => {
-                                        const ageRange = item.age_range || item.age || 'N/A';
-                                        const displayAgeRange = getAgeDisplayLabel(ageRange);
-                                        const percentage = item.percentage || 'N/A';
-                                        const genPop = item.gen_pop || item.genPop || '';
-                                        const displayValue = getDisplayValue(item.count, genPop);
-                                        return `
-                                            <tr>
-                                                <td><strong>${displayAgeRange}</strong></td>
-                                                <td>${formatNumber(displayValue)}</td>
-                                                <td>${percentage}</td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
+                                    ${bucketedAge.map(b => `<tr><td><strong>${b.label}</strong></td><td>${formatNumber(b.count)}</td><td>${b.pct.toFixed(2)}%</td></tr>`).join('')}
                                 </tbody>
                             </table>
-                        </div>
-                    `;
+                        </div>`;
                 } else {
                     ageTableContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No age data available</p>';
                 }
             }
-            
 
-            
-            // Gender Table (uses validGenderData created earlier)
+            // Gender Chart
+            const genderChartCanvas = document.getElementById('subscriberGenderChart');
+            const genderChartWrap = document.getElementById('subscriberGenderChartWrap');
+            const genderColors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff'];
+            if (genderChartCanvas && validGenderData.length > 0) {
+                if (genderChartWrap) genderChartWrap.style.display = '';
+                const genderLabelsChart = validGenderData.map(g => g.gender);
+                const genderCountsChart = validGenderData.map(g => g.count);
+                window._subDemoGenderChart = new Chart(genderChartCanvas, {
+                    type: 'doughnut',
+                    data: { labels: genderLabelsChart, datasets: [{ data: genderCountsChart, backgroundColor: genderColors.slice(0, genderLabelsChart.length) }] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '55%',
+                        plugins: {
+                            legend: { display: true, position: 'bottom', labels: { color: '#e6f1ff', padding: 12, font: { size: 12 } } },
+                            datalabels: { display: true, color: '#fff', font: { size: 12, weight: 700 }, formatter: (v, ctx) => { const total = ctx.dataset.data.reduce((a, b) => a + b, 0); return total > 0 ? ((v / total) * 100).toFixed(1) + '%' : ''; } }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            } else if (genderChartWrap) {
+                genderChartWrap.style.display = 'none';
+            }
+
+            // Gender Table
             const genderTableContainer = document.getElementById('subscriberGenderTable');
             if (genderTableContainer) {
                 if (validGenderData.length > 0) {
-                    
                     genderTableContainer.innerHTML = `
                         <div class="demographics-table-wrapper">
                             <table class="demographics-table">
-                                <thead>
-                                    <tr>
-                                        <th class="has-tooltip" data-tooltip="Gender: Gender identity of people who signed up for the platform to watch this show">Gender</th>
-                                        <th class="has-tooltip" data-tooltip="Accounts: Projected number of accounts for this gender">Accounts</th>
-                                        <th class="has-tooltip" data-tooltip="Percentage: This gender's share of total new signups">Percentage</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr>
+                                    <th>Gender</th><th>Accounts</th><th>Percentage</th>
+                                </tr></thead>
                                 <tbody>
-                                    ${validGenderData.map(item => {
-                                        const gender = item.gender;
-                                        const count = item.count;
-                                        const percentage = item.percentage; // Already calculated earlier
-                                        const genPop = item.genPop;
-                                        const displayValue = getDisplayValue(count, genPop);
-                                        return `
-                                            <tr>
-                                                <td><strong>${gender}</strong></td>
-                                                <td>${formatNumber(displayValue)}</td>
-                                                <td>${percentage}</td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
+                                    ${validGenderData.map(item => `<tr><td><strong>${item.gender}</strong></td><td>${formatNumber(item.count)}</td><td>${item.percentage}</td></tr>`).join('')}
                                 </tbody>
                             </table>
-                        </div>
-                    `;
+                        </div>`;
                 } else {
-                    console.warn('⚠️ No valid gender data found. Raw genderData:', genderData);
                     genderTableContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No gender data available</p>';
                 }
             }
