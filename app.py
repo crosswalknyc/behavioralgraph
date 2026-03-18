@@ -6852,129 +6852,12 @@ _llmo_cache = {'summary': None, 'loaded_at': 0, 'loading': False,
                'lock': _llmo_threading.Lock(), 'stage': ''}
 
 
-def _llmo_load_one_file(key):
-    """Download and parse a single gzipped CSV from S3."""
-    import gzip
-    try:
-        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=key)
-        raw = resp['Body'].read()
-        text = gzip.decompress(raw).decode('utf-8')
-        return pd.read_csv(
-            io.StringIO(text),
-            usecols=['UID', 'DELIVERED', 'COMMON_NAME', 'MATCH_TYPE', 'BROWSER', 'PLATFORM', 'URL', 'VISIT_TS'],
-            dtype={'UID': 'str', 'COMMON_NAME': 'str', 'MATCH_TYPE': 'str', 'BROWSER': 'str', 'PLATFORM': 'str', 'URL': 'str'}
-        )
-    except Exception as e:
-        print(f"[LLMO S3] Error loading {key}: {e}")
-        return None
-
-
-def _llmo_compute_daily_summary(df):
-    """Compute per-date dashboard metrics from a raw DataFrame. Returns dict keyed by date string."""
-    import re as _re
-    from urllib.parse import unquote_plus
-
-    search_pattern = _re.compile(r'[?&](?:q|query|p|search|prompt|text)=([^&]+)', _re.IGNORECASE)
-    def _extract_search(url):
-        if not isinstance(url, str):
-            return None
-        m = search_pattern.search(url)
-        if m:
-            try: return unquote_plus(m.group(1))[:200]
-            except Exception: return m.group(1)[:200]
-        return None
-
-    df['DELIVERED'] = pd.to_datetime(df['DELIVERED'], errors='coerce').dt.date
-    df['VISIT_TS'] = pd.to_datetime(df['VISIT_TS'], errors='coerce')
-    df['SEARCH_TERM'] = df['URL'].apply(_extract_search)
-
-    summary = {}
-    for date_val, day_df in df.groupby('DELIVERED'):
-        if pd.isna(date_val):
-            continue
-        ds = str(date_val)
-        ai = day_df[day_df['MATCH_TYPE'] == 'AI_AGENT']
-        post = day_df[day_df['MATCH_TYPE'] == 'POST_AI_NON_AGENT']
-
-        total_ai_users = int(ai['UID'].nunique())
-        total_ai_clicks = int(len(ai))
-
-        llm_grp = ai.groupby('COMMON_NAME').agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
-        llm_grp = llm_grp.sort_values('uu', ascending=False)
-        llms = [{'name': str(r['COMMON_NAME'] or 'Unknown'), 'unique_users': int(r['uu']), 'total_clicks': int(r['cl'])}
-                for _, r in llm_grp.iterrows()]
-
-        post_v = post[post['COMMON_NAME'].notna() & (post['COMMON_NAME'] != '')]
-        att_grp = post_v.groupby('COMMON_NAME').agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
-        att_grp = att_grp.sort_values('uu', ascending=False).head(50)
-        attribution = [{'name': str(r['COMMON_NAME'] or 'Unknown'), 'unique_users': int(r['uu']), 'total_clicks': int(r['cl'])}
-                       for _, r in att_grp.iterrows()]
-
-        flow_df = day_df[['UID', 'VISIT_TS', 'COMMON_NAME', 'MATCH_TYPE']].sort_values(['UID', 'VISIT_TS'])
-        flow_df['prev_name'] = flow_df.groupby('UID')['COMMON_NAME'].shift(1)
-        flow_df['prev_type'] = flow_df.groupby('UID')['MATCH_TYPE'].shift(1)
-        mask = ((flow_df['MATCH_TYPE'] == 'POST_AI_NON_AGENT') & (flow_df['prev_type'] == 'AI_AGENT')
-                & flow_df['prev_name'].notna() & flow_df['COMMON_NAME'].notna() & (flow_df['COMMON_NAME'] != ''))
-        ff = flow_df[mask]
-        if not ff.empty:
-            fg = ff.groupby(['prev_name', 'COMMON_NAME']).agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
-            fg = fg.sort_values('uu', ascending=False).head(100)
-            flows = [{'source': str(r['prev_name']), 'destination': str(r['COMMON_NAME']),
-                      'unique_users': int(r['uu']), 'clicks': int(r['cl'])} for _, r in fg.iterrows()]
-        else:
-            flows = []
-
-        s_df = ai[ai['SEARCH_TERM'].notna() & (ai['SEARCH_TERM'] != '')]
-        if not s_df.empty:
-            sg = s_df.groupby('SEARCH_TERM').size().reset_index(name='count').sort_values('count', ascending=False).head(50)
-            searches = [{'term': str(r['SEARCH_TERM']), 'count': int(r['count'])} for _, r in sg.iterrows()]
-        else:
-            searches = []
-
-        br = ai[ai['BROWSER'].notna() & (ai['BROWSER'] != '')].groupby('BROWSER')['UID'].nunique().reset_index(name='uu').sort_values('uu', ascending=False)
-        browsers = [{'name': str(r['BROWSER']), 'unique_users': int(r['uu'])} for _, r in br.iterrows()]
-
-        pl = ai[ai['PLATFORM'].notna() & (ai['PLATFORM'] != '')].groupby('PLATFORM')['UID'].nunique().reset_index(name='uu').sort_values('uu', ascending=False)
-        platforms = [{'name': str(r['PLATFORM']), 'unique_users': int(r['uu'])} for _, r in pl.iterrows()]
-
-        summary[ds] = {
-            'total_ai_users': total_ai_users,
-            'total_ai_clicks': total_ai_clicks,
-            'llms': llms,
-            'attribution': attribution,
-            'flows': flows,
-            'searches': searches,
-            'browsers': browsers,
-            'platforms': platforms,
-        }
-        print(f"[LLMO Summary] {ds}: {total_ai_users:,} users, {total_ai_clicks:,} clicks")
-
-    return summary
-
-
-def _llmo_save_summary(summary):
-    """Save pre-computed summary dict to S3 as gzipped JSON."""
-    import gzip, json, time as _time
-    try:
-        t0 = _time.time()
-        data = {'dates': sorted(summary.keys(), reverse=True), 'by_date': summary}
-        raw = json.dumps(data, separators=(',', ':')).encode('utf-8')
-        compressed = gzip.compress(raw)
-        s3_client.put_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_SUMMARY_KEY,
-                             Body=compressed, ContentType='application/json',
-                             ContentEncoding='gzip')
-        elapsed = _time.time() - t0
-        print(f"[LLMO S3] Saved summary to s3://{LLMO_S3_BUCKET}/{LLMO_SUMMARY_KEY} "
-              f"({len(compressed)/1e6:.1f} MB, {len(summary)} dates, {elapsed:.1f}s)")
-    except Exception as e:
-        print(f"[LLMO S3] Failed to save summary: {e}")
-
-
 def _llmo_load_summary():
-    """Download the pre-computed summary JSON from S3. Returns dict or None."""
+    """Download the pre-computed summary JSON from S3 (~2-5 MB). Returns dict or None."""
     import gzip, json, time as _time
     try:
         t0 = _time.time()
+        _llmo_cache['stage'] = 'Downloading summary...'
         resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_SUMMARY_KEY)
         raw = resp['Body'].read()
         try:
@@ -6983,140 +6866,23 @@ def _llmo_load_summary():
             text = raw.decode('utf-8')
         data = json.loads(text)
         elapsed = _time.time() - t0
-        print(f"[LLMO S3] Loaded summary: {len(data.get('dates', []))} dates in {elapsed:.1f}s")
+        print(f"[LLMO S3] Loaded summary: {len(data.get('dates', []))} dates, "
+              f"{len(raw)/1e6:.1f} MB in {elapsed:.1f}s")
         return data
     except Exception as e:
         print(f"[LLMO S3] Summary load failed: {e}")
         return None
 
 
-def _llmo_get_summary_last_modified():
-    """Return LastModified of summary JSON on S3, or None."""
-    try:
-        resp = s3_client.head_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_SUMMARY_KEY)
-        return resp['LastModified']
-    except Exception:
-        return None
-
-
-def _llmo_build_summary_from_raw():
-    """Full rebuild: download all raw CSVs, compute daily summaries, save."""
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+def _llmo_do_background_load():
+    """Background worker: download and cache the summary JSON."""
     import time as _time
-
-    _llmo_cache['stage'] = 'Discovering files...'
-    paginator = s3_client.get_paginator('list_objects_v2')
-    keys = []
-    for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
-        for obj in page.get('Contents', []):
-            if obj['Key'].endswith('.csv.gz'):
-                keys.append(obj['Key'])
-
-    _llmo_cache['total_files'] = len(keys)
-    _llmo_cache['loaded_files'] = 0
-    _llmo_cache['stage'] = f'Downloading {len(keys)} raw files...'
-    print(f"[LLMO S3] Processing {len(keys)} raw files for summary build")
-
-    dfs = []
-    with ThreadPoolExecutor(max_workers=48) as pool:
-        futures = {pool.submit(_llmo_load_one_file, k): k for k in keys}
-        for fut in as_completed(futures):
-            _llmo_cache['loaded_files'] = _llmo_cache.get('loaded_files', 0) + 1
-            r = fut.result()
-            if r is not None:
-                dfs.append(r)
-
-    if not dfs:
-        return None
-
-    _llmo_cache['stage'] = 'Computing daily summaries...'
-    df = pd.concat(dfs, ignore_index=True)
-    del dfs
-    summary = _llmo_compute_daily_summary(df)
-    del df
-
-    _llmo_cache['stage'] = 'Saving summary...'
-    _llmo_save_summary(summary)
-    return {'dates': sorted(summary.keys(), reverse=True), 'by_date': summary}
-
-
-def _llmo_incremental_summary():
-    """Incremental: load existing summary, process only new raw files for new dates, merge."""
-    summary_mtime = _llmo_get_summary_last_modified()
-    if summary_mtime is None:
-        print("[LLMO S3] No existing summary -- doing full build")
-        return _llmo_build_summary_from_raw()
-
-    _llmo_cache['stage'] = 'Checking for new files...'
-    paginator = s3_client.get_paginator('list_objects_v2')
-    new_keys = []
-    total_keys = 0
-    for page in paginator.paginate(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_S3_PREFIX):
-        for obj in page.get('Contents', []):
-            if obj['Key'].endswith('.csv.gz'):
-                total_keys += 1
-                if obj['LastModified'] > summary_mtime:
-                    new_keys.append(obj['Key'])
-
-    if not new_keys:
-        print(f"[LLMO S3] No new raw files since {summary_mtime.strftime('%Y-%m-%d %H:%M')} -- loading existing summary")
-        return _llmo_load_summary()
-
-    print(f"[LLMO S3] Found {len(new_keys)} new files since {summary_mtime.strftime('%Y-%m-%d %H:%M')}")
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    _llmo_cache['stage'] = 'Loading existing summary...'
-    existing = _llmo_load_summary()
-
-    _llmo_cache['total_files'] = len(new_keys)
-    _llmo_cache['loaded_files'] = 0
-    _llmo_cache['stage'] = f'Processing {len(new_keys)} new files...'
-
-    dfs = []
-    with ThreadPoolExecutor(max_workers=48) as pool:
-        futures = {pool.submit(_llmo_load_one_file, k): k for k in new_keys}
-        for fut in as_completed(futures):
-            _llmo_cache['loaded_files'] = _llmo_cache.get('loaded_files', 0) + 1
-            r = fut.result()
-            if r is not None:
-                dfs.append(r)
-
-    if not dfs:
-        return existing
-
-    _llmo_cache['stage'] = 'Computing new date summaries...'
-    df = pd.concat(dfs, ignore_index=True)
-    del dfs
-    new_summary = _llmo_compute_daily_summary(df)
-    del df
-
-    merged = existing.get('by_date', {}) if existing else {}
-    for d, stats in new_summary.items():
-        merged[d] = stats
-
-    result = {'dates': sorted(merged.keys(), reverse=True), 'by_date': merged}
-    _llmo_cache['stage'] = 'Saving updated summary...'
-    _llmo_save_summary(merged)
-    return result
-
-
-def _llmo_do_background_load(incremental=False):
-    """Background worker: load summary JSON (fast) or rebuild from raw CSVs."""
-    import time as _time
-    print("[LLMO S3] Background load starting...")
+    print("[LLMO S3] Loading summary from S3...")
     t0 = _time.time()
     try:
-        data = None
-        if incremental:
-            data = _llmo_incremental_summary()
-        else:
-            _llmo_cache['stage'] = 'Downloading summary...'
-            data = _llmo_load_summary()
-            if data is None:
-                data = _llmo_build_summary_from_raw()
-
+        data = _llmo_load_summary()
         if data is None:
-            print("[LLMO S3] No data loaded!")
+            print("[LLMO S3] No summary found on S3. Run build_llmo_summary.py to create it.")
             with _llmo_cache['lock']:
                 _llmo_cache['loading'] = False
                 _llmo_cache['stage'] = ''
@@ -7146,32 +6912,14 @@ def _llmo_ensure_loaded():
             return _llmo_cache['summary']
         if not _llmo_cache['loading']:
             _llmo_cache['loading'] = True
-            _llmo_cache['loaded_files'] = 0
-            _llmo_cache['total_files'] = 0
             _llmo_cache['stage'] = 'Starting...'
             t = _llmo_threading.Thread(target=_llmo_do_background_load, daemon=True)
             t.start()
         return None
 
 
-def _llmo_scheduled_prewarm():
-    """Daily pre-warm: incremental summary update."""
-    with _llmo_cache['lock']:
-        if _llmo_cache['loading']:
-            print("[LLMO Scheduler] Already loading, skipping pre-warm")
-            return
-        _llmo_cache['loading'] = True
-        _llmo_cache['loaded_files'] = 0
-        _llmo_cache['total_files'] = 0
-        _llmo_cache['summary'] = None
-        _llmo_cache['loaded_at'] = 0
-        _llmo_cache['stage'] = 'Starting daily update...'
-    print("[LLMO Scheduler] Starting daily pre-warm (incremental)...")
-    _llmo_do_background_load(incremental=True)
-
-
 def _llmo_daily_scheduler():
-    """Background thread: fires pre-warm at 5:45 AM PST daily, and pre-warms on startup."""
+    """Background thread: loads summary on startup, refreshes daily at 5:45 AM PST."""
     import time as _time
     from datetime import datetime, timedelta
     try:
@@ -7181,12 +6929,8 @@ def _llmo_daily_scheduler():
         from datetime import timezone
         pst = timezone(timedelta(hours=-8))
 
-    # Pre-warm immediately on startup
-    print("[LLMO Scheduler] Startup pre-warm: loading summary...")
-    try:
-        _llmo_do_background_load(incremental=False)
-    except Exception as e:
-        print(f"[LLMO Scheduler] Startup pre-warm failed: {e}")
+    print("[LLMO Scheduler] Startup: loading summary from S3...")
+    _llmo_do_background_load()
 
     while True:
         now = datetime.now(pst)
@@ -7194,22 +6938,23 @@ def _llmo_daily_scheduler():
         if now >= target:
             target += timedelta(days=1)
         wait_secs = (target - now).total_seconds()
-        print(f"[LLMO Scheduler] Next pre-warm at {target.strftime('%Y-%m-%d %H:%M %Z')} ({wait_secs/3600:.1f}h from now)")
+        print(f"[LLMO Scheduler] Next refresh at {target.strftime('%Y-%m-%d %H:%M %Z')} ({wait_secs/3600:.1f}h from now)")
         _time.sleep(wait_secs)
-        try:
-            _llmo_scheduled_prewarm()
-        except Exception as e:
-            print(f"[LLMO Scheduler] Pre-warm error: {e}")
+        print("[LLMO Scheduler] Daily refresh: reloading summary from S3...")
+        with _llmo_cache['lock']:
+            _llmo_cache['summary'] = None
+            _llmo_cache['loaded_at'] = 0
+        _llmo_do_background_load()
 
 
 _llmo_scheduler_thread = _llmo_threading.Thread(target=_llmo_daily_scheduler, daemon=True)
 _llmo_scheduler_thread.start()
-print("[LLMO Scheduler] Background thread started (startup pre-warm + daily 5:45 AM PST)")
+print("[LLMO Scheduler] Background thread started (startup load + daily 5:45 AM PST refresh)")
 
 
 @app.route('/api/cron/llmo-prewarm', methods=['POST'])
 def cron_llmo_prewarm():
-    """Trigger LLMO data rebuild from raw S3 files. Called by Render Cron Job daily.
+    """Reload LLMO summary JSON from S3. Called by external cron to refresh after daily build.
     Requires CRON_SECRET via header or query param."""
     secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
     if not secret or secret != os.environ.get('CRON_SECRET', ''):
@@ -7217,9 +6962,11 @@ def cron_llmo_prewarm():
     with _llmo_cache['lock']:
         if _llmo_cache['loading']:
             return jsonify({'success': True, 'message': 'Already loading, skipped'})
-    t = _llmo_threading.Thread(target=_llmo_scheduled_prewarm, daemon=True)
+        _llmo_cache['summary'] = None
+        _llmo_cache['loaded_at'] = 0
+    t = _llmo_threading.Thread(target=_llmo_do_background_load, daemon=True)
     t.start()
-    return jsonify({'success': True, 'message': 'LLMO pre-warm started in background'})
+    return jsonify({'success': True, 'message': 'LLMO summary reload started'})
 
 
 @app.route('/api/llmo-iq/dates', methods=['GET'])
