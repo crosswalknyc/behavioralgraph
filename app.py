@@ -6839,18 +6839,17 @@ def get_goodshort_ranker_data():
 
 
 # ============================================================================
-# LLMO IQ - Large Language Model Optimization dashboard (S3-backed)
+# LLMO IQ - Large Language Model Optimization dashboard
+# The server ONLY loads a small pre-computed summary JSON from S3.
+# Raw file processing is done externally (build_llmo_summary.py) and uploaded to S3.
 # ============================================================================
 LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000  # 32.99
 LLMO_S3_BUCKET = 'llmo'
-LLMO_S3_PREFIX = 'full_table/'
-LLMO_PROCESSED_KEY = 'processed/llmo_processed.parquet'
 LLMO_SUMMARY_KEY = 'processed/llmo_daily_summary.json.gz'
 LLMO_CACHE_TTL = 86400  # 24 hours
 import threading as _llmo_threading
 _llmo_cache = {'summary': None, 'loaded_at': 0, 'loading': False,
-               'lock': _llmo_threading.Lock(),
-               'total_files': 0, 'loaded_files': 0, 'stage': ''}
+               'lock': _llmo_threading.Lock(), 'stage': ''}
 
 
 def _llmo_load_one_file(key):
