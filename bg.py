@@ -352,26 +352,48 @@ import json as _json_mod
 
 
 def _soft_clamp_index(raw_index, lo, hi, cat, val):
-    """Soft-compress a raw index into [lo, hi] with organic variation.
+    """Soft-compress a raw index into [lo, hi], centered on 1.0 (GP parity).
 
-    Instead of a hard clamp (which pins every out-of-range value to the
-    exact same boundary), this uses tanh compression to smoothly squeeze
-    extreme values while preserving relative ordering.  A small amount of
-    deterministic per-item noise is added so no two items land on the
-    exact same index even when their raw indices are similar.
+    Three-step process:
+    1. Asymmetric tanh compression toward [lo, hi] centered on 1.0
+    2. Regression toward parity — pulls the compressed value 35% back
+       toward 1.0, so borderline items cluster near Gen Pop levels
+    3. Deterministic per-item noise (±15%) that crosses the 1.0 boundary
+       for borderline items, creating an organic mix of over/under indexing
+
+    This ensures items with STRONG affinity signals stay clearly over-indexed,
+    generic/borderline items scatter around 1.0, and items with no special
+    affinity naturally fall below 1.0.
     """
-    mid = (lo + hi) / 2.0
-    half = (hi - lo) / 2.0
-    if half <= 0:
-        return mid
+    center = 1.0
+    half_hi = hi - center
+    half_lo = center - lo
 
-    deviation = raw_index - 1.0
-    scale = half * 2.5
-    compressed = mid + half * math.tanh(deviation / scale)
+    if half_hi <= 0 and half_lo <= 0:
+        return center
 
+    deviation = raw_index - center
+
+    if deviation >= 0:
+        scale = max(half_hi * 2.0, 0.01)
+        compressed = center + half_hi * math.tanh(deviation / scale)
+    else:
+        scale = max(half_lo * 2.0, 0.01)
+        compressed = center - half_lo * math.tanh(abs(deviation) / scale)
+
+    # Regression toward parity: pull 72% back toward 1.0.
+    # Source data is often uniformly inflated (all items 50-87% BP), so real
+    # differentiation must come from (a) items with genuinely high affinity
+    # surviving the pull, and (b) the AI gut check boosting/lowering items.
+    parity_pull = 0.72
+    regressed = compressed + (center - compressed) * parity_pull
+
+    # Deterministic per-item noise (±20%) that crosses the 1.0 boundary
+    # for borderline items, creating organic over/under distribution.
     item_hash = int(hashlib.md5(f"{cat}:{val}".encode()).hexdigest()[:8], 16)
-    noise = ((item_hash / 0xFFFFFFFF) - 0.5) * half * 0.45
-    result = compressed + noise
+    noise_amplitude = 0.20
+    noise = ((item_hash / 0xFFFFFFFF) - 0.5) * 2.0 * noise_amplitude
+    result = regressed + noise
 
     return max(lo, min(hi, result))
 
@@ -959,11 +981,11 @@ def anchor_to_genpop(df, sample_size):
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2  # 0 for Gen Pop, ~1 for niche
 
     # --- Tight, realistic bounds ---
-    # Even very niche profiles shouldn't produce 4x over-indexing on generic brands.
-    # Max behavioral index: 1.50 (mainstream) to 2.20 (very niche) — the AI gut
-    # check can selectively boost items that genuinely deserve higher.
-    BEHAV_HI = min(2.20, 1.0 + 0.50 + 1.20 * niche_factor)
-    BEHAV_LO = max(0.40, 1.0 - 0.30 - 0.30 * niche_factor)
+    # Anchoring keeps everything within a narrow band around GP parity (1.0).
+    # The AI gut check selectively boosts items with genuine affinity.
+    # Max behavioral index: 1.25 (mainstream) to 1.50 (very niche).
+    BEHAV_HI = min(1.50, 1.0 + 0.25 + 0.50 * niche_factor)
+    BEHAV_LO = max(0.50, 1.0 - 0.25 - 0.30 * niche_factor)
     DEMO_HI  = max(1.10, 1.0 + 0.8 * niche_factor)
     DEMO_LO  = min(0.92, 1.0 - 0.5 * niche_factor)
 
@@ -6387,45 +6409,44 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"=== BEHAVIORAL DATA (batch {batch_num}/{len(batches)}) ===\n"
             + "\n\n".join(items_text) +
             f"\n\n=== CRITICAL RULES ===\n"
-            f"1. The audience is fans/users/customers of \"{subject_clean}\" ({bc}). "
-            f"Items should reflect what THIS SPECIFIC audience would realistically "
-            f"engage with more or less than the general population.\n"
+            f"1. USE THE DEMOGRAPHICS ABOVE. The audience demographics (age, gender, "
+            f"ethnicity, income) are the MOST IMPORTANT signal for what brands this "
+            f"audience would engage with. A predominantly male audience should "
+            f"UNDER-INDEX on women's beauty brands (Sephora, Bath & Body Works, "
+            f"Ulta, Victoria's Secret, Lululemon). A young audience should "
+            f"under-index on brands popular with older demographics (Fox News, "
+            f"AARP, Cracker Barrel). An older audience should under-index on "
+            f"youth brands (Roblox, Fortnite, TikTok). APPLY THIS LOGIC to every "
+            f"item in the data.\n"
             f"2. ORGANIC DATA HAS BOTH OVER AND UNDER INDEXING. In real consumer "
-            f"panels, roughly 30-50% of items under-index for any given audience. "
-            f"If everything is over-indexing (all indices > 1.0x), that is a RED "
-            f"FLAG — you MUST push some items below 1.0x. Generic mass-market "
-            f"brands that have no special affinity with this audience should sit "
-            f"near or below 1.0x.\n"
+            f"panels, roughly 40-60% of items under-index for any given audience. "
+            f"If most items are over-indexing, that is a RED FLAG — you MUST push "
+            f"items that don't match this audience's demographics and interests "
+            f"below 1.0x. Only items with CLEAR affinity should over-index.\n"
             f"3. FOCUS ON INDEX, NOT ABSOLUTE BP. The index (profile BP / GenPop BP) "
-            f"is what matters. Mass-market items with high GenPop BP (e.g. Google "
-            f"at ~68%, Netflix at ~90%, Amazon at ~41%) SHOULD have high absolute "
-            f"BP in every audience — that is normal. An item with 70% BP and 90% "
-            f"GenPop BP (index 0.78) is UNDER-indexing, which is fine. An item "
-            f"with 30% BP but only 5% GenPop BP (index 6.0) is wildly inflated.\n"
-            f"4. MASS-MARKET UNIVERSAL ITEMS MUST NOT BE UNREALISTICALLY LOW. "
-            f"If Google (GenPop ~68%) shows up at 20% BP for a digital/tech "
-            f"audience, that is WRONG — boost it. If Netflix (GenPop ~90%) is at "
-            f"30% for any audience, that is WRONG — boost it. Universal services "
-            f"(Google, Amazon, YouTube, Netflix, Walmart) should generally have "
-            f"indices between 0.7 and 1.2 for most audiences.\n"
-            f"5. NICHE ITEM BP CEILING: For items with GenPop BP < 40%, profile "
-            f"BP should not exceed ~35% unless strongly justified. No niche brand "
-            f"should appear at 60-80% penetration. But for items with GenPop BP "
-            f"> 40%, the profile BP can legitimately be 40-90%.\n"
-            f"6. BRAND RELEVANCE TO SUBJECT: The top-ranked items in each category "
-            f"should make intuitive sense for \"{subject_clean}\". Ask yourself: "
-            f"\"Would a fan/customer of {subject_clean} realistically over-index "
-            f"on this brand?\" If the answer is \"not really, it's just popular in "
-            f"general,\" push it DOWN toward or below GenPop (factor 0.5-0.8). "
-            f"If the item has CLEAR affinity with this audience, boost it.\n"
-            f"7. Items that are CLEARLY mismatched should be aggressively reduced:\n"
-            f"   - NASCAR ranking high for a young female pop-star audience\n"
-            f"   - Fox News ranking high for a young progressive audience\n"
-            f"   - Luxury brands ranking high for a low-income audience\n"
-            f"   - Niche regional brands ranking high for a national audience\n"
-            f"8. EXPECT TO MAKE ADJUSTMENTS. It is rare that all data passes "
-            f"without corrections. Be thorough — review every item and ensure "
-            f"the overall picture tells a coherent story about this audience.\n\n"
+            f"is what matters. Mass-market items with high GenPop BP SHOULD have "
+            f"high absolute BP. An item with 70% BP and 90% GenPop BP is "
+            f"UNDER-indexing (index 0.78), which is fine.\n"
+            f"4. BRAND RELEVANCE = SUBJECT + DEMOGRAPHICS. Two-part test for each "
+            f"item: (a) Does it relate to \"{subject_clean}\"? (b) Does it match "
+            f"the audience's age, gender, income, and lifestyle? Both must pass "
+            f"for an over-index. Examples:\n"
+            f"   - Fandom.com (male tech/gaming) → Discord OVER, Sephora UNDER\n"
+            f"   - Taylor Swift (young female pop) → Sephora OVER, ESPN UNDER\n"
+            f"   - AARP (older 65+) → Fox News OVER, Roblox UNDER\n"
+            f"5. DEMOGRAPHIC MISMATCHES — aggressively reduce these:\n"
+            f"   - Beauty/cosmetics brands over-indexing for a male-heavy audience\n"
+            f"   - Women's fashion brands over-indexing for a male-heavy audience\n"
+            f"   - Sports/hunting brands over-indexing for a female-heavy audience\n"
+            f"   - Youth gaming brands over-indexing for an older audience\n"
+            f"   - Luxury brands over-indexing for a low-income audience\n"
+            f"   - Conservative media over-indexing for a young progressive audience\n"
+            f"   Use factor 0.4-0.7 for clear demographic mismatches.\n"
+            f"6. MASS-MARKET UNIVERSAL ITEMS should be near Gen Pop parity (index "
+            f"0.8-1.1). Google, Amazon, Walmart, Netflix are used by nearly everyone.\n"
+            f"7. EXPECT TO MAKE MANY ADJUSTMENTS. Review every single item. It is "
+            f"rare that all data passes without corrections. Push at least 30-40% "
+            f"of items below 1.0x if they are currently above.\n\n"
             f"Return ONLY valid JSON:\n"
             f'If everything passes: {{"status":"OK","notes":"reason"}}\n'
             f'If corrections needed: {{"status":"FIX","notes":"summary",'
@@ -6435,7 +6456,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"factor: multiplier on current BP (0.3-0.5 = significant reduction, "
             f"0.5-0.8 = moderate reduction, 0.8-0.95 = slight reduction, "
             f"1.1-1.3 = moderate boost, 1.3-1.8 = significant boost). "
-            f"Stay in 0.2 to 2.5 range.\n"
+            f"Stay in 0.15 to 2.5 range.\n"
             f"JSON only, no markdown."
         )
 
