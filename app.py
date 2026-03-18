@@ -7080,6 +7080,21 @@ _llmo_scheduler_thread.start()
 print("[LLMO Scheduler] Daily pre-warm thread started (5:45 AM PST)")
 
 
+@app.route('/api/cron/llmo-prewarm', methods=['POST'])
+def cron_llmo_prewarm():
+    """Trigger LLMO data rebuild from raw S3 files. Called by Render Cron Job daily.
+    Requires CRON_SECRET via header or query param."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    if not secret or secret != os.environ.get('CRON_SECRET', ''):
+        return jsonify({'error': 'Unauthorized'}), 403
+    with _llmo_cache['lock']:
+        if _llmo_cache['loading']:
+            return jsonify({'success': True, 'message': 'Already loading, skipped'})
+    t = _llmo_threading.Thread(target=_llmo_scheduled_prewarm, daemon=True)
+    t.start()
+    return jsonify({'success': True, 'message': 'LLMO pre-warm started in background'})
+
+
 @app.route('/api/llmo-iq/dates', methods=['GET'])
 @requires_auth
 def llmo_iq_dates():
