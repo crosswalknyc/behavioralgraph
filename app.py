@@ -6871,7 +6871,7 @@ def llmo_iq_dates():
 @app.route('/api/llmo-iq/data', methods=['GET'])
 @requires_auth
 def llmo_iq_data():
-    """Return all LLMO IQ dashboard data for a date or date range."""
+    """Return core LLMO IQ dashboard data (no demographics -- those load async)."""
     date_str = request.args.get('date')
     date_end = request.args.get('date_end')
     if not date_str:
@@ -6888,7 +6888,7 @@ def llmo_iq_data():
         date_where = "DELIVERED::DATE BETWEEN %s AND %s"
         params = (date_str, date_end)
 
-        # 1) Unique users per LLM (AI_AGENT only)
+        # 1) LLM usage + total unique in a single scan
         cur.execute(f"""
             SELECT COMMON_NAME,
                    COUNT(DISTINCT UID) AS unique_users,
@@ -6899,16 +6899,9 @@ def llmo_iq_data():
             ORDER BY unique_users DESC
         """, params)
         llm_rows = cur.fetchall()
+        total_unique = sum(r[1] for r in llm_rows)
 
-        # 2) Total unique AI users across all LLMs (for %)
-        cur.execute(f"""
-            SELECT COUNT(DISTINCT UID) AS total_unique
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
-            WHERE MATCH_TYPE = 'AI_AGENT' AND {date_where}
-        """, params)
-        total_unique = cur.fetchone()[0] or 0
-
-        # 3) First-click attribution destinations (POST_AI_NON_AGENT)
+        # 2) Attribution destinations
         cur.execute(f"""
             SELECT COMMON_NAME,
                    COUNT(DISTINCT UID) AS unique_users,
@@ -6922,7 +6915,7 @@ def llmo_iq_data():
         """, params)
         attrib_rows = cur.fetchall()
 
-        # 4) Source LLM -> Destination mapping (top flows)
+        # 3) Source LLM -> Destination flows
         cur.execute(f"""
             WITH ordered AS (
                 SELECT UID, COMMON_NAME, MATCH_TYPE, VISIT_TS,
@@ -6946,7 +6939,7 @@ def llmo_iq_data():
         """, params)
         flow_rows = cur.fetchall()
 
-        # 5) Top search queries extracted from AI_AGENT URLs
+        # 4) Top searches from URLs
         cur.execute(f"""
             SELECT REGEXP_SUBSTR(URL, '[?&](?:q|query|p|search|prompt|text)=([^&]+)', 1, 1, 'e') AS search_term,
                    COUNT(*) AS cnt
@@ -6959,7 +6952,7 @@ def llmo_iq_data():
         """, params)
         search_rows = cur.fetchall()
 
-        # 6) Daily trend data (unique users + clicks per LLM per day)
+        # 5) Daily trend (unique users + clicks per LLM per day)
         cur.execute(f"""
             SELECT DELIVERED::DATE AS d,
                    COMMON_NAME,
@@ -6972,57 +6965,23 @@ def llmo_iq_data():
         """, params)
         trend_rows = cur.fetchall()
 
-        # 7) Browser / Platform breakdown
+        # 6) Browser + Platform in one query
         cur.execute(f"""
-            SELECT BROWSER, COUNT(DISTINCT UID) AS unique_users
+            SELECT 'B' AS typ, BROWSER AS val, COUNT(DISTINCT UID) AS cnt
             FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
             WHERE MATCH_TYPE = 'AI_AGENT' AND {date_where}
               AND BROWSER IS NOT NULL AND BROWSER != ''
             GROUP BY BROWSER
-            ORDER BY unique_users DESC
-        """, params)
-        browser_rows = cur.fetchall()
-
-        cur.execute(f"""
-            SELECT PLATFORM, COUNT(DISTINCT UID) AS unique_users
+            UNION ALL
+            SELECT 'P' AS typ, PLATFORM AS val, COUNT(DISTINCT UID) AS cnt
             FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
             WHERE MATCH_TYPE = 'AI_AGENT' AND {date_where}
               AND PLATFORM IS NOT NULL AND PLATFORM != ''
             GROUP BY PLATFORM
-            ORDER BY unique_users DESC
-        """, params)
-        platform_rows = cur.fetchall()
-
-        # 8) Overall demographic breakdown for AI users
-        demo_categories = ['GENDER', 'AGE', 'ETHNICITY', 'INCOME', 'EDUCATION']
-        demo_results = {}
-        for dc in demo_categories:
-            cur.execute(f"""
-                SELECT d.{dc} AS val, COUNT(DISTINCT l.UID) AS cnt
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO l
-                INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON l.UID = d.UID
-                WHERE l.MATCH_TYPE = 'AI_AGENT' AND {date_where}
-                  AND d.{dc} IS NOT NULL AND TRIM(d.{dc}) != ''
-                  AND UPPER(TRIM(d.{dc})) NOT IN ('PREFER NOT TO SAY', 'NONE', 'N/A', '')
-                GROUP BY d.{dc}
-                ORDER BY cnt DESC
-            """, params)
-            demo_results[dc.lower()] = cur.fetchall()
-
-        # 9) Per-date demographic breakdown (for delta overlay)
-        demo_trend_results = {}
-        for dc in demo_categories:
-            cur.execute(f"""
-                SELECT l.DELIVERED::DATE AS d, d2.{dc} AS val, COUNT(DISTINCT l.UID) AS cnt
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO l
-                INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d2 ON l.UID = d2.UID
-                WHERE l.MATCH_TYPE = 'AI_AGENT' AND {date_where}
-                  AND d2.{dc} IS NOT NULL AND TRIM(d2.{dc}) != ''
-                  AND UPPER(TRIM(d2.{dc})) NOT IN ('PREFER NOT TO SAY', 'NONE', 'N/A', '')
-                GROUP BY d, d2.{dc}
-                ORDER BY d, cnt DESC
-            """, params)
-            demo_trend_results[dc.lower()] = cur.fetchall()
+        """, params + params)
+        bp_rows = cur.fetchall()
+        browser_rows = sorted([r for r in bp_rows if r[0] == 'B'], key=lambda x: -x[2])
+        platform_rows = sorted([r for r in bp_rows if r[0] == 'P'], key=lambda x: -x[2])
 
         conn.close()
 
@@ -7044,36 +7003,23 @@ def llmo_iq_data():
                 'category_share': round(clicks / total_clicks_all * 100, 2) if total_clicks_all else 0,
             })
 
-        attribution = []
-        for r in attrib_rows:
-            name, uu, clicks = r
-            attribution.append({
-                'name': name or 'Unknown',
-                'unique_users': uu,
-                'unique_users_projected': round(uu * M),
-                'total_clicks': clicks,
-                'total_clicks_projected': round(clicks * M),
-            })
+        attribution = [{
+            'name': r[0] or 'Unknown', 'unique_users': r[1],
+            'unique_users_projected': round(r[1] * M), 'total_clicks': r[2],
+            'total_clicks_projected': round(r[2] * M),
+        } for r in attrib_rows]
 
-        flows = []
-        for r in flow_rows:
-            src, dst, uu, clicks = r
-            flows.append({
-                'source': src,
-                'destination': dst,
-                'unique_users': uu,
-                'clicks': clicks,
-            })
+        flows = [{'source': r[0], 'destination': r[1], 'unique_users': r[2], 'clicks': r[3]} for r in flow_rows]
 
         searches = []
         for r in search_rows:
-            term, cnt = r
+            term = r[0]
             try:
                 from urllib.parse import unquote_plus
                 term = unquote_plus(str(term))
             except Exception:
                 pass
-            searches.append({'term': term, 'count': cnt})
+            searches.append({'term': term, 'count': r[1]})
 
         trend_dates = sorted(set(str(r[0]) for r in trend_rows))
         trend_by_llm = {}
@@ -7084,38 +7030,8 @@ def llmo_iq_data():
                 trend_by_llm[name] = {}
             trend_by_llm[name][str(d)] = {'unique_users': uu, 'total_clicks': clicks}
 
-        browsers = [{'name': r[0], 'unique_users': r[1]} for r in browser_rows]
-        platforms = [{'name': r[0], 'unique_users': r[1]} for r in platform_rows]
-
-        # Build demographics payload
-        demographics = {}
-        for dc in demo_categories:
-            dc_lower = dc.lower()
-            rows = demo_results[dc_lower]
-            total_demo = sum(r[1] for r in rows)
-            demographics[dc_lower] = [
-                {'value': r[0], 'count': r[1], 'pct': round(r[1] / total_demo * 100, 2) if total_demo else 0}
-                for r in rows
-            ]
-
-        # Build per-date demographic trends (percentage per value per date)
-        demo_trend = {}
-        for dc in demo_categories:
-            dc_lower = dc.lower()
-            rows = demo_trend_results[dc_lower]
-            by_date = {}
-            for r in rows:
-                d_str = str(r[0])
-                if d_str not in by_date:
-                    by_date[d_str] = []
-                by_date[d_str].append({'value': r[1], 'count': r[2]})
-            # Convert counts to percentages per date
-            for d_str in by_date:
-                items = by_date[d_str]
-                total_d = sum(x['count'] for x in items)
-                for x in items:
-                    x['pct'] = round(x['count'] / total_d * 100, 2) if total_d else 0
-            demo_trend[dc_lower] = by_date
+        browsers = [{'name': r[1], 'unique_users': r[2]} for r in browser_rows]
+        platforms = [{'name': r[1], 'unique_users': r[2]} for r in platform_rows]
 
         return jsonify({
             'success': True,
@@ -7134,12 +7050,165 @@ def llmo_iq_data():
             'trend_by_llm': trend_by_llm,
             'browsers': browsers,
             'platforms': platforms,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[LLMO IQ data] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/llmo-iq/demographics', methods=['GET'])
+@requires_auth
+def llmo_iq_demographics():
+    """Return demographic breakdown for LLMO users (loaded async for speed)."""
+    date_str = request.args.get('date')
+    date_end = request.args.get('date_end')
+    if not date_str:
+        date_str = datetime.now().strftime('%Y-%m-%d')
+    if not date_end:
+        date_end = date_str
+
+    try:
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        cur = conn.cursor()
+        cur.execute(f"USE WAREHOUSE {LLMO_IQ_WAREHOUSE}")
+
+        params = (date_str, date_end)
+
+        # Build temp table of distinct AI-agent UIDs once -- reuse for all demo queries
+        cur.execute("""
+            CREATE OR REPLACE TEMP TABLE TEMP_LLMO_AI_UIDS AS
+            SELECT DISTINCT UID, DELIVERED::DATE AS d
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            WHERE MATCH_TYPE = 'AI_AGENT'
+              AND DELIVERED::DATE BETWEEN %s AND %s
+        """, params)
+
+        # Single query: overall demographics for all 5 categories via UNPIVOT-style UNION ALL
+        cur.execute("""
+            SELECT 'gender' AS cat, d.GENDER AS val, COUNT(DISTINCT u.UID) AS cnt
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.GENDER IS NOT NULL AND TRIM(d.GENDER) != ''
+              AND UPPER(TRIM(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.GENDER
+            UNION ALL
+            SELECT 'age', d.AGE, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.AGE IS NOT NULL AND TRIM(d.AGE) != ''
+              AND UPPER(TRIM(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.AGE
+            UNION ALL
+            SELECT 'ethnicity', d.ETHNICITY, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.ETHNICITY IS NOT NULL AND TRIM(d.ETHNICITY) != ''
+              AND UPPER(TRIM(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.ETHNICITY
+            UNION ALL
+            SELECT 'income', d.INCOME, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.INCOME IS NOT NULL AND TRIM(d.INCOME) != ''
+              AND UPPER(TRIM(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.INCOME
+            UNION ALL
+            SELECT 'education', d.EDUCATION, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.EDUCATION IS NOT NULL AND TRIM(d.EDUCATION) != ''
+              AND UPPER(TRIM(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.EDUCATION
+        """)
+        overall_rows = cur.fetchall()
+
+        # Single query: per-date demographics for all categories
+        cur.execute("""
+            SELECT 'gender' AS cat, u.d, d.GENDER AS val, COUNT(DISTINCT u.UID) AS cnt
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.GENDER IS NOT NULL AND TRIM(d.GENDER) != ''
+              AND UPPER(TRIM(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.GENDER
+            UNION ALL
+            SELECT 'age', u.d, d.AGE, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.AGE IS NOT NULL AND TRIM(d.AGE) != ''
+              AND UPPER(TRIM(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.AGE
+            UNION ALL
+            SELECT 'ethnicity', u.d, d.ETHNICITY, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.ETHNICITY IS NOT NULL AND TRIM(d.ETHNICITY) != ''
+              AND UPPER(TRIM(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.ETHNICITY
+            UNION ALL
+            SELECT 'income', u.d, d.INCOME, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.INCOME IS NOT NULL AND TRIM(d.INCOME) != ''
+              AND UPPER(TRIM(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.INCOME
+            UNION ALL
+            SELECT 'education', u.d, d.EDUCATION, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u
+            JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.EDUCATION IS NOT NULL AND TRIM(d.EDUCATION) != ''
+              AND UPPER(TRIM(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.EDUCATION
+        """)
+        trend_rows = cur.fetchall()
+
+        conn.close()
+
+        # Process overall demographics
+        cat_data = {}
+        for r in overall_rows:
+            cat, val, cnt = r
+            if cat not in cat_data:
+                cat_data[cat] = []
+            cat_data[cat].append((val, cnt))
+
+        demographics = {}
+        for cat, items in cat_data.items():
+            items.sort(key=lambda x: -x[1])
+            total_d = sum(x[1] for x in items)
+            demographics[cat] = [
+                {'value': v, 'count': c, 'pct': round(c / total_d * 100, 2) if total_d else 0}
+                for v, c in items
+            ]
+
+        # Process per-date demographic trends
+        trend_data = {}
+        for r in trend_rows:
+            cat, d, val, cnt = r
+            d_str = str(d)
+            if cat not in trend_data:
+                trend_data[cat] = {}
+            if d_str not in trend_data[cat]:
+                trend_data[cat][d_str] = []
+            trend_data[cat][d_str].append({'value': val, 'count': cnt})
+
+        demo_trend = {}
+        for cat, by_date in trend_data.items():
+            for d_str, items in by_date.items():
+                total_d = sum(x['count'] for x in items)
+                for x in items:
+                    x['pct'] = round(x['count'] / total_d * 100, 2) if total_d else 0
+            demo_trend[cat] = by_date
+
+        return jsonify({
+            'success': True,
             'demographics': demographics,
             'demo_trend': demo_trend,
         })
     except Exception as e:
         import traceback; traceback.print_exc()
-        print(f"[LLMO IQ data] Error: {e}")
+        print(f"[LLMO IQ demographics] Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

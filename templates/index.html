@@ -17457,16 +17457,26 @@
                     renderLLMOSearches(data.searches);
                     renderLLMOFlows(data.flows);
                     renderLLMOBrowserPlatform(data.browsers, data.platforms);
-                    renderLLMODemographics(data.demographics);
-                    _llmoDemoTrendData = data.demo_trend;
                     _llmoTrendDatesCache = data.trend_dates;
                     _llmoTrendByLLMCache = data.trend_by_llm;
-                    renderLLMODemoTrend();
+                    loadLLMOIQDemographics(date, dateEnd || date);
                 })
                 .catch(function(e) {
                     if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                     console.error('LLMO data fetch error:', e);
                 });
+        }
+
+        function loadLLMOIQDemographics(date, dateEnd) {
+            fetch('/api/llmo-iq/demographics?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success) { console.error('LLMO demo error:', data.error); return; }
+                    renderLLMODemographics(data.demographics);
+                    _llmoDemoTrendData = data.demo_trend;
+                    renderLLMODemoTrend();
+                })
+                .catch(function(e) { console.error('LLMO demographics fetch error:', e); });
         }
 
         function _llmoFmt(n) {
