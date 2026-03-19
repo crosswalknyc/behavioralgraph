@@ -13357,6 +13357,139 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = pd.concat([df_final, loc_row], ignore_index=True)
         print(f"📍 Geographic profile: set LOCATION to '{dma_display}' at 100%")
 
+    # ══════════════════════════════════════════════════════════════════
+    # FINAL HARD ENFORCEMENT: Mathematical guarantees that override AI
+    # These run LAST (after all AI passes) to catch anything AI missed
+    # ══════════════════════════════════════════════════════════════════
+    if not is_genpop:
+        _bp_col_fe = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
+        _cs_col_fe = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
+
+        def _read_bp(idx):
+            col = _bp_col_fe or _cs_col_fe
+            try:
+                return float(str(df_final.at[idx, col]).replace(',', '').replace('%', ''))
+            except (ValueError, TypeError):
+                return 0.0
+
+        def _write_bp(idx, val):
+            v = f"{val:.4f}"
+            if _bp_col_fe:
+                df_final.at[idx, _bp_col_fe] = v
+            df_final.at[idx, _cs_col_fe] = v
+            if 'Percentage' in df_final.columns:
+                df_final.at[idx, 'Percentage'] = v
+
+        # ─── 1. PREFER NOT TO SAY: ≤10% in ALL demo categories ──────
+        _PNTS_CAP = 10.0
+        _demo_cats_final = {'AGE', 'EDUCATION', 'ETHNICITY', 'INCOME', 'RELATIONSHIP',
+                            'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'GENDER'}
+        for _dc in _demo_cats_final:
+            _mask = df_final['Column'].str.upper().str.strip() == _dc
+            if not _mask.any():
+                continue
+            _pnts_rows = []
+            _other_rows = []
+            for _ri in df_final[_mask].index:
+                _rv = str(df_final.at[_ri, 'Value']).strip().upper()
+                _rbp = _read_bp(_ri)
+                if 'PREFER NOT TO SAY' in _rv:
+                    _pnts_rows.append((_ri, _rbp))
+                else:
+                    _other_rows.append((_ri, _rbp))
+            for _pi, _pv in _pnts_rows:
+                if _pv > _PNTS_CAP:
+                    _excess = _pv - _PNTS_CAP
+                    _ot = sum(v for _, v in _other_rows)
+                    for _oi, _ov in _other_rows:
+                        _boost = _excess * (_ov / _ot) if _ot > 0 else _excess / max(1, len(_other_rows))
+                        _write_bp(_oi, round(_ov + _boost, 4))
+                    _write_bp(_pi, _PNTS_CAP)
+                    print(f"   ✅ HARD FIX {_dc}: PREFER NOT TO SAY {_pv:.1f}% → {_PNTS_CAP}%")
+
+        # ─── 2. SOCIAL MEDIA: enforce realistic rank order / ranges ──
+        _sm_mask = df_final['Column'].str.upper().str.strip() == 'SOCIAL MEDIA'
+        if _sm_mask.any():
+            _sm_items = {}
+            for _si in df_final[_sm_mask].index:
+                _sn = str(df_final.at[_si, 'Value']).strip().upper()
+                _sm_items[_sn] = (_si, _read_bp(_si))
+            _sm_targets = {
+                'YOUTUBE': (78.0, 85.0),
+                'FACEBOOK': (38.0, 48.0),
+                'INSTAGRAM': (55.0, 65.0),
+                'TIKTOK': (48.0, 58.0),
+                'X': (28.0, 42.0),
+                'SNAPCHAT': (18.0, 28.0),
+                'LINKEDIN': (15.0, 25.0),
+                'PINTEREST': (12.0, 22.0),
+                'DISCORD': (18.0, 30.0),
+                'TWITCH': (15.0, 28.0),
+                'THREADS': (5.0, 12.0),
+                'TUMBLR': (3.0, 8.0),
+                'BLUESKY': (2.0, 6.0),
+                'PATREON': (4.0, 10.0),
+                'LETTERBOXD': (2.0, 5.0),
+                'ONLYFANS': (3.0, 7.0),
+            }
+            for _pname, (_plow, _phi) in _sm_targets.items():
+                if _pname in _sm_items:
+                    _idx, _cur = _sm_items[_pname]
+                    if _cur < _plow or _cur > _phi:
+                        import random
+                        _new = round(random.uniform(_plow, _phi), 4)
+                        _write_bp(_idx, _new)
+                        print(f"   ✅ HARD FIX SOCIAL MEDIA: {_pname} {_cur:.1f}% → {_new:.4f}%")
+
+        # ─── 3. VENUE: physical attendance venues capped at 10% ──────
+        _ven_mask = df_final['Column'].str.upper().str.strip() == 'VENUE'
+        if _ven_mask.any():
+            _VEN_CAP = 10.0
+            for _vi in df_final[_ven_mask].index:
+                _vbp = _read_bp(_vi)
+                _vn = str(df_final.at[_vi, 'Value']).strip()
+                if _vbp > _VEN_CAP:
+                    import random
+                    _new_vbp = round(random.uniform(2.0, _VEN_CAP), 4)
+                    _write_bp(_vi, _new_vbp)
+                    print(f"   ✅ HARD FIX VENUE: {_vn} {_vbp:.1f}% → {_new_vbp:.4f}%")
+
+        # ─── 4. BETTING: DraftKings must beat Bet365 ────────────────
+        _bet_mask = df_final['Column'].str.upper().str.strip() == 'BETTING'
+        if _bet_mask.any():
+            _dk_idx = _b365_idx = None
+            _dk_bp = _b365_bp = 0
+            for _bi in df_final[_bet_mask].index:
+                _bn = str(df_final.at[_bi, 'Value']).strip().upper()
+                if 'DRAFTKINGS' in _bn:
+                    _dk_idx = _bi
+                    _dk_bp = _read_bp(_bi)
+                elif 'BET365' in _bn:
+                    _b365_idx = _bi
+                    _b365_bp = _read_bp(_bi)
+            if _dk_idx is not None and _b365_idx is not None and _b365_bp >= _dk_bp:
+                _dk_new = round(max(_dk_bp, _b365_bp + 3.0), 4)
+                _b365_new = round(min(_b365_bp, _dk_bp - 3.0), 4)
+                _write_bp(_dk_idx, _dk_new)
+                _write_bp(_b365_idx, max(1.0, _b365_new))
+                print(f"   ✅ HARD FIX BETTING: DraftKings {_dk_bp:.1f}→{_dk_new:.4f}, "
+                      f"Bet365 {_b365_bp:.1f}→{_b365_new:.4f}")
+
+        # ─── 5. EVENTS: cap at 15% (most people don't attend events) ─
+        _ev_mask = df_final['Column'].str.upper().str.strip() == 'EVENTS'
+        if _ev_mask.any():
+            _EV_CAP = 15.0
+            for _ei in df_final[_ev_mask].index:
+                _ev_n = str(df_final.at[_ei, 'Value']).strip()
+                _ev_bp = _read_bp(_ei)
+                if _ev_bp > _EV_CAP:
+                    import random
+                    _new_ev = round(random.uniform(3.0, _EV_CAP), 4)
+                    _write_bp(_ei, _new_ev)
+                    print(f"   ✅ HARD FIX EVENTS: {_ev_n} {_ev_bp:.1f}% → {_new_ev:.4f}%")
+
+        print("   ✅ Final hard enforcement pass complete")
+
     # Reorder columns
     column_order = ['Column', 'Value', 'Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers', 'US Gen Pop Projection']
     existing_columns = [col for col in column_order if col in df_final.columns]
