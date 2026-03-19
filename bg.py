@@ -12611,6 +12611,51 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Universal catch-all: handles ANY category not covered above
         df_final = ai_universal_demographic_review(df_final, brand_category, project_name, brands)
 
+    # ── Post-AI gender enforcement ────────────────────────────────────
+    # AI demographic agents often inflate PREFER NOT TO SAY despite prompt
+    # instructions. Re-apply the archetype-based gender distribution.
+    if not is_genpop and _archetype:
+        _gender_skew = _archetype.get('gender_skew', 'balanced')
+        _gm = df_final['Column'].str.upper().str.strip() == 'GENDER'
+        _gender_rows = {}
+        for _gidx in df_final[_gm].index:
+            _gval = str(df_final.at[_gidx, 'Value']).strip().upper()
+            _gender_rows[_gidx] = _gval
+        if _gender_rows:
+            if _gender_skew == 'male':
+                _g_target = {'MALE': 65.0, 'FEMALE': 30.0}
+            elif _gender_skew == 'female':
+                _g_target = {'MALE': 28.0, 'FEMALE': 67.0}
+            else:
+                _g_target = {'MALE': 48.0, 'FEMALE': 47.0}
+            _g_minor = 1.0
+            _g_minor_labels = {'NON-BINARY', 'TRANS MALE', 'TRANS FEMALE', 'PREFER NOT TO SAY'}
+            _g_minor_count = sum(1 for v in _gender_rows.values() if v in _g_minor_labels)
+            _g_remaining = 100.0 - _g_minor_count * _g_minor
+            _g_male_pct = _g_target.get('MALE', 48.0) / (_g_target.get('MALE', 48.0) + _g_target.get('FEMALE', 47.0)) * _g_remaining
+            _g_female_pct = _g_remaining - _g_male_pct
+            _g_bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
+            _g_cs_col = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
+            for _gidx, _gval in _gender_rows.items():
+                if _gval in _g_minor_labels:
+                    _g_pct = _g_minor
+                elif _gval == 'MALE' or ('MALE' in _gval and 'FEMALE' not in _gval and 'TRANS' not in _gval):
+                    _g_pct = _g_male_pct
+                elif _gval == 'FEMALE' or _gval.startswith('FEMALE'):
+                    _g_pct = _g_female_pct
+                else:
+                    _g_pct = _g_minor
+                _g_pct = round(_g_pct, 4)
+                if _g_bp_col:
+                    df_final.at[_gidx, _g_bp_col] = f"{_g_pct:.4f}"
+                df_final.at[_gidx, _g_cs_col] = f"{_g_pct:.4f}"
+                if 'Percentage' in df_final.columns:
+                    df_final.at[_gidx, 'Percentage'] = f"{_g_pct:.4f}"
+                _g_raw = max(1, int(round(_g_pct / 100.0 * final_sample_size)))
+                df_final.at[_gidx, 'Original Raw Numbers'] = str(_g_raw)
+            print(f"   🔧 Post-AI gender enforcement: {_gender_skew} skew "
+                  f"(M={_g_male_pct:.1f}%, F={_g_female_pct:.1f}%, minor={_g_minor}%)")
+
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
         df_final = cap_demographic_projections(df_final)
@@ -12669,8 +12714,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _bp_v = 0
             _gp_bp = _gp_bp_map.get((_cat, _val), 0)
             # Ceiling: prevent AI inflation above realistic levels
+            # Formula: gp * 1.2 + 5pp — allows moderate over-index but not extreme
             if _gp_bp > 0:
-                _ceiling = min(99.99, max(35.0, _gp_bp * 1.5))
+                _ceiling = min(99.99, max(35.0, _gp_bp * 1.2 + 5.0))
             else:
                 _ceiling = 35.0
             # Floor: prevent mass-market items from being suppressed below reality
@@ -12822,6 +12868,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 except (ValueError, TypeError):
                     _formatted.append(str(_v))
             df_final[_fmt_col] = _formatted
+
+    # Ensure formatted columns are string dtype to prevent pandas from stripping trailing zeros
+    for _str_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage',
+                      'Original Raw Numbers', 'US Gen Pop Projection']:
+        if _str_col in df_final.columns:
+            df_final[_str_col] = df_final[_str_col].astype(str)
 
     # Save to CSV
     try:
