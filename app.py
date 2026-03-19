@@ -1483,7 +1483,7 @@ def ensure_metadata_has_rerun_fields(csv_path, brand_category, is_listener_watch
     """Append BRAND_CATEGORY, LISTENER_WATCHER, PLATFORM_NAME to INPUT_METADATA row for future reruns."""
     try:
         import pandas as pd
-        df = pd.read_csv(csv_path)
+        df = pd.read_csv(csv_path, dtype=str)
         mask = df['Column'].astype(str).str.upper() == 'INPUT_METADATA'
         if not mask.any():
             return
@@ -15247,7 +15247,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         update_job_status(job_id, progress=87, message='Adding frequency analysis...')
                         
                         import pandas as pd
-                        df = pd.read_csv(result_file)
+                        df = pd.read_csv(result_file, dtype=str)
                         
                         # Use calculate_frequency_metrics like terminal version does
                         if hasattr(bg, 'calculate_frequency_metrics'):
@@ -15278,7 +15278,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 elif is_listener_watcher:
                     try:
                         import pandas as pd
-                        df = pd.read_csv(result_file)
+                        df = pd.read_csv(result_file, dtype=str)
                         if hasattr(bg, 'set_brand_input_to_csv'):
                             df = bg.set_brand_input_to_csv(df)
                         if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
@@ -15307,12 +15307,12 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                                 except (ValueError, TypeError):
                                     continue
                                 if _bpv > 99.99:
-                                    df.at[_idx, _bp_c] = 99.99
-                                    df.at[_idx, _cs_c] = 99.99
+                                    df.at[_idx, _bp_c] = '99.9900'
+                                    df.at[_idx, _cs_c] = '99.9900'
                         # Format to 4 decimal places
                         for _fc in [_bp_c, _cs_c]:
                             if _fc in df.columns:
-                                df[_fc] = df[_fc].apply(lambda x: f"{float(str(x).replace(',','').replace('%','')):.4f}" if pd.notna(x) else str(x))
+                                df[_fc] = df[_fc].apply(lambda x: f"{float(str(x).replace(',','').replace('%','')):.4f}" if pd.notna(x) and str(x).strip() not in ('', 'nan', 'None') else str(x))
                         df.to_csv(result_file, index=False)
                     except Exception as e:
                         print(f"⚠️ Listener/watcher adjustment error: {e}")
@@ -15324,7 +15324,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     update_job_status(job_id, progress=88, message='Applying final processing...')
                     try:
                         import pandas as pd
-                        df = pd.read_csv(result_file)
+                        df = pd.read_csv(result_file, dtype=str)
                         
                         # 1. Enforce input brand to 100% (skip for GenPop)
                         if not is_genpop and hasattr(bg, 'enforce_input_brand_100'):
