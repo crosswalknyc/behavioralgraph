@@ -13167,6 +13167,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         "persona is explicitly creators/gamers only. If any value looks like raw "
                         "clickstream inflation, correct it.\n"
                     )
+                elif _rc_upper == 'MOST PURCHASED BRANDS':
+                    _category_deep_check = (
+                        "\n=== DEEP CHECK: MOST PURCHASED BRANDS (every row) ===\n"
+                        "Treat each brand independently. Compare implied lift vs US Gen Pop when "
+                        "the baseline is obvious: women's skincare, prestige beauty, and women's "
+                        "luxury fashion (e.g. La Roche-Posay, Tory Burch) must NOT massively "
+                        "over-index on male-skewing or sports/entertainment audiences. "
+                        "If profile BP is far above Gen Pop without a strong persona reason, "
+                        "lower it. Mass retailers and sports/athletic brands may index higher.\n"
+                    )
                 elif _rc_upper in ('SEARCH ENGINE/AI', 'SEARCH ENGINE'):
                     _category_deep_check = (
                         "\n=== DEEP CHECK: SEARCH / AI (read every row) ===\n"
@@ -13575,8 +13585,17 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
         print("   ✅ Final hard enforcement pass complete")
 
+    # Dedicated MOST PURCHASED BRANDS pass: row-by-row vs Gen Pop + persona (GPT-4o)
+    if not is_genpop:
+        df_final, _mpb_n = ai_review_most_purchased_brands_vs_genpop(
+            df_final, project_name, brands, brand_category, is_genpop)
+
     # Final math pass: BP × sample_size → Original Raw; within-category Category Share;
     # then US Gen Pop from raw (same as edit_sample_size.py)
+    df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
+    df_final = add_us_gen_pop_projection(df_final)
+    # Micro-variation so BP never ends in .0000; re-reconcile so raws / CS / genpop match
+    df_final = perturb_brand_penetration_avoid_dot_0000(df_final)
     df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
     df_final = add_us_gen_pop_projection(df_final)
 
@@ -13632,6 +13651,48 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             df_final[_fmt_col] = _formatted
 
     # Ensure formatted columns are string dtype to prevent pandas from stripping trailing zeros
+    for _str_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage',
+                      'Original Raw Numbers', 'US Gen Pop Projection']:
+        if _str_col in df_final.columns:
+            df_final[_str_col] = df_final[_str_col].astype(str)
+
+    # Last save hook: same math as edit_sample_size.py (BP→raw→category share→genpop)
+    # so post-format / Excel churn cannot leave raws, CS, or projections out of sync.
+    df_final = finalize_output_metrics_like_edit_sample_size(df_final)
+    for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
+        if _fmt_col not in df_final.columns:
+            continue
+        _formatted = []
+        for _v in df_final[_fmt_col]:
+            try:
+                _num = float(str(_v).replace(',', '').replace('%', ''))
+            except (ValueError, TypeError):
+                _formatted.append(str(_v))
+                continue
+            _formatted.append(f"{_num:.4f}")
+        df_final[_fmt_col] = _formatted
+    for _di in df_final.index:
+        _dcat = str(df_final.at[_di, 'Column']).strip().upper()
+        if _dcat not in _DEMO_COLS_4DP:
+            continue
+        for _dfc in ('Brand Penetration (Row)', 'Category Share', 'Percentage'):
+            if _dfc not in df_final.columns:
+                continue
+            try:
+                _dn = float(str(df_final.at[_di, _dfc]).replace(',', '').replace('%', ''))
+                df_final.at[_di, _dfc] = f"{_dn:.4f}"
+            except (ValueError, TypeError):
+                pass
+    for _fmt_col in ['Original Raw Numbers', 'US Gen Pop Projection']:
+        if _fmt_col in df_final.columns:
+            _formatted = []
+            for _v in df_final[_fmt_col]:
+                try:
+                    _num = float(str(_v).replace(',', ''))
+                    _formatted.append(str(int(round(_num))) if _num == int(_num) else f"{_num:.4f}")
+                except (ValueError, TypeError):
+                    _formatted.append(str(_v))
+            df_final[_fmt_col] = _formatted
     for _str_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage',
                       'Original Raw Numbers', 'US Gen Pop Projection']:
         if _str_col in df_final.columns:
@@ -24316,6 +24377,177 @@ def enforce_streaming_music_top6(df):
     return df
 
 
+def _parse_ai_json_response(text: str):
+    """Extract first JSON object from model output (handles markdown fences)."""
+    import json as _json
+    text = (text or '').strip()
+    if text.startswith('```'):
+        text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+    depth = 0
+    end = 0
+    for i, c in enumerate(text):
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end > 0:
+        text = text[:end]
+    return _json.loads(text)
+
+
+def finalize_output_metrics_like_edit_sample_size(df: pd.DataFrame) -> pd.DataFrame:
+    """Last-step math: BP × sample_size → Original Raw; within-category Category Share;
+    then US Gen Pop from raws. Same order as ``edit_sample_size.py`` / reconcile."""
+    if df is None or df.empty:
+        return df
+    df = reconcile_final_output_from_bp_and_sample_size(df)
+    df = add_us_gen_pop_projection(df)
+    return df
+
+
+def ai_review_most_purchased_brands_vs_genpop(
+        df: pd.DataFrame,
+        project_name: str,
+        brands,
+        brand_category: str,
+        is_genpop: bool) -> tuple:
+    """Row-by-row GPT-4o review of MOST PURCHASED BRANDS vs US Gen Pop + persona.
+
+    Flags implausible over-index (e.g. La Roche-Posay, Tory Burch on male-skewing /
+    sports audiences) and returns corrected BP. Caller should run
+    ``finalize_output_metrics_like_edit_sample_size`` after all BP edits.
+    """
+    if is_genpop or df is None or df.empty:
+        return df, 0
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
+    if not bp_col:
+        return df, 0
+    mpb_mask = df['Column'].str.upper().str.strip() == 'MOST PURCHASED BRANDS'
+    if not mpb_mask.any():
+        return df, 0
+
+    client = _get_openai_client()
+    if not client:
+        return df, 0
+
+    gp_ref = _load_genpop_csv()
+    gp_bp_map = {}
+    if gp_ref is not None:
+        try:
+            _c0, _c1, _c2 = gp_ref.columns[0], gp_ref.columns[1], gp_ref.columns[2]
+            for _, _gr in gp_ref.iterrows():
+                _gc = str(_gr[_c0]).strip().upper()
+                _gv = str(_gr[_c1]).strip().upper()
+                try:
+                    gp_bp_map[(_gc, _gv)] = float(_gr[_c2])
+                except (ValueError, TypeError):
+                    pass
+        except Exception:
+            gp_bp_map = {}
+
+    subject = (project_name or (brands[0] if brands else 'Unknown')).replace('_', ' ').strip()
+    bc = (brand_category or '').strip()
+    profile_summary = _build_profile_summary(df)
+
+    rows = []
+    for idx in df[mpb_mask].index:
+        val = str(df.at[idx, 'Value']).strip()
+        try:
+            bp = float(str(df.at[idx, bp_col]).replace(',', '').replace('%', ''))
+        except (ValueError, TypeError):
+            continue
+        gpk = ('MOST PURCHASED BRANDS', val.upper())
+        gp_bp = gp_bp_map.get(gpk, 0.0)
+        idx_mult = (bp / gp_bp) if gp_bp > 0 else None
+        rows.append((idx, val, bp, gp_bp, idx_mult))
+
+    if not rows:
+        return df, 0
+
+    adjustments = 0
+    batch_size = 22
+    for b_start in range(0, len(rows), batch_size):
+        batch = rows[b_start:b_start + batch_size]
+        lines = []
+        for _i, (_idx, _name, _bp, _gp, _im) in enumerate(batch, 1):
+            if _gp and _gp > 0:
+                im_s = f", GenPop={_gp:.2f}%, index≈{_bp/_gp:.2f}x" if _im else ''
+            else:
+                im_s = ", GenPop baseline N/A"
+            lines.append(f"  {_i}. {_name}: profile BP={_bp:.4f}%{im_s}")
+
+        prompt = (
+            f"You are a senior consumer insights director. Audience: \"{subject}\" "
+            f"({bc}).\n\n"
+            f"DEMO / PERSONA (use for every judgment):\n{profile_summary[:2500]}\n\n"
+            f"=== MOST PURCHASED BRANDS — ROW BY ROW ===\n"
+            f"Each line is ONE brand. \"profile BP\" = % of THIS audience panel estimated "
+            f"to have purchased that brand in the study window. \"GenPop\" = US general "
+            f"population baseline % for the same row when available.\n\n"
+            + "\n".join(lines) +
+            f"\n\n=== YOUR TASK ===\n"
+            f"For EACH brand above, decide if the profile BP is believable for this audience.\n"
+            f"- Brands that skew female / prestige skincare / women's luxury (e.g. La Roche-Posay, "
+            f"Tory Burch, Fenty, Sephora-heavy labels) should NOT sit far ABOVE US Gen Pop on a "
+            f"male-skewing or sports/entertainment audience unless you can justify a small lift "
+            f"(typically cap near min(profile, max(GenPop×1.15, GenPop+0.5)) when GenPop exists; "
+            f"if GenPop missing, use persona: often single-digit to low teens for niche luxury "
+            f"women's brands on male-skew profiles).\n"
+            f"- Mass brands (Nike, Amazon, Walmart, Coke) can index higher; still cap any single "
+            f"row at 90% BP.\n"
+            f"- If the current BP is fine, return the SAME value (or within 0.01).\n"
+            f"- You MUST return one entry per line number / brand — no skipping.\n\n"
+            f"Return ONLY valid JSON:\n"
+            f'{{"corrections":[{{"item":"BRAND NAME EXACT",'
+            f'"correct_bp":12.3456,"reason":"brief"}},...]}}\n'
+            f"JSON only, no markdown."
+        )
+
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.12,
+                max_tokens=8000,
+            )
+            result = _parse_ai_json_response(resp.choices[0].message.content.strip())
+            for corr in result.get('corrections', []):
+                try:
+                    ci = str(corr.get('item', '')).strip().upper()
+                    cnew = float(corr.get('correct_bp', 0))
+                    _reason = str(corr.get('reason', ''))[:120]
+                except (ValueError, TypeError):
+                    continue
+                cnew = max(0.05, min(cnew, 90.0))
+                cnew = round(cnew, 4)
+                matched_idx = None
+                matched_old = None
+                for _idx, _name, _bp, _gp, _ in batch:
+                    nu = _name.strip().upper()
+                    if nu == ci or ci in nu or nu in ci:
+                        matched_idx, matched_old = _idx, _bp
+                        break
+                if matched_idx is None:
+                    continue
+                if abs(cnew - matched_old) < 0.25:
+                    continue
+                # Only set BP; reconcile_final_output_from_bp_and_sample_size + genpop
+                # will recompute Original Raw Numbers, Category Share, and projection.
+                df.at[matched_idx, bp_col] = f"{cnew:.4f}"
+                adjustments += 1
+                print(f"   🛒 MPB review ↕ {df.at[matched_idx, 'Value']}: "
+                      f"{matched_old:.2f}%→{cnew:.4f}% — {_reason}")
+        except Exception as _e:
+            print(f"   ⚠️ MOST PURCHASED BRANDS AI review error: {_e}")
+
+    if adjustments:
+        print(f"   🛒 MOST PURCHASED BRANDS persona+GenPop review: {adjustments} rows adjusted")
+    return df, adjustments
+
+
 def reconcile_final_output_from_bp_and_sample_size(df: pd.DataFrame) -> pd.DataFrame:
     """Align Original Raw Numbers and Category Share with Brand Penetration and panel sample size.
 
@@ -24420,6 +24652,68 @@ def reconcile_final_output_from_bp_and_sample_size(df: pd.DataFrame) -> pd.DataF
 
     print(f"   🔗 Reconciled output metrics: sample_size={sample_size:,}, "
           f"raw-from-BP rows={rows_updated}, categories CS={cats_updated}")
+    return df
+
+
+def perturb_brand_penetration_avoid_dot_0000(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure Brand Penetration (Row) never ends in ``.0000`` (four trailing zeros).
+
+    Values formatted to 4 decimals that would read ``X.0000`` get a small uniform bump
+    in ``[0.0001, 0.0099]`` (or replacement for true zeros). Rows at ~100%% (platform /
+    brand input / sample) are left unchanged. After this, run
+    ``reconcile_final_output_from_bp_and_sample_size`` + ``add_us_gen_pop_projection``
+    so raws and projections stay consistent with BP.
+    """
+    if df is None or df.empty or 'Brand Penetration (Row)' not in df.columns:
+        return df
+    df = df.copy()
+    bp_col = 'Brand Penetration (Row)'
+    skip_cats = {
+        'INPUT_METADATA',
+    }
+    n_adj = 0
+    for idx in df.index:
+        cat = str(df.at[idx, 'Column']).strip().upper()
+        if cat in skip_cats:
+            continue
+        try:
+            raw_bp = df.at[idx, bp_col]
+            if isinstance(raw_bp, str):
+                raw_bp = raw_bp.replace('%', '').replace(',', '').strip()
+            x = float(raw_bp)
+        except (ValueError, TypeError):
+            continue
+        # Keep intentional 100% rows (platform, brand, sample size, series row, etc.)
+        if x >= 99.999:
+            df.at[idx, bp_col] = f"{min(x, 100.0):.4f}"
+            continue
+        x4 = round(x, 4)
+        frac_mod = int(round(abs(x4) * 10000 + 1e-9)) % 10000
+        if frac_mod != 0:
+            df.at[idx, bp_col] = f"{x4:.4f}"
+            continue
+        # Exactly *.0000 at 4dp (or zero): add slight noise
+        noise = random.uniform(0.0001, 0.0099)
+        if x4 <= 0:
+            new_x = noise
+        else:
+            new_x = x4 + noise
+            if new_x > 100.0:
+                new_x = max(0.0001, x4 - noise)
+            if new_x >= 99.999:
+                new_x = 99.9999 - random.uniform(0.0001, 0.0099)
+        new_x = max(0.0001, min(round(new_x, 4), 99.9999))
+        # Re-check suffix (e.g. round edge)
+        s = f"{new_x:.4f}"
+        if s.endswith('0000'):
+            new_x = round(new_x + random.uniform(0.0001, 0.0099), 4)
+            new_x = min(new_x, 99.9999)
+            s = f"{new_x:.4f}"
+        df.at[idx, bp_col] = s
+        n_adj += 1
+    if n_adj:
+        print(f"   🎲 Brand Penetration: added micro-variation to {n_adj} "
+              f"rows to avoid .0000 endings")
     return df
 
 

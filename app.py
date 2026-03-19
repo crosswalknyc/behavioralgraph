@@ -15287,6 +15287,12 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                             df = bg.reconcile_final_output_from_bp_and_sample_size(df)
                         if hasattr(bg, 'add_us_gen_pop_projection'):
                             df = bg.add_us_gen_pop_projection(df)
+                        if hasattr(bg, 'perturb_brand_penetration_avoid_dot_0000'):
+                            df = bg.perturb_brand_penetration_avoid_dot_0000(df)
+                        if hasattr(bg, 'reconcile_final_output_from_bp_and_sample_size'):
+                            df = bg.reconcile_final_output_from_bp_and_sample_size(df)
+                        if hasattr(bg, 'add_us_gen_pop_projection'):
+                            df = bg.add_us_gen_pop_projection(df)
                         _bp_c = 'Brand Penetration (Row)'
                         _cs_c = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
                         # Format to 4 decimal places
@@ -15395,6 +15401,12 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                             if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
                                 df = bg.adjust_platform_to_100_percent(df, platform_name)
                         
+                        if hasattr(bg, 'reconcile_final_output_from_bp_and_sample_size'):
+                            df = bg.reconcile_final_output_from_bp_and_sample_size(df)
+                        if hasattr(bg, 'add_us_gen_pop_projection'):
+                            df = bg.add_us_gen_pop_projection(df)
+                        if hasattr(bg, 'perturb_brand_penetration_avoid_dot_0000'):
+                            df = bg.perturb_brand_penetration_avoid_dot_0000(df)
                         if hasattr(bg, 'reconcile_final_output_from_bp_and_sample_size'):
                             df = bg.reconcile_final_output_from_bp_and_sample_size(df)
                         if hasattr(bg, 'add_us_gen_pop_projection'):
