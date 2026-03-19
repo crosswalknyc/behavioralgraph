@@ -1643,7 +1643,7 @@ def validate_demographics(df, archetype, sample_size):
                 df.at[idx, pct_col] = round(0.8, 4)
         corrections += len(gender_rows)
         print(f"   🔧 Gender: set {gender_skew} distribution "
-              f"(M={male_target:.1f}%, F={female_target:.1f}%, minor={MINOR_SHARE}% each)")
+              f"(M={male_target:.1f}%, F={female_target:.1f}%, minor varied)")
 
     # ── ETHNICITY (light touch -- only dampen extreme outliers) ───────────
     expected_high = [e.upper() for e in archetype.get('ethnicity_over_index', [])]
