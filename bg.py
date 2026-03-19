@@ -1057,11 +1057,12 @@ def anchor_to_genpop(df, sample_size):
         if not is_demo and raw_ratio < base_lo:
             lo = max(0.20, raw_ratio * 0.8)
 
-        # Popularity dampening: mass-market items (high GP BP) have a NARROW
+        # Popularity dampening: mass-market items (high GP BP) have a narrower
         # range centered on 1.0 (GP parity). Niche items keep the wide range.
-        # This is symmetric — both upper and lower bounds move toward 1.0.
+        # Gentler formula prevents over-compression of ubiquitous brands
+        # (YouTube, Google, Amazon) that should stay near Gen Pop for most audiences.
         if not is_demo:
-            popularity_scale = max(0.30, 1.0 - gp_bp_val / 100.0)
+            popularity_scale = max(0.50, 1.0 - gp_bp_val / 200.0)
             hi = 1.0 + (hi - 1.0) * popularity_scale
             lo = 1.0 - (1.0 - lo) * popularity_scale
 
@@ -1628,15 +1629,23 @@ def validate_demographics(df, archetype, sample_size):
             elif gender_skew == 'female' and is_core_male:
                 disfavored_pct = cur
 
-        if disfavored_pct > favored_pct:
+        MIN_FAVORED_PCT = 58.0
+        needs_gender_fix = (disfavored_pct > favored_pct) or (favored_pct < MIN_FAVORED_PCT)
+        if needs_gender_fix:
+            if disfavored_pct > favored_pct:
+                boost, dampen = 1.40, 0.60
+            elif favored_pct < 52:
+                boost, dampen = 1.35, 0.65
+            else:
+                boost, dampen = 1.20, 0.80
             new_vals = {}
             for idx, (val, cur) in gender_rows.items():
                 is_core_male = 'MALE' in val and 'FEMALE' not in val and 'NON' not in val and 'TRANS' not in val
                 is_core_female = val == 'FEMALE' or (val.startswith('FEMALE') and 'TRANS' not in val)
                 if (gender_skew == 'male' and is_core_male) or (gender_skew == 'female' and is_core_female):
-                    new_vals[idx] = cur * 1.15
+                    new_vals[idx] = cur * boost
                 elif (gender_skew == 'male' and is_core_female) or (gender_skew == 'female' and is_core_male):
-                    new_vals[idx] = cur * 0.85
+                    new_vals[idx] = cur * dampen
                 else:
                     new_vals[idx] = cur
             total = sum(new_vals.values())
@@ -1646,7 +1655,7 @@ def validate_demographics(df, archetype, sample_size):
                     df.at[idx, pct_col] = new_pct
                 corrections += len(new_vals)
                 print(f"   🔧 Gender: reshaped for '{gender_skew}' archetype "
-                      f"(disfavored gender was larger)")
+                      f"(favored={favored_pct:.1f}%, target>={MIN_FAVORED_PCT}%)")
 
     # ── ETHNICITY (light touch -- only dampen extreme outliers) ───────────
     expected_high = [e.upper() for e in archetype.get('ethnicity_over_index', [])]
@@ -12630,6 +12639,38 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("🔍 Running comprehensive final gut check (demographics + locations + behavioral)...")
         df_final = ai_final_gut_check(df_final, brand_category, project_name, brands)
 
+    # ── Post-gut-check: recalculate BP from raw, cap at 99.99%, fix formatting ─
+    df_final = add_brand_penetration_column_using_final_raw(df_final)
+    _bp_col_final = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
+    _cs_col_final = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
+    if _bp_col_final:
+        _ss_final = 1
+        _ss_mask_f = df_final['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+        if _ss_mask_f.any():
+            try:
+                _ss_final = max(1, int(float(str(df_final.loc[_ss_mask_f, 'Original Raw Numbers'].iloc[0]).replace(',', ''))))
+            except Exception:
+                pass
+        _META = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'SERIES - NETFLIX'}
+        _DEMO = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
+        _bp_caps = 0
+        for _idx, _row in df_final.iterrows():
+            _cat = str(_row.get('Column', '')).strip().upper()
+            if _cat in _META or _cat in _DEMO:
+                continue
+            try:
+                _bp_v = float(_row.get(_bp_col_final, 0))
+            except (ValueError, TypeError):
+                continue
+            if _bp_v > 99.99:
+                df_final.at[_idx, _bp_col_final] = 99.99
+                _new_raw = max(1, int(round(99.99 / 100.0 * _ss_final)))
+                df_final.at[_idx, 'Original Raw Numbers'] = str(_new_raw)
+                df_final.at[_idx, _cs_col_final] = 99.99
+                _bp_caps += 1
+        if _bp_caps:
+            print(f"   🔒 Capped {_bp_caps} items that exceeded 99.99% BP")
+
     # ── Final GPP recalc: ensures every row's US Gen Pop Projection = (Raw / 10M) * 329.9M
     df_final = add_us_gen_pop_projection(df_final)
 
@@ -12718,6 +12759,27 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Gen Pop only: no value may be exactly 100% (including BRAND INPUT); SAMPLE SIZE remains 10M
     if is_genpop:
         df_final = enforce_genpop_no_exact_100(df_final)
+
+    # ── Force exactly 4 decimal places on all numeric output columns ────
+    for _fmt_col in ['Brand Penetration (Row)', 'Category Share']:
+        if _fmt_col in df_final.columns:
+            _formatted = []
+            for _v in df_final[_fmt_col]:
+                try:
+                    _formatted.append(f"{float(str(_v).replace(',', '')):.4f}")
+                except (ValueError, TypeError):
+                    _formatted.append(str(_v))
+            df_final[_fmt_col] = _formatted
+    for _fmt_col in ['Original Raw Numbers', 'US Gen Pop Projection']:
+        if _fmt_col in df_final.columns:
+            _formatted = []
+            for _v in df_final[_fmt_col]:
+                try:
+                    _num = float(str(_v).replace(',', ''))
+                    _formatted.append(str(int(round(_num))) if _num == int(_num) else f"{_num:.4f}")
+                except (ValueError, TypeError):
+                    _formatted.append(str(_v))
+            df_final[_fmt_col] = _formatted
 
     # Save to CSV
     try:
@@ -23854,16 +23916,15 @@ def enforce_max_four_decimals_across_columns(df):
             continue
         # Coerce to numeric where possible
         series = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce')
-        # Keep original non-numeric values untouched, format numerics to 4 dp (trim trailing zeros)
         formatted = []
         for orig, num in zip(df[col].astype(str), series):
             if pd.isna(num):
                 formatted.append(orig)
             else:
-                txt = f"{num:.4f}"
-                # Trim trailing zeros and dot
-                txt = txt.rstrip('0').rstrip('.')
-                formatted.append(txt)
+                if col == 'Original Raw Numbers':
+                    formatted.append(str(int(round(num))) if num == int(num) else f"{num:.4f}")
+                else:
+                    formatted.append(f"{num:.4f}")
         df[col] = formatted
     return df
 
