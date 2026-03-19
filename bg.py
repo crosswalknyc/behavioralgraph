@@ -1518,7 +1518,8 @@ def validate_demographics(df, archetype, sample_size):
 
     df = df.copy()
     DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
-                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
+                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+                 'LOCATION'}
     pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
     bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
     sample_size = max(int(float(sample_size)), 1)
@@ -13267,19 +13268,20 @@ def add_brand_penetration_column_using_final_raw(df: pd.DataFrame) -> pd.DataFra
     if df is None or df.empty:
         return df
     df = df.copy()
-    # Resolve sample size
+    # Resolve sample size (prefer Original Raw Numbers or Category Share over Percentage)
     sample_mask = df['Column'].astype(str).str.upper() == 'SAMPLE SIZE'
+    final_sample_size = 0
     if sample_mask.any():
-        sample_size_value = df.loc[sample_mask, 'Percentage'].iloc[0]
-        try:
-            if isinstance(sample_size_value, str):
-                final_sample_size = int(float(sample_size_value.replace(',', '')))
-            else:
-                final_sample_size = int(float(sample_size_value))
-        except Exception:
-            final_sample_size = 0
-    else:
-        final_sample_size = 0
+        for _ss_col in ['Original Raw Numbers', 'Category Share', 'Percentage']:
+            if _ss_col not in df.columns:
+                continue
+            try:
+                _ss_v = int(float(str(df.loc[sample_mask, _ss_col].iloc[0]).replace(',', '')))
+                if _ss_v > 1000:
+                    final_sample_size = _ss_v
+                    break
+            except Exception:
+                continue
 
     col_name = 'Brand Penetration (Row)'
     if col_name not in df.columns:
@@ -13465,22 +13467,22 @@ def set_demographic_original_raws_from_percentage(df: pd.DataFrame) -> pd.DataFr
     df = df.copy()
 
     # Resolve TOTAL UNIVERSE size used by the pipeline
-    # Prefer the computed 'final_sample_size' proxy row if present, else derive from scale factor branch
+    # Read from Original Raw Numbers or Category Share of the SAMPLE SIZE row,
+    # NOT Percentage (which holds the sampling rate, e.g. 99.99%).
     total_universe_size = None
-    # Look for previously set universe size prints/values
-    # Attempt to infer from SAMPLE SIZE row if that's used as universe
     sample_mask = df['Column'].astype(str).str.upper() == 'SAMPLE SIZE'
     if sample_mask.any():
-        try:
-            val = df.loc[sample_mask, 'Percentage'].iloc[0]
-            total_universe_size = int(float(str(val).replace(',', '')))
-        except Exception:
-            total_universe_size = None
-
-    if not total_universe_size:
-        # Fallback to rough defaults based on scale factor comments
-        # If unreachable, skip without changing
-        total_universe_size = None
+        for col_name in ['Original Raw Numbers', 'Category Share', 'Percentage']:
+            if col_name not in df.columns:
+                continue
+            try:
+                val = df.loc[sample_mask, col_name].iloc[0]
+                candidate = int(float(str(val).replace(',', '')))
+                if candidate > 1000:
+                    total_universe_size = candidate
+                    break
+            except Exception:
+                continue
 
     if not total_universe_size:
         return df
@@ -15695,18 +15697,21 @@ def set_behavioral_original_raws_from_percentage(df: pd.DataFrame) -> pd.DataFra
         return df
     df = df.copy()
     
-    # Get inflated sample size from SAMPLE SIZE row (6x inflation)
+    # Get inflated sample size from SAMPLE SIZE row
     sample_mask = df['Column'].astype(str).str.upper() == 'SAMPLE SIZE'
+    inflated_sample_size = None
     if sample_mask.any():
-        try:
-            val = df.loc[sample_mask, 'Percentage'].iloc[0] if 'Percentage' in df.columns else df.loc[sample_mask, 'Category Share'].iloc[0] if 'Category Share' in df.columns else None
-            if val:
-                inflated_sample_size = int(float(str(val).replace(',', '')))
-            else:
-                return df
-        except Exception:
-            return df
-    else:
+        for _ss_col in ['Original Raw Numbers', 'Category Share', 'Percentage']:
+            if _ss_col not in df.columns:
+                continue
+            try:
+                _ss_v = int(float(str(df.loc[sample_mask, _ss_col].iloc[0]).replace(',', '')))
+                if _ss_v > 1000:
+                    inflated_sample_size = _ss_v
+                    break
+            except Exception:
+                continue
+    if not inflated_sample_size:
         return df
     
     # Behavioral categories (exclude demographics and metadata)
@@ -15815,8 +15820,16 @@ def enforce_cross_category_brand_consistency(df):
     try:
         sample_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
         if sample_mask.any():
-            sample_val = df.loc[sample_mask, 'Percentage'].iloc[0]
-            sample_size = int(float(str(sample_val).replace(',', '')))
+            for _ss_col in ['Original Raw Numbers', 'Category Share', 'Percentage']:
+                if _ss_col not in df.columns:
+                    continue
+                try:
+                    _ss_v = int(float(str(df.loc[sample_mask, _ss_col].iloc[0]).replace(',', '')))
+                    if _ss_v > 1000:
+                        sample_size = _ss_v
+                        break
+                except Exception:
+                    continue
     except Exception:
         sample_size = None
 
@@ -15878,14 +15891,22 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False):
     if is_genpop:
         return df
     
-    # Get sample size from SAMPLE SIZE row's Percentage
+    # Get sample size from SAMPLE SIZE row (Original Raw Numbers or Category Share, not Percentage)
     sample_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
     if not sample_mask.any():
         return df
-    try:
-        sample_size_value = df.loc[sample_mask, 'Percentage'].iloc[0]
-        sample_size = int(float(str(sample_size_value).replace(',', '')))
-    except Exception:
+    sample_size = None
+    for _col in ['Original Raw Numbers', 'Category Share', 'Percentage']:
+        if _col not in df.columns:
+            continue
+        try:
+            _v = int(float(str(df.loc[sample_mask, _col].iloc[0]).replace(',', '')))
+            if _v > 1000:
+                sample_size = _v
+                break
+        except Exception:
+            continue
+    if not sample_size:
         return df
     
     # Get the input brand name from BRAND INPUT row
@@ -22960,15 +22981,22 @@ def finalize_original_raw_numbers_for_output(df):
         if mask.any():
             df.loc[mask, final_col] = ''
 
-    # Resolve sample size
+    # Resolve sample size from Original Raw Numbers or Category Share
+    # (NOT Percentage, which holds the sampling rate e.g. 99.99%)
     sample_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
     sample_size = None
     if sample_mask.any():
-        try:
-            sample_val = df.loc[sample_mask, 'Percentage'].iloc[0]
-            sample_size = int(float(str(sample_val).replace(',', '')))
-        except Exception:
-            sample_size = None
+        for _ss_col in ['Original Raw Numbers', 'Category Share', 'Percentage']:
+            if _ss_col not in df.columns:
+                continue
+            try:
+                _ss_val = df.loc[sample_mask, _ss_col].iloc[0]
+                _ss_candidate = int(float(str(_ss_val).replace(',', '')))
+                if _ss_candidate > 1000:
+                    sample_size = _ss_candidate
+                    break
+            except Exception:
+                continue
 
     # Ensure final raw numbers are strings; store a numeric copy for ops
     df[final_col] = df[final_col].astype(str)
@@ -23851,15 +23879,22 @@ def cap_original_raw_numbers_to_sample_size(df):
     if db_col not in df.columns:
         return df
 
-    # Resolve sample size from SAMPLE SIZE row's Percentage
+    # Resolve sample size from SAMPLE SIZE row
     sample_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
     if not sample_mask.any():
         return df
-
-    try:
-        sample_size_val = df.loc[sample_mask, 'Percentage'].iloc[0]
-        sample_size = int(float(str(sample_size_val).replace(',', '')))
-    except Exception:
+    sample_size = None
+    for _ss_col in ['Original Raw Numbers', 'Category Share', 'Percentage']:
+        if _ss_col not in df.columns:
+            continue
+        try:
+            _ss_v = int(float(str(df.loc[sample_mask, _ss_col].iloc[0]).replace(',', '')))
+            if _ss_v > 1000:
+                sample_size = _ss_v
+                break
+        except Exception:
+            continue
+    if not sample_size:
         return df
 
     # Rows to exclude from capping
