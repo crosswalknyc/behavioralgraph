@@ -7045,7 +7045,7 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
             nm = llm['name']
             if nm not in trend_by_llm:
                 trend_by_llm[nm] = {}
-            trend_by_llm[nm][d] = {'unique_users': llm['unique_users'], 'total_clicks': llm['total_clicks']}
+            trend_by_llm[nm][d] = {'unique_users': round(llm['unique_users'] * M), 'total_clicks': round(llm['total_clicks'] * M)}
 
         for att in day.get('attribution', []):
             att_agg[att['name']]['uu'] += att['unique_users']
@@ -7084,14 +7084,15 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
                    for n, v in att_sorted]
 
     flow_sorted = sorted(flow_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
-    flows = [{'source': k[0], 'destination': k[1], 'unique_users': v['uu'], 'clicks': v['cl']}
+    flows = [{'source': k[0], 'destination': k[1],
+              'unique_users': round(v['uu'] * M), 'clicks': round(v['cl'] * M)}
              for k, v in flow_sorted]
 
     search_sorted = sorted(search_agg.items(), key=lambda x: x[1], reverse=True)[:50]
-    searches = [{'term': t, 'count': c} for t, c in search_sorted]
+    searches = [{'term': t, 'count': round(c * M)} for t, c in search_sorted]
 
-    browsers = [{'name': n, 'unique_users': u} for n, u in sorted(browser_agg.items(), key=lambda x: x[1], reverse=True)]
-    platforms = [{'name': n, 'unique_users': u} for n, u in sorted(platform_agg.items(), key=lambda x: x[1], reverse=True)]
+    browsers = [{'name': n, 'unique_users': round(u * M)} for n, u in sorted(browser_agg.items(), key=lambda x: x[1], reverse=True)]
+    platforms = [{'name': n, 'unique_users': round(u * M)} for n, u in sorted(platform_agg.items(), key=lambda x: x[1], reverse=True)]
 
     return {
         'success': True, 'loading': False,

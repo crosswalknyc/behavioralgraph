@@ -14932,14 +14932,12 @@
                 <!-- Summary Cards -->
                 <div id="llmoSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
                     <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Users</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Users (US Gen Pop)</div>
                         <div id="llmoTotalUsers" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
-                        <div id="llmoTotalUsersProj" style="font-size: 0.8rem; color: var(--text-secondary);">US Gen Pop: --</div>
                     </div>
                     <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Clicks</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Clicks (US Gen Pop)</div>
                         <div id="llmoTotalClicks" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
-                        <div id="llmoTotalClicksProj" style="font-size: 0.8rem; color: var(--text-secondary);">US Gen Pop: --</div>
                     </div>
                     <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">LLMs Tracked</div>
@@ -14965,15 +14963,13 @@
                                         <th style="padding: 0.5rem; white-space: nowrap;">#</th>
                                         <th style="padding: 0.5rem; white-space: nowrap;">LLM</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Unique Users</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Proj. Users</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">% of Total</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Total Clicks</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Proj. Clicks</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Category Share</th>
                                     </tr>
                                 </thead>
                                 <tbody id="llmoRankerBody">
-                                    <tr><td colspan="8" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a date and click Load</td></tr>
+                                    <tr><td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a date and click Load</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -14988,7 +14984,7 @@
 
                 <!-- Usage Trend Line Chart -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (Unique Users by Date)</h3>
+                    <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (US Gen Pop Unique Users by Date)</h3>
                     <div style="position: relative; height: 350px;">
                         <canvas id="llmoTrendChart"></canvas>
                     </div>
@@ -15013,7 +15009,7 @@
                                     <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
                                         <th style="padding: 0.5rem;">#</th>
                                         <th style="padding: 0.5rem;">Search Query</th>
-                                        <th style="padding: 0.5rem; text-align: right;">Count</th>
+                                        <th style="padding: 0.5rem; text-align: right;">Searches</th>
                                     </tr>
                                 </thead>
                                 <tbody id="llmoSearchesBody">
@@ -15035,7 +15031,7 @@
                                     <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
                                         <th style="padding: 0.5rem;">Source LLM</th>
                                         <th style="padding: 0.5rem;">Destination</th>
-                                        <th style="padding: 0.5rem; text-align: right;">Unique Users</th>
+                                        <th style="padding: 0.5rem; text-align: right;">Users</th>
                                         <th style="padding: 0.5rem; text-align: right;">Clicks</th>
                                     </tr>
                                 </thead>
@@ -17556,10 +17552,8 @@
         }
 
         function renderLLMOSummaryCards(data) {
-            document.getElementById('llmoTotalUsers').textContent = _llmoFmt(data.total_unique_users);
-            document.getElementById('llmoTotalUsersProj').textContent = 'US Gen Pop: ' + _llmoFmt(data.total_unique_users_projected);
-            document.getElementById('llmoTotalClicks').textContent = _llmoFmt(data.total_clicks);
-            document.getElementById('llmoTotalClicksProj').textContent = 'US Gen Pop: ' + _llmoFmt(data.total_clicks_projected);
+            document.getElementById('llmoTotalUsers').textContent = _llmoFmt(data.total_unique_users_projected);
+            document.getElementById('llmoTotalClicks').textContent = _llmoFmt(data.total_clicks_projected);
             document.getElementById('llmoLLMCount').textContent = data.llm_count || '--';
             if (data.llms && data.llms.length > 0) {
                 document.getElementById('llmoTopLLM').textContent = data.llms[0].name;
@@ -17573,7 +17567,7 @@
         function renderLLMOUsageTable(llms) {
             var tbody = document.getElementById('llmoRankerBody');
             if (!llms || llms.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="padding:2rem;text-align:center;color:var(--text-secondary);">No data available</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="padding:2rem;text-align:center;color:var(--text-secondary);">No data available</td></tr>';
                 return;
             }
             var html = '';
@@ -17581,10 +17575,8 @@
                 html += '<tr style="border-bottom:1px solid var(--border-color);">'
                     + '<td style="padding:0.5rem;">' + r.rank + '</td>'
                     + '<td style="padding:0.5rem;font-weight:600;">' + r.name + '</td>'
-                    + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.unique_users) + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.unique_users_projected) + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + r.pct_of_total + '%</td>'
-                    + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.total_clicks) + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.total_clicks_projected) + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + r.category_share + '%</td>'
                     + '</tr>';
@@ -17671,11 +17663,12 @@
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { position: 'top', labels: { color: 'var(--text-primary)', font: { size: 11 }, boxWidth: 12, padding: 8 } }
+                        legend: { position: 'top', labels: { color: 'var(--text-primary)', font: { size: 11 }, boxWidth: 12, padding: 8 } },
+                        tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + _llmoFmt(ctx.parsed.y); } } }
                     },
                     scales: {
                         x: { ticks: { color: 'var(--text-secondary)', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.06)' } },
-                        y: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+                        y: { ticks: { color: 'var(--text-secondary)', callback: function(v) { return _llmoFmt(v); } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
                     }
                 }
             });
@@ -17689,7 +17682,7 @@
 
             var top = attribution.slice(0, 20);
             var labels = top.map(function(r) { return r.name; });
-            var values = top.map(function(r) { return r.unique_users; });
+            var values = top.map(function(r) { return r.unique_users_projected; });
 
             _llmoAttributionChart = new Chart(ctx, {
                 type: 'bar',
@@ -17771,7 +17764,7 @@
                             labels: browsers.slice(0, 8).map(function(b) { return b.name; }),
                             datasets: [{ data: browsers.slice(0, 8).map(function(b) { return b.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
                         },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } } } }
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
                     });
                 }
             }
@@ -17786,7 +17779,7 @@
                             labels: platforms.slice(0, 8).map(function(p) { return p.name; }),
                             datasets: [{ data: platforms.slice(0, 8).map(function(p) { return p.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
                         },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } } } }
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
                     });
                 }
             }
