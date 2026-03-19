@@ -1621,22 +1621,26 @@ def validate_demographics(df, archetype, sample_size):
             target = {'MALE': 28.0, 'FEMALE': 67.0}
         else:
             target = {'MALE': 48.0, 'FEMALE': 47.0}
-        MINOR_SHARE = 1.0
-        minor_labels = {'NON-BINARY', 'TRANS MALE', 'TRANS FEMALE', 'PREFER NOT TO SAY'}
-        minor_count = sum(1 for v in gender_rows.values() if v in minor_labels)
-        minor_total = minor_count * MINOR_SHARE
+        minor_shares = {
+            'NON-BINARY': 1.2,
+            'TRANS MALE': 0.6,
+            'TRANS FEMALE': 0.5,
+            'PREFER NOT TO SAY': 2.4,
+        }
+        minor_labels = set(minor_shares.keys())
+        minor_total = sum(minor_shares.get(v, 0.8) for v in gender_rows.values() if v in minor_labels)
         remaining = 100.0 - minor_total
         male_target = target.get('MALE', 48.0) / (target.get('MALE', 48.0) + target.get('FEMALE', 47.0)) * remaining
         female_target = remaining - male_target
         for idx, val in gender_rows.items():
             if val in minor_labels:
-                df.at[idx, pct_col] = round(MINOR_SHARE, 4)
+                df.at[idx, pct_col] = round(minor_shares.get(val, 0.8), 4)
             elif val == 'MALE' or (val.startswith('MALE') and 'FEMALE' not in val and 'TRANS' not in val):
                 df.at[idx, pct_col] = round(male_target, 4)
             elif val == 'FEMALE' or val.startswith('FEMALE'):
                 df.at[idx, pct_col] = round(female_target, 4)
             else:
-                df.at[idx, pct_col] = round(MINOR_SHARE, 4)
+                df.at[idx, pct_col] = round(0.8, 4)
         corrections += len(gender_rows)
         print(f"   🔧 Gender: set {gender_skew} distribution "
               f"(M={male_target:.1f}%, F={female_target:.1f}%, minor={MINOR_SHARE}% each)")
@@ -7211,12 +7215,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         val_occurrences.setdefault(val, []).append((idx, cat, bp))
 
     harmonized = 0
-    try:
-        sample_size = int(float(str(
-            df.loc[df['Column'].str.upper().str.strip() == 'SAMPLE SIZE',
-                   'Value'].iloc[0]).replace(',', '')))
-    except Exception:
-        sample_size = 10_000_000
+    sample_size = sample_raw
 
     for val, entries in val_occurrences.items():
         if len(entries) < 2:
@@ -12754,23 +12753,28 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _g_target = {'MALE': 28.0, 'FEMALE': 67.0}
             else:
                 _g_target = {'MALE': 48.0, 'FEMALE': 47.0}
-            _g_minor = 1.0
-            _g_minor_labels = {'NON-BINARY', 'TRANS MALE', 'TRANS FEMALE', 'PREFER NOT TO SAY'}
-            _g_minor_count = sum(1 for v in _gender_rows.values() if v in _g_minor_labels)
-            _g_remaining = 100.0 - _g_minor_count * _g_minor
+            _g_minor_shares = {
+                'NON-BINARY': 1.2,
+                'TRANS MALE': 0.6,
+                'TRANS FEMALE': 0.5,
+                'PREFER NOT TO SAY': 2.4,
+            }
+            _g_minor_labels = set(_g_minor_shares.keys())
+            _g_minor_total = sum(_g_minor_shares.get(v, 0.8) for v in _gender_rows.values() if v in _g_minor_labels)
+            _g_remaining = 100.0 - _g_minor_total
             _g_male_pct = _g_target.get('MALE', 48.0) / (_g_target.get('MALE', 48.0) + _g_target.get('FEMALE', 47.0)) * _g_remaining
             _g_female_pct = _g_remaining - _g_male_pct
             _g_bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
             _g_cs_col = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
             for _gidx, _gval in _gender_rows.items():
                 if _gval in _g_minor_labels:
-                    _g_pct = _g_minor
+                    _g_pct = _g_minor_shares.get(_gval, 0.8)
                 elif _gval == 'MALE' or ('MALE' in _gval and 'FEMALE' not in _gval and 'TRANS' not in _gval):
                     _g_pct = _g_male_pct
                 elif _gval == 'FEMALE' or _gval.startswith('FEMALE'):
                     _g_pct = _g_female_pct
                 else:
-                    _g_pct = _g_minor
+                    _g_pct = 0.8
                 _g_pct = round(_g_pct, 4)
                 if _g_bp_col:
                     df_final.at[_gidx, _g_bp_col] = f"{_g_pct:.4f}"
@@ -12794,13 +12798,52 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("🔍 Running comprehensive final gut check (demographics + locations + behavioral)...")
         df_final = ai_final_gut_check(df_final, brand_category, project_name, brands)
 
-    # ── Post-gut-check: AI-driven evaluation of outlier BP values ──────
-    # Instead of hard caps, any item with a suspiciously high or low BP is
-    # sent to an AI agent that evaluates it against the persona and sets
-    # a realistic value.  No hard numeric ceilings are applied.
+    # ── Post-gut-check: recalculate BP from raw numbers ──────────────────
     df_final = add_brand_penetration_column_using_final_raw(df_final)
+
+    # ── Mathematical safety: BP cannot exceed 95% (100% only for BRAND INPUT / platform) ──
     _bp_col_final = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
     _cs_col_final = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
+    if _bp_col_final:
+        _bc_uf_safe = (brand_category or '').strip().upper()
+        _ALLOW_FULL = {'BRAND INPUT', 'SAMPLE SIZE'}
+        if _bc_uf_safe:
+            _ALLOW_FULL.add(_bc_uf_safe)
+        _pn_uf = (platform_name or '').strip().upper() if 'platform_name' in dir() else ''
+        _ss_safe = 1
+        _ss_mask_safe = df_final['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+        if _ss_mask_safe.any():
+            try:
+                _ss_safe = max(1, int(float(str(df_final.loc[_ss_mask_safe, 'Original Raw Numbers'].iloc[0]).replace(',', ''))))
+            except Exception:
+                pass
+        _MULT_S = 329_900_000 / 10_000_000
+        _capped_count = 0
+        for _idx, _row in df_final.iterrows():
+            _cat = str(_row.get('Column', '')).strip().upper()
+            if _cat in _ALLOW_FULL:
+                continue
+            _val = str(_row.get('Value', '')).strip().upper()
+            if _pn_uf and _val == _pn_uf and _cat != 'BRAND INPUT':
+                continue
+            try:
+                _bp_v = float(str(_row.get(_bp_col_final, 0)).replace(',', '').replace('%', ''))
+            except (ValueError, TypeError):
+                continue
+            if _bp_v > 95.0:
+                _new = 95.0
+                _nr = max(1, int(round(_new / 100.0 * _ss_safe)))
+                _np = int(round(_nr * _MULT_S))
+                df_final.at[_idx, _bp_col_final] = f"{_new:.4f}"
+                df_final.at[_idx, 'Original Raw Numbers'] = str(_nr)
+                df_final.at[_idx, _cs_col_final] = f"{_new:.4f}"
+                if 'US Gen Pop Projection' in df_final.columns:
+                    df_final.at[_idx, 'US Gen Pop Projection'] = str(_np)
+                _capped_count += 1
+        if _capped_count:
+            print(f"   ⚠️ Safety cap: {_capped_count} items exceeded 95% — capped to 95% before AI review")
+
+    # ── AI-driven evaluation of outlier BP values ──────
     if _bp_col_final and not is_genpop:
         _ss_final = 1
         _ss_mask_f = df_final['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
@@ -12950,10 +12993,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = add_us_gen_pop_projection(df_final)
 
     # ── FINAL COMPREHENSIVE AI REVIEW (GPT-4o) ──────────────────────────
-    # Last-pass agent that reviews EVERY behavioral category row by row,
-    # checks each BP value against the persona, and corrects anything that
-    # doesn't pass the sniff test. This is the last line of defense before
-    # the CSV is saved.
+    # Step 1: Research the subject to build an informed persona
+    # Step 2: Review ONE category at a time, item by item
+    # Step 3: Correct anything that doesn't pass the sniff test
     if not is_genpop and brand_category:
         _client_final = _get_openai_client()
         if _client_final:
@@ -12975,6 +13017,37 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             _subject_cf = _subject_f.replace('_', ' ').replace('-', ' ').strip()
             _bc_f = (brand_category or '').strip()
             _profile_f = _build_profile_summary(df_final)
+
+            # Step 1: Have the AI research the subject and build a persona
+            print(f"🔬 FINAL REVIEW Step 1: Researching \"{_subject_cf}\" persona...")
+            _persona_research = ""
+            try:
+                _persona_resp = _client_final.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': (
+                        f"Research \"{_subject_cf}\" which is in the category "
+                        f"\"{_bc_f}\". Build a detailed consumer persona of the "
+                        f"typical person who engages with this. Include:\n\n"
+                        f"1. What is \"{_subject_cf}\"? (show, team, brand, etc.)\n"
+                        f"2. Core demographics (gender split, age range, income)\n"
+                        f"3. Lifestyle and interests (what else do they like?)\n"
+                        f"4. Brands they would and WOULD NOT use\n"
+                        f"5. Social media platforms they prefer\n"
+                        f"6. Sports, entertainment, technology preferences\n"
+                        f"7. Things that would be WRONG for this persona "
+                        f"(e.g. if it's a male-skewing audience, women's makeup "
+                        f"brands should be low; if it's an F1 audience, F1-related "
+                        f"items should be high)\n\n"
+                        f"Be specific and detailed. This will be used to validate "
+                        f"an audience profile."
+                    )}],
+                    temperature=0.2,
+                    max_tokens=2000
+                )
+                _persona_research = _persona_resp.choices[0].message.content.strip()
+                print(f"   📋 Persona research complete ({len(_persona_research)} chars)")
+            except Exception as _e:
+                print(f"   ⚠️ Persona research error: {_e}")
 
             _SKIP_FINAL = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
                            'CASUAL FAN', 'BRAND CATEGORY'}
@@ -12998,54 +13071,65 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _cats_to_review.setdefault(_cat_f, []).append(
                     (_val_f, _bp_f, _idx_f))
 
-            print(f"🔬 FINAL REVIEW: {sum(len(v) for v in _cats_to_review.values())} items "
-                  f"across {len(_cats_to_review)} categories — comprehensive persona check")
+            _total_items = sum(len(v) for v in _cats_to_review.values())
+            print(f"🔬 FINAL REVIEW Step 2: {_total_items} items across "
+                  f"{len(_cats_to_review)} categories")
 
             _final_adj = 0
-            _REVIEW_BATCH = 3
 
-            _cat_list = list(_cats_to_review.keys())
-            for _rb_start in range(0, len(_cat_list), _REVIEW_BATCH):
-                _batch_cats = _cat_list[_rb_start:_rb_start + _REVIEW_BATCH]
+            # Step 2: Review ONE category at a time
+            for _rc, _rc_items in _cats_to_review.items():
+                _items_sorted = sorted(_rc_items, key=lambda x: -x[1])
                 _batch_lines = []
                 _batch_items = []
-                for _rc in _batch_cats:
-                    _items_sorted = sorted(_cats_to_review[_rc], key=lambda x: -x[1])
-                    _batch_lines.append(f"\n=== {_rc} ({len(_items_sorted)} items) ===")
-                    for _rank, (_vn, _vbp, _vidx) in enumerate(_items_sorted, 1):
-                        _batch_lines.append(f"  #{_rank}: {_vn} — {_vbp:.2f}% BP")
-                        _batch_items.append((_rc, _vn, _vbp, _vidx))
+                for _rank, (_vn, _vbp, _vidx) in enumerate(_items_sorted, 1):
+                    _batch_lines.append(f"  #{_rank}: {_vn} — {_vbp:.2f}%")
+                    _batch_items.append((_rc, _vn, _vbp, _vidx))
 
                 _review_prompt = (
-                    f"You are a senior consumer research analyst doing a FINAL "
-                    f"quality review of an audience profile for \"{_subject_cf}\" "
-                    f"({_bc_f}).\n\n"
-                    f"AUDIENCE DEMOGRAPHICS:\n{_profile_f}\n\n"
-                    f"Below is every item in each category with its Brand "
-                    f"Penetration (BP) — the % of THIS specific audience that "
-                    f"engages with that item.\n"
+                    f"You are a senior consumer research analyst doing the FINAL "
+                    f"quality check on an audience profile.\n\n"
+                    f"=== SUBJECT ===\n"
+                    f"\"{_subject_cf}\" — {_bc_f}\n\n"
+                    f"=== PERSONA RESEARCH ===\n"
+                    f"{_persona_research[:3000]}\n\n"
+                    f"=== AUDIENCE DEMOGRAPHICS ===\n"
+                    f"{_profile_f}\n\n"
+                    f"=== CATEGORY: {_rc} ({len(_items_sorted)} items) ===\n"
+                    f"Brand Penetration = % of this audience that engages "
+                    f"with each item:\n"
                     + "\n".join(_batch_lines) +
-                    f"\n\n=== YOUR TASK ===\n"
-                    f"Go through EVERY row and check:\n"
-                    f"1. Is this BP% realistic for a \"{_subject_cf}\" audience?\n"
-                    f"2. Nothing should EVER be above 95% — even YouTube is only "
-                    f"~84% in the general population. Only the most universal "
-                    f"items (Google, YouTube) should be 80%+.\n"
-                    f"3. Gender alignment: the audience is predominantly "
-                    f"MALE. Women's brands (makeup, women's fashion, women's "
-                    f"jewelry) should be LOW (under 15%).\n"
-                    f"4. Persona alignment: \"{_subject_cf}\" is {_bc_f}. "
-                    f"Items related to motorsport, racing, F1, automotive, "
-                    f"sports should be HIGH. Unrelated niche/luxury items "
-                    f"should be LOW.\n"
-                    f"5. Items that are clearly inflated beyond reality should "
-                    f"be corrected to a realistic value.\n"
-                    f"6. Items that look fine should be LEFT ALONE.\n\n"
-                    f"Return ONLY items that need correction:\n"
-                    f'{{"corrections":[{{"category":"CAT","item":"ITEM",'
-                    f'"current_bp":50.0,"correct_bp":25.0,'
+                    f"\n\n=== RULES (STRICT) ===\n"
+                    f"1. MAXIMUM BP is 90%. Even YouTube (the most popular "
+                    f"platform) is only ~84% in the US general population. "
+                    f"For a niche audience like \"{_subject_cf}\", the very "
+                    f"top items might reach 85% but NEVER above 90%.\n"
+                    f"2. Most items should be 5-40%. Only truly universal "
+                    f"items (Google, YouTube, Netflix) should be 60%+.\n"
+                    f"3. GENDER CHECK: Audience is ~66% male. Women's brands "
+                    f"(makeup like Maybelline/Fenty, women's fashion like "
+                    f"Lululemon/Doen/Victoria's Secret, women's jewelry) "
+                    f"should be UNDER 12%.\n"
+                    f"4. PERSONA CHECK: Does this item make sense for someone "
+                    f"who watches/follows \"{_subject_cf}\"? Items core to "
+                    f"the persona should be elevated. Irrelevant items should "
+                    f"not be artificially high.\n"
+                    f"5. RANK ORDER: Does the rank order make sense? "
+                    f"DraftKings should beat Bet365 for a US audience. "
+                    f"YouTube should beat most social platforms. Nike should "
+                    f"beat niche luxury brands.\n"
+                    f"6. LUXURY/NICHE brands (Christian Louboutin, Fendi, "
+                    f"Rag & Bone, Acne Studios) should generally be under "
+                    f"5% unless the persona specifically skews luxury.\n"
+                    f"7. CHILDREN'S items (Roblox, Minecraft) should be "
+                    f"moderate (10-25%) not dominant for an adult audience.\n\n"
+                    f"For EACH item that needs correction, provide the "
+                    f"realistic BP value. Leave correct items alone.\n\n"
+                    f"Return ONLY valid JSON:\n"
+                    f'{{"corrections":[{{"item":"ITEM",'
+                    f'"correct_bp":25.0,'
                     f'"reason":"brief"}},...]}}\n'
-                    f'If everything looks good: {{"corrections":[]}}\n'
+                    f'If all items look correct: {{"corrections":[]}}\n'
                     f"JSON only, no markdown."
                 )
 
@@ -13060,16 +13144,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     _corrections = _r_result.get('corrections', [])
                     for _corr in _corrections:
                         try:
-                            _cc = str(_corr.get('category', '')).strip().upper()
                             _ci = str(_corr.get('item', '')).strip().upper()
                             _cnew = float(_corr.get('correct_bp', 0))
                             _creason = _corr.get('reason', '')
                         except (ValueError, TypeError):
                             continue
-                        _cnew = max(0.1, min(_cnew, 95.0))
+                        _cnew = max(0.1, min(_cnew, 90.0))
                         _matched_f = None
                         for _rc2, _vn2, _vbp2, _vidx2 in _batch_items:
-                            if _rc2 == _cc and (_vn2.strip().upper() == _ci or
+                            if (_vn2.strip().upper() == _ci or
                                     _ci in _vn2.strip().upper() or
                                     _vn2.strip().upper() in _ci):
                                 _matched_f = (_rc2, _vn2, _vbp2, _vidx2)
@@ -13085,11 +13168,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                             if _proj_cf in df_final.columns:
                                 df_final.at[_midx, _proj_cf] = str(_np)
                             _arr = '↓' if _cnew < _mold else '↑'
-                            print(f"   🔬 {_cc} {_arr} {_mn}: "
+                            print(f"   🔬 {_rc} {_arr} {_mn}: "
                                   f"{_mold:.1f}%→{_cnew:.1f}% — {_creason}")
                             _final_adj += 1
                 except Exception as _e:
-                    print(f"   ⚠️ Final review error: {_e}")
+                    print(f"   ⚠️ Final review error ({_rc}): {_e}")
 
             # Recalculate Category Share after corrections
             if _final_adj > 0:
