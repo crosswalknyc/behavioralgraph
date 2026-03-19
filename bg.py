@@ -970,16 +970,13 @@ def anchor_to_genpop(df, sample_size):
 
     pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
     bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
+    read_col = bp_col or pct_col
 
     sample_size = max(int(float(sample_size)), 1)
 
     profile_bp_pct = _get_profile_genpop_penetration(df, gp_lookup)
     niche_factor = (1.0 - profile_bp_pct / 100.0) ** 2  # 0 for Gen Pop, ~1 for niche
 
-    # --- Organic-signal bounds ---
-    # Wide enough that the raw profile data's natural over/under-indexing
-    # survives compression.  The AI gut check then molds the result
-    # into a persona-consistent profile, correcting only what's wrong.
     BEHAV_HI = min(2.20, 1.0 + 0.50 + 1.20 * niche_factor)
     BEHAV_LO = max(0.40, 1.0 - 0.30 - 0.30 * niche_factor)
     DEMO_HI  = max(1.10, 1.0 + 0.8 * niche_factor)
@@ -1030,7 +1027,7 @@ def anchor_to_genpop(df, sample_size):
             continue
 
         try:
-            profile_bp_val = float(row.get(bp_col, 0)) if bp_col else 0
+            profile_bp_val = float(row.get(read_col, 0))
         except (ValueError, TypeError):
             profile_bp_val = 0
 
@@ -1085,6 +1082,7 @@ def anchor_to_genpop(df, sample_size):
 
         if bp_col and bp_col in df.columns:
             df.at[idx, bp_col] = new_bp
+        df.at[idx, read_col] = new_bp
         df.at[idx, 'Original Raw Numbers'] = str(new_raw)
         if 'US Gen Pop Projection' in df.columns:
             df.at[idx, 'US Gen Pop Projection'] = str(new_genpop)
@@ -1103,7 +1101,7 @@ def anchor_to_genpop(df, sample_size):
         if gp_entry is not None:
             continue
         try:
-            cur_bp = float(row.get(bp_col, 0)) if bp_col else 0
+            cur_bp = float(row.get(read_col, 0))
         except (ValueError, TypeError):
             continue
         if cur_bp <= UNMATCHED_CEILING or cur_bp <= 0:
@@ -1113,6 +1111,7 @@ def anchor_to_genpop(df, sample_size):
         new_genpop = int(round((new_raw / 10_000_000) * 329_900_000))
         if bp_col and bp_col in df.columns:
             df.at[idx, bp_col] = new_bp
+        df.at[idx, read_col] = new_bp
         df.at[idx, 'Original Raw Numbers'] = str(new_raw)
         if 'US Gen Pop Projection' in df.columns:
             df.at[idx, 'US Gen Pop Projection'] = str(new_genpop)
@@ -1137,20 +1136,19 @@ def anchor_to_genpop(df, sample_size):
         anchored_bps = []
         for val, orig_cs, ridx in profile_order:
             try:
-                cur_bp = float(df.at[ridx, bp_col]) if bp_col else 0
+                cur_bp = float(df.at[ridx, read_col])
             except (ValueError, TypeError):
                 cur_bp = 0
             anchored_bps.append(cur_bp)
-        # Sort the anchored BP values descending — these are the
-        # magnitude slots we'll assign to maintain realistic levels.
         bp_slots = sorted(anchored_bps, reverse=True)
-        # Assign BP slots to items in profile rank order
         for i, (val, orig_cs, ridx) in enumerate(profile_order):
-            if i < len(bp_slots) and bp_col:
+            if i < len(bp_slots):
                 old_bp = anchored_bps[i]
                 new_bp_val = bp_slots[i]
                 if abs(old_bp - new_bp_val) > 0.001:
-                    df.at[ridx, bp_col] = round(new_bp_val, 4)
+                    df.at[ridx, read_col] = round(new_bp_val, 4)
+                    if bp_col and bp_col in df.columns:
+                        df.at[ridx, bp_col] = round(new_bp_val, 4)
                     new_raw = max(1, int(round(new_bp_val / 100.0 * sample_size)))
                     df.at[ridx, 'Original Raw Numbers'] = str(new_raw)
                     if 'US Gen Pop Projection' in df.columns:
@@ -1174,7 +1172,7 @@ def anchor_to_genpop(df, sample_size):
         if not val:
             continue
         try:
-            cur_bp = float(row.get(bp_col, 0)) if bp_col else 0
+            cur_bp = float(row.get(read_col, 0))
         except (ValueError, TypeError):
             continue
         val_occ.setdefault(val, []).append((idx, cur_bp))
@@ -1189,7 +1187,8 @@ def anchor_to_genpop(df, sample_size):
         for ridx, old_bp in entries:
             if abs(old_bp - avg_bp) < 0.01:
                 continue
-            if bp_col:
+            df.at[ridx, read_col] = avg_bp
+            if bp_col and bp_col in df.columns:
                 df.at[ridx, bp_col] = avg_bp
             new_raw = max(1, int(round(avg_bp / 100.0 * sample_size)))
             df.at[ridx, 'Original Raw Numbers'] = str(new_raw)
@@ -12538,13 +12537,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = rename_streaming_max_to_hbo_max_upper(df_final)
     df_final = cleanup_streaming_platforms(df_final)
 
-    # ── ANCHOR TO GEN POP — DISABLED ────────────────────────────────────
-    # Was compressing ALL behavioral values to near-identical Gen Pop
-    # baselines (index clamped to ~0.4–2.2×), destroying the brand-specific
-    # signal from Snowflake.  The AI gut check (ai_final_gut_check) now
-    # serves as the single authoritative behavioral reviewer with full
-    # audience context, web research, and gen pop comparison.
-    print("⏭️  Skipping anchor_to_genpop — AI gut check handles validation")
+    # ── ANCHOR TO GEN POP (calibrate raw clickstream to consumer scale) ─
+    print("🎯 Anchoring all values to Gen Pop baseline...")
+    df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
 
     # ── AI-powered validation (demographics + behavioral gut-check) ────
     _archetype = None
