@@ -12786,6 +12786,59 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print(f"   🔧 Post-AI gender enforcement: {_gender_skew} skew "
                   f"(M={_g_male_pct:.1f}%, F={_g_female_pct:.1f}%, minor varied)")
 
+    # ── Cap PREFER NOT TO SAY at 10% across ALL demographic categories ──
+    # Raw survey data often has high PNTS rates; redistribute excess to top items.
+    if not is_genpop:
+        _PNTS_MAX = 10.0
+        _DEMO_CATS_PNTS = {'AGE', 'EDUCATION', 'ETHNICITY', 'INCOME', 'RELATIONSHIP',
+                           'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
+        _bp_pnts = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
+        _cs_pnts = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
+        _pnts_fixes = 0
+        for _dcat in _DEMO_CATS_PNTS:
+            _dm = df_final['Column'].str.upper().str.strip() == _dcat
+            if not _dm.any():
+                continue
+            _pnts_idx = None
+            _pnts_val = 0
+            _other_items = []
+            for _didx in df_final[_dm].index:
+                _dval = str(df_final.at[_didx, 'Value']).strip().upper()
+                try:
+                    _dpct = float(str(df_final.at[_didx, _cs_pnts]).replace(',', '').replace('%', ''))
+                except (ValueError, TypeError):
+                    _dpct = 0
+                if 'PREFER NOT TO SAY' in _dval:
+                    _pnts_idx = _didx
+                    _pnts_val = _dpct
+                else:
+                    _other_items.append((_didx, _dpct))
+            if _pnts_idx is not None and _pnts_val > _PNTS_MAX:
+                _excess = _pnts_val - _PNTS_MAX
+                _other_total = sum(p for _, p in _other_items)
+                for _oidx, _opct in _other_items:
+                    if _other_total > 0:
+                        _boost = _excess * (_opct / _other_total)
+                    else:
+                        _boost = _excess / max(1, len(_other_items))
+                    _new_pct = round(_opct + _boost, 4)
+                    if _bp_pnts:
+                        df_final.at[_oidx, _bp_pnts] = f"{_new_pct:.4f}"
+                    df_final.at[_oidx, _cs_pnts] = f"{_new_pct:.4f}"
+                    if 'Percentage' in df_final.columns:
+                        df_final.at[_oidx, 'Percentage'] = f"{_new_pct:.4f}"
+                _new_pnts = round(_PNTS_MAX, 4)
+                if _bp_pnts:
+                    df_final.at[_pnts_idx, _bp_pnts] = f"{_new_pnts:.4f}"
+                df_final.at[_pnts_idx, _cs_pnts] = f"{_new_pnts:.4f}"
+                if 'Percentage' in df_final.columns:
+                    df_final.at[_pnts_idx, 'Percentage'] = f"{_new_pnts:.4f}"
+                _pnts_fixes += 1
+                print(f"   🔧 {_dcat}: PREFER NOT TO SAY {_pnts_val:.1f}%→{_PNTS_MAX}%, "
+                      f"excess {_excess:.1f}% redistributed")
+        if _pnts_fixes:
+            print(f"   🔧 Capped PREFER NOT TO SAY in {_pnts_fixes} demographic categories")
+
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
         df_final = cap_demographic_projections(df_final)
@@ -13122,7 +13175,17 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     f"Rag & Bone, Acne Studios) should generally be under "
                     f"5% unless the persona specifically skews luxury.\n"
                     f"7. CHILDREN'S items (Roblox, Minecraft) should be "
-                    f"moderate (10-25%) not dominant for an adult audience.\n\n"
+                    f"moderate (10-25%) not dominant for an adult audience.\n"
+                    f"8. SOCIAL MEDIA reality check: YouTube MUST be #1 or #2 "
+                    f"(~80-85%). Facebook MUST be in top 5 (~35-50%). "
+                    f"X/Twitter should be 30-45% not 80%+. Instagram ~55-65%. "
+                    f"TikTok ~50-65%. These are real US usage rates.\n"
+                    f"9. VENUE/EVENTS: Physical attendance venues should be "
+                    f"LOW (under 10%). Most fans watch on TV, not in person. "
+                    f"Even iconic venues like stadiums should be 2-8%.\n"
+                    f"10. STREAMING: For a Netflix show audience, Netflix=100% "
+                    f"is correct. Other streamers: Hulu ~45%, Amazon ~35%, "
+                    f"Disney+ ~25%. ESPN should be 25-40% not 50%+.\n\n"
                     f"For EACH item that needs correction, provide the "
                     f"realistic BP value. Leave correct items alone.\n\n"
                     f"Return ONLY valid JSON:\n"
