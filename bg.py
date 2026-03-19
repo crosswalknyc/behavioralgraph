@@ -21239,10 +21239,16 @@ def ensure_all_dmas_in_location_category(df, conn=None):
             df.loc[location_mask, 'Percentage'] / location_total * 100.0
         )
     
-    # Ensure minimum 0.01% for all LOCATION entries
-    df.loc[location_mask & (df['Percentage'] < 0.01), 'Percentage'] = 0.01
+    # Ensure minimum 0.01% for all LOCATION entries (compare only within location subset)
+    _loc_pct = pd.to_numeric(df.loc[location_mask, 'Percentage'], errors='coerce').fillna(0.0)
+    _too_low = _loc_pct[_loc_pct < 0.01].index
+    if len(_too_low):
+        df.loc[_too_low, 'Percentage'] = 0.01
     
     # Renormalize again after setting minimums
+    df.loc[location_mask, 'Percentage'] = pd.to_numeric(
+        df.loc[location_mask, 'Percentage'], errors='coerce'
+    ).fillna(0.0).values
     location_total = df.loc[location_mask, 'Percentage'].sum()
     if location_total > 0:
         df.loc[location_mask, 'Percentage'] = (
