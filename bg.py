@@ -12639,7 +12639,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("🔍 Running comprehensive final gut check (demographics + locations + behavioral)...")
         df_final = ai_final_gut_check(df_final, brand_category, project_name, brands)
 
-    # ── Post-gut-check: recalculate BP from raw, cap at 99.99%, fix formatting ─
+    # ── Post-gut-check: enforce hard 100% ceiling on ALL columns ─────────
+    # ONLY BRAND INPUT may be exactly 100%.
+    # The platform entry (e.g. Netflix) is set to 100% by adjust_platform_to_100_percent AFTER pipeline.
+    # Everything else: max 99.99%.
+    # Also ensure Original Raw Numbers never exceeds sample size.
     df_final = add_brand_penetration_column_using_final_raw(df_final)
     _bp_col_final = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
     _cs_col_final = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
@@ -12651,25 +12655,47 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _ss_final = max(1, int(float(str(df_final.loc[_ss_mask_f, 'Original Raw Numbers'].iloc[0]).replace(',', ''))))
             except Exception:
                 pass
-        _META = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'SERIES - NETFLIX'}
-        _DEMO = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
+        _bc_upper = (brand_category or '').strip().upper()
+        _SKIP_CAP = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
+        if _bc_upper:
+            _SKIP_CAP.add(_bc_upper)
+        _DEMO = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION'}
         _bp_caps = 0
+        _raw_caps = 0
         for _idx, _row in df_final.iterrows():
             _cat = str(_row.get('Column', '')).strip().upper()
-            if _cat in _META or _cat in _DEMO:
+            if _cat in _SKIP_CAP or _cat in _DEMO:
                 continue
+            # Read BP — handle possible % suffix from AI agents
             try:
-                _bp_v = float(_row.get(_bp_col_final, 0))
+                _bp_v = float(str(_row.get(_bp_col_final, 0)).replace(',', '').replace('%', ''))
             except (ValueError, TypeError):
-                continue
+                _bp_v = 0
+            # Read raw numbers
+            try:
+                _raw_v = int(float(str(_row.get('Original Raw Numbers', 0)).replace(',', '')))
+            except (ValueError, TypeError):
+                _raw_v = 0
+            # Cap raw numbers at sample size
+            if _raw_v > _ss_final:
+                _raw_v = _ss_final
+                df_final.at[_idx, 'Original Raw Numbers'] = str(_raw_v)
+                _raw_caps += 1
+            # Cap BP at 99.99%
             if _bp_v > 99.99:
                 df_final.at[_idx, _bp_col_final] = 99.99
-                _new_raw = max(1, int(round(99.99 / 100.0 * _ss_final)))
-                df_final.at[_idx, 'Original Raw Numbers'] = str(_new_raw)
+                _capped_raw = max(1, int(round(99.99 / 100.0 * _ss_final)))
+                df_final.at[_idx, 'Original Raw Numbers'] = str(min(_raw_v, _capped_raw))
                 df_final.at[_idx, _cs_col_final] = 99.99
                 _bp_caps += 1
+            # Also fix BP values with stray % signs
+            elif isinstance(_row.get(_bp_col_final), str) and '%' in str(_row.get(_bp_col_final, '')):
+                df_final.at[_idx, _bp_col_final] = _bp_v
         if _bp_caps:
             print(f"   🔒 Capped {_bp_caps} items that exceeded 99.99% BP")
+        if _raw_caps:
+            print(f"   🔒 Capped {_raw_caps} items where raw numbers exceeded sample size")
 
     # ── Final GPP recalc: ensures every row's US Gen Pop Projection = (Raw / 10M) * 329.9M
     df_final = add_us_gen_pop_projection(df_final)
