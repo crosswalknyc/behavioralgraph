@@ -15283,32 +15283,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                             df = bg.set_brand_input_to_csv(df)
                         if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
                             df = bg.adjust_platform_to_100_percent(df, platform_name)
-                        # Final 99.99% cap — only BRAND INPUT and platform can be 100%
                         _bp_c = 'Brand Penetration (Row)'
                         _cs_c = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
-                        _bc_u = (brand_category or '').strip().upper()
-                        _allow = {'BRAND INPUT'}
-                        if _bc_u:
-                            _allow.add(_bc_u)
-                        _skip = {'AGE','GENDER','ETHNICITY','INCOME','EDUCATION','RELATIONSHIP',
-                                 'SEXUAL_ORIENTATION','PARENTAL_STATUS','OCCUPATION','LOCATION',
-                                 'INPUT_METADATA','SAMPLE SIZE','AVID FAN','CASUAL FAN','BRAND CATEGORY'}
-                        if _bp_c in df.columns:
-                            _pn_upper = (platform_name or '').strip().upper()
-                            for _idx, _row in df.iterrows():
-                                _cat = str(_row.get('Column', '')).strip().upper()
-                                if _cat in _allow or _cat in _skip:
-                                    continue
-                                _val = str(_row.get('Value', '')).strip().upper()
-                                if _pn_upper and _val == _pn_upper:
-                                    continue
-                                try:
-                                    _bpv = float(str(_row.get(_bp_c, 0)).replace(',', '').replace('%', ''))
-                                except (ValueError, TypeError):
-                                    continue
-                                if _bpv > 99.99:
-                                    df.at[_idx, _bp_c] = '99.9900'
-                                    df.at[_idx, _cs_c] = '99.9900'
                         # Format to 4 decimal places
                         for _fc in [_bp_c, _cs_c]:
                             if _fc in df.columns:

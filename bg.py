@@ -6525,9 +6525,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             name, cur_bp, cur_cs, row_idx = matched
             factor = max(0.15, min(4.0, factor))
             new_bp = round(cur_bp * factor, 4)
-            item_gp_bp = gp_bp_lookup.get((a_cat, a_item), 0)
-            bp_cap = max(45.0, item_gp_bp * 1.15) if item_gp_bp > 0 else 65.0
-            new_bp = max(0.01, min(new_bp, bp_cap))
+            new_bp = max(0.01, new_bp)
 
             new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
             new_proj = int(round(new_raw * MULT))
@@ -12796,13 +12794,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("🔍 Running comprehensive final gut check (demographics + locations + behavioral)...")
         df_final = ai_final_gut_check(df_final, brand_category, project_name, brands)
 
-    # ── Post-gut-check: GenPop-based ceiling + hard 99.99% cap ──────────
-    # No behavioral item should exceed min(99.99, max(45, gp_bp * 2.0)).
-    # This prevents AI agents from inflating items to unrealistic levels.
+    # ── Post-gut-check: AI-driven evaluation of outlier BP values ──────
+    # Instead of hard caps, any item with a suspiciously high or low BP is
+    # sent to an AI agent that evaluates it against the persona and sets
+    # a realistic value.  No hard numeric ceilings are applied.
     df_final = add_brand_penetration_column_using_final_raw(df_final)
     _bp_col_final = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
     _cs_col_final = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
-    if _bp_col_final:
+    if _bp_col_final and not is_genpop:
         _ss_final = 1
         _ss_mask_f = df_final['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
         if _ss_mask_f.any():
@@ -12811,11 +12810,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             except Exception:
                 pass
         _bc_upper = (brand_category or '').strip().upper()
-        _SKIP_CAP = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
+        _SKIP_EVAL = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
         if _bc_upper:
-            _SKIP_CAP.add(_bc_upper)
+            _SKIP_EVAL.add(_bc_upper)
         _DEMO = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
                  'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION'}
+
         _gp_ref = _load_genpop_csv()
         _gp_bp_map = {}
         if _gp_ref is not None:
@@ -12829,51 +12829,122 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     _gp_bp_map[(_gc, _gv)] = float(_gpr[_gp_col_bp])
                 except (ValueError, TypeError):
                     pass
-        _bp_caps = 0
-        _bp_floors = 0
+
+        # Strip stray % signs first
+        for _idx, _row in df_final.iterrows():
+            if isinstance(_row.get(_bp_col_final), str) and '%' in str(_row.get(_bp_col_final, '')):
+                try:
+                    _clean = float(str(_row[_bp_col_final]).replace(',', '').replace('%', ''))
+                    df_final.at[_idx, _bp_col_final] = _clean
+                except (ValueError, TypeError):
+                    pass
+
+        # Collect items that look suspiciously high or low for AI evaluation
+        _HIGH_THRESHOLD = 75.0
+        _flagged_items = []
+        _MULT = 329_900_000 / 10_000_000
+        _subject = project_name or (brands[0] if brands else 'Unknown')
+        _subject_clean = _subject.replace('_', ' ').replace('-', ' ').strip()
+
         for _idx, _row in df_final.iterrows():
             _cat = str(_row.get('Column', '')).strip().upper()
-            if _cat in _SKIP_CAP or _cat in _DEMO:
+            if _cat in _SKIP_EVAL or _cat in _DEMO:
                 continue
             _val = str(_row.get('Value', '')).strip().upper()
             try:
                 _bp_v = float(str(_row.get(_bp_col_final, 0)).replace(',', '').replace('%', ''))
             except (ValueError, TypeError):
-                _bp_v = 0
+                continue
             _gp_bp = _gp_bp_map.get((_cat, _val), 0)
-            # Ceiling: only cap items that HAVE a GenPop match.
-            # Items without GenPop match are already capped by anchor_to_genpop
-            # (UNMATCHED_CEILING) and the AI gut check's own bp_cap. Adding a
-            # flat ceiling here causes unnatural clustering (e.g. 50 items at 35%).
-            if _gp_bp > 0:
-                _ceiling = min(99.99, _gp_bp * 1.2 + 5.0)
-            else:
-                _ceiling = 99.99
-            # Floor: prevent mass-market items from being suppressed below reality
-            _floor = 0
-            if _gp_bp >= 40.0:
-                _floor = _gp_bp * 0.55
-            # Strip stray % signs
-            if isinstance(_row.get(_bp_col_final), str) and '%' in str(_row.get(_bp_col_final, '')):
-                df_final.at[_idx, _bp_col_final] = _bp_v
-            if _bp_v > _ceiling:
-                _new_bp = round(_ceiling, 4)
-                df_final.at[_idx, _bp_col_final] = f"{_new_bp:.4f}"
-                _new_raw = max(1, int(round(_new_bp / 100.0 * _ss_final)))
-                df_final.at[_idx, 'Original Raw Numbers'] = str(_new_raw)
-                df_final.at[_idx, _cs_col_final] = f"{_new_bp:.4f}"
-                _bp_caps += 1
-            elif _floor > 0 and _bp_v < _floor:
-                _new_bp = round(_floor, 4)
-                df_final.at[_idx, _bp_col_final] = f"{_new_bp:.4f}"
-                _new_raw = max(1, int(round(_new_bp / 100.0 * _ss_final)))
-                df_final.at[_idx, 'Original Raw Numbers'] = str(_new_raw)
-                df_final.at[_idx, _cs_col_final] = f"{_new_bp:.4f}"
-                _bp_floors += 1
-        if _bp_caps:
-            print(f"   🔒 GenPop ceiling: capped {_bp_caps} behavioral items to realistic levels")
-        if _bp_floors:
-            print(f"   🔒 GenPop floor: raised {_bp_floors} mass-market items that were too low")
+            if _bp_v >= _HIGH_THRESHOLD:
+                _flagged_items.append((_idx, _cat, _val, _bp_v, _gp_bp))
+
+        if _flagged_items:
+            print(f"   🧠 AI evaluation: {len(_flagged_items)} items above {_HIGH_THRESHOLD}% — "
+                  f"sending to persona agent for review")
+            _client = _get_openai_client()
+            if _client:
+                _profile_summary = _build_profile_summary(df_final)
+                _bc = (brand_category or '').strip()
+                _BATCH = 40
+                _ai_adjustments = 0
+                for _b_start in range(0, len(_flagged_items), _BATCH):
+                    _batch = _flagged_items[_b_start:_b_start + _BATCH]
+                    _item_lines = []
+                    for _, _cat, _val, _bp_v, _gp_bp in _batch:
+                        gp_note = f" (GenPop: {_gp_bp:.1f}%)" if _gp_bp > 0 else " (no GenPop data)"
+                        _item_lines.append(
+                            f"  - {_cat} | {_val}: {_bp_v:.2f}% BP{gp_note}")
+
+                    _eval_prompt = (
+                        f"You are a consumer research analyst finalizing an audience "
+                        f"profile for \"{_subject_clean}\" ({_bc}).\n\n"
+                        f"AUDIENCE PROFILE SUMMARY:\n{_profile_summary}\n\n"
+                        f"The following items have VERY HIGH brand penetration values "
+                        f"(above {_HIGH_THRESHOLD}%). Your job is to determine if each "
+                        f"value is REALISTIC for this specific audience, or if it "
+                        f"should be adjusted.\n\n"
+                        f"Items to evaluate:\n"
+                        + "\n".join(_item_lines) +
+                        f"\n\n=== EVALUATION CRITERIA ===\n"
+                        f"1. 99.99% means virtually EVERYONE in the audience engages "
+                        f"with this item. This is almost NEVER true — even the most "
+                        f"popular items rarely exceed 90% for a niche audience.\n"
+                        f"2. Values above 90% should only be for truly UNIVERSAL items "
+                        f"for this audience (e.g. YouTube for any internet audience).\n"
+                        f"3. Items that are the CORE subject should be high but "
+                        f"realistic — not 99.99%. Even fans don't ALL follow every "
+                        f"specific talent/team.\n"
+                        f"4. If GenPop is provided, consider: how much higher than "
+                        f"GenPop is realistic? 1.5x GenPop is common, 2x is very "
+                        f"high, 3x+ is usually unrealistic.\n"
+                        f"5. If an item IS correctly high, keep it — don't lower "
+                        f"everything artificially.\n\n"
+                        f"For EACH item, return a realistic BP% value:\n"
+                        f"Return ONLY valid JSON:\n"
+                        f'{{"items":[{{"category":"CAT","item":"ITEM",'
+                        f'"bp":72.5,"reason":"brief"}},...]}}\n'
+                        f"Include ALL {len(_batch)} items. JSON only, no markdown."
+                    )
+
+                    try:
+                        _resp = _client.chat.completions.create(
+                            model='gpt-4o',
+                            messages=[{'role': 'user', 'content': _eval_prompt}],
+                            temperature=0.2,
+                            max_tokens=6000
+                        )
+                        _result = _parse_ai_json(_resp.choices[0].message.content.strip())
+                        _ai_items = _result.get('items', [])
+                        for _ai_item in _ai_items:
+                            try:
+                                _ai_cat = str(_ai_item.get('category', '')).strip().upper()
+                                _ai_name = str(_ai_item.get('item', '')).strip().upper()
+                                _ai_bp = float(_ai_item.get('bp', 0))
+                                _ai_reason = _ai_item.get('reason', '')
+                            except (ValueError, TypeError):
+                                continue
+                            _ai_bp = max(0.5, _ai_bp)
+                            for _f_idx, _f_cat, _f_val, _f_old_bp, _ in _batch:
+                                if _f_cat == _ai_cat and (_f_val == _ai_name or
+                                        _ai_name in _f_val or _f_val in _ai_name):
+                                    if abs(_ai_bp - _f_old_bp) > 0.5:
+                                        _new_raw = max(1, int(round(_ai_bp / 100.0 * _ss_final)))
+                                        _new_proj = int(round(_new_raw * _MULT))
+                                        df_final.at[_f_idx, _bp_col_final] = f"{_ai_bp:.4f}"
+                                        df_final.at[_f_idx, 'Original Raw Numbers'] = str(_new_raw)
+                                        df_final.at[_f_idx, _cs_col_final] = f"{_ai_bp:.4f}"
+                                        if 'US Gen Pop Projection' in df_final.columns:
+                                            df_final.at[_f_idx, 'US Gen Pop Projection'] = str(_new_proj)
+                                        arrow = '↓' if _ai_bp < _f_old_bp else '↑'
+                                        print(f"   🧠 {_f_cat} {arrow} {_f_val}: "
+                                              f"{_f_old_bp:.1f}%→{_ai_bp:.1f}% — {_ai_reason}")
+                                        _ai_adjustments += 1
+                                    break
+                    except Exception as _e:
+                        print(f"   ⚠️ AI evaluation error: {_e}")
+
+                print(f"   🧠 AI evaluation complete: {_ai_adjustments} items adjusted")
 
     # ── Final GPP recalc: ensures every row's US Gen Pop Projection = (Raw / 10M) * 329.9M
     df_final = add_us_gen_pop_projection(df_final)
@@ -12964,28 +13035,17 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if is_genpop:
         df_final = enforce_genpop_no_exact_100(df_final)
 
-    # ── Force exactly 4 decimal places + hard 99.99% ceiling on final output ─
-    _bc_upper_fmt = (brand_category or '').strip().upper()
-    _ALLOW_100 = {'BRAND INPUT'}
-    if _bc_upper_fmt:
-        _ALLOW_100.add(_bc_upper_fmt)
-    _SKIP_CAP_FMT = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
-                      'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
-                      'INPUT_METADATA', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
-    _col_values = df_final['Column'].astype(str).str.strip().str.upper().tolist()
+    # ── Force exactly 4 decimal places on final output (no hard caps) ────
     for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
         if _fmt_col not in df_final.columns:
             continue
         _formatted = []
-        for _i, _v in enumerate(df_final[_fmt_col]):
+        for _v in df_final[_fmt_col]:
             try:
                 _num = float(str(_v).replace(',', '').replace('%', ''))
             except (ValueError, TypeError):
                 _formatted.append(str(_v))
                 continue
-            _cat_val = _col_values[_i] if _i < len(_col_values) else ''
-            if _cat_val not in _ALLOW_100 and _cat_val not in _SKIP_CAP_FMT and _num > 99.99:
-                _num = 99.99
             _formatted.append(f"{_num:.4f}")
         df_final[_fmt_col] = _formatted
     for _fmt_col in ['Original Raw Numbers', 'US Gen Pop Projection']:
@@ -13588,16 +13648,7 @@ def add_brand_penetration_column_using_final_raw(df: pd.DataFrame) -> pd.DataFra
         except Exception:
             raw_num = 0.0
         pct = 0.0 if final_sample_size <= 0 else (raw_num / final_sample_size) * 100.0
-        
-        # Cap at 100% - only brand inputs should be at 100%
-        category = str(row.get('Column', '')).upper()
-        if category == 'BRAND INPUT':
-            # Brand inputs can be exactly 100%
-            pct = min(pct, 100.0)
-        else:
-            # Everything else capped at 99.99%
-            pct = min(pct, 99.99)
-        
+        pct = min(pct, 100.0)
         df.at[idx, col_name] = float(f"{pct:.4f}")
 
     return df
