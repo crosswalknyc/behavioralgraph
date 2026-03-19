@@ -12784,7 +12784,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _g_raw = max(1, int(round(_g_pct / 100.0 * final_sample_size)))
                 df_final.at[_gidx, 'Original Raw Numbers'] = str(_g_raw)
             print(f"   🔧 Post-AI gender enforcement: {_gender_skew} skew "
-                  f"(M={_g_male_pct:.1f}%, F={_g_female_pct:.1f}%, minor={_g_minor}%)")
+                  f"(M={_g_male_pct:.1f}%, F={_g_female_pct:.1f}%, minor varied)")
 
     # ── Census ceiling on final projections ─────────────────────────────
     if not is_genpop:
