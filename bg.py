@@ -7045,6 +7045,132 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         except Exception as e:
             print(f"   ⚠️ Pass D error ({cat}): {e}")
 
+    # ──── PASS E: AI PERSONA-BASED VALUATION FOR UNMATCHED ITEMS ────
+    # Items with no Gen Pop benchmark were capped at UNMATCHED_CEILING by
+    # anchor_to_genpop, giving them a flat, unnatural starting point.
+    # Instead of leaving them there (or capping them post-hoc at a flat
+    # value that causes clustering), we ask the AI to set each item's BP
+    # directly based on what makes sense for this specific persona.
+    pass_e_adjustments = 0
+    unmatched_items_by_cat = {}
+    for cat, items in categories_data.items():
+        if cat in DEMO_CATS or cat in META_CATS or cat == 'LOCATION':
+            continue
+        for name, bp_orig, cs_orig, idx in items:
+            gp_match = gp_bp_lookup.get((cat, name.strip().upper()), 0)
+            if gp_match > 0:
+                continue
+            try:
+                cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cur_bp = bp_orig
+            unmatched_items_by_cat.setdefault(cat, []).append(
+                (name, cur_bp, idx))
+
+    total_unmatched = sum(len(v) for v in unmatched_items_by_cat.values())
+    if total_unmatched > 0:
+        print(f"   🎯 Pass E: {total_unmatched} items without GenPop benchmark "
+              f"across {len(unmatched_items_by_cat)} categories — AI persona valuation")
+
+        BATCH_MAX = 60
+        for cat, cat_items in unmatched_items_by_cat.items():
+            for batch_start in range(0, len(cat_items), BATCH_MAX):
+                batch = cat_items[batch_start:batch_start + BATCH_MAX]
+                item_lines = []
+                for name, cur_bp, _ in batch:
+                    item_lines.append(f"  - {name}: {cur_bp:.2f}% BP")
+
+                unmatched_prompt = (
+                    f"You are a consumer research analyst building an audience "
+                    f"profile for people who engage with \"{subject_clean}\".\n\n"
+                    f"{audience_context}\n"
+                    f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n\n"
+                    f"=== CATEGORY: {cat} ===\n"
+                    f"The following items have NO general population benchmark "
+                    f"data. They were set to a flat default value, which is "
+                    f"unrealistic. Your job is to set each item's Brand "
+                    f"Penetration to a realistic value for THIS specific "
+                    f"audience — people who engage with \"{subject_clean}\" "
+                    f"({bc}).\n\n"
+                    f"Current items (all at artificial default values):\n"
+                    + "\n".join(item_lines) +
+                    f"\n\n=== YOUR TASK ===\n"
+                    f"For EACH item, decide what BP% makes sense for this "
+                    f"persona. Consider:\n"
+                    f"- Is this item CORE to the persona? (e.g. F1 for a "
+                    f"racing show audience → 65-80%)\n"
+                    f"- Is it RELEVANT but not central? (e.g. sports betting "
+                    f"for a racing audience → 20-40%)\n"
+                    f"- Is it NEUTRAL? (e.g. common brand → 8-18%)\n"
+                    f"- Is it MISALIGNED with the persona? (e.g. a heavily "
+                    f"female brand for a male audience → 2-8%)\n"
+                    f"- Is it ultra-niche/luxury? (e.g. Acne Studios for a "
+                    f"mass audience → 1-5%)\n\n"
+                    f"=== RULES ===\n"
+                    f"1. EVERY item must get a value — do not skip any.\n"
+                    f"2. Values should vary widely (1% to 75%) — NOT cluster "
+                    f"around one number.\n"
+                    f"3. Gender matters: if the audience is {male_pct:.0f}% "
+                    f"male, female-skewing brands (makeup, women's fashion) "
+                    f"should be LOW.\n"
+                    f"4. Age matters: if {young_pct:.0f}% are under 35, "
+                    f"skew toward younger platforms/brands.\n"
+                    f"5. The subject \"{subject_clean}\" is in the "
+                    f"\"{bc}\" category — items related to that "
+                    f"category should be HIGH.\n"
+                    f"6. Be realistic — even highly relevant items rarely "
+                    f"exceed 75% for a niche audience.\n\n"
+                    f"Return ONLY valid JSON:\n"
+                    f'{{"items":[{{"item":"ITEM_NAME","bp":42.5,'
+                    f'"reason":"brief explanation"}},...]}}\n'
+                    f"Include ALL {len(batch)} items. JSON only, no markdown."
+                )
+
+                try:
+                    resp = client.chat.completions.create(
+                        model='gpt-4o',
+                        messages=[{'role': 'user', 'content': unmatched_prompt}],
+                        temperature=0.3,
+                        max_tokens=6000
+                    )
+                    result = _parse_ai_json(resp.choices[0].message.content.strip())
+                    ai_items = result.get('items', [])
+                    for ai_item in ai_items:
+                        try:
+                            item_name = str(ai_item.get('item', '')).strip().upper()
+                            new_bp = float(ai_item.get('bp', 0))
+                            reason = ai_item.get('reason', '')
+                        except (ValueError, TypeError):
+                            continue
+                        new_bp = max(0.5, min(75.0, new_bp))
+                        matched_idx = None
+                        for name, cur_bp, idx in batch:
+                            if name.strip().upper() == item_name:
+                                matched_idx = (name, cur_bp, idx)
+                                break
+                        if not matched_idx:
+                            for name, cur_bp, idx in batch:
+                                if item_name in name.strip().upper() or name.strip().upper() in item_name:
+                                    matched_idx = (name, cur_bp, idx)
+                                    break
+                        if matched_idx:
+                            name, old_bp, idx = matched_idx
+                            new_bp = round(new_bp, 4)
+                            new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
+                            new_proj = int(round(new_raw * MULT))
+                            df.at[idx, bp_col] = new_bp
+                            df.at[idx, raw_col] = str(new_raw)
+                            if proj_col in df.columns:
+                                df.at[idx, proj_col] = str(new_proj)
+                            arrow = '↓' if new_bp < old_bp else '↑'
+                            print(f"   🎯 [PERSONA] {cat} {arrow} {name}: "
+                                  f"{old_bp:.1f}%→{new_bp:.1f}% — {reason}")
+                            pass_e_adjustments += 1
+                except Exception as e:
+                    print(f"   ⚠️ Pass E error ({cat}): {e}")
+
+        print(f"   🎯 Pass E complete: {pass_e_adjustments} items valued by persona AI")
+
     # ── Full Category Share recalculation across ALL categories ──
     for cat in df['Column'].str.upper().str.strip().unique():
         if cat in DEMO_CATS or cat in META_CATS or cat == 'LOCATION':
@@ -7135,10 +7261,12 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                         pass
         print(f"   🔗 Cross-category harmonization: {harmonized} values aligned")
 
-    print(f"🔍 Final gut check for {subject_clean}: {total_adjustments} total adjustments "
+    print(f"🔍 Final gut check for {subject_clean}: "
+          f"{total_adjustments + pass_e_adjustments} total adjustments "
           f"(Pass A: outlier, Pass B: {len(spot_batches)} spot-check, "
           f"Pass C: {pass_c_adjustments} demographic, "
           f"Pass D: {pass_d_adjustments} rank reorder, "
+          f"Pass E: {pass_e_adjustments} unmatched persona, "
           f"harmonized: {harmonized})")
     return df
 
