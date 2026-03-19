@@ -1598,7 +1598,9 @@ def validate_demographics(df, archetype, sample_size):
             if total > 0:
                 for idx in new_vals:
                     new_pct = round(new_vals[idx] / total * 100.0, 4)
-                    df.at[idx, pct_col] = new_pct
+                    df.at[idx, pct_col] = f"{new_pct:.4f}"
+                    if bp_col and bp_col in df.columns:
+                        df.at[idx, bp_col] = f"{new_pct:.4f}"
                 corrections += len(new_vals)
                 print(f"   🔧 Age: reshaped for '{age_skew}' archetype "
                       f"(top-2 had old-age groups)")
@@ -1634,13 +1636,25 @@ def validate_demographics(df, archetype, sample_size):
         female_target = remaining - male_target
         for idx, val in gender_rows.items():
             if val in minor_labels:
-                df.at[idx, pct_col] = round(minor_shares.get(val, 0.8), 4)
+                _gp = round(minor_shares.get(val, 0.8), 4)
+                df.at[idx, pct_col] = f"{_gp:.4f}"
+                if bp_col and bp_col in df.columns:
+                    df.at[idx, bp_col] = f"{_gp:.4f}"
             elif val == 'MALE' or (val.startswith('MALE') and 'FEMALE' not in val and 'TRANS' not in val):
-                df.at[idx, pct_col] = round(male_target, 4)
+                _gp = round(male_target, 4)
+                df.at[idx, pct_col] = f"{_gp:.4f}"
+                if bp_col and bp_col in df.columns:
+                    df.at[idx, bp_col] = f"{_gp:.4f}"
             elif val == 'FEMALE' or val.startswith('FEMALE'):
-                df.at[idx, pct_col] = round(female_target, 4)
+                _gp = round(female_target, 4)
+                df.at[idx, pct_col] = f"{_gp:.4f}"
+                if bp_col and bp_col in df.columns:
+                    df.at[idx, bp_col] = f"{_gp:.4f}"
             else:
-                df.at[idx, pct_col] = round(0.8, 4)
+                _gp = round(0.8, 4)
+                df.at[idx, pct_col] = f"{_gp:.4f}"
+                if bp_col and bp_col in df.columns:
+                    df.at[idx, bp_col] = f"{_gp:.4f}"
         corrections += len(gender_rows)
         print(f"   🔧 Gender: set {gender_skew} distribution "
               f"(M={male_target:.1f}%, F={female_target:.1f}%, minor varied)")
@@ -1659,7 +1673,10 @@ def validate_demographics(df, archetype, sample_size):
             continue
         is_expected = any(exp in val or val in exp for exp in expected_high)
         if not is_expected and cur / gp_val > 2.0:
-            df.at[idx, pct_col] = round(gp_val * 0.6 + cur * 0.4, 4)
+            _ep = round(gp_val * 0.6 + cur * 0.4, 4)
+            df.at[idx, pct_col] = f"{_ep:.4f}"
+            if bp_col and bp_col in df.columns:
+                df.at[idx, bp_col] = f"{_ep:.4f}"
             corrections += 1
 
     # ── Renormalize each demo category to 100% and update raw numbers ────
@@ -1785,7 +1802,7 @@ def _enforce_demographic_census_ceiling(df, sample_size, pct_col, bp_col):
                 projected = (cur_pct / 100.0) * profile_projected_audience
                 if projected > census_cap:
                     max_pct = (census_cap / profile_projected_audience) * 100.0
-                    df.at[idx, pct_col] = round(max_pct, 4)
+                    df.at[idx, pct_col] = f"{round(max_pct, 4):.4f}"
                     locked_indices.add(idx)
                     locked_pct += max_pct
                     any_capped_this_round = True
@@ -1805,8 +1822,8 @@ def _enforce_demographic_census_ceiling(df, sample_size, pct_col, bp_col):
                     if idx in locked_indices:
                         continue
                     try:
-                        old = float(df.at[idx, pct_col])
-                        df.at[idx, pct_col] = round(old * scale, 4)
+                        old = float(str(df.at[idx, pct_col]).replace(',', '').replace('%', ''))
+                        df.at[idx, pct_col] = f"{round(old * scale, 4):.4f}"
                     except (ValueError, TypeError):
                         pass
 
@@ -1822,15 +1839,14 @@ def _enforce_demographic_census_ceiling(df, sample_size, pct_col, bp_col):
                 continue
             projected = (cur_pct / 100.0) * profile_projected_audience
             if projected > census_cap:
-                df.at[idx, pct_col] = round(
-                    (census_cap / profile_projected_audience) * 100.0 * 0.999, 4)
+                df.at[idx, pct_col] = f"{round((census_cap / profile_projected_audience) * 100.0 * 0.999, 4):.4f}"
 
         # Final pass: update BP and raw numbers
         for idx in df[cm].index:
             try:
-                final_pct = float(df.at[idx, pct_col])
+                final_pct = float(str(df.at[idx, pct_col]).replace(',', '').replace('%', ''))
                 if bp_col and bp_col in df.columns:
-                    df.at[idx, bp_col] = final_pct
+                    df.at[idx, bp_col] = f"{round(final_pct, 4):.4f}"
                 df.at[idx, 'Original Raw Numbers'] = str(
                     max(1, int(round(final_pct / 100.0 * sample_size))))
             except (ValueError, TypeError):
@@ -13139,6 +13155,31 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     _batch_lines.append(f"  #{_rank}: {_vn} — {_vbp:.2f}%")
                     _batch_items.append((_rc, _vn, _vbp, _vidx))
 
+                _rc_upper = str(_rc).strip().upper()
+                _category_deep_check = ""
+                if _rc_upper == 'SOCIAL MEDIA':
+                    _category_deep_check = (
+                        "\n=== DEEP CHECK: SOCIAL MEDIA (read every row) ===\n"
+                        "Validate each platform against US adult norms (Pew/Comscore-style reach). "
+                        "YouTube and Facebook should be among the highest; X/Twitter is not "
+                        "universal (~25–45% typical). Twitch, Discord, Patreon are niches vs "
+                        "YouTube — they must not massively outrank YouTube/Facebook unless the "
+                        "persona is explicitly creators/gamers only. If any value looks like raw "
+                        "clickstream inflation, correct it.\n"
+                    )
+                elif _rc_upper in ('SEARCH ENGINE/AI', 'SEARCH ENGINE'):
+                    _category_deep_check = (
+                        "\n=== DEEP CHECK: SEARCH / AI (read every row) ===\n"
+                        "Google must be #1 with very high BP (typically ~70–92% among people who search). "
+                        "ChatGPT / OpenAI-style assistants: popular but NOT used by most US adults daily — "
+                        "BP above ~50% is usually wrong for a general Netflix/show audience; target "
+                        "roughly ~18–45% unless the persona is explicitly AI/tech-first. "
+                        "Reddit is forums with loyal users but limited mass reach — expect ~12–35%, "
+                        "almost never above ~45%. Bing, Yahoo, DuckDuckGo sit well below Google. "
+                        "Perplexity, DeepSeek, Copilot: moderate; none should exceed Google. "
+                        "Fix rank order and magnitudes until they pass a researcher sniff test.\n"
+                    )
+
                 _review_prompt = (
                     f"You are a senior consumer research analyst doing the FINAL "
                     f"quality check on an audience profile.\n\n"
@@ -13152,6 +13193,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     f"Brand Penetration = % of this audience that engages "
                     f"with each item:\n"
                     + "\n".join(_batch_lines) +
+                    _category_deep_check +
                     f"\n\n=== RULES (STRICT) ===\n"
                     f"1. MAXIMUM BP is 90%. Even YouTube (the most popular "
                     f"platform) is only ~84% in the US general population. "
@@ -13185,7 +13227,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     f"Even iconic venues like stadiums should be 2-8%.\n"
                     f"10. STREAMING: For a Netflix show audience, Netflix=100% "
                     f"is correct. Other streamers: Hulu ~45%, Amazon ~35%, "
-                    f"Disney+ ~25%. ESPN should be 25-40% not 50%+.\n\n"
+                    f"Disney+ ~25%. ESPN should be 25-40% not 50%+.\n"
+                    f"11. SEARCH/AI + SOCIAL: Apply rules 8–10 and the DEEP CHECK "
+                    f"sections above with extra scrutiny — these categories are often "
+                    f"inflated by clickstream. ChatGPT and Reddit are frequently too high; "
+                    f"Google should dominate search/AI.\n\n"
                     f"For EACH item that needs correction, provide the "
                     f"realistic BP value. Leave correct items alone.\n\n"
                     f"Return ONLY valid JSON:\n"
@@ -13440,6 +13486,47 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         _write_bp(_idx, _new)
                         print(f"   ✅ HARD FIX SOCIAL MEDIA: {_pname} {_cur:.1f}% → {_new:.4f}%")
 
+        # ─── 2b. SEARCH ENGINE/AI: Google #1; ChatGPT & Reddit not mass-universal ─
+        def _search_ai_target_range(_v):
+            _u = str(_v).strip().upper()
+            if 'GOOGLE' in _u and 'DUCK' not in _u:
+                return (70.0, 92.0)
+            if 'BING' in _u:
+                return (8.0, 22.0)
+            if 'YAHOO' in _u:
+                return (5.0, 16.0)
+            if 'DUCKDUCK' in _u or 'DUCK DUCK' in _u:
+                return (3.0, 12.0)
+            if 'CHATGPT' in _u or 'CHAT GPT' in _u:
+                return (18.0, 45.0)
+            if 'OPENAI' in _u:
+                return (18.0, 48.0)
+            if 'REDDIT' in _u:
+                return (12.0, 32.0)
+            if 'PERPLEXITY' in _u:
+                return (4.0, 14.0)
+            if 'DEEPSEEK' in _u:
+                return (2.0, 10.0)
+            if 'COPILOT' in _u:
+                return (12.0, 35.0)
+            return None
+
+        for _se_cat in ('SEARCH ENGINE/AI', 'SEARCH ENGINE'):
+            _se_mask = df_final['Column'].str.upper().str.strip() == _se_cat
+            if not _se_mask.any():
+                continue
+            for _ei in df_final[_se_mask].index:
+                _ev = str(df_final.at[_ei, 'Value']).strip()
+                _tr = _search_ai_target_range(_ev)
+                if _tr is None:
+                    continue
+                _elow, _ehigh = _tr
+                _ecur = _read_bp(_ei)
+                if _ecur < _elow or _ecur > _ehigh:
+                    _enew = round(random.uniform(_elow, _ehigh), 4)
+                    _write_bp(_ei, _enew)
+                    print(f"   ✅ HARD FIX {_se_cat}: {_ev} {_ecur:.1f}% → {_enew:.4f}%")
+
         # ─── 3. VENUE: physical attendance venues capped at 10% ──────
         _ven_mask = df_final['Column'].str.upper().str.strip() == 'VENUE'
         if _ven_mask.any():
@@ -13510,6 +13597,23 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 continue
             _formatted.append(f"{_num:.4f}")
         df_final[_fmt_col] = _formatted
+    # Demographics: always show 4 decimals (avoid Excel/CSV showing bare 25 vs 25.0000)
+    _DEMO_COLS_4DP = {
+        'AGE', 'EDUCATION', 'ETHNICITY', 'GENDER', 'INCOME', 'RELATIONSHIP',
+        'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+    }
+    for _di in df_final.index:
+        _dcat = str(df_final.at[_di, 'Column']).strip().upper()
+        if _dcat not in _DEMO_COLS_4DP:
+            continue
+        for _dfc in ('Brand Penetration (Row)', 'Category Share', 'Percentage'):
+            if _dfc not in df_final.columns:
+                continue
+            try:
+                _dn = float(str(df_final.at[_di, _dfc]).replace(',', '').replace('%', ''))
+                df_final.at[_di, _dfc] = f"{_dn:.4f}"
+            except (ValueError, TypeError):
+                pass
     for _fmt_col in ['Original Raw Numbers', 'US Gen Pop Projection']:
         if _fmt_col in df_final.columns:
             _formatted = []
@@ -16314,7 +16418,8 @@ def enforce_parental_status_sum_to_100(df: pd.DataFrame) -> pd.DataFrame:
         for idx in category_indices:
             raw_num = raw_numbers[idx]
             new_category_share = (raw_num / total_raw) * 100.0
-            df.at[idx, pct_col] = round(new_category_share, 4)
+            # Always 4-decimal strings so CSV/Excel never shows bare integers (25 vs 25.0000)
+            df.at[idx, pct_col] = f"{round(new_category_share, 4):.4f}"
         
         # Recalculate Brand Penetration (Row)
         if 'Brand Penetration (Row)' in df.columns:
@@ -16324,13 +16429,13 @@ def enforce_parental_status_sum_to_100(df: pd.DataFrame) -> pd.DataFrame:
                 for idx in category_indices:
                     raw_num = raw_numbers[idx]
                     new_brand_penetration = (raw_num / total_raw) * 100.0
-                    df.at[idx, 'Brand Penetration (Row)'] = round(new_brand_penetration, 4)
+                    df.at[idx, 'Brand Penetration (Row)'] = f"{round(new_brand_penetration, 4):.4f}"
             elif sample_size and sample_size > 0:
                 # For non-demographic categories, use sample size
                 for idx in category_indices:
                     raw_num = raw_numbers[idx]
                     new_brand_penetration = (raw_num / sample_size) * 100.0
-                    df.at[idx, 'Brand Penetration (Row)'] = round(new_brand_penetration, 4)
+                    df.at[idx, 'Brand Penetration (Row)'] = f"{round(new_brand_penetration, 4):.4f}"
         
         categories_processed += 1
     
