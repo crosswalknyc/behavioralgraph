@@ -32553,8 +32553,12 @@
                 if (d.label === 'Top Ethnicity') {
                     if (idx >= 130) {
                         takeaways.push(`<span class="takeaway-over">Strong ${d.value} representation</span> — ${idxMultiplier}x higher than Gen Pop`);
+                    } else if (idx >= 110) {
+                        takeaways.push(`<span class="takeaway-over">Ethnicity skews toward ${d.value}</span> — ${idxMultiplier}x vs Gen Pop`);
                     } else if (idx <= 70) {
                         takeaways.push(`<span class="takeaway-under">Lower ${d.value} representation</span> than Gen Pop (${idxMultiplier}x)`);
+                    } else if (idx <= 90) {
+                        takeaways.push(`<span class="takeaway-under">${d.value} slightly under-represented</span> vs Gen Pop (${idxMultiplier}x)`);
                     } else {
                         takeaways.push(`Ethnicity mix is <span class="takeaway-highlight">representative</span> of Gen Pop`);
                     }
