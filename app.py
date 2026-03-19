@@ -8618,17 +8618,16 @@ def parse_subscriber_iq_csv(csv_content):
             if first_col and first_col not in ['', 'AGE']:
                 # Filter out gender entries that might have been mixed in
                 first_col_upper = first_col.upper().strip()
-                gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER']
+                gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY']
                 
                 # Count/percentage/gen_pop: CSV format is col C (2) for count, col I (8) for percentage, col J (9) for gen_pop
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _pct = (row[8].strip() if len(row) > 8 else '') or (row[7].strip() if len(row) > 7 else '')
                 _gen = (row[9].strip() if len(row) > 9 else '') or (row[5].strip() if len(row) > 5 else '')
                 
-                # Only add if it's not a gender entry and looks like an age range
+                # Only add if it's not a gender entry and looks like an age range (or "Other")
                 if not any(keyword in first_col_upper for keyword in gender_keywords):
-                    # Check if it looks like an age range (contains numbers or age-like patterns)
-                    if any(char.isdigit() for char in first_col) or '-' in first_col or '+' in first_col or 'to' in first_col_upper or 'and' in first_col_upper:
+                    if any(char.isdigit() for char in first_col) or '-' in first_col or '+' in first_col or 'to' in first_col_upper or 'and' in first_col_upper or first_col_upper == 'OTHER':
                         parsed['demographics']['age'].append({
                             'age_range': first_col,
                             'count': _count,
@@ -8636,7 +8635,7 @@ def parse_subscriber_iq_csv(csv_content):
                             'gen_pop': _gen
                         })
                     else:
-                        print(f"   ⚠️ Skipping potential gender entry in age section: '{first_col}'")
+                        print(f"   ⚠️ Skipping unrecognized entry in age section: '{first_col}'")
                 else:
                     # This is a gender entry - add it to gender data instead
                     print(f"   ⚠️ Found gender entry '{first_col}' in age section, moving to gender data")
