@@ -13436,7 +13436,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 if _pname in _sm_items:
                     _idx, _cur = _sm_items[_pname]
                     if _cur < _plow or _cur > _phi:
-                        import random
                         _new = round(random.uniform(_plow, _phi), 4)
                         _write_bp(_idx, _new)
                         print(f"   ✅ HARD FIX SOCIAL MEDIA: {_pname} {_cur:.1f}% → {_new:.4f}%")
@@ -13449,7 +13448,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _vbp = _read_bp(_vi)
                 _vn = str(df_final.at[_vi, 'Value']).strip()
                 if _vbp > _VEN_CAP:
-                    import random
                     _new_vbp = round(random.uniform(2.0, _VEN_CAP), 4)
                     _write_bp(_vi, _new_vbp)
                     print(f"   ✅ HARD FIX VENUE: {_vn} {_vbp:.1f}% → {_new_vbp:.4f}%")
@@ -13483,7 +13481,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _ev_n = str(df_final.at[_ei, 'Value']).strip()
                 _ev_bp = _read_bp(_ei)
                 if _ev_bp > _EV_CAP:
-                    import random
                     _new_ev = round(random.uniform(3.0, _EV_CAP), 4)
                     _write_bp(_ei, _new_ev)
                     print(f"   ✅ HARD FIX EVENTS: {_ev_n} {_ev_bp:.1f}% → {_new_ev:.4f}%")
