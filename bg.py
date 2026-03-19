@@ -6525,7 +6525,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             name, cur_bp, cur_cs, row_idx = matched
             factor = max(0.15, min(4.0, factor))
             new_bp = round(cur_bp * factor, 4)
-            new_bp = max(0.01, new_bp)
+            new_bp = max(0.01, min(new_bp, 95.0))
 
             new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
             new_proj = int(round(new_raw * MULT))
@@ -7140,7 +7140,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                             reason = ai_item.get('reason', '')
                         except (ValueError, TypeError):
                             continue
-                        new_bp = max(0.5, min(75.0, new_bp))
+                        new_bp = max(0.5, min(95.0, new_bp))
                         matched_idx = None
                         for name, cur_bp, idx in batch:
                             if name.strip().upper() == item_name:
@@ -7378,7 +7378,7 @@ def item_level_ai_review(df, archetype, project_name, brands):
 
         try:
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are an expert consumer research analyst. Return only valid JSON."},
                     {"role": "user", "content": prompt},
@@ -7421,7 +7421,7 @@ def item_level_ai_review(df, archetype, project_name, brands):
 
             multiplier = 0.70 if direction == 'lower' else 1.30
             new_bp = round(soft_bp_ceiling(cur_bp * multiplier), 4)
-            new_bp = max(0.01, new_bp)
+            new_bp = max(0.01, min(new_bp, 95.0))
 
             new_raw = max(1, int(round(new_bp / 100.0 * sample_size)))
             new_proj = int(round((new_raw / 10_000_000) * 329_900_000))
@@ -12924,7 +12924,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                                 _ai_reason = _ai_item.get('reason', '')
                             except (ValueError, TypeError):
                                 continue
-                            _ai_bp = max(0.5, _ai_bp)
+                            _ai_bp = max(0.5, min(_ai_bp, 95.0))
                             for _f_idx, _f_cat, _f_val, _f_old_bp, _ in _batch:
                                 if _f_cat == _ai_cat and (_f_val == _ai_name or
                                         _ai_name in _f_val or _f_val in _ai_name):
@@ -12948,6 +12948,192 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     # ── Final GPP recalc: ensures every row's US Gen Pop Projection = (Raw / 10M) * 329.9M
     df_final = add_us_gen_pop_projection(df_final)
+
+    # ── FINAL COMPREHENSIVE AI REVIEW (GPT-4o) ──────────────────────────
+    # Last-pass agent that reviews EVERY behavioral category row by row,
+    # checks each BP value against the persona, and corrects anything that
+    # doesn't pass the sniff test. This is the last line of defense before
+    # the CSV is saved.
+    if not is_genpop and brand_category:
+        _client_final = _get_openai_client()
+        if _client_final:
+            _bp_cf = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
+            _cs_cf = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
+            _raw_cf = 'Original Raw Numbers'
+            _proj_cf = 'US Gen Pop Projection'
+            _MULT_F = 329_900_000 / 10_000_000
+
+            _ss_f = 1
+            _ss_mf = df_final['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+            if _ss_mf.any():
+                try:
+                    _ss_f = max(1, int(float(str(df_final.loc[_ss_mf, _raw_cf].iloc[0]).replace(',', ''))))
+                except Exception:
+                    pass
+
+            _subject_f = project_name or (brands[0] if brands else 'Unknown')
+            _subject_cf = _subject_f.replace('_', ' ').replace('-', ' ').strip()
+            _bc_f = (brand_category or '').strip()
+            _profile_f = _build_profile_summary(df_final)
+
+            _SKIP_FINAL = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
+                           'CASUAL FAN', 'BRAND CATEGORY'}
+            _DEMO_FINAL = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                           'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                           'OCCUPATION', 'LOCATION'}
+            _bc_uf = _bc_f.strip().upper()
+            if _bc_uf:
+                _SKIP_FINAL.add(_bc_uf)
+
+            _cats_to_review = {}
+            for _idx_f, _row_f in df_final.iterrows():
+                _cat_f = str(_row_f.get('Column', '')).strip().upper()
+                if _cat_f in _SKIP_FINAL or _cat_f in _DEMO_FINAL:
+                    continue
+                _val_f = str(_row_f.get('Value', '')).strip()
+                try:
+                    _bp_f = float(str(_row_f.get(_bp_cf, 0)).replace(',', '').replace('%', ''))
+                except (ValueError, TypeError):
+                    continue
+                _cats_to_review.setdefault(_cat_f, []).append(
+                    (_val_f, _bp_f, _idx_f))
+
+            print(f"🔬 FINAL REVIEW: {sum(len(v) for v in _cats_to_review.values())} items "
+                  f"across {len(_cats_to_review)} categories — comprehensive persona check")
+
+            _final_adj = 0
+            _REVIEW_BATCH = 3
+
+            _cat_list = list(_cats_to_review.keys())
+            for _rb_start in range(0, len(_cat_list), _REVIEW_BATCH):
+                _batch_cats = _cat_list[_rb_start:_rb_start + _REVIEW_BATCH]
+                _batch_lines = []
+                _batch_items = []
+                for _rc in _batch_cats:
+                    _items_sorted = sorted(_cats_to_review[_rc], key=lambda x: -x[1])
+                    _batch_lines.append(f"\n=== {_rc} ({len(_items_sorted)} items) ===")
+                    for _rank, (_vn, _vbp, _vidx) in enumerate(_items_sorted, 1):
+                        _batch_lines.append(f"  #{_rank}: {_vn} — {_vbp:.2f}% BP")
+                        _batch_items.append((_rc, _vn, _vbp, _vidx))
+
+                _review_prompt = (
+                    f"You are a senior consumer research analyst doing a FINAL "
+                    f"quality review of an audience profile for \"{_subject_cf}\" "
+                    f"({_bc_f}).\n\n"
+                    f"AUDIENCE DEMOGRAPHICS:\n{_profile_f}\n\n"
+                    f"Below is every item in each category with its Brand "
+                    f"Penetration (BP) — the % of THIS specific audience that "
+                    f"engages with that item.\n"
+                    + "\n".join(_batch_lines) +
+                    f"\n\n=== YOUR TASK ===\n"
+                    f"Go through EVERY row and check:\n"
+                    f"1. Is this BP% realistic for a \"{_subject_cf}\" audience?\n"
+                    f"2. Nothing should EVER be above 95% — even YouTube is only "
+                    f"~84% in the general population. Only the most universal "
+                    f"items (Google, YouTube) should be 80%+.\n"
+                    f"3. Gender alignment: the audience is predominantly "
+                    f"MALE. Women's brands (makeup, women's fashion, women's "
+                    f"jewelry) should be LOW (under 15%).\n"
+                    f"4. Persona alignment: \"{_subject_cf}\" is {_bc_f}. "
+                    f"Items related to motorsport, racing, F1, automotive, "
+                    f"sports should be HIGH. Unrelated niche/luxury items "
+                    f"should be LOW.\n"
+                    f"5. Items that are clearly inflated beyond reality should "
+                    f"be corrected to a realistic value.\n"
+                    f"6. Items that look fine should be LEFT ALONE.\n\n"
+                    f"Return ONLY items that need correction:\n"
+                    f'{{"corrections":[{{"category":"CAT","item":"ITEM",'
+                    f'"current_bp":50.0,"correct_bp":25.0,'
+                    f'"reason":"brief"}},...]}}\n'
+                    f'If everything looks good: {{"corrections":[]}}\n'
+                    f"JSON only, no markdown."
+                )
+
+                try:
+                    _r_resp = _client_final.chat.completions.create(
+                        model='gpt-4o',
+                        messages=[{'role': 'user', 'content': _review_prompt}],
+                        temperature=0.15,
+                        max_tokens=8000
+                    )
+                    _r_result = _parse_ai_json(_r_resp.choices[0].message.content.strip())
+                    _corrections = _r_result.get('corrections', [])
+                    for _corr in _corrections:
+                        try:
+                            _cc = str(_corr.get('category', '')).strip().upper()
+                            _ci = str(_corr.get('item', '')).strip().upper()
+                            _cnew = float(_corr.get('correct_bp', 0))
+                            _creason = _corr.get('reason', '')
+                        except (ValueError, TypeError):
+                            continue
+                        _cnew = max(0.1, min(_cnew, 95.0))
+                        _matched_f = None
+                        for _rc2, _vn2, _vbp2, _vidx2 in _batch_items:
+                            if _rc2 == _cc and (_vn2.strip().upper() == _ci or
+                                    _ci in _vn2.strip().upper() or
+                                    _vn2.strip().upper() in _ci):
+                                _matched_f = (_rc2, _vn2, _vbp2, _vidx2)
+                                break
+                        if _matched_f and abs(_cnew - _matched_f[2]) > 0.5:
+                            _, _mn, _mold, _midx = _matched_f
+                            _cnew = round(_cnew, 4)
+                            _nr = max(1, int(round(_cnew / 100.0 * _ss_f)))
+                            _np = int(round(_nr * _MULT_F))
+                            df_final.at[_midx, _bp_cf] = f"{_cnew:.4f}"
+                            df_final.at[_midx, _raw_cf] = str(_nr)
+                            df_final.at[_midx, _cs_cf] = f"{_cnew:.4f}"
+                            if _proj_cf in df_final.columns:
+                                df_final.at[_midx, _proj_cf] = str(_np)
+                            _arr = '↓' if _cnew < _mold else '↑'
+                            print(f"   🔬 {_cc} {_arr} {_mn}: "
+                                  f"{_mold:.1f}%→{_cnew:.1f}% — {_creason}")
+                            _final_adj += 1
+                except Exception as _e:
+                    print(f"   ⚠️ Final review error: {_e}")
+
+            # Recalculate Category Share after corrections
+            if _final_adj > 0:
+                for _fcat in df_final['Column'].str.upper().str.strip().unique():
+                    if _fcat in _DEMO_FINAL or _fcat in _SKIP_FINAL:
+                        continue
+                    _fcm = df_final['Column'].str.upper().str.strip() == _fcat
+                    if not _fcm.any():
+                        continue
+                    _ftotal = 0
+                    for _fcidx in df_final[_fcm].index:
+                        try:
+                            _ftotal += int(float(str(df_final.at[_fcidx, _raw_cf]).replace(',', '')))
+                        except (ValueError, TypeError):
+                            pass
+                    if _ftotal > 0:
+                        for _fcidx in df_final[_fcm].index:
+                            try:
+                                _fraw = int(float(str(df_final.at[_fcidx, _raw_cf]).replace(',', '')))
+                                _fcs = round((_fraw / _ftotal) * 100.0, 4)
+                                df_final.at[_fcidx, _cs_cf] = f"{_fcs:.4f}"
+                            except (ValueError, TypeError):
+                                pass
+
+            print(f"🔬 FINAL REVIEW complete: {_final_adj} corrections applied")
+
+    # Re-run formatting to ensure 4 decimal places after final review
+    for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
+        if _fmt_col not in df_final.columns:
+            continue
+        _formatted = []
+        for _v in df_final[_fmt_col]:
+            try:
+                _num = float(str(_v).replace(',', '').replace('%', ''))
+            except (ValueError, TypeError):
+                _formatted.append(str(_v))
+                continue
+            _formatted.append(f"{_num:.4f}")
+        df_final[_fmt_col] = _formatted
+
+    for _str_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage',
+                      'Original Raw Numbers', 'US Gen Pop Projection']:
+        if _str_col in df_final.columns:
+            df_final[_str_col] = df_final[_str_col].astype(str)
 
     # Final row ordering and CSV save - using exact order from reference file
     CATEGORY_ORDER = [
