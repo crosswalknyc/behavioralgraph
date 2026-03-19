@@ -21203,6 +21203,9 @@ def ensure_all_dmas_in_location_category(df, conn=None):
     
     # Normalize LOCATION percentages to sum to 100%
     location_mask = df['Column'] == 'LOCATION'
+    df.loc[location_mask, 'Percentage'] = pd.to_numeric(
+        df.loc[location_mask, 'Percentage'], errors='coerce'
+    ).fillna(0.0).values
     location_total = df.loc[location_mask, 'Percentage'].sum()
     
     if location_total > 0:
