@@ -12786,16 +12786,30 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if is_genpop:
         df_final = enforce_genpop_no_exact_100(df_final)
 
-    # ── Force exactly 4 decimal places on all numeric output columns ────
+    # ── Force exactly 4 decimal places + hard 99.99% ceiling on final output ─
+    _bc_upper_fmt = (brand_category or '').strip().upper()
+    _ALLOW_100 = {'BRAND INPUT'}
+    if _bc_upper_fmt:
+        _ALLOW_100.add(_bc_upper_fmt)
+    _SKIP_CAP_FMT = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
+                      'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+                      'INPUT_METADATA', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
+    _col_values = df_final['Column'].astype(str).str.strip().str.upper().tolist()
     for _fmt_col in ['Brand Penetration (Row)', 'Category Share']:
-        if _fmt_col in df_final.columns:
-            _formatted = []
-            for _v in df_final[_fmt_col]:
-                try:
-                    _formatted.append(f"{float(str(_v).replace(',', '')):.4f}")
-                except (ValueError, TypeError):
-                    _formatted.append(str(_v))
-            df_final[_fmt_col] = _formatted
+        if _fmt_col not in df_final.columns:
+            continue
+        _formatted = []
+        for _i, _v in enumerate(df_final[_fmt_col]):
+            try:
+                _num = float(str(_v).replace(',', '').replace('%', ''))
+            except (ValueError, TypeError):
+                _formatted.append(str(_v))
+                continue
+            _cat_val = _col_values[_i] if _i < len(_col_values) else ''
+            if _cat_val not in _ALLOW_100 and _cat_val not in _SKIP_CAP_FMT and _num > 99.99:
+                _num = 99.99
+            _formatted.append(f"{_num:.4f}")
+        df_final[_fmt_col] = _formatted
     for _fmt_col in ['Original Raw Numbers', 'US Gen Pop Projection']:
         if _fmt_col in df_final.columns:
             _formatted = []
