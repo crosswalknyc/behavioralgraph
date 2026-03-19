@@ -13575,6 +13575,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
         print("   ✅ Final hard enforcement pass complete")
 
+    # Final math pass: BP × sample_size → Original Raw; within-category Category Share;
+    # then US Gen Pop from raw (same as edit_sample_size.py)
+    df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
+    df_final = add_us_gen_pop_projection(df_final)
+
     # Reorder columns
     column_order = ['Column', 'Value', 'Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers', 'US Gen Pop Projection']
     existing_columns = [col for col in column_order if col in df_final.columns]
@@ -24309,6 +24314,114 @@ def enforce_streaming_music_top6(df):
             print(f"🔄 Swapped {df.at[req_idx, 'Value']} into top 6 of STREAMING/MUSIC")
     
     return df
+
+
+def reconcile_final_output_from_bp_and_sample_size(df: pd.DataFrame) -> pd.DataFrame:
+    """Align Original Raw Numbers and Category Share with Brand Penetration and panel sample size.
+
+    Mirrors ``edit_sample_size.py`` (same math / order):
+      1. Resolve sample size from SAMPLE SIZE (Original Raw Numbers, else Category Share) or
+         BRAND INPUT Original Raw Numbers.
+      2. Set BRAND INPUT ``Original Raw Numbers`` = sample size; SAMPLE SIZE ``Original Raw
+         Numbers`` = sample size; SAMPLE SIZE ``Category Share`` (or ``Percentage``) = sample
+         size (spreadsheet convention: D4 holds the panel N).
+      3. For every other row: ``Original Raw Numbers`` = round((BP / 100) * sample_size).
+      4. Within each ``Column`` category: ``Category Share`` = (row raw / sum raws in category)
+         * 100, rounded to 4 decimals.
+
+    Caller should run ``add_us_gen_pop_projection(df)`` immediately after to fill
+    ``US Gen Pop Projection`` from Original Raw Numbers.
+    """
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    required = {'Column', 'Brand Penetration (Row)', 'Original Raw Numbers'}
+    if not required.issubset(df.columns):
+        return df
+    pct_col = 'Category Share' if 'Category Share' in df.columns else (
+        'Percentage' if 'Percentage' in df.columns else None)
+    if pct_col is None:
+        return df
+    bp_col = 'Brand Penetration (Row)'
+
+    def _parse_int(x):
+        try:
+            return int(round(float(str(x).replace(',', '').replace('%', '').strip())))
+        except (ValueError, TypeError):
+            return 0
+
+    sample_size = 0
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        sidx = df[ss_mask].index[0]
+        sample_size = _parse_int(df.at[sidx, 'Original Raw Numbers'])
+        if sample_size <= 0:
+            sample_size = _parse_int(df.at[sidx, pct_col])
+    if sample_size <= 0:
+        bi_mask = df['Column'].str.upper().str.strip() == 'BRAND INPUT'
+        if bi_mask.any():
+            sample_size = _parse_int(df.loc[bi_mask, 'Original Raw Numbers'].iloc[0])
+    if sample_size <= 0:
+        print("   ⚠️ reconcile_final_output_from_bp_and_sample_size: no valid sample size; skip")
+        return df
+
+    skip_bp_to_raw = {
+        'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
+        'BRAND CATEGORY',
+    }
+    skip_cs_cats = set(skip_bp_to_raw)
+
+    bi_mask = df['Column'].str.upper().str.strip() == 'BRAND INPUT'
+    if bi_mask.any():
+        df.loc[bi_mask, 'Original Raw Numbers'] = str(sample_size)
+    if ss_mask.any():
+        sidx = df[ss_mask].index[0]
+        df.at[sidx, 'Original Raw Numbers'] = str(sample_size)
+        df.at[sidx, pct_col] = str(sample_size)
+
+    rows_updated = 0
+    for idx in df.index:
+        col_u = str(df.at[idx, 'Column']).strip().upper()
+        if col_u in skip_bp_to_raw:
+            continue
+        try:
+            pv = df.at[idx, bp_col]
+            if isinstance(pv, str):
+                pv = pv.replace('%', '').replace(',', '').strip()
+            penetration = float(pv)
+            new_raw = int(round((penetration / 100.0) * sample_size))
+            df.at[idx, 'Original Raw Numbers'] = str(new_raw)
+            rows_updated += 1
+        except (ValueError, TypeError):
+            continue
+
+    cat_groups = {}
+    for idx in df.index:
+        cu = str(df.at[idx, 'Column']).strip().upper()
+        cat_groups.setdefault(cu, []).append(idx)
+
+    cats_updated = 0
+    for cu, indices in cat_groups.items():
+        if cu in skip_cs_cats:
+            continue
+        category_sum = 0
+        valid = []
+        for idx in indices:
+            rn = _parse_int(df.at[idx, 'Original Raw Numbers'])
+            category_sum += rn
+            valid.append(idx)
+        if category_sum <= 0:
+            continue
+        for idx in valid:
+            raw_num = _parse_int(df.at[idx, 'Original Raw Numbers'])
+            share = round((raw_num / category_sum) * 100.0, 4)
+            df.at[idx, pct_col] = f"{share:.4f}"
+        cats_updated += 1
+
+    print(f"   🔗 Reconciled output metrics: sample_size={sample_size:,}, "
+          f"raw-from-BP rows={rows_updated}, categories CS={cats_updated}")
+    return df
+
 
 def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
     """Add US Gen Pop Projection = (Original Raw Numbers / 10,000,000) * 329,900,000.
