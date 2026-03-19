@@ -13477,6 +13477,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 'PATREON': (4.0, 10.0),
                 'LETTERBOXD': (2.0, 5.0),
                 'ONLYFANS': (3.0, 7.0),
+                'REDDIT': (12.0, 32.0),
             }
             for _pname, (_plow, _phi) in _sm_targets.items():
                 if _pname in _sm_items:
