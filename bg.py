@@ -1091,7 +1091,7 @@ def anchor_to_genpop(df, sample_size):
         changes += 1
 
     # --- Pass 2: Cap items with NO Gen Pop match ---
-    UNMATCHED_CEILING = 15.0
+    UNMATCHED_CEILING = 20.0
     unmatched_fixes = 0
     for idx, row in df.iterrows():
         cat = str(row.get('Column', '')).strip().upper()
@@ -6523,10 +6523,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 continue
 
             name, cur_bp, cur_cs, row_idx = matched
-            factor = max(0.15, min(2.5, factor))
+            factor = max(0.15, min(4.0, factor))
             new_bp = round(cur_bp * factor, 4)
             item_gp_bp = gp_bp_lookup.get((a_cat, a_item), 0)
-            bp_cap = max(40.0, item_gp_bp * 1.15) if item_gp_bp > 0 else 40.0
+            bp_cap = max(45.0, item_gp_bp * 1.15) if item_gp_bp > 0 else 65.0
             new_bp = max(0.01, min(new_bp, bp_cap))
 
             new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
@@ -6615,7 +6615,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f'If corrections needed: {{"status":"FIX","notes":"summary",'
                 f'"adjustments":[{{"category":"CAT","item":"ITEM",'
                 f'"factor":0.6,"reason":"brief"}},...]}}\n'
-                f"factor: multiplier on current BP. Stay in 0.15 to 2.5 range.\n"
+                f"factor: multiplier on current BP. Stay in 0.15 to 4.0 range.\n"
                 f"JSON only, no markdown."
             )
             try:
@@ -6731,7 +6731,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f'If corrections needed: {{"status":"FIX","notes":"summary",'
             f'"adjustments":[{{"category":"CAT","item":"ITEM",'
             f'"factor":0.6,"reason":"brief"}},...]}}\n'
-            f"factor: multiplier on current BP. Stay in 0.15 to 2.5 range.\n"
+            f"factor: multiplier on current BP. Stay in 0.15 to 4.0 range.\n"
             f"JSON only, no markdown."
         )
 
@@ -12713,12 +12713,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             except (ValueError, TypeError):
                 _bp_v = 0
             _gp_bp = _gp_bp_map.get((_cat, _val), 0)
-            # Ceiling: prevent AI inflation above realistic levels
-            # Formula: gp * 1.2 + 5pp — allows moderate over-index but not extreme
+            # Ceiling: only cap items that HAVE a GenPop match.
+            # Items without GenPop match are already capped by anchor_to_genpop
+            # (UNMATCHED_CEILING) and the AI gut check's own bp_cap. Adding a
+            # flat ceiling here causes unnatural clustering (e.g. 50 items at 35%).
             if _gp_bp > 0:
-                _ceiling = min(99.99, max(35.0, _gp_bp * 1.2 + 5.0))
+                _ceiling = min(99.99, _gp_bp * 1.2 + 5.0)
             else:
-                _ceiling = 35.0
+                _ceiling = 99.99
             # Floor: prevent mass-market items from being suppressed below reality
             _floor = 0
             if _gp_bp >= 40.0:
@@ -12728,17 +12730,17 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 df_final.at[_idx, _bp_col_final] = _bp_v
             if _bp_v > _ceiling:
                 _new_bp = round(_ceiling, 4)
-                df_final.at[_idx, _bp_col_final] = _new_bp
+                df_final.at[_idx, _bp_col_final] = f"{_new_bp:.4f}"
                 _new_raw = max(1, int(round(_new_bp / 100.0 * _ss_final)))
                 df_final.at[_idx, 'Original Raw Numbers'] = str(_new_raw)
-                df_final.at[_idx, _cs_col_final] = _new_bp
+                df_final.at[_idx, _cs_col_final] = f"{_new_bp:.4f}"
                 _bp_caps += 1
             elif _floor > 0 and _bp_v < _floor:
                 _new_bp = round(_floor, 4)
-                df_final.at[_idx, _bp_col_final] = _new_bp
+                df_final.at[_idx, _bp_col_final] = f"{_new_bp:.4f}"
                 _new_raw = max(1, int(round(_new_bp / 100.0 * _ss_final)))
                 df_final.at[_idx, 'Original Raw Numbers'] = str(_new_raw)
-                df_final.at[_idx, _cs_col_final] = _new_bp
+                df_final.at[_idx, _cs_col_final] = f"{_new_bp:.4f}"
                 _bp_floors += 1
         if _bp_caps:
             print(f"   🔒 GenPop ceiling: capped {_bp_caps} behavioral items to realistic levels")
