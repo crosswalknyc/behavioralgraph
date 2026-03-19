@@ -1604,58 +1604,42 @@ def validate_demographics(df, archetype, sample_size):
                       f"(top-2 had old-age groups)")
 
     # ── GENDER reshaping ─────────────────────────────────────────────────
+    # Directly set a realistic gender distribution based on the archetype.
+    # PREFER NOT TO SAY and other non-binary categories get small fixed shares;
+    # the bulk goes to MALE/FEMALE based on the skew direction.
     gender_skew = archetype.get('gender_skew', 'balanced')
-    if gender_skew != 'balanced':
-        gm = df['Column'].str.upper() == 'GENDER'
-        gender_rows = {}
-        for idx in df[gm].index:
-            val = str(df.at[idx, 'Value']).upper()
-            try:
-                cur = float(df.at[idx, pct_col])
-            except (ValueError, TypeError):
-                cur = 0.0
-            gender_rows[idx] = (val, cur)
+    gm = df['Column'].str.upper() == 'GENDER'
+    gender_rows = {}
+    for idx in df[gm].index:
+        val = str(df.at[idx, 'Value']).upper()
+        gender_rows[idx] = val
 
-        favored_pct = disfavored_pct = 0.0
-        for idx, (val, cur) in gender_rows.items():
-            is_core_male = 'MALE' in val and 'FEMALE' not in val and 'NON' not in val and 'TRANS' not in val
-            is_core_female = val == 'FEMALE' or (val.startswith('FEMALE') and 'TRANS' not in val)
-            if gender_skew == 'male' and is_core_male:
-                favored_pct = cur
-            elif gender_skew == 'male' and is_core_female:
-                disfavored_pct = cur
-            elif gender_skew == 'female' and is_core_female:
-                favored_pct = cur
-            elif gender_skew == 'female' and is_core_male:
-                disfavored_pct = cur
-
-        MIN_FAVORED_PCT = 58.0
-        needs_gender_fix = (disfavored_pct > favored_pct) or (favored_pct < MIN_FAVORED_PCT)
-        if needs_gender_fix:
-            if disfavored_pct > favored_pct:
-                boost, dampen = 1.40, 0.60
-            elif favored_pct < 52:
-                boost, dampen = 1.35, 0.65
+    if gender_rows:
+        if gender_skew == 'male':
+            target = {'MALE': 65.0, 'FEMALE': 30.0}
+        elif gender_skew == 'female':
+            target = {'MALE': 28.0, 'FEMALE': 67.0}
+        else:
+            target = {'MALE': 48.0, 'FEMALE': 47.0}
+        MINOR_SHARE = 1.0
+        minor_labels = {'NON-BINARY', 'TRANS MALE', 'TRANS FEMALE', 'PREFER NOT TO SAY'}
+        minor_count = sum(1 for v in gender_rows.values() if v in minor_labels)
+        minor_total = minor_count * MINOR_SHARE
+        remaining = 100.0 - minor_total
+        male_target = target.get('MALE', 48.0) / (target.get('MALE', 48.0) + target.get('FEMALE', 47.0)) * remaining
+        female_target = remaining - male_target
+        for idx, val in gender_rows.items():
+            if val in minor_labels:
+                df.at[idx, pct_col] = round(MINOR_SHARE, 4)
+            elif val == 'MALE' or (val.startswith('MALE') and 'FEMALE' not in val and 'TRANS' not in val):
+                df.at[idx, pct_col] = round(male_target, 4)
+            elif val == 'FEMALE' or val.startswith('FEMALE'):
+                df.at[idx, pct_col] = round(female_target, 4)
             else:
-                boost, dampen = 1.20, 0.80
-            new_vals = {}
-            for idx, (val, cur) in gender_rows.items():
-                is_core_male = 'MALE' in val and 'FEMALE' not in val and 'NON' not in val and 'TRANS' not in val
-                is_core_female = val == 'FEMALE' or (val.startswith('FEMALE') and 'TRANS' not in val)
-                if (gender_skew == 'male' and is_core_male) or (gender_skew == 'female' and is_core_female):
-                    new_vals[idx] = cur * boost
-                elif (gender_skew == 'male' and is_core_female) or (gender_skew == 'female' and is_core_male):
-                    new_vals[idx] = cur * dampen
-                else:
-                    new_vals[idx] = cur
-            total = sum(new_vals.values())
-            if total > 0:
-                for idx in new_vals:
-                    new_pct = round(new_vals[idx] / total * 100.0, 4)
-                    df.at[idx, pct_col] = new_pct
-                corrections += len(new_vals)
-                print(f"   🔧 Gender: reshaped for '{gender_skew}' archetype "
-                      f"(favored={favored_pct:.1f}%, target>={MIN_FAVORED_PCT}%)")
+                df.at[idx, pct_col] = round(MINOR_SHARE, 4)
+        corrections += len(gender_rows)
+        print(f"   🔧 Gender: set {gender_skew} distribution "
+              f"(M={male_target:.1f}%, F={female_target:.1f}%, minor={MINOR_SHARE}% each)")
 
     # ── ETHNICITY (light touch -- only dampen extreme outliers) ───────────
     expected_high = [e.upper() for e in archetype.get('ethnicity_over_index', [])]
@@ -1682,7 +1666,7 @@ def validate_demographics(df, archetype, sample_size):
         total = 0.0
         for idx in df[cm].index:
             try:
-                total += float(df.at[idx, pct_col])
+                total += float(str(df.at[idx, pct_col]).replace(',', '').replace('%', ''))
             except (ValueError, TypeError):
                 pass
         if total <= 0:
@@ -1690,11 +1674,11 @@ def validate_demographics(df, archetype, sample_size):
         scale = 100.0 / total
         for idx in df[cm].index:
             try:
-                old = float(df.at[idx, pct_col])
+                old = float(str(df.at[idx, pct_col]).replace(',', '').replace('%', ''))
                 new_val = round(old * scale, 4)
-                df.at[idx, pct_col] = new_val
+                df.at[idx, pct_col] = f"{new_val:.4f}"
                 if bp_col and bp_col in df.columns:
-                    df.at[idx, bp_col] = new_val
+                    df.at[idx, bp_col] = f"{new_val:.4f}"
                 df.at[idx, 'Original Raw Numbers'] = str(max(1, int(round(new_val / 100.0 * sample_size))))
             except (ValueError, TypeError):
                 pass
@@ -12639,11 +12623,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("🔍 Running comprehensive final gut check (demographics + locations + behavioral)...")
         df_final = ai_final_gut_check(df_final, brand_category, project_name, brands)
 
-    # ── Post-gut-check: enforce hard 100% ceiling on ALL columns ─────────
-    # ONLY BRAND INPUT may be exactly 100%.
-    # The platform entry (e.g. Netflix) is set to 100% by adjust_platform_to_100_percent AFTER pipeline.
-    # Everything else: max 99.99%.
-    # Also ensure Original Raw Numbers never exceeds sample size.
+    # ── Post-gut-check: GenPop-based ceiling + hard 99.99% cap ──────────
+    # No behavioral item should exceed min(99.99, max(45, gp_bp * 2.0)).
+    # This prevents AI agents from inflating items to unrealistic levels.
     df_final = add_brand_penetration_column_using_final_raw(df_final)
     _bp_col_final = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
     _cs_col_final = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
@@ -12661,41 +12643,61 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             _SKIP_CAP.add(_bc_upper)
         _DEMO = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
                  'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION'}
+        _gp_ref = _load_genpop_csv()
+        _gp_bp_map = {}
+        if _gp_ref is not None:
+            _gp_col_c = _gp_ref.columns[0]
+            _gp_col_v = _gp_ref.columns[1]
+            _gp_col_bp = _gp_ref.columns[2]
+            for _, _gpr in _gp_ref.iterrows():
+                _gc = str(_gpr[_gp_col_c]).strip().upper()
+                _gv = str(_gpr[_gp_col_v]).strip().upper()
+                try:
+                    _gp_bp_map[(_gc, _gv)] = float(_gpr[_gp_col_bp])
+                except (ValueError, TypeError):
+                    pass
         _bp_caps = 0
-        _raw_caps = 0
+        _bp_floors = 0
         for _idx, _row in df_final.iterrows():
             _cat = str(_row.get('Column', '')).strip().upper()
             if _cat in _SKIP_CAP or _cat in _DEMO:
                 continue
-            # Read BP — handle possible % suffix from AI agents
+            _val = str(_row.get('Value', '')).strip().upper()
             try:
                 _bp_v = float(str(_row.get(_bp_col_final, 0)).replace(',', '').replace('%', ''))
             except (ValueError, TypeError):
                 _bp_v = 0
-            # Read raw numbers
-            try:
-                _raw_v = int(float(str(_row.get('Original Raw Numbers', 0)).replace(',', '')))
-            except (ValueError, TypeError):
-                _raw_v = 0
-            # Cap raw numbers at sample size
-            if _raw_v > _ss_final:
-                _raw_v = _ss_final
-                df_final.at[_idx, 'Original Raw Numbers'] = str(_raw_v)
-                _raw_caps += 1
-            # Cap BP at 99.99%
-            if _bp_v > 99.99:
-                df_final.at[_idx, _bp_col_final] = 99.99
-                _capped_raw = max(1, int(round(99.99 / 100.0 * _ss_final)))
-                df_final.at[_idx, 'Original Raw Numbers'] = str(min(_raw_v, _capped_raw))
-                df_final.at[_idx, _cs_col_final] = 99.99
-                _bp_caps += 1
-            # Also fix BP values with stray % signs
-            elif isinstance(_row.get(_bp_col_final), str) and '%' in str(_row.get(_bp_col_final, '')):
+            _gp_bp = _gp_bp_map.get((_cat, _val), 0)
+            # Ceiling: prevent AI inflation above realistic levels
+            if _gp_bp > 0:
+                _ceiling = min(99.99, max(35.0, _gp_bp * 1.5))
+            else:
+                _ceiling = 35.0
+            # Floor: prevent mass-market items from being suppressed below reality
+            _floor = 0
+            if _gp_bp >= 40.0:
+                _floor = _gp_bp * 0.55
+            # Strip stray % signs
+            if isinstance(_row.get(_bp_col_final), str) and '%' in str(_row.get(_bp_col_final, '')):
                 df_final.at[_idx, _bp_col_final] = _bp_v
+            if _bp_v > _ceiling:
+                _new_bp = round(_ceiling, 4)
+                df_final.at[_idx, _bp_col_final] = _new_bp
+                _new_raw = max(1, int(round(_new_bp / 100.0 * _ss_final)))
+                df_final.at[_idx, 'Original Raw Numbers'] = str(_new_raw)
+                df_final.at[_idx, _cs_col_final] = _new_bp
+                _bp_caps += 1
+            elif _floor > 0 and _bp_v < _floor:
+                _new_bp = round(_floor, 4)
+                df_final.at[_idx, _bp_col_final] = _new_bp
+                _new_raw = max(1, int(round(_new_bp / 100.0 * _ss_final)))
+                df_final.at[_idx, 'Original Raw Numbers'] = str(_new_raw)
+                df_final.at[_idx, _cs_col_final] = _new_bp
+                _bp_floors += 1
         if _bp_caps:
-            print(f"   🔒 Capped {_bp_caps} items that exceeded 99.99% BP")
-        if _raw_caps:
-            print(f"   🔒 Capped {_raw_caps} items where raw numbers exceeded sample size")
+            print(f"   🔒 GenPop ceiling: capped {_bp_caps} behavioral items to realistic levels")
+        if _bp_floors:
+            print(f"   🔒 GenPop floor: raised {_bp_floors} mass-market items that were too low")
 
     # ── Final GPP recalc: ensures every row's US Gen Pop Projection = (Raw / 10M) * 329.9M
     df_final = add_us_gen_pop_projection(df_final)
@@ -12795,7 +12797,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                       'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
                       'INPUT_METADATA', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
     _col_values = df_final['Column'].astype(str).str.strip().str.upper().tolist()
-    for _fmt_col in ['Brand Penetration (Row)', 'Category Share']:
+    for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
         if _fmt_col not in df_final.columns:
             continue
         _formatted = []
