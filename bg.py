@@ -1518,8 +1518,7 @@ def validate_demographics(df, archetype, sample_size):
 
     df = df.copy()
     DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
-                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
-                 'LOCATION'}
+                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
     pct_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
     bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
     sample_size = max(int(float(sample_size)), 1)
@@ -12322,7 +12321,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         
         df_final = set_top_value_in_cap_range(df_final)
         
-        df_final = create_smooth_decay_from_locked_top(df_final)
+        # create_smooth_decay_from_locked_top DISABLED — it replaced ALL
+        # behavioral percentages with synthetic exponential decay curves,
+        # destroying the actual Snowflake signal.  The AI gut check now
+        # handles unrealistic values with full audience context.
+        # df_final = create_smooth_decay_from_locked_top(df_final)
         
         # Category caps removed per user request
         df_final = df_final
@@ -12535,11 +12538,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = rename_streaming_max_to_hbo_max_upper(df_final)
     df_final = cleanup_streaming_platforms(df_final)
 
-    # ── ANCHOR TO GEN POP (the core calibration step) ──────────────────
-    # Replaces all previous boost/scale/divide transformations with a
-    # single, clean index-and-anchor against the calibrated Gen Pop CSV.
-    print("🎯 Anchoring all values to Gen Pop baseline...")
-    df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
+    # ── ANCHOR TO GEN POP — DISABLED ────────────────────────────────────
+    # Was compressing ALL behavioral values to near-identical Gen Pop
+    # baselines (index clamped to ~0.4–2.2×), destroying the brand-specific
+    # signal from Snowflake.  The AI gut check (ai_final_gut_check) now
+    # serves as the single authoritative behavioral reviewer with full
+    # audience context, web research, and gen pop comparison.
+    print("⏭️  Skipping anchor_to_genpop — AI gut check handles validation")
 
     # ── AI-powered validation (demographics + behavioral gut-check) ────
     _archetype = None
