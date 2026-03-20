@@ -7769,8 +7769,32 @@ def _llmo_merge_search_theme_daily_payloads(payloads):
     }
 
 
+def _llmo_day_has_search_volume(day_blob):
+    """True if summary row has any non-empty search term with positive count."""
+    if not isinstance(day_blob, dict):
+        return False
+    for s in day_blob.get('searches') or []:
+        if not isinstance(s, dict):
+            continue
+        term = (s.get('term') or '').strip()
+        if not term:
+            continue
+        try:
+            cnt = int(round(float(s.get('count', 0))))
+        except (TypeError, ValueError):
+            cnt = 0
+        if cnt > 0:
+            return True
+    return False
+
+
 def _llmo_try_merge_search_themes_from_summary(summary_data, date_str, date_end):
-    """If every day in range has precomputed search_themes in the summary JSON, merge and return."""
+    """Merge precomputed search_themes for the range when every day is covered.
+
+    - Days with successful ``search_themes`` are merged normally.
+    - Days with no search volume may use ``search_themes: null`` (treated as empty success).
+    - If any day has searches but missing/failed ``search_themes``, return None (OpenAI path).
+    """
     if not summary_data or not isinstance(summary_data.get('by_date'), dict):
         return None
     by_date = summary_data['by_date']
@@ -7779,10 +7803,20 @@ def _llmo_try_merge_search_themes_from_summary(summary_data, date_str, date_end)
         return None
     payloads = []
     for d in matching:
-        st = (by_date.get(d) or {}).get('search_themes')
-        if not isinstance(st, dict) or not st.get('success'):
-            return None
-        payloads.append(st)
+        row = by_date.get(d) or {}
+        st = row.get('search_themes')
+        if isinstance(st, dict) and st.get('success'):
+            payloads.append(st)
+            continue
+        if not _llmo_day_has_search_volume(row):
+            payloads.append({
+                'success': True,
+                'version': 1,
+                'categories': [],
+                'meta': {'total_weight': 0, 'pii_weight': 0, 'queries_sent_to_model': 0, 'source': 'no_search_volume'},
+            })
+            continue
+        return None
     return _llmo_merge_search_theme_daily_payloads(payloads)
 
 
