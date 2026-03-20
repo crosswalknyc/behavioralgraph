@@ -15394,30 +15394,25 @@
 
                 <!-- LLM to Retailer (1st–3rd post-AI; HOST_MAPPING Where They Shop) -->
                 <div id="llmoRetailerConvSection" class="behavioral-card llmo-brand-conv-wrap" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1.5rem;">
-                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Percent of panelists who visited a retailer (Where They Shop in HOST_MAPPING) within 3 clicks post LLM usage. LLM % indexed to Gen Pop Where They Shop penetration (Profile IQ parity).">LLM to Retailer</h3>
+                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Retailers matched via Where They Shop (HOST_MAPPING) on 1st–3rd post-LLM click. &quot;Share&quot; is each retailer&apos;s percent of total retailer-conversion users in the date range. Index still uses % of AI users vs Gen Pop Where They Shop penetration.">LLM to Retailer</h3>
                     <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.75rem;">
                         <select id="llmoRetailerConvSlice" class="behavioral-slice-select" onchange="refreshLLMORetailerConversionTable()" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                             <option value="all">Show All</option>
                         </select>
                         <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                         <select id="llmoRetailerConvSort" class="behavioral-sort-select" onchange="refreshLLMORetailerConversionTable()" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
-                            <option value="pct" selected>% ↓</option>
+                            <option value="pct" selected>Share ↓</option>
                             <option value="index">Idx ↓</option>
                             <option value="genpop">GP ↓</option>
                             <option value="alpha">A-Z</option>
                         </select>
                         <input id="llmoRetailerConvSearch" type="text" placeholder="Search..." oninput="refreshLLMORetailerConversionTable()" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                     </div>
-                    <div class="llmo-attrib-chart-scroll">
-                        <div class="llmo-attrib-chart-inner">
-                            <canvas id="llmoRetailerConversionChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="behavioral-table" style="margin-top: 1rem;">
+                    <div class="behavioral-table" style="margin-top: 0.25rem;">
                         <div class="behavioral-header-row">
                             <span>#</span>
                             <span>Retailer</span>
-                            <span class="profile-col" id="llmoRetailerConvHProfile">LLM %</span>
+                            <span class="profile-col" id="llmoRetailerConvHProfile">Share %</span>
                             <span class="genpop-col" id="llmoRetailerConvHGenpop">Gen Pop</span>
                             <span class="index-col">Index</span>
                         </div>
@@ -17492,7 +17487,6 @@
         var _llmoAttributionChart2 = null;
         var _llmoAttributionChart3 = null;
         var _llmoBrandConversionChart = null;
-        var _llmoRetailerConversionChart = null;
         var _llmoBrandConvRows = [];
         var _llmoBrandConvTotUsers = 0;
         var _llmoRetailerConvRows = [];
@@ -17515,7 +17509,7 @@
         }
         function syncLLMOChartTooltips() {
             var en = _llmoTooltipsEnabled();
-            [_llmoCategoryShareChart, _llmoTrendChart, _llmoAttributionChart, _llmoAttributionChart2, _llmoAttributionChart3, _llmoBrandConversionChart, _llmoRetailerConversionChart, _llmoBrowserChart, _llmoPlatformChart, _llmoDemoTrendChart].forEach(function(ch) {
+            [_llmoCategoryShareChart, _llmoTrendChart, _llmoAttributionChart, _llmoAttributionChart2, _llmoAttributionChart3, _llmoBrandConversionChart, _llmoBrowserChart, _llmoPlatformChart, _llmoDemoTrendChart].forEach(function(ch) {
                 if (ch && ch.options && ch.options.plugins && ch.options.plugins.tooltip) {
                     ch.options.plugins.tooltip.enabled = en;
                     try { ch.update('none'); } catch (e) {}
@@ -18136,100 +18130,6 @@
             });
         }
 
-        function _llmoRenderRetailerConversionChart(top, totUsers) {
-            var ctx = document.getElementById('llmoRetailerConversionChart');
-            if (!ctx) return;
-            var inner = ctx.closest('.llmo-attrib-chart-inner');
-            if (!inner) inner = ctx.parentElement;
-            if (_llmoRetailerConversionChart) { _llmoRetailerConversionChart.destroy(); _llmoRetailerConversionChart = null; }
-            var fill = '#34D399';
-            if (!top || top.length === 0) {
-                if (inner) inner.style.height = '260px';
-                _llmoRetailerConversionChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: { labels: ['No data'], datasets: [{ data: [0], backgroundColor: 'rgba(255,255,255,0.08)' }] },
-                    options: {
-                        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                        plugins: { legend: { display: false }, tooltip: { enabled: _llmoTooltipsEnabled() } },
-                        scales: {
-                            x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
-                            y: { ticks: { color: '#e8e8e8' }, grid: { display: false } }
-                        }
-                    }
-                });
-                return;
-            }
-            var labels = top.map(function(r) {
-                var pct = (r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
-                    ? Number(r.pct_of_ai_users)
-                    : (totUsers > 0 ? Math.round((r.unique_users / totUsers) * 10000) / 100 : 0);
-                return r.name + ' · ' + pct + '%';
-            });
-            var values = top.map(function(r) { return r.unique_users_projected; });
-            if (inner) {
-                var n = Math.max(top.length, 1);
-                var innerH = Math.min(3000, Math.max(260, n * 26 + 72));
-                inner.style.height = innerH + 'px';
-            }
-            _llmoRetailerConversionChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Unique Users (US Gen Pop)',
-                        data: values,
-                        backgroundColor: fill,
-                        borderRadius: 4,
-                        barPercentage: 0.7
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            enabled: _llmoTooltipsEnabled(),
-                            callbacks: {
-                                title: function(items) {
-                                    if (!items || !items.length) return '';
-                                    var lab = items[0].label || '';
-                                    var ix = lab.indexOf(' · ');
-                                    return ix >= 0 ? lab.slice(0, ix) : lab;
-                                },
-                                label: function(c) {
-                                    var i = c.dataIndex;
-                                    var r = top[i];
-                                    var pct = (r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
-                                        ? Number(r.pct_of_ai_users)
-                                        : (totUsers > 0 ? Math.round((r.unique_users / totUsers) * 10000) / 100 : 0);
-                                    var lines = [
-                                        _llmoFmt(c.parsed.x) + ' users (US Gen Pop proj.)',
-                                        pct + '% of AI users (aggregate)'
-                                    ];
-                                    if (r.genpop_penetration != null && !isNaN(Number(r.genpop_penetration)))
-                                        lines.push('Gen Pop (Where They Shop): ' + Number(r.genpop_penetration).toFixed(2) + '%');
-                                    if (r.index_vs_genpop != null && !isNaN(Number(r.index_vs_genpop)))
-                                        lines.push('Index: ' + formatIndex(r.index_vs_genpop));
-                                    return lines;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            ticks: { color: '#e8e8e8' },
-                            grid: { color: 'rgba(255,255,255,0.06)' },
-                            beginAtZero: true,
-                            title: { display: true, text: 'Projected unique users', color: 'var(--text-secondary)', font: { size: 11 } }
-                        },
-                        y: { ticks: { color: '#e8e8e8', font: { size: 10 } }, grid: { display: false } }
-                    }
-                }
-            });
-        }
-
         function refreshLLMORetailerConversionTable() {
             var sec = document.getElementById('llmoRetailerConvSection');
             if (sec && typeof dashDisplayMode !== 'undefined') {
@@ -18238,7 +18138,7 @@
             var hp = document.getElementById('llmoRetailerConvHProfile');
             var hg = document.getElementById('llmoRetailerConvHGenpop');
             var isProj = (typeof dashDisplayMode !== 'undefined' && dashDisplayMode === 'projection');
-            if (hp) hp.textContent = isProj ? 'US #' : 'LLM %';
+            if (hp) hp.textContent = isProj ? 'US #' : 'Share %';
             if (hg) hg.textContent = isProj ? 'GP #' : 'Gen Pop';
 
             var listEl = document.getElementById('llmoRetailerConvList');
@@ -18281,7 +18181,9 @@
                 if (isProj) {
                     rows.sort(function(a, b) { return (b.unique_users_projected || 0) - (a.unique_users_projected || 0); });
                 } else {
-                    rows.sort(function(a, b) { return (Number(b.pct_of_ai_users) || 0) - (Number(a.pct_of_ai_users) || 0); });
+                    rows.sort(function(a, b) {
+                        return (Number(b.category_share) || 0) - (Number(a.category_share) || 0);
+                    });
                 }
             }
 
@@ -18295,11 +18197,12 @@
                 listEl.innerHTML = displayRows.map(function(item) {
                     var index = item.index_vs_genpop != null ? Number(item.index_vs_genpop) : 0;
                     var genPopPct = item.genpop_penetration != null ? Number(item.genpop_penetration) : 0;
-                    var profilePct = item.pct_of_ai_users != null ? Number(item.pct_of_ai_users) : 0;
+                    var catShare = item.category_share != null ? Number(item.category_share) : 0;
                     var indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                    var shareStr = (catShare == null || isNaN(catShare) || catShare === 0) ? 'N/A' : catShare.toFixed(2) + '%';
                     var profileDisplay = isProj
                         ? (!item.unique_users_projected ? 'N/A' : formatNumber(Math.round(item.unique_users_projected)))
-                        : formatValueOrNA(profilePct, true);
+                        : shareStr;
                     var genPopProj = genPopPct > 0 ? Math.round(US_POP * (genPopPct / 100)) : 0;
                     var genPopDisplay = isProj
                         ? (genPopProj === 0 ? 'N/A' : formatNumber(genPopProj))
@@ -18315,9 +18218,6 @@
                         '</div>';
                 }).join('');
             }
-
-            _llmoRenderRetailerConversionChart(displayRows.slice(0, 100), _llmoRetailerConvTotUsers);
-            if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
         }
 
         function renderLLMORetailerConversion(data) {
@@ -18331,7 +18231,7 @@
             if (sortSel) {
                 var po = sortSel.querySelector('option[value="pct"]');
                 if (po && typeof dashDisplayMode !== 'undefined') {
-                    po.textContent = dashDisplayMode === 'projection' ? '# ↓' : '% ↓';
+                    po.textContent = dashDisplayMode === 'projection' ? '# ↓' : 'Share ↓';
                 }
             }
             refreshLLMORetailerConversionTable();
@@ -30617,11 +30517,17 @@
             
             // Update behavioral sort dropdowns
             document.querySelectorAll('.behavioral-sort-select').forEach(select => {
+                if (select.id === 'llmoRetailerConvSort') return;
                 const pctOption = select.querySelector('option[value="pct"]');
                 if (pctOption) {
                     pctOption.textContent = newLabel;
                 }
             });
+            var llmRetSort = document.getElementById('llmoRetailerConvSort');
+            if (llmRetSort) {
+                var ro = llmRetSort.querySelector('option[value="pct"]');
+                if (ro) ro.textContent = dashDisplayMode === 'projection' ? '# ↓' : 'Share ↓';
+            }
             
             // Update other sort dropdowns (affinity, interests, etc.)
             document.querySelectorAll('.affinity-sort-select, #interestsSortSelect').forEach(select => {

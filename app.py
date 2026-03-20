@@ -7422,12 +7422,15 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
     } for _, v in bc_sorted]
     brand_conversion = _llmo_enrich_brand_conversion_rows(brand_conversion)
 
+    total_retailer_uu = sum(v['uu'] for v in retailer_conv_agg.values()) if retailer_conv_agg else 0
     rt_sorted = sorted(retailer_conv_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
     retailer_conversion = [{
         'name': v['display'],
         'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
         'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M),
         'pct_of_ai_users': round(v['uu'] / total_users * 100, 2) if total_users else 0,
+        # Share of retailer-conversion volume (unique users) across the selected range — sums to 100% over full agg
+        'category_share': round(v['uu'] / total_retailer_uu * 100, 2) if total_retailer_uu else 0,
     } for _, v in rt_sorted]
     retailer_conversion = _llmo_enrich_retailer_conversion_rows(retailer_conversion)
 
