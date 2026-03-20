@@ -16,6 +16,27 @@ s3 = boto3.client('s3', region_name='us-east-2')
 search_pattern = re.compile(r'[?&](?:q|query|p|search|prompt|text)=([^&]+)', re.IGNORECASE)
 
 
+def explode_pipe_column(df, col='COMMON_NAME'):
+    """One row per pipe-separated token; empty/whitespace parts dropped; blank -> Unknown."""
+    if df.empty:
+        return df
+    d = df.copy()
+
+    def _parts(val):
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return ['Unknown']
+        s = str(val).strip()
+        if not s:
+            return ['Unknown']
+        out = [p.strip() for p in s.split('|') if p.strip()]
+        return out if out else ['Unknown']
+
+    d['_pipe_parts'] = d[col].map(_parts)
+    d = d.explode('_pipe_parts').reset_index(drop=True)
+    d[col] = d['_pipe_parts']
+    return d.drop(columns=['_pipe_parts'])
+
+
 def extract_search(url):
     if not isinstance(url, str):
         return None
@@ -51,13 +72,15 @@ def compute_date_summary(day_df):
     total_ai_users = int(ai['UID'].nunique())
     total_ai_clicks = int(len(ai))
 
-    llm_grp = ai.groupby('COMMON_NAME').agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
+    ai_exp = explode_pipe_column(ai, 'COMMON_NAME')
+    llm_grp = ai_exp.groupby('COMMON_NAME').agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
     llm_grp = llm_grp.sort_values('uu', ascending=False)
     llms = [{'name': str(r['COMMON_NAME'] or 'Unknown'), 'unique_users': int(r['uu']), 'total_clicks': int(r['cl'])}
             for _, r in llm_grp.iterrows()]
 
     post_v = post[post['COMMON_NAME'].notna() & (post['COMMON_NAME'] != '')]
-    att_grp = post_v.groupby('COMMON_NAME').agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
+    post_exp = explode_pipe_column(post_v, 'COMMON_NAME')
+    att_grp = post_exp.groupby('COMMON_NAME').agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
     att_grp = att_grp.sort_values('uu', ascending=False).head(100)
     attribution = [{'name': str(r['COMMON_NAME'] or 'Unknown'), 'unique_users': int(r['uu']), 'total_clicks': int(r['cl'])}
                    for _, r in att_grp.iterrows()]
@@ -69,7 +92,20 @@ def compute_date_summary(day_df):
             & flow_df['prev_name'].notna() & flow_df['COMMON_NAME'].notna() & (flow_df['COMMON_NAME'] != ''))
     ff = flow_df[mask]
     if not ff.empty:
-        fg = ff.groupby(['prev_name', 'COMMON_NAME']).agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
+        flow_rows = []
+        for _, row in ff.iterrows():
+            ps = [p.strip() for p in str(row['prev_name']).split('|') if p.strip()]
+            ds = [p.strip() for p in str(row['COMMON_NAME']).split('|') if p.strip()]
+            if not ps:
+                ps = ['Unknown']
+            if not ds:
+                ds = ['Unknown']
+            uid = row['UID']
+            for s in ps:
+                for t in ds:
+                    flow_rows.append({'prev_name': s, 'COMMON_NAME': t, 'UID': uid})
+        ff_exp = pd.DataFrame(flow_rows)
+        fg = ff_exp.groupby(['prev_name', 'COMMON_NAME']).agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
         fg = fg.sort_values('uu', ascending=False).head(100)
         flows = [{'source': str(r['prev_name']), 'destination': str(r['COMMON_NAME']),
                   'unique_users': int(r['uu']), 'clicks': int(r['cl'])} for _, r in fg.iterrows()]

@@ -7071,6 +7071,17 @@ def llmo_iq_dates():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _llmo_split_multi_names(name):
+    """Split COMMON_NAME-style values on '|' into separate entities; empty -> ['Unknown']."""
+    if name is None:
+        return ['Unknown']
+    s = str(name).strip()
+    if not s:
+        return ['Unknown']
+    parts = [p.strip() for p in s.split('|') if p.strip()]
+    return parts if parts else ['Unknown']
+
+
 def _llmo_combine_date_range(summary_data, date_str, date_end):
     """Combine pre-computed per-date stats for a date range. Returns API response dict."""
     from collections import defaultdict
@@ -7105,29 +7116,44 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         total_clicks += day.get('total_ai_clicks', 0)
 
         for llm in day.get('llms', []):
-            llm_agg[llm['name']]['uu'] += llm['unique_users']
-            llm_agg[llm['name']]['cl'] += llm['total_clicks']
-            nm = llm['name']
-            if nm not in trend_by_llm:
-                trend_by_llm[nm] = {}
-            trend_by_llm[nm][d] = {'unique_users': round(llm['unique_users'] * M), 'total_clicks': round(llm['total_clicks'] * M)}
+            uu, cl = llm['unique_users'], llm['total_clicks']
+            for nm in _llmo_split_multi_names(llm.get('name')):
+                llm_agg[nm]['uu'] += uu
+                llm_agg[nm]['cl'] += cl
+                if nm not in trend_by_llm:
+                    trend_by_llm[nm] = {}
+                td = trend_by_llm[nm].setdefault(d, {'unique_users': 0, 'total_clicks': 0})
+                td['unique_users'] += round(uu * M)
+                td['total_clicks'] += round(cl * M)
 
         for att in day.get('attribution', []):
-            att_agg[att['name']]['uu'] += att['unique_users']
-            att_agg[att['name']]['cl'] += att['total_clicks']
+            uu, cl = att['unique_users'], att['total_clicks']
+            for nm in _llmo_split_multi_names(att.get('name')):
+                att_agg[nm]['uu'] += uu
+                att_agg[nm]['cl'] += cl
 
         for att in day.get('attribution_second', []):
-            att2_agg[att['name']]['uu'] += att['unique_users']
-            att2_agg[att['name']]['cl'] += att['total_clicks']
+            uu, cl = att['unique_users'], att['total_clicks']
+            for nm in _llmo_split_multi_names(att.get('name')):
+                att2_agg[nm]['uu'] += uu
+                att2_agg[nm]['cl'] += cl
 
         for att in day.get('attribution_third', []):
-            att3_agg[att['name']]['uu'] += att['unique_users']
-            att3_agg[att['name']]['cl'] += att['total_clicks']
+            uu, cl = att['unique_users'], att['total_clicks']
+            for nm in _llmo_split_multi_names(att.get('name')):
+                att3_agg[nm]['uu'] += uu
+                att3_agg[nm]['cl'] += cl
 
         for fl in day.get('flows', []):
-            key = (fl['source'], fl['destination'])
-            flow_agg[key]['uu'] += fl['unique_users']
-            flow_agg[key]['cl'] += fl['clicks']
+            src_parts = _llmo_split_multi_names(fl.get('source'))
+            dst_parts = _llmo_split_multi_names(fl.get('destination'))
+            uu, cl = fl['unique_users'], fl['clicks']
+            n_pairs = max(1, len(src_parts) * len(dst_parts))
+            w = 1.0 / n_pairs
+            for s in src_parts:
+                for t in dst_parts:
+                    flow_agg[(s, t)]['uu'] += uu * w
+                    flow_agg[(s, t)]['cl'] += cl * w
 
         for s in day.get('searches', []):
             search_agg[s['term']] += s['count']
