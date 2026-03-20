@@ -153,10 +153,11 @@ JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persis
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
 TICKET_SALES_S3_BUCKET = 'ticket-sales-iq'  # Bucket for Ticket Sales IQ (talent-to-theater attribution)
 TICKET_SALES_TRACKER_S3_BUCKET = 'ticket-sales-tracker'  # Bucket for Ticket Sales Tracker (movie viewers → theater)
-# LLMO IQ: daily rollup produced by build_llmo_summary.py (separate bucket from dashboard-inputs)
+# LLMO IQ — /api/llmo-iq/* + _llmo_* (rollup from build_llmo_summary.py on S3)
+LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000
 LLMO_S3_BUCKET = os.environ.get('LLMO_S3_BUCKET', 'llmo')
-LLMO_SUMMARY_KEY = os.environ.get('LLMO_SUMMARY_KEY', 'processed/llmo_daily_summary.json.gz')
-LLMO_SUMMARY_MAX_DATES = int(os.environ.get('LLMO_SUMMARY_MAX_DATES', '120'))
+LLMO_SUMMARY_PREFIX = os.environ.get('LLMO_SUMMARY_PREFIX', 'processed/llmo_daily_summary')
+LLMO_CACHE_TTL = int(os.environ.get('LLMO_CACHE_TTL', '86400'))
 # FORCE us-east-2 - all buckets are in this region, ignore AWS_REGION env var if set
 S3_REGION = 'us-east-2'
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
@@ -5103,50 +5104,6 @@ def _current_user_has_llmo_iq_access():
     return bool(acc.get('has_llmo_iq_access'))
 
 
-@app.route('/api/llmo/summary', methods=['GET'])
-@requires_auth
-def api_llmo_summary():
-    """Serve gzipped LLMO daily rollup from S3 (same artifact as build_llmo_summary.py)."""
-    if not _current_user_has_llmo_iq_access():
-        return jsonify({'success': False, 'error': 'LLMO IQ access denied'}), 403
-    if not s3_client:
-        return jsonify({'success': False, 'error': 'S3 not available'}), 503
-    try:
-        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_SUMMARY_KEY)
-        raw = resp['Body'].read()
-        try:
-            text = gzip.decompress(raw).decode('utf-8')
-        except Exception:
-            text = raw.decode('utf-8')
-        data = json.loads(text)
-        dates = list(data.get('dates') or [])
-        by_date = data.get('by_date') or {}
-        dates = dates[: max(1, LLMO_SUMMARY_MAX_DATES)]
-        slim_by = {d: by_date[d] for d in dates if d in by_date}
-        return jsonify({
-            'success': True,
-            'bucket': LLMO_S3_BUCKET,
-            'key': LLMO_SUMMARY_KEY,
-            'dates': dates,
-            'by_date': slim_by,
-        })
-    except ClientError as e:
-        code = (e.response or {}).get('Error', {}).get('Code', '')
-        if code in ('NoSuchKey', '404'):
-            return jsonify({
-                'success': False,
-                'error': 'no_data',
-                'message': 'No LLMO summary found yet. Run build_llmo_summary.py to populate s3://%s/%s'
-                           % (LLMO_S3_BUCKET, LLMO_SUMMARY_KEY),
-            }), 200
-        print(f'⚠️ api_llmo_summary S3 error: {e}')
-        return jsonify({'success': False, 'error': 'S3 read failed', 'details': str(e)}), 502
-    except Exception as e:
-        print(f'⚠️ api_llmo_summary error: {e}')
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 @app.route('/')
 @requires_auth
 def index():
@@ -6941,6 +6898,428 @@ def get_goodshort_ranker_data():
         print(f"[GoodShort Ranker] Error: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+import threading as _llmo_threading
+_llmo_cache = {'summary': None, 'loaded_at': 0, 'loading': False,
+               'lock': _llmo_threading.Lock(), 'stage': ''}
+
+
+def _llmo_find_summary_key():
+    """Find the actual S3 key for the summary JSON (Snowflake may add suffixes)."""
+    fixed = (os.environ.get('LLMO_SUMMARY_KEY') or '').strip()
+    if fixed:
+        return fixed
+    try:
+        resp = s3_client.list_objects_v2(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_SUMMARY_PREFIX, MaxKeys=10)
+        for obj in resp.get('Contents', []):
+            if 'summary' in obj['Key'] and obj['Size'] > 100:
+                return obj['Key']
+    except Exception:
+        pass
+    return LLMO_SUMMARY_PREFIX + '.json.gz'
+
+
+def _llmo_load_summary():
+    """Download the pre-computed summary JSON from S3 (~2-5 MB). Returns dict or None."""
+    import gzip, json, time as _time
+    if not s3_client:
+        return None
+    try:
+        t0 = _time.time()
+        _llmo_cache['stage'] = 'Downloading summary...'
+        key = _llmo_find_summary_key()
+        print(f"[LLMO S3] Loading summary from s3://{LLMO_S3_BUCKET}/{key}")
+        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=key)
+        raw = resp['Body'].read()
+        try:
+            text = gzip.decompress(raw).decode('utf-8')
+        except Exception:
+            text = raw.decode('utf-8')
+        data = json.loads(text)
+        if isinstance(data, list) and len(data) == 1:
+            data = data[0]
+        if 'dates' not in data and 'by_date' not in data:
+            for k, v in data.items():
+                if isinstance(v, dict) and 'dates' in v:
+                    data = v
+                    break
+        elapsed = _time.time() - t0
+        print(f"[LLMO S3] Loaded summary: {len(data.get('dates', []))} dates, "
+              f"{len(raw)/1e6:.1f} MB in {elapsed:.1f}s")
+        return data
+    except Exception as e:
+        print(f"[LLMO S3] Summary load failed: {e}")
+        return None
+
+
+def _llmo_do_background_load():
+    """Background worker: download and cache the summary JSON."""
+    import time as _time
+    print("[LLMO S3] Loading summary from S3...")
+    t0 = _time.time()
+    try:
+        data = _llmo_load_summary()
+        if data is None:
+            print("[LLMO S3] No summary found on S3. Run build_llmo_summary.py to create it.")
+            with _llmo_cache['lock']:
+                _llmo_cache['loading'] = False
+                _llmo_cache['stage'] = ''
+            return
+
+        elapsed = _time.time() - t0
+        print(f"[LLMO S3] Ready: {len(data.get('dates', []))} dates in {elapsed:.1f}s")
+        with _llmo_cache['lock']:
+            _llmo_cache['summary'] = data
+            _llmo_cache['loaded_at'] = _time.time()
+            _llmo_cache['loading'] = False
+            _llmo_cache['stage'] = ''
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[LLMO S3] Background load failed: {e}")
+        with _llmo_cache['lock']:
+            _llmo_cache['loading'] = False
+            _llmo_cache['stage'] = ''
+
+
+def _llmo_ensure_loaded():
+    """Return cached summary dict if ready, or kick off background load. Returns None while loading."""
+    import time as _time
+    now = _time.time()
+    with _llmo_cache['lock']:
+        if _llmo_cache['summary'] is not None and (now - _llmo_cache['loaded_at']) < LLMO_CACHE_TTL:
+            return _llmo_cache['summary']
+        if not _llmo_cache['loading']:
+            _llmo_cache['loading'] = True
+            _llmo_cache['stage'] = 'Starting...'
+            t = _llmo_threading.Thread(target=_llmo_do_background_load, daemon=True)
+            t.start()
+        return None
+
+
+def _llmo_daily_scheduler():
+    """Background thread: loads summary on startup, refreshes daily at 5:45 AM PST."""
+    import time as _time
+    from datetime import datetime, timedelta
+    try:
+        import pytz
+        pst = pytz.timezone('US/Pacific')
+    except ImportError:
+        from datetime import timezone
+        pst = timezone(timedelta(hours=-8))
+
+    print("[LLMO Scheduler] Startup: loading summary from S3...")
+    _llmo_do_background_load()
+
+    while True:
+        now = datetime.now(pst)
+        target = now.replace(hour=5, minute=45, second=0, microsecond=0)
+        if now >= target:
+            target += timedelta(days=1)
+        wait_secs = (target - now).total_seconds()
+        print(f"[LLMO Scheduler] Next refresh at {target.strftime('%Y-%m-%d %H:%M %Z')} ({wait_secs/3600:.1f}h from now)")
+        _time.sleep(wait_secs)
+        print("[LLMO Scheduler] Daily refresh: reloading summary from S3...")
+        with _llmo_cache['lock']:
+            _llmo_cache['summary'] = None
+            _llmo_cache['loaded_at'] = 0
+        _llmo_do_background_load()
+
+
+if s3_client:
+    _llmo_scheduler_thread = _llmo_threading.Thread(target=_llmo_daily_scheduler, daemon=True)
+    _llmo_scheduler_thread.start()
+    print("[LLMO Scheduler] Background thread started (startup load + daily 5:45 AM PST refresh)")
+else:
+    print("[LLMO Scheduler] Skipped (no S3 client)")
+
+
+@app.route('/api/cron/llmo-prewarm', methods=['POST'])
+def cron_llmo_prewarm():
+    """Reload LLMO summary JSON from S3. Called by external cron to refresh after daily build.
+    Requires CRON_SECRET via header or query param."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    if not secret or secret != os.environ.get('CRON_SECRET', ''):
+        return jsonify({'error': 'Unauthorized'}), 403
+    with _llmo_cache['lock']:
+        if _llmo_cache['loading']:
+            return jsonify({'success': True, 'message': 'Already loading, skipped'})
+        _llmo_cache['summary'] = None
+        _llmo_cache['loaded_at'] = 0
+    t = _llmo_threading.Thread(target=_llmo_do_background_load, daemon=True)
+    t.start()
+    return jsonify({'success': True, 'message': 'LLMO summary reload started'})
+
+
+@app.route('/api/llmo-iq/dates', methods=['GET'])
+@requires_auth
+def llmo_iq_dates():
+    """Return available DELIVERED dates from pre-computed summary."""
+    if not _current_user_has_llmo_iq_access():
+        return jsonify({'success': False, 'error': 'LLMO IQ access denied'}), 403
+    try:
+        data = _llmo_ensure_loaded()
+        if data is None:
+            loaded = _llmo_cache.get('loaded_files', 0)
+            total = _llmo_cache.get('total_files', 0)
+            stage = _llmo_cache.get('stage', '')
+            return jsonify({'success': True, 'loading': True, 'dates': [],
+                            'loaded_files': loaded, 'total_files': total,
+                            'stage': stage})
+        return jsonify({'success': True, 'loading': False, 'dates': data.get('dates', [])})
+    except Exception as e:
+        print(f"[LLMO IQ dates] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _llmo_combine_date_range(summary_data, date_str, date_end):
+    """Combine pre-computed per-date stats for a date range. Returns API response dict."""
+    from collections import defaultdict
+    M = LLMO_PROJECTION_MULT
+    by_date = summary_data.get('by_date', {})
+
+    matching_dates = sorted(d for d in by_date if d >= date_str and d <= date_end)
+    if not matching_dates:
+        return {'success': True, 'loading': False, 'date': date_str, 'date_end': date_end,
+                'total_unique_users': 0, 'total_unique_users_projected': 0,
+                'total_clicks': 0, 'total_clicks_projected': 0,
+                'llm_count': 0, 'llms': [], 'attribution': [], 'flows': [],
+                'searches': [], 'trend_dates': [], 'trend_by_llm': {},
+                'browsers': [], 'platforms': []}
+
+    llm_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
+    att_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
+    flow_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
+    search_agg = defaultdict(int)
+    browser_agg = defaultdict(int)
+    platform_agg = defaultdict(int)
+    total_users = 0
+    total_clicks = 0
+    trend_by_llm = {}
+
+    for d in matching_dates:
+        day = by_date[d]
+        total_users += day.get('total_ai_users', 0)
+        total_clicks += day.get('total_ai_clicks', 0)
+
+        for llm in day.get('llms', []):
+            llm_agg[llm['name']]['uu'] += llm['unique_users']
+            llm_agg[llm['name']]['cl'] += llm['total_clicks']
+            nm = llm['name']
+            if nm not in trend_by_llm:
+                trend_by_llm[nm] = {}
+            trend_by_llm[nm][d] = {'unique_users': round(llm['unique_users'] * M), 'total_clicks': round(llm['total_clicks'] * M)}
+
+        for att in day.get('attribution', []):
+            att_agg[att['name']]['uu'] += att['unique_users']
+            att_agg[att['name']]['cl'] += att['total_clicks']
+
+        for fl in day.get('flows', []):
+            key = (fl['source'], fl['destination'])
+            flow_agg[key]['uu'] += fl['unique_users']
+            flow_agg[key]['cl'] += fl['clicks']
+
+        for s in day.get('searches', []):
+            search_agg[s['term']] += s['count']
+
+        for b in day.get('browsers', []):
+            browser_agg[b['name']] += b['unique_users']
+
+        for p in day.get('platforms', []):
+            platform_agg[p['name']] += p['unique_users']
+
+    total_clicks_all = sum(v['cl'] for v in llm_agg.values())
+    llm_sorted = sorted(llm_agg.items(), key=lambda x: x[1]['uu'], reverse=True)
+    llm_data = []
+    for rank, (name, v) in enumerate(llm_sorted, 1):
+        uu, cl = v['uu'], v['cl']
+        llm_data.append({
+            'rank': rank, 'name': name,
+            'unique_users': uu, 'unique_users_projected': round(uu * M),
+            'pct_of_total': round(uu / total_users * 100, 2) if total_users else 0,
+            'total_clicks': cl, 'total_clicks_projected': round(cl * M),
+            'category_share': round(cl / total_clicks_all * 100, 2) if total_clicks_all else 0,
+        })
+
+    att_sorted = sorted(att_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:50]
+    attribution = [{'name': n, 'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
+                    'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M)}
+                   for n, v in att_sorted]
+
+    flow_sorted = sorted(flow_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
+    flows = [{'source': k[0], 'destination': k[1],
+              'unique_users': round(v['uu'] * M), 'clicks': round(v['cl'] * M)}
+             for k, v in flow_sorted]
+
+    search_sorted = sorted(search_agg.items(), key=lambda x: x[1], reverse=True)[:50]
+    searches = [{'term': t, 'count': round(c * M)} for t, c in search_sorted]
+
+    browsers = [{'name': n, 'unique_users': round(u * M)} for n, u in sorted(browser_agg.items(), key=lambda x: x[1], reverse=True)]
+    platforms = [{'name': n, 'unique_users': round(u * M)} for n, u in sorted(platform_agg.items(), key=lambda x: x[1], reverse=True)]
+
+    return {
+        'success': True, 'loading': False,
+        'date': date_str, 'date_end': date_end,
+        'total_unique_users': total_users,
+        'total_unique_users_projected': round(total_users * M),
+        'total_clicks': total_clicks,
+        'total_clicks_projected': round(total_clicks * M),
+        'llm_count': len(llm_data), 'llms': llm_data,
+        'attribution': attribution, 'flows': flows,
+        'searches': searches,
+        'trend_dates': matching_dates, 'trend_by_llm': trend_by_llm,
+        'browsers': browsers, 'platforms': platforms,
+    }
+
+
+@app.route('/api/llmo-iq/data', methods=['GET'])
+@requires_auth
+def llmo_iq_data():
+    """Return core LLMO IQ dashboard data from pre-computed summary."""
+    if not _current_user_has_llmo_iq_access():
+        return jsonify({'success': False, 'error': 'LLMO IQ access denied'}), 403
+    date_str = request.args.get('date')
+    date_end = request.args.get('date_end')
+    if not date_str:
+        date_str = datetime.now().strftime('%Y-%m-%d')
+    if not date_end:
+        date_end = date_str
+
+    try:
+        summary = _llmo_ensure_loaded()
+        if summary is None:
+            loaded = _llmo_cache.get('loaded_files', 0)
+            total = _llmo_cache.get('total_files', 0)
+            stage = _llmo_cache.get('stage', '')
+            return jsonify({'success': True, 'loading': True,
+                            'loaded_files': loaded, 'total_files': total,
+                            'stage': stage})
+
+        result = _llmo_combine_date_range(summary, date_str, date_end)
+        return jsonify(result)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[LLMO IQ data] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/llmo-iq/demographics', methods=['GET'])
+@requires_auth
+def llmo_iq_demographics():
+    """Return demographic breakdown for LLMO users from Snowflake (async load)."""
+    if not _current_user_has_llmo_iq_access():
+        return jsonify({'success': False, 'error': 'LLMO IQ access denied'}), 403
+    import datetime as _dt
+    date_str = request.args.get('date')
+    date_end = request.args.get('date_end')
+    if not date_str:
+        date_str = datetime.now().strftime('%Y-%m-%d')
+    if not date_end:
+        date_end = date_str
+
+    try:
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        cur = conn.cursor()
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+
+        params = (date_str, date_end)
+
+        cur.execute("""
+            CREATE OR REPLACE TEMP TABLE TEMP_LLMO_AI_UIDS AS
+            SELECT DISTINCT UID, DELIVERED::DATE AS d
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+            WHERE MATCH_TYPE = 'AI_AGENT'
+              AND DELIVERED::DATE BETWEEN %s AND %s
+        """, params)
+
+        cur.execute("""
+            SELECT 'gender' AS cat, d.GENDER AS val, COUNT(DISTINCT u.UID) AS cnt
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.GENDER IS NOT NULL AND TRIM(d.GENDER) != '' AND UPPER(TRIM(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.GENDER
+            UNION ALL
+            SELECT 'age', d.AGE, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.AGE IS NOT NULL AND TRIM(d.AGE) != '' AND UPPER(TRIM(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.AGE
+            UNION ALL
+            SELECT 'ethnicity', d.ETHNICITY, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.ETHNICITY IS NOT NULL AND TRIM(d.ETHNICITY) != '' AND UPPER(TRIM(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.ETHNICITY
+            UNION ALL
+            SELECT 'income', d.INCOME, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.INCOME IS NOT NULL AND TRIM(d.INCOME) != '' AND UPPER(TRIM(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.INCOME
+            UNION ALL
+            SELECT 'education', d.EDUCATION, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.EDUCATION IS NOT NULL AND TRIM(d.EDUCATION) != '' AND UPPER(TRIM(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.EDUCATION
+        """)
+        overall_rows = cur.fetchall()
+
+        cur.execute("""
+            SELECT 'gender' AS cat, u.d, d.GENDER AS val, COUNT(DISTINCT u.UID) AS cnt
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.GENDER IS NOT NULL AND TRIM(d.GENDER) != '' AND UPPER(TRIM(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.GENDER
+            UNION ALL
+            SELECT 'age', u.d, d.AGE, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.AGE IS NOT NULL AND TRIM(d.AGE) != '' AND UPPER(TRIM(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.AGE
+            UNION ALL
+            SELECT 'ethnicity', u.d, d.ETHNICITY, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.ETHNICITY IS NOT NULL AND TRIM(d.ETHNICITY) != '' AND UPPER(TRIM(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.ETHNICITY
+            UNION ALL
+            SELECT 'income', u.d, d.INCOME, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.INCOME IS NOT NULL AND TRIM(d.INCOME) != '' AND UPPER(TRIM(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.INCOME
+            UNION ALL
+            SELECT 'education', u.d, d.EDUCATION, COUNT(DISTINCT u.UID)
+            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
+            WHERE d.EDUCATION IS NOT NULL AND TRIM(d.EDUCATION) != '' AND UPPER(TRIM(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.EDUCATION
+        """)
+        trend_rows = cur.fetchall()
+        conn.close()
+
+        cat_data = {}
+        for r in overall_rows:
+            cat, val, cnt = r
+            cat_data.setdefault(cat, []).append((val, cnt))
+        demographics = {}
+        for cat, items in cat_data.items():
+            items.sort(key=lambda x: -x[1])
+            total_d = sum(x[1] for x in items)
+            demographics[cat] = [{'value': v, 'count': c, 'pct': round(c / total_d * 100, 2) if total_d else 0} for v, c in items]
+
+        trend_data = {}
+        for r in trend_rows:
+            cat, d, val, cnt = r
+            d_str = str(d)
+            trend_data.setdefault(cat, {}).setdefault(d_str, []).append({'value': val, 'count': cnt})
+        demo_trend = {}
+        for cat, by_date in trend_data.items():
+            for d_str, items in by_date.items():
+                total_d = sum(x['count'] for x in items)
+                for x in items:
+                    x['pct'] = round(x['count'] / total_d * 100, 2) if total_d else 0
+            demo_trend[cat] = by_date
+
+        return jsonify({'success': True, 'demographics': demographics, 'demo_trend': demo_trend})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[LLMO IQ demographics] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
 
 # ============================================================================
 # NETFLIX LIVE TOP 10 - Real-time Netflix viewing data from S3
