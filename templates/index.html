@@ -15526,7 +15526,7 @@
                 <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- Source LLM -> Destination Flows -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
-                        <h3 class="has-tooltip" style="margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="First post-AI click after an AI agent visit. Destination type uses Gen Pop lists: Brand = MOST PURCHASED BRANDS values; Retailer = WHERE THEY SHOP values (pipe-split names matched case-insensitively).">AI Agent → Destination Flows</h3>
+                        <h3 class="has-tooltip" style="margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Each row is Source LLM (last AI agent before the click) → destination site/brand. Counts include 1st, 2nd, and 3rd post-AI clicks (same scope as LLM→Brand and LLM→Retailer charts). Brand / Retailer filters use Gen Pop lists: MOST PURCHASED BRANDS vs WHERE THEY SHOP (pipe-split tokens, case-insensitive).">AI Agent → Destination Flows</h3>
                         <div class="behavioral-filter llmo-flows-toolbar" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.65rem;">
                             <span style="font-size: 0.65rem; color: var(--text-secondary); white-space: nowrap;">Destination:</span>
                             <select id="llmoFlowsCategory" onchange="refreshLLMOFlowsTable()" style="flex: 1; min-width: 100px; padding: 0.3rem 0.45rem; font-size: 0.72rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
