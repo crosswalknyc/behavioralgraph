@@ -15491,14 +15491,14 @@
 
                 <!-- LLM to Brand Conversion (1st–3rd post-AI; HOST_MAPPING Most Purchased Brands) — after 1st/2nd/3rd attribution charts -->
                 <div id="llmoBrandConvSection" class="behavioral-card llmo-brand-conv-wrap" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1.5rem;">
-                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Percent of panelists who visited a brand (owned and via wholesale) within 3 clicks post LLM usage. LLM % indexed to Gen Pop brand penetration (same baseline as Profile IQ).">LLM to Brand Conversion</h3>
+                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Brands matched via Most Purchased Brands (HOST_MAPPING) on 1st–3rd post-LLM click. &quot;Share&quot; is each brand&apos;s percent of total brand-conversion users in the date range (same idea as LLM to Retailer). Index still uses % of AI users vs Gen Pop MPB penetration.">LLM to Brand Conversion</h3>
                     <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.75rem;">
                         <select id="llmoBrandConvSlice" class="behavioral-slice-select" onchange="refreshLLMOBrandConversionTable()" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                             <option value="all">Show All</option>
                         </select>
                         <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                         <select id="llmoBrandConvSort" class="behavioral-sort-select" onchange="refreshLLMOBrandConversionTable()" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
-                            <option value="pct" selected>% ↓</option>
+                            <option value="pct" selected>Share ↓</option>
                             <option value="index">Idx ↓</option>
                             <option value="genpop">GP ↓</option>
                             <option value="alpha">A-Z</option>
@@ -15514,7 +15514,7 @@
                         <div class="behavioral-header-row">
                             <span>#</span>
                             <span>Brand</span>
-                            <span class="profile-col" id="llmoBrandConvHProfile">LLM %</span>
+                            <span class="profile-col" id="llmoBrandConvHProfile">Share %</span>
                             <span class="genpop-col" id="llmoBrandConvHGenpop">Gen Pop</span>
                             <span class="index-col">Index</span>
                         </div>
@@ -17971,10 +17971,12 @@
                 return;
             }
             var labels = top.map(function(r) {
-                var pct = (r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
-                    ? Number(r.pct_of_ai_users)
-                    : (totUsers > 0 ? Math.round((r.unique_users / totUsers) * 10000) / 100 : 0);
-                return r.name + ' · ' + pct + '%';
+                var share = (r.category_share != null && r.category_share !== undefined && !isNaN(Number(r.category_share)))
+                    ? Number(r.category_share)
+                    : ((r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
+                        ? Number(r.pct_of_ai_users)
+                        : (totUsers > 0 ? Math.round((r.unique_users / totUsers) * 10000) / 100 : 0));
+                return r.name + ' · ' + share + '%';
             });
             var values = top.map(function(r) { return r.unique_users_projected; });
             if (inner) {
@@ -18012,13 +18014,18 @@
                                 label: function(c) {
                                     var i = c.dataIndex;
                                     var r = top[i];
-                                    var pct = (r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
+                                    var catShare = (r.category_share != null && r.category_share !== undefined && !isNaN(Number(r.category_share)))
+                                        ? Number(r.category_share)
+                                        : null;
+                                    var pctAi = (r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
                                         ? Number(r.pct_of_ai_users)
                                         : (totUsers > 0 ? Math.round((r.unique_users / totUsers) * 10000) / 100 : 0);
                                     var lines = [
                                         _llmoFmt(c.parsed.x) + ' users (US Gen Pop proj.)',
-                                        pct + '% of AI users (aggregate)'
+                                        (catShare != null ? catShare.toFixed(2) : pctAi) + '% category share (brand conversion)'
                                     ];
+                                    if (catShare != null)
+                                        lines.push(pctAi + '% of AI users');
                                     if (r.genpop_penetration != null && !isNaN(Number(r.genpop_penetration)))
                                         lines.push('Gen Pop: ' + Number(r.genpop_penetration).toFixed(2) + '%');
                                     if (r.index_vs_genpop != null && !isNaN(Number(r.index_vs_genpop)))
@@ -18049,7 +18056,7 @@
             var hp = document.getElementById('llmoBrandConvHProfile');
             var hg = document.getElementById('llmoBrandConvHGenpop');
             var isProj = (typeof dashDisplayMode !== 'undefined' && dashDisplayMode === 'projection');
-            if (hp) hp.textContent = isProj ? 'US #' : 'LLM %';
+            if (hp) hp.textContent = isProj ? 'US #' : 'Share %';
             if (hg) hg.textContent = isProj ? 'GP #' : 'Gen Pop';
 
             var listEl = document.getElementById('llmoBrandConvList');
@@ -18092,7 +18099,9 @@
                 if (isProj) {
                     rows.sort(function(a, b) { return (b.unique_users_projected || 0) - (a.unique_users_projected || 0); });
                 } else {
-                    rows.sort(function(a, b) { return (Number(b.pct_of_ai_users) || 0) - (Number(a.pct_of_ai_users) || 0); });
+                    rows.sort(function(a, b) {
+                        return (Number(b.category_share) || 0) - (Number(a.category_share) || 0);
+                    });
                 }
             }
 
@@ -18108,9 +18117,11 @@
                     var genPopPct = item.genpop_penetration != null ? Number(item.genpop_penetration) : 0;
                     var profilePct = item.pct_of_ai_users != null ? Number(item.pct_of_ai_users) : 0;
                     var indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                    var hasShare = item.category_share != null && !isNaN(Number(item.category_share));
+                    var shareStr = hasShare ? Number(item.category_share).toFixed(2) + '%' : 'N/A';
                     var profileDisplay = isProj
                         ? (!item.unique_users_projected ? 'N/A' : formatNumber(Math.round(item.unique_users_projected)))
-                        : formatValueOrNA(profilePct, true);
+                        : (hasShare ? shareStr : formatValueOrNA(profilePct, true));
                     var genPopProj = genPopPct > 0 ? Math.round(US_POP * (genPopPct / 100)) : 0;
                     var genPopDisplay = isProj
                         ? (genPopProj === 0 ? 'N/A' : formatNumber(genPopProj))
@@ -18142,7 +18153,7 @@
             if (sortSel) {
                 var po = sortSel.querySelector('option[value="pct"]');
                 if (po && typeof dashDisplayMode !== 'undefined') {
-                    po.textContent = dashDisplayMode === 'projection' ? '# ↓' : '% ↓';
+                    po.textContent = dashDisplayMode === 'projection' ? '# ↓' : 'Share ↓';
                 }
             }
             refreshLLMOBrandConversionTable();
