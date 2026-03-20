@@ -693,18 +693,51 @@
         #llmoIQView #llmoTotalUsersNote { color: var(--text-secondary) !important; }
         #llmoIQView #llmoHoverToggle.display-mode-toggle { cursor: pointer; font-size: 0.7rem; padding: 0.35rem 0.55rem; }
         #llmoIQView .llmo-searches-scroll { max-height: 480px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        #llmoIQView .llmo-search-themes-body { padding: 0.15rem 0 0 0; }
         #llmoIQView .llmo-theme-details {
-            border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 0.45rem;
+            border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 0.4rem;
             background: rgba(255,255,255,0.02);
         }
-        #llmoIQView .llmo-theme-details summary {
-            list-style: none; cursor: pointer; padding: 0.5rem 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
-            font-weight: 600; font-size: 0.82rem;
+        #llmoIQView .llmo-theme-details summary,
+        #llmoIQView .llmo-theme-summary {
+            list-style: none; cursor: pointer; margin: 0;
         }
         #llmoIQView .llmo-theme-details summary::-webkit-details-marker { display: none; }
-        #llmoIQView .llmo-theme-details summary::after { content: '▸'; color: var(--text-secondary); font-size: 0.75rem; }
-        #llmoIQView .llmo-theme-details[open] summary::after { content: '▾'; }
-        #llmoIQView .llmo-theme-pct { color: var(--accent-cyan); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        /* 3-col grid: label | right-aligned % | chevron — same widths for every row */
+        #llmoIQView .llmo-theme-summary {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 4.5rem 1.35rem;
+            column-gap: 0.65rem;
+            align-items: center;
+            padding: 0.55rem 0.7rem;
+            font-size: 0.82rem;
+        }
+        #llmoIQView .llmo-theme-name {
+            font-weight: 600;
+            min-width: 0;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+        #llmoIQView .llmo-theme-pct {
+            color: var(--accent-cyan);
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+            text-align: right;
+            justify-self: stretch;
+        }
+        #llmoIQView .llmo-theme-chev {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 0.65rem;
+            line-height: 1;
+            user-select: none;
+            transition: transform 0.15s ease;
+        }
+        #llmoIQView .llmo-theme-details[open] .llmo-theme-chev {
+            transform: rotate(90deg);
+        }
         #llmoIQView .llmo-theme-examples { margin: 0; padding: 0 0.65rem 0.65rem 1.5rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45; max-height: 280px; overflow-y: auto; }
         #llmoIQView .llmo-theme-examples li { margin-bottom: 0.35rem; word-break: break-word; }
         #llmoIQView .llmo-theme-pii-msg { padding: 0 0.65rem 0.65rem 0.65rem; font-size: 0.75rem; color: var(--text-secondary); font-style: italic; }
@@ -15450,7 +15483,7 @@
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
                         <h3 class="has-tooltip" style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Queries are filtered for PII, URLs, and one-word navigational noise. OpenAI groups the rest into themes; only category share is shown until you expand (up to 100 example queries per theme, no per-query counts). PII volume rolls into &quot;Personal Information Query&quot; with no examples.">AI search themes</h3>
                         <p style="margin: 0 0 0.25rem 0; font-size: 0.75rem; color: var(--text-secondary);">Rolled-up intent categories · expand for sample queries</p>
-                        <div id="llmoSearchThemesBody" class="llmo-searches-scroll">
+                        <div id="llmoSearchThemesBody" class="llmo-searches-scroll llmo-search-themes-body">
                             <div style="padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">Load data to generate themes</div>
                         </div>
                     </div>
@@ -18278,7 +18311,11 @@
                 var pct = (c.pct != null && !isNaN(Number(c.pct))) ? Number(c.pct).toFixed(1) : '0.0';
                 var theme = _llmoEsc(c.theme || '');
                 html += '<details class="llmo-theme-details">';
-                html += '<summary><span class="llmo-theme-name">' + theme + '</span><span class="llmo-theme-pct">' + pct + '%</span></summary>';
+                html += '<summary class="llmo-theme-summary">';
+                html += '<span class="llmo-theme-name">' + theme + '</span>';
+                html += '<span class="llmo-theme-pct">' + pct + '%</span>';
+                html += '<span class="llmo-theme-chev" aria-hidden="true">▸</span>';
+                html += '</summary>';
                 if (c.show_examples === false) {
                     html += '<div class="llmo-theme-pii-msg">Examples withheld for privacy.</div>';
                 } else {
