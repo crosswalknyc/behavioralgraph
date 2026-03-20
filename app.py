@@ -7210,6 +7210,7 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         'name': v['display'],
         'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
         'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M),
+        'pct_of_ai_users': round(v['uu'] / total_users * 100, 2) if total_users else 0,
     } for _, v in bc_sorted]
 
     flow_sorted = sorted(flow_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]

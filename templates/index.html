@@ -690,6 +690,8 @@
             position: relative;
             min-height: 260px;
         }
+        #llmoIQView #llmoTotalUsersNote { color: var(--text-secondary) !important; }
+        #llmoIQView #llmoHoverToggle.display-mode-toggle { cursor: pointer; font-size: 0.7rem; padding: 0.35rem 0.55rem; }
         #llmoIQView .llmo-searches-scroll { max-height: 480px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
         
         /* Custom Analysis Tabs */
@@ -15294,6 +15296,9 @@
                         <select id="llmoDateEndSelect" style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; cursor: pointer;">
                             <option value="">Loading...</option>
                         </select>
+                        <div class="display-mode-toggle has-tooltip" id="llmoHoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle chart tooltips on/off (same as main dashboard)." title="Toggle chart tooltips on/off">
+                            <span id="llmoHoverToggleLabel">HOVER ON</span>
+                        </div>
                         <button id="llmoRefreshBtn" onclick="loadLLMOIQData()" style="background: var(--accent-blue); color: #fff; border: none; border-radius: 6px; padding: 0.4rem 1rem; font-size: 0.8rem; cursor: pointer; font-weight: 600;">Load</button>
                     </div>
                 </div>
@@ -15303,6 +15308,7 @@
                     <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Users (US Gen Pop)</div>
                         <div id="llmoTotalUsers" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
+                        <div id="llmoTotalUsersNote" style="font-size: 0.72rem; color: var(--text-secondary); font-style: italic; line-height: 1.35; margin-top: 0.15rem;">(Deduplicated by day, duplicated in aggregate)</div>
                     </div>
                     <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Clicks (US Gen Pop)</div>
@@ -15359,13 +15365,9 @@
                     </div>
                 </div>
 
-                <!-- LLM -> Most Purchased Brands (1st+2nd+3rd post-AI, HOST_MAPPING) -->
+                <!-- LLM to Brand Conversion (1st–3rd post-AI; HOST_MAPPING Most Purchased Brands) -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600;">LLM to Brand Conversion</h3>
-                    <p style="margin: 0 0 1rem 0; font-size: 0.78rem; color: var(--text-secondary); line-height: 1.45;">
-                        Combined 1st, 2nd, and 3rd clicks after AI. Destinations whose <strong>COMMON_NAME</strong> (pipe-split, case-insensitive) matches <strong>BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING.BRAND</strong> on rows whose <strong>SECTION</strong> includes <strong>Most Purchased Brands</strong>. Ranked by unique users (US Gen Pop projection).
-                        <span style="display:block;margin-top:0.35rem;">Requires <code>SP_LLMO_DAILY</code> summary export; Python-only S3 builds leave this empty until the procedure is deployed.</span>
-                    </p>
+                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Percent of panelists who visited a brand (owned and via wholesale) within 3 clicks post LLM usage.">LLM to Brand Conversion</h3>
                     <div class="llmo-attrib-chart-scroll">
                         <div class="llmo-attrib-chart-inner">
                             <canvas id="llmoBrandConversionChart"></canvas>
@@ -17405,6 +17407,26 @@
         var _llmoTrendByLLMCache = null;
         var _llmoLoaded = false;
 
+        function _llmoTooltipsEnabled() {
+            return !document.body.classList.contains('hover-disabled');
+        }
+        function syncLLMOChartTooltips() {
+            var en = _llmoTooltipsEnabled();
+            [_llmoCategoryShareChart, _llmoTrendChart, _llmoAttributionChart, _llmoAttributionChart2, _llmoAttributionChart3, _llmoBrandConversionChart, _llmoBrowserChart, _llmoPlatformChart, _llmoDemoTrendChart].forEach(function(ch) {
+                if (ch && ch.options && ch.options.plugins && ch.options.plugins.tooltip) {
+                    ch.options.plugins.tooltip.enabled = en;
+                    try { ch.update('none'); } catch (e) {}
+                }
+            });
+            Object.keys(_llmoDemoCharts || {}).forEach(function(k) {
+                var c = _llmoDemoCharts[k];
+                if (c && c.options && c.options.plugins && c.options.plugins.tooltip) {
+                    c.options.plugins.tooltip.enabled = en;
+                    try { c.update('none'); } catch (e) {}
+                }
+            });
+        }
+
         window.showLLMOIQ = function() {
             const dd = document.getElementById('viewNavDropdown');
             const opt = dd ? dd.querySelector('option[value="llmoIQ"]') : null;
@@ -17537,8 +17559,9 @@
                     renderLLMOAttribution(data.attribution, 'llmoAttributionChart', '_llmoAttributionChart', '#4285F4');
                     renderLLMOAttribution(data.attribution_second || [], 'llmoAttributionChart2', '_llmoAttributionChart2', '#34A853');
                     renderLLMOAttribution(data.attribution_third || [], 'llmoAttributionChart3', '_llmoAttributionChart3', '#FBBC04');
-                    renderLLMOBrandConversion(data.brand_conversion || []);
+                    renderLLMOBrandConversion(data);
                     renderLLMOSearches(data.searches);
+                    syncLLMOChartTooltips();
                     renderLLMOFlows(data.flows);
                     renderLLMOBrowserPlatform(data.browsers, data.platforms);
                     _llmoTrendDatesCache = data.trend_dates;
@@ -17633,6 +17656,7 @@
                     plugins: {
                         legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 8, boxWidth: 12 } },
                         tooltip: {
+                            enabled: _llmoTooltipsEnabled(),
                             callbacks: {
                                 label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; }
                             }
@@ -17681,7 +17705,10 @@
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, boxWidth: 12, padding: 8 } },
-                        tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + _llmoFmt(ctx.parsed.y); } } }
+                        tooltip: {
+                            enabled: _llmoTooltipsEnabled(),
+                            callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + _llmoFmt(ctx.parsed.y); } }
+                        }
                     },
                     scales: {
                         x: { ticks: { color: '#e8e8e8', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.06)' } },
@@ -17708,7 +17735,7 @@
                     data: { labels: ['No data'], datasets: [{ data: [0], backgroundColor: 'rgba(255,255,255,0.08)' }] },
                     options: {
                         responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                        plugins: { legend: { display: false } },
+                        plugins: { legend: { display: false }, tooltip: { enabled: _llmoTooltipsEnabled() } },
                         scales: {
                             x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
                             y: { ticks: { color: '#e8e8e8' }, grid: { display: false } }
@@ -17750,6 +17777,7 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
+                            enabled: _llmoTooltipsEnabled(),
                             callbacks: {
                                 label: function(ctx) { return _llmoFmt(ctx.parsed.x) + ' users'; }
                             }
@@ -17766,7 +17794,9 @@
             else if (holder === '_llmoAttributionChart3') _llmoAttributionChart3 = ch;
         }
 
-        function renderLLMOBrandConversion(rows) {
+        function renderLLMOBrandConversion(data) {
+            var rows = (data && data.brand_conversion) ? data.brand_conversion : [];
+            var totUsers = (data && data.total_unique_users) ? data.total_unique_users : 0;
             var ctx = document.getElementById('llmoBrandConversionChart');
             if (!ctx) return;
             var inner = ctx.closest('.llmo-attrib-chart-inner');
@@ -17777,10 +17807,10 @@
                 if (inner) inner.style.height = '260px';
                 _llmoBrandConversionChart = new Chart(ctx, {
                     type: 'bar',
-                    data: { labels: ['No data (run SP_LLMO_DAILY with HOST_MAPPING)'], datasets: [{ data: [0], backgroundColor: 'rgba(255,255,255,0.08)' }] },
+                    data: { labels: ['No data'], datasets: [{ data: [0], backgroundColor: 'rgba(255,255,255,0.08)' }] },
                     options: {
                         responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                        plugins: { legend: { display: false } },
+                        plugins: { legend: { display: false }, tooltip: { enabled: _llmoTooltipsEnabled() } },
                         scales: {
                             x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
                             y: { ticks: { color: '#e8e8e8' }, grid: { display: false } }
@@ -17790,11 +17820,16 @@
                 return;
             }
             var top = rows.slice(0, 100);
-            var labels = top.map(function(r) { return r.name; });
+            var labels = top.map(function(r) {
+                var pct = (r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
+                    ? Number(r.pct_of_ai_users)
+                    : (totUsers > 0 ? Math.round((r.unique_users / totUsers) * 10000) / 100 : 0);
+                return r.name + ' · ' + pct + '%';
+            });
             var values = top.map(function(r) { return r.unique_users_projected; });
             if (inner) {
                 var n = Math.max(top.length, 1);
-                var innerH = Math.min(3000, Math.max(260, n * 24 + 72));
+                var innerH = Math.min(3000, Math.max(260, n * 26 + 72));
                 inner.style.height = innerH + 'px';
             }
             _llmoBrandConversionChart = new Chart(ctx, {
@@ -17802,7 +17837,7 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Unique Users',
+                        label: 'Unique Users (US Gen Pop)',
                         data: values,
                         backgroundColor: fill,
                         borderRadius: 4,
@@ -17816,14 +17851,36 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
+                            enabled: _llmoTooltipsEnabled(),
                             callbacks: {
-                                label: function(c) { return _llmoFmt(c.parsed.x) + ' users'; }
+                                title: function(items) {
+                                    if (!items || !items.length) return '';
+                                    var lab = items[0].label || '';
+                                    var ix = lab.indexOf(' · ');
+                                    return ix >= 0 ? lab.slice(0, ix) : lab;
+                                },
+                                label: function(c) {
+                                    var i = c.dataIndex;
+                                    var r = top[i];
+                                    var pct = (r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
+                                        ? Number(r.pct_of_ai_users)
+                                        : (totUsers > 0 ? Math.round((r.unique_users / totUsers) * 10000) / 100 : 0);
+                                    return [
+                                        _llmoFmt(c.parsed.x) + ' users (US Gen Pop proj.)',
+                                        pct + '% of AI users (aggregate)'
+                                    ];
+                                }
                             }
                         }
                     },
                     scales: {
-                        x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
-                        y: { ticks: { color: '#e8e8e8', font: { size: 11 } }, grid: { display: false } }
+                        x: {
+                            ticks: { color: '#e8e8e8' },
+                            grid: { color: 'rgba(255,255,255,0.06)' },
+                            beginAtZero: true,
+                            title: { display: true, text: 'Projected unique users', color: 'var(--text-secondary)', font: { size: 11 } }
+                        },
+                        y: { ticks: { color: '#e8e8e8', font: { size: 10 } }, grid: { display: false } }
                     }
                 }
             });
@@ -17877,7 +17934,7 @@
                             labels: browsers.slice(0, 8).map(function(b) { return b.name; }),
                             datasets: [{ data: browsers.slice(0, 8).map(function(b) { return b.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
                         },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { enabled: _llmoTooltipsEnabled(), callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
                     });
                 }
             }
@@ -17892,7 +17949,7 @@
                             labels: platforms.slice(0, 8).map(function(p) { return p.name; }),
                             datasets: [{ data: platforms.slice(0, 8).map(function(p) { return p.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
                         },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { enabled: _llmoTooltipsEnabled(), callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
                     });
                 }
             }
@@ -17934,6 +17991,7 @@
                         plugins: {
                             legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 6 } },
                             tooltip: {
+                                enabled: _llmoTooltipsEnabled(),
                                 callbacks: {
                                     label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; }
                                 }
@@ -17942,6 +18000,7 @@
                     }
                 });
             });
+            syncLLMOChartTooltips();
         }
 
         function renderLLMODemoTrend() {
@@ -18016,6 +18075,7 @@
                     plugins: {
                         legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, boxWidth: 12, padding: 8 } },
                         tooltip: {
+                            enabled: _llmoTooltipsEnabled(),
                             callbacks: {
                                 label: function(ctx) {
                                     if (ctx.dataset.yAxisID === 'y1') return ctx.dataset.label + ': ' + _llmoFmt(ctx.parsed.y);
@@ -18043,6 +18103,7 @@
                     }
                 }
             });
+            syncLLMOChartTooltips();
         }
 
         window.showTalentSearchIQ = function() {
@@ -30069,6 +30130,8 @@
             const tsLabel = document.getElementById('ticketSalesHoverToggleLabel');
             const tstToggle = document.getElementById('tstHoverToggle');
             const tstLabel = document.getElementById('tstHoverToggleLabel');
+            const llmoToggle = document.getElementById('llmoHoverToggle');
+            const llmoLabel = document.getElementById('llmoHoverToggleLabel');
             const tooltip = document.getElementById('globalTooltip');
             
             if (hoverEnabled) {
@@ -30078,10 +30141,13 @@
                 if (tsLabel) tsLabel.textContent = 'HOVER ON';
                 if (tstToggle) tstToggle.classList.remove('active');
                 if (tstLabel) tstLabel.textContent = 'HOVER ON';
+                if (llmoToggle) llmoToggle.classList.remove('active');
+                if (llmoLabel) llmoLabel.textContent = 'HOVER ON';
                 document.body.classList.remove('hover-disabled');
                 tstDemographicsHoverEnabled = true;
                 localStorage.setItem('bg_tst_demographics_hover', 'true');
                 Object.keys(tstCharts || {}).forEach(k => { const c = tstCharts[k]; if (c && c.options?.plugins?.tooltip) { c.options.plugins.tooltip.enabled = true; c.update(); } });
+                if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
             } else {
                 if (toggle) toggle.classList.add('active');
                 if (label) label.textContent = 'HOVER OFF';
@@ -30089,10 +30155,13 @@
                 if (tsLabel) tsLabel.textContent = 'HOVER OFF';
                 if (tstToggle) tstToggle.classList.add('active');
                 if (tstLabel) tstLabel.textContent = 'HOVER OFF';
+                if (llmoToggle) llmoToggle.classList.add('active');
+                if (llmoLabel) llmoLabel.textContent = 'HOVER OFF';
                 document.body.classList.add('hover-disabled');
                 tstDemographicsHoverEnabled = false;
                 localStorage.setItem('bg_tst_demographics_hover', 'false');
                 Object.keys(tstCharts || {}).forEach(k => { const c = tstCharts[k]; if (c && c.options?.plugins?.tooltip) { c.options.plugins.tooltip.enabled = false; c.update(); } });
+                if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
                 
                 // Hide any currently visible tooltip using inline styles
                 if (tooltip) {
@@ -30127,6 +30196,16 @@
                 if (tsToggle) tsToggle.classList.add('active');
                 if (tsLabel) tsLabel.textContent = 'HOVER OFF';
             }
+            const llmoHToggle = document.getElementById('llmoHoverToggle');
+            const llmoHLabel = document.getElementById('llmoHoverToggleLabel');
+            if (!hoverOn && (llmoHToggle || llmoHLabel)) {
+                if (llmoHToggle) llmoHToggle.classList.add('active');
+                if (llmoHLabel) llmoHLabel.textContent = 'HOVER OFF';
+            }
+            if (hoverOn && llmoHLabel) {
+                if (llmoHToggle) llmoHToggle.classList.remove('active');
+                llmoHLabel.textContent = 'HOVER ON';
+            }
             if (!tickerOn && (tickerToggle || tickerLabel)) {
                 if (tickerToggle) tickerToggle.classList.add('active');
                 if (tickerLabel) tickerLabel.textContent = 'HOVER OFF';
@@ -30141,6 +30220,7 @@
             const tstDemoToggle = document.getElementById('tstDemographicsHoverToggle');
             if (tstDemoLabel) tstDemoLabel.textContent = tstDemographicsHoverEnabled ? 'HOVER ON' : 'HOVER OFF';
             if (tstDemoToggle) tstDemoToggle.classList.toggle('active', !tstDemographicsHoverEnabled);
+            if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
         }
         document.addEventListener('DOMContentLoaded', applyPersistedHoverPreferences);
         
