@@ -17610,8 +17610,9 @@
                 if (bar) bar.style.width = p + '%';
                 if (pct) pct.textContent = p + '%';
             } else if (stage) {
+                /* Use loaded=0 or total=0 for phase-only updates — (1,1,msg) wrongly showed 100% */
                 if (msg) msg.textContent = stage;
-                if (bar) bar.style.width = '10%';
+                if (bar) bar.style.width = '88%';
                 if (pct) pct.textContent = '';
             } else {
                 if (msg) msg.textContent = 'Initializing...';
@@ -17700,7 +17701,7 @@
                         selEnd.value = data.dates[0];
                         loadLLMOIQData();
                     } else {
-                        _llmoUpdateProgress(1, 1, 'No dates available');
+                        _llmoUpdateProgress(0, 0, 'No dates available');
                         _llmoHideLoading();
                     }
                 })
@@ -17720,7 +17721,7 @@
             if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
 
             _llmoShowLoading();
-            _llmoUpdateProgress(1, 1, 'Loading dashboard…');
+            _llmoUpdateProgress(0, 0, 'Loading dashboard…');
 
             fetch('/api/llmo-iq/data?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd || date), { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
@@ -17753,7 +17754,7 @@
                     _llmoTrendDatesCache = data.trend_dates;
                     _llmoTrendByLLMCache = data.trend_by_llm;
                     syncLLMOChartTooltips();
-                    _llmoUpdateProgress(1, 1, 'Loading demographics & AI search themes…');
+                    _llmoUpdateProgress(0, 0, 'Loading demographics & AI search themes…');
                     var de = dateEnd || date;
                     return Promise.all([
                         _llmoFetchDemographicsPromise(date, de),
