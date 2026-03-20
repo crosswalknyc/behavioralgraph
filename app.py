@@ -160,6 +160,8 @@ LLMO_SUMMARY_PREFIX = os.environ.get('LLMO_SUMMARY_PREFIX', 'processed/llmo_dail
 LLMO_CACHE_TTL = int(os.environ.get('LLMO_CACHE_TTL', '86400'))
 # Gen Pop slice → brand sets for LLMO brand conversion (aligned with Profile IQ MPB slicer)
 _llmo_gp_slice_brands_cache = None
+# Same for LLM → Retailer (Where They Shop slicer options)
+_llmo_wts_slice_brands_cache = None
 # FORCE us-east-2 - all buckets are in this region, ignore AWS_REGION env var if set
 S3_REGION = 'us-east-2'
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
@@ -7148,6 +7150,79 @@ def _llmo_enrich_brand_conversion_rows(rows):
     return rows
 
 
+def _llmo_get_genpop_slice_brand_sets_wts():
+    """Gen Pop brand sets per slice key — Profile IQ 'Where They Shop' dropdown (not MPB)."""
+    global _llmo_wts_slice_brands_cache
+    if _llmo_wts_slice_brands_cache is not None:
+        return _llmo_wts_slice_brands_cache
+    import bg
+    gp = bg._load_genpop_csv()
+    if gp is None:
+        _llmo_wts_slice_brands_cache = {}
+        return _llmo_wts_slice_brands_cache
+    g = gp.copy()
+    col_name = g.columns[0]
+    val_name = g.columns[1]
+    g['_col'] = g[col_name].astype(str).str.strip().str.upper()
+    g['_val'] = g[val_name].astype(str).str.strip().str.upper()
+    slice_defs = {
+        'apparel/footwear': ('APPAREL/FOOTWEAR',),
+        'accessories': ('ACCESSORIES',),
+        'beauty/wellness': ('BEAUTY/WELLNESS',),
+        'health & wellness': ('HEALTH & WELLNESS',),
+        'home/outdoor': ('HOME/OUTDOOR',),
+        'toys': ('TOYS',),
+    }
+    out = {}
+    for sk, cats in slice_defs.items():
+        s = set()
+        for cat in cats:
+            sub = g[g['_col'] == cat]
+            for v in sub['_val']:
+                vv = str(v).strip().upper()
+                if vv and vv not in ('NAN', 'NONE', ''):
+                    s.add(vv)
+        out[sk] = s
+    _llmo_wts_slice_brands_cache = out
+    return out
+
+
+def _llmo_enrich_retailer_conversion_rows(rows):
+    """Gen Pop + index + Where They Shop slice keys (Gen Pop WHERE THEY SHOP baseline)."""
+    import bg
+    slice_map = _llmo_get_genpop_slice_brand_sets_wts()
+    for row in rows:
+        name = row.get('name')
+        gp_pct, gp_cat = bg.get_genpop_penetration_for_brand(name, brand_category='WHERE THEY SHOP')
+        if gp_pct is not None:
+            try:
+                row['genpop_penetration'] = round(float(gp_pct), 4)
+            except (TypeError, ValueError):
+                row['genpop_penetration'] = None
+        else:
+            row['genpop_penetration'] = None
+        row['genpop_category'] = gp_cat
+        pct_ai = row.get('pct_of_ai_users')
+        try:
+            pct_ai_f = float(pct_ai) if pct_ai is not None else 0.0
+        except (TypeError, ValueError):
+            pct_ai_f = 0.0
+        if row['genpop_penetration'] is not None and row['genpop_penetration'] > 0:
+            row['index_vs_genpop'] = round((pct_ai_f / float(row['genpop_penetration'])) * 100, 2)
+        else:
+            row['index_vs_genpop'] = None
+        cands = set()
+        for c in bg._extract_core_brand(name, None):
+            if c:
+                cands.add(str(c).strip().upper())
+        sks = []
+        for sk, brand_set in slice_map.items():
+            if cands & brand_set:
+                sks.append(sk)
+        row['genpop_slice_keys'] = sks
+    return rows
+
+
 def _llmo_split_multi_names(name):
     """Split COMMON_NAME-style values on '|' into separate entities; empty -> ['Unknown']."""
     if name is None:
@@ -7171,7 +7246,7 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
                 'total_unique_users': 0, 'total_unique_users_projected': 0,
                 'total_clicks': 0, 'total_clicks_projected': 0,
                 'llm_count': 0, 'llms': [], 'attribution': [], 'attribution_second': [],
-                'attribution_third': [], 'brand_conversion': [], 'flows': [],
+                'attribution_third': [], 'brand_conversion': [], 'retailer_conversion': [], 'flows': [],
                 'searches': [], 'trend_dates': [], 'trend_by_llm': {},
                 'browsers': [], 'platforms': []}
 
@@ -7181,6 +7256,7 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
     att3_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
     # Lowercase key -> counts + display label (HOST_MAPPING / MPB case-insensitive)
     brand_conv_agg = {}
+    retailer_conv_agg = {}
     flow_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
     search_agg = defaultdict(int)
     browser_agg = defaultdict(int)
@@ -7233,6 +7309,17 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
                     brand_conv_agg[lk] = {'uu': 0, 'cl': 0, 'display': part.strip()}
                 brand_conv_agg[lk]['uu'] += uu
                 brand_conv_agg[lk]['cl'] += cl
+
+        for rc in day.get('retailer_conversion', []):
+            uu, cl = rc['unique_users'], rc['total_clicks']
+            for part in _llmo_split_multi_names(rc.get('name')):
+                lk = part.strip().lower()
+                if not lk:
+                    continue
+                if lk not in retailer_conv_agg:
+                    retailer_conv_agg[lk] = {'uu': 0, 'cl': 0, 'display': part.strip()}
+                retailer_conv_agg[lk]['uu'] += uu
+                retailer_conv_agg[lk]['cl'] += cl
 
         for fl in day.get('flows', []):
             src_parts = _llmo_split_multi_names(fl.get('source'))
@@ -7291,6 +7378,15 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
     } for _, v in bc_sorted]
     brand_conversion = _llmo_enrich_brand_conversion_rows(brand_conversion)
 
+    rt_sorted = sorted(retailer_conv_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
+    retailer_conversion = [{
+        'name': v['display'],
+        'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
+        'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M),
+        'pct_of_ai_users': round(v['uu'] / total_users * 100, 2) if total_users else 0,
+    } for _, v in rt_sorted]
+    retailer_conversion = _llmo_enrich_retailer_conversion_rows(retailer_conversion)
+
     flow_sorted = sorted(flow_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
     flows = [{'source': k[0], 'destination': k[1],
               'unique_users': round(v['uu'] * M), 'clicks': round(v['cl'] * M)}
@@ -7314,6 +7410,7 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         'attribution_second': attribution_second,
         'attribution_third': attribution_third,
         'brand_conversion': brand_conversion,
+        'retailer_conversion': retailer_conversion,
         'flows': flows,
         'searches': searches,
         'trend_dates': matching_dates, 'trend_by_llm': trend_by_llm,
