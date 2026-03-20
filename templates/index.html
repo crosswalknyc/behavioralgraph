@@ -693,7 +693,6 @@
         #llmoIQView #llmoTotalUsersNote { color: var(--text-secondary) !important; }
         #llmoIQView #llmoHoverToggle.display-mode-toggle { cursor: pointer; font-size: 0.7rem; padding: 0.35rem 0.55rem; }
         #llmoIQView .llmo-searches-scroll { max-height: 480px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-        #llmoIQView .llmo-search-themes-meta { font-size: 0.72rem; color: var(--text-secondary); margin: 0 0 0.75rem 0; line-height: 1.35; }
         #llmoIQView .llmo-theme-details {
             border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 0.45rem;
             background: rgba(255,255,255,0.02);
@@ -15451,7 +15450,6 @@
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
                         <h3 class="has-tooltip" style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Queries are filtered for PII, URLs, and one-word navigational noise. OpenAI groups the rest into themes; only category share is shown until you expand (up to 100 example queries per theme, no per-query counts). PII volume rolls into &quot;Personal Information Query&quot; with no examples.">AI search themes</h3>
                         <p style="margin: 0 0 0.25rem 0; font-size: 0.75rem; color: var(--text-secondary);">Rolled-up intent categories · expand for sample queries</p>
-                        <p id="llmoSearchThemesMeta" class="llmo-search-themes-meta"></p>
                         <div id="llmoSearchThemesBody" class="llmo-searches-scroll">
                             <div style="padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">Load data to generate themes</div>
                         </div>
@@ -18244,10 +18242,8 @@
 
         function loadLLMOIQSearchThemes(date, dateEnd) {
             var body = document.getElementById('llmoSearchThemesBody');
-            var meta = document.getElementById('llmoSearchThemesMeta');
             if (!body) return;
             body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Loading themes…</div>';
-            if (meta) meta.textContent = '';
             var u = '/api/llmo-iq/search-themes?date=' + encodeURIComponent(date || '') + '&date_end=' + encodeURIComponent(dateEnd || date || '');
             fetch(u, { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
@@ -18269,16 +18265,8 @@
 
         function renderLLMOSearchThemes(d) {
             var body = document.getElementById('llmoSearchThemesBody');
-            var meta = document.getElementById('llmoSearchThemesMeta');
             if (!body) return;
             var m = d.meta || {};
-            if (meta) {
-                var bits = [];
-                if (m.model) bits.push('Model: ' + m.model);
-                if (m.queries_sent_to_model != null) bits.push('Queries themed: ' + m.queries_sent_to_model);
-                if (m.total_weight && m.pii_weight) bits.push('PII-like volume rolled up (no examples)');
-                meta.textContent = bits.join(' · ');
-            }
             var cats = d.categories || [];
             if (cats.length === 0) {
                 body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">'
