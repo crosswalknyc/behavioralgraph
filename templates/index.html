@@ -693,6 +693,22 @@
         #llmoIQView #llmoTotalUsersNote { color: var(--text-secondary) !important; }
         #llmoIQView #llmoHoverToggle.display-mode-toggle { cursor: pointer; font-size: 0.7rem; padding: 0.35rem 0.55rem; }
         #llmoIQView .llmo-searches-scroll { max-height: 480px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        #llmoIQView .llmo-search-themes-meta { font-size: 0.72rem; color: var(--text-secondary); margin: 0 0 0.75rem 0; line-height: 1.35; }
+        #llmoIQView .llmo-theme-details {
+            border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 0.45rem;
+            background: rgba(255,255,255,0.02);
+        }
+        #llmoIQView .llmo-theme-details summary {
+            list-style: none; cursor: pointer; padding: 0.5rem 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+            font-weight: 600; font-size: 0.82rem;
+        }
+        #llmoIQView .llmo-theme-details summary::-webkit-details-marker { display: none; }
+        #llmoIQView .llmo-theme-details summary::after { content: '▸'; color: var(--text-secondary); font-size: 0.75rem; }
+        #llmoIQView .llmo-theme-details[open] summary::after { content: '▾'; }
+        #llmoIQView .llmo-theme-pct { color: var(--accent-cyan); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        #llmoIQView .llmo-theme-examples { margin: 0; padding: 0 0.65rem 0.65rem 1.5rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45; max-height: 280px; overflow-y: auto; }
+        #llmoIQView .llmo-theme-examples li { margin-bottom: 0.35rem; word-break: break-word; }
+        #llmoIQView .llmo-theme-pii-msg { padding: 0 0.65rem 0.65rem 0.65rem; font-size: 0.75rem; color: var(--text-secondary); font-style: italic; }
         
         /* Custom Analysis Tabs */
         .custom-analysis-tabs-container {
@@ -15438,20 +15454,11 @@
                         </div>
                     </div>
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Top AI Searches <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
-                        <div class="llmo-searches-scroll">
-                            <table id="llmoSearchesTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
-                                <thead>
-                                    <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
-                                        <th style="padding: 0.5rem;">#</th>
-                                        <th style="padding: 0.5rem;">Search Query</th>
-                                        <th style="padding: 0.5rem; text-align: right;">Searches</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="llmoSearchesBody">
-                                    <tr><td colspan="3" style="padding: 2rem; text-align: center; color: var(--text-secondary);">No data loaded</td></tr>
-                                </tbody>
-                            </table>
+                        <h3 class="has-tooltip" style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Queries are filtered for PII, URLs, and one-word navigational noise. OpenAI groups the rest into themes; only category share is shown until you expand (up to 100 example queries per theme, no per-query counts). PII volume rolls into &quot;Personal Information Query&quot; with no examples.">AI search themes</h3>
+                        <p style="margin: 0 0 0.25rem 0; font-size: 0.75rem; color: var(--text-secondary);">Rolled-up intent categories · expand for sample queries</p>
+                        <p id="llmoSearchThemesMeta" class="llmo-search-themes-meta"></p>
+                        <div id="llmoSearchThemesBody" class="llmo-searches-scroll">
+                            <div style="padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">Load data to generate themes</div>
                         </div>
                     </div>
                 </div>
@@ -17657,7 +17664,7 @@
                     renderLLMOAttribution(data.attribution_third || [], 'llmoAttributionChart3', '_llmoAttributionChart3', '#FBBC04');
                     renderLLMOBrandConversion(data);
                     renderLLMORetailerConversion(data);
-                    renderLLMOSearches(data.searches);
+                    loadLLMOIQSearchThemes(date, dateEnd || date);
                     syncLLMOChartTooltips();
                     setLLMOFlowsFromApi(data.flows);
                     renderLLMOBrowserPlatform(data.browsers, data.platforms);
@@ -18330,21 +18337,77 @@
             refreshLLMORetailerConversionTable();
         }
 
-        function renderLLMOSearches(searches) {
-            var tbody = document.getElementById('llmoSearchesBody');
-            if (!searches || searches.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" style="padding:2rem;text-align:center;color:var(--text-secondary);">No search data extracted</td></tr>';
+        function _llmoEsc(s) {
+            if (s == null || s === '') return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function loadLLMOIQSearchThemes(date, dateEnd) {
+            var body = document.getElementById('llmoSearchThemesBody');
+            var meta = document.getElementById('llmoSearchThemesMeta');
+            if (!body) return;
+            body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Loading themes…</div>';
+            if (meta) meta.textContent = '';
+            var u = '/api/llmo-iq/search-themes?date=' + encodeURIComponent(date || '') + '&date_end=' + encodeURIComponent(dateEnd || date || '');
+            fetch(u, { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.loading) {
+                        body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);">LLMO summary still loading — try again in a moment.</div>';
+                        return;
+                    }
+                    if (!d.success) {
+                        body.innerHTML = '<div style="padding:1.25rem;color:#f87171;font-size:0.85rem;">' + _llmoEsc(d.error || 'Could not load themes') + '</div>';
+                        return;
+                    }
+                    renderLLMOSearchThemes(d);
+                })
+                .catch(function() {
+                    body.innerHTML = '<div style="padding:1.25rem;color:#f87171;font-size:0.85rem;">Network error loading themes.</div>';
+                });
+        }
+
+        function renderLLMOSearchThemes(d) {
+            var body = document.getElementById('llmoSearchThemesBody');
+            var meta = document.getElementById('llmoSearchThemesMeta');
+            if (!body) return;
+            var m = d.meta || {};
+            if (meta) {
+                var bits = [];
+                if (m.model) bits.push('Model: ' + m.model);
+                if (m.queries_sent_to_model != null) bits.push('Queries themed: ' + m.queries_sent_to_model);
+                if (m.total_weight && m.pii_weight) bits.push('PII-like volume rolled up (no examples)');
+                meta.textContent = bits.join(' · ');
+            }
+            var cats = d.categories || [];
+            if (cats.length === 0) {
+                body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">'
+                    + _llmoEsc(m.message || 'No qualifying searches after filters.') + '</div>';
                 return;
             }
             var html = '';
-            searches.slice(0, 100).forEach(function(s, i) {
-                html += '<tr style="border-bottom:1px solid var(--border-color);">'
-                    + '<td style="padding:0.4rem 0.5rem;">' + (i + 1) + '</td>'
-                    + '<td style="padding:0.4rem 0.5rem; word-break: break-word;">' + (s.term || '').replace(/</g, '&lt;') + '</td>'
-                    + '<td style="padding:0.4rem 0.5rem; text-align:right;">' + _llmoFmt(s.count) + '</td>'
-                    + '</tr>';
+            cats.forEach(function(c) {
+                var pct = (c.pct != null && !isNaN(Number(c.pct))) ? Number(c.pct).toFixed(1) : '0.0';
+                var theme = _llmoEsc(c.theme || '');
+                html += '<details class="llmo-theme-details">';
+                html += '<summary><span class="llmo-theme-name">' + theme + '</span><span class="llmo-theme-pct">' + pct + '%</span></summary>';
+                if (c.show_examples === false) {
+                    html += '<div class="llmo-theme-pii-msg">Examples withheld for privacy.</div>';
+                } else {
+                    var ex = (c.examples || []).slice(0, 100);
+                    if (ex.length === 0) {
+                        html += '<div class="llmo-theme-examples" style="list-style:none;padding-left:0.65rem;">No example queries stored.</div>';
+                    } else {
+                        html += '<ul class="llmo-theme-examples">';
+                        ex.forEach(function(q) {
+                            html += '<li>' + _llmoEsc(q) + '</li>';
+                        });
+                        html += '</ul>';
+                    }
+                }
+                html += '</details>';
             });
-            tbody.innerHTML = html;
+            body.innerHTML = html;
         }
 
         var _llmoFlowsAll = [];

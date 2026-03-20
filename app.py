@@ -158,6 +158,9 @@ LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000
 LLMO_S3_BUCKET = os.environ.get('LLMO_S3_BUCKET', 'llmo')
 LLMO_SUMMARY_PREFIX = os.environ.get('LLMO_SUMMARY_PREFIX', 'processed/llmo_daily_summary')
 LLMO_CACHE_TTL = int(os.environ.get('LLMO_CACHE_TTL', '86400'))
+# OpenAI model for LLMO "Top AI Searches" theme rollup (gpt-4o or gpt-4o-mini)
+LLMO_SEARCH_THEMES_MODEL = os.environ.get('LLMO_SEARCH_THEMES_MODEL', 'gpt-4o')
+LLMO_SEARCH_THEMES_BATCH = int(os.environ.get('LLMO_SEARCH_THEMES_BATCH', '75'))
 # Gen Pop slice → brand sets for LLMO brand conversion (aligned with Profile IQ MPB slicer)
 _llmo_gp_slice_brands_cache = None
 # Same for LLM → Retailer (Where They Shop slicer options)
@@ -7467,6 +7470,269 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         'trend_dates': matching_dates, 'trend_by_llm': trend_by_llm,
         'browsers': browsers, 'platforms': platforms,
     }
+
+
+# --- LLMO: AI search theme rollup (noise + PII filter, OpenAI clustering) ---
+LLMO_PII_THEME = 'Personal Information Query'
+_LLM_SEARCH_NOISE_EXACT = frozenset({
+    'chatgpt', 'chat gpt', 'gpt', 'openai', 'claude', 'claude ai', 'perplexity', 'gemini',
+    'google gemini', 'bard', 'copilot', 'microsoft copilot', 'deepseek', 'meta ai',
+    'login', 'logout', 'sign in', 'sign up', 'home', 'search', 'help', 'settings',
+    'fs', 'none', 'pending', 'consent', 'select_account', 'null', 'undefined', 'na', 'n/a',
+    'api', 'cdn', 'www', 'chat', 'gpt-4', 'gpt 4', 'gpt4', 'new chat', 'new thread',
+    'openai.com', 'chatgpt.com',
+})
+_LLM_SEARCH_PII_EMAIL = re.compile(
+    r'\b[A-Za-z0-9][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9][A-Za-z0-9.-]{0,252}\.[A-Za-z]{2,}\b'
+)
+_LLM_SEARCH_PII_PHONE = re.compile(
+    r'\b(?:\+?1[-.\s]?)?(?:\(\s*\d{3}\s*\)|\d{3})[-.\s]?\d{3}[-.\s]?\d{4}\b'
+)
+_LLM_SEARCH_PII_SSN = re.compile(r'\b\d{3}-\d{2}-\d{4}\b')
+
+
+def _llmo_search_term_has_pii(term):
+    if not term or not isinstance(term, str):
+        return False
+    if _LLM_SEARCH_PII_EMAIL.search(term):
+        return True
+    if _LLM_SEARCH_PII_SSN.search(term):
+        return True
+    if _LLM_SEARCH_PII_PHONE.search(term):
+        return True
+    return False
+
+
+def _llmo_search_term_is_noise(term):
+    """Drop navigational / one-word brand stubs / URLs / OAuth-style tokens."""
+    if not term or not isinstance(term, str):
+        return True
+    t = term.strip()
+    if not t:
+        return True
+    low = t.lower()
+    if low.startswith('http://') or low.startswith('https://'):
+        return True
+    norm_ws = re.sub(r'\s+', ' ', low).strip()
+    norm_alnum = re.sub(r'[^a-z0-9\s]', '', norm_ws)
+    if norm_alnum in _LLM_SEARCH_NOISE_EXACT:
+        return True
+    words = norm_ws.split()
+    if len(t) < 8:
+        return True
+    if len(t) < 12 and len(words) < 3:
+        return True
+    if re.fullmatch(r'[a-z][a-z0-9_-]{1,40}', low.replace('-', '_')) and '_' in low.replace('-', '_'):
+        return True
+    if re.fullmatch(r'[a-z][a-z0-9_]{2,35}', low) and '_' in low:
+        return True
+    return False
+
+
+def _llmo_extract_json_from_llm_text(text):
+    if not text:
+        return None
+    raw = text.strip()
+    m = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except json.JSONDecodeError:
+            pass
+    try:
+        i = raw.index('{')
+        j = raw.rindex('}') + 1
+        return json.loads(raw[i:j])
+    except (ValueError, json.JSONDecodeError):
+        return None
+
+
+def _llmo_search_themes_cache_dir():
+    ensure_cache_dir()
+    d = os.path.join(AI_CACHE_DIR, 'llmo_search_themes')
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _llmo_build_search_themes_payload(searches, date_str, date_end):
+    """Returns dict for API: categories with pct + examples, meta."""
+    from collections import defaultdict
+
+    pii_weight = 0
+    kept = []
+    for s in searches or []:
+        term = (s.get('term') or '').strip()
+        try:
+            cnt = int(round(float(s.get('count', 0))))
+        except (TypeError, ValueError):
+            cnt = 0
+        if not term or cnt <= 0:
+            continue
+        if _llmo_search_term_has_pii(term):
+            pii_weight += cnt
+            continue
+        if _llmo_search_term_is_noise(term):
+            continue
+        kept.append({'term': term[:800], 'count': cnt})
+
+    total_weight = pii_weight + sum(x['count'] for x in kept)
+    if total_weight <= 0:
+        return {
+            'success': True,
+            'categories': [],
+            'meta': {
+                'total_weight': 0, 'pii_weight': 0, 'queries_sent_to_model': 0,
+                'message': 'No qualifying searches after PII/noise filters.',
+            },
+        }
+
+    client = get_openai_client()
+    if not client:
+        return {
+            'success': False,
+            'error': 'OpenAI not configured (OPENAI_API_KEY). Theme rollup requires the API.',
+            'categories': [],
+            'meta': {'total_weight': total_weight, 'pii_weight': pii_weight},
+        }
+
+    theme_weight = defaultdict(int)
+    if pii_weight > 0:
+        theme_weight[LLMO_PII_THEME] = pii_weight
+
+    theme_examples = defaultdict(list)
+    assignments = {}
+
+    batch_size = max(20, min(LLMO_SEARCH_THEMES_BATCH, 100))
+    for start in range(0, len(kept), batch_size):
+        batch = kept[start:start + batch_size]
+        lines = []
+        for i, row in enumerate(batch):
+            global_i = start + i
+            safe = json.dumps(row['term'], ensure_ascii=False)
+            lines.append(f'{global_i}\t{safe}')
+        block = '\n'.join(lines)
+        sys_msg = (
+            'You label analytics search strings from AI chat products. '
+            'Each line is INDEX<TAB>JSON-encoded query string. '
+            'For each index, assign exactly ONE short theme name in Title Case (2–5 words), e.g. '
+            '"Image Generation", "Software Development", "Writing & Editing", "Sports Discussion", '
+            '"Current Events", "Education & Homework", "Health & Fitness", "Shopping & Products", '
+            '"Entertainment Recommendations", "Humor & Games". '
+            f'If the query contains or solicits private personal data (addresses, phones, emails, SSN, doxxing), '
+            f'use exactly "{LLMO_PII_THEME}". '
+            'Do not copy long slurs or harassment into the theme name—summarize neutrally. '
+            'Return ONLY valid JSON: {"items":[{"i":0,"theme":"..."}]} with one entry per input line, same indices.'
+        )
+        try:
+            response = client.chat.completions.create(
+                model=LLMO_SEARCH_THEMES_MODEL,
+                messages=[
+                    {'role': 'system', 'content': sys_msg},
+                    {'role': 'user', 'content': f'Classify each query:\n{block}'},
+                ],
+                max_tokens=4000,
+                temperature=0.15,
+            )
+            content = (response.choices[0].message.content or '').strip()
+            parsed = _llmo_extract_json_from_llm_text(content)
+            items = (parsed or {}).get('items') or []
+            for it in items:
+                try:
+                    ii = int(it.get('i'))
+                    th = (it.get('theme') or 'General Interest').strip()
+                    if not th:
+                        th = 'General Interest'
+                    assignments[ii] = th
+                except (TypeError, ValueError):
+                    continue
+        except Exception as e:
+            print(f'[LLMO search themes] OpenAI batch error: {e}')
+            traceback.print_exc()
+            for i in range(len(batch)):
+                assignments[start + i] = 'General Interest'
+
+    for idx, row in enumerate(kept):
+        th = assignments.get(idx, 'General Interest')
+        if th == LLMO_PII_THEME:
+            th = 'General Interest'
+        c = row['count']
+        theme_weight[th] += c
+        if len(theme_examples[th]) < 100:
+            theme_examples[th].append(row['term'])
+
+    cats = []
+    for theme, w in sorted(theme_weight.items(), key=lambda x: -x[1]):
+        pct = round(100.0 * w / total_weight, 2) if total_weight else 0.0
+        show_ex = theme != LLMO_PII_THEME
+        ex = [] if not show_ex else theme_examples.get(theme, [])[:100]
+        cats.append({
+            'theme': theme,
+            'pct': pct,
+            'examples': ex,
+            'show_examples': show_ex,
+        })
+
+    cats.sort(key=lambda x: (x['theme'] == LLMO_PII_THEME, -x['pct']))
+
+    return {
+        'success': True,
+        'categories': cats,
+        'meta': {
+            'total_weight': total_weight,
+            'pii_weight': pii_weight,
+            'queries_sent_to_model': len(kept),
+            'model': LLMO_SEARCH_THEMES_MODEL,
+        },
+    }
+
+
+@app.route('/api/llmo-iq/search-themes', methods=['GET'])
+@requires_auth
+def llmo_iq_search_themes():
+    """PII/noise-filtered search terms → OpenAI theme rollup; cached on disk."""
+    if not _current_user_has_llmo_iq_access():
+        return jsonify({'success': False, 'error': 'LLMO IQ access denied'}), 403
+    date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+    date_end = request.args.get('date_end') or date_str
+
+    try:
+        summary = _llmo_ensure_loaded()
+        if summary is None:
+            return jsonify({'success': True, 'loading': True}), 200
+
+        combined = _llmo_combine_date_range(summary, date_str, date_end)
+        searches = combined.get('searches') or []
+
+        cache_key_src = json.dumps(
+            {'from': date_str, 'to': date_end, 'searches': searches},
+            sort_keys=True,
+            default=str,
+        )
+        cache_h = hashlib.sha256(cache_key_src.encode('utf-8')).hexdigest()[:48]
+        cache_path = os.path.join(_llmo_search_themes_cache_dir(), f'{cache_h}.json')
+
+        if os.path.isfile(cache_path):
+            try:
+                with open(cache_path, 'r', encoding='utf-8') as cf:
+                    cached = json.load(cf)
+                if isinstance(cached, dict) and cached.get('success'):
+                    return jsonify(cached)
+            except Exception:
+                pass
+
+        payload = _llmo_build_search_themes_payload(searches, date_str, date_end)
+        if payload.get('success'):
+            try:
+                with open(cache_path, 'w', encoding='utf-8') as cf:
+                    json.dump(payload, cf, ensure_ascii=False)
+            except Exception as wex:
+                print(f'[LLMO search themes] cache write: {wex}')
+
+        return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        print(f'[LLMO search themes] Error: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/llmo-iq/data', methods=['GET'])

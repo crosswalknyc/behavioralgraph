@@ -123,3 +123,8 @@ If the service is a **separate repo** or **submodule** checkout, ensure the buil
    `python3 run_llmo_daily_snowflake.py`  
    Calls `SP_LLMO_DAILY()` — processes **yesterday (US/Pacific)** into `LLMO`, rebuilds the JSON summary, exports to `s3://llmo/processed/llmo_daily_summary.json.gz`.
 5. **Scheduled task**: `LLMO_DAILY_TASK` (cron in `setup_llmo_daily.sql`) should call the same procedure after you deploy the updated procedure body.
+
+### LLMO “AI search themes” (OpenAI rollup)
+
+- Requires **`OPENAI_API_KEY`** (same as other AI features). Themes are cached under `ai_cache/llmo_search_themes/` per date range + search payload hash.
+- Optional env: **`LLMO_SEARCH_THEMES_MODEL`** (default `gpt-4o`; use `gpt-4o-mini` to reduce cost), **`LLMO_SEARCH_THEMES_BATCH`** (default `75`, queries per API call).
