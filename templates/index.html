@@ -15376,39 +15376,6 @@
                     </div>
                 </div>
 
-                <!-- LLM to Brand Conversion (1st–3rd post-AI; HOST_MAPPING Most Purchased Brands) -->
-                <div id="llmoBrandConvSection" class="behavioral-card llmo-brand-conv-wrap" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1.5rem;">
-                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Percent of panelists who visited a brand (owned and via wholesale) within 3 clicks post LLM usage. LLM % indexed to Gen Pop brand penetration (same baseline as Profile IQ).">LLM to Brand Conversion</h3>
-                    <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.75rem;">
-                        <select id="llmoBrandConvSlice" class="behavioral-slice-select" onchange="refreshLLMOBrandConversionTable()" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <option value="all">Show All</option>
-                        </select>
-                        <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
-                        <select id="llmoBrandConvSort" class="behavioral-sort-select" onchange="refreshLLMOBrandConversionTable()" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
-                            <option value="pct" selected>% ↓</option>
-                            <option value="index">Idx ↓</option>
-                            <option value="genpop">GP ↓</option>
-                            <option value="alpha">A-Z</option>
-                        </select>
-                        <input id="llmoBrandConvSearch" type="text" placeholder="Search..." oninput="refreshLLMOBrandConversionTable()" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                    </div>
-                    <div class="llmo-attrib-chart-scroll">
-                        <div class="llmo-attrib-chart-inner">
-                            <canvas id="llmoBrandConversionChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="behavioral-table" style="margin-top: 1rem;">
-                        <div class="behavioral-header-row">
-                            <span>#</span>
-                            <span>Brand</span>
-                            <span class="profile-col" id="llmoBrandConvHProfile">LLM %</span>
-                            <span class="genpop-col" id="llmoBrandConvHGenpop">Gen Pop</span>
-                            <span class="index-col">Index</span>
-                        </div>
-                        <div class="behavioral-list" id="llmoBrandConvList"></div>
-                    </div>
-                </div>
-
                 <!-- LLM to Retailer (1st–3rd post-AI; HOST_MAPPING Where They Shop) -->
                 <div id="llmoRetailerConvSection" class="behavioral-card llmo-brand-conv-wrap" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1.5rem;">
                     <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Percent of panelists who visited a retailer (Where They Shop in HOST_MAPPING) within 3 clicks post LLM usage. LLM % indexed to Gen Pop Where They Shop penetration (Profile IQ parity).">LLM to Retailer</h3>
@@ -15486,6 +15453,39 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- LLM to Brand Conversion (1st–3rd post-AI; HOST_MAPPING Most Purchased Brands) — after 1st/2nd/3rd attribution charts -->
+                <div id="llmoBrandConvSection" class="behavioral-card llmo-brand-conv-wrap" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1.5rem;">
+                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Percent of panelists who visited a brand (owned and via wholesale) within 3 clicks post LLM usage. LLM % indexed to Gen Pop brand penetration (same baseline as Profile IQ).">LLM to Brand Conversion</h3>
+                    <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.75rem;">
+                        <select id="llmoBrandConvSlice" class="behavioral-slice-select" onchange="refreshLLMOBrandConversionTable()" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <option value="all">Show All</option>
+                        </select>
+                        <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
+                        <select id="llmoBrandConvSort" class="behavioral-sort-select" onchange="refreshLLMOBrandConversionTable()" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
+                            <option value="pct" selected>% ↓</option>
+                            <option value="index">Idx ↓</option>
+                            <option value="genpop">GP ↓</option>
+                            <option value="alpha">A-Z</option>
+                        </select>
+                        <input id="llmoBrandConvSearch" type="text" placeholder="Search..." oninput="refreshLLMOBrandConversionTable()" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    </div>
+                    <div class="llmo-attrib-chart-scroll">
+                        <div class="llmo-attrib-chart-inner">
+                            <canvas id="llmoBrandConversionChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="behavioral-table" style="margin-top: 1rem;">
+                        <div class="behavioral-header-row">
+                            <span>#</span>
+                            <span>Brand</span>
+                            <span class="profile-col" id="llmoBrandConvHProfile">LLM %</span>
+                            <span class="genpop-col" id="llmoBrandConvHGenpop">Gen Pop</span>
+                            <span class="index-col">Index</span>
+                        </div>
+                        <div class="behavioral-list" id="llmoBrandConvList"></div>
                     </div>
                 </div>
 
