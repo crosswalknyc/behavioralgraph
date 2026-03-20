@@ -7692,10 +7692,104 @@ def _llmo_build_search_themes_payload(searches, date_str, date_end):
     }
 
 
+def _llmo_merge_search_theme_daily_payloads(payloads):
+    """Merge per-day search_themes objects (from Snowflake summary) into one API payload."""
+    from collections import defaultdict
+    if not payloads:
+        return None
+    merged_w = defaultdict(int)
+    merged_ex = defaultdict(list)
+    seen_q = defaultdict(set)
+    models = []
+    queries_sent = 0
+    for st in payloads:
+        if not isinstance(st, dict) or not st.get('success'):
+            return None
+        meta = st.get('meta') or {}
+        mq = meta.get('queries_sent_to_model')
+        if mq is not None:
+            try:
+                queries_sent += int(mq)
+            except (TypeError, ValueError):
+                pass
+        mdl = meta.get('model')
+        if mdl:
+            models.append(mdl)
+        for c in st.get('categories') or []:
+            theme = (c.get('theme') or 'General Interest').strip() or 'General Interest'
+            w = c.get('weight')
+            if w is None:
+                return None
+            try:
+                wint = int(round(float(w)))
+            except (TypeError, ValueError):
+                return None
+            merged_w[theme] += wint
+            if theme == LLMO_PII_THEME:
+                continue
+            for q in (c.get('examples') or [])[:100]:
+                qs = str(q).strip()
+                if qs and qs not in seen_q[theme] and len(merged_ex[theme]) < 100:
+                    seen_q[theme].add(qs)
+                    merged_ex[theme].append(qs)
+    total_weight = sum(merged_w.values())
+    if total_weight <= 0:
+        return {
+            'success': True,
+            'categories': [],
+            'meta': {
+                'total_weight': 0, 'pii_weight': 0, 'queries_sent_to_model': queries_sent,
+                'message': 'No qualifying searches after PII/noise filters.',
+                'source': 'summary_merge',
+            },
+        }
+    cats = []
+    for theme, w in sorted(merged_w.items(), key=lambda x: -x[1]):
+        pct = round(100.0 * w / total_weight, 2)
+        show_ex = theme != LLMO_PII_THEME
+        ex = [] if not show_ex else merged_ex.get(theme, [])[:100]
+        cats.append({
+            'theme': theme,
+            'pct': pct,
+            'examples': ex,
+            'show_examples': show_ex,
+        })
+    cats.sort(key=lambda x: (x['theme'] == LLMO_PII_THEME, -x['pct']))
+    return {
+        'success': True,
+        'categories': cats,
+        'meta': {
+            'total_weight': total_weight,
+            'pii_weight': int(merged_w.get(LLMO_PII_THEME, 0)),
+            'queries_sent_to_model': queries_sent,
+            'model': models[0] if models else None,
+            'source': 'summary_cortex_merged',
+            'merged_days': len(payloads),
+        },
+    }
+
+
+def _llmo_try_merge_search_themes_from_summary(summary_data, date_str, date_end):
+    """If every day in range has precomputed search_themes in the summary JSON, merge and return."""
+    if not summary_data or not isinstance(summary_data.get('by_date'), dict):
+        return None
+    by_date = summary_data['by_date']
+    matching = sorted(d for d in by_date.keys() if isinstance(d, str) and date_str <= d <= date_end)
+    if not matching:
+        return None
+    payloads = []
+    for d in matching:
+        st = (by_date.get(d) or {}).get('search_themes')
+        if not isinstance(st, dict) or not st.get('success'):
+            return None
+        payloads.append(st)
+    return _llmo_merge_search_theme_daily_payloads(payloads)
+
+
 @app.route('/api/llmo-iq/search-themes', methods=['GET'])
 @requires_auth
 def llmo_iq_search_themes():
-    """PII/noise-filtered search terms → OpenAI theme rollup; cached on disk."""
+    """PII/noise-filtered search terms → precomputed summary (Cortex) or OpenAI theme rollup; disk cache."""
     if not _current_user_has_llmo_iq_access():
         return jsonify({'success': False, 'error': 'LLMO IQ access denied'}), 403
     date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
@@ -7705,6 +7799,10 @@ def llmo_iq_search_themes():
         summary = _llmo_ensure_loaded()
         if summary is None:
             return jsonify({'success': True, 'loading': True}), 200
+
+        merged = _llmo_try_merge_search_themes_from_summary(summary, date_str, date_end)
+        if merged is not None and merged.get('success'):
+            return jsonify(merged)
 
         combined = _llmo_combine_date_range(summary, date_str, date_end)
         searches = combined.get('searches') or []
