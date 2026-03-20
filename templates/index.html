@@ -15359,6 +15359,20 @@
                     </div>
                 </div>
 
+                <!-- LLM -> Most Purchased Brands (1st+2nd+3rd post-AI, HOST_MAPPING) -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <h3 style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600;">LLM to Brand Conversion</h3>
+                    <p style="margin: 0 0 1rem 0; font-size: 0.78rem; color: var(--text-secondary); line-height: 1.45;">
+                        Combined 1st, 2nd, and 3rd clicks after AI. Destinations whose <strong>COMMON_NAME</strong> (pipe-split, case-insensitive) matches <strong>BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING.BRAND</strong> on rows whose <strong>SECTION</strong> includes <strong>Most Purchased Brands</strong>. Ranked by unique users (US Gen Pop projection).
+                        <span style="display:block;margin-top:0.35rem;">Requires <code>SP_LLMO_DAILY</code> summary export; Python-only S3 builds leave this empty until the procedure is deployed.</span>
+                    </p>
+                    <div class="llmo-attrib-chart-scroll">
+                        <div class="llmo-attrib-chart-inner">
+                            <canvas id="llmoBrandConversionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 1st / 2nd / 3rd post-AI attribution + Top Searches -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
@@ -17381,6 +17395,7 @@
         var _llmoAttributionChart = null;
         var _llmoAttributionChart2 = null;
         var _llmoAttributionChart3 = null;
+        var _llmoBrandConversionChart = null;
         var _llmoBrowserChart = null;
         var _llmoPlatformChart = null;
         var _llmoDemoCharts = {};
@@ -17522,6 +17537,7 @@
                     renderLLMOAttribution(data.attribution, 'llmoAttributionChart', '_llmoAttributionChart', '#4285F4');
                     renderLLMOAttribution(data.attribution_second || [], 'llmoAttributionChart2', '_llmoAttributionChart2', '#34A853');
                     renderLLMOAttribution(data.attribution_third || [], 'llmoAttributionChart3', '_llmoAttributionChart3', '#FBBC04');
+                    renderLLMOBrandConversion(data.brand_conversion || []);
                     renderLLMOSearches(data.searches);
                     renderLLMOFlows(data.flows);
                     renderLLMOBrowserPlatform(data.browsers, data.platforms);
@@ -17748,6 +17764,69 @@
             if (holder === '_llmoAttributionChart') _llmoAttributionChart = ch;
             else if (holder === '_llmoAttributionChart2') _llmoAttributionChart2 = ch;
             else if (holder === '_llmoAttributionChart3') _llmoAttributionChart3 = ch;
+        }
+
+        function renderLLMOBrandConversion(rows) {
+            var ctx = document.getElementById('llmoBrandConversionChart');
+            if (!ctx) return;
+            var inner = ctx.closest('.llmo-attrib-chart-inner');
+            if (!inner) inner = ctx.parentElement;
+            if (_llmoBrandConversionChart) { _llmoBrandConversionChart.destroy(); _llmoBrandConversionChart = null; }
+            var fill = '#A78BFA';
+            if (!rows || rows.length === 0) {
+                if (inner) inner.style.height = '260px';
+                _llmoBrandConversionChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: ['No data (run SP_LLMO_DAILY with HOST_MAPPING)'], datasets: [{ data: [0], backgroundColor: 'rgba(255,255,255,0.08)' }] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
+                            y: { ticks: { color: '#e8e8e8' }, grid: { display: false } }
+                        }
+                    }
+                });
+                return;
+            }
+            var top = rows.slice(0, 100);
+            var labels = top.map(function(r) { return r.name; });
+            var values = top.map(function(r) { return r.unique_users_projected; });
+            if (inner) {
+                var n = Math.max(top.length, 1);
+                var innerH = Math.min(3000, Math.max(260, n * 24 + 72));
+                inner.style.height = innerH + 'px';
+            }
+            _llmoBrandConversionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Unique Users',
+                        data: values,
+                        backgroundColor: fill,
+                        borderRadius: 4,
+                        barPercentage: 0.7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(c) { return _llmoFmt(c.parsed.x) + ' users'; }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
+                        y: { ticks: { color: '#e8e8e8', font: { size: 11 } }, grid: { display: false } }
+                    }
+                }
+            });
         }
 
         function renderLLMOSearches(searches) {

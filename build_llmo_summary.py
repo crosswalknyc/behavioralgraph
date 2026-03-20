@@ -129,6 +129,8 @@ def compute_date_summary(day_df):
         'total_ai_users': total_ai_users,
         'total_ai_clicks': total_ai_clicks,
         'llms': llms, 'attribution': attribution,
+        # Filled by Snowflake SP_LLMO_DAILY (joins HOST_MAPPING / Most Purchased Brands)
+        'brand_conversion': [],
         'flows': flows, 'searches': searches,
         'browsers': browsers, 'platforms': platforms,
     }
