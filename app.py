@@ -22,6 +22,7 @@ import threading
 import traceback
 import re
 import io
+import gzip
 import hashlib
 import secrets
 from datetime import datetime, timedelta, date
@@ -152,6 +153,10 @@ JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persis
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
 TICKET_SALES_S3_BUCKET = 'ticket-sales-iq'  # Bucket for Ticket Sales IQ (talent-to-theater attribution)
 TICKET_SALES_TRACKER_S3_BUCKET = 'ticket-sales-tracker'  # Bucket for Ticket Sales Tracker (movie viewers → theater)
+# LLMO IQ: daily rollup produced by build_llmo_summary.py (separate bucket from dashboard-inputs)
+LLMO_S3_BUCKET = os.environ.get('LLMO_S3_BUCKET', 'llmo')
+LLMO_SUMMARY_KEY = os.environ.get('LLMO_SUMMARY_KEY', 'processed/llmo_daily_summary.json.gz')
+LLMO_SUMMARY_MAX_DATES = int(os.environ.get('LLMO_SUMMARY_MAX_DATES', '120'))
 # FORCE us-east-2 - all buckets are in this region, ignore AWS_REGION env var if set
 S3_REGION = 'us-east-2'
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
@@ -5086,6 +5091,59 @@ def api_me_product_access():
         access['success'] = True
         return jsonify(access)
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _current_user_has_llmo_iq_access():
+    user = get_current_user()
+    if not user:
+        return False
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    return bool(acc.get('has_llmo_iq_access'))
+
+
+@app.route('/api/llmo/summary', methods=['GET'])
+@requires_auth
+def api_llmo_summary():
+    """Serve gzipped LLMO daily rollup from S3 (same artifact as build_llmo_summary.py)."""
+    if not _current_user_has_llmo_iq_access():
+        return jsonify({'success': False, 'error': 'LLMO IQ access denied'}), 403
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not available'}), 503
+    try:
+        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=LLMO_SUMMARY_KEY)
+        raw = resp['Body'].read()
+        try:
+            text = gzip.decompress(raw).decode('utf-8')
+        except Exception:
+            text = raw.decode('utf-8')
+        data = json.loads(text)
+        dates = list(data.get('dates') or [])
+        by_date = data.get('by_date') or {}
+        dates = dates[: max(1, LLMO_SUMMARY_MAX_DATES)]
+        slim_by = {d: by_date[d] for d in dates if d in by_date}
+        return jsonify({
+            'success': True,
+            'bucket': LLMO_S3_BUCKET,
+            'key': LLMO_SUMMARY_KEY,
+            'dates': dates,
+            'by_date': slim_by,
+        })
+    except ClientError as e:
+        code = (e.response or {}).get('Error', {}).get('Code', '')
+        if code in ('NoSuchKey', '404'):
+            return jsonify({
+                'success': False,
+                'error': 'no_data',
+                'message': 'No LLMO summary found yet. Run build_llmo_summary.py to populate s3://%s/%s'
+                           % (LLMO_S3_BUCKET, LLMO_SUMMARY_KEY),
+            }), 200
+        print(f'⚠️ api_llmo_summary S3 error: {e}')
+        return jsonify({'success': False, 'error': 'S3 read failed', 'details': str(e)}), 502
+    except Exception as e:
+        print(f'⚠️ api_llmo_summary error: {e}')
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

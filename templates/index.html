@@ -662,6 +662,11 @@
         #hedgeFundIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #ticketSalesTrackerView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
+        #llmoIQView .llmo-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+        #llmoIQView .llmo-table { width: 100%; font-size: 0.85rem; border-collapse: collapse; }
+        #llmoIQView .llmo-table th, #llmoIQView .llmo-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left; }
+        #llmoIQView .llmo-table th { color: var(--text-secondary); font-weight: 600; }
+        #llmoIQView .llmo-kpi { font-size: 1.75rem; font-weight: 700; color: var(--accent-lime); }
         
         /* Custom Analysis Tabs */
         .custom-analysis-tabs-container {
@@ -15226,23 +15231,74 @@
             </div>
         </div><!-- End ticketSalesTrackerView -->
 
-        <!-- LLMO IQ VIEW -->
+        <!-- LLMO IQ VIEW (data from /api/llmo/summary → S3 llmo/processed/llmo_daily_summary.json.gz) -->
         <div id="llmoIQView" style="display: none;">
+            {% if not has_llmo_iq_access %}
             <div class="dashboard-empty-state" style="min-height: 50vh; display: flex; align-items: center; justify-content: center;">
                 <div class="empty-state-content" style="max-width: 520px; text-align: center;">
                     <div class="empty-state-icon">🤖</div>
                     <h2 style="margin: 0.5rem 0;">LLMO IQ</h2>
-                    {% if has_llmo_iq_access %}
                     <p style="color: var(--text-secondary); line-height: 1.5;">
-                        You have access. LLMO (AI agent / chat traffic) dashboards and exports will appear here as they are rolled out.
+                        LLMO IQ is not enabled for your account. Ask your admin to turn on <strong>LLMO IQ</strong> in company defaults or your user profile, then refresh.
                     </p>
-                    {% else %}
-                    <p style="color: var(--text-secondary); line-height: 1.5;">
-                        LLMO IQ is not enabled for your account yet. Ask your admin to turn on <strong>LLMO IQ</strong> in company defaults or your user profile, then refresh this page.
-                    </p>
-                    {% endif %}
                 </div>
             </div>
+            {% else %}
+            <div id="llmoDashboardRoot" style="max-width: 1400px; margin: 0 auto;">
+                <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem;">
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.35rem;">🤖 LLMO IQ</h2>
+                        <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">AI agent traffic, post-AI attribution, and search terms (daily rollup).</p>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem;">
+                        <label style="font-size: 0.85rem; color: var(--text-secondary);">Delivered date
+                            <select id="llmoDateSelect" style="margin-left: 0.35rem; padding: 0.45rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); min-width: 140px;"></select>
+                        </label>
+                        <button type="button" class="btn btn-secondary" onclick="loadLLMOSummary(true)" style="padding: 0.45rem 0.9rem;">↻ Refresh</button>
+                    </div>
+                </div>
+                <div id="llmoErrorBanner" class="llmo-panel" style="display: none; border-color: #c44; color: #faa;"></div>
+                <div id="llmoLoadingState" class="llmo-panel" style="text-align: center; color: var(--text-secondary);">Loading LLMO summary…</div>
+                <div id="llmoMainContent" style="display: none;">
+                    <div class="exec-summary-grid" style="margin-bottom: 1rem;">
+                        <div class="llmo-panel" style="margin-bottom: 0;">
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Unique users (AI_AGENT)</div>
+                            <div class="llmo-kpi" id="llmoKpiUsers">—</div>
+                        </div>
+                        <div class="llmo-panel" style="margin-bottom: 0;">
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">AI_AGENT events</div>
+                            <div class="llmo-kpi" id="llmoKpiClicks">—</div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem;">
+                        <div class="llmo-panel">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">LLMs / agents (AI_AGENT)</h4>
+                            <div id="llmoTableLLMs" style="overflow-x: auto; max-height: 320px; overflow-y: auto;"></div>
+                        </div>
+                        <div class="llmo-panel">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">Post-AI attribution (POST_AI_NON_AGENT)</h4>
+                            <div id="llmoTableAttr" style="overflow-x: auto; max-height: 320px; overflow-y: auto;"></div>
+                        </div>
+                        <div class="llmo-panel">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">AI → next destination (flows)</h4>
+                            <div id="llmoTableFlows" style="overflow-x: auto; max-height: 280px; overflow-y: auto;"></div>
+                        </div>
+                        <div class="llmo-panel">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">Search terms (from URLs)</h4>
+                            <div id="llmoTableSearches" style="overflow-x: auto; max-height: 280px; overflow-y: auto;"></div>
+                        </div>
+                        <div class="llmo-panel">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">Browsers</h4>
+                            <div id="llmoTableBrowsers" style="overflow-x: auto; max-height: 240px; overflow-y: auto;"></div>
+                        </div>
+                        <div class="llmo-panel">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">Platforms</h4>
+                            <div id="llmoTablePlatforms" style="overflow-x: auto; max-height: 240px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div><!-- End llmoIQView -->
 
         <!-- HEDGE FUND IQ VIEW -->
@@ -17154,7 +17210,147 @@
             if (customAnalysisView) customAnalysisView.style.display = 'none';
             const llmoView = document.getElementById('llmoIQView');
             if (llmoView) llmoView.style.display = 'flex';
+            if (document.getElementById('llmoDashboardRoot') && typeof window.loadLLMOSummary === 'function') {
+                window.loadLLMOSummary(false);
+            }
         }
+
+        window.llmoSummaryCache = null;
+        function _llmoEsc(s) {
+            if (s == null || s === undefined) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function _llmoHtmlTable(rows, colDefs) {
+            if (!rows || !rows.length) {
+                return '<p style="color:var(--text-secondary);font-size:0.85rem;margin:0;">No data for this date.</p>';
+            }
+            var h = '<table class="llmo-table"><thead><tr>';
+            colDefs.forEach(function(c) { h += '<th>' + _llmoEsc(c.label) + '</th>'; });
+            h += '</tr></thead><tbody>';
+            rows.forEach(function(r) {
+                h += '<tr>';
+                colDefs.forEach(function(c) {
+                    var v = r[c.key];
+                    if (typeof c.fmt === 'function') v = c.fmt(v);
+                    else if (typeof v === 'number') v = v.toLocaleString();
+                    h += '<td>' + _llmoEsc(v) + '</td>';
+                });
+                h += '</tr>';
+            });
+            h += '</tbody></table>';
+            return h;
+        }
+        window.renderLLMOForSelectedDate = function() {
+            var sel = document.getElementById('llmoDateSelect');
+            var d = window.llmoSummaryCache;
+            if (!sel || !d || !d.by_date) return;
+            var dayKey = sel.value;
+            var day = d.by_date[dayKey];
+            if (!day) {
+                document.getElementById('llmoKpiUsers').textContent = '—';
+                document.getElementById('llmoKpiClicks').textContent = '—';
+                ['llmoTableLLMs', 'llmoTableAttr', 'llmoTableFlows', 'llmoTableSearches', 'llmoTableBrowsers', 'llmoTablePlatforms'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;">No data.</p>';
+                });
+                return;
+            }
+            document.getElementById('llmoKpiUsers').textContent = day.total_ai_users != null ? Number(day.total_ai_users).toLocaleString() : '—';
+            document.getElementById('llmoKpiClicks').textContent = day.total_ai_clicks != null ? Number(day.total_ai_clicks).toLocaleString() : '—';
+            var llmRows = (day.llms || []).map(function(x) {
+                return { name: x.name, uu: x.unique_users, cl: x.total_clicks };
+            });
+            document.getElementById('llmoTableLLMs').innerHTML = _llmoHtmlTable(llmRows, [
+                { key: 'name', label: 'Name' }, { key: 'uu', label: 'Unique users' }, { key: 'cl', label: 'Clicks' }
+            ]);
+            var attrRows = (day.attribution || []).map(function(x) {
+                return { name: x.name, uu: x.unique_users, cl: x.total_clicks };
+            });
+            document.getElementById('llmoTableAttr').innerHTML = _llmoHtmlTable(attrRows, [
+                { key: 'name', label: 'Destination' }, { key: 'uu', label: 'Unique users' }, { key: 'cl', label: 'Clicks' }
+            ]);
+            var flowRows = (day.flows || []).map(function(x) {
+                return { src: x.source, dst: x.destination, uu: x.unique_users, cl: x.clicks };
+            });
+            document.getElementById('llmoTableFlows').innerHTML = _llmoHtmlTable(flowRows, [
+                { key: 'src', label: 'From (AI)' }, { key: 'dst', label: 'To' }, { key: 'uu', label: 'Users' }, { key: 'cl', label: 'Clicks' }
+            ]);
+            var searchRows = (day.searches || []).map(function(x) {
+                return { term: x.term, n: x.count };
+            });
+            document.getElementById('llmoTableSearches').innerHTML = _llmoHtmlTable(searchRows, [
+                { key: 'term', label: 'Term' }, { key: 'n', label: 'Count' }
+            ]);
+            var brRows = (day.browsers || []).map(function(x) {
+                return { name: x.name, uu: x.unique_users };
+            });
+            document.getElementById('llmoTableBrowsers').innerHTML = _llmoHtmlTable(brRows, [
+                { key: 'name', label: 'Browser' }, { key: 'uu', label: 'Unique users' }
+            ]);
+            var plRows = (day.platforms || []).map(function(x) {
+                return { name: x.name, uu: x.unique_users };
+            });
+            document.getElementById('llmoTablePlatforms').innerHTML = _llmoHtmlTable(plRows, [
+                { key: 'name', label: 'Platform' }, { key: 'uu', label: 'Unique users' }
+            ]);
+        };
+        window.loadLLMOSummary = async function(force) {
+            var root = document.getElementById('llmoDashboardRoot');
+            if (!root) return;
+            var loadEl = document.getElementById('llmoLoadingState');
+            var mainEl = document.getElementById('llmoMainContent');
+            var errEl = document.getElementById('llmoErrorBanner');
+            if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+            if (force) window.llmoSummaryCache = null;
+            if (!window.llmoSummaryCache) {
+                if (loadEl) loadEl.style.display = 'block';
+                if (mainEl) mainEl.style.display = 'none';
+                try {
+                    var r = await fetch('/api/llmo/summary', { credentials: 'same-origin' });
+                    var data = await r.json();
+                    if (r.status === 403) {
+                        if (loadEl) loadEl.style.display = 'none';
+                        if (errEl) { errEl.textContent = 'You do not have access to LLMO IQ.'; errEl.style.display = 'block'; }
+                        return;
+                    }
+                    if (!data.success) {
+                        if (loadEl) loadEl.style.display = 'none';
+                        if (errEl) {
+                            errEl.textContent = data.message || data.error || 'Could not load LLMO summary.';
+                            errEl.style.display = 'block';
+                        }
+                        return;
+                    }
+                    window.llmoSummaryCache = data;
+                } catch (e) {
+                    if (loadEl) loadEl.style.display = 'none';
+                    if (errEl) { errEl.textContent = 'Network error loading LLMO data.'; errEl.style.display = 'block'; }
+                    return;
+                }
+            }
+            if (loadEl) loadEl.style.display = 'none';
+            if (mainEl) mainEl.style.display = 'block';
+            var sel = document.getElementById('llmoDateSelect');
+            var d = window.llmoSummaryCache;
+            if (!sel || !d) return;
+            var prev = sel.value;
+            sel.innerHTML = '';
+            (d.dates || []).forEach(function(dt) {
+                var o = document.createElement('option');
+                o.value = dt;
+                o.textContent = dt;
+                sel.appendChild(o);
+            });
+            if (sel.options.length) {
+                if (prev && Array.prototype.some.call(sel.options, function(opt) { return opt.value === prev; })) {
+                    sel.value = prev;
+                } else {
+                    sel.selectedIndex = 0;
+                }
+            }
+            sel.onchange = function() { window.renderLLMOForSelectedDate(); };
+            window.renderLLMOForSelectedDate();
+        };
         
         window.showTalentSearchIQ = function() {
             const talentSearchTab = document.getElementById('talentSearchIQTab');

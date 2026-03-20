@@ -103,6 +103,12 @@ SNOWFLAKE_CONFIG = {
 | `/api/status/<job_id>` | GET | Get job status |
 | `/api/download/<job_id>` | GET | Download results |
 | `/api/jobs` | GET | List all jobs |
+| `/api/me/product-access` | GET | Module flags (dropdown sync) |
+| `/api/llmo/summary` | GET | LLMO daily rollup JSON (requires LLMO IQ access) |
+
+### LLMO IQ
+
+Daily summary is built by `build_llmo_summary.py` and uploaded to **`s3://llmo/processed/llmo_daily_summary.json.gz`** (gzip JSON). The web app reads it with the same AWS credentials as other S3 usage — grant **`s3:GetObject`** on that bucket/key (or override with env **`LLMO_S3_BUCKET`** / **`LLMO_SUMMARY_KEY`**). Users need **LLMO IQ** enabled in Admin.
 
 ## License
 
