@@ -96,6 +96,21 @@ After switching to native Python runtime, deployments should:
 
 ---
 
+## behavioral-graph-dev not showing latest code?
+
+We push app changes to the GitHub **`dev`** branch (`crosswalknyc/behavioralgraph`). **Production** often deploys from **`main`**, so the **dev** Render service must be wired to **`dev`**.
+
+1. **Render Dashboard** → open service **behavioral-graph-dev** (or whatever the dev web service is named).
+2. **Settings** → **Build & Deploy**:
+   - **Branch** = **`dev`** (if it says `main`, dev will never show dev-branch commits).
+   - **Auto-Deploy** = **On** (so each push to `dev` starts a deploy).
+3. **Manual Deploy** → **Deploy latest commit** to pick up changes immediately.
+4. Confirm GitHub: [behavioralgraph `dev` branch](https://github.com/crosswalknyc/behavioralgraph/tree/dev) shows your commit (e.g. LLMO scroll/top-100 work is on `dev`).
+
+If the service is a **separate repo** or **submodule** checkout, ensure the build pulls **`behavioralgraph` @ `dev`**, not `finished_codes` only.
+
+---
+
 ## LLMO IQ — Snowflake procedure & S3 summary
 
 1. **S3 stage**: `PROCESSEDCLICKSTREAM.PUBLIC.LLMO_EXPORT_STAGE` must exist with valid credentials for `s3://llmo/` (see commented example in `setup_llmo_daily.sql`).  
