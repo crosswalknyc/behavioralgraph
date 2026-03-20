@@ -15493,7 +15493,27 @@
                 <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- Source LLM -> Destination Flows -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">AI Agent -> Destination Flows</h3>
+                        <h3 class="has-tooltip" style="margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="First post-AI click after an AI agent visit. Destination type uses Gen Pop lists: Brand = MOST PURCHASED BRANDS values; Retailer = WHERE THEY SHOP values (pipe-split names matched case-insensitively).">AI Agent → Destination Flows</h3>
+                        <div class="behavioral-filter llmo-flows-toolbar" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.65rem;">
+                            <span style="font-size: 0.65rem; color: var(--text-secondary); white-space: nowrap;">Destination:</span>
+                            <select id="llmoFlowsCategory" onchange="refreshLLMOFlowsTable()" style="flex: 1; min-width: 100px; padding: 0.3rem 0.45rem; font-size: 0.72rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="overall" selected>Overall</option>
+                                <option value="brand">Brand</option>
+                                <option value="retailer">Retailer</option>
+                            </select>
+                            <span style="font-size: 0.65rem; color: var(--text-secondary); white-space: nowrap;">Source LLM:</span>
+                            <select id="llmoFlowsSourceFilter" onchange="refreshLLMOFlowsTable()" style="flex: 1; min-width: 110px; padding: 0.3rem 0.45rem; font-size: 0.72rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="">All sources</option>
+                            </select>
+                            <span style="font-size: 0.65rem; color: var(--text-secondary); white-space: nowrap;">Sort:</span>
+                            <select id="llmoFlowsSort" onchange="refreshLLMOFlowsTable()" style="flex: 1; min-width: 120px; padding: 0.3rem 0.45rem; font-size: 0.72rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="users_desc" selected>Users ↓</option>
+                                <option value="clicks_desc">Clicks ↓</option>
+                                <option value="source_az">Source A–Z</option>
+                                <option value="source_za">Source Z–A</option>
+                                <option value="dest_az">Destination A–Z</option>
+                            </select>
+                        </div>
                         <div style="overflow-y: auto; max-height: 450px;">
                             <table id="llmoFlowsTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
                                 <thead>
@@ -17639,7 +17659,7 @@
                     renderLLMORetailerConversion(data);
                     renderLLMOSearches(data.searches);
                     syncLLMOChartTooltips();
-                    renderLLMOFlows(data.flows);
+                    setLLMOFlowsFromApi(data.flows);
                     renderLLMOBrowserPlatform(data.browsers, data.platforms);
                     _llmoTrendDatesCache = data.trend_dates;
                     _llmoTrendByLLMCache = data.trend_by_llm;
@@ -18327,17 +18347,78 @@
             tbody.innerHTML = html;
         }
 
-        function renderLLMOFlows(flows) {
+        var _llmoFlowsAll = [];
+
+        function setLLMOFlowsFromApi(flows) {
+            _llmoFlowsAll = (flows && flows.length) ? flows.slice() : [];
+            var srcSel = document.getElementById('llmoFlowsSourceFilter');
+            if (srcSel) {
+                var prev = srcSel.value || '';
+                var sources = [];
+                var seen = {};
+                _llmoFlowsAll.forEach(function(f) {
+                    var s = (f.source || '').trim();
+                    if (s && !seen[s]) { seen[s] = true; sources.push(s); }
+                });
+                sources.sort(function(a, b) { return a.localeCompare(b); });
+                srcSel.innerHTML = '<option value="">All sources</option>';
+                sources.forEach(function(s) {
+                    var o = document.createElement('option');
+                    o.value = s;
+                    o.textContent = s;
+                    srcSel.appendChild(o);
+                });
+                if (prev && seen[prev]) srcSel.value = prev;
+            }
+            refreshLLMOFlowsTable();
+        }
+
+        function refreshLLMOFlowsTable() {
             var tbody = document.getElementById('llmoFlowsBody');
-            if (!flows || flows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="padding:2rem;text-align:center;color:var(--text-secondary);">No flow data available</td></tr>';
+            if (!tbody) return;
+            var catEl = document.getElementById('llmoFlowsCategory');
+            var sortEl = document.getElementById('llmoFlowsSort');
+            var srcEl = document.getElementById('llmoFlowsSourceFilter');
+            var cat = (catEl && catEl.value) ? catEl.value : 'overall';
+            var sortVal = (sortEl && sortEl.value) ? sortEl.value : 'users_desc';
+            var srcPick = (srcEl && srcEl.value) ? srcEl.value.trim() : '';
+
+            var rows = (_llmoFlowsAll || []).map(function(f) { return f; });
+            if (cat === 'brand') {
+                rows = rows.filter(function(f) { return f.dest_brand === true; });
+            } else if (cat === 'retailer') {
+                rows = rows.filter(function(f) { return f.dest_retailer === true; });
+            }
+            if (srcPick) {
+                rows = rows.filter(function(f) { return (f.source || '').trim() === srcPick; });
+            }
+
+            if (sortVal === 'clicks_desc') {
+                rows.sort(function(a, b) { return (b.clicks || 0) - (a.clicks || 0); });
+            } else if (sortVal === 'source_az') {
+                rows.sort(function(a, b) { return (a.source || '').localeCompare(b.source || ''); });
+            } else if (sortVal === 'source_za') {
+                rows.sort(function(a, b) { return (b.source || '').localeCompare(a.source || ''); });
+            } else if (sortVal === 'dest_az') {
+                rows.sort(function(a, b) { return (a.destination || '').localeCompare(b.destination || ''); });
+            } else {
+                rows.sort(function(a, b) { return (b.unique_users || 0) - (a.unique_users || 0); });
+            }
+
+            if (rows.length === 0) {
+                var emptyMsg = (!_llmoFlowsAll || !_llmoFlowsAll.length)
+                    ? 'No flow data available'
+                    : 'No rows for this filter — try Overall or another source.';
+                tbody.innerHTML = '<tr><td colspan="4" style="padding:2rem;text-align:center;color:var(--text-secondary);">' + emptyMsg + '</td></tr>';
                 return;
             }
             var html = '';
-            flows.slice(0, 50).forEach(function(f) {
+            rows.slice(0, 200).forEach(function(f) {
+                var srcEsc = String(f.source || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var dstEsc = String(f.destination || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 html += '<tr style="border-bottom:1px solid var(--border-color);">'
-                    + '<td style="padding:0.4rem 0.5rem;font-weight:600;">' + (f.source || '') + '</td>'
-                    + '<td style="padding:0.4rem 0.5rem;">' + (f.destination || '') + '</td>'
+                    + '<td style="padding:0.4rem 0.5rem;font-weight:600;">' + srcEsc + '</td>'
+                    + '<td style="padding:0.4rem 0.5rem;">' + dstEsc + '</td>'
                     + '<td style="padding:0.4rem 0.5rem;text-align:right;">' + _llmoFmt(f.unique_users) + '</td>'
                     + '<td style="padding:0.4rem 0.5rem;text-align:right;">' + _llmoFmt(f.clicks) + '</td>'
                     + '</tr>';

@@ -162,6 +162,8 @@ LLMO_CACHE_TTL = int(os.environ.get('LLMO_CACHE_TTL', '86400'))
 _llmo_gp_slice_brands_cache = None
 # Same for LLM → Retailer (Where They Shop slicer options)
 _llmo_wts_slice_brands_cache = None
+# Gen Pop value sets for classifying flow destinations (MPB vs WTS columns)
+_llmo_flow_dest_token_sets_cache = None
 # FORCE us-east-2 - all buckets are in this region, ignore AWS_REGION env var if set
 S3_REGION = 'us-east-2'
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
@@ -7223,6 +7225,45 @@ def _llmo_enrich_retailer_conversion_rows(rows):
     return rows
 
 
+def _llmo_get_genpop_flow_destination_token_sets():
+    """Lowercase tokens from Gen Pop for MOST PURCHASED BRANDS vs WHERE THEY SHOP (destination typing)."""
+    global _llmo_flow_dest_token_sets_cache
+    if _llmo_flow_dest_token_sets_cache is not None:
+        return _llmo_flow_dest_token_sets_cache
+    import bg
+    gp = bg._load_genpop_csv()
+    if gp is None:
+        _llmo_flow_dest_token_sets_cache = (set(), set())
+        return _llmo_flow_dest_token_sets_cache
+    g = gp.copy()
+    col_cat = g.columns[0]
+    col_val = g.columns[1]
+    g['_col'] = g[col_cat].astype(str).str.strip().str.upper()
+    g['_val'] = g[col_val].astype(str).str.strip().str.lower()
+    mpb = set(g.loc[g['_col'] == 'MOST PURCHASED BRANDS', '_val'].dropna().astype(str).str.strip().str.lower())
+    wts = set(g.loc[g['_col'] == 'WHERE THEY SHOP', '_val'].dropna().astype(str).str.strip().str.lower())
+    mpb = {x for x in mpb if x and x not in ('nan', 'none', '')}
+    wts = {x for x in wts if x and x not in ('nan', 'none', '')}
+    _llmo_flow_dest_token_sets_cache = (mpb, wts)
+    return _llmo_flow_dest_token_sets_cache
+
+
+def _llmo_flow_destination_brand_retailer_flags(destination):
+    """True if any pipe-split destination token appears in Gen Pop MPB and/or WTS lists."""
+    mpb, wts = _llmo_get_genpop_flow_destination_token_sets()
+    is_brand = False
+    is_retailer = False
+    for part in _llmo_split_multi_names(destination):
+        t = part.strip().lower()
+        if not t:
+            continue
+        if t in mpb:
+            is_brand = True
+        if t in wts:
+            is_retailer = True
+    return is_brand, is_retailer
+
+
 def _llmo_split_multi_names(name):
     """Split COMMON_NAME-style values on '|' into separate entities; empty -> ['Unknown']."""
     if name is None:
@@ -7387,10 +7428,20 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
     } for _, v in rt_sorted]
     retailer_conversion = _llmo_enrich_retailer_conversion_rows(retailer_conversion)
 
-    flow_sorted = sorted(flow_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
-    flows = [{'source': k[0], 'destination': k[1],
-              'unique_users': round(v['uu'] * M), 'clicks': round(v['cl'] * M)}
-             for k, v in flow_sorted]
+    # More rows so UI can filter by destination category without emptying the list
+    flow_sorted = sorted(flow_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:500]
+    flows = []
+    for k, v in flow_sorted:
+        src, dst = k[0], k[1]
+        db, dr = _llmo_flow_destination_brand_retailer_flags(dst)
+        flows.append({
+            'source': src,
+            'destination': dst,
+            'unique_users': round(v['uu'] * M),
+            'clicks': round(v['cl'] * M),
+            'dest_brand': db,
+            'dest_retailer': dr,
+        })
 
     search_sorted = sorted(search_agg.items(), key=lambda x: x[1], reverse=True)[:100]
     searches = [{'term': t, 'count': round(c * M)} for t, c in search_sorted]
