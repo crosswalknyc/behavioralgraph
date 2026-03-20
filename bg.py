@@ -1605,59 +1605,8 @@ def validate_demographics(df, archetype, sample_size):
                 print(f"   🔧 Age: reshaped for '{age_skew}' archetype "
                       f"(top-2 had old-age groups)")
 
-    # ── GENDER reshaping ─────────────────────────────────────────────────
-    # Directly set a realistic gender distribution based on the archetype.
-    # PREFER NOT TO SAY and other non-binary categories get small fixed shares;
-    # the bulk goes to MALE/FEMALE based on the skew direction.
-    gender_skew = archetype.get('gender_skew', 'balanced')
-    gm = df['Column'].str.upper() == 'GENDER'
-    gender_rows = {}
-    for idx in df[gm].index:
-        val = str(df.at[idx, 'Value']).upper()
-        gender_rows[idx] = val
-
-    if gender_rows:
-        if gender_skew == 'male':
-            target = {'MALE': 65.0, 'FEMALE': 30.0}
-        elif gender_skew == 'female':
-            target = {'MALE': 28.0, 'FEMALE': 67.0}
-        else:
-            target = {'MALE': 48.0, 'FEMALE': 47.0}
-        minor_shares = {
-            'NON-BINARY': 1.2,
-            'TRANS MALE': 0.6,
-            'TRANS FEMALE': 0.5,
-            'PREFER NOT TO SAY': 2.4,
-        }
-        minor_labels = set(minor_shares.keys())
-        minor_total = sum(minor_shares.get(v, 0.8) for v in gender_rows.values() if v in minor_labels)
-        remaining = 100.0 - minor_total
-        male_target = target.get('MALE', 48.0) / (target.get('MALE', 48.0) + target.get('FEMALE', 47.0)) * remaining
-        female_target = remaining - male_target
-        for idx, val in gender_rows.items():
-            if val in minor_labels:
-                _gp = round(minor_shares.get(val, 0.8), 4)
-                df.at[idx, pct_col] = f"{_gp:.4f}"
-                if bp_col and bp_col in df.columns:
-                    df.at[idx, bp_col] = f"{_gp:.4f}"
-            elif val == 'MALE' or (val.startswith('MALE') and 'FEMALE' not in val and 'TRANS' not in val):
-                _gp = round(male_target, 4)
-                df.at[idx, pct_col] = f"{_gp:.4f}"
-                if bp_col and bp_col in df.columns:
-                    df.at[idx, bp_col] = f"{_gp:.4f}"
-            elif val == 'FEMALE' or val.startswith('FEMALE'):
-                _gp = round(female_target, 4)
-                df.at[idx, pct_col] = f"{_gp:.4f}"
-                if bp_col and bp_col in df.columns:
-                    df.at[idx, bp_col] = f"{_gp:.4f}"
-            else:
-                _gp = round(0.8, 4)
-                df.at[idx, pct_col] = f"{_gp:.4f}"
-                if bp_col and bp_col in df.columns:
-                    df.at[idx, bp_col] = f"{_gp:.4f}"
-        corrections += len(gender_rows)
-        print(f"   🔧 Gender: set {gender_skew} distribution "
-              f"(M={male_target:.1f}%, F={female_target:.1f}%, minor varied)")
+    # ── GENDER: never overwrite from archetype — use panel + AI demographic agents ──
+    # (Hard-coded M/F targets contradicted file-derived audiences, e.g. balanced profiles.)
 
     # ── ETHNICITY (light touch -- only dampen extreme outliers) ───────────
     expected_high = [e.upper() for e in archetype.get('ethnicity_over_index', [])]
@@ -2373,8 +2322,7 @@ def ai_actor_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -2569,8 +2517,7 @@ def ai_creator_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -2765,8 +2712,7 @@ def ai_athlete_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -2961,8 +2907,7 @@ def ai_host_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -3157,8 +3102,7 @@ def ai_musician_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -3353,8 +3297,7 @@ def ai_politics_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -3548,8 +3491,7 @@ def ai_creative_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -3744,8 +3686,7 @@ def ai_series_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -3940,8 +3881,7 @@ def ai_podcast_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -4137,8 +4077,7 @@ def ai_app_platform_demographic_review(df, brand_category, project_name, brands)
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -4334,8 +4273,7 @@ def ai_broadcast_cable_demographic_review(df, brand_category, project_name, bran
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -4900,8 +4838,7 @@ def ai_media_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -5124,8 +5061,7 @@ def ai_movie_theater_demographic_review(df, brand_category, project_name, brands
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -5342,8 +5278,7 @@ def ai_search_engine_ai_demographic_review(df, brand_category, project_name, bra
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -5777,8 +5712,7 @@ def ai_social_media_demographic_review(df, brand_category, project_name, brands)
     client = _get_openai_client()
     if not client:
         print("⚠️  OpenAI not available — skipping social media demographic review")
-        subject = project_name or (brands[0] if brands else 'Unknown')
-        subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+        subject_clean = extract_profile_subject_from_df(df, project_name, brands)
         return _enforce_all_demographics(df, subject_clean, brand_category)
 
     import json as _json
@@ -5796,8 +5730,7 @@ def ai_social_media_demographic_review(df, brand_category, project_name, brands)
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -6003,8 +5936,7 @@ def ai_universal_demographic_review(df, brand_category, project_name, brands):
     client = _get_openai_client()
     if not client:
         print(f"⚠️  OpenAI not available — skipping universal demographic review for {bc_upper}")
-        subject = project_name or (brands[0] if brands else 'Unknown')
-        subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+        subject_clean = extract_profile_subject_from_df(df, project_name, brands)
         return _enforce_all_demographics(df, subject_clean, brand_category)
 
     import json as _json
@@ -6022,8 +5954,7 @@ def ai_universal_demographic_review(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     web_research = _research_brand_demographics(client, subject_clean, brand_category)
     research_block = (
         "\n=== REAL-WORLD RESEARCH (from web search) ===\n"
@@ -6209,13 +6140,44 @@ Each corrected category sums to 100. JSON only, no markdown."""
 # behavioral category row by row — ensuring coherence with who the
 # audience actually is.  Uses GPT-4o + web research.
 
+def extract_profile_subject_from_df(df, project_name=None, brands=None):
+    """Profile subject label from the file first (metadata / brand input), then fallbacks.
+
+    Order: INPUT_METADATA ``BRAND:...`` → BRAND INPUT ``Value`` (if not CSV) →
+    ``project_name`` → first ``brands`` entry. Never hard-code a subject string.
+    """
+    import re as _re_subj
+    fallback = project_name or (brands[0] if brands else None) or 'Unknown'
+    fallback = str(fallback).replace('_', ' ').replace('-', ' ').strip()
+    if df is None or df.empty or 'Column' not in df.columns:
+        return fallback
+    _colu = df['Column'].str.upper().str.strip()
+    _meta = _colu == 'INPUT_METADATA'
+    if _meta.any():
+        _raw = str(df.loc[_meta].iloc[0].get('Value', '') or '')
+        _m = _re_subj.search(r'BRAND:(.+?)_SAMPLE', _raw, _re_subj.I)
+        if _m:
+            _sub = _m.group(1).strip().replace('_', ' ').replace('-', ' ').strip()
+            if _sub and _sub.upper() not in ('CSV', 'UNKNOWN', 'NAN'):
+                return _sub
+    _bi = _colu == 'BRAND INPUT'
+    if _bi.any():
+        _bv = str(df.loc[_bi].iloc[0].get('Value', '')).strip()
+        if _bv and _bv.upper() not in ('CSV', 'N/A', 'NAN', '', 'NONE'):
+            return _bv.replace('_', ' ').replace('-', ' ').strip()
+    return fallback
+
+
 def _build_profile_summary(df):
-    """Extract a compact natural-language summary of the profile's demographics."""
+    """Extract a compact natural-language summary of the profile's demographics from the file."""
     cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
-    bp_col = 'Brand Penetration (Row)'
     summary_parts = []
 
-    for demo_cat in ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION']:
+    _demo_cats = [
+        'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+    ]
+    for demo_cat in _demo_cats:
         mask = df['Column'].str.upper().str.strip() == demo_cat
         if not mask.any():
             continue
@@ -6266,8 +6228,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
 
     df = df.copy()
 
-    subject = project_name or (brands[0] if brands else 'Unknown')
-    subject_clean = subject.replace('_', ' ').replace('-', ' ').strip()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
     bc = (brand_category or '').strip()
 
     sample_raw = 1
@@ -6719,20 +6680,19 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"- Is it showing OVER when this persona would AVOID it? → FIX\n"
             f"- Is it showing UNDER when this persona has AFFINITY? → FIX\n"
             f"- Is it at PARITY when this persona has clear feelings? → FIX\n\n"
-            f"CRITICAL — DEMOGRAPHIC DIRECTION RULES:\n"
-            f"These MUST be enforced regardless of what the organic data shows:\n"
-            f"- MALE audience (>55%): female-skewing brands MUST under-index. "
-            f"Examples: Pinterest, Lululemon, Bath & Body Works, Sephora, "
-            f"Victoria's Secret, Pandora, Kate Spade, Ulta, NYX, etc.\n"
-            f"- FEMALE audience (>55%): male-skewing brands MUST under-index. "
-            f"Examples: Old Spice, ESPN, DraftKings, Barstool, etc.\n"
-            f"- YOUNG audience (<35): boomer-skewing brands MUST under-index. "
-            f"Examples: Facebook, Fox News, AARP, Macy's, PBS, etc.\n"
-            f"- OLDER audience (>45): Gen-Z brands MUST under-index. "
-            f"Examples: TikTok, Roblox, Discord, Snapchat, etc.\n"
-            f"Even INDEX 101-110 is WRONG if the brand clearly mismatches "
-            f"the demographic. A 104 for a female brand in a male audience "
-            f"should be corrected to ~85-95.\n\n"
+            f"CRITICAL — DEMOGRAPHIC DIRECTION (from THIS profile file only):\n"
+            f"- Male-identified share (MALE+TRANS MALE in file): ~{male_pct:.0f}%. "
+            f"Female-identified (FEMALE+TRANS FEMALE): ~{female_pct:.0f}%.\n"
+            f"- If male-identified leads female by ≥10 points: female-skewing brands "
+            f"(beauty, women's fashion, Pinterest-class) should tend to UNDER-index; "
+            f"fix clear mismatches even at INDEX ~100–110.\n"
+            f"- If female-identified leads male by ≥10 points: male-skewing brands "
+            f"(e.g. some sports betting, barstool-class) should tend to UNDER-index.\n"
+            f"- If within ~10 points: gender is **balanced in the file** — do NOT assume "
+            f"a heavy male or female skew; only fix items that clearly mismatch the persona.\n"
+            f"- Youth: file shows ~{young_pct:.0f}% in younger brackets (18–34 style rows). "
+            f"If very young-heavy, older-skew platforms may under-index; if older-heavy, "
+            f"Gen-Z platforms may under-index. Use {demo_skew_summary} as ground truth.\n\n"
             f"=== BEHAVIORAL DATA (batch {batch_num}/{len(spot_batches)}) ===\n"
             + "\n\n".join(items_text) +
             f"\n\n=== RULES ===\n"
@@ -6815,7 +6775,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             if total_with_gp < 5:
                 continue
             over_pct = (over_count / total_with_gp) * 100
-            if over_pct >= 65 and (male_pct > 55 or female_pct > 55):
+            _skew_m = male_pct >= female_pct + 10.0
+            _skew_f = female_pct >= male_pct + 10.0
+            if over_pct >= 65 and (_skew_m or _skew_f):
                 flagged_cats[cat] = (over_count, total_with_gp, over_pct,
                                      cat_items_with_index)
 
@@ -6840,13 +6802,14 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"Gen Pop, which may be participation bias:\n\n"
                 + "\n".join(triage_lines) +
                 f"\n\nWhich categories contain items that CONFLICT with the "
-                f"audience demographics? For example:\n"
-                f"- BEAUTY/WELLNESS for a 70% male audience → many female "
-                f"brands would incorrectly over-index\n"
-                f"- MOST PURCHASED BRANDS for a male audience → female brands "
-                f"like Free People, Lululemon mixed in\n"
-                f"- Sports categories for a male audience → CORRECT, no fix\n"
-                f"- GAMES for a young tech audience → CORRECT, no fix\n\n"
+                f"audience demographics **in the file** ({demo_skew_summary})? "
+                f"For example:\n"
+                f"- BEAUTY/WELLNESS when the file skews male-identified → female "
+                f"brands may incorrectly over-index\n"
+                f"- MOST PURCHASED BRANDS when the file skews male-identified → "
+                f"check female-skew fashion/beauty\n"
+                f"- Sports when the file skews male-identified → often CORRECT\n"
+                f"- GAMES when the file skews young → often CORRECT\n\n"
                 f"Return ONLY the category names that need demographic "
                 f"correction, as a JSON array. Example:\n"
                 f'["BEAUTY/WELLNESS","MOST PURCHASED BRANDS","ACCESSORIES"]\n'
@@ -12752,55 +12715,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Universal catch-all: handles ANY category not covered above
         df_final = ai_universal_demographic_review(df_final, brand_category, project_name, brands)
 
-    # ── Post-AI gender enforcement ────────────────────────────────────
-    # AI demographic agents often inflate PREFER NOT TO SAY despite prompt
-    # instructions. Re-apply the archetype-based gender distribution.
-    if not is_genpop and _archetype:
-        _gender_skew = _archetype.get('gender_skew', 'balanced')
-        _gm = df_final['Column'].str.upper().str.strip() == 'GENDER'
-        _gender_rows = {}
-        for _gidx in df_final[_gm].index:
-            _gval = str(df_final.at[_gidx, 'Value']).strip().upper()
-            _gender_rows[_gidx] = _gval
-        if _gender_rows:
-            if _gender_skew == 'male':
-                _g_target = {'MALE': 65.0, 'FEMALE': 30.0}
-            elif _gender_skew == 'female':
-                _g_target = {'MALE': 28.0, 'FEMALE': 67.0}
-            else:
-                _g_target = {'MALE': 48.0, 'FEMALE': 47.0}
-            _g_minor_shares = {
-                'NON-BINARY': 1.2,
-                'TRANS MALE': 0.6,
-                'TRANS FEMALE': 0.5,
-                'PREFER NOT TO SAY': 2.4,
-            }
-            _g_minor_labels = set(_g_minor_shares.keys())
-            _g_minor_total = sum(_g_minor_shares.get(v, 0.8) for v in _gender_rows.values() if v in _g_minor_labels)
-            _g_remaining = 100.0 - _g_minor_total
-            _g_male_pct = _g_target.get('MALE', 48.0) / (_g_target.get('MALE', 48.0) + _g_target.get('FEMALE', 47.0)) * _g_remaining
-            _g_female_pct = _g_remaining - _g_male_pct
-            _g_bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
-            _g_cs_col = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
-            for _gidx, _gval in _gender_rows.items():
-                if _gval in _g_minor_labels:
-                    _g_pct = _g_minor_shares.get(_gval, 0.8)
-                elif _gval == 'MALE' or ('MALE' in _gval and 'FEMALE' not in _gval and 'TRANS' not in _gval):
-                    _g_pct = _g_male_pct
-                elif _gval == 'FEMALE' or _gval.startswith('FEMALE'):
-                    _g_pct = _g_female_pct
-                else:
-                    _g_pct = 0.8
-                _g_pct = round(_g_pct, 4)
-                if _g_bp_col:
-                    df_final.at[_gidx, _g_bp_col] = f"{_g_pct:.4f}"
-                df_final.at[_gidx, _g_cs_col] = f"{_g_pct:.4f}"
-                if 'Percentage' in df_final.columns:
-                    df_final.at[_gidx, 'Percentage'] = f"{_g_pct:.4f}"
-                _g_raw = max(1, int(round(_g_pct / 100.0 * final_sample_size)))
-                df_final.at[_gidx, 'Original Raw Numbers'] = str(_g_raw)
-            print(f"   🔧 Post-AI gender enforcement: {_gender_skew} skew "
-                  f"(M={_g_male_pct:.1f}%, F={_g_female_pct:.1f}%, minor varied)")
+    # Gender distribution: from panel + demographic AI agents only (no archetype overwrite).
 
     # ── Cap PREFER NOT TO SAY at 10% across ALL demographic categories ──
     # Raw survey data often has high PNTS rates; redistribute excess to top items.
@@ -12955,8 +12870,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         _HIGH_THRESHOLD = 75.0
         _flagged_items = []
         _MULT = 329_900_000 / 10_000_000
-        _subject = project_name or (brands[0] if brands else 'Unknown')
-        _subject_clean = _subject.replace('_', ' ').replace('-', ' ').strip()
+        _subject_clean = extract_profile_subject_from_df(df_final, project_name, brands)
 
         for _idx, _row in df_final.iterrows():
             _cat = str(_row.get('Column', '')).strip().upper()
@@ -13082,8 +12996,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 except Exception:
                     pass
 
-            _subject_f = project_name or (brands[0] if brands else 'Unknown')
-            _subject_cf = _subject_f.replace('_', ' ').replace('-', ' ').strip()
+            _subject_cf = extract_profile_subject_from_df(
+                df_final, project_name, brands)
             _bc_f = (brand_category or '').strip()
             _profile_f = _build_profile_summary(df_final)
 
@@ -13094,21 +13008,24 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _persona_resp = _client_final.chat.completions.create(
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': (
-                        f"Research \"{_subject_cf}\" which is in the category "
-                        f"\"{_bc_f}\". Build a detailed consumer persona of the "
-                        f"typical person who engages with this. Include:\n\n"
-                        f"1. What is \"{_subject_cf}\"? (show, team, brand, etc.)\n"
-                        f"2. Core demographics (gender split, age range, income)\n"
-                        f"3. Lifestyle and interests (what else do they like?)\n"
+                        f"Profile subject (from file/metadata): \"{_subject_cf}\". "
+                        f"Category: \"{_bc_f}\".\n\n"
+                        f"=== AUDIENCE DEMOGRAPHICS FROM THIS PROFILE FILE ===\n"
+                        f"{_profile_f}\n\n"
+                        f"Research who \"{_subject_cf}\" is and who engages with them. "
+                        f"When you describe demographics, **align with the file snapshot "
+                        f"above** where it exists; do not invent a different gender/age "
+                        f"split than the file unless you explain a clear conflict.\n\n"
+                        f"Include:\n"
+                        f"1. What is \"{_subject_cf}\"? (show, team, brand, talent, etc.)\n"
+                        f"2. Core demographics consistent with the file (use the percentages above)\n"
+                        f"3. Lifestyle and interests\n"
                         f"4. Brands they would and WOULD NOT use\n"
                         f"5. Social media platforms they prefer\n"
                         f"6. Sports, entertainment, technology preferences\n"
-                        f"7. Things that would be WRONG for this persona "
-                        f"(e.g. if it's a male-skewing audience, women's makeup "
-                        f"brands should be low; if it's an F1 audience, F1-related "
-                        f"items should be high)\n\n"
-                        f"Be specific and detailed. This will be used to validate "
-                        f"an audience profile."
+                        f"7. What would be WRONG for this persona vs the behavioral data "
+                        f"(use file demographics, not assumptions)\n\n"
+                        f"Be specific. This will validate an audience profile CSV."
                     )}],
                     temperature=0.2,
                     max_tokens=2000
@@ -24549,7 +24466,7 @@ def ai_review_most_purchased_brands_vs_genpop(
         except Exception:
             gp_bp_map = {}
 
-    subject = (project_name or (brands[0] if brands else 'Unknown')).replace('_', ' ').strip()
+    subject = extract_profile_subject_from_df(df, project_name, brands)
     bc = (brand_category or '').strip()
     profile_summary = _build_profile_summary(df)
 
