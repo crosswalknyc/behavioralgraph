@@ -13144,6 +13144,51 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print(f"🔬 FINAL REVIEW Step 2: {_total_items} items across "
                   f"{len(_cats_to_review)} categories")
 
+            # Dynamic gender hint from THIS profile (avoid hardcoded "~66% male" misleading AI)
+            _male_pct_r = _female_pct_r = None
+            if _bp_cf:
+                _gm_r = df_final['Column'].str.upper().str.strip() == 'GENDER'
+                for _gix in df_final[_gm_r].index:
+                    _gvu = str(df_final.at[_gix, 'Value']).strip().upper()
+                    try:
+                        _gbp = float(str(df_final.at[_gix, _bp_cf]).replace(',', '').replace('%', ''))
+                    except (ValueError, TypeError):
+                        continue
+                    if _gvu == 'MALE' or (_gvu.startswith('MALE') and 'FEMALE' not in _gvu and 'TRANS' not in _gvu):
+                        _male_pct_r = _gbp
+                    elif _gvu == 'FEMALE' or _gvu.startswith('FEMALE'):
+                        _female_pct_r = _gbp
+            if _male_pct_r is not None and _female_pct_r is not None:
+                if _male_pct_r > _female_pct_r + 5.0:
+                    _rule3_gender = (
+                        f"3. GENDER / RETAIL (from this file): MALE ~{_male_pct_r:.1f}%, "
+                        f"FEMALE ~{_female_pct_r:.1f}% — skews male. Women's beauty, women's "
+                        f"fashion, and **female-skewing marketplaces (Etsy, many Poshmark-type "
+                        f"signals)** must NOT have stratospheric BP (e.g. never 80–95% Etsy) "
+                        f"unless you explicitly justify from persona; usually cap Etsy-like "
+                        f"channels well under Gen-mass-retailer levels.\n"
+                    )
+                elif _female_pct_r > _male_pct_r + 5.0:
+                    _rule3_gender = (
+                        f"3. GENDER / RETAIL (from this file): FEMALE ~{_female_pct_r:.1f}%, "
+                        f"MALE ~{_male_pct_r:.1f}% — skews female. Hyper-masculine-only niches "
+                        f"should stay moderate; mass retail OK.\n"
+                    )
+                else:
+                    _rule3_gender = (
+                        f"3. GENDER / RETAIL (from this file): ~BALANCED (M ~{_male_pct_r:.1f}%, "
+                        f"F ~{_female_pct_r:.1f}%). Do NOT assume a male-heavy audience. "
+                        f"**Etsy, eBay, and other niche marketplaces must NEVER dominate "
+                        f"WHERE THEY SHOP above Amazon/Walmart/Target** — values like 90%+ Etsy "
+                        f"are almost always clickstream inflation; correct them sharply. "
+                        f"Women's-only brand rules apply only where demographics skew female.\n"
+                    )
+            else:
+                _rule3_gender = (
+                    "3. GENDER / RETAIL: Use AUDIENCE DEMOGRAPHICS above. Do not assume ~66% male. "
+                    "If gender is balanced, flag impossible marketplace dominance (e.g. Etsy 90%+).\n"
+                )
+
             _final_adj = 0
 
             # Step 2: Review ONE category at a time
@@ -13189,6 +13234,19 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         "Perplexity, DeepSeek, Copilot: moderate; none should exceed Google. "
                         "Fix rank order and magnitudes until they pass a researcher sniff test.\n"
                     )
+                elif _rc_upper == 'WHERE THEY SHOP':
+                    _category_deep_check = (
+                        "\n=== DEEP CHECK: WHERE THEY SHOP (every row — agent often misses this) ===\n"
+                        "This category is prone to **massive clickstream inflation**. "
+                        "**Amazon** should usually be #1 or very top among retailers (often ~45–80% BP). "
+                        "**Walmart** and **Target** should be high but typically **below** Amazon. "
+                        "**Etsy** is a niche handmade/vintage marketplace — for general film/TV/celebrity "
+                        "audiences it is almost never above ~25–40% BP and **must never** exceed Amazon; "
+                        "**90%+ Etsy is always wrong**. **eBay** is moderate (~15–45%), not above Amazon. "
+                        "**Best Buy, Costco, Macy's** sit in a believable mid tier. "
+                        "Review **every line**; lower any marketplace above 90% unless it is truly "
+                        "universal (essentially never for Etsy/eBay).\n"
+                    )
 
                 _review_prompt = (
                     f"You are a senior consumer research analyst doing the FINAL "
@@ -13211,10 +13269,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     f"top items might reach 85% but NEVER above 90%.\n"
                     f"2. Most items should be 5-40%. Only truly universal "
                     f"items (Google, YouTube, Netflix) should be 60%+.\n"
-                    f"3. GENDER CHECK: Audience is ~66% male. Women's brands "
-                    f"(makeup like Maybelline/Fenty, women's fashion like "
-                    f"Lululemon/Doen/Victoria's Secret, women's jewelry) "
-                    f"should be UNDER 12%.\n"
+                    + _rule3_gender +
                     f"4. PERSONA CHECK: Does this item make sense for someone "
                     f"who watches/follows \"{_subject_cf}\"? Items core to "
                     f"the persona should be elevated. Irrelevant items should "
@@ -13241,7 +13296,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     f"11. SEARCH/AI + SOCIAL: Apply rules 8–10 and the DEEP CHECK "
                     f"sections above with extra scrutiny — these categories are often "
                     f"inflated by clickstream. ChatGPT and Reddit are frequently too high; "
-                    f"Google should dominate search/AI.\n\n"
+                    f"Google should dominate search/AI.\n"
+                    f"12. WHERE THEY SHOP: If this category is in the batch, apply the "
+                    f"DEEP CHECK for retail literally — **Etsy/eBay cannot be ~90%**; "
+                    f"Amazon should lead. Missing this is a common failure mode.\n\n"
                     f"For EACH item that needs correction, provide the "
                     f"realistic BP value. Leave correct items alone.\n\n"
                     f"Return ONLY valid JSON:\n"
@@ -13537,6 +13595,49 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     _enew = round(random.uniform(_elow, _ehigh), 4)
                     _write_bp(_ei, _enew)
                     print(f"   ✅ HARD FIX {_se_cat}: {_ev} {_ecur:.1f}% → {_enew:.4f}%")
+
+        # ─── 2c. WHERE THEY SHOP: cap inflated marketplaces (final agent often misses Etsy/eBay)
+        def _retail_shop_target_range(_rv):
+            _u = str(_rv).strip().upper()
+            if _u == 'AMAZON' or (_u.startswith('AMAZON') and 'PRIME VIDEO' not in _u):
+                return (40.0, 80.0)
+            if 'WALMART' in _u:
+                return (25.0, 68.0)
+            if 'TARGET' in _u:
+                return (25.0, 62.0)
+            if 'COSTCO' in _u:
+                return (15.0, 50.0)
+            if 'BEST BUY' in _u or 'BESTBUY' in _u:
+                return (20.0, 55.0)
+            if 'ETSY' in _u:
+                return (5.0, 38.0)
+            if 'EBAY' in _u:
+                return (10.0, 45.0)
+            if 'WAYFAIR' in _u:
+                return (6.0, 35.0)
+            if 'MACY' in _u:
+                return (10.0, 42.0)
+            if 'NORDSTROM' in _u:
+                return (6.0, 32.0)
+            if 'HOME DEPOT' in _u or 'HOMEDEPOT' in _u:
+                return (12.0, 45.0)
+            if 'LOWES' in _u or "LOWE'S" in _u:
+                return (10.0, 40.0)
+            return None
+
+        _wts_mask = df_final['Column'].str.upper().str.strip() == 'WHERE THEY SHOP'
+        if _wts_mask.any():
+            for _wi in df_final[_wts_mask].index:
+                _wv = str(df_final.at[_wi, 'Value']).strip()
+                _tr = _retail_shop_target_range(_wv)
+                if _tr is None:
+                    continue
+                _wlow, _whigh = _tr
+                _wbp = _read_bp(_wi)
+                if _wbp < _wlow or _wbp > _whigh:
+                    _wnew = round(random.uniform(_wlow, _whigh), 4)
+                    _write_bp(_wi, _wnew)
+                    print(f"   ✅ HARD FIX WHERE THEY SHOP: {_wv} {_wbp:.1f}% → {_wnew:.4f}%")
 
         # ─── 3. VENUE: physical attendance venues capped at 10% ──────
         _ven_mask = df_final['Column'].str.upper().str.strip() == 'VENUE'
