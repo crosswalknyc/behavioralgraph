@@ -17621,6 +17621,38 @@
             }
         }
 
+        var _llmoOverlayDeadlineTimer = null;
+        function _llmoClearOverlayDeadline() {
+            if (_llmoOverlayDeadlineTimer) {
+                clearTimeout(_llmoOverlayDeadlineTimer);
+                _llmoOverlayDeadlineTimer = null;
+            }
+        }
+        /** Ensures loading overlay never blocks the dashboard past ms (demographics/themes can finish in background). */
+        function _llmoScheduleOverlayDeadline(ms) {
+            _llmoClearOverlayDeadline();
+            var wait = (typeof ms === 'number' && ms > 0) ? ms : 90000;
+            _llmoOverlayDeadlineTimer = setTimeout(function() {
+                _llmoOverlayDeadlineTimer = null;
+                var btn = document.getElementById('llmoRefreshBtn');
+                if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
+                _llmoHideLoading();
+                var themesBody = document.getElementById('llmoSearchThemesBody');
+                if (themesBody && /Loading themes/i.test(themesBody.textContent || '')) {
+                    themesBody.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Still loading AI themes — wait a moment or click <strong>Load</strong> to retry.</div>';
+                }
+            }, wait);
+        }
+
+        function _llmoFetchJsonWithTimeout(url, timeoutMs) {
+            var ms = timeoutMs || 55000;
+            var ctrl = new AbortController();
+            var tid = setTimeout(function() { try { ctrl.abort(); } catch (e) {} }, ms);
+            return fetch(url, { credentials: 'same-origin', signal: ctrl.signal })
+                .finally(function() { clearTimeout(tid); })
+                .then(function(r) { return r.json(); });
+        }
+
         /** Promise: search themes ready (polls while API returns loading). */
         function _llmoFetchSearchThemesPromise(date, dateEnd) {
             var body = document.getElementById('llmoSearchThemesBody');
@@ -17628,13 +17660,20 @@
                 body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Loading themes…</div>';
             }
             var u = '/api/llmo-iq/search-themes?date=' + encodeURIComponent(date || '') + '&date_end=' + encodeURIComponent(dateEnd || date || '');
-            function poll() {
-                return fetch(u, { credentials: 'same-origin' })
-                    .then(function(r) { return r.json(); })
+            var maxPolls = 90;
+            function poll(attempt) {
+                attempt = attempt || 0;
+                if (attempt > maxPolls) {
+                    if (body) {
+                        body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:#f87171;font-size:0.85rem;">AI search themes timed out. Click <strong>Load</strong> to retry.</div>';
+                    }
+                    return Promise.resolve();
+                }
+                return _llmoFetchJsonWithTimeout(u, 50000)
                     .then(function(d) {
                         if (d.loading) {
                             return new Promise(function(resolve) {
-                                setTimeout(function() { poll().then(resolve).catch(resolve); }, 2000);
+                                setTimeout(function() { poll(attempt + 1).then(resolve).catch(resolve); }, 2000);
                             });
                         }
                         if (!d.success) {
@@ -17644,19 +17683,25 @@
                             return;
                         }
                         renderLLMOSearchThemes(d);
+                    })
+                    .catch(function(err) {
+                        if (err && err.name === 'AbortError') {
+                            return new Promise(function(resolve) {
+                                setTimeout(function() { poll(attempt + 1).then(resolve).catch(resolve); }, 1500);
+                            });
+                        }
+                        if (body) {
+                            body.innerHTML = '<div style="padding:1.25rem;color:#f87171;font-size:0.85rem;">Network error loading themes.</div>';
+                        }
                     });
             }
-            return poll().catch(function() {
-                if (body) {
-                    body.innerHTML = '<div style="padding:1.25rem;color:#f87171;font-size:0.85rem;">Network error loading themes.</div>';
-                }
-            });
+            return poll(0);
         }
 
         /** Promise: demographics + demo trend charts. */
         function _llmoFetchDemographicsPromise(date, dateEnd) {
-            return fetch('/api/llmo-iq/demographics?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd), { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
+            var url = '/api/llmo-iq/demographics?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd);
+            return _llmoFetchJsonWithTimeout(url, 70000)
                 .then(function(data) {
                     if (!data.success) {
                         console.error('LLMO demo error:', data.error);
@@ -17665,6 +17710,9 @@
                     renderLLMODemographics(data.demographics);
                     _llmoDemoTrendData = data.demo_trend;
                     renderLLMODemoTrend();
+                })
+                .catch(function(err) {
+                    console.warn('LLMO demographics fetch failed or timed out:', err && err.name ? err.name : err);
                 });
         }
 
@@ -17756,11 +17804,15 @@
                     syncLLMOChartTooltips();
                     _llmoUpdateProgress(0, 0, 'Loading demographics & AI search themes…');
                     var de = dateEnd || date;
+                    _llmoScheduleOverlayDeadline(90000);
                     return Promise.all([
                         _llmoFetchDemographicsPromise(date, de),
                         _llmoFetchSearchThemesPromise(date, de)
                     ]).then(function() {
+                        _llmoClearOverlayDeadline();
                         if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
+                    }).finally(function() {
+                        _llmoClearOverlayDeadline();
                     });
                 })
                 .then(function(asyncPart) {
@@ -17769,6 +17821,7 @@
                     if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                 })
                 .catch(function(e) {
+                    _llmoClearOverlayDeadline();
                     if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                     _llmoHideLoading();
                     console.error('LLMO data fetch error:', e);
