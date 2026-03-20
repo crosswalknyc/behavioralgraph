@@ -655,7 +655,6 @@
         }
         /* All product views: take remaining height when shown (flex: 1 1 0%, min-height: 0) */
         #subscriberIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
-        #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #rankerIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #ticketSalesIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
         #talentSearchIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
@@ -11901,7 +11900,6 @@
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
-                            <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
                             <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
@@ -13860,7 +13858,7 @@
                 <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
                     <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
                     <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">(GP: X%)</strong> — Gen Pop penetration</span>
-                    <span class="has-tooltip" data-tooltip="Index is shown as a whole number (no decimals): 100 = same as Gen Pop, 200 ≈ twice as likely, 50 ≈ half as likely."><strong style="color: #10b981;">Index to (XXX, no decimal point)</strong> | Over / Under Index</span>
+                    <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.xxx)</strong> — Over/under-index multiplier</span>
                     <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
                 </div>
                 <!-- Category Reorder Controls -->
@@ -14782,8 +14780,6 @@
                             
                             <!-- Platform Value Assessment -->
                             <div id="subscriberPlatformValue" class="strategic-section"></div>
-
-                            <p style="text-align: left; font-size: 0.75rem; color: var(--text-secondary); margin-top: 1.5rem; padding: 0;">*A view equals one second or more over viewing.</p>
                         </div>
 
                         <!-- Revenue Tab (after Insights) -->
@@ -14860,22 +14856,23 @@
 
                         <!-- Demographics Tab -->
                         <div id="subscriber-tab-demographics" class="tab-content">
+                            <p id="subscriberDemographicsProjectedNote" class="section-description" style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;"></p>
                             <div id="subscriberDemographicsInsights" class="tab-insights-section"></div>
                             
-                            <!-- Age Section -->
+                            <!-- Age Section - Separate Box -->
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
-                                <h3>👥 Age of New Signups</h3>
-                                <p class="section-description">Age distribution of people who signed up for the platform to watch this show</p>
-                                <div id="subscriberAgeChartWrap" style="position: relative; height: 320px; margin-bottom: 1rem;"><canvas id="subscriberAgeChart"></canvas></div>
+                                <h3>👥 Age of Reactivated + New Signups</h3>
+                                <p class="section-description">Age distribution of people who were reactivated or signed up for the platform to watch this show</p>
                                 <div id="subscriberAgeTable" class="demographics-table-container"></div>
+
                             </div>
                             
-                            <!-- Gender Section -->
+                            <!-- Gender Section - Separate Box -->
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem;">
-                                <h3>👥 Gender of New Signups</h3>
-                                <p class="section-description">Gender distribution of people who signed up for the platform to watch this show</p>
-                                <div id="subscriberGenderChartWrap" style="position: relative; height: 260px; margin-bottom: 1rem;"><canvas id="subscriberGenderChart"></canvas></div>
+                                <h3>👥 Gender of Reactivated + New Signups</h3>
+                                <p class="section-description">Gender distribution of people who were reactivated or signed up for the platform to watch this show</p>
                                 <div id="subscriberGenderTable" class="demographics-table-container"></div>
+
                             </div>
                             <p style="color: var(--text-secondary); font-size: 0.8rem; font-style: italic; margin-top: 1.5rem; text-align: left;">*Values represented only show participants who agreed to share demographic data.</p>
                         </div>
@@ -14894,211 +14891,6 @@
                 </div>
                 <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary);">Side-by-side comparison of all open tabs. <strong>Winner</strong> in each row is highlighted. Gaps show how much the leader is ahead.</p>
                 <div id="subscriberCompareAllContent" style="overflow-x: auto;"></div>
-            </div>
-        </div>
-
-        <!-- LLMO IQ VIEW -->
-        <div id="llmoIQView">
-            <!-- Loading overlay shown while S3 data loads -->
-            <div id="llmoLoadingOverlay" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:4rem 2rem; text-align:center;">
-                <div style="font-size:2.5rem; margin-bottom:1rem;">🤖</div>
-                <h2 style="margin:0 0 0.5rem; font-size:1.3rem; font-weight:700;">Loading LLMO Data</h2>
-                <p id="llmoLoadingMsg" style="margin:0 0 1.5rem; color:var(--text-secondary); font-size:0.9rem;">Initializing...</p>
-                <div style="width:300px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
-                    <div id="llmoLoadingBar" style="width:0%; height:100%; background:linear-gradient(90deg,#34d399,#06b6d4); border-radius:3px; transition:width 0.3s ease;"></div>
-                </div>
-                <p id="llmoLoadingPct" style="margin:0.5rem 0 0; color:var(--text-secondary); font-size:0.8rem;">0%</p>
-            </div>
-            <div class="llmo-iq-container" id="llmoIQContent" style="max-width: 1600px; margin: 0 auto; width: 100%; display:none;">
-                <!-- Header -->
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-                    <div>
-                        <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">Large Language Model Optimization</h2>
-                        <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">AI platform usage, attribution & search intelligence</p>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Date:</label>
-                        <select id="llmoDateSelect" style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; cursor: pointer;">
-                            <option value="">Loading...</option>
-                        </select>
-                        <label style="font-size: 0.8rem; color: var(--text-secondary);">to</label>
-                        <select id="llmoDateEndSelect" style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; cursor: pointer;">
-                            <option value="">Loading...</option>
-                        </select>
-                        <button id="llmoRefreshBtn" onclick="loadLLMOIQData()" style="background: var(--accent-blue); color: #fff; border: none; border-radius: 6px; padding: 0.4rem 1rem; font-size: 0.8rem; cursor: pointer; font-weight: 600;">Load</button>
-                    </div>
-                </div>
-
-                <!-- Summary Cards -->
-                <div id="llmoSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Users (US Gen Pop)</div>
-                        <div id="llmoTotalUsers" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
-                    </div>
-                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Clicks (US Gen Pop)</div>
-                        <div id="llmoTotalClicks" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
-                    </div>
-                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">LLMs Tracked</div>
-                        <div id="llmoLLMCount" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
-                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Unique platforms</div>
-                    </div>
-                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Top LLM</div>
-                        <div id="llmoTopLLM" style="font-size: 1.25rem; font-weight: 700; margin: 0.25rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">--</div>
-                        <div id="llmoTopLLMPct" style="font-size: 0.8rem; color: var(--text-secondary);">--</div>
-                    </div>
-                </div>
-
-                <!-- Main grid: Ranker table + Category Share chart -->
-                <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <!-- LLM Usage Ranker Table -->
-                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">LLM Usage Ranker</h3>
-                        <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
-                            <table id="llmoRankerTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
-                                <thead>
-                                    <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
-                                        <th style="padding: 0.5rem; white-space: nowrap;">#</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap;">LLM</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Unique Users</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">% of Total</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Total Clicks</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Category Share</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="llmoRankerBody">
-                                    <tr><td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a date and click Load</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Category Share Doughnut -->
-                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; align-items: center;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;">Category Share</h3>
-                        <canvas id="llmoCategoryShareChart" style="max-width: 320px; max-height: 320px;"></canvas>
-                    </div>
-                </div>
-
-                <!-- Usage Trend Line Chart -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (US Gen Pop Unique Users by Date)</h3>
-                    <div style="position: relative; height: 350px;">
-                        <canvas id="llmoTrendChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- First-Click Attribution + Top Searches -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <!-- First-Click Attribution -->
-                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">First-Click Attribution (Post-AI Destinations)</h3>
-                        <div style="position: relative; height: 400px;">
-                            <canvas id="llmoAttributionChart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Top Searches -->
-                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Top AI Searches</h3>
-                        <div style="overflow-y: auto; max-height: 400px;">
-                            <table id="llmoSearchesTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
-                                <thead>
-                                    <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
-                                        <th style="padding: 0.5rem;">#</th>
-                                        <th style="padding: 0.5rem;">Search Query</th>
-                                        <th style="padding: 0.5rem; text-align: right;">Searches</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="llmoSearchesBody">
-                                    <tr><td colspan="3" style="padding: 2rem; text-align: center; color: var(--text-secondary);">No data loaded</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Source -> Destination Flows + Browser/Platform -->
-                <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <!-- Source LLM -> Destination Flows -->
-                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">AI Agent -> Destination Flows</h3>
-                        <div style="overflow-y: auto; max-height: 450px;">
-                            <table id="llmoFlowsTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
-                                <thead>
-                                    <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
-                                        <th style="padding: 0.5rem;">Source LLM</th>
-                                        <th style="padding: 0.5rem;">Destination</th>
-                                        <th style="padding: 0.5rem; text-align: right;">Users</th>
-                                        <th style="padding: 0.5rem; text-align: right;">Clicks</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="llmoFlowsBody">
-                                    <tr><td colspan="4" style="padding: 2rem; text-align: center; color: var(--text-secondary);">No data loaded</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Browser / Platform Breakdown -->
-                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Browser</h3>
-                        <canvas id="llmoBrowserChart" style="max-width: 300px; max-height: 180px; margin: 0 auto 1.5rem auto; display: block;"></canvas>
-                        <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Platform</h3>
-                        <canvas id="llmoPlatformChart" style="max-width: 300px; max-height: 180px; margin: 0 auto; display: block;"></canvas>
-                    </div>
-                </div>
-
-                <!-- AI User Demographics -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem; font-weight: 600;">AI User Demographics</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
-                        <div style="text-align: center;">
-                            <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Gender</h4>
-                            <canvas id="llmoDemoGenderChart" style="max-width: 240px; max-height: 240px; margin: 0 auto;"></canvas>
-                        </div>
-                        <div style="text-align: center;">
-                            <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Age</h4>
-                            <canvas id="llmoDemoAgeChart" style="max-width: 240px; max-height: 240px; margin: 0 auto;"></canvas>
-                        </div>
-                        <div style="text-align: center;">
-                            <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Ethnicity</h4>
-                            <canvas id="llmoDemoEthnicityChart" style="max-width: 240px; max-height: 240px; margin: 0 auto;"></canvas>
-                        </div>
-                        <div style="text-align: center;">
-                            <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Income</h4>
-                            <canvas id="llmoDemoIncomeChart" style="max-width: 240px; max-height: 240px; margin: 0 auto;"></canvas>
-                        </div>
-                        <div style="text-align: center;">
-                            <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Education</h4>
-                            <canvas id="llmoDemoEducationChart" style="max-width: 240px; max-height: 240px; margin: 0 auto;"></canvas>
-                        </div>
-                    </div>
-                    <p style="text-align: left; font-size: 0.75rem; color: var(--text-secondary); margin-top: 1.25rem;">*Values represented only show participants who agreed to share demographic data.</p>
-                </div>
-
-                <!-- Demographic Trends Over Time (Delta Overlay) -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
-                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Demographic Trends + Usage Overlay</h3>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Category:</label>
-                            <select id="llmoDemoTrendCategory" onchange="renderLLMODemoTrend()" style="background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.5rem; font-size: 0.8rem; cursor: pointer;">
-                                <option value="gender">Gender</option>
-                                <option value="age">Age</option>
-                                <option value="ethnicity">Ethnicity</option>
-                                <option value="income">Income</option>
-                                <option value="education">Education</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div style="position: relative; height: 380px;">
-                        <canvas id="llmoDemoTrendChart"></canvas>
-                    </div>
-                    <p style="text-align: left; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.75rem;">Dashed line = total AI unique users (right axis). Solid lines = demographic segment % (left axis). Shows how audience composition shifts alongside usage volume.</p>
-                </div>
             </div>
         </div>
 
@@ -16013,9 +15805,6 @@
         let currentS3Key = null;
         let charts = {};
         let genPopBaselineData = null; // Parsed Gen Pop file - resolved to file with most recent year in filename; used for Gen Pop % everywhere
-        let _genPopReadyResolve = null;
-        let _genPopReady = new Promise(resolve => { _genPopReadyResolve = resolve; });
-        let _genPopLoaded = false; // flipped once genPopBaselineData is set
         
         // Subscriber IQ state variables (declared early for tooltip system access)
         let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
@@ -16295,8 +16084,6 @@
                     const data = await response.json();
                     if (data.success && data.data) {
                         genPopBaselineData = parseAllData(data.data);
-                        _genPopLoaded = true;
-                        if (_genPopReadyResolve) { _genPopReadyResolve(); _genPopReadyResolve = null; }
                         console.log('✅ Gen Pop baseline loaded successfully');
                         if (currentDashboardData && Array.isArray(currentDashboardData.locations) && currentDashboardData.locations.length > 0) {
                             renderLocationTable(currentDashboardData.locations);
@@ -16326,20 +16113,6 @@
             
             // Load Gen Pop baseline BEFORE profiles so index calculations have the data they need
             await loadGenPopBaseline();
-            
-            // If first attempt failed (no jobs cache yet), the job list load below will
-            // trigger a second attempt. Resolve the gate anyway after a timeout so the
-            // app doesn't hang forever if the Gen Pop file truly doesn't exist.
-            if (!_genPopLoaded) {
-                console.warn('⚠️ Gen Pop not loaded on first try — will retry after job list loads');
-                setTimeout(() => {
-                    if (!_genPopLoaded && _genPopReadyResolve) {
-                        console.warn('⚠️ Gen Pop load timed out — proceeding without baseline');
-                        _genPopReadyResolve();
-                        _genPopReadyResolve = null;
-                    }
-                }, 15000);
-            }
             
             loadJobs();
             // If user only has Hedge Fund IQ, show Hedge Fund landing; otherwise apply selected product view so dashboard/content shows
@@ -16379,7 +16152,6 @@
             const navHandlers = {
                 profileIQ: showProfileIQ,
                 subscriberIQ: showSubscriberIQ,
-                llmoIQ: showLLMOIQ,
                 rankerIQ: showRankerIQ,
                 ticketSalesIQ: showTicketSalesIQ,
                 ticketSalesTracker: showTicketSalesTracker,
@@ -16414,12 +16186,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -16431,7 +16203,6 @@
             var viewNavProductTooltips = {
                 profileIQ: 'Profile IQ: Build and analyze custom audience profiles based on engagement and behavior.',
                 subscriberIQ: 'Subscriber IQ: Explore subscriber demographics, retention, and engagement metrics.',
-                llmoIQ: 'LLMO IQ: Analyze AI platform usage, attribution, and search behavior across LLMs.',
                 rankerIQ: 'Ranker: Compare and rank titles, genres, or properties by performance.',
                 ticketSalesIQ: 'Impact IQ: Measure impact and performance of titles via ticket sales and engagement.',
                 ticketSalesTracker: 'Ticket Sales Tracker: Track ticket sales and box office performance over time.',
@@ -17053,8 +16824,6 @@
             if (talentTheaterView) talentTheaterView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Update button states
             const formBtn = document.getElementById('formViewBtn');
@@ -17098,8 +16867,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Load profiles
             loadDashboardProfiles();
@@ -17136,8 +16903,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Load subscriber profiles
             loadSubscriberProfiles();
@@ -17196,8 +16961,6 @@
             }
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Load ranker data
             loadRankerIQNetflixData();
@@ -17226,8 +16989,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
             loadTicketSalesProfiles();
         }
         
@@ -17254,8 +17015,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
             if (typeof loadTSTProfiles === 'function') loadTSTProfiles();
             checkProfileReleasedNotifications();
         }
@@ -17285,8 +17044,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
             
             // Load tickers
             loadHedgeFundTickers();
@@ -17319,8 +17076,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
         }
         
         window.showTalentTheaterIQ = function() {
@@ -17342,8 +17097,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
         }
         
         window.showCustomAnalysis = function() {
@@ -17359,8 +17112,6 @@
             if (talentSearchView) talentSearchView.style.display = 'none';
             const talentTheaterView = document.getElementById('talentTheaterIQView');
             if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const llmoIQView = document.getElementById('llmoIQView');
-            if (llmoIQView) llmoIQView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) {
                 customAnalysisView.style.display = 'flex';
@@ -17376,562 +17127,6 @@
             }
         }
         
-        // ====================================================================
-        // LLMO IQ - Large Language Model Optimization Dashboard
-        // ====================================================================
-        var _llmoCategoryShareChart = null;
-        var _llmoTrendChart = null;
-        var _llmoAttributionChart = null;
-        var _llmoBrowserChart = null;
-        var _llmoPlatformChart = null;
-        var _llmoDemoCharts = {};
-        var _llmoDemoTrendChart = null;
-        var _llmoDemoTrendData = null;
-        var _llmoTrendDatesCache = null;
-        var _llmoTrendByLLMCache = null;
-        var _llmoLoaded = false;
-
-        window.showLLMOIQ = function() {
-            const dd = document.getElementById('viewNavDropdown');
-            const opt = dd ? dd.querySelector('option[value="llmoIQ"]') : null;
-            if (opt && opt.disabled) return;
-            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('llmoIQ');
-
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            var llmoV = document.getElementById('llmoIQView');
-            if (llmoV) llmoV.style.display = 'flex';
-            var rv = document.getElementById('rankerIQView'); if (rv) rv.style.display = 'none';
-            var tv = document.getElementById('ticketSalesIQView'); if (tv) tv.style.display = 'none';
-            var ttv = document.getElementById('ticketSalesTrackerView'); if (ttv) ttv.style.display = 'none';
-            var hv = document.getElementById('hedgeFundIQView'); if (hv) hv.style.display = 'none';
-            var tsv = document.getElementById('talentSearchIQView'); if (tsv) tsv.style.display = 'none';
-            var tthv = document.getElementById('talentTheaterIQView'); if (tthv) tthv.style.display = 'none';
-            var fv = document.getElementById('formView'); if (fv) fv.style.display = 'none';
-            var cav = document.getElementById('customAnalysisView'); if (cav) cav.style.display = 'none';
-
-            if (!_llmoLoaded) {
-                _llmoLoaded = true;
-                loadLLMOIQDates();
-            }
-        };
-
-        var _llmoPollingTimer = null;
-
-        function _llmoShowLoading() {
-            var overlay = document.getElementById('llmoLoadingOverlay');
-            var content = document.getElementById('llmoIQContent');
-            if (overlay) overlay.style.display = 'flex';
-            if (content) content.style.display = 'none';
-        }
-
-        function _llmoHideLoading() {
-            var overlay = document.getElementById('llmoLoadingOverlay');
-            var content = document.getElementById('llmoIQContent');
-            if (overlay) overlay.style.display = 'none';
-            if (content) content.style.display = 'block';
-        }
-
-        function _llmoUpdateProgress(loaded, total, stage) {
-            var msg = document.getElementById('llmoLoadingMsg');
-            var bar = document.getElementById('llmoLoadingBar');
-            var pct = document.getElementById('llmoLoadingPct');
-            if (stage && stage.indexOf('Downloading processed') >= 0) {
-                if (msg) msg.textContent = 'Loading pre-processed data...';
-                if (bar) bar.style.width = '60%';
-                if (pct) pct.textContent = '';
-            } else if (total > 0 && loaded > 0) {
-                var p = Math.round((loaded / total) * 100);
-                if (msg) msg.textContent = 'Processing ' + loaded + ' of ' + total + ' raw data files...';
-                if (bar) bar.style.width = p + '%';
-                if (pct) pct.textContent = p + '%';
-            } else if (stage) {
-                if (msg) msg.textContent = stage;
-                if (bar) bar.style.width = '10%';
-                if (pct) pct.textContent = '';
-            } else {
-                if (msg) msg.textContent = 'Initializing...';
-                if (bar) bar.style.width = '5%';
-                if (pct) pct.textContent = '';
-            }
-        }
-
-        function loadLLMOIQDates() {
-            _llmoShowLoading();
-            fetch('/api/llmo-iq/dates')
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (!data.success) { console.error('LLMO dates error:', data.error); return; }
-                    if (data.loading) {
-                        _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0, data.stage || '');
-                        if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
-                        _llmoPollingTimer = setTimeout(loadLLMOIQDates, 2000);
-                        return;
-                    }
-                    _llmoHideLoading();
-                    var sel = document.getElementById('llmoDateSelect');
-                    var selEnd = document.getElementById('llmoDateEndSelect');
-                    sel.innerHTML = '';
-                    selEnd.innerHTML = '';
-                    data.dates.forEach(function(d, i) {
-                        var o = document.createElement('option');
-                        o.value = d; o.textContent = d;
-                        sel.appendChild(o);
-                        var o2 = document.createElement('option');
-                        o2.value = d; o2.textContent = d;
-                        selEnd.appendChild(o2);
-                    });
-                    if (data.dates.length > 0) {
-                        sel.value = data.dates[0];
-                        selEnd.value = data.dates[0];
-                        loadLLMOIQData();
-                    }
-                })
-                .catch(function(e) {
-                    console.error('LLMO dates fetch error:', e);
-                    if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
-                    _llmoPollingTimer = setTimeout(loadLLMOIQDates, 3000);
-                });
-        }
-
-        function loadLLMOIQData() {
-            var date = document.getElementById('llmoDateSelect').value;
-            var dateEnd = document.getElementById('llmoDateEndSelect').value;
-            if (!date) return;
-
-            var btn = document.getElementById('llmoRefreshBtn');
-            if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
-
-            fetch('/api/llmo-iq/data?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd || date))
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (!data.success) { if (btn) { btn.textContent = 'Load'; btn.disabled = false; } console.error('LLMO data error:', data.error); return; }
-                    if (data.loading) {
-                        _llmoShowLoading();
-                        _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0, data.stage || '');
-                        if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
-                        _llmoLoaded = false;
-                        if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
-                        _llmoPollingTimer = setTimeout(loadLLMOIQDates, 2000);
-                        return;
-                    }
-                    if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
-                    renderLLMOSummaryCards(data);
-                    renderLLMOUsageTable(data.llms);
-                    renderLLMOCategoryShare(data.llms);
-                    renderLLMOTrend(data.trend_dates, data.trend_by_llm);
-                    renderLLMOAttribution(data.attribution);
-                    renderLLMOSearches(data.searches);
-                    renderLLMOFlows(data.flows);
-                    renderLLMOBrowserPlatform(data.browsers, data.platforms);
-                    _llmoTrendDatesCache = data.trend_dates;
-                    _llmoTrendByLLMCache = data.trend_by_llm;
-                    loadLLMOIQDemographics(date, dateEnd || date);
-                })
-                .catch(function(e) {
-                    if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
-                    console.error('LLMO data fetch error:', e);
-                });
-        }
-
-        function loadLLMOIQDemographics(date, dateEnd) {
-            fetch('/api/llmo-iq/demographics?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd))
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (!data.success) { console.error('LLMO demo error:', data.error); return; }
-                    renderLLMODemographics(data.demographics);
-                    _llmoDemoTrendData = data.demo_trend;
-                    renderLLMODemoTrend();
-                })
-                .catch(function(e) { console.error('LLMO demographics fetch error:', e); });
-        }
-
-        function _llmoFmt(n) {
-            if (n == null) return '--';
-            return n.toLocaleString();
-        }
-
-        function renderLLMOSummaryCards(data) {
-            document.getElementById('llmoTotalUsers').textContent = _llmoFmt(data.total_unique_users_projected);
-            document.getElementById('llmoTotalClicks').textContent = _llmoFmt(data.total_clicks_projected);
-            document.getElementById('llmoLLMCount').textContent = data.llm_count || '--';
-            if (data.llms && data.llms.length > 0) {
-                document.getElementById('llmoTopLLM').textContent = data.llms[0].name;
-                document.getElementById('llmoTopLLMPct').textContent = data.llms[0].pct_of_total + '% of users';
-            } else {
-                document.getElementById('llmoTopLLM').textContent = '--';
-                document.getElementById('llmoTopLLMPct').textContent = '--';
-            }
-        }
-
-        function renderLLMOUsageTable(llms) {
-            var tbody = document.getElementById('llmoRankerBody');
-            if (!llms || llms.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="padding:2rem;text-align:center;color:var(--text-secondary);">No data available</td></tr>';
-                return;
-            }
-            var html = '';
-            llms.forEach(function(r) {
-                html += '<tr style="border-bottom:1px solid var(--border-color);">'
-                    + '<td style="padding:0.5rem;">' + r.rank + '</td>'
-                    + '<td style="padding:0.5rem;font-weight:600;">' + r.name + '</td>'
-                    + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.unique_users_projected) + '</td>'
-                    + '<td style="padding:0.5rem;text-align:right;">' + r.pct_of_total + '%</td>'
-                    + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.total_clicks_projected) + '</td>'
-                    + '<td style="padding:0.5rem;text-align:right;">' + r.category_share + '%</td>'
-                    + '</tr>';
-            });
-            tbody.innerHTML = html;
-        }
-
-        function renderLLMOCategoryShare(llms) {
-            var ctx = document.getElementById('llmoCategoryShareChart');
-            if (!ctx) return;
-            if (_llmoCategoryShareChart) { _llmoCategoryShareChart.destroy(); _llmoCategoryShareChart = null; }
-            if (!llms || llms.length === 0) return;
-
-            var top = llms.slice(0, 10);
-            var otherShare = 0;
-            if (llms.length > 10) {
-                for (var i = 10; i < llms.length; i++) otherShare += llms[i].category_share;
-            }
-            var labels = top.map(function(r) { return r.name; });
-            var values = top.map(function(r) { return r.category_share; });
-            if (otherShare > 0) { labels.push('Other'); values.push(Math.round(otherShare * 100) / 100); }
-
-            var palette = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01','#46BDC6','#7B61FF','#F538A0','#00BFA5','#FF8A65','#90A4AE'];
-            _llmoCategoryShareChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: values,
-                        backgroundColor: palette.slice(0, labels.length),
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 11 }, padding: 8, boxWidth: 12 } },
-                        tooltip: {
-                            callbacks: {
-                                label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function renderLLMOTrend(dates, byLLM) {
-            var ctx = document.getElementById('llmoTrendChart');
-            if (!ctx) return;
-            if (_llmoTrendChart) { _llmoTrendChart.destroy(); _llmoTrendChart = null; }
-            if (!dates || dates.length === 0) return;
-
-            var palette = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01','#46BDC6','#7B61FF','#F538A0','#00BFA5','#FF8A65'];
-            var llmNames = Object.keys(byLLM);
-            var totals = {};
-            llmNames.forEach(function(n) {
-                var total = 0;
-                Object.values(byLLM[n]).forEach(function(v) { total += v.unique_users; });
-                totals[n] = total;
-            });
-            llmNames.sort(function(a, b) { return totals[b] - totals[a]; });
-            var topNames = llmNames.slice(0, 10);
-
-            var datasets = topNames.map(function(name, i) {
-                return {
-                    label: name,
-                    data: dates.map(function(d) { return byLLM[name][d] ? byLLM[name][d].unique_users : 0; }),
-                    borderColor: palette[i % palette.length],
-                    backgroundColor: palette[i % palette.length] + '22',
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: dates.length > 14 ? 0 : 3,
-                    borderWidth: 2
-                };
-            });
-
-            _llmoTrendChart = new Chart(ctx, {
-                type: 'line',
-                data: { labels: dates, datasets: datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { position: 'top', labels: { color: 'var(--text-primary)', font: { size: 11 }, boxWidth: 12, padding: 8 } },
-                        tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + _llmoFmt(ctx.parsed.y); } } }
-                    },
-                    scales: {
-                        x: { ticks: { color: 'var(--text-secondary)', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.06)' } },
-                        y: { ticks: { color: 'var(--text-secondary)', callback: function(v) { return _llmoFmt(v); } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
-                    }
-                }
-            });
-        }
-
-        function renderLLMOAttribution(attribution) {
-            var ctx = document.getElementById('llmoAttributionChart');
-            if (!ctx) return;
-            if (_llmoAttributionChart) { _llmoAttributionChart.destroy(); _llmoAttributionChart = null; }
-            if (!attribution || attribution.length === 0) return;
-
-            var top = attribution.slice(0, 20);
-            var labels = top.map(function(r) { return r.name; });
-            var values = top.map(function(r) { return r.unique_users_projected; });
-
-            _llmoAttributionChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Unique Users',
-                        data: values,
-                        backgroundColor: '#4285F4',
-                        borderRadius: 4,
-                        barPercentage: 0.7
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(ctx) { return _llmoFmt(ctx.parsed.x) + ' users'; }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
-                        y: { ticks: { color: 'var(--text-primary)', font: { size: 11 } }, grid: { display: false } }
-                    }
-                }
-            });
-        }
-
-        function renderLLMOSearches(searches) {
-            var tbody = document.getElementById('llmoSearchesBody');
-            if (!searches || searches.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" style="padding:2rem;text-align:center;color:var(--text-secondary);">No search data extracted</td></tr>';
-                return;
-            }
-            var html = '';
-            searches.slice(0, 40).forEach(function(s, i) {
-                html += '<tr style="border-bottom:1px solid var(--border-color);">'
-                    + '<td style="padding:0.4rem 0.5rem;">' + (i + 1) + '</td>'
-                    + '<td style="padding:0.4rem 0.5rem; word-break: break-word;">' + (s.term || '').replace(/</g, '&lt;') + '</td>'
-                    + '<td style="padding:0.4rem 0.5rem; text-align:right;">' + _llmoFmt(s.count) + '</td>'
-                    + '</tr>';
-            });
-            tbody.innerHTML = html;
-        }
-
-        function renderLLMOFlows(flows) {
-            var tbody = document.getElementById('llmoFlowsBody');
-            if (!flows || flows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="padding:2rem;text-align:center;color:var(--text-secondary);">No flow data available</td></tr>';
-                return;
-            }
-            var html = '';
-            flows.slice(0, 50).forEach(function(f) {
-                html += '<tr style="border-bottom:1px solid var(--border-color);">'
-                    + '<td style="padding:0.4rem 0.5rem;font-weight:600;">' + (f.source || '') + '</td>'
-                    + '<td style="padding:0.4rem 0.5rem;">' + (f.destination || '') + '</td>'
-                    + '<td style="padding:0.4rem 0.5rem;text-align:right;">' + _llmoFmt(f.unique_users) + '</td>'
-                    + '<td style="padding:0.4rem 0.5rem;text-align:right;">' + _llmoFmt(f.clicks) + '</td>'
-                    + '</tr>';
-            });
-            tbody.innerHTML = html;
-        }
-
-        function renderLLMOBrowserPlatform(browsers, platforms) {
-            var palette = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01','#46BDC6','#7B61FF','#F538A0','#00BFA5','#FF8A65'];
-
-            var bCtx = document.getElementById('llmoBrowserChart');
-            if (bCtx) {
-                if (_llmoBrowserChart) { _llmoBrowserChart.destroy(); _llmoBrowserChart = null; }
-                if (browsers && browsers.length > 0) {
-                    _llmoBrowserChart = new Chart(bCtx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: browsers.slice(0, 8).map(function(b) { return b.name; }),
-                            datasets: [{ data: browsers.slice(0, 8).map(function(b) { return b.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
-                    });
-                }
-            }
-
-            var pCtx = document.getElementById('llmoPlatformChart');
-            if (pCtx) {
-                if (_llmoPlatformChart) { _llmoPlatformChart.destroy(); _llmoPlatformChart = null; }
-                if (platforms && platforms.length > 0) {
-                    _llmoPlatformChart = new Chart(pCtx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: platforms.slice(0, 8).map(function(p) { return p.name; }),
-                            datasets: [{ data: platforms.slice(0, 8).map(function(p) { return p.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
-                    });
-                }
-            }
-        }
-
-        function renderLLMODemographics(demographics) {
-            if (!demographics) return;
-            var palette = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01','#46BDC6','#7B61FF','#F538A0','#00BFA5','#FF8A65','#90A4AE'];
-            var cats = ['gender', 'age', 'ethnicity', 'income', 'education'];
-            var chartIds = {
-                gender: 'llmoDemoGenderChart',
-                age: 'llmoDemoAgeChart',
-                ethnicity: 'llmoDemoEthnicityChart',
-                income: 'llmoDemoIncomeChart',
-                education: 'llmoDemoEducationChart'
-            };
-
-            cats.forEach(function(cat) {
-                var canvasId = chartIds[cat];
-                var ctx = document.getElementById(canvasId);
-                if (!ctx) return;
-                if (_llmoDemoCharts[cat]) { _llmoDemoCharts[cat].destroy(); _llmoDemoCharts[cat] = null; }
-                var items = demographics[cat];
-                if (!items || items.length === 0) return;
-
-                _llmoDemoCharts[cat] = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: items.map(function(i) { return i.value; }),
-                        datasets: [{
-                            data: items.map(function(i) { return i.pct; }),
-                            backgroundColor: palette.slice(0, items.length),
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 6 } },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; }
-                                }
-                            }
-                        }
-                    }
-                });
-            });
-        }
-
-        function renderLLMODemoTrend() {
-            var ctx = document.getElementById('llmoDemoTrendChart');
-            if (!ctx) return;
-            if (_llmoDemoTrendChart) { _llmoDemoTrendChart.destroy(); _llmoDemoTrendChart = null; }
-            if (!_llmoDemoTrendData || !_llmoTrendDatesCache || _llmoTrendDatesCache.length === 0) return;
-
-            var cat = document.getElementById('llmoDemoTrendCategory').value || 'gender';
-            var byDate = _llmoDemoTrendData[cat];
-            if (!byDate) return;
-
-            var dates = _llmoTrendDatesCache;
-            var allVals = {};
-            Object.values(byDate).forEach(function(items) {
-                items.forEach(function(it) { allVals[it.value] = true; });
-            });
-            var valNames = Object.keys(allVals);
-
-            var demoPalette = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01','#46BDC6','#7B61FF','#F538A0','#00BFA5','#FF8A65'];
-
-            var datasets = valNames.map(function(val, i) {
-                return {
-                    label: val,
-                    data: dates.map(function(d) {
-                        var items = byDate[d];
-                        if (!items) return null;
-                        var match = items.find(function(x) { return x.value === val; });
-                        return match ? match.pct : 0;
-                    }),
-                    borderColor: demoPalette[i % demoPalette.length],
-                    backgroundColor: demoPalette[i % demoPalette.length] + '22',
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: dates.length > 14 ? 0 : 3,
-                    borderWidth: 2,
-                    yAxisID: 'y'
-                };
-            });
-
-            // Usage overlay: total unique users per date (dashed, right axis)
-            var usageData = dates.map(function(d) {
-                var total = 0;
-                if (_llmoTrendByLLMCache) {
-                    Object.keys(_llmoTrendByLLMCache).forEach(function(llm) {
-                        var dayData = _llmoTrendByLLMCache[llm][d];
-                        if (dayData) total += dayData.unique_users;
-                    });
-                }
-                return total;
-            });
-            datasets.push({
-                label: 'Total AI Users',
-                data: usageData,
-                borderColor: '#ffffff',
-                backgroundColor: 'rgba(255,255,255,0.08)',
-                borderDash: [6, 3],
-                fill: false,
-                tension: 0.3,
-                pointRadius: 0,
-                borderWidth: 2.5,
-                yAxisID: 'y1'
-            });
-
-            _llmoDemoTrendChart = new Chart(ctx, {
-                type: 'line',
-                data: { labels: dates, datasets: datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { position: 'top', labels: { color: 'var(--text-primary)', font: { size: 11 }, boxWidth: 12, padding: 8 } },
-                        tooltip: {
-                            callbacks: {
-                                label: function(ctx) {
-                                    if (ctx.dataset.yAxisID === 'y1') return ctx.dataset.label + ': ' + _llmoFmt(ctx.parsed.y);
-                                    return ctx.dataset.label + ': ' + ctx.parsed.y + '%';
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { ticks: { color: 'var(--text-secondary)', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.06)' } },
-                        y: {
-                            type: 'linear', position: 'left',
-                            title: { display: true, text: 'Demographic %', color: 'var(--text-secondary)', font: { size: 11 } },
-                            ticks: { color: 'var(--text-secondary)', callback: function(v) { return v + '%'; } },
-                            grid: { color: 'rgba(255,255,255,0.06)' },
-                            beginAtZero: true
-                        },
-                        y1: {
-                            type: 'linear', position: 'right',
-                            title: { display: true, text: 'Total AI Users', color: 'rgba(255,255,255,0.5)', font: { size: 11 } },
-                            ticks: { color: 'rgba(255,255,255,0.5)' },
-                            grid: { drawOnChartArea: false },
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-        }
-
         function switchCustomAnalysisTab(tabName) {
             // Update tab buttons - use optional chaining for tabs that may not exist
             const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater', 
@@ -23081,7 +22276,7 @@
         const TST_GENPOP_BASE_2026 = '329,900,000';
         const TST_GENPOP_TOOLTIP = 'US Gen Pop projections use the 2026 base of ' + TST_GENPOP_BASE_2026 + '.';
         const TST_GENPOP_DMA = { 'NEW YORK NY': 6.4, 'LOS ANGELES CA': 4.8, 'CHICAGO IL': 3.0, 'PHILADELPHIA PA': 2.5, 'DALLAS FORT WORTH TX': 2.4, 'SAN FRANCISCO OAKLAND SAN JOSE CA': 2.2, 'WASHINGTON DC': 2.2, 'HOUSTON TX': 2.2, 'BOSTON MA': 2.1, 'ATLANTA GA': 2.0, 'PHOENIX AZ': 1.7, 'TAMPA ST PETERSBURG FL': 1.6, 'SEATTLE TACOMA WA': 1.6, 'DETROIT MI': 1.6, 'MINNEAPOLIS ST PAUL MN': 1.5, 'MIAMI FT LAUDERDALE FL': 1.5, 'DENVER CO': 1.4, 'ORLANDO FL': 1.3, 'CLEVELAND OH': 1.2, 'SACRAMENTO CA': 1.2, 'ST LOUIS MO': 1.1, 'PORTLAND OR': 1.0, 'CHARLOTTE NC': 1.0, 'PITTSBURGH PA': 1.0, 'RALEIGH DURHAM NC': 1.0, 'INDIANAPOLIS IN': 0.9, 'BALTIMORE MD': 0.9, 'SAN DIEGO CA': 0.9, 'NASHVILLE TN': 0.9, 'HARTFORD CT': 0.8, 'KANSAS CITY MO': 0.8, 'COLUMBUS OH': 0.8, 'SALT LAKE CITY UT': 0.8, 'MILWAUKEE WI': 0.7, 'SAN ANTONIO TX': 0.7, 'AUSTIN TX': 0.7, 'LAS VEGAS NV': 0.7, 'CINCINNATI OH': 0.7, 'GREENVILLE SC': 0.6, 'WEST PALM BEACH FL': 0.6, 'JACKSONVILLE FL': 0.6, 'GRAND RAPIDS MI': 0.6, 'BIRMINGHAM AL': 0.6, 'OKLAHOMA CITY OK': 0.6, 'HARRISBURG PA': 0.6, 'NORFOLK VA': 0.5, 'ALBUQUERQUE SANTA FE NM': 0.5, 'MEMPHIS TN': 0.5, 'LOUISVILLE KY': 0.5, 'NEW ORLEANS LA': 0.5, 'PROVIDENCE RI': 0.5, 'BUFFALO NY': 0.5, 'GREENSBORO NC': 0.5, 'FRESNO CA': 0.4, 'RICHMOND VA': 0.4, 'KNOXVILLE TN': 0.4, 'LITTLE ROCK AR': 0.4, 'TULSA OK': 0.4, 'LEXINGTON KY': 0.4, 'DAYTON OH': 0.4, 'CHARLESTON SC': 0.4, 'WICHITA KS': 0.3, 'MOBILE AL': 0.3, 'FLINT MI': 0.3, 'TUCSON AZ': 0.3, 'TOLEDO OH': 0.3, 'HONOLULU HI': 0.3, 'DES MOINES IA': 0.3, 'SPOKANE WA': 0.3, 'OMAHA NE': 0.3, 'ROCHESTER NY': 0.3, 'SPRINGFIELD MO': 0.3, 'SHREVEPORT LA': 0.2, 'SYRACUSE NY': 0.2, 'PADUCAH KY': 0.2, 'MADISON WI': 0.2 };
-        const TST_GENPOP_DEMOGRAPHICS = { 'AGE': { '<16': 16.9, '16-18': 3.7, '18-20': 2.7, '21-25': 6.8, '26-30': 6.7, '31-40': 13.7, '41-59': 25.1, '60+': 24.5, '17 and Under': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6, '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1 }, 'GENDER': { 'Female': 48.2, 'Male': 47.8, 'Trans Female': 0.8, 'Trans Male': 1.0, 'Non-Binary': 2.1, 'Prefer Not to Say': 0.5, 'FEMALE': 48.2, 'MALE': 47.8, 'TRANS FEMALE': 0.8, 'TRANS MALE': 1.0, 'NON-BINARY': 2.1, 'PREFER NOT TO SAY': 0.5 }, 'ETHNICITY': { 'White': 59.0, 'Hispanic or Latino': 18.6, 'Black or African American': 14.3, 'Another Race/Ethnicity': 5.0, 'Asian': 3.0, 'WHITE': 59.0, 'LATINO': 18.6, 'LATINX': 18.6, 'BLACK': 14.3, 'ASIAN': 3.0, 'OTHER': 5.0 }, 'INCOME': { '$25,000 - $49,999': 15.0, '$50,000 - $74,999': 17.0, '$75,000 - $99,999': 12.0, '$100,000 - $149,999': 18.0, '$150,000 - $249,999': 15.0, '$250,000 or More': 13.0, '$250K+': 13.0, 'Under $25,000': 10.0, '$40K-$60K': 16.0, '$60K-$75K': 10.0, '$75K-$100K': 12.0, '$100K-$150K': 18.0, '$150K-$250K': 15.0 } };
+        const TST_GENPOP_DEMOGRAPHICS = { 'AGE': { '<16': 16.9, '16-18': 3.7, '18-20': 2.7, '21-25': 6.8, '26-30': 6.7, '31-40': 13.7, '41-59': 25.1, '60+': 24.5, '17 and Under': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6, '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1 }, 'GENDER': { 'Female': 48.2, 'Male': 47.8, 'Trans Female': 0.8, 'Trans Male': 1.0, 'Non-Binary': 2.1, 'FEMALE': 48.2, 'MALE': 47.8, 'TRANS FEMALE': 0.8, 'TRANS MALE': 1.0, 'NON-BINARY': 2.1 }, 'ETHNICITY': { 'White': 59.0, 'Hispanic or Latino': 18.6, 'Black or African American': 14.3, 'Another Race/Ethnicity': 5.0, 'Asian': 3.0, 'WHITE': 59.0, 'LATINO': 18.6, 'LATINX': 18.6, 'BLACK': 14.3, 'ASIAN': 3.0, 'OTHER': 5.0 }, 'INCOME': { '$25,000 - $49,999': 15.0, '$50,000 - $74,999': 17.0, '$75,000 - $99,999': 12.0, '$100,000 - $149,999': 18.0, '$150,000 - $249,999': 15.0, '$250,000 or More': 13.0, '$250K+': 13.0, 'Under $25,000': 10.0, '$40K-$60K': 16.0, '$60K-$75K': 10.0, '$75K-$100K': 12.0, '$100K-$150K': 18.0, '$150K-$250K': 15.0 } };
         let tstDemographicsHoverEnabled = localStorage.getItem('bg_tst_demographics_hover') !== 'false';
         async function loadTSTProfiles() {
             try {
@@ -23260,8 +22455,8 @@
             });
             const snapshotTip = 'Audience % vs General Population (GP). ' + TST_GENPOP_TOOLTIP;
             container.innerHTML = insights.map(i => {
-                const pctColor = i.gp > 0 ? (i.overIndex ? '#10b981' : '#ef4444') : 'var(--text-primary)';
-                const pctHtml = i.gp > 0 ? `<span style="color:${pctColor};">${i.pct.toFixed(2)}%</span> (GP: ${i.gp.toFixed(2)}%)` : `${i.pct.toFixed(2)}%`;
+                const pctColor = i.gp > 0.05 ? (i.overIndex ? '#10b981' : '#ef4444') : 'var(--text-primary)';
+                const pctHtml = i.gp > 0.05 ? `<span style="color:${pctColor};">${i.pct.toFixed(2)}%</span> (GP: ${i.gp.toFixed(2)}%)` : `${i.pct.toFixed(2)}%`;
                 return `<div class="snapshot-item has-tooltip" data-tooltip="${(snapshotTip||'').replace(/"/g,'&quot;')}" style="text-align:left;padding:0.75rem;background:rgba(255,255,255,0.03);border-radius:8px;min-width:0;overflow:hidden;">
                     <div class="snapshot-label" style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;">${(i.label||'').replace(/</g,'&lt;')}</div>
                     <div class="snapshot-value" style="font-size:clamp(0.8rem,1.1vw + 0.3rem,1.1rem);font-weight:700;color:var(--accent-lime);margin-top:0.25rem;word-wrap:break-word;overflow-wrap:break-word;">${(i.value||'').replace(/</g,'&lt;')}</div>
@@ -23612,11 +22807,11 @@
                             legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12, generateLabels: useBar ? undefined : (ch)=>{
                                 return (ch.data.labels||[]).map((l,i)=>{
                                     const p = pcts[i]||0, gp = genPopVals[i]||0;
-                                    const txt = gp>0 ? `${l} ${fmtPct(p)} (GP: ${fmtPct(gp)})` : `${l} ${fmtPct(p)}`;
+                                    const txt = gp>0.05 ? `${l} ${fmtPct(p)} (GP: ${fmtPct(gp)})` : `${l} ${fmtPct(p)}`;
                                     return { text: txt, fillStyle: ch.data.datasets[0].backgroundColor[i], fontColor: gp>0&&p>=gp?'#10b981':(gp>0?'#ef4444':'#e6f1ff') };
                                 });
                             } } },
-                            datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const gp=genPopVals[ctx.dataIndex]||0; return gp>0 ? fmtPct(p)+' (GP: '+fmtPct(gp)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
+                            datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const gp=genPopVals[ctx.dataIndex]||0; return gp>0.05 ? fmtPct(p)+' (GP: '+fmtPct(gp)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
                         },
                         layout: useBar ? { padding: { left: isLocation ? 300 : 20, right: 90 } } : {},
                         scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: function(val, index) { var L = this.chart.data.labels; if (L && index >= 0 && index < L.length) { var lab = L[index]; if (lab !== undefined && lab !== null && String(lab).trim() !== '') return lab; } if (isLocation && typeof getDMARank === 'function') { var s = val != null && typeof val === 'string' ? val : String(val || ''); if (!s) return val; var r = getDMARank(s); return r != null ? '#'+r+'  '+s : val; } if (field === 'AGE' && (typeof val === 'number' || (typeof val === 'string' && /^\d+$/.test(val)))) { var idx = typeof val === 'number' ? val : parseInt(val, 10); if (idx >= 0 && idx < TST_AGE_ORDER.length) return TST_AGE_ORDER[idx]; if (idx >= 0 && idx < TST_AGE_ORDER_EXTRA.length) return TST_AGE_ORDER_EXTRA[idx]; } if (field === 'INCOME' && (typeof val === 'number' || (typeof val === 'string' && /^\d+$/.test(val)))) { var idx = typeof val === 'number' ? val : parseInt(val, 10); if (idx >= 0 && idx < TST_INCOME_ORDER.length) return TST_INCOME_ORDER[idx]; } return val; } } } } : {}
@@ -23853,11 +23048,11 @@
                             legend: useBar ? { display: false } : { position: 'right', labels: { color: '#e6f1ff', boxWidth: 12, generateLabels: useBar ? undefined : (ch)=>{
                                 return (ch.data.labels||[]).map((l,i)=>{
                                     const p = pcts[i]||0, g = genPopVals[i]||0;
-                                    const txt = g>0 ? `${l} ${fmtPct(p)} (GP: ${fmtPct(g)})` : `${l} ${fmtPct(p)}`;
+                                    const txt = g>0.05 ? `${l} ${fmtPct(p)} (GP: ${fmtPct(g)})` : `${l} ${fmtPct(p)}`;
                                     return { text: txt, fillStyle: ch.data.datasets[0].backgroundColor[i], fontColor: g>0&&p>=g?'#10b981':(g>0?'#ef4444':'#e6f1ff') };
                                 });
                             } } },
-                            datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const g=genPopVals[ctx.dataIndex]||0; return g>0 ? fmtPct(p)+' (GP: '+fmtPct(g)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
+                            datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const g=genPopVals[ctx.dataIndex]||0; return g>0.05 ? fmtPct(p)+' (GP: '+fmtPct(g)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
                         },
                         layout: useBar ? { padding: { left: isLocation ? 300 : 20, right: 90 } } : {},
                         scales: useBar ? { x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: isLocation ? 9 : 11 }, autoSkip: false, callback: function(val, index) { var L = this.chart.data.labels; if (L && index >= 0 && index < L.length) { var lab = L[index]; if (lab !== undefined && lab !== null && String(lab).trim() !== '') return lab; } if (isLocation && typeof getDMARank === 'function') { var s = val != null && typeof val === 'string' ? val : String(val || ''); if (!s) return val; var r = getDMARank(s); return r != null ? '#'+r+'  '+s : val; } if (field === 'AGE' && (typeof val === 'number' || (typeof val === 'string' && /^\d+$/.test(val)))) { var idx = typeof val === 'number' ? val : parseInt(val, 10); if (idx >= 0 && idx < TST_AGE_ORDER.length) return TST_AGE_ORDER[idx]; if (idx >= 0 && idx < TST_AGE_ORDER_EXTRA.length) return TST_AGE_ORDER_EXTRA[idx]; } if (field === 'INCOME' && (typeof val === 'number' || (typeof val === 'string' && /^\d+$/.test(val)))) { var idx = typeof val === 'number' ? val : parseInt(val, 10); if (idx >= 0 && idx < TST_INCOME_ORDER.length) return TST_INCOME_ORDER[idx]; } return val; } } } } : {}
@@ -24606,13 +23801,19 @@
             const summary = data.attribution_summary || {};
             const totalWatchers = Number(metrics.total_watchers?.count) || 0;
             const newSignups = Number(metrics.new_signups?.count) || 0;
+            const totalWatchersGenPop = metrics.total_watchers?.gen_pop;
+            const newSignupsGenPop = metrics.new_signups?.gen_pop;
             const totalSignups = Number(summary.total?.count) || Number(metrics.new_signups?.count) || 0;
             const attributedSignups = Number(summary.attributed?.count) || 0;
             const dormantReactive = Number(summary.dormant_reactive?.count) || 0;
             const totalConversionRate = metrics.total_conversion_rate || '';
+            const twProj = parseNumber(totalWatchersGenPop);
+            const npsProj = parseNumber(newSignupsGenPop);
             const conversionPct = (totalConversionRate && String(totalConversionRate).trim())
                 ? parseFloat(String(totalConversionRate).replace('%', ''))
-                : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
+                : (twProj != null && twProj > 0 && npsProj != null)
+                    ? (npsProj / twProj) * 100
+                    : (totalWatchers > 0 && newSignups > 0 ? (newSignups / totalWatchers) * 100 : 0);
             const avgDaysRaw = metrics.avg_days_to_signup;
             const avgDaysToSignup = (avgDaysRaw !== undefined && avgDaysRaw !== null && String(avgDaysRaw).trim() && String(avgDaysRaw) !== 'N/A')
                 ? parseFloat(String(avgDaysRaw).replace(/[^0-9.-]/g, '')) : null;
@@ -24887,10 +24088,13 @@
             if (tabs) tabs.style.display = 'flex';
             if (actionRow) actionRow.style.display = 'flex';
             
-            // Hide Episodes tab on all profiles
+            // Hide Episodes tab for Stand Up Comedy, Movie genres, and All at Once cadence
             const episodesTabBtn = document.getElementById('subscriberEpisodesTabBtn');
             if (episodesTabBtn) {
-                episodesTabBtn.style.display = 'none';
+                const genreLower = (genre || '').toLowerCase();
+                const cadenceLower = (contentCadence || '').toLowerCase();
+                const hideEpisodes = genreLower.includes('stand up comedy') || genreLower.includes('movie') || cadenceLower.includes('all at once');
+                episodesTabBtn.style.display = hideEpisodes ? 'none' : '';
             }
             
             // Load profile image if available
@@ -24937,10 +24141,20 @@
         
         // Hide/show subscriber tabs based on data availability
         function updateSubscriberTabVisibility(data) {
-            // Episodes tab - hidden on all profiles
+            // Episodes tab - hide if no episode data, movie genre, stand up, or all-at-once cadence
             const episodesTabBtn = document.getElementById('subscriberEpisodesTabBtn');
             if (episodesTabBtn) {
-                episodesTabBtn.style.display = 'none';
+                const metaGenre = ((data.metadata && data.metadata.genre) || '').toLowerCase();
+                const metaCadence = ((data.metadata && data.metadata.content_cadence) || '').toLowerCase();
+                const isMovieGenre = metaGenre.includes('movie');
+                const isStandUp = metaGenre.includes('stand up comedy');
+                const isAllAtOnce = metaCadence.includes('all at once');
+                if (isMovieGenre || isStandUp || isAllAtOnce) {
+                    episodesTabBtn.style.display = 'none';
+                } else {
+                    const episodes = (data.episode_attribution || []).filter(ep => (Number(ep.signups) || 0) > 0);
+                    episodesTabBtn.style.display = episodes.length > 0 ? '' : 'none';
+                }
             }
             
             // Timing tab - hide if no signup_timing data AND no episode_signup_timing data
@@ -25281,10 +24495,13 @@
             const cleanConversionRate = metrics.clean_conversion_rate || '';
             const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
             
-            // Use CSV conversion rate when available, else compute from viewers/signups
-            const conversionPctDisplay = (totalConversionRate && String(totalConversionRate).trim()) 
-                ? (String(totalConversionRate).replace('%', '') + '%') 
-                : (totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) + '%' : '0%');
+            // Prefer rate from projected numbers so it always matches the two card values (Total Accounts Viewed, Accounts Acquired)
+            const twProj = parseNumber(totalWatchersGenPop);
+            const npsProj = parseNumber(newSignupsGenPop);
+            const conversionFromProjected = (twProj != null && twProj > 0 && npsProj != null) ? ((npsProj / twProj) * 100).toFixed(2) + '%' : null;
+            const conversionPctDisplay = conversionFromProjected
+                || (totalConversionRate && String(totalConversionRate).trim() ? (String(totalConversionRate).replace('%', '') + '%') : null)
+                || (totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) + '%' : '0%');
             
             // Format values based on display mode
             const formatValue = (value, genPop) => {
@@ -25293,13 +24510,18 @@
                 }
                 return formatNumber(value);
             };
-            // Executive Summary always shows projected US (gen_pop) when available
+            // Executive Summary: show gen pop projection from CSV when available (actual data), else raw count
             const formatExecProjected = (value, genPop) => {
                 if (genPop != null && String(genPop).trim() !== '') {
                     return formatNumber(genPop);
                 }
                 return formatNumber(value);
             };
+            // Ensure these four metrics use gen_pop from CSV: Total Show Watchers, New Platform Signups, Attributed Signups, Dormant to Reactive
+            const totalAccountsViewedDisplay = formatExecProjected(totalWatchers, totalWatchersGenPop);
+            const accountsAcquiredDisplay = formatExecProjected(newSignups, newSignupsGenPop);
+            const newAccountsAcquisitionDisplay = formatExecProjected(attributedSignups, attributedSignupsGenPop);
+            const reactivatedAccountsDisplay = formatExecProjected(dormantReactive, dormantReactiveGenPop);
             
             const formatGenPop = (genPop) => {
                 if (!genPop) return '';
@@ -25309,9 +24531,11 @@
                 return `Actual: ${formatNumber(genPop)}`;
             };
             
-            // Calculate strategic metrics
+            // Calculate strategic metrics (use projected for conversion rate when available)
             const newViewerPct = cleanSample > 0 && totalWatchers > 0 ? ((cleanSample / totalWatchers) * 100).toFixed(2) : 0;
-            const conversionPct = totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) : 0;
+            const conversionPct = (twProj != null && twProj > 0 && npsProj != null)
+                ? ((npsProj / twProj) * 100).toFixed(2)
+                : (totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) : 0);
             const reactivationPct = totalSignups > 0 ? ((dormantReactive / totalSignups) * 100).toFixed(2) : 0;
             const attributionPct = totalSignups > 0 ? ((attributedSignups / totalSignups) * 100).toFixed(2) : 0;
             const newViewerConversionPct = cleanSample > 0 ? ((newSignups / cleanSample) * 100).toFixed(2) : 0;
@@ -25335,23 +24559,23 @@
                         <h2 class="has-tooltip" data-tooltip="Key performance metrics showing subscriber growth, conversion rates, and platform value.">Performance Metrics</h2>
                     </div>
                     <div class="exec-summary-grid">
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Total Accounts Viewed: Total account views during the tracking period (projected US).">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Total Accounts Viewed: Gen Pop projection from Total Show Watchers row in the data.">
                             <div class="exec-metric-label">Total Accounts<br>Viewed</div>
-                            <div class="exec-metric-value">${formatExecProjected(totalWatchers, totalWatchersGenPop)}</div>
+                            <div class="exec-metric-value">${totalAccountsViewedDisplay}</div>
                         </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Accounts Acquired or Reactivated: Total number of accounts acquired or reactivated due to this show (projected US).">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Accounts Acquired or Reactivated: Gen Pop projection from New Platform Signups row in the data.">
                             <div class="exec-metric-label">Accounts Acquired<br>or Reactivated</div>
-                            <div class="exec-metric-value">${formatExecProjected(newSignups, newSignupsGenPop)}</div>
+                            <div class="exec-metric-value">${accountsAcquiredDisplay}</div>
                         </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="New Accounts Acquisition: Attributed signups — new accounts who signed up then watched this show (from Attribution Summary, projected US).">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="New Accounts Acquisition: Gen Pop projection from Attributed Signups row in the data.">
                             <div class="exec-metric-label">New Accounts<br>Acquisition</div>
-                            <div class="exec-metric-value">${formatExecProjected(attributedSignups, attributedSignupsGenPop)}</div>
+                            <div class="exec-metric-value">${newAccountsAcquisitionDisplay}</div>
                         </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Reactivated Accounts: Dormant users who returned to the platform to watch this show after a period of inactivity (projected US).">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Reactivated Accounts: Gen Pop projection from Dormant to Reactive row in the data.">
                             <div class="exec-metric-label">Reactivated<br>Accounts</div>
-                            <div class="exec-metric-value">${formatExecProjected(dormantReactive, dormantReactiveGenPop)}</div>
+                            <div class="exec-metric-value">${reactivatedAccountsDisplay}</div>
                         </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Acquired and Reactivated Accounts: Percentage of total show viewers who signed up or reactivated for the platform to watch this show.">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Total Show Conversion Rate: The percentage of Total Show Watchers who became New Platform Signups, using US projected (Gen Pop) numbers: (NPS projected ÷ Total Show Watchers projected) × 100.">
                             <div class="exec-metric-label">Acquired and<br>Reactivated Accounts</div>
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
                         </div>
@@ -26394,13 +25618,27 @@
             
             console.log('📊 Demographics data:', data.demographics);
             
+            // Show projected New Platform Signups and note that age/gender totals equal it
+            const projectedNoteEl = document.getElementById('subscriberDemographicsProjectedNote');
+            if (projectedNoteEl) {
+                const npsGenPop = data.key_metrics?.new_signups?.gen_pop;
+                const npsVal = npsGenPop !== undefined && npsGenPop !== null && npsGenPop !== '' ? parseNumber(String(npsGenPop).trim()) : null;
+                if (npsVal !== null && !isNaN(npsVal)) {
+                    projectedNoteEl.textContent = 'US projected New Platform Signups: ' + formatNumber(npsVal) + '. Age and gender account totals each equal this number.';
+                    projectedNoteEl.style.display = '';
+                } else {
+                    projectedNoteEl.textContent = '';
+                    projectedNoteEl.style.display = 'none';
+                }
+            }
+            
             // Get demographics data - check multiple possible locations
             const insightsContainer = document.getElementById('subscriberDemographicsInsights');
             let ageData = data.demographics?.age || [];
             let genderData = data.demographics?.gender || [];
             
             // Gender keywords to identify gender entries
-            const genderKeywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY'];
+            const genderKeywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER'];
             
             // Fallback: check if demographics is an array or object with different structure
             if (!ageData.length && !genderData.length && data.demographics) {
@@ -26482,10 +25720,10 @@
             const normalizeGenderKey = (gender) => {
                 const normalized = gender.toUpperCase().trim().replace(/\s+/g, ' ');
                 // Handle common variations
-                if (normalized.includes('TRANS') && normalized.includes('FEMALE')) return 'TRANS FEMALE';
-                if (normalized.includes('TRANS') && normalized.includes('MALE')) return 'TRANS MALE';
                 if (normalized === 'MALE' || normalized.startsWith('MALE')) return 'MALE';
                 if (normalized === 'FEMALE' || normalized.startsWith('FEMALE')) return 'FEMALE';
+                if (normalized.includes('TRANS') && normalized.includes('MALE')) return 'TRANS MALE';
+                if (normalized.includes('TRANS') && normalized.includes('FEMALE')) return 'TRANS FEMALE';
                 if (normalized.includes('NON') && normalized.includes('BINARY')) return 'NON-BINARY';
                 if (normalized.includes('PREFER') || normalized.includes('NOT') && normalized.includes('SAY')) return 'PREFER NOT TO SAY';
                 return normalized;
@@ -26534,7 +25772,7 @@
             const validGenderData = Object.values(genderGroups)
                 .sort((a, b) => b.count - a.count);
             
-            // Calculate total for percentage recalculation (rebased without PNTS)
+            // Calculate total for percentage recalculation
             const genderTotalCount = validGenderData.reduce((sum, g) => sum + g.count, 0);
             validGenderData.forEach(g => {
                 g.percentage = genderTotalCount > 0 ? ((g.count / genderTotalCount) * 100).toFixed(2) + '%' : 'N/A';
@@ -26575,170 +25813,108 @@
                 return formatNumber(value);
             };
             
-            // Get the value to display (actual or gen pop projection)
+            // Get the value to display (actual or gen pop projection). Demographics always prefer projected when available.
             const getDisplayValue = (actual, genPop) => {
-                if (subscriberGenPopMode) {
-                    // Check if genPop exists and is valid (not empty, not 'N/A')
-                    if (genPop !== null && genPop !== undefined && genPop !== '') {
-                        const genPopStr = String(genPop).trim();
-                        if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A') {
-                            const parsed = parseNumber(genPopStr);
-                            console.log(`🔄 Gen Pop toggle: genPop="${genPopStr}", parsed=${parsed}, isNaN=${isNaN(parsed)}`);
-                            // Return parsed value if valid (including 0), otherwise fall back to actual
-                            if (parsed !== null && parsed !== undefined && !isNaN(parsed)) {
-                                console.log(`✅ Using Gen Pop: ${parsed}`);
-                                return parsed;
-                            } else {
-                                console.log(`⚠️ Gen Pop invalid (parsed=${parsed}), falling back to actual: ${actual}`);
-                            }
-                        } else {
-                            console.log(`⚠️ Gen Pop is empty or N/A ("${genPopStr}"), falling back to actual: ${actual}`);
+                const useProjected = subscriberGenPopMode;
+                if (genPop !== null && genPop !== undefined && genPop !== '') {
+                    const genPopStr = String(genPop).trim();
+                    if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A') {
+                        const parsed = parseNumber(genPopStr);
+                        if (parsed !== null && parsed !== undefined && !isNaN(parsed)) {
+                            if (useProjected) return parsed;
                         }
-                    } else {
-                        console.log(`⚠️ Gen Pop is null/undefined/empty, falling back to actual: ${actual}`);
                     }
-                    // If no valid genPop, return actual as fallback
-                    return parseNumber(actual) || 0;
+                }
+                return parseNumber(actual) || 0;
+            };
+            // Demographics table: always show US projected when available (ignore global toggle for this section)
+            const getDemographicsDisplayValue = (actual, genPop) => {
+                if (genPop !== null && genPop !== undefined && genPop !== '') {
+                    const genPopStr = String(genPop).trim();
+                    if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A') {
+                        const parsed = parseNumber(genPopStr);
+                        if (parsed !== null && parsed !== undefined && !isNaN(parsed)) return parsed;
+                    }
                 }
                 return parseNumber(actual) || 0;
             };
             
-            // Bucket age data into standard groups (same logic as normalizeAgeBucketsForDashboard)
-            const oldToNew = { '<16': [['17 and Under', 1]], 'under 16': [['17 and Under', 1]], '16-18': [['17 and Under', 0.67], ['18-24', 0.33]], '17-18': [['17 and Under', 0.67], ['18-24', 0.33]], '19-20': [['18-24', 1]], '18-20': [['18-24', 1]], '21-25': [['18-24', 0.8], ['25-34', 0.2]], '26-30': [['25-34', 1]], '31-40': [['25-34', 0.4], ['35-44', 0.6]], '41-49': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '41-59': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]], '60+': [['55-64', 0.25], ['65 or Older', 0.75]], '65+': [['55-64', 0.25], ['65 or Older', 0.75]], 'over 65': [['55-64', 0.25], ['65 or Older', 0.75]] };
-            const standardAgeOrder = ['17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older'];
-            const bucketedRaw = {};
-            const bucketedGP = {};
-            validAgeData.forEach(item => {
-                const rawKey = (item.age_range || item.age || '').trim();
-                const normKey = rawKey.toLowerCase().replace(/\s*-\s*/g, '-').replace(/\s+/g, ' ');
-                const count = parseNumber(item.count) || 0;
-                const gp = parseNumber(item.gen_pop || item.genPop || '') || 0;
-                if (count <= 0 && gp <= 0) return;
-                const mapping = oldToNew[normKey] || oldToNew[rawKey] || oldToNew[rawKey.toLowerCase()];
-                if (mapping) {
-                    mapping.forEach(([bucket, ratio]) => {
-                        bucketedRaw[bucket] = (bucketedRaw[bucket] || 0) + count * ratio;
-                        bucketedGP[bucket] = (bucketedGP[bucket] || 0) + gp * ratio;
-                    });
-                } else {
-                    const displayBucket = getAgeDisplayLabel(rawKey);
-                    bucketedRaw[displayBucket] = (bucketedRaw[displayBucket] || 0) + count;
-                    bucketedGP[displayBucket] = (bucketedGP[displayBucket] || 0) + gp;
-                }
-            });
-            const useGP = subscriberGenPopMode;
-            const bucketedDisplay = useGP ? bucketedGP : bucketedRaw;
-            const totalAgeDisplay = Object.values(bucketedDisplay).reduce((a, b) => a + b, 0);
-            const bucketedAge = standardAgeOrder
-                .filter(b => (bucketedDisplay[b] || 0) > 0)
-                .map(b => ({ label: b, displayCount: Math.round(bucketedDisplay[b] || 0), pct: totalAgeDisplay > 0 ? (((bucketedDisplay[b] || 0) / totalAgeDisplay) * 100) : 0 }));
-            Object.keys(bucketedDisplay).forEach(b => {
-                if (!standardAgeOrder.includes(b) && (bucketedDisplay[b] || 0) > 0) {
-                    bucketedAge.push({ label: b, displayCount: Math.round(bucketedDisplay[b]), pct: totalAgeDisplay > 0 ? ((bucketedDisplay[b] / totalAgeDisplay) * 100) : 0 });
-                }
-            });
-
-            // Destroy previous charts
-            if (window._subDemoAgeChart) { window._subDemoAgeChart.destroy(); window._subDemoAgeChart = null; }
-            if (window._subDemoGenderChart) { window._subDemoGenderChart.destroy(); window._subDemoGenderChart = null; }
-
-            // Age Chart
-            const ageChartCanvas = document.getElementById('subscriberAgeChart');
-            const ageChartWrap = document.getElementById('subscriberAgeChartWrap');
-            if (ageChartCanvas && bucketedAge.length > 0) {
-                if (ageChartWrap) ageChartWrap.style.display = '';
-                const ageLabelsChart = bucketedAge.map(b => b.label);
-                const agePctData = bucketedAge.map(b => Math.round(b.pct * 100) / 100);
-                window._subDemoAgeChart = new Chart(ageChartCanvas, {
-                    type: 'bar',
-                    data: { labels: ageLabelsChart, datasets: [{ data: agePctData, backgroundColor: '#5a9ad9', borderRadius: 4 }] },
-                    options: {
-                        indexAxis: 'y',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            datalabels: { display: true, anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 11, weight: 600 }, formatter: v => v.toFixed(1) + '%' }
-                        },
-                        scales: {
-                            x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#8b949e', callback: v => v + '%' }, max: Math.max(...agePctData) * 1.4 },
-                            y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 12 } } }
-                        }
-                    },
-                    plugins: [ChartDataLabels]
-                });
-            } else if (ageChartWrap) {
-                ageChartWrap.style.display = 'none';
-            }
-
-            // Age Table (bucketed)
+            // Age Table
             const ageTableContainer = document.getElementById('subscriberAgeTable');
             if (ageTableContainer) {
-                if (bucketedAge.length > 0) {
+                if (validAgeData.length > 0) {
                     ageTableContainer.innerHTML = `
                         <div class="demographics-table-wrapper">
                             <table class="demographics-table">
-                                <thead><tr>
-                                    <th>Age Range</th><th>Accounts</th><th>Percentage</th>
-                                </tr></thead>
+                                <thead>
+                                    <tr>
+                                        <th class="has-tooltip" data-tooltip="Age Range: Demographic age groups of people who were reactivated or signed up for the platform to watch this show">Age Range</th>
+                                        <th class="has-tooltip" data-tooltip="US projected number of accounts for this age group (scaled to US population)">Accounts (US projected)</th>
+                                        <th class="has-tooltip" data-tooltip="Percentage: This age group's share of total new signups">Percentage</th>
+                                    </tr>
+                                </thead>
                                 <tbody>
-                                    ${bucketedAge.map(b => `<tr><td><strong>${b.label}</strong></td><td>${formatNumber(b.displayCount)}</td><td>${b.pct.toFixed(2)}%</td></tr>`).join('')}
+                                    ${validAgeData.map(item => {
+                                        const ageRange = item.age_range || item.age || 'N/A';
+                                        const displayAgeRange = getAgeDisplayLabel(ageRange);
+                                        const percentage = item.percentage || 'N/A';
+                                        const genPop = item.gen_pop || item.genPop || '';
+                                        const displayValue = getDemographicsDisplayValue(item.count, genPop);
+                                        return `
+                                            <tr>
+                                                <td><strong>${displayAgeRange}</strong></td>
+                                                <td>${formatNumber(displayValue)}</td>
+                                                <td>${percentage}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
                                 </tbody>
                             </table>
-                        </div>`;
+                        </div>
+                    `;
                 } else {
                     ageTableContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No age data available</p>';
                 }
             }
+            
 
-            // Gender Chart - use projected numbers when in gen pop mode
-            const genderChartCanvas = document.getElementById('subscriberGenderChart');
-            const genderChartWrap = document.getElementById('subscriberGenderChartWrap');
-            const genderColors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff'];
-            const genderDisplayData = validGenderData.map(g => {
-                const gpVal = parseNumber(g.genPop) || 0;
-                return { gender: g.gender, displayCount: useGP && gpVal > 0 ? gpVal : g.count, count: g.count, genPop: g.genPop, percentage: g.percentage };
-            });
-            const genderDisplayTotal = genderDisplayData.reduce((s, g) => s + g.displayCount, 0);
-            genderDisplayData.forEach(g => { g.displayPct = genderDisplayTotal > 0 ? ((g.displayCount / genderDisplayTotal) * 100).toFixed(2) + '%' : 'N/A'; });
-            if (genderChartCanvas && genderDisplayData.length > 0) {
-                if (genderChartWrap) genderChartWrap.style.display = '';
-                const genderLabelsChart = genderDisplayData.map(g => g.gender);
-                const genderCountsChart = genderDisplayData.map(g => g.displayCount);
-                window._subDemoGenderChart = new Chart(genderChartCanvas, {
-                    type: 'doughnut',
-                    data: { labels: genderLabelsChart, datasets: [{ data: genderCountsChart, backgroundColor: genderColors.slice(0, genderLabelsChart.length) }] },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        cutout: '55%',
-                        plugins: {
-                            legend: { display: true, position: 'bottom', labels: { color: '#e6f1ff', padding: 12, font: { size: 12 } } },
-                            datalabels: { display: true, color: '#fff', font: { size: 12, weight: 700 }, formatter: (v, ctx) => { const total = ctx.dataset.data.reduce((a, b) => a + b, 0); return total > 0 ? ((v / total) * 100).toFixed(1) + '%' : ''; } }
-                        }
-                    },
-                    plugins: [ChartDataLabels]
-                });
-            } else if (genderChartWrap) {
-                genderChartWrap.style.display = 'none';
-            }
-
-            // Gender Table
+            
+            // Gender Table (uses validGenderData created earlier)
             const genderTableContainer = document.getElementById('subscriberGenderTable');
             if (genderTableContainer) {
-                if (genderDisplayData.length > 0) {
+                if (validGenderData.length > 0) {
+                    
                     genderTableContainer.innerHTML = `
                         <div class="demographics-table-wrapper">
                             <table class="demographics-table">
-                                <thead><tr>
-                                    <th>Gender</th><th>Accounts</th><th>Percentage</th>
-                                </tr></thead>
+                                <thead>
+                                    <tr>
+                                        <th class="has-tooltip" data-tooltip="Gender: Gender identity of people who were reactivated or signed up for the platform to watch this show">Gender</th>
+                                        <th class="has-tooltip" data-tooltip="US projected number of accounts for this gender (scaled to US population)">Accounts (US projected)</th>
+                                        <th class="has-tooltip" data-tooltip="Percentage: This gender's share of total new signups">Percentage</th>
+                                    </tr>
+                                </thead>
                                 <tbody>
-                                    ${genderDisplayData.map(item => `<tr><td><strong>${item.gender}</strong></td><td>${formatNumber(item.displayCount)}</td><td>${item.displayPct}</td></tr>`).join('')}
+                                    ${validGenderData.map(item => {
+                                        const gender = item.gender;
+                                        const count = item.count;
+                                        const percentage = item.percentage; // Already calculated earlier
+                                        const genPop = item.genPop || item.gen_pop;
+                                        const displayValue = getDemographicsDisplayValue(count, genPop);
+                                        return `
+                                            <tr>
+                                                <td><strong>${gender}</strong></td>
+                                                <td>${formatNumber(displayValue)}</td>
+                                                <td>${percentage}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
                                 </tbody>
                             </table>
-                        </div>`;
+                        </div>
+                    `;
                 } else {
+                    console.warn('⚠️ No valid gender data found. Raw genderData:', genderData);
                     genderTableContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No gender data available</p>';
                 }
             }
@@ -27200,22 +26376,6 @@
                 }
 
                 // (projectedUS from BRAND INPUT row handled above)
-            });
-
-            // Remove "Prefer Not to Say" from demographics and rebase to 100%
-            const _pnts = (k) => ['prefer not to say', 'none'].includes((k || '').trim().toLowerCase());
-            Object.keys(demographics).forEach(demoCat => {
-                const obj = demographics[demoCat];
-                if (!obj) return;
-                const bad = Object.keys(obj).filter(_pnts);
-                if (!bad.length) return;
-                bad.forEach(k => { delete obj[k]; if (genPop[demoCat]) delete genPop[demoCat][k]; });
-                const vals = Object.values(obj);
-                const tot = vals.reduce((s, v) => s + v, 0);
-                if (tot > 0 && Math.abs(tot - 100) > 0.1) {
-                    const sc = 100.0 / tot;
-                    Object.keys(obj).forEach(k => { obj[k] = Math.round(obj[k] * sc * 100) / 100; });
-                }
             });
 
             return { sampleSize, projectedUS, medianAge, demographics, genPop };
@@ -28293,8 +27453,7 @@
                 'GENDER': {
                     'Female': 50.83, 'FEMALE': 50.83, 'Male': 49.17, 'MALE': 49.17,
                     'Trans Female': 0.5, 'TRANS FEMALE': 0.5, 'Trans Male': 0.5, 'TRANS MALE': 0.5,
-                    'Non-Binary': 1.0, 'NON-BINARY': 1.0,
-                    'Prefer Not to Say': 0.5, 'PREFER NOT TO SAY': 0.5
+                    'Non-Binary': 1.0, 'NON-BINARY': 1.0
                 },
                 'ETHNICITY': {
                     'White': 59.0, 'WHITE': 59.0,
@@ -28447,15 +27606,11 @@
                             genPopPct = genPopItem.pct || 0;
                             genPopProjection = genPopItem.projection || 0;
                         }
-                        // Case-insensitive fallback if exact match failed
-                        if (genPopPct === 0) {
-                            const valUpper = (value || '').trim().toUpperCase();
-                            const gpItem = genPopBaselineData.behavioral[category].find(item => (item.name || '').trim().toUpperCase() === valUpper);
-                            if (gpItem) {
-                                genPopPct = gpItem.pct || 0;
-                                genPopProjection = gpItem.projection || 0;
-                            }
-                        }
+                    }
+                    
+                    // Fallback: Use Category Share if Gen Pop baseline not available
+                    if (genPopPct === 0) {
+                        genPopPct = catShare > 0 ? catShare : 0;
                     }
                     
                     // Fallback for genPopProjection: calculate from genPopPct if not available
@@ -28468,7 +27623,7 @@
                                            currentS3Key?.toUpperCase().includes('GENPOP') ||
                                            currentProfileData?.name?.toUpperCase().includes('GEN POP');
                     if (isGenPopProfile && genPopPct === 0) {
-                        genPopPct = pct;
+                        genPopPct = pct; // Use profile percentage as gen pop percentage
                     }
                 }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
@@ -28655,33 +27810,6 @@
                 result.behavioral[cat].sort((a, b) => b.pct - a.pct);
             });
 
-            // Remove "Prefer Not to Say" from all demographic categories
-            // and rebase remaining values to sum to 100%
-            const _pntsPatterns = ['prefer not to say', 'none'];
-            const _isPNTS = (k) => _pntsPatterns.includes((k || '').trim().toLowerCase());
-            ['age', 'gender', 'ethnicity', 'income', 'education',
-             'relationship', 'sexual_orientation', 'parental_status', 'occupation'
-            ].forEach(demoCat => {
-                const dataObj = result.demographics[demoCat];
-                if (!dataObj) return;
-                const pntsKeys = Object.keys(dataObj).filter(_isPNTS);
-                if (pntsKeys.length === 0) return;
-                pntsKeys.forEach(k => {
-                    delete dataObj[k];
-                    if (result.demographicsIndex[demoCat]) delete result.demographicsIndex[demoCat][k];
-                    if (result.demographicsGenPop[demoCat]) delete result.demographicsGenPop[demoCat][k];
-                    if (result.demographicsProjection[demoCat]) delete result.demographicsProjection[demoCat][k];
-                });
-                const remaining = Object.values(dataObj);
-                const total = remaining.reduce((s, v) => s + v, 0);
-                if (total > 0 && Math.abs(total - 100) > 0.1) {
-                    const scale = 100.0 / total;
-                    Object.keys(dataObj).forEach(k => {
-                        dataObj[k] = Math.round(dataObj[k] * scale * 100) / 100;
-                    });
-                }
-            });
-
             return result;
         }
 
@@ -28734,11 +27862,6 @@
         async function restoreSavedTabs() {
             const { savedTabs, savedActiveId } = loadSavedTabs();
             if (savedTabs.length === 0) return;
-            // Wait for Gen Pop baseline before parsing any profile so indices are correct
-            if (!_genPopLoaded) {
-                console.log('⏳ Waiting for Gen Pop baseline before restoring tabs...');
-                await _genPopReady;
-            }
             const seen = new Set();
             const deduped = savedTabs.filter(t => {
                 if (seen.has(t.id)) return false;
@@ -29327,11 +28450,6 @@
                         switchToProfileTab(effectiveId);
                         return;
                     }
-                    // Wait for Gen Pop baseline before parsing so indices are correct
-                    if (!_genPopLoaded) {
-                        console.log('⏳ Waiting for Gen Pop baseline before parsing profile...');
-                        await _genPopReady;
-                    }
                     const parsed = parseAllData(data.data);
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === effectiveId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
@@ -29790,24 +28908,13 @@
                 }
                 
                 // Reload Gen Pop baseline so new/updated Gen Pop file in S3 is used (e.g. after upload)
-                // Then RE-PARSE all open tabs with correct gen pop data (not just re-render stale parsed data)
                 if (typeof loadGenPopBaseline === 'function') {
                     loadGenPopBaseline().then(() => {
-                        if (!genPopBaselineData) return;
-                        // Re-parse every open tab's raw CSV data with the now-available gen pop baseline
-                        let reParsedActive = false;
-                        openProfileTabs.forEach(tab => {
-                            if (tab.data && tab.data.data) {
-                                tab.parsed = parseAllData(tab.data.data);
-                                if (tab.id === activeProfileTabId) reParsedActive = true;
-                            }
-                        });
-                        // Re-display the active tab with corrected indices
-                        if (reParsedActive) {
-                            const activeTab = openProfileTabs.find(t => t.id === activeProfileTabId);
-                            if (activeTab) {
-                                try { displayProfileTabData(activeTab); } catch (e) { console.error('Re-display after Gen Pop load error:', e); }
-                            }
+                        if (currentDashboardData && genPopBaselineData) {
+                            renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, genPopBaselineData.demographics || {});
+                            if (currentDashboardData.behavioral) renderBehavioralCards(currentDashboardData.behavioral);
+                            if (Array.isArray(currentDashboardData.locations)) renderLocationTable(currentDashboardData.locations);
+                            if (typeof renderDemoInsights === 'function') renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, genPopBaselineData.demographics || {});
                         }
                     });
                 }
@@ -31232,7 +30339,7 @@
                                     const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                     return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                 }
-                                return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                             }
                         }
                     }, 
@@ -31288,7 +30395,7 @@
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
                                         const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
-                                        const gpStr = (isGenPop || genPop <= 0) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
+                                        const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
                                         const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
@@ -31318,7 +30425,7 @@
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                 }
-                                return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                             }
                         } : doughnutDataLabels
                     },
@@ -31411,7 +30518,7 @@
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
                                         const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
-                                        const gpStr = (isGenPop || genPop <= 0) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
+                                        const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
                                         const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
@@ -31441,7 +30548,7 @@
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (!isGenPop && gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                 }
-                                return formatPct(pct) + (!isGenPop && genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
+                                return formatPct(pct) + (!isGenPop && genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                             }
                         }
                     },
@@ -31561,7 +30668,7 @@
                                     const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                     return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                 }
-                                return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                             }
                         }
                     }, 
@@ -31645,7 +30752,7 @@
                                         const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
                                         return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '') + idxStr;
                                     }
-                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
+                                    return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '') + idxStr;
                                 }
                             } 
                         }, 
@@ -32546,12 +31653,8 @@
                 if (d.label === 'Top Ethnicity') {
                     if (idx >= 130) {
                         takeaways.push(`<span class="takeaway-over">Strong ${d.value} representation</span> — ${idxMultiplier}x higher than Gen Pop`);
-                    } else if (idx >= 110) {
-                        takeaways.push(`<span class="takeaway-over">Ethnicity skews toward ${d.value}</span> — ${idxMultiplier}x vs Gen Pop`);
                     } else if (idx <= 70) {
                         takeaways.push(`<span class="takeaway-under">Lower ${d.value} representation</span> than Gen Pop (${idxMultiplier}x)`);
-                    } else if (idx <= 90) {
-                        takeaways.push(`<span class="takeaway-under">${d.value} slightly under-represented</span> vs Gen Pop (${idxMultiplier}x)`);
                     } else {
                         takeaways.push(`Ethnicity mix is <span class="takeaway-highlight">representative</span> of Gen Pop`);
                     }

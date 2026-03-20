@@ -1318,9 +1318,11 @@ def run_query(conn, p):
         inflated_new_signups = min(int(raw_new_signups * inflation_factor), SAMPLE_REPRESENTS)
         df_summary.loc[0, 'NEW_SIGNUPS'] = inflated_new_signups
         
-        # Recalculate TOTAL_SHOW_CONVERSION_RATE from inflated values
-        if inflated_total_watchers > 0:
-            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((inflated_new_signups * 100.0) / inflated_total_watchers, 2)
+        # Recalculate TOTAL_SHOW_CONVERSION_RATE from projected (Gen Pop) values
+        tw_proj = gen_pop_projection(inflated_total_watchers)
+        nps_proj = gen_pop_projection(inflated_new_signups)
+        if tw_proj > 0:
+            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((nps_proj / tw_proj) * 100.0, 2)
     else:
         inflated_new_signups = 0
     
@@ -1933,7 +1935,7 @@ def ai_validate_demographics(show_name, platform_name, df_demo, new_signups):
         f'- If the show skews female, female % should be higher than male\n'
         f'- If the show skews young, younger age brackets should dominate\n'
         f'- Keep Non-Binary/Trans/Other at realistic small percentages (1-3% total)\n'
-        f'- Keep "Prefer Not to Say" under 5% (target 3-5%)\n\n'
+        f'- Keep "Prefer Not to Say" under 1%\n\n'
         f'Return ONLY a JSON object with this exact structure (no comments, no commas in numbers):\n'
         f'{{\n'
         f'  "age": {{"17 and Under": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, '
@@ -2017,38 +2019,6 @@ def ai_validate_demographics(show_name, platform_name, df_demo, new_signups):
     if reasoning:
         changes.append(f"Reasoning: {reasoning}")
 
-    # Hard cap: "Prefer Not to Say" must not exceed 5% in any category
-    PNS_CAP = 5.0
-    for cat in ['AGE', 'GENDER']:
-        cat_rows = df_demo[df_demo['CATEGORY'].str.strip() == cat]
-        if cat_rows.empty:
-            continue
-        cat_total = cat_rows['COUNT'].sum()
-        if cat_total <= 0:
-            continue
-        pns_mask = cat_rows['VALUE'].str.strip().str.upper() == 'PREFER NOT TO SAY'
-        if not pns_mask.any():
-            continue
-        pns_count = int(cat_rows.loc[pns_mask, 'COUNT'].iloc[0]) if not pd.isna(cat_rows.loc[pns_mask, 'COUNT'].iloc[0]) else 0
-        pns_pct = pns_count * 100.0 / cat_total
-        if pns_pct <= PNS_CAP:
-            continue
-        max_pns = max(1, int(round(cat_total * PNS_CAP / 100.0)))
-        excess = pns_count - max_pns
-        pns_idx = cat_rows.index[pns_mask][0]
-        df_demo.loc[pns_idx, 'COUNT'] = max_pns
-        df_demo.loc[pns_idx, 'PERCENTAGE'] = round(max_pns * 100.0 / cat_total, 1)
-        non_pns = cat_rows[~pns_mask]
-        non_pns_total = non_pns['COUNT'].sum()
-        if non_pns_total > 0:
-            for idx in non_pns.index:
-                old_c = int(df_demo.loc[idx, 'COUNT']) if not pd.isna(df_demo.loc[idx, 'COUNT']) else 0
-                share = old_c / non_pns_total if non_pns_total > 0 else 0
-                new_c = old_c + int(round(excess * share))
-                df_demo.loc[idx, 'COUNT'] = new_c
-                df_demo.loc[idx, 'PERCENTAGE'] = round(new_c * 100.0 / cat_total, 1)
-        changes.append(f"{cat} 'Prefer Not to Say' capped: {pns_pct:.1f}% → {PNS_CAP}%")
-
     return df_demo, changes
 
 
@@ -2065,7 +2035,10 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     new_signups = int(df_summary.loc[0, "NEW_SIGNUPS"]) if not pd.isna(df_summary.loc[0, "NEW_SIGNUPS"]) else 0
     avg_days = float(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) if not pd.isna(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) else 0
     clean_conversion = float(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) else 0
-    total_show_conversion = float(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) else 0
+    # Total Show Conversion Rate = (projected NPS / projected Total Show Watchers) * 100 (use Gen Pop projected numbers)
+    tw_projected = gen_pop_projection(total_watchers)
+    nps_projected = gen_pop_projection(new_signups)
+    total_show_conversion = round((nps_projected / tw_projected) * 100.0, 2) if tw_projected > 0 else 0.0
     # For new shows, clean sample = all show watchers (no pre-existing viewers to exclude)
 
     # Get tracking mode and create lookup for display labels and episode dates (used for episode/date attribution)

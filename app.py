@@ -1483,7 +1483,7 @@ def ensure_metadata_has_rerun_fields(csv_path, brand_category, is_listener_watch
     """Append BRAND_CATEGORY, LISTENER_WATCHER, PLATFORM_NAME to INPUT_METADATA row for future reruns."""
     try:
         import pandas as pd
-        df = pd.read_csv(csv_path, dtype=str)
+        df = pd.read_csv(csv_path)
         mask = df['Column'].astype(str).str.upper() == 'INPUT_METADATA'
         if not mask.any():
             return
@@ -2533,7 +2533,6 @@ def create_user():
             'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
             'has_ticket_sales_tracker_access': req_data.get('has_ticket_sales_tracker_access', cd.get('has_ticket_sales_tracker_access', False) if cd else False),
             'has_rankers_iq_access': req_data.get('has_rankers_iq_access', cd.get('has_rankers_iq_access', False) if cd else False),
-            'has_llmo_iq_access': req_data.get('has_llmo_iq_access', cd.get('has_llmo_iq_access', False) if cd else False),
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False
@@ -2643,8 +2642,6 @@ def update_user(username):
             user['has_ticket_sales_tracker_access'] = bool(req_data['has_ticket_sales_tracker_access'])
         if 'has_rankers_iq_access' in req_data:
             user['has_rankers_iq_access'] = req_data['has_rankers_iq_access']
-        if 'has_llmo_iq_access' in req_data:
-            user['has_llmo_iq_access'] = req_data['has_llmo_iq_access']
         if 'rankers_iq_options' in req_data:
             user['rankers_iq_options'] = req_data['rankers_iq_options']
         if 'collab_team' in req_data:
@@ -2775,7 +2772,6 @@ def restore_defaults_all_users():
             user['has_analysis_iq_access'] = False
             user['analysis_iq_modules'] = user.get('analysis_iq_modules', [])
             user['has_rankers_iq_access'] = False
-            user['has_llmo_iq_access'] = False
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
             count += 1
         save_users(data)
@@ -3157,7 +3153,6 @@ def api_set_company_defaults(company_name):
             'has_hedge_fund_iq_access': req.get('has_hedge_fund_iq_access', False),
             'has_analysis_iq_access': req.get('has_analysis_iq_access', False),
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
-            'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
             'credits': req.get('credits', 5),
         }
@@ -3207,7 +3202,6 @@ def api_reset_company_users(company_name):
                 user['has_hedge_fund_iq_access'] = cd.get('has_hedge_fund_iq_access', False)
                 user['has_analysis_iq_access'] = cd.get('has_analysis_iq_access', False)
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
-                user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
                 user['credits'] = cd.get('credits', 5)
             else:
@@ -3220,7 +3214,6 @@ def api_reset_company_users(company_name):
                 user['has_hedge_fund_iq_access'] = False
                 user['has_analysis_iq_access'] = False
                 user['has_rankers_iq_access'] = False
-                user['has_llmo_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
                 user['credits'] = 5
             count += 1
@@ -4394,17 +4387,14 @@ def get_admin_content():
                     # Get category from metadata, default to 'SVOD Acquisition'
                     # SVOD files can have subcategories (TALENT, CONTENT, etc.) but they're always under SVOD ACQUISITION master
                     category = 'SVOD Acquisition'
-                    file_meta = svod_metadata.get(key, {})
-                    if file_meta.get('category'):
-                        category = file_meta['category']
-                    content_cadence = file_meta.get('content_cadence', '')
+                    if key in svod_metadata and svod_metadata[key].get('category'):
+                        category = svod_metadata[key]['category']
                     
                     svod_files.append({
                         'key': f'svod-acquisition/{key}',  # Prefix to identify bucket
                         'filename': filename,
                         'project_name': show_name,
                         'category': category,
-                        'content_cadence': content_cadence,
                         'size': obj.get('Size', 0),
                         'last_modified': last_modified,
                         'created_at': last_modified,
@@ -5054,7 +5044,6 @@ def index():
         rankers_iq_options = ['*']
         has_ticket_sales_iq = True
         has_ticket_sales_tracker = True
-        has_llmo_iq = True
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
@@ -5069,7 +5058,6 @@ def index():
         rankers_iq_options = user.get('rankers_iq_options', []) if user else []
         has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
         has_ticket_sales_tracker = user.get('has_ticket_sales_tracker_access', False) if user else False
-        has_llmo_iq = user.get('has_llmo_iq_access', False) if user else False
     
     # When cloaked, grant Analysis IQ access so the admin can use it while acting as a user who may not have it
     if session.get('cloaked_from'):
@@ -5119,7 +5107,6 @@ def index():
                            rankers_iq_options=rankers_iq_options,
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
-                           has_llmo_iq_access=has_llmo_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -6839,421 +6826,6 @@ def get_goodshort_ranker_data():
 
 
 # ============================================================================
-# LLMO IQ - Large Language Model Optimization dashboard
-# The server ONLY loads a small pre-computed summary JSON from S3 (~2-5 MB).
-# Summary is built by Snowflake SP_BUILD_LLMO_SUMMARY (runs daily after data load).
-# ============================================================================
-LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000  # 32.99
-LLMO_S3_BUCKET = 'llmo'
-LLMO_SUMMARY_PREFIX = 'processed/llmo_daily_summary'
-LLMO_CACHE_TTL = 86400  # 24 hours
-import threading as _llmo_threading
-_llmo_cache = {'summary': None, 'loaded_at': 0, 'loading': False,
-               'lock': _llmo_threading.Lock(), 'stage': ''}
-
-
-def _llmo_find_summary_key():
-    """Find the actual S3 key for the summary JSON (Snowflake may add suffixes)."""
-    try:
-        resp = s3_client.list_objects_v2(Bucket=LLMO_S3_BUCKET, Prefix=LLMO_SUMMARY_PREFIX, MaxKeys=10)
-        for obj in resp.get('Contents', []):
-            if 'summary' in obj['Key'] and obj['Size'] > 100:
-                return obj['Key']
-    except Exception:
-        pass
-    return LLMO_SUMMARY_PREFIX + '.json.gz'
-
-
-def _llmo_load_summary():
-    """Download the pre-computed summary JSON from S3 (~2-5 MB). Returns dict or None."""
-    import gzip, json, time as _time
-    try:
-        t0 = _time.time()
-        _llmo_cache['stage'] = 'Downloading summary...'
-        key = _llmo_find_summary_key()
-        print(f"[LLMO S3] Loading summary from s3://{LLMO_S3_BUCKET}/{key}")
-        resp = s3_client.get_object(Bucket=LLMO_S3_BUCKET, Key=key)
-        raw = resp['Body'].read()
-        try:
-            text = gzip.decompress(raw).decode('utf-8')
-        except Exception:
-            text = raw.decode('utf-8')
-        data = json.loads(text)
-        if isinstance(data, list) and len(data) == 1:
-            data = data[0]
-        if 'dates' not in data and 'by_date' not in data:
-            for k, v in data.items():
-                if isinstance(v, dict) and 'dates' in v:
-                    data = v
-                    break
-        elapsed = _time.time() - t0
-        print(f"[LLMO S3] Loaded summary: {len(data.get('dates', []))} dates, "
-              f"{len(raw)/1e6:.1f} MB in {elapsed:.1f}s")
-        return data
-    except Exception as e:
-        print(f"[LLMO S3] Summary load failed: {e}")
-        return None
-
-
-def _llmo_do_background_load():
-    """Background worker: download and cache the summary JSON."""
-    import time as _time
-    print("[LLMO S3] Loading summary from S3...")
-    t0 = _time.time()
-    try:
-        data = _llmo_load_summary()
-        if data is None:
-            print("[LLMO S3] No summary found on S3. Run build_llmo_summary.py to create it.")
-            with _llmo_cache['lock']:
-                _llmo_cache['loading'] = False
-                _llmo_cache['stage'] = ''
-            return
-
-        elapsed = _time.time() - t0
-        print(f"[LLMO S3] Ready: {len(data.get('dates', []))} dates in {elapsed:.1f}s")
-        with _llmo_cache['lock']:
-            _llmo_cache['summary'] = data
-            _llmo_cache['loaded_at'] = _time.time()
-            _llmo_cache['loading'] = False
-            _llmo_cache['stage'] = ''
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[LLMO S3] Background load failed: {e}")
-        with _llmo_cache['lock']:
-            _llmo_cache['loading'] = False
-            _llmo_cache['stage'] = ''
-
-
-def _llmo_ensure_loaded():
-    """Return cached summary dict if ready, or kick off background load. Returns None while loading."""
-    import time as _time
-    now = _time.time()
-    with _llmo_cache['lock']:
-        if _llmo_cache['summary'] is not None and (now - _llmo_cache['loaded_at']) < LLMO_CACHE_TTL:
-            return _llmo_cache['summary']
-        if not _llmo_cache['loading']:
-            _llmo_cache['loading'] = True
-            _llmo_cache['stage'] = 'Starting...'
-            t = _llmo_threading.Thread(target=_llmo_do_background_load, daemon=True)
-            t.start()
-        return None
-
-
-def _llmo_daily_scheduler():
-    """Background thread: loads summary on startup, refreshes daily at 5:45 AM PST."""
-    import time as _time
-    from datetime import datetime, timedelta
-    try:
-        import pytz
-        pst = pytz.timezone('US/Pacific')
-    except ImportError:
-        from datetime import timezone
-        pst = timezone(timedelta(hours=-8))
-
-    print("[LLMO Scheduler] Startup: loading summary from S3...")
-    _llmo_do_background_load()
-
-    while True:
-        now = datetime.now(pst)
-        target = now.replace(hour=5, minute=45, second=0, microsecond=0)
-        if now >= target:
-            target += timedelta(days=1)
-        wait_secs = (target - now).total_seconds()
-        print(f"[LLMO Scheduler] Next refresh at {target.strftime('%Y-%m-%d %H:%M %Z')} ({wait_secs/3600:.1f}h from now)")
-        _time.sleep(wait_secs)
-        print("[LLMO Scheduler] Daily refresh: reloading summary from S3...")
-        with _llmo_cache['lock']:
-            _llmo_cache['summary'] = None
-            _llmo_cache['loaded_at'] = 0
-        _llmo_do_background_load()
-
-
-_llmo_scheduler_thread = _llmo_threading.Thread(target=_llmo_daily_scheduler, daemon=True)
-_llmo_scheduler_thread.start()
-print("[LLMO Scheduler] Background thread started (startup load + daily 5:45 AM PST refresh)")
-
-
-@app.route('/api/cron/llmo-prewarm', methods=['POST'])
-def cron_llmo_prewarm():
-    """Reload LLMO summary JSON from S3. Called by external cron to refresh after daily build.
-    Requires CRON_SECRET via header or query param."""
-    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
-    if not secret or secret != os.environ.get('CRON_SECRET', ''):
-        return jsonify({'error': 'Unauthorized'}), 403
-    with _llmo_cache['lock']:
-        if _llmo_cache['loading']:
-            return jsonify({'success': True, 'message': 'Already loading, skipped'})
-        _llmo_cache['summary'] = None
-        _llmo_cache['loaded_at'] = 0
-    t = _llmo_threading.Thread(target=_llmo_do_background_load, daemon=True)
-    t.start()
-    return jsonify({'success': True, 'message': 'LLMO summary reload started'})
-
-
-@app.route('/api/llmo-iq/dates', methods=['GET'])
-@requires_auth
-def llmo_iq_dates():
-    """Return available DELIVERED dates from pre-computed summary."""
-    try:
-        data = _llmo_ensure_loaded()
-        if data is None:
-            loaded = _llmo_cache.get('loaded_files', 0)
-            total = _llmo_cache.get('total_files', 0)
-            stage = _llmo_cache.get('stage', '')
-            return jsonify({'success': True, 'loading': True, 'dates': [],
-                            'loaded_files': loaded, 'total_files': total,
-                            'stage': stage})
-        return jsonify({'success': True, 'loading': False, 'dates': data.get('dates', [])})
-    except Exception as e:
-        print(f"[LLMO IQ dates] Error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-def _llmo_combine_date_range(summary_data, date_str, date_end):
-    """Combine pre-computed per-date stats for a date range. Returns API response dict."""
-    from collections import defaultdict
-    M = LLMO_PROJECTION_MULT
-    by_date = summary_data.get('by_date', {})
-
-    matching_dates = sorted(d for d in by_date if d >= date_str and d <= date_end)
-    if not matching_dates:
-        return {'success': True, 'loading': False, 'date': date_str, 'date_end': date_end,
-                'total_unique_users': 0, 'total_unique_users_projected': 0,
-                'total_clicks': 0, 'total_clicks_projected': 0,
-                'llm_count': 0, 'llms': [], 'attribution': [], 'flows': [],
-                'searches': [], 'trend_dates': [], 'trend_by_llm': {},
-                'browsers': [], 'platforms': []}
-
-    llm_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
-    att_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
-    flow_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
-    search_agg = defaultdict(int)
-    browser_agg = defaultdict(int)
-    platform_agg = defaultdict(int)
-    total_users = 0
-    total_clicks = 0
-    trend_by_llm = {}
-
-    for d in matching_dates:
-        day = by_date[d]
-        total_users += day.get('total_ai_users', 0)
-        total_clicks += day.get('total_ai_clicks', 0)
-
-        for llm in day.get('llms', []):
-            llm_agg[llm['name']]['uu'] += llm['unique_users']
-            llm_agg[llm['name']]['cl'] += llm['total_clicks']
-            nm = llm['name']
-            if nm not in trend_by_llm:
-                trend_by_llm[nm] = {}
-            trend_by_llm[nm][d] = {'unique_users': round(llm['unique_users'] * M), 'total_clicks': round(llm['total_clicks'] * M)}
-
-        for att in day.get('attribution', []):
-            att_agg[att['name']]['uu'] += att['unique_users']
-            att_agg[att['name']]['cl'] += att['total_clicks']
-
-        for fl in day.get('flows', []):
-            key = (fl['source'], fl['destination'])
-            flow_agg[key]['uu'] += fl['unique_users']
-            flow_agg[key]['cl'] += fl['clicks']
-
-        for s in day.get('searches', []):
-            search_agg[s['term']] += s['count']
-
-        for b in day.get('browsers', []):
-            browser_agg[b['name']] += b['unique_users']
-
-        for p in day.get('platforms', []):
-            platform_agg[p['name']] += p['unique_users']
-
-    total_clicks_all = sum(v['cl'] for v in llm_agg.values())
-    llm_sorted = sorted(llm_agg.items(), key=lambda x: x[1]['uu'], reverse=True)
-    llm_data = []
-    for rank, (name, v) in enumerate(llm_sorted, 1):
-        uu, cl = v['uu'], v['cl']
-        llm_data.append({
-            'rank': rank, 'name': name,
-            'unique_users': uu, 'unique_users_projected': round(uu * M),
-            'pct_of_total': round(uu / total_users * 100, 2) if total_users else 0,
-            'total_clicks': cl, 'total_clicks_projected': round(cl * M),
-            'category_share': round(cl / total_clicks_all * 100, 2) if total_clicks_all else 0,
-        })
-
-    att_sorted = sorted(att_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:50]
-    attribution = [{'name': n, 'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
-                    'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M)}
-                   for n, v in att_sorted]
-
-    flow_sorted = sorted(flow_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
-    flows = [{'source': k[0], 'destination': k[1],
-              'unique_users': round(v['uu'] * M), 'clicks': round(v['cl'] * M)}
-             for k, v in flow_sorted]
-
-    search_sorted = sorted(search_agg.items(), key=lambda x: x[1], reverse=True)[:50]
-    searches = [{'term': t, 'count': round(c * M)} for t, c in search_sorted]
-
-    browsers = [{'name': n, 'unique_users': round(u * M)} for n, u in sorted(browser_agg.items(), key=lambda x: x[1], reverse=True)]
-    platforms = [{'name': n, 'unique_users': round(u * M)} for n, u in sorted(platform_agg.items(), key=lambda x: x[1], reverse=True)]
-
-    return {
-        'success': True, 'loading': False,
-        'date': date_str, 'date_end': date_end,
-        'total_unique_users': total_users,
-        'total_unique_users_projected': round(total_users * M),
-        'total_clicks': total_clicks,
-        'total_clicks_projected': round(total_clicks * M),
-        'llm_count': len(llm_data), 'llms': llm_data,
-        'attribution': attribution, 'flows': flows,
-        'searches': searches,
-        'trend_dates': matching_dates, 'trend_by_llm': trend_by_llm,
-        'browsers': browsers, 'platforms': platforms,
-    }
-
-
-@app.route('/api/llmo-iq/data', methods=['GET'])
-@requires_auth
-def llmo_iq_data():
-    """Return core LLMO IQ dashboard data from pre-computed summary."""
-    date_str = request.args.get('date')
-    date_end = request.args.get('date_end')
-    if not date_str:
-        date_str = datetime.now().strftime('%Y-%m-%d')
-    if not date_end:
-        date_end = date_str
-
-    try:
-        summary = _llmo_ensure_loaded()
-        if summary is None:
-            loaded = _llmo_cache.get('loaded_files', 0)
-            total = _llmo_cache.get('total_files', 0)
-            stage = _llmo_cache.get('stage', '')
-            return jsonify({'success': True, 'loading': True,
-                            'loaded_files': loaded, 'total_files': total,
-                            'stage': stage})
-
-        result = _llmo_combine_date_range(summary, date_str, date_end)
-        return jsonify(result)
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[LLMO IQ data] Error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/llmo-iq/demographics', methods=['GET'])
-@requires_auth
-def llmo_iq_demographics():
-    """Return demographic breakdown for LLMO users from Snowflake (async load)."""
-    import datetime as _dt
-    date_str = request.args.get('date')
-    date_end = request.args.get('date_end')
-    if not date_str:
-        date_str = datetime.now().strftime('%Y-%m-%d')
-    if not date_end:
-        date_end = date_str
-
-    try:
-        import bg as _bg
-        conn = _bg.connect_snowflake()
-        cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-
-        params = (date_str, date_end)
-
-        cur.execute("""
-            CREATE OR REPLACE TEMP TABLE TEMP_LLMO_AI_UIDS AS
-            SELECT DISTINCT UID, DELIVERED::DATE AS d
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
-            WHERE MATCH_TYPE = 'AI_AGENT'
-              AND DELIVERED::DATE BETWEEN %s AND %s
-        """, params)
-
-        cur.execute("""
-            SELECT 'gender' AS cat, d.GENDER AS val, COUNT(DISTINCT u.UID) AS cnt
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.GENDER IS NOT NULL AND TRIM(d.GENDER) != '' AND UPPER(TRIM(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY d.GENDER
-            UNION ALL
-            SELECT 'age', d.AGE, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.AGE IS NOT NULL AND TRIM(d.AGE) != '' AND UPPER(TRIM(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY d.AGE
-            UNION ALL
-            SELECT 'ethnicity', d.ETHNICITY, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.ETHNICITY IS NOT NULL AND TRIM(d.ETHNICITY) != '' AND UPPER(TRIM(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY d.ETHNICITY
-            UNION ALL
-            SELECT 'income', d.INCOME, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.INCOME IS NOT NULL AND TRIM(d.INCOME) != '' AND UPPER(TRIM(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY d.INCOME
-            UNION ALL
-            SELECT 'education', d.EDUCATION, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.EDUCATION IS NOT NULL AND TRIM(d.EDUCATION) != '' AND UPPER(TRIM(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY d.EDUCATION
-        """)
-        overall_rows = cur.fetchall()
-
-        cur.execute("""
-            SELECT 'gender' AS cat, u.d, d.GENDER AS val, COUNT(DISTINCT u.UID) AS cnt
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.GENDER IS NOT NULL AND TRIM(d.GENDER) != '' AND UPPER(TRIM(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY u.d, d.GENDER
-            UNION ALL
-            SELECT 'age', u.d, d.AGE, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.AGE IS NOT NULL AND TRIM(d.AGE) != '' AND UPPER(TRIM(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY u.d, d.AGE
-            UNION ALL
-            SELECT 'ethnicity', u.d, d.ETHNICITY, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.ETHNICITY IS NOT NULL AND TRIM(d.ETHNICITY) != '' AND UPPER(TRIM(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY u.d, d.ETHNICITY
-            UNION ALL
-            SELECT 'income', u.d, d.INCOME, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.INCOME IS NOT NULL AND TRIM(d.INCOME) != '' AND UPPER(TRIM(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY u.d, d.INCOME
-            UNION ALL
-            SELECT 'education', u.d, d.EDUCATION, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.EDUCATION IS NOT NULL AND TRIM(d.EDUCATION) != '' AND UPPER(TRIM(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY u.d, d.EDUCATION
-        """)
-        trend_rows = cur.fetchall()
-        conn.close()
-
-        cat_data = {}
-        for r in overall_rows:
-            cat, val, cnt = r
-            cat_data.setdefault(cat, []).append((val, cnt))
-        demographics = {}
-        for cat, items in cat_data.items():
-            items.sort(key=lambda x: -x[1])
-            total_d = sum(x[1] for x in items)
-            demographics[cat] = [{'value': v, 'count': c, 'pct': round(c / total_d * 100, 2) if total_d else 0} for v, c in items]
-
-        trend_data = {}
-        for r in trend_rows:
-            cat, d, val, cnt = r
-            d_str = str(d)
-            trend_data.setdefault(cat, {}).setdefault(d_str, []).append({'value': val, 'count': cnt})
-        demo_trend = {}
-        for cat, by_date in trend_data.items():
-            for d_str, items in by_date.items():
-                total_d = sum(x['count'] for x in items)
-                for x in items:
-                    x['pct'] = round(x['count'] / total_d * 100, 2) if total_d else 0
-            demo_trend[cat] = by_date
-
-        return jsonify({'success': True, 'demographics': demographics, 'demo_trend': demo_trend})
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[LLMO IQ demographics] Error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# ============================================================================
 # NETFLIX LIVE TOP 10 - Real-time Netflix viewing data from S3
 # ============================================================================
 NETFLIX_LIVE_TOP10_CACHE = {'data': None, 'loaded_at': 0}
@@ -8619,16 +8191,17 @@ def parse_subscriber_iq_csv(csv_content):
             if first_col and first_col not in ['', 'AGE']:
                 # Filter out gender entries that might have been mixed in
                 first_col_upper = first_col.upper().strip()
-                gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY']
+                gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER']
                 
                 # Count/percentage/gen_pop: CSV format is col C (2) for count, col I (8) for percentage, col J (9) for gen_pop
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _pct = (row[8].strip() if len(row) > 8 else '') or (row[7].strip() if len(row) > 7 else '')
                 _gen = (row[9].strip() if len(row) > 9 else '') or (row[5].strip() if len(row) > 5 else '')
                 
-                # Only add if it's not a gender entry and looks like an age range (or "Other")
+                # Only add if it's not a gender entry and looks like an age range
                 if not any(keyword in first_col_upper for keyword in gender_keywords):
-                    if any(char.isdigit() for char in first_col) or '-' in first_col or '+' in first_col or 'to' in first_col_upper or 'and' in first_col_upper or first_col_upper == 'OTHER':
+                    # Check if it looks like an age range (contains numbers or age-like patterns)
+                    if any(char.isdigit() for char in first_col) or '-' in first_col or '+' in first_col or 'to' in first_col_upper or 'and' in first_col_upper:
                         parsed['demographics']['age'].append({
                             'age_range': first_col,
                             'count': _count,
@@ -8636,7 +8209,7 @@ def parse_subscriber_iq_csv(csv_content):
                             'gen_pop': _gen
                         })
                     else:
-                        print(f"   ⚠️ Skipping unrecognized entry in age section: '{first_col}'")
+                        print(f"   ⚠️ Skipping potential gender entry in age section: '{first_col}'")
                 else:
                     # This is a gender entry - add it to gender data instead
                     print(f"   ⚠️ Found gender entry '{first_col}' in age section, moving to gender data")
@@ -8909,7 +8482,8 @@ def parse_subscriber_iq_csv(csv_content):
             if demo_sub and first_col and first_col not in ('AGE', 'GENDER'):
                 _c = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _p = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
-                _g = (row[5].strip() if len(row) > 5 else '') or (row[8].strip() if len(row) > 8 else '')
+                # Prefer column 9 for US projected (gen_pop), then 8, then 5 (match main demographics section)
+                _g = (row[9].strip() if len(row) > 9 else '') or (row[8].strip() if len(row) > 8 else '') or (row[5].strip() if len(row) > 5 else '')
                 if demo_sub == 'age' and (any(c.isdigit() for c in first_col) or '-' in first_col or '+' in first_col):
                     parsed['demographics']['age'].append({'age_range': first_col, 'count': _c, 'percentage': _p, 'gen_pop': _g})
                 elif demo_sub == 'gender':
@@ -9041,13 +8615,70 @@ def scale_subscriber_iq_values(parsed, divisor=10):
             elif isinstance(val, str) and parse_number(val) is not None:
                 m['gen_pop'] = _scale_num(val)
 
-    # demographics: scale count for age and gender
+    # demographics: scale count and gen_pop for age and gender
     for bucket in parsed.get('demographics', {}).get('age') or []:
         if bucket.get('count') is not None:
             bucket['count'] = _scale_num(bucket['count'])
+        if bucket.get('gen_pop') is not None:
+            val = bucket['gen_pop']
+            if isinstance(val, (int, float)):
+                bucket['gen_pop'] = _scale_num(val)
+            elif isinstance(val, str) and parse_number(val) is not None:
+                bucket['gen_pop'] = _scale_num(val)
     for bucket in parsed.get('demographics', {}).get('gender') or []:
         if bucket.get('count') is not None:
             bucket['count'] = _scale_num(bucket['count'])
+        if bucket.get('gen_pop') is not None:
+            val = bucket['gen_pop']
+            if isinstance(val, (int, float)):
+                bucket['gen_pop'] = _scale_num(val)
+            elif isinstance(val, str) and parse_number(val) is not None:
+                bucket['gen_pop'] = _scale_num(val)
+
+    normalize_demographics_gen_pop_to_nps(parsed)
+
+
+def normalize_demographics_gen_pop_to_nps(parsed):
+    """Rescale demographics age and gender gen_pop so each sum equals projected New Platform Signups (key_metrics.new_signups.gen_pop)."""
+    nps = parsed.get('key_metrics', {}).get('new_signups', {})
+    if not nps:
+        return
+    gp = nps.get('gen_pop')
+    if gp is None:
+        return
+    nps_val = parse_number(gp) if isinstance(gp, str) else (gp if isinstance(gp, (int, float)) else None)
+    if nps_val is None or nps_val < 0:
+        return
+
+    def _num(g):
+        if g is None:
+            return 0
+        if isinstance(g, str):
+            n = parse_number(g)
+            return n if n is not None else 0
+        return g if isinstance(g, (int, float)) else 0
+
+    for kind in ('age', 'gender'):
+        buckets = (parsed.get('demographics') or {}).get(kind) or []
+        if not buckets:
+            continue
+        total = sum(_num(b.get('gen_pop')) for b in buckets)
+        if total <= 0:
+            continue
+        # Largest-remainder apportionment so sum of gen_pop equals nps_val exactly
+        nps_int = int(round(nps_val))
+        shares = [_num(b.get('gen_pop')) * nps_int / total for b in buckets]
+        floors = [int(s) for s in shares]
+        remainders = [(i, shares[i] - floors[i]) for i in range(len(shares))]
+        remainder_sum = nps_int - sum(floors)
+        remainders.sort(key=lambda x: -x[1])
+        for k in range(remainder_sum):
+            i = remainders[k][0]
+            floors[i] += 1
+        for i, b in enumerate(buckets):
+            b['gen_pop'] = str(max(0, floors[i]))
+
+    return
 
 
 @app.route('/api/subscriber-iq/list')
@@ -9126,6 +8757,7 @@ def get_subscriber_iq_data(s3_key):
         print(f"📝 CSV content preview (first 500 chars): {csv_content[:500]}")
         parsed = parse_subscriber_iq_csv(csv_content)
         # Subscriber IQ: use raw values from CSV (no scaling at serve time)
+        normalize_demographics_gen_pop_to_nps(parsed)
 
         # Log what was parsed in detail
         print(f"📊 Parsed data summary:")
@@ -9268,12 +8900,6 @@ def get_subscriber_iq_data(s3_key):
         # Uppercase platform name in metadata for display
         if parsed.get('metadata') and parsed['metadata'].get('platform'):
             parsed['metadata']['platform'] = str(parsed['metadata']['platform']).upper()
-        
-        # Override content_cadence from svod_metadata if set (CMS editable)
-        svod_meta = load_svod_metadata()
-        meta_cadence = svod_meta.get(s3_key, {}).get('content_cadence', '')
-        if meta_cadence:
-            parsed['metadata']['content_cadence'] = meta_cadence
         
         response_data = {
             'success': True,
@@ -13996,44 +13622,6 @@ def change_file_category():
         return jsonify({'success': False, 'error': str(e)})
 
 
-@app.route('/api/admin/change-cadence', methods=['POST'])
-@requires_admin
-def change_file_cadence():
-    """Change the Content Cadence for an SVOD file in svod_metadata."""
-    try:
-        data = request.get_json()
-        file_key = data.get('file_key', '').strip()
-        new_cadence = data.get('content_cadence', '').strip()
-
-        if not file_key:
-            return jsonify({'success': False, 'error': 'File key is required'})
-
-        if new_cadence and new_cadence not in ('Weekly', 'All at Once'):
-            return jsonify({'success': False, 'error': 'Content cadence must be "Weekly" or "All at Once"'})
-
-        if not file_key.startswith('svod-acquisition/'):
-            return jsonify({'success': False, 'error': 'Content cadence can only be set for SVOD files'})
-
-        actual_key = file_key.replace('svod-acquisition/', '')
-        metadata = load_svod_metadata()
-        if actual_key not in metadata:
-            metadata[actual_key] = {}
-        metadata[actual_key]['content_cadence'] = new_cadence
-        save_svod_metadata(metadata)
-
-        print(f"🔄 Changed content cadence for {actual_key} to '{new_cadence}'")
-        return jsonify({
-            'success': True,
-            'content_cadence': new_cadence,
-            'message': f'Content cadence updated to {new_cadence or "(cleared)"}'
-        })
-    except Exception as e:
-        print(f"❌ Cadence change error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
-
-
 @app.route('/api/image-cache-stats')
 @requires_auth
 def get_image_cache_stats():
@@ -15247,7 +14835,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         update_job_status(job_id, progress=87, message='Adding frequency analysis...')
                         
                         import pandas as pd
-                        df = pd.read_csv(result_file, dtype=str)
+                        df = pd.read_csv(result_file)
                         
                         # Use calculate_frequency_metrics like terminal version does
                         if hasattr(bg, 'calculate_frequency_metrics'):
@@ -15278,27 +14866,11 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 elif is_listener_watcher:
                     try:
                         import pandas as pd
-                        df = pd.read_csv(result_file, dtype=str)
+                        df = pd.read_csv(result_file)
                         if hasattr(bg, 'set_brand_input_to_csv'):
                             df = bg.set_brand_input_to_csv(df)
                         if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
                             df = bg.adjust_platform_to_100_percent(df, platform_name)
-                        if hasattr(bg, 'reconcile_final_output_from_bp_and_sample_size'):
-                            df = bg.reconcile_final_output_from_bp_and_sample_size(df)
-                        if hasattr(bg, 'add_us_gen_pop_projection'):
-                            df = bg.add_us_gen_pop_projection(df)
-                        if hasattr(bg, 'perturb_brand_penetration_avoid_dot_0000'):
-                            df = bg.perturb_brand_penetration_avoid_dot_0000(df)
-                        if hasattr(bg, 'reconcile_final_output_from_bp_and_sample_size'):
-                            df = bg.reconcile_final_output_from_bp_and_sample_size(df)
-                        if hasattr(bg, 'add_us_gen_pop_projection'):
-                            df = bg.add_us_gen_pop_projection(df)
-                        _bp_c = 'Brand Penetration (Row)'
-                        _cs_c = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
-                        # Format to 4 decimal places
-                        for _fc in [_bp_c, _cs_c]:
-                            if _fc in df.columns:
-                                df[_fc] = df[_fc].apply(lambda x: f"{float(str(x).replace(',','').replace('%','')):.4f}" if pd.notna(x) and str(x).strip() not in ('', 'nan', 'None') else str(x))
                         df.to_csv(result_file, index=False)
                     except Exception as e:
                         print(f"⚠️ Listener/watcher adjustment error: {e}")
@@ -15310,7 +14882,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     update_job_status(job_id, progress=88, message='Applying final processing...')
                     try:
                         import pandas as pd
-                        df = pd.read_csv(result_file, dtype=str)
+                        df = pd.read_csv(result_file)
                         
                         # 1. Enforce input brand to 100% (skip for GenPop)
                         if not is_genpop and hasattr(bg, 'enforce_input_brand_100'):
@@ -15400,17 +14972,6 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                                 df = bg.set_brand_input_to_csv(df)
                             if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
                                 df = bg.adjust_platform_to_100_percent(df, platform_name)
-                        
-                        if hasattr(bg, 'reconcile_final_output_from_bp_and_sample_size'):
-                            df = bg.reconcile_final_output_from_bp_and_sample_size(df)
-                        if hasattr(bg, 'add_us_gen_pop_projection'):
-                            df = bg.add_us_gen_pop_projection(df)
-                        if hasattr(bg, 'perturb_brand_penetration_avoid_dot_0000'):
-                            df = bg.perturb_brand_penetration_avoid_dot_0000(df)
-                        if hasattr(bg, 'reconcile_final_output_from_bp_and_sample_size'):
-                            df = bg.reconcile_final_output_from_bp_and_sample_size(df)
-                        if hasattr(bg, 'add_us_gen_pop_projection'):
-                            df = bg.add_us_gen_pop_projection(df)
                         
                         # Save the fully processed file
                         df.to_csv(result_file, index=False)
