@@ -58,7 +58,7 @@ def compute_date_summary(day_df):
 
     post_v = post[post['COMMON_NAME'].notna() & (post['COMMON_NAME'] != '')]
     att_grp = post_v.groupby('COMMON_NAME').agg(uu=('UID', 'nunique'), cl=('UID', 'size')).reset_index()
-    att_grp = att_grp.sort_values('uu', ascending=False).head(50)
+    att_grp = att_grp.sort_values('uu', ascending=False).head(100)
     attribution = [{'name': str(r['COMMON_NAME'] or 'Unknown'), 'unique_users': int(r['uu']), 'total_clicks': int(r['cl'])}
                    for _, r in att_grp.iterrows()]
 
@@ -78,7 +78,7 @@ def compute_date_summary(day_df):
 
     s_df = ai[ai['SEARCH_TERM'].notna() & (ai['SEARCH_TERM'] != '')]
     if not s_df.empty:
-        sg = s_df.groupby('SEARCH_TERM').size().reset_index(name='count').sort_values('count', ascending=False).head(50)
+        sg = s_df.groupby('SEARCH_TERM').size().reset_index(name='count').sort_values('count', ascending=False).head(100)
         searches = [{'term': str(r['SEARCH_TERM']), 'count': int(r['count'])} for _, r in sg.iterrows()]
     else:
         searches = []

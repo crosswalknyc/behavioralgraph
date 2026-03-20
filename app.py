@@ -7151,17 +7151,17 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
             'category_share': round(cl / total_clicks_all * 100, 2) if total_clicks_all else 0,
         })
 
-    att_sorted = sorted(att_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:50]
+    att_sorted = sorted(att_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
     attribution = [{'name': n, 'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
                     'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M)}
                    for n, v in att_sorted]
 
-    att2_sorted = sorted(att2_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:50]
+    att2_sorted = sorted(att2_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
     attribution_second = [{'name': n, 'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
                           'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M)}
                          for n, v in att2_sorted]
 
-    att3_sorted = sorted(att3_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:50]
+    att3_sorted = sorted(att3_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
     attribution_third = [{'name': n, 'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
                          'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M)}
                         for n, v in att3_sorted]
@@ -7171,7 +7171,7 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
               'unique_users': round(v['uu'] * M), 'clicks': round(v['cl'] * M)}
              for k, v in flow_sorted]
 
-    search_sorted = sorted(search_agg.items(), key=lambda x: x[1], reverse=True)[:50]
+    search_sorted = sorted(search_agg.items(), key=lambda x: x[1], reverse=True)[:100]
     searches = [{'term': t, 'count': round(c * M)} for t, c in search_sorted]
 
     browsers = [{'name': n, 'unique_users': round(u * M)} for n, u in sorted(browser_agg.items(), key=lambda x: x[1], reverse=True)]

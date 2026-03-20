@@ -678,6 +678,19 @@
         }
         #llmoIQView #llmoRankerTable thead tr, #llmoIQView #llmoSearchesTable thead tr,
         #llmoIQView #llmoFlowsTable thead tr { color: var(--text-secondary) !important; }
+        /* LLMO attribution bar charts: scroll to see all bars (top 100) */
+        #llmoIQView .llmo-attrib-chart-scroll {
+            max-height: 480px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 6px;
+        }
+        #llmoIQView .llmo-attrib-chart-inner {
+            position: relative;
+            min-height: 260px;
+        }
+        #llmoIQView .llmo-searches-scroll { max-height: 480px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
         
         /* Custom Analysis Tabs */
         .custom-analysis-tabs-container {
@@ -15349,28 +15362,34 @@
                 <!-- 1st / 2nd / 3rd post-AI attribution + Top Searches -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">1st click after AI (destination)</h3>
-                        <div style="position: relative; height: 320px;">
-                            <canvas id="llmoAttributionChart"></canvas>
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">1st click after AI (destination) <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
+                        <div class="llmo-attrib-chart-scroll">
+                            <div class="llmo-attrib-chart-inner">
+                                <canvas id="llmoAttributionChart"></canvas>
+                            </div>
                         </div>
                     </div>
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">2nd click after AI (destination)</h3>
-                        <div style="position: relative; height: 320px;">
-                            <canvas id="llmoAttributionChart2"></canvas>
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">2nd click after AI (destination) <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
+                        <div class="llmo-attrib-chart-scroll">
+                            <div class="llmo-attrib-chart-inner">
+                                <canvas id="llmoAttributionChart2"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">3rd click after AI (destination)</h3>
-                        <div style="position: relative; height: 320px;">
-                            <canvas id="llmoAttributionChart3"></canvas>
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">3rd click after AI (destination) <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
+                        <div class="llmo-attrib-chart-scroll">
+                            <div class="llmo-attrib-chart-inner">
+                                <canvas id="llmoAttributionChart3"></canvas>
+                            </div>
                         </div>
                     </div>
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Top AI Searches</h3>
-                        <div style="overflow-y: auto; max-height: 320px;">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Top AI Searches <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
+                        <div class="llmo-searches-scroll">
                             <table id="llmoSearchesTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
                                 <thead>
                                     <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
@@ -17659,12 +17678,15 @@
         function renderLLMOAttribution(attribution, canvasId, chartHolderName, barColor) {
             var ctx = document.getElementById(canvasId || 'llmoAttributionChart');
             if (!ctx) return;
+            var inner = ctx.closest('.llmo-attrib-chart-inner');
+            if (!inner) inner = ctx.parentElement;
             var holder = chartHolderName || '_llmoAttributionChart';
             if (holder === '_llmoAttributionChart' && _llmoAttributionChart) { _llmoAttributionChart.destroy(); _llmoAttributionChart = null; }
             if (holder === '_llmoAttributionChart2' && _llmoAttributionChart2) { _llmoAttributionChart2.destroy(); _llmoAttributionChart2 = null; }
             if (holder === '_llmoAttributionChart3' && _llmoAttributionChart3) { _llmoAttributionChart3.destroy(); _llmoAttributionChart3 = null; }
             var fill = barColor || '#4285F4';
             if (!attribution || attribution.length === 0) {
+                if (inner) inner.style.height = '260px';
                 var emptyChart = new Chart(ctx, {
                     type: 'bar',
                     data: { labels: ['No data'], datasets: [{ data: [0], backgroundColor: 'rgba(255,255,255,0.08)' }] },
@@ -17683,9 +17705,15 @@
                 return;
             }
 
-            var top = attribution.slice(0, 20);
+            var top = attribution.slice(0, 100);
             var labels = top.map(function(r) { return r.name; });
             var values = top.map(function(r) { return r.unique_users_projected; });
+            /* Tall inner area so horizontal bars aren't clipped; outer .llmo-attrib-chart-scroll scrolls */
+            if (inner) {
+                var n = Math.max(top.length, 1);
+                var innerH = Math.min(3000, Math.max(260, n * 24 + 72));
+                inner.style.height = innerH + 'px';
+            }
 
             var ch = new Chart(ctx, {
                 type: 'bar',
@@ -17729,7 +17757,7 @@
                 return;
             }
             var html = '';
-            searches.slice(0, 40).forEach(function(s, i) {
+            searches.slice(0, 100).forEach(function(s, i) {
                 html += '<tr style="border-bottom:1px solid var(--border-color);">'
                     + '<td style="padding:0.4rem 0.5rem;">' + (i + 1) + '</td>'
                     + '<td style="padding:0.4rem 0.5rem; word-break: break-word;">' + (s.term || '').replace(/</g, '&lt;') + '</td>'
