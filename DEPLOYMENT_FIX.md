@@ -98,8 +98,12 @@ After switching to native Python runtime, deployments should:
 
 ## LLMO IQ — Snowflake procedure & S3 summary
 
-1. **Apply procedure changes** (from repo root `finished_codes`): run the `CREATE OR REPLACE PROCEDURE ... SP_LLMO_DAILY` block in Snowflake Worksheets (see `setup_llmo_daily.sql`). Ensure the S3 stage `PROCESSEDCLICKSTREAM.PUBLIC.LLMO_EXPORT_STAGE` exists with valid credentials for `s3://llmo/`.
-2. **Run a daily load** (with Snowflake env configured, from `bg-webapp/`):  
+1. **S3 stage**: `PROCESSEDCLICKSTREAM.PUBLIC.LLMO_EXPORT_STAGE` must exist with valid credentials for `s3://llmo/` (see commented example in `setup_llmo_daily.sql`).  
+   **Apply procedure DDL**: either paste `setup_llmo_daily.sql` into Snowflake Worksheets, or use `deploy_llmo_procedure_snowflake.py` (step 2).
+2. **Redeploy procedure + run once** (with `SNOWFLAKE_USER` + `SNOWFLAKE_TOKEN` or `SNOWFLAKE_PASSWORD` set):  
+   `cd bg-webapp && python3 deploy_llmo_procedure_snowflake.py`  
+   This reads `../setup_llmo_daily.sql`, runs `CREATE OR REPLACE PROCEDURE ... SP_LLMO_DAILY`, then `CALL` it.
+3. **Run daily load only** (procedure already deployed):  
    `python3 run_llmo_daily_snowflake.py`  
-   This calls `CALL PROCESSEDCLICKSTREAM.PUBLIC.SP_LLMO_DAILY();` which processes **yesterday (US/Pacific)** into `LLMO`, rebuilds the JSON summary, and exports to `s3://llmo/processed/llmo_daily_summary.json.gz`.
-3. **Scheduled task**: `LLMO_DAILY_TASK` (cron in `setup_llmo_daily.sql`) should call the same procedure after you deploy the updated procedure body.
+   Calls `SP_LLMO_DAILY()` — processes **yesterday (US/Pacific)** into `LLMO`, rebuilds the JSON summary, exports to `s3://llmo/processed/llmo_daily_summary.json.gz`.
+4. **Scheduled task**: `LLMO_DAILY_TASK` (cron in `setup_llmo_daily.sql`) should call the same procedure after you deploy the updated procedure body.
