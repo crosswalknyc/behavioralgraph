@@ -6207,6 +6207,12 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
        at the top of their interests)
     3. Cross-category coherence — does the profile tell a consistent story?
 
+    **Mandatory:** The final GPT-4o passes are instructed (via shared
+    ``audience_context``) to audit **SEARCH ENGINE/AI** and
+    **STREAMING/PLATFORM** **row by row** — every Value line must be
+    plausible for the output persona (BP % and index vs Gen Pop), not
+    dismissed as “generic” panel noise.
+
     Runs AFTER all demographic agents and formatting steps, right before
     the CSV save. Uses GPT-4o with web research for context.
     """
@@ -6268,6 +6274,25 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         f'WEB RESEARCH — DEMOGRAPHICS + PERSONA:\n'
         f'{web_research[:4000] if web_research else "No research available"}\n'
     )
+
+    # Special mandate for final ChatGPT agent (all passes that inject audience_context)
+    streaming_search_mandate = (
+        "\n\n=== ⚠️ MANDATORY — FINAL AGENT: SEARCH ENGINE/AI & STREAMING/PLATFORM ===\n"
+        "You are the **final** quality gate on this profile. For **SEARCH ENGINE/AI** and "
+        "**STREAMING/PLATFORM** behavioral categories:\n"
+        "- Review **every row** (every **Value** / line item) shown to you in those categories — "
+        "not only the top few. Each platform, AI tool, or search product must be **accurate for "
+        "this output’s persona**: people who digitally engage with "
+        f'"{subject_clean}" (category: {bc}).\n'
+        "- Check **Brand Penetration** and **index vs Gen Pop** for **directional and substantive** "
+        "fit (age, tech adoption, content taste, lifestyle). Fix items that are misaligned, "
+        "implausibly high/low, or inconsistent with the demographics and research above.\n"
+        "- Do **not** skip or hand-wave these categories because they are ubiquitous; errors here "
+        "undermine trust as much as wrong INTEREST or SOCIAL MEDIA rows.\n"
+        "- When you return FIX/adjustments, include **specific** category + item corrections for "
+        "any misaligned SEARCH ENGINE/AI or STREAMING/PLATFORM rows you identify.\n"
+    )
+    audience_context = audience_context + streaming_search_mandate
 
     total_adjustments = 0
 
@@ -6703,7 +6728,11 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"3. Core affinity items that sit at parity (95-105) when they "
             f"should strongly over-index also need correction.\n"
             f"4. The goal: a market researcher sees this data and immediately "
-            f"knows this is a \"{subject_clean}\" audience.\n\n"
+            f"knows this is a \"{subject_clean}\" audience.\n"
+            f"5. **SEARCH ENGINE/AI** and **STREAMING/PLATFORM**: apply the mandatory "
+            f"row-by-row persona check from the context above — verify **each** listed item "
+            f"in those two sections of this batch; correct any platform/AI/streamer line that "
+            f"does not fit \"{subject_clean}\".\n\n"
             f"Return ONLY valid JSON:\n"
             f'If everything passes: {{"status":"OK","notes":"reason"}}\n'
             f'If corrections needed: {{"status":"FIX","notes":"summary",'
