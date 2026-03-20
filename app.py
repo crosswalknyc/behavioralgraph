@@ -7820,6 +7820,31 @@ def _llmo_try_merge_search_themes_from_summary(summary_data, date_str, date_end)
     return _llmo_merge_search_theme_daily_payloads(payloads)
 
 
+def _llmo_try_demographics_from_summary(summary_data, date_str, date_end):
+    """Use precomputed ``llmo_demographics`` from S3 summary for a single day only.
+
+    Multi-day ranges cannot be merged from per-day aggregates (distinct users); those
+    still use Snowflake in ``llmo_iq_demographics``.
+    """
+    if date_str != date_end:
+        return None
+    if not summary_data or not isinstance(summary_data.get('by_date'), dict):
+        return None
+    row = summary_data['by_date'].get(date_str)
+    if not isinstance(row, dict):
+        return None
+    blob = row.get('llmo_demographics')
+    if not isinstance(blob, dict):
+        return None
+    dem = blob.get('demographics')
+    if not isinstance(dem, dict) or not dem:
+        return None
+    demo_trend = blob.get('demo_trend')
+    if not isinstance(demo_trend, dict):
+        demo_trend = {}
+    return {'success': True, 'demographics': dem, 'demo_trend': demo_trend}
+
+
 @app.route('/api/llmo-iq/search-themes', methods=['GET'])
 @requires_auth
 def llmo_iq_search_themes():
@@ -7919,6 +7944,13 @@ def llmo_iq_demographics():
         date_end = date_str
 
     try:
+        summary = _llmo_ensure_loaded()
+        if summary is None:
+            return jsonify({'success': True, 'loading': True}), 200
+        from_summary = _llmo_try_demographics_from_summary(summary, date_str, date_end)
+        if from_summary is not None:
+            return jsonify(from_summary)
+
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
