@@ -17620,19 +17620,69 @@
             }
         }
 
+        /** Promise: search themes ready (polls while API returns loading). */
+        function _llmoFetchSearchThemesPromise(date, dateEnd) {
+            var body = document.getElementById('llmoSearchThemesBody');
+            if (body) {
+                body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Loading themes…</div>';
+            }
+            var u = '/api/llmo-iq/search-themes?date=' + encodeURIComponent(date || '') + '&date_end=' + encodeURIComponent(dateEnd || date || '');
+            function poll() {
+                return fetch(u, { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (d.loading) {
+                            return new Promise(function(resolve) {
+                                setTimeout(function() { poll().then(resolve).catch(resolve); }, 2000);
+                            });
+                        }
+                        if (!d.success) {
+                            if (body) {
+                                body.innerHTML = '<div style="padding:1.25rem;color:#f87171;font-size:0.85rem;">' + _llmoEsc(d.error || 'Could not load themes') + '</div>';
+                            }
+                            return;
+                        }
+                        renderLLMOSearchThemes(d);
+                    });
+            }
+            return poll().catch(function() {
+                if (body) {
+                    body.innerHTML = '<div style="padding:1.25rem;color:#f87171;font-size:0.85rem;">Network error loading themes.</div>';
+                }
+            });
+        }
+
+        /** Promise: demographics + demo trend charts. */
+        function _llmoFetchDemographicsPromise(date, dateEnd) {
+            return fetch('/api/llmo-iq/demographics?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd), { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success) {
+                        console.error('LLMO demo error:', data.error);
+                        return;
+                    }
+                    renderLLMODemographics(data.demographics);
+                    _llmoDemoTrendData = data.demo_trend;
+                    renderLLMODemoTrend();
+                });
+        }
+
         function loadLLMOIQDates() {
             _llmoShowLoading();
             fetch('/api/llmo-iq/dates', { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    if (!data.success) { console.error('LLMO dates error:', data.error); return; }
+                    if (!data.success) {
+                        console.error('LLMO dates error:', data.error);
+                        _llmoHideLoading();
+                        return;
+                    }
                     if (data.loading) {
                         _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0, data.stage || '');
                         if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
                         _llmoPollingTimer = setTimeout(loadLLMOIQDates, 2000);
                         return;
                     }
-                    _llmoHideLoading();
                     var sel = document.getElementById('llmoDateSelect');
                     var selEnd = document.getElementById('llmoDateEndSelect');
                     sel.innerHTML = '';
@@ -17649,6 +17699,9 @@
                         sel.value = data.dates[0];
                         selEnd.value = data.dates[0];
                         loadLLMOIQData();
+                    } else {
+                        _llmoUpdateProgress(1, 1, 'No dates available');
+                        _llmoHideLoading();
                     }
                 })
                 .catch(function(e) {
@@ -17666,20 +17719,26 @@
             var btn = document.getElementById('llmoRefreshBtn');
             if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
 
+            _llmoShowLoading();
+            _llmoUpdateProgress(1, 1, 'Loading dashboard…');
+
             fetch('/api/llmo-iq/data?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd || date), { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    if (!data.success) { if (btn) { btn.textContent = 'Load'; btn.disabled = false; } console.error('LLMO data error:', data.error); return; }
+                    if (!data.success) {
+                        if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
+                        _llmoHideLoading();
+                        console.error('LLMO data error:', data.error);
+                        return;
+                    }
                     if (data.loading) {
-                        _llmoShowLoading();
                         _llmoUpdateProgress(data.loaded_files || 0, data.total_files || 0, data.stage || '');
                         if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                         _llmoLoaded = false;
                         if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
                         _llmoPollingTimer = setTimeout(loadLLMOIQDates, 2000);
-                        return;
+                        return null;
                     }
-                    if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                     renderLLMOSummaryCards(data);
                     renderLLMOUsageTable(data.llms);
                     renderLLMOCategoryShare(data.llms);
@@ -17689,30 +17748,34 @@
                     renderLLMOAttribution(data.attribution_third || [], 'llmoAttributionChart3', '_llmoAttributionChart3', '#FBBC04');
                     renderLLMOBrandConversion(data);
                     renderLLMORetailerConversion(data);
-                    loadLLMOIQSearchThemes(date, dateEnd || date);
-                    syncLLMOChartTooltips();
                     setLLMOFlowsFromApi(data.flows);
                     renderLLMOBrowserPlatform(data.browsers, data.platforms);
                     _llmoTrendDatesCache = data.trend_dates;
                     _llmoTrendByLLMCache = data.trend_by_llm;
-                    loadLLMOIQDemographics(date, dateEnd || date);
+                    syncLLMOChartTooltips();
+                    _llmoUpdateProgress(1, 1, 'Loading demographics & AI search themes…');
+                    var de = dateEnd || date;
+                    return Promise.all([
+                        _llmoFetchDemographicsPromise(date, de),
+                        _llmoFetchSearchThemesPromise(date, de)
+                    ]).then(function() {
+                        if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
+                    });
+                })
+                .then(function(asyncPart) {
+                    if (asyncPart == null || asyncPart === undefined) return;
+                    _llmoHideLoading();
+                    if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                 })
                 .catch(function(e) {
                     if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
+                    _llmoHideLoading();
                     console.error('LLMO data fetch error:', e);
                 });
         }
 
         function loadLLMOIQDemographics(date, dateEnd) {
-            fetch('/api/llmo-iq/demographics?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd), { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (!data.success) { console.error('LLMO demo error:', data.error); return; }
-                    renderLLMODemographics(data.demographics);
-                    _llmoDemoTrendData = data.demo_trend;
-                    renderLLMODemoTrend();
-                })
-                .catch(function(e) { console.error('LLMO demographics fetch error:', e); });
+            return _llmoFetchDemographicsPromise(date, dateEnd);
         }
 
         function _llmoFmt(n) {
@@ -18285,26 +18348,7 @@
         }
 
         function loadLLMOIQSearchThemes(date, dateEnd) {
-            var body = document.getElementById('llmoSearchThemesBody');
-            if (!body) return;
-            body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Loading themes…</div>';
-            var u = '/api/llmo-iq/search-themes?date=' + encodeURIComponent(date || '') + '&date_end=' + encodeURIComponent(dateEnd || date || '');
-            fetch(u, { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.loading) {
-                        body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);">LLMO summary still loading — try again in a moment.</div>';
-                        return;
-                    }
-                    if (!d.success) {
-                        body.innerHTML = '<div style="padding:1.25rem;color:#f87171;font-size:0.85rem;">' + _llmoEsc(d.error || 'Could not load themes') + '</div>';
-                        return;
-                    }
-                    renderLLMOSearchThemes(d);
-                })
-                .catch(function() {
-                    body.innerHTML = '<div style="padding:1.25rem;color:#f87171;font-size:0.85rem;">Network error loading themes.</div>';
-                });
+            return _llmoFetchSearchThemesPromise(date, dateEnd);
         }
 
         function renderLLMOSearchThemes(d) {
