@@ -10,8 +10,22 @@ Usage (from bg-webapp directory):
 import os
 import sys
 
+_BG = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.abspath(os.path.join(_BG, ".."))
+
+
+def _load_env_files() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv(os.path.join(_BG, ".env"))
+    load_dotenv(os.path.join(_REPO_ROOT, ".env"))
+
+
 def main():
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    _load_env_files()
+    os.chdir(_BG)
     try:
         import bg
     except ImportError as e:

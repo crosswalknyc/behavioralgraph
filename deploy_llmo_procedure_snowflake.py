@@ -19,6 +19,16 @@ _REPO_ROOT = os.path.abspath(os.path.join(_BG, ".."))
 _SQL_PATH = os.path.join(_REPO_ROOT, "setup_llmo_daily.sql")
 
 
+def _load_env_files() -> None:
+    """Load `.env` from bg-webapp/ then finished_codes/ (gitignored; never commit secrets)."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv(os.path.join(_BG, ".env"))
+    load_dotenv(os.path.join(_REPO_ROOT, ".env"))
+
+
 def extract_procedure_ddl(sql_text: str) -> str:
     marker = "CREATE OR REPLACE PROCEDURE PROCESSEDCLICKSTREAM.PUBLIC.SP_LLMO_DAILY()"
     start = sql_text.find(marker)
@@ -41,6 +51,7 @@ def extract_procedure_ddl(sql_text: str) -> str:
 
 
 def main():
+    _load_env_files()
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-call", action="store_true", help="Only deploy procedure, do not CALL")
     parser.add_argument("--sql-path", default=_SQL_PATH, help="Path to setup_llmo_daily.sql")
