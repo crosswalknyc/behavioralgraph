@@ -15232,10 +15232,15 @@
                 <div class="empty-state-content" style="max-width: 520px; text-align: center;">
                     <div class="empty-state-icon">🤖</div>
                     <h2 style="margin: 0.5rem 0;">LLMO IQ</h2>
+                    {% if has_llmo_iq_access %}
                     <p style="color: var(--text-secondary); line-height: 1.5;">
-                        LLMO (AI agent / chat traffic) analytics load here when enabled for your account.
-                        If you need access, ask your admin to enable <strong>LLMO IQ</strong> under company defaults or your user profile.
+                        You have access. LLMO (AI agent / chat traffic) dashboards and exports will appear here as they are rolled out.
                     </p>
+                    {% else %}
+                    <p style="color: var(--text-secondary); line-height: 1.5;">
+                        LLMO IQ is not enabled for your account yet. Ask your admin to turn on <strong>LLMO IQ</strong> in company defaults or your user profile, then refresh this page.
+                    </p>
+                    {% endif %}
                 </div>
             </div>
         </div><!-- End llmoIQView -->
@@ -16233,35 +16238,72 @@
             var triggerEl = document.getElementById('viewNavTrigger');
             var panelEl = document.getElementById('viewNavPanel');
             if (triggerEl && panelEl && viewDropdown) {
-                for (var i = 0; i < viewDropdown.options.length; i++) {
-                    var opt = viewDropdown.options[i];
-                    var val = opt.value;
-                    var label = opt.textContent;
-                    var disabled = opt.disabled;
-                    var item = document.createElement('button');
-                    item.type = 'button';
-                    item.className = 'view-nav-option' + (disabled ? ' disabled' : '') + ' has-tooltip';
-                    item.setAttribute('role', 'option');
-                    item.setAttribute('data-value', val);
-                    if (!disabled && viewNavProductTooltips[val]) item.setAttribute('data-tooltip', viewNavProductTooltips[val]);
-                    item.textContent = label;
-                    if (disabled) item.disabled = true;
-                    else {
-                        item.addEventListener('click', function() {
-                            var v = this.getAttribute('data-value');
-                            viewDropdown.value = v;
-                            viewDropdown.dispatchEvent(new Event('change', { bubbles: true }));
-                            triggerEl.textContent = this.textContent;
-                            panelEl.classList.remove('open');
-                            triggerEl.setAttribute('aria-expanded', 'false');
-                        });
-                    }
-                    panelEl.appendChild(item);
-                }
                 function updateTriggerText() {
                     if (viewDropdown.selectedIndex >= 0) triggerEl.textContent = viewDropdown.options[viewDropdown.selectedIndex].textContent;
                 }
-                updateTriggerText();
+                function applyProductAccessPayload(d) {
+                    if (!d || !d.success) return;
+                    var pairs = [
+                        ['profileIQ', !!d.has_profile_iq_access],
+                        ['subscriberIQ', !!d.has_subscriber_iq_access],
+                        ['rankerIQ', !!d.has_rankers_iq_access],
+                        ['ticketSalesIQ', !!d.has_ticket_sales_iq_access],
+                        ['ticketSalesTracker', !!d.has_ticket_sales_tracker_access],
+                        ['hedgeFundIQ', !!d.has_hedge_fund_iq_access],
+                        ['llmoIQ', !!d.has_llmo_iq_access]
+                    ];
+                    pairs.forEach(function (pv) {
+                        var opt = viewDropdown.querySelector('option[value="' + pv[0] + '"]');
+                        if (opt) opt.disabled = !pv[1];
+                    });
+                    var caOpt = viewDropdown.querySelector('option[value="customAnalysis"]');
+                    if (caOpt && d.has_analysis_iq_access !== undefined) caOpt.disabled = !d.has_analysis_iq_access;
+                }
+                function rebuildViewNavCustomPanel() {
+                    panelEl.innerHTML = '';
+                    for (var i = 0; i < viewDropdown.options.length; i++) {
+                        var opt = viewDropdown.options[i];
+                        var val = opt.value;
+                        var label = opt.textContent;
+                        var disabled = opt.disabled;
+                        var item = document.createElement('button');
+                        item.type = 'button';
+                        item.className = 'view-nav-option' + (disabled ? ' disabled' : '') + ' has-tooltip';
+                        item.setAttribute('role', 'option');
+                        item.setAttribute('data-value', val);
+                        if (!disabled && viewNavProductTooltips[val]) item.setAttribute('data-tooltip', viewNavProductTooltips[val]);
+                        item.textContent = label;
+                        if (disabled) item.disabled = true;
+                        else {
+                            item.addEventListener('click', function() {
+                                var v = this.getAttribute('data-value');
+                                viewDropdown.value = v;
+                                viewDropdown.dispatchEvent(new Event('change', { bubbles: true }));
+                                triggerEl.textContent = this.textContent;
+                                panelEl.classList.remove('open');
+                                triggerEl.setAttribute('aria-expanded', 'false');
+                            });
+                        }
+                        panelEl.appendChild(item);
+                    }
+                    updateTriggerText();
+                }
+                rebuildViewNavCustomPanel();
+                function syncProductAccessFromServer() {
+                    fetch('/api/me/product-access', { credentials: 'same-origin' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) {
+                            applyProductAccessPayload(d);
+                            rebuildViewNavCustomPanel();
+                        })
+                        .catch(function () { /* ignore */ });
+                }
+                syncProductAccessFromServer();
+                var _productAccessSyncTimer = null;
+                window.addEventListener('focus', function() {
+                    clearTimeout(_productAccessSyncTimer);
+                    _productAccessSyncTimer = setTimeout(syncProductAccessFromServer, 300);
+                });
                 triggerEl.addEventListener('click', function(e) {
                     e.stopPropagation();
                     var open = panelEl.classList.toggle('open');

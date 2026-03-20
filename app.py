@@ -5019,6 +5019,76 @@ def set_chat_status():
 # MAIN ROUTES
 # ============================================================================
 
+_ANALYSIS_IQ_MODULES_FULL = [
+    'profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign',
+    'cross_show', 'watch_time', 'ticket_sales_tracker',
+]
+
+
+def compute_product_access_flags(user, role):
+    """Resolved module access for the main app (index + /api/me/product-access)."""
+    if role == 'super_admin':
+        return {
+            'has_profile_iq_access': True,
+            'has_subscriber_iq_access': True,
+            'has_hedge_fund_iq_access': True,
+            'hedge_fund_iq_tickers': ['*'],
+            'has_analysis_iq_access': True,
+            'analysis_iq_modules': list(_ANALYSIS_IQ_MODULES_FULL),
+            'allowed_behavioral_categories': ['*'],
+            'allowed_categories': ['*'],
+            'allowed_runs': ['*'],
+            'has_rankers_iq_access': True,
+            'rankers_iq_options': ['*'],
+            'has_ticket_sales_iq_access': True,
+            'has_ticket_sales_tracker_access': True,
+            'has_llmo_iq_access': True,
+        }
+    u = user or {}
+    return {
+        'has_profile_iq_access': u.get('has_profile_iq_access', True),
+        'has_subscriber_iq_access': bool(u.get('has_subscriber_iq_access', False)),
+        'has_hedge_fund_iq_access': bool(u.get('has_hedge_fund_iq_access', False)),
+        'hedge_fund_iq_tickers': u.get('hedge_fund_iq_tickers', ['*']) or ['*'],
+        'has_analysis_iq_access': bool(u.get('has_analysis_iq_access', False)),
+        'analysis_iq_modules': list(u.get('analysis_iq_modules', []) or []),
+        'allowed_behavioral_categories': u.get('allowed_behavioral_categories', ['*']) or ['*'],
+        'allowed_categories': u.get('allowed_categories', ['*']) or ['*'],
+        'allowed_runs': u.get('allowed_runs', ['*']) or ['*'],
+        'has_rankers_iq_access': bool(u.get('has_rankers_iq_access', False)),
+        'rankers_iq_options': u.get('rankers_iq_options', []) or [],
+        'has_ticket_sales_iq_access': u.get('has_ticket_sales_iq_access', True) is not False,
+        'has_ticket_sales_tracker_access': bool(u.get('has_ticket_sales_tracker_access', False)),
+        'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
+    }
+
+
+def apply_cloak_product_access_overrides(access):
+    """Mutate access dict when admin is cloaked (Analysis IQ always on)."""
+    if session.get('cloaked_from'):
+        access = dict(access)
+        access['has_analysis_iq_access'] = True
+        access['analysis_iq_modules'] = list(_ANALYSIS_IQ_MODULES_FULL)
+    return access
+
+
+@app.route('/api/me/product-access', methods=['GET'])
+@requires_auth
+def api_me_product_access():
+    """Fresh module flags from user store — keeps SELECT PRODUCT in sync after admin edits (no full reload)."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        role = _normalize_role(user.get('role', 'user'))
+        access = compute_product_access_flags(user, role)
+        access = apply_cloak_product_access_overrides(access)
+        access['success'] = True
+        return jsonify(access)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/')
 @requires_auth
 def index():
@@ -5035,43 +5105,22 @@ def index():
     except Exception as e:
         print(f"⚠️ Could not load quick selects for behavioral filtering: {e}")
     
-    # Super admins always have access to all dashboards and modules
-    # Regular admins now need module access enabled like other users
-    if role == 'super_admin':
-        has_profile_iq = True
-        has_subscriber_iq = True
-        has_hedge_fund_iq = True
-        hedge_fund_iq_tickers = ['*']
-        has_analysis_iq = True
-        analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time', 'ticket_sales_tracker']
-        allowed_behavioral_categories = ['*']
-        allowed_categories = ['*']
-        allowed_runs = ['*']
-        has_rankers_iq = True
-        rankers_iq_options = ['*']
-        has_ticket_sales_iq = True
-        has_ticket_sales_tracker = True
-        has_llmo_iq = True
-    else:
-        has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
-        has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
-        has_hedge_fund_iq = user.get('has_hedge_fund_iq_access', False) if user else False
-        hedge_fund_iq_tickers = user.get('hedge_fund_iq_tickers', ['*']) if user else ['*']
-        has_analysis_iq = user.get('has_analysis_iq_access', False) if user else False
-        analysis_iq_modules = user.get('analysis_iq_modules', []) if user else []
-        allowed_behavioral_categories = user.get('allowed_behavioral_categories', ['*']) if user else ['*']
-        allowed_categories = user.get('allowed_categories', ['*']) if user else ['*']
-        allowed_runs = user.get('allowed_runs', ['*']) if user else ['*']
-        has_rankers_iq = user.get('has_rankers_iq_access', False) if user else False
-        rankers_iq_options = user.get('rankers_iq_options', []) if user else []
-        has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
-        has_ticket_sales_tracker = user.get('has_ticket_sales_tracker_access', False) if user else False
-        has_llmo_iq = user.get('has_llmo_iq_access', False) if user else False
-    
-    # When cloaked, grant Analysis IQ access so the admin can use it while acting as a user who may not have it
-    if session.get('cloaked_from'):
-        has_analysis_iq = True
-        analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time', 'ticket_sales_tracker']
+    _acc = compute_product_access_flags(user, role)
+    _acc = apply_cloak_product_access_overrides(_acc)
+    has_profile_iq = _acc['has_profile_iq_access']
+    has_subscriber_iq = _acc['has_subscriber_iq_access']
+    has_hedge_fund_iq = _acc['has_hedge_fund_iq_access']
+    hedge_fund_iq_tickers = _acc['hedge_fund_iq_tickers']
+    has_analysis_iq = _acc['has_analysis_iq_access']
+    analysis_iq_modules = _acc['analysis_iq_modules']
+    allowed_behavioral_categories = _acc['allowed_behavioral_categories']
+    allowed_categories = _acc['allowed_categories']
+    allowed_runs = _acc['allowed_runs']
+    has_rankers_iq = _acc['has_rankers_iq_access']
+    rankers_iq_options = _acc['rankers_iq_options']
+    has_ticket_sales_iq = _acc['has_ticket_sales_iq_access']
+    has_ticket_sales_tracker = _acc['has_ticket_sales_tracker_access']
+    has_llmo_iq = _acc['has_llmo_iq_access']
     
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
