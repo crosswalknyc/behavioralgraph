@@ -4977,6 +4977,17 @@
         .behavioral-card.hide-gp .behavioral-item .genpop-col {
             display: none !important;
         }
+        /* LLM to Brand Conversion: use behavioral table styles without fixed card height / drag */
+        #llmoIQView .llmo-brand-conv-wrap.behavioral-card {
+            height: auto;
+            min-height: 0;
+            cursor: default;
+            user-select: text;
+            padding: 1.25rem;
+        }
+        #llmoIQView .llmo-brand-conv-wrap.behavioral-card .behavioral-table {
+            max-height: 420px;
+        }
         .behavioral-table .behavioral-list {
             display: contents;
         }
@@ -15366,12 +15377,35 @@
                 </div>
 
                 <!-- LLM to Brand Conversion (1st–3rd post-AI; HOST_MAPPING Most Purchased Brands) -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Percent of panelists who visited a brand (owned and via wholesale) within 3 clicks post LLM usage.">LLM to Brand Conversion</h3>
+                <div id="llmoBrandConvSection" class="behavioral-card llmo-brand-conv-wrap" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1.5rem;">
+                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Percent of panelists who visited a brand (owned and via wholesale) within 3 clicks post LLM usage. LLM % indexed to Gen Pop brand penetration (same baseline as Profile IQ).">LLM to Brand Conversion</h3>
+                    <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.75rem;">
+                        <select id="llmoBrandConvSlice" class="behavioral-slice-select" onchange="refreshLLMOBrandConversionTable()" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <option value="all">Show All</option>
+                        </select>
+                        <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
+                        <select id="llmoBrandConvSort" class="behavioral-sort-select" onchange="refreshLLMOBrandConversionTable()" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
+                            <option value="pct" selected>% ↓</option>
+                            <option value="index">Idx ↓</option>
+                            <option value="genpop">GP ↓</option>
+                            <option value="alpha">A-Z</option>
+                        </select>
+                        <input id="llmoBrandConvSearch" type="text" placeholder="Search..." oninput="refreshLLMOBrandConversionTable()" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    </div>
                     <div class="llmo-attrib-chart-scroll">
                         <div class="llmo-attrib-chart-inner">
                             <canvas id="llmoBrandConversionChart"></canvas>
                         </div>
+                    </div>
+                    <div class="behavioral-table" style="margin-top: 1rem;">
+                        <div class="behavioral-header-row">
+                            <span>#</span>
+                            <span>Brand</span>
+                            <span class="profile-col" id="llmoBrandConvHProfile">LLM %</span>
+                            <span class="genpop-col" id="llmoBrandConvHGenpop">Gen Pop</span>
+                            <span class="index-col">Index</span>
+                        </div>
+                        <div class="behavioral-list" id="llmoBrandConvList"></div>
                     </div>
                 </div>
 
@@ -17398,6 +17432,10 @@
         var _llmoAttributionChart2 = null;
         var _llmoAttributionChart3 = null;
         var _llmoBrandConversionChart = null;
+        var _llmoBrandConvRows = [];
+        var _llmoBrandConvTotUsers = 0;
+        /** MPB slicer keys — same set/order idea as Profile IQ Most Purchased Brands */
+        var _llmoMPB_SLICE_OPTS = ['accessories', 'apparel/footwear', 'beauty/wellness', 'cpg', 'home/outdoor', 'pets', 'technology brand', 'toys'];
         var _llmoBrowserChart = null;
         var _llmoPlatformChart = null;
         var _llmoDemoCharts = {};
@@ -17794,16 +17832,38 @@
             else if (holder === '_llmoAttributionChart3') _llmoAttributionChart3 = ch;
         }
 
-        function renderLLMOBrandConversion(data) {
-            var rows = (data && data.brand_conversion) ? data.brand_conversion : [];
-            var totUsers = (data && data.total_unique_users) ? data.total_unique_users : 0;
+        function _llmoFormatSliceOption(opt) {
+            if (!opt || opt === 'all') return 'Show All';
+            var acronyms = ['cpg'];
+            if (acronyms.indexOf(opt.toLowerCase()) >= 0) return opt.toUpperCase();
+            return opt.split('/').map(function(part) {
+                return part.split(/[\s&]+/).map(function(word) {
+                    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+                }).join(' ');
+            }).join('/');
+        }
+
+        function ensureLLMOBrandConvSliceOptions() {
+            var sel = document.getElementById('llmoBrandConvSlice');
+            if (!sel || sel.getAttribute('data-llmo-slice-init') === '1') return;
+            sel.setAttribute('data-llmo-slice-init', '1');
+            var opts = _llmoMPB_SLICE_OPTS.slice().sort(function(a, b) { return a.localeCompare(b); });
+            opts.forEach(function(o) {
+                var el = document.createElement('option');
+                el.value = o;
+                el.textContent = _llmoFormatSliceOption(o);
+                sel.appendChild(el);
+            });
+        }
+
+        function _llmoRenderBrandConversionChart(top, totUsers) {
             var ctx = document.getElementById('llmoBrandConversionChart');
             if (!ctx) return;
             var inner = ctx.closest('.llmo-attrib-chart-inner');
             if (!inner) inner = ctx.parentElement;
             if (_llmoBrandConversionChart) { _llmoBrandConversionChart.destroy(); _llmoBrandConversionChart = null; }
             var fill = '#A78BFA';
-            if (!rows || rows.length === 0) {
+            if (!top || top.length === 0) {
                 if (inner) inner.style.height = '260px';
                 _llmoBrandConversionChart = new Chart(ctx, {
                     type: 'bar',
@@ -17819,7 +17879,6 @@
                 });
                 return;
             }
-            var top = rows.slice(0, 100);
             var labels = top.map(function(r) {
                 var pct = (r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
                     ? Number(r.pct_of_ai_users)
@@ -17865,10 +17924,15 @@
                                     var pct = (r.pct_of_ai_users != null && r.pct_of_ai_users !== undefined)
                                         ? Number(r.pct_of_ai_users)
                                         : (totUsers > 0 ? Math.round((r.unique_users / totUsers) * 10000) / 100 : 0);
-                                    return [
+                                    var lines = [
                                         _llmoFmt(c.parsed.x) + ' users (US Gen Pop proj.)',
                                         pct + '% of AI users (aggregate)'
                                     ];
+                                    if (r.genpop_penetration != null && !isNaN(Number(r.genpop_penetration)))
+                                        lines.push('Gen Pop: ' + Number(r.genpop_penetration).toFixed(2) + '%');
+                                    if (r.index_vs_genpop != null && !isNaN(Number(r.index_vs_genpop)))
+                                        lines.push('Index: ' + formatIndex(r.index_vs_genpop));
+                                    return lines;
                                 }
                             }
                         }
@@ -17884,6 +17948,113 @@
                     }
                 }
             });
+        }
+
+        function refreshLLMOBrandConversionTable() {
+            var sec = document.getElementById('llmoBrandConvSection');
+            if (sec && typeof dashDisplayMode !== 'undefined') {
+                sec.classList.toggle('hide-gp', dashDisplayMode === 'projection');
+            }
+            var hp = document.getElementById('llmoBrandConvHProfile');
+            var hg = document.getElementById('llmoBrandConvHGenpop');
+            var isProj = (typeof dashDisplayMode !== 'undefined' && dashDisplayMode === 'projection');
+            if (hp) hp.textContent = isProj ? 'US #' : 'LLM %';
+            if (hg) hg.textContent = isProj ? 'GP #' : 'Gen Pop';
+
+            var listEl = document.getElementById('llmoBrandConvList');
+            if (!listEl) return;
+            var sliceVal = (document.getElementById('llmoBrandConvSlice') || {}).value || 'all';
+            var sortVal = (document.getElementById('llmoBrandConvSort') || {}).value || 'pct';
+            var searchRaw = (document.getElementById('llmoBrandConvSearch') || {}).value || '';
+            var q = searchRaw.trim().toLowerCase();
+
+            var rows = (_llmoBrandConvRows || []).map(function(r) { return Object.assign({}, r); });
+            if (sliceVal && sliceVal !== 'all') {
+                rows = rows.filter(function(r) {
+                    var keys = r.genpop_slice_keys || [];
+                    return keys.indexOf(sliceVal) >= 0;
+                });
+            }
+            if (q) {
+                rows = rows.filter(function(r) {
+                    return (r.name || '').toLowerCase().indexOf(q) >= 0;
+                });
+            }
+
+            var gpNum = function(r) { return r.genpop_penetration != null ? Number(r.genpop_penetration) : 0; };
+            var idxNum = function(r) { return r.index_vs_genpop != null ? Number(r.index_vs_genpop) : 0; };
+            if (sortVal === 'index') {
+                rows.sort(function(a, b) { return idxNum(b) - idxNum(a); });
+            } else if (sortVal === 'genpop') {
+                if (isProj) {
+                    rows.sort(function(a, b) {
+                        var ga = gpNum(a) > 0 ? Math.round(329900000 * (gpNum(a) / 100)) : 0;
+                        var gb = gpNum(b) > 0 ? Math.round(329900000 * (gpNum(b) / 100)) : 0;
+                        return gb - ga;
+                    });
+                } else {
+                    rows.sort(function(a, b) { return gpNum(b) - gpNum(a); });
+                }
+            } else if (sortVal === 'alpha') {
+                rows.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+            } else {
+                if (isProj) {
+                    rows.sort(function(a, b) { return (b.unique_users_projected || 0) - (a.unique_users_projected || 0); });
+                } else {
+                    rows.sort(function(a, b) { return (Number(b.pct_of_ai_users) || 0) - (Number(a.pct_of_ai_users) || 0); });
+                }
+            }
+
+            rows.forEach(function(item, i) { item._rank = i + 1; });
+            var displayRows = rows.slice(0, 100);
+            var US_POP = 329900000;
+
+            if (displayRows.length === 0) {
+                listEl.innerHTML = '<div style="grid-column: 1 / -1; padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No brands match this slice or search.</div>';
+            } else {
+                listEl.innerHTML = displayRows.map(function(item) {
+                    var index = item.index_vs_genpop != null ? Number(item.index_vs_genpop) : 0;
+                    var genPopPct = item.genpop_penetration != null ? Number(item.genpop_penetration) : 0;
+                    var profilePct = item.pct_of_ai_users != null ? Number(item.pct_of_ai_users) : 0;
+                    var indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                    var profileDisplay = isProj
+                        ? (!item.unique_users_projected ? 'N/A' : formatNumber(Math.round(item.unique_users_projected)))
+                        : formatValueOrNA(profilePct, true);
+                    var genPopProj = genPopPct > 0 ? Math.round(US_POP * (genPopPct / 100)) : 0;
+                    var genPopDisplay = isProj
+                        ? (genPopProj === 0 ? 'N/A' : formatNumber(genPopProj))
+                        : formatValueOrNA(genPopPct, true);
+                    var indexCell = (genPopDisplay === 'N/A' || !index) ? '' : formatIndex(index);
+                    var nm = (item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return '<div class="behavioral-item">' +
+                        '<span class="behavioral-rank">' + item._rank + '</span>' +
+                        '<div class="behavioral-name-wrapper"><span class="behavioral-name has-tooltip" data-tooltip="' + nm.replace(/"/g, '&quot;') + '">' + nm + '</span></div>' +
+                        '<span class="behavioral-pct" style="color: var(--text-primary);">' + profileDisplay + '</span>' +
+                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(' + genPopDisplay + ')</span>' +
+                        '<span class="behavioral-index index-col" style="color: ' + indexColor + '; font-weight: 700;">' + indexCell + '</span>' +
+                        '</div>';
+                }).join('');
+            }
+
+            _llmoRenderBrandConversionChart(displayRows.slice(0, 100), _llmoBrandConvTotUsers);
+            if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
+        }
+
+        function renderLLMOBrandConversion(data) {
+            ensureLLMOBrandConvSliceOptions();
+            var rows = (data && data.brand_conversion) ? data.brand_conversion : [];
+            var totUsers = (data && data.total_unique_users) ? data.total_unique_users : 0;
+            _llmoBrandConvRows = rows;
+            _llmoBrandConvTotUsers = totUsers;
+
+            var sortSel = document.getElementById('llmoBrandConvSort');
+            if (sortSel) {
+                var po = sortSel.querySelector('option[value="pct"]');
+                if (po && typeof dashDisplayMode !== 'undefined') {
+                    po.textContent = dashDisplayMode === 'projection' ? '# ↓' : '% ↓';
+                }
+            }
+            refreshLLMOBrandConversionTable();
         }
 
         function renderLLMOSearches(searches) {
@@ -30034,6 +30205,9 @@
                 renderEcosystemInsights(currentDashboardData);
                 renderSponsorshipFinder(currentDashboardData);
                 renderMediaOptimizer(currentDashboardData);
+            }
+            if (typeof refreshLLMOBrandConversionTable === 'function' && _llmoBrandConvRows && _llmoBrandConvRows.length) {
+                refreshLLMOBrandConversionTable();
             }
         }
         
