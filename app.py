@@ -2534,6 +2534,7 @@ def create_user():
             'has_ticket_sales_tracker_access': req_data.get('has_ticket_sales_tracker_access', cd.get('has_ticket_sales_tracker_access', False) if cd else False),
             'has_rankers_iq_access': req_data.get('has_rankers_iq_access', cd.get('has_rankers_iq_access', False) if cd else False),
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
+            'has_llmo_iq_access': req_data.get('has_llmo_iq_access', cd.get('has_llmo_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False
         }
@@ -2644,6 +2645,8 @@ def update_user(username):
             user['has_rankers_iq_access'] = req_data['has_rankers_iq_access']
         if 'rankers_iq_options' in req_data:
             user['rankers_iq_options'] = req_data['rankers_iq_options']
+        if 'has_llmo_iq_access' in req_data:
+            user['has_llmo_iq_access'] = bool(req_data['has_llmo_iq_access'])
         if 'collab_team' in req_data:
             user['collab_team'] = req_data['collab_team']
         # Activity CSV export (per user): emails comma-separated, cadence
@@ -2773,6 +2776,7 @@ def restore_defaults_all_users():
             user['analysis_iq_modules'] = user.get('analysis_iq_modules', [])
             user['has_rankers_iq_access'] = False
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
+            user['has_llmo_iq_access'] = False
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -3154,6 +3158,7 @@ def api_set_company_defaults(company_name):
             'has_analysis_iq_access': req.get('has_analysis_iq_access', False),
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
+            'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
             'credits': req.get('credits', 5),
         }
         save_users(data)
@@ -3203,6 +3208,7 @@ def api_reset_company_users(company_name):
                 user['has_analysis_iq_access'] = cd.get('has_analysis_iq_access', False)
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
+                user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
             else:
                 user['allowed_categories'] = ['*']
@@ -3215,6 +3221,7 @@ def api_reset_company_users(company_name):
                 user['has_analysis_iq_access'] = False
                 user['has_rankers_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
+                user['has_llmo_iq_access'] = False
                 user['credits'] = 5
             count += 1
         save_users(data)
@@ -5044,6 +5051,7 @@ def index():
         rankers_iq_options = ['*']
         has_ticket_sales_iq = True
         has_ticket_sales_tracker = True
+        has_llmo_iq = True
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
@@ -5058,6 +5066,7 @@ def index():
         rankers_iq_options = user.get('rankers_iq_options', []) if user else []
         has_ticket_sales_iq = user.get('has_ticket_sales_iq_access', True) if user else True  # Default True
         has_ticket_sales_tracker = user.get('has_ticket_sales_tracker_access', False) if user else False
+        has_llmo_iq = user.get('has_llmo_iq_access', False) if user else False
     
     # When cloaked, grant Analysis IQ access so the admin can use it while acting as a user who may not have it
     if session.get('cloaked_from'):
@@ -5107,6 +5116,7 @@ def index():
                            rankers_iq_options=rankers_iq_options,
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
+                           has_llmo_iq_access=has_llmo_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,

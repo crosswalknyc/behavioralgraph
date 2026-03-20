@@ -661,6 +661,7 @@
         #talentTheaterIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #hedgeFundIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #ticketSalesTrackerView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
+        #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         
         /* Custom Analysis Tabs */
         .custom-analysis-tabs-container {
@@ -11904,6 +11905,7 @@
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
                             <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
+                            <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="workspace">🗂️ Workspace</option>
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
@@ -15224,6 +15226,20 @@
             </div>
         </div><!-- End ticketSalesTrackerView -->
 
+        <!-- LLMO IQ VIEW -->
+        <div id="llmoIQView" style="display: none;">
+            <div class="dashboard-empty-state" style="min-height: 50vh; display: flex; align-items: center; justify-content: center;">
+                <div class="empty-state-content" style="max-width: 520px; text-align: center;">
+                    <div class="empty-state-icon">🤖</div>
+                    <h2 style="margin: 0.5rem 0;">LLMO IQ</h2>
+                    <p style="color: var(--text-secondary); line-height: 1.5;">
+                        LLMO (AI agent / chat traffic) analytics load here when enabled for your account.
+                        If you need access, ask your admin to enable <strong>LLMO IQ</strong> under company defaults or your user profile.
+                    </p>
+                </div>
+            </div>
+        </div><!-- End llmoIQView -->
+
         <!-- HEDGE FUND IQ VIEW -->
         <div id="hedgeFundIQView"{% if default_view_hedge_fund_iq %} style="display: flex;"{% else %} style="display: none;"{% endif %}>
             <div class="dashboard-layout">
@@ -16123,7 +16139,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, llmoIQ: showLLMOIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -16156,6 +16172,7 @@
                 ticketSalesIQ: showTicketSalesIQ,
                 ticketSalesTracker: showTicketSalesTracker,
                 hedgeFundIQ: showHedgeFundIQ,
+                llmoIQ: showLLMOIQ,
                 dashboard: showDashboardView,
                 workspace: function() {
                     if (typeof showProfileIQ === 'function') showProfileIQ();
@@ -16186,12 +16203,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', llmoIQ: 'llmoIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'llmoIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -16207,6 +16224,7 @@
                 ticketSalesIQ: 'Impact IQ: Measure impact and performance of titles via ticket sales and engagement.',
                 ticketSalesTracker: 'Ticket Sales Tracker: Track ticket sales and box office performance over time.',
                 hedgeFundIQ: 'Hedge Fund IQ: View hedge fund and institutional engagement and exposure.',
+                llmoIQ: 'LLMO IQ: AI agent and LLM-driven traffic and engagement insights.',
                 workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
                 admin: 'Admin: Manage users, access, and system settings.',
@@ -16812,6 +16830,11 @@
             }
         }
 
+        function hideLLMOIQView() {
+            var _llmo = document.getElementById('llmoIQView');
+            if (_llmo) _llmo.style.display = 'none';
+        }
+
         window.showFormView = function() {
             const formView = document.getElementById('formView');
             if (!formView) return; // Not available for this user role
@@ -16824,6 +16847,7 @@
             if (talentTheaterView) talentTheaterView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            hideLLMOIQView();
             
             // Update button states
             const formBtn = document.getElementById('formViewBtn');
@@ -16867,6 +16891,7 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            hideLLMOIQView();
             
             // Load profiles
             loadDashboardProfiles();
@@ -16903,6 +16928,7 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            hideLLMOIQView();
             
             // Load subscriber profiles
             loadSubscriberProfiles();
@@ -16961,6 +16987,7 @@
             }
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            hideLLMOIQView();
             
             // Load ranker data
             loadRankerIQNetflixData();
@@ -16989,6 +17016,7 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            hideLLMOIQView();
             loadTicketSalesProfiles();
         }
         
@@ -17015,6 +17043,7 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            hideLLMOIQView();
             if (typeof loadTSTProfiles === 'function') loadTSTProfiles();
             checkProfileReleasedNotifications();
         }
@@ -17044,6 +17073,7 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            hideLLMOIQView();
             
             // Load tickers
             loadHedgeFundTickers();
@@ -17055,6 +17085,33 @@
                 // Re-render tabs bar in case we're returning to this view
                 renderTickerTabsBar();
             }
+        }
+        
+        window.showLLMOIQ = function() {
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="llmoIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('llmoIQ');
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            const rankerIQView = document.getElementById('rankerIQView');
+            if (rankerIQView) rankerIQView.style.display = 'none';
+            const ticketSalesView = document.getElementById('ticketSalesIQView');
+            if (ticketSalesView) ticketSalesView.style.display = 'none';
+            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
+            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
+            const hedgeFundView = document.getElementById('hedgeFundIQView');
+            if (hedgeFundView) hedgeFundView.style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
+            const customAnalysisView = document.getElementById('customAnalysisView');
+            if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const llmoView = document.getElementById('llmoIQView');
+            if (llmoView) llmoView.style.display = 'flex';
         }
         
         window.showTalentSearchIQ = function() {
@@ -17076,6 +17133,7 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            hideLLMOIQView();
         }
         
         window.showTalentTheaterIQ = function() {
@@ -17097,6 +17155,7 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            hideLLMOIQView();
         }
         
         window.showCustomAnalysis = function() {
@@ -17112,6 +17171,7 @@
             if (talentSearchView) talentSearchView.style.display = 'none';
             const talentTheaterView = document.getElementById('talentTheaterIQView');
             if (talentTheaterView) talentTheaterView.style.display = 'none';
+            hideLLMOIQView();
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) {
                 customAnalysisView.style.display = 'flex';
