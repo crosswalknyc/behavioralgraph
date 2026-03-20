@@ -7082,12 +7082,15 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         return {'success': True, 'loading': False, 'date': date_str, 'date_end': date_end,
                 'total_unique_users': 0, 'total_unique_users_projected': 0,
                 'total_clicks': 0, 'total_clicks_projected': 0,
-                'llm_count': 0, 'llms': [], 'attribution': [], 'flows': [],
+                'llm_count': 0, 'llms': [], 'attribution': [], 'attribution_second': [],
+                'attribution_third': [], 'flows': [],
                 'searches': [], 'trend_dates': [], 'trend_by_llm': {},
                 'browsers': [], 'platforms': []}
 
     llm_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
     att_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
+    att2_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
+    att3_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
     flow_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
     search_agg = defaultdict(int)
     browser_agg = defaultdict(int)
@@ -7112,6 +7115,14 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         for att in day.get('attribution', []):
             att_agg[att['name']]['uu'] += att['unique_users']
             att_agg[att['name']]['cl'] += att['total_clicks']
+
+        for att in day.get('attribution_second', []):
+            att2_agg[att['name']]['uu'] += att['unique_users']
+            att2_agg[att['name']]['cl'] += att['total_clicks']
+
+        for att in day.get('attribution_third', []):
+            att3_agg[att['name']]['uu'] += att['unique_users']
+            att3_agg[att['name']]['cl'] += att['total_clicks']
 
         for fl in day.get('flows', []):
             key = (fl['source'], fl['destination'])
@@ -7145,6 +7156,16 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
                     'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M)}
                    for n, v in att_sorted]
 
+    att2_sorted = sorted(att2_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:50]
+    attribution_second = [{'name': n, 'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
+                          'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M)}
+                         for n, v in att2_sorted]
+
+    att3_sorted = sorted(att3_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:50]
+    attribution_third = [{'name': n, 'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
+                         'total_clicks': v['cl'], 'total_clicks_projected': round(v['cl'] * M)}
+                        for n, v in att3_sorted]
+
     flow_sorted = sorted(flow_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
     flows = [{'source': k[0], 'destination': k[1],
               'unique_users': round(v['uu'] * M), 'clicks': round(v['cl'] * M)}
@@ -7164,7 +7185,10 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         'total_clicks': total_clicks,
         'total_clicks_projected': round(total_clicks * M),
         'llm_count': len(llm_data), 'llms': llm_data,
-        'attribution': attribution, 'flows': flows,
+        'attribution': attribution,
+        'attribution_second': attribution_second,
+        'attribution_third': attribution_third,
+        'flows': flows,
         'searches': searches,
         'trend_dates': matching_dates, 'trend_by_llm': trend_by_llm,
         'browsers': browsers, 'platforms': platforms,

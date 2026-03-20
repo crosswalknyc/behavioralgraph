@@ -93,3 +93,13 @@ After switching to native Python runtime, deployments should:
 2. Verify all environment variables are set
 3. Consider using Render's "Manual Deploy" to test
 4. Contact Render support to increase timeout limits
+
+---
+
+## LLMO IQ — Snowflake procedure & S3 summary
+
+1. **Apply procedure changes** (from repo root `finished_codes`): run the `CREATE OR REPLACE PROCEDURE ... SP_LLMO_DAILY` block in Snowflake Worksheets (see `setup_llmo_daily.sql`). Ensure the S3 stage `PROCESSEDCLICKSTREAM.PUBLIC.LLMO_EXPORT_STAGE` exists with valid credentials for `s3://llmo/`.
+2. **Run a daily load** (with Snowflake env configured, from `bg-webapp/`):  
+   `python3 run_llmo_daily_snowflake.py`  
+   This calls `CALL PROCESSEDCLICKSTREAM.PUBLIC.SP_LLMO_DAILY();` which processes **yesterday (US/Pacific)** into `LLMO`, rebuilds the JSON summary, and exports to `s3://llmo/processed/llmo_daily_summary.json.gz`.
+3. **Scheduled task**: `LLMO_DAILY_TASK` (cron in `setup_llmo_daily.sql`) should call the same procedure after you deploy the updated procedure body.

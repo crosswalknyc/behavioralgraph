@@ -667,6 +667,17 @@
         #llmoIQView .llmo-table th, #llmoIQView .llmo-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left; }
         #llmoIQView .llmo-table th { color: var(--text-secondary); font-weight: 600; }
         #llmoIQView .llmo-kpi { font-size: 1.75rem; font-weight: 700; color: var(--accent-lime); }
+        /* LLMO: force light text (avoid black Chart.js / table text on dark cards) */
+        #llmoIQView, #llmoIQView .llmo-iq-container { color: var(--text-primary); }
+        #llmoIQView h2, #llmoIQView h3, #llmoIQView h4, #llmoIQView p, #llmoIQView label,
+        #llmoIQView .llmo-card, #llmoIQView table, #llmoIQView th, #llmoIQView td,
+        #llmoIQView #llmoRankerTable th, #llmoIQView #llmoRankerTable td,
+        #llmoIQView #llmoSearchesTable th, #llmoIQView #llmoSearchesTable td,
+        #llmoIQView #llmoFlowsTable th, #llmoIQView #llmoFlowsTable td {
+            color: var(--text-primary) !important;
+        }
+        #llmoIQView #llmoRankerTable thead tr, #llmoIQView #llmoSearchesTable thead tr,
+        #llmoIQView #llmoFlowsTable thead tr { color: var(--text-secondary) !important; }
         
         /* Custom Analysis Tabs */
         .custom-analysis-tabs-container {
@@ -15335,20 +15346,31 @@
                     </div>
                 </div>
 
-                <!-- First-Click Attribution + Top Searches -->
+                <!-- 1st / 2nd / 3rd post-AI attribution + Top Searches -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <!-- First-Click Attribution -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">First-Click Attribution (Post-AI Destinations)</h3>
-                        <div style="position: relative; height: 400px;">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">1st click after AI (destination)</h3>
+                        <div style="position: relative; height: 320px;">
                             <canvas id="llmoAttributionChart"></canvas>
                         </div>
                     </div>
-
-                    <!-- Top Searches -->
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">2nd click after AI (destination)</h3>
+                        <div style="position: relative; height: 320px;">
+                            <canvas id="llmoAttributionChart2"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">3rd click after AI (destination)</h3>
+                        <div style="position: relative; height: 320px;">
+                            <canvas id="llmoAttributionChart3"></canvas>
+                        </div>
+                    </div>
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
                         <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Top AI Searches</h3>
-                        <div style="overflow-y: auto; max-height: 400px;">
+                        <div style="overflow-y: auto; max-height: 320px;">
                             <table id="llmoSearchesTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
                                 <thead>
                                     <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
@@ -17338,6 +17360,8 @@
         var _llmoCategoryShareChart = null;
         var _llmoTrendChart = null;
         var _llmoAttributionChart = null;
+        var _llmoAttributionChart2 = null;
+        var _llmoAttributionChart3 = null;
         var _llmoBrowserChart = null;
         var _llmoPlatformChart = null;
         var _llmoDemoCharts = {};
@@ -17476,7 +17500,9 @@
                     renderLLMOUsageTable(data.llms);
                     renderLLMOCategoryShare(data.llms);
                     renderLLMOTrend(data.trend_dates, data.trend_by_llm);
-                    renderLLMOAttribution(data.attribution);
+                    renderLLMOAttribution(data.attribution, 'llmoAttributionChart', '_llmoAttributionChart', '#4285F4');
+                    renderLLMOAttribution(data.attribution_second || [], 'llmoAttributionChart2', '_llmoAttributionChart2', '#34A853');
+                    renderLLMOAttribution(data.attribution_third || [], 'llmoAttributionChart3', '_llmoAttributionChart3', '#FBBC04');
                     renderLLMOSearches(data.searches);
                     renderLLMOFlows(data.flows);
                     renderLLMOBrowserPlatform(data.browsers, data.platforms);
@@ -17570,7 +17596,7 @@
                     responsive: true,
                     maintainAspectRatio: true,
                     plugins: {
-                        legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 11 }, padding: 8, boxWidth: 12 } },
+                        legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 8, boxWidth: 12 } },
                         tooltip: {
                             callbacks: {
                                 label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; }
@@ -17619,35 +17645,56 @@
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { position: 'top', labels: { color: 'var(--text-primary)', font: { size: 11 }, boxWidth: 12, padding: 8 } },
+                        legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, boxWidth: 12, padding: 8 } },
                         tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + _llmoFmt(ctx.parsed.y); } } }
                     },
                     scales: {
-                        x: { ticks: { color: 'var(--text-secondary)', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.06)' } },
-                        y: { ticks: { color: 'var(--text-secondary)', callback: function(v) { return _llmoFmt(v); } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+                        x: { ticks: { color: '#e8e8e8', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                        y: { ticks: { color: '#e8e8e8', callback: function(v) { return _llmoFmt(v); } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
                     }
                 }
             });
         }
 
-        function renderLLMOAttribution(attribution) {
-            var ctx = document.getElementById('llmoAttributionChart');
+        function renderLLMOAttribution(attribution, canvasId, chartHolderName, barColor) {
+            var ctx = document.getElementById(canvasId || 'llmoAttributionChart');
             if (!ctx) return;
-            if (_llmoAttributionChart) { _llmoAttributionChart.destroy(); _llmoAttributionChart = null; }
-            if (!attribution || attribution.length === 0) return;
+            var holder = chartHolderName || '_llmoAttributionChart';
+            if (holder === '_llmoAttributionChart' && _llmoAttributionChart) { _llmoAttributionChart.destroy(); _llmoAttributionChart = null; }
+            if (holder === '_llmoAttributionChart2' && _llmoAttributionChart2) { _llmoAttributionChart2.destroy(); _llmoAttributionChart2 = null; }
+            if (holder === '_llmoAttributionChart3' && _llmoAttributionChart3) { _llmoAttributionChart3.destroy(); _llmoAttributionChart3 = null; }
+            var fill = barColor || '#4285F4';
+            if (!attribution || attribution.length === 0) {
+                var emptyChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: ['No data'], datasets: [{ data: [0], backgroundColor: 'rgba(255,255,255,0.08)' }] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
+                            y: { ticks: { color: '#e8e8e8' }, grid: { display: false } }
+                        }
+                    }
+                });
+                if (holder === '_llmoAttributionChart') _llmoAttributionChart = emptyChart;
+                else if (holder === '_llmoAttributionChart2') _llmoAttributionChart2 = emptyChart;
+                else if (holder === '_llmoAttributionChart3') _llmoAttributionChart3 = emptyChart;
+                return;
+            }
 
             var top = attribution.slice(0, 20);
             var labels = top.map(function(r) { return r.name; });
             var values = top.map(function(r) { return r.unique_users_projected; });
 
-            _llmoAttributionChart = new Chart(ctx, {
+            var ch = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
                     datasets: [{
                         label: 'Unique Users',
                         data: values,
-                        backgroundColor: '#4285F4',
+                        backgroundColor: fill,
                         borderRadius: 4,
                         barPercentage: 0.7
                     }]
@@ -17665,11 +17712,14 @@
                         }
                     },
                     scales: {
-                        x: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
-                        y: { ticks: { color: 'var(--text-primary)', font: { size: 11 } }, grid: { display: false } }
+                        x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
+                        y: { ticks: { color: '#e8e8e8', font: { size: 11 } }, grid: { display: false } }
                     }
                 }
             });
+            if (holder === '_llmoAttributionChart') _llmoAttributionChart = ch;
+            else if (holder === '_llmoAttributionChart2') _llmoAttributionChart2 = ch;
+            else if (holder === '_llmoAttributionChart3') _llmoAttributionChart3 = ch;
         }
 
         function renderLLMOSearches(searches) {
@@ -17720,7 +17770,7 @@
                             labels: browsers.slice(0, 8).map(function(b) { return b.name; }),
                             datasets: [{ data: browsers.slice(0, 8).map(function(b) { return b.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
                         },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
                     });
                 }
             }
@@ -17735,7 +17785,7 @@
                             labels: platforms.slice(0, 8).map(function(p) { return p.name; }),
                             datasets: [{ data: platforms.slice(0, 8).map(function(p) { return p.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
                         },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
+                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
                     });
                 }
             }
@@ -17775,7 +17825,7 @@
                         responsive: true,
                         maintainAspectRatio: true,
                         plugins: {
-                            legend: { position: 'bottom', labels: { color: 'var(--text-primary)', font: { size: 10 }, boxWidth: 10, padding: 6 } },
+                            legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 6 } },
                             tooltip: {
                                 callbacks: {
                                     label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; }
@@ -17857,7 +17907,7 @@
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { position: 'top', labels: { color: 'var(--text-primary)', font: { size: 11 }, boxWidth: 12, padding: 8 } },
+                        legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, boxWidth: 12, padding: 8 } },
                         tooltip: {
                             callbacks: {
                                 label: function(ctx) {
@@ -17868,18 +17918,18 @@
                         }
                     },
                     scales: {
-                        x: { ticks: { color: 'var(--text-secondary)', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                        x: { ticks: { color: '#e8e8e8', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.06)' } },
                         y: {
                             type: 'linear', position: 'left',
-                            title: { display: true, text: 'Demographic %', color: 'var(--text-secondary)', font: { size: 11 } },
-                            ticks: { color: 'var(--text-secondary)', callback: function(v) { return v + '%'; } },
+                            title: { display: true, text: 'Demographic %', color: '#e8e8e8', font: { size: 11 } },
+                            ticks: { color: '#e8e8e8', callback: function(v) { return v + '%'; } },
                             grid: { color: 'rgba(255,255,255,0.06)' },
                             beginAtZero: true
                         },
                         y1: {
                             type: 'linear', position: 'right',
-                            title: { display: true, text: 'Total AI Users', color: 'rgba(255,255,255,0.5)', font: { size: 11 } },
-                            ticks: { color: 'rgba(255,255,255,0.5)' },
+                            title: { display: true, text: 'Total AI Users', color: '#e8e8e8', font: { size: 11 } },
+                            ticks: { color: '#e8e8e8' },
                             grid: { drawOnChartArea: false },
                             beginAtZero: true
                         }
