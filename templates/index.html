@@ -15414,9 +15414,10 @@
                         </div>
                     </div>
 
-                    <!-- Category Share Doughnut -->
+                    <!-- Category Share Doughnut (Gen Pop matched shares when available) -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; align-items: center;">
-                        <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;" data-tooltip="When Gen Pop matches exist, slices use normalized Gen Pop category share (same rows as Index). Otherwise session share across LLMs.">Category share</h3>
+                        <h3 class="has-tooltip" style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;" data-tooltip="When Gen Pop matches exist, slices use normalized Gen Pop category share (same rows as Index). Otherwise session share across LLMs.">Category share (Gen Pop matched)</h3>
+                        <p style="margin: 0 0 0.75rem 0; font-size: 0.72rem; color: var(--text-secondary); align-self: flex-start; line-height: 1.35;">Apples-to-apples with Index: GP category rows (SEARCH ENGINE/AI / STREAMING) normalized to 100%.</p>
                         <canvas id="llmoCategoryShareChart" style="max-width: 320px; max-height: 320px;"></canvas>
                     </div>
                 </div>
