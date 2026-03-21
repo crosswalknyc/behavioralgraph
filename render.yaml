@@ -66,9 +66,9 @@ services:
         value: "1"
       - key: GUNICORN_TIMEOUT
         value: "300"
-      # Cron secret for /api/cron/run-activity-export-jobs (set in Dashboard for web + cron)
+      # Cron secret for /api/cron/* endpoints (shared between web + cron services)
       - key: CRON_SECRET
-        sync: false
+        value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
 
   # Cron: run scheduled activity CSV exports daily at 6:00 UTC
   - type: cron
@@ -81,4 +81,4 @@ services:
       - key: APP_URL
         value: "https://behavioralgraph.onrender.com"
       - key: CRON_SECRET
-        sync: false
+        value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
