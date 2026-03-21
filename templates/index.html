@@ -17621,20 +17621,28 @@
             }
         }
 
-        /** Promise: search themes ready (polls while API returns loading). */
+        /** Promise: search themes ready (polls while API returns loading; capped so Promise.all cannot hang forever). */
         function _llmoFetchSearchThemesPromise(date, dateEnd) {
             var body = document.getElementById('llmoSearchThemesBody');
             if (body) {
                 body.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">Loading themes…</div>';
             }
             var u = '/api/llmo-iq/search-themes?date=' + encodeURIComponent(date || '') + '&date_end=' + encodeURIComponent(dateEnd || date || '');
-            function poll() {
+            var maxPolls = 40;
+            function poll(attempt) {
+                attempt = attempt || 0;
                 return fetch(u, { credentials: 'same-origin' })
                     .then(function(r) { return r.json(); })
                     .then(function(d) {
                         if (d.loading) {
+                            if (attempt >= maxPolls) {
+                                if (body) {
+                                    body.innerHTML = '<div style="padding:1.25rem;color:var(--text-secondary);font-size:0.85rem;">Themes still processing — refresh in a moment or click Load again.</div>';
+                                }
+                                return;
+                            }
                             return new Promise(function(resolve) {
-                                setTimeout(function() { poll().then(resolve).catch(resolve); }, 2000);
+                                setTimeout(function() { poll(attempt + 1).then(resolve).catch(resolve); }, 2000);
                             });
                         }
                         if (!d.success) {
@@ -17646,7 +17654,7 @@
                         renderLLMOSearchThemes(d);
                     });
             }
-            return poll().catch(function() {
+            return poll(0).catch(function() {
                 if (body) {
                     body.innerHTML = '<div style="padding:1.25rem;color:#f87171;font-size:0.85rem;">Network error loading themes.</div>';
                 }
@@ -17777,20 +17785,19 @@
                     _llmoTrendDatesCache = data.trend_dates;
                     _llmoTrendByLLMCache = data.trend_by_llm;
                     syncLLMOChartTooltips();
-                    _llmoUpdateProgress(0, 0, 'Loading demographics & AI search themes…');
+                    /* Dismiss overlay as soon as core /api/llmo-iq/data is rendered. Demographics + search themes
+                       can take a long time (search-themes polls while loading:true) — do not block UI on them. */
+                    _llmoHideLoading();
+                    if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                     var de = dateEnd || date;
-                    return Promise.all([
+                    Promise.all([
                         _llmoFetchDemographicsPromise(date, de),
                         _llmoFetchSearchThemesPromise(date, de)
                     ]).then(function() {
                         if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
+                    }).catch(function(err) {
+                        console.warn('LLMO background demographics/themes:', err);
                     });
-                })
-                .then(function(asyncPart) {
-                    /* Only skip hide when first branch explicitly returned null (data.loading → poll dates). */
-                    if (asyncPart === null) return;
-                    _llmoHideLoading();
-                    if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                 })
                 .catch(function(e) {
                     if (e && e.message === 'llmo-auth') return;
