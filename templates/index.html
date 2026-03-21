@@ -17671,8 +17671,16 @@
         function loadLLMOIQDates() {
             _llmoShowLoading();
             fetch('/api/llmo-iq/dates', { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (r.status === 401) {
+                        _llmoHideLoading();
+                        window.location.href = '/login';
+                        return Promise.reject(new Error('llmo-auth'));
+                    }
+                    return r.json();
+                })
                 .then(function(data) {
+                    if (!data) return;
                     if (!data.success) {
                         console.error('LLMO dates error:', data.error);
                         _llmoHideLoading();
@@ -17686,6 +17694,11 @@
                     }
                     var sel = document.getElementById('llmoDateSelect');
                     var selEnd = document.getElementById('llmoDateEndSelect');
+                    if (!sel || !selEnd) {
+                        console.error('LLMO: date selects missing from DOM');
+                        _llmoHideLoading();
+                        return;
+                    }
                     sel.innerHTML = '';
                     selEnd.innerHTML = '';
                     data.dates.forEach(function(d, i) {
@@ -17706,7 +17719,9 @@
                     }
                 })
                 .catch(function(e) {
+                    if (e && e.message === 'llmo-auth') return;
                     console.error('LLMO dates fetch error:', e);
+                    _llmoHideLoading();
                     if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
                     _llmoPollingTimer = setTimeout(loadLLMOIQDates, 3000);
                 });
@@ -17724,7 +17739,15 @@
             _llmoUpdateProgress(0, 0, 'Loading dashboard…');
 
             fetch('/api/llmo-iq/data?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd || date), { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (r.status === 401) {
+                        if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
+                        _llmoHideLoading();
+                        window.location.href = '/login';
+                        return Promise.reject(new Error('llmo-auth'));
+                    }
+                    return r.json();
+                })
                 .then(function(data) {
                     if (!data.success) {
                         if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
@@ -17764,11 +17787,13 @@
                     });
                 })
                 .then(function(asyncPart) {
-                    if (asyncPart == null || asyncPart === undefined) return;
+                    /* Only skip hide when first branch explicitly returned null (data.loading → poll dates). */
+                    if (asyncPart === null) return;
                     _llmoHideLoading();
                     if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                 })
                 .catch(function(e) {
+                    if (e && e.message === 'llmo-auth') return;
                     if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                     _llmoHideLoading();
                     console.error('LLMO data fetch error:', e);
