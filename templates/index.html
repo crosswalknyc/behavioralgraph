@@ -15370,7 +15370,7 @@
                         <div id="llmoTotalUsersNote" style="font-size: 0.72rem; color: var(--text-secondary); font-style: italic; line-height: 1.35; margin-top: 0.15rem;">(Deduplicated by day, duplicated in aggregate)</div>
                     </div>
                     <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Clicks (US Gen Pop)</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Sessions (US Gen Pop)</div>
                         <div id="llmoTotalClicks" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
                     </div>
                     <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
@@ -15398,20 +15398,23 @@
                                         <th style="padding: 0.5rem; white-space: nowrap;">LLM</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Unique Users</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">% of Total</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Total Clicks</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Category Share</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Total Sessions</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Session share</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;" class="has-tooltip" data-tooltip="Share of matched Gen Pop category rows (SEARCH ENGINE/AI / STREAMING), normalized to 100% for apples-to-apples with Index.">GP cat. share</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;" class="has-tooltip" data-tooltip="(% of AI users ÷ Gen Pop penetration) × 100 — same basis as brand/retailer index.">Index</th>
                                     </tr>
                                 </thead>
                                 <tbody id="llmoRankerBody">
-                                    <tr><td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a date and click Load</td></tr>
+                                    <tr><td colspan="8" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a date and click Load</td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    <!-- Category Share Doughnut -->
+                    <!-- Category Share Doughnut (Gen Pop matched shares when available) -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; align-items: center;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;">Category Share</h3>
+                        <h3 class="has-tooltip" style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;" data-tooltip="When Gen Pop matches exist, slices use normalized Gen Pop category share (same rows as Index). Otherwise session share across LLMs.">Category share (Gen Pop matched)</h3>
+                        <p style="margin: 0 0 0.75rem 0; font-size: 0.72rem; color: var(--text-secondary); align-self: flex-start; line-height: 1.35;">Apples-to-apples with Index: GP category rows (SEARCH ENGINE/AI / STREAMING) normalized to 100%.</p>
                         <canvas id="llmoCategoryShareChart" style="max-width: 320px; max-height: 320px;"></canvas>
                     </div>
                 </div>
@@ -15421,34 +15424,6 @@
                     <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (US Gen Pop Unique Users by Date)</h3>
                     <div style="position: relative; height: 350px;">
                         <canvas id="llmoTrendChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- LLM to Retailer (1st–3rd post-AI; HOST_MAPPING Where They Shop) -->
-                <div id="llmoRetailerConvSection" class="behavioral-card llmo-brand-conv-wrap" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1.5rem;">
-                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Retailers matched via Where They Shop (HOST_MAPPING) on 1st–3rd post-LLM click. &quot;Share&quot; is each retailer&apos;s percent of total retailer-conversion users in the date range. Index still uses % of AI users vs Gen Pop Where They Shop penetration.">LLM to Retailer</h3>
-                    <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.75rem;">
-                        <select id="llmoRetailerConvSlice" class="behavioral-slice-select" onchange="refreshLLMORetailerConversionTable()" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <option value="all">Show All</option>
-                        </select>
-                        <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
-                        <select id="llmoRetailerConvSort" class="behavioral-sort-select" onchange="refreshLLMORetailerConversionTable()" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
-                            <option value="pct" selected>Share ↓</option>
-                            <option value="index">Idx ↓</option>
-                            <option value="genpop">GP ↓</option>
-                            <option value="alpha">A-Z</option>
-                        </select>
-                        <input id="llmoRetailerConvSearch" type="text" placeholder="Search..." oninput="refreshLLMORetailerConversionTable()" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                    </div>
-                    <div class="behavioral-table" style="margin-top: 0.25rem;">
-                        <div class="behavioral-header-row">
-                            <span>#</span>
-                            <span>Retailer</span>
-                            <span class="profile-col" id="llmoRetailerConvHProfile">Share %</span>
-                            <span class="genpop-col" id="llmoRetailerConvHGenpop">Gen Pop</span>
-                            <span class="index-col">Index</span>
-                        </div>
-                        <div class="behavioral-list" id="llmoRetailerConvList"></div>
                     </div>
                 </div>
 
@@ -15522,7 +15497,35 @@
                     </div>
                 </div>
 
-                <!-- Source -> Destination Flows + Browser/Platform -->
+                <!-- LLM to Retailer (1st–3rd post-AI; HOST_MAPPING Where They Shop) — below Brand Conversion -->
+                <div id="llmoRetailerConvSection" class="behavioral-card llmo-brand-conv-wrap" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 1.5rem;">
+                    <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;" data-tooltip="Retailers matched via Where They Shop (HOST_MAPPING) on 1st–3rd post-LLM click. &quot;Share&quot; is each retailer&apos;s percent of total retailer-conversion users in the date range. Index still uses % of AI users vs Gen Pop Where They Shop penetration.">LLM to Retailer</h3>
+                    <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.75rem;">
+                        <select id="llmoRetailerConvSlice" class="behavioral-slice-select" onchange="refreshLLMORetailerConversionTable()" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <option value="all">Show All</option>
+                        </select>
+                        <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
+                        <select id="llmoRetailerConvSort" class="behavioral-sort-select" onchange="refreshLLMORetailerConversionTable()" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
+                            <option value="pct" selected>Share ↓</option>
+                            <option value="index">Idx ↓</option>
+                            <option value="genpop">GP ↓</option>
+                            <option value="alpha">A-Z</option>
+                        </select>
+                        <input id="llmoRetailerConvSearch" type="text" placeholder="Search..." oninput="refreshLLMORetailerConversionTable()" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    </div>
+                    <div class="behavioral-table" style="margin-top: 0.25rem;">
+                        <div class="behavioral-header-row">
+                            <span>#</span>
+                            <span>Retailer</span>
+                            <span class="profile-col" id="llmoRetailerConvHProfile">Share %</span>
+                            <span class="genpop-col" id="llmoRetailerConvHGenpop">Gen Pop</span>
+                            <span class="index-col">Index</span>
+                        </div>
+                        <div class="behavioral-list" id="llmoRetailerConvList"></div>
+                    </div>
+                </div>
+
+                <!-- Source -> Destination Flows + Browser -->
                 <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- Source LLM -> Destination Flows -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
@@ -15541,7 +15544,7 @@
                             <span style="font-size: 0.65rem; color: var(--text-secondary); white-space: nowrap;">Sort:</span>
                             <select id="llmoFlowsSort" onchange="refreshLLMOFlowsTable()" style="flex: 1; min-width: 120px; padding: 0.3rem 0.45rem; font-size: 0.72rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                 <option value="users_desc" selected>Users ↓</option>
-                                <option value="clicks_desc">Clicks ↓</option>
+                                <option value="clicks_desc">Sessions ↓</option>
                                 <option value="source_az">Source A–Z</option>
                                 <option value="source_za">Source Z–A</option>
                                 <option value="dest_az">Destination A–Z</option>
@@ -15554,7 +15557,7 @@
                                         <th style="padding: 0.5rem;">Source LLM</th>
                                         <th style="padding: 0.5rem;">Destination</th>
                                         <th style="padding: 0.5rem; text-align: right;">Users</th>
-                                        <th style="padding: 0.5rem; text-align: right;">Clicks</th>
+                                        <th style="padding: 0.5rem; text-align: right;">Sessions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="llmoFlowsBody">
@@ -15564,18 +15567,24 @@
                         </div>
                     </div>
 
-                    <!-- Browser / Platform Breakdown -->
+                    <!-- Browser breakdown -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Browser</h3>
-                        <canvas id="llmoBrowserChart" style="max-width: 300px; max-height: 180px; margin: 0 auto 1.5rem auto; display: block;"></canvas>
-                        <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Platform</h3>
-                        <canvas id="llmoPlatformChart" style="max-width: 300px; max-height: 180px; margin: 0 auto; display: block;"></canvas>
+                        <canvas id="llmoBrowserChart" style="max-width: 300px; max-height: 260px; margin: 0 auto; display: block;"></canvas>
                     </div>
                 </div>
 
                 <!-- AI User Demographics -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem; font-weight: 600;">AI User Demographics</h3>
+                    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem;">
+                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">AI User Demographics</h3>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">AI agent:</label>
+                            <select id="llmoDemoAgentFilter" onchange="refreshLLMODemographicsFilter()" style="background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.55rem; font-size: 0.8rem; cursor: pointer; min-width: 160px;">
+                                <option value="">All agents</option>
+                            </select>
+                        </div>
+                    </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
                         <div style="text-align: center;">
                             <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Gender</h4>
@@ -17527,7 +17536,6 @@
         /** Where They Shop slicer — Profile IQ WHERE THEY SHOP card */
         var _llmoWTS_SLICE_OPTS = ['accessories', 'apparel/footwear', 'beauty/wellness', 'health & wellness', 'home/outdoor', 'toys'];
         var _llmoBrowserChart = null;
-        var _llmoPlatformChart = null;
         var _llmoDemoCharts = {};
         var _llmoDemoTrendChart = null;
         var _llmoDemoTrendData = null;
@@ -17540,7 +17548,7 @@
         }
         function syncLLMOChartTooltips() {
             var en = _llmoTooltipsEnabled();
-            [_llmoCategoryShareChart, _llmoTrendChart, _llmoAttributionChart, _llmoAttributionChart2, _llmoAttributionChart3, _llmoBrandConversionChart, _llmoBrowserChart, _llmoPlatformChart, _llmoDemoTrendChart].forEach(function(ch) {
+            [_llmoCategoryShareChart, _llmoTrendChart, _llmoAttributionChart, _llmoAttributionChart2, _llmoAttributionChart3, _llmoBrandConversionChart, _llmoBrowserChart, _llmoDemoTrendChart].forEach(function(ch) {
                 if (ch && ch.options && ch.options.plugins && ch.options.plugins.tooltip) {
                     ch.options.plugins.tooltip.enabled = en;
                     try { ch.update('none'); } catch (e) {}
@@ -17682,9 +17690,12 @@
             return poll(0);
         }
 
-        /** Promise: demographics + demo trend charts. */
-        function _llmoFetchDemographicsPromise(date, dateEnd) {
+        /** Promise: demographics + demo trend charts. Optional agent filters COMMON_NAME (ILIKE). */
+        function _llmoFetchDemographicsPromise(date, dateEnd, agent) {
             var url = '/api/llmo-iq/demographics?date=' + encodeURIComponent(date) + '&date_end=' + encodeURIComponent(dateEnd);
+            if (agent && String(agent).trim()) {
+                url += '&agent=' + encodeURIComponent(String(agent).trim());
+            }
             return _llmoFetchJsonWithTimeout(url, 45000)
                 .then(function(data) {
                     if (!data.success) {
@@ -17729,8 +17740,10 @@
                         selEnd.appendChild(o2);
                     });
                     if (data.dates.length > 0) {
-                        sel.value = data.dates[0];
+                        /* Default: last 7 available days (newest = end date) */
                         selEnd.value = data.dates[0];
+                        var iStart = Math.min(6, data.dates.length - 1);
+                        sel.value = data.dates[iStart];
                         loadLLMOIQData();
                     } else {
                         _llmoUpdateProgress(0, 0, 'No dates available');
@@ -17773,6 +17786,7 @@
                         return null;
                     }
                     renderLLMOSummaryCards(data);
+                    populateLLMODemoAgentOptions(data.llms);
                     renderLLMOUsageTable(data.llms);
                     renderLLMOCategoryShare(data.llms);
                     renderLLMOTrend(data.trend_dates, data.trend_by_llm);
@@ -17792,7 +17806,8 @@
                     _llmoHideLoading();
                     if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
                     var de = dateEnd || date;
-                    _llmoFetchDemographicsPromise(date, de).then(function() {
+                    var agEl = document.getElementById('llmoDemoAgentFilter');
+                    _llmoFetchDemographicsPromise(date, de, agEl ? agEl.value : '').then(function() {
                         if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
                     });
                     _llmoFetchSearchThemesPromise(date, de).then(function() {
@@ -17808,7 +17823,36 @@
         }
 
         function loadLLMOIQDemographics(date, dateEnd) {
-            return _llmoFetchDemographicsPromise(date, dateEnd);
+            var ag = document.getElementById('llmoDemoAgentFilter');
+            return _llmoFetchDemographicsPromise(date, dateEnd, ag ? ag.value : '');
+        }
+
+        function populateLLMODemoAgentOptions(llms) {
+            var sel = document.getElementById('llmoDemoAgentFilter');
+            if (!sel) return;
+            var prev = sel.value;
+            sel.innerHTML = '<option value="">All agents</option>';
+            (llms || []).forEach(function(r) {
+                if (!r || !r.name) return;
+                var o = document.createElement('option');
+                o.value = r.name;
+                o.textContent = r.name;
+                sel.appendChild(o);
+            });
+            var ok = false;
+            for (var i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === prev) { ok = true; break; }
+            }
+            sel.value = ok ? prev : '';
+        }
+
+        function refreshLLMODemographicsFilter() {
+            var sel = document.getElementById('llmoDateSelect');
+            var selEnd = document.getElementById('llmoDateEndSelect');
+            var ag = document.getElementById('llmoDemoAgentFilter');
+            if (!sel || !sel.value) return;
+            var agent = ag ? ag.value : '';
+            _llmoFetchDemographicsPromise(sel.value, selEnd ? selEnd.value : sel.value, agent);
         }
 
         function _llmoFmt(n) {
@@ -17832,11 +17876,14 @@
         function renderLLMOUsageTable(llms) {
             var tbody = document.getElementById('llmoRankerBody');
             if (!llms || llms.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="padding:2rem;text-align:center;color:var(--text-secondary);">No data available</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="padding:2rem;text-align:center;color:var(--text-secondary);">No data available</td></tr>';
                 return;
             }
             var html = '';
             llms.forEach(function(r) {
+                var gpPct = (r.category_share_genpop_normalized != null && r.category_share_genpop_normalized !== undefined)
+                    ? (r.category_share_genpop_normalized + '%') : '—';
+                var idx = (r.index_vs_genpop != null && r.index_vs_genpop !== undefined) ? formatIndex(r.index_vs_genpop) : '—';
                 html += '<tr style="border-bottom:1px solid var(--border-color);">'
                     + '<td style="padding:0.5rem;">' + r.rank + '</td>'
                     + '<td style="padding:0.5rem;font-weight:600;">' + r.name + '</td>'
@@ -17844,6 +17891,8 @@
                     + '<td style="padding:0.5rem;text-align:right;">' + r.pct_of_total + '%</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.total_clicks_projected) + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + r.category_share + '%</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">' + gpPct + '</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">' + idx + '</td>'
                     + '</tr>';
             });
             tbody.innerHTML = html;
@@ -17855,13 +17904,17 @@
             if (_llmoCategoryShareChart) { _llmoCategoryShareChart.destroy(); _llmoCategoryShareChart = null; }
             if (!llms || llms.length === 0) return;
 
+            var useGp = llms.some(function(r) {
+                return r.category_share_genpop_normalized != null && r.category_share_genpop_normalized !== undefined;
+            });
+            var shareKey = useGp ? 'category_share_genpop_normalized' : 'category_share';
             var top = llms.slice(0, 10);
             var otherShare = 0;
             if (llms.length > 10) {
-                for (var i = 10; i < llms.length; i++) otherShare += llms[i].category_share;
+                for (var i = 10; i < llms.length; i++) otherShare += (llms[i][shareKey] || 0);
             }
             var labels = top.map(function(r) { return r.name; });
-            var values = top.map(function(r) { return r.category_share; });
+            var values = top.map(function(r) { return r[shareKey] || 0; });
             if (otherShare > 0) { labels.push('Other'); values.push(Math.round(otherShare * 100) / 100); }
 
             var palette = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01','#46BDC6','#7B61FF','#F538A0','#00BFA5','#FF8A65','#90A4AE'];
@@ -17883,7 +17936,11 @@
                         tooltip: {
                             enabled: _llmoTooltipsEnabled(),
                             callbacks: {
-                                label: function(ctx) { return ctx.label + ': ' + ctx.parsed + '%'; }
+                                label: function(ctx) {
+                                    var pct = ctx.parsed;
+                                    var suf = useGp ? '% (Gen Pop cat. share)' : '% (session share)';
+                                    return ctx.label + ': ' + pct + suf;
+                                }
                             }
                         }
                     }
@@ -18514,21 +18571,6 @@
                         data: {
                             labels: browsers.slice(0, 8).map(function(b) { return b.name; }),
                             datasets: [{ data: browsers.slice(0, 8).map(function(b) { return b.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { enabled: _llmoTooltipsEnabled(), callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
-                    });
-                }
-            }
-
-            var pCtx = document.getElementById('llmoPlatformChart');
-            if (pCtx) {
-                if (_llmoPlatformChart) { _llmoPlatformChart.destroy(); _llmoPlatformChart = null; }
-                if (platforms && platforms.length > 0) {
-                    _llmoPlatformChart = new Chart(pCtx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: platforms.slice(0, 8).map(function(p) { return p.name; }),
-                            datasets: [{ data: platforms.slice(0, 8).map(function(p) { return p.unique_users; }), backgroundColor: palette, borderWidth: 0 }]
                         },
                         options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10, padding: 4 } }, tooltip: { enabled: _llmoTooltipsEnabled(), callbacks: { label: function(ctx) { return ctx.label + ': ' + _llmoFmt(ctx.parsed); } } } } }
                     });

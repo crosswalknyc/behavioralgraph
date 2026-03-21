@@ -7278,6 +7278,92 @@ def _llmo_split_multi_names(name):
     return parts if parts else ['Unknown']
 
 
+def _llmo_genpop_lookup_bp_cs(name):
+    """Return (penetration_pct, category_share, gp_cat) from Gen Pop for LLM / platform names."""
+    import bg as _bg
+    gp = _bg._load_genpop_csv()
+    if gp is None or not name:
+        return None, None, None
+    col_name, val_name, bp_name = gp.columns[0], gp.columns[1], gp.columns[2]
+    cs_name = gp.columns[3] if len(gp.columns) > 3 else None
+    bp = None
+    gp_cat = None
+    for bc in ('SEARCH ENGINE/AI', 'STREAMING/PLATFORM', None):
+        pct, c = _bg.get_genpop_penetration_for_brand(name, brand_category=bc)
+        if pct is not None:
+            bp, gp_cat = float(pct), c
+            break
+    if bp is None or gp_cat is None:
+        return None, None, None
+    cs = None
+    if cs_name:
+        gp_u = gp.copy()
+        gp_u['_col'] = gp_u[col_name].astype(str).str.strip().str.upper()
+        gp_u['_val'] = gp_u[val_name].astype(str).str.strip().str.upper()
+        cat_u = str(gp_cat).strip().upper()
+        for cand in (_bg._extract_core_brand(name, None) or []):
+            c = str(cand).strip().upper()
+            if not c:
+                continue
+            mask = (gp_u['_col'] == cat_u) & (gp_u['_val'] == c)
+            if mask.any():
+                try:
+                    raw = gp_u.loc[mask].iloc[0][cs_name]
+                    cs = float(pd.to_numeric(raw, errors='coerce'))
+                except (TypeError, ValueError, IndexError):
+                    cs = None
+                if cs is not None and cs == cs:
+                    break
+        if cs is None:
+            bpn = pd.to_numeric(gp_u[bp_name], errors='coerce')
+            mask_bp = (gp_u['_col'] == cat_u) & ((bpn - float(bp)).abs() < 1e-4)
+            if mask_bp.any():
+                try:
+                    raw = gp_u.loc[mask_bp].iloc[0][cs_name]
+                    cs = float(pd.to_numeric(raw, errors='coerce'))
+                except (TypeError, ValueError, IndexError):
+                    cs = None
+    return bp, cs, gp_cat
+
+
+def _llmo_enrich_llm_genpop(llm_data):
+    """Attach Gen Pop penetration, category share (for doughnut), and index vs GP for each LLM row."""
+    if not llm_data:
+        return llm_data
+    rows = []
+    for row in llm_data:
+        r = dict(row)
+        bp, cs, gp_cat = _llmo_genpop_lookup_bp_cs(r.get('name'))
+        r['genpop_penetration'] = round(bp, 4) if bp is not None else None
+        r['genpop_category'] = gp_cat
+        r['genpop_category_share'] = round(cs, 4) if cs is not None and cs == cs else None
+        try:
+            pt_f = float(r.get('pct_of_total'))
+        except (TypeError, ValueError):
+            pt_f = 0.0
+        if bp and bp > 0:
+            r['index_vs_genpop'] = round((pt_f / float(bp)) * 100, 2)
+        else:
+            r['index_vs_genpop'] = None
+        rows.append(r)
+    cs_vals = []
+    for r in rows:
+        v = r.get('genpop_category_share')
+        if v is not None and v == v and v > 0:
+            cs_vals.append(float(v))
+    tot_cs = sum(cs_vals)
+    for r in rows:
+        if tot_cs > 0 and r.get('genpop_category_share') is not None:
+            try:
+                gpcs = float(r['genpop_category_share'])
+                r['category_share_genpop_normalized'] = round(gpcs / tot_cs * 100, 2)
+            except (TypeError, ValueError):
+                r['category_share_genpop_normalized'] = None
+        else:
+            r['category_share_genpop_normalized'] = None
+    return rows
+
+
 def _llmo_combine_date_range(summary_data, date_str, date_end):
     """Combine pre-computed per-date stats for a date range. Returns API response dict."""
     from collections import defaultdict
@@ -7397,6 +7483,8 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
             'total_clicks': cl, 'total_clicks_projected': round(cl * M),
             'category_share': round(cl / total_clicks_all * 100, 2) if total_clicks_all else 0,
         })
+
+    llm_data = _llmo_enrich_llm_genpop(llm_data)
 
     att_sorted = sorted(att_agg.items(), key=lambda x: x[1]['uu'], reverse=True)[:100]
     attribution = [{'name': n, 'unique_users': v['uu'], 'unique_users_projected': round(v['uu'] * M),
@@ -7820,12 +7908,14 @@ def _llmo_try_merge_search_themes_from_summary(summary_data, date_str, date_end)
     return _llmo_merge_search_theme_daily_payloads(payloads)
 
 
-def _llmo_try_demographics_from_summary(summary_data, date_str, date_end):
+def _llmo_try_demographics_from_summary(summary_data, date_str, date_end, agent=None):
     """Use precomputed ``llmo_demographics`` from S3 summary for a single day only.
 
     Multi-day ranges cannot be merged from per-day aggregates (distinct users); those
     still use Snowflake in ``llmo_iq_demographics``.
     """
+    if agent and str(agent).strip():
+        return None
     if date_str != date_end:
         return None
     if not summary_data or not isinstance(summary_data.get('by_date'), dict):
@@ -7942,12 +8032,13 @@ def llmo_iq_demographics():
         date_str = datetime.now().strftime('%Y-%m-%d')
     if not date_end:
         date_end = date_str
+    agent = (request.args.get('agent') or '').strip()
 
     try:
         summary = _llmo_ensure_loaded()
         if summary is None:
             return jsonify({'success': True, 'loading': True}), 200
-        from_summary = _llmo_try_demographics_from_summary(summary, date_str, date_end)
+        from_summary = _llmo_try_demographics_from_summary(summary, date_str, date_end, agent=agent)
         if from_summary is not None:
             return jsonify(from_summary)
 
@@ -7956,15 +8047,23 @@ def llmo_iq_demographics():
         cur = conn.cursor()
         cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
 
-        params = (date_str, date_end)
-
-        cur.execute("""
-            CREATE OR REPLACE TEMP TABLE TEMP_LLMO_AI_UIDS AS
-            SELECT DISTINCT UID, DELIVERED::DATE AS d
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
-            WHERE MATCH_TYPE = 'AI_AGENT'
-              AND DELIVERED::DATE BETWEEN %s AND %s
-        """, params)
+        if agent:
+            cur.execute("""
+                CREATE OR REPLACE TEMP TABLE TEMP_LLMO_AI_UIDS AS
+                SELECT DISTINCT UID, DELIVERED::DATE AS d
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+                WHERE MATCH_TYPE = 'AI_AGENT'
+                  AND DELIVERED::DATE BETWEEN %s AND %s
+                  AND TRIM(COMMON_NAME) ILIKE %s
+            """, (date_str, date_end, f'%{agent}%'))
+        else:
+            cur.execute("""
+                CREATE OR REPLACE TEMP TABLE TEMP_LLMO_AI_UIDS AS
+                SELECT DISTINCT UID, DELIVERED::DATE AS d
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
+                WHERE MATCH_TYPE = 'AI_AGENT'
+                  AND DELIVERED::DATE BETWEEN %s AND %s
+            """, (date_str, date_end))
 
         cur.execute("""
             SELECT 'gender' AS cat, d.GENDER AS val, COUNT(DISTINCT u.UID) AS cnt
