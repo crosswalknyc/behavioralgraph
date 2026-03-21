@@ -7267,6 +7267,18 @@ def _llmo_flow_destination_brand_retailer_flags(destination):
     return is_brand, is_retailer
 
 
+# LLMO: do not surface these COMMON_NAME values (noise / mislabels) in dashboards or aggregates.
+_LLMO_TRACKING_NAME_DENYLIST = frozenset({'afc bournemouth', 'chelmico', 'unknown'})
+
+
+def _llmo_name_excluded_from_tracking(name):
+    """True if this entity should be omitted from LLMO rollups (case-insensitive)."""
+    if name is None:
+        return True
+    s = str(name).strip().lower()
+    return (not s) or (s in _LLMO_TRACKING_NAME_DENYLIST)
+
+
 def _llmo_split_multi_names(name):
     """Split COMMON_NAME-style values on '|' into separate entities; empty -> ['Unknown']."""
     if name is None:
@@ -7364,6 +7376,211 @@ def _llmo_enrich_llm_genpop(llm_data):
     return rows
 
 
+def _llmo_llm_totals_uu_for_dates(summary_data, dates_list):
+    """Aggregate unique-user counts per split LLM name across a list of calendar dates."""
+    from collections import defaultdict
+    agg = defaultdict(int)
+    by_date = summary_data.get('by_date', {})
+    for d in dates_list:
+        day = by_date.get(d) or {}
+        for llm in day.get('llms', []):
+            uu = llm.get('unique_users', 0)
+            for nm in _llmo_split_multi_names(llm.get('name')):
+                if _llmo_name_excluded_from_tracking(nm):
+                    continue
+                agg[nm] += uu
+    return dict(agg)
+
+
+def _llmo_merge_llmo_insights(by_date, matching_dates):
+    """Merge per-day llmo_insights (from S3) across a date range."""
+    merged = {
+        'hourly': [0] * 24,
+        'dow': [0] * 7,
+        'session_depth_by_llm': {},
+        'cross_llm_pairs': [],
+        'funnel': {'post1_users': 0, 'post2_users': 0, 'post3_users': 0},
+    }
+    pair_map = {}
+    for d in matching_dates:
+        ins = (by_date.get(d) or {}).get('llmo_insights')
+        if not isinstance(ins, dict):
+            continue
+        h = ins.get('hourly') or []
+        for i in range(min(24, len(h))):
+            merged['hourly'][i] += int(h[i] or 0)
+        dow = ins.get('dow') or []
+        for i in range(min(7, len(dow))):
+            merged['dow'][i] += int(dow[i] or 0)
+        sd = ins.get('session_depth') or {}
+        for llm, buckets in sd.items():
+            if _llmo_name_excluded_from_tracking(llm):
+                continue
+            if not isinstance(buckets, dict):
+                continue
+            merged['session_depth_by_llm'].setdefault(llm, {})
+            for bk, nv in buckets.items():
+                merged['session_depth_by_llm'][llm][bk] = (
+                    merged['session_depth_by_llm'][llm].get(bk, 0) + int(nv or 0)
+                )
+        for p in ins.get('cross_llm_pairs') or []:
+            if not isinstance(p, dict):
+                continue
+            if _llmo_name_excluded_from_tracking(p.get('a')) or _llmo_name_excluded_from_tracking(p.get('b')):
+                continue
+            key = (p.get('a'), p.get('b'))
+            pair_map[key] = pair_map.get(key, 0) + int(p.get('n') or 0)
+        fu = ins.get('funnel') or {}
+        merged['funnel']['post1_users'] += int(fu.get('post1_users') or 0)
+        merged['funnel']['post2_users'] += int(fu.get('post2_users') or 0)
+        merged['funnel']['post3_users'] += int(fu.get('post3_users') or 0)
+    merged['cross_llm_pairs'] = sorted(
+        [{'a': a, 'b': b, 'n': n} for (a, b), n in pair_map.items()],
+        key=lambda x: -x['n'],
+    )[:25]
+    if len(matching_dates) > 1:
+        merged['multi_day_note'] = (
+            'Hourly/dow are summed session counts. Session depth, funnel, and cross-LLM pair counts sum daily '
+            'figures (same user across days may be counted more than once).'
+        )
+    return merged
+
+
+def _llmo_flow_destination_entropy_and_lift(flow_agg, M):
+    """Brand/retailer destination mix and Shannon entropy of destinations per source LLM."""
+    import math
+    from collections import defaultdict
+    src_brand = defaultdict(float)
+    src_retail = defaultdict(float)
+    src_total = defaultdict(float)
+    src_dest = defaultdict(lambda: defaultdict(float))
+    for (src, dst), v in flow_agg.items():
+        uu = v['uu']
+        db, dr = _llmo_flow_destination_brand_retailer_flags(dst)
+        src_total[src] += uu
+        if db:
+            src_brand[src] += uu
+        if dr:
+            src_retail[src] += uu
+        src_dest[src][dst] += uu
+    lift = []
+    entropy_list = []
+    for src in sorted(src_total.keys(), key=lambda s: src_total[s], reverse=True)[:35]:
+        t = src_total[src] or 1e-9
+        lift.append({
+            'source': src,
+            'pct_brand_dest': round(src_brand[src] / t * 100, 2),
+            'pct_retailer_dest': round(src_retail[src] / t * 100, 2),
+            'flow_weighted_users': round(t * M),
+        })
+        dist = src_dest[src]
+        ssum = sum(dist.values())
+        h = 0.0
+        if ssum > 0:
+            for vv in dist.values():
+                p = float(vv) / ssum
+                if p > 0:
+                    h -= p * math.log(p + 1e-15)
+        mx = max(dist.values()) if dist else 0
+        entropy_list.append({
+            'source': src,
+            'destination_entropy': round(h, 3),
+            'top_dest_share_pct': round(mx / ssum * 100, 2) if ssum else 0,
+        })
+    entropy_list.sort(key=lambda x: -x.get('destination_entropy', 0))
+    return lift, entropy_list[:25]
+
+
+def _llmo_search_term_insights(search_agg):
+    """Diversity of search terms in the selected range (from aggregated term counts)."""
+    if not search_agg:
+        return {'unique_terms': 0, 'total_term_occurrences': 0, 'avg_occurrences_per_term': 0}
+    total = sum(search_agg.values())
+    uniq = len(search_agg)
+    return {
+        'unique_terms': uniq,
+        'total_term_occurrences': int(total),
+        'avg_occurrences_per_term': round(total / uniq, 2) if uniq else 0,
+    }
+
+
+def _llmo_coverage_metrics(llm_data):
+    matched = sum(1 for r in llm_data if r.get('genpop_penetration') is not None)
+    n = len(llm_data)
+    return {
+        'llms_with_genpop_match': matched,
+        'llms_total': n,
+        'match_pct': round(matched / n * 100, 1) if n else 0,
+    }
+
+
+def _llmo_wow_and_rising(summary_data, matching_dates, llm_totals_cur):
+    """Prior-period comparison (same span) and LLM with largest % gain in raw user counts."""
+    all_dates = sorted(summary_data.get('dates', []))
+    if len(matching_dates) < 1 or len(all_dates) < 2:
+        return None, None
+    span = len(matching_dates)
+    lo = min(matching_dates)
+    try:
+        i0 = all_dates.index(lo)
+    except ValueError:
+        return None, None
+    if i0 < span:
+        return None, None
+    prev_dates = all_dates[i0 - span:i0]
+    by_date = summary_data.get('by_date', {})
+    cur_ai = sum((by_date.get(d) or {}).get('total_ai_users', 0) for d in matching_dates)
+    prev_ai = sum((by_date.get(d) or {}).get('total_ai_users', 0) for d in prev_dates)
+    prev_llm = _llmo_llm_totals_uu_for_dates(summary_data, prev_dates)
+    wow = {
+        'prior_period_start': prev_dates[0],
+        'prior_period_end': prev_dates[-1],
+        'pct_change_ai_users': round((cur_ai - prev_ai) / prev_ai * 100, 2) if prev_ai else None,
+        'current_ai_users': cur_ai,
+        'previous_ai_users': prev_ai,
+    }
+    best_name = None
+    best_pct = None
+    for name, cur_u in (llm_totals_cur or {}).items():
+        pv = prev_llm.get(name, 0)
+        if pv > 0:
+            pct = round((cur_u - pv) / pv * 100, 2)
+        else:
+            pct = 100.0 if cur_u > 0 else 0.0
+        if best_pct is None or pct > best_pct:
+            best_pct = pct
+            best_name = name
+    rising = {'name': best_name, 'pct_change_vs_prior': best_pct} if best_name is not None else None
+    return wow, rising
+
+
+def _llmo_build_extended_insights_payload(
+    summary_data, matching_dates, date_str, date_end, flow_agg, search_agg, llm_data, llm_totals_uu,
+):
+    by_date = summary_data.get('by_date', {})
+    M = LLMO_PROJECTION_MULT
+    merged = _llmo_merge_llmo_insights(by_date, matching_dates)
+    lift, entropy = _llmo_flow_destination_entropy_and_lift(flow_agg, M)
+    search_ins = _llmo_search_term_insights(search_agg)
+    cov = _llmo_coverage_metrics(llm_data)
+    wow, rising = _llmo_wow_and_rising(summary_data, matching_dates, llm_totals_uu)
+    return {
+        'merged_from_summary': merged,
+        'dow_labels': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        'llm_brand_retailer_lift': lift,
+        'destination_entropy': entropy,
+        'search_terms': search_ins,
+        'coverage': cov,
+        'wow': wow,
+        'rising_llm': rising,
+        'notes': {
+            'demo_by_llm': 'Use the AI agent filter on AI User Demographics to isolate one LLM.',
+            'theme_by_llm': 'Search themes aggregate all LLMs; per-LLM theme splits need query→agent linkage in the pipeline.',
+            'new_vs_returning': 'First-seen cohort not in summary yet.',
+        },
+    }
+
+
 def _llmo_combine_date_range(summary_data, date_str, date_end):
     """Combine pre-computed per-date stats for a date range. Returns API response dict."""
     from collections import defaultdict
@@ -7378,7 +7595,8 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
                 'llm_count': 0, 'llms': [], 'attribution': [], 'attribution_second': [],
                 'attribution_third': [], 'brand_conversion': [], 'retailer_conversion': [], 'flows': [],
                 'searches': [], 'trend_dates': [], 'trend_by_llm': {},
-                'browsers': [], 'platforms': []}
+                'browsers': [], 'platforms': [],
+                'llmo_extended_insights': {}}
 
     llm_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
     att_agg = defaultdict(lambda: {'uu': 0, 'cl': 0})
@@ -7403,6 +7621,8 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         for llm in day.get('llms', []):
             uu, cl = llm['unique_users'], llm['total_clicks']
             for nm in _llmo_split_multi_names(llm.get('name')):
+                if _llmo_name_excluded_from_tracking(nm):
+                    continue
                 llm_agg[nm]['uu'] += uu
                 llm_agg[nm]['cl'] += cl
                 if nm not in trend_by_llm:
@@ -7414,24 +7634,32 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         for att in day.get('attribution', []):
             uu, cl = att['unique_users'], att['total_clicks']
             for nm in _llmo_split_multi_names(att.get('name')):
+                if _llmo_name_excluded_from_tracking(nm):
+                    continue
                 att_agg[nm]['uu'] += uu
                 att_agg[nm]['cl'] += cl
 
         for att in day.get('attribution_second', []):
             uu, cl = att['unique_users'], att['total_clicks']
             for nm in _llmo_split_multi_names(att.get('name')):
+                if _llmo_name_excluded_from_tracking(nm):
+                    continue
                 att2_agg[nm]['uu'] += uu
                 att2_agg[nm]['cl'] += cl
 
         for att in day.get('attribution_third', []):
             uu, cl = att['unique_users'], att['total_clicks']
             for nm in _llmo_split_multi_names(att.get('name')):
+                if _llmo_name_excluded_from_tracking(nm):
+                    continue
                 att3_agg[nm]['uu'] += uu
                 att3_agg[nm]['cl'] += cl
 
         for bc in day.get('brand_conversion', []):
             uu, cl = bc['unique_users'], bc['total_clicks']
             for part in _llmo_split_multi_names(bc.get('name')):
+                if _llmo_name_excluded_from_tracking(part):
+                    continue
                 lk = part.strip().lower()
                 if not lk:
                     continue
@@ -7443,6 +7671,8 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         for rc in day.get('retailer_conversion', []):
             uu, cl = rc['unique_users'], rc['total_clicks']
             for part in _llmo_split_multi_names(rc.get('name')):
+                if _llmo_name_excluded_from_tracking(part):
+                    continue
                 lk = part.strip().lower()
                 if not lk:
                     continue
@@ -7452,9 +7682,11 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
                 retailer_conv_agg[lk]['cl'] += cl
 
         for fl in day.get('flows', []):
-            src_parts = _llmo_split_multi_names(fl.get('source'))
-            dst_parts = _llmo_split_multi_names(fl.get('destination'))
+            src_parts = [p for p in _llmo_split_multi_names(fl.get('source')) if not _llmo_name_excluded_from_tracking(p)]
+            dst_parts = [p for p in _llmo_split_multi_names(fl.get('destination')) if not _llmo_name_excluded_from_tracking(p)]
             uu, cl = fl['unique_users'], fl['clicks']
+            if not src_parts or not dst_parts:
+                continue
             n_pairs = max(1, len(src_parts) * len(dst_parts))
             w = 1.0 / n_pairs
             for s in src_parts:
@@ -7470,6 +7702,8 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
 
         for p in day.get('platforms', []):
             platform_agg[p['name']] += p['unique_users']
+
+    llm_totals_uu = {name: v['uu'] for name, v in llm_agg.items()}
 
     total_clicks_all = sum(v['cl'] for v in llm_agg.values())
     llm_sorted = sorted(llm_agg.items(), key=lambda x: x[1]['uu'], reverse=True)
@@ -7548,6 +7782,10 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
     browsers = [{'name': n, 'unique_users': round(u * M)} for n, u in sorted(browser_agg.items(), key=lambda x: x[1], reverse=True)]
     platforms = [{'name': n, 'unique_users': round(u * M)} for n, u in sorted(platform_agg.items(), key=lambda x: x[1], reverse=True)]
 
+    llmo_extended_insights = _llmo_build_extended_insights_payload(
+        summary_data, matching_dates, date_str, date_end, flow_agg, search_agg, llm_data, llm_totals_uu,
+    )
+
     return {
         'success': True, 'loading': False,
         'date': date_str, 'date_end': date_end,
@@ -7565,6 +7803,7 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
         'searches': searches,
         'trend_dates': matching_dates, 'trend_by_llm': trend_by_llm,
         'browsers': browsers, 'platforms': platforms,
+        'llmo_extended_insights': llmo_extended_insights,
     }
 
 
