@@ -17792,8 +17792,24 @@
         function loadLLMOIQDates() {
             _llmoShowLoading();
             fetch('/api/llmo-iq/dates', { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (r.status === 401) {
+                        _llmoHideLoading();
+                        window.location.href = '/login';
+                        return Promise.reject(new Error('llmo-auth-401'));
+                    }
+                    if (r.status === 403) {
+                        return r.json().then(function(data) {
+                            _llmoHideLoading();
+                            console.error('LLMO dates error:', (data && data.error) || 'Access denied');
+                            _llmoUpdateProgress(0, 0, (data && data.error) || 'LLMO IQ access denied');
+                            return Promise.reject(new Error('llmo-access-denied'));
+                        });
+                    }
+                    return r.json();
+                })
                 .then(function(data) {
+                    if (!data) return;
                     if (!data.success) {
                         console.error('LLMO dates error:', data.error);
                         _llmoHideLoading();
@@ -17829,6 +17845,7 @@
                     }
                 })
                 .catch(function(e) {
+                    if (e && (e.message === 'llmo-auth-401' || e.message === 'llmo-access-denied')) return;
                     console.error('LLMO dates fetch error:', e);
                     if (_llmoPollingTimer) clearTimeout(_llmoPollingTimer);
                     _llmoPollingTimer = setTimeout(loadLLMOIQDates, 3000);
@@ -48216,31 +48233,29 @@
                     cacheStatus.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.7rem;">⚡ ${cacheInfo.file_count} files • Updated ${timeAgo}</span>`;
                 }
                 
-                // Populate category filter with master category grouping
+                // Populate category filter with master category grouping (Profile IQ only — element may be absent on other products)
                 const categorySelect = document.getElementById('categoryFilter');
-                let categoryOptions = '<option value="">All Categories</option>';
-                
-                // Group categories by master category
-                const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
-                const categoriesByMaster = {};
-                allCategories.forEach(cat => {
-                    const master = getMasterCategory(cat);
-                    if (!categoriesByMaster[master]) categoriesByMaster[master] = [];
-                    categoriesByMaster[master].push(cat);
-                });
-                
-                masterOrder.forEach(master => {
-                    const cats = categoriesByMaster[master];
-                    if (!cats || cats.length === 0) return;
-                    const icon = MASTER_CATEGORY_ICONS[master] || '📁';
-                    categoryOptions += `<optgroup label="${icon} ${master}">`;
-                    cats.sort().forEach(cat => {
-                        categoryOptions += `<option value="${cat}">${cat}</option>`;
+                if (categorySelect) {
+                    let categoryOptions = '<option value="">All Categories</option>';
+                    const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                    const categoriesByMaster = {};
+                    allCategories.forEach(cat => {
+                        const master = getMasterCategory(cat);
+                        if (!categoriesByMaster[master]) categoriesByMaster[master] = [];
+                        categoriesByMaster[master].push(cat);
                     });
-                    categoryOptions += '</optgroup>';
-                });
-                
-                categorySelect.innerHTML = categoryOptions;
+                    masterOrder.forEach(master => {
+                        const cats = categoriesByMaster[master];
+                        if (!cats || cats.length === 0) return;
+                        const icon = MASTER_CATEGORY_ICONS[master] || '📁';
+                        categoryOptions += `<optgroup label="${icon} ${master}">`;
+                        cats.sort().forEach(cat => {
+                            categoryOptions += `<option value="${cat}">${cat}</option>`;
+                        });
+                        categoryOptions += '</optgroup>';
+                    });
+                    categorySelect.innerHTML = categoryOptions;
+                }
                 
                 // Reset display limit when loading fresh data
                 jobsDisplayLimit = 50;
