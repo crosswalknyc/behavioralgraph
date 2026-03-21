@@ -677,6 +677,8 @@
             color: var(--text-primary) !important;
         }
         #llmoIQView #llmoRankerTable thead tr, #llmoIQView #llmoSearchesTable thead tr,
+        #llmoIQView th.llmo-ranker-th { cursor: pointer; user-select: none; white-space: nowrap; }
+        #llmoIQView th.llmo-ranker-th:hover { color: var(--accent-blue); }
         #llmoIQView #llmoFlowsTable thead tr { color: var(--text-secondary) !important; }
         /* LLMO attribution bar charts: scroll to see all bars (top 100) */
         #llmoIQView .llmo-attrib-chart-scroll {
@@ -15394,15 +15396,15 @@
                             <table id="llmoRankerTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
                                 <thead>
                                     <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
-                                        <th style="padding: 0.5rem; white-space: nowrap;">#</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap;">LLM</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Unique Users</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">% of Total</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Total Sessions</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;" class="has-tooltip" data-tooltip="Average sessions per unique user for this LLM (platform) in the selected date range.">Avg sess./user</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Session share</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;" class="has-tooltip" data-tooltip="Share of matched Gen Pop category rows (SEARCH ENGINE/AI / STREAMING), normalized to 100% for apples-to-apples with Index.">GP cat. share</th>
-                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;" class="has-tooltip" data-tooltip="(% of AI users ÷ Gen Pop penetration) × 100 — same basis as brand/retailer index.">Index</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Sort by API rank (default order)" style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('rank')" id="llmoTh_rank">#</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('name')" id="llmoTh_name">LLM</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('unique_users')" id="llmoTh_unique_users">Unique Users</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('pct_of_total')" id="llmoTh_pct_of_total">% of Total</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('total_sessions')" id="llmoTh_total_sessions">Total Sessions</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Average sessions per unique user for this LLM (platform) in the selected date range." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('avg_sess')" id="llmoTh_avg_sess">Avg sess./user</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('session_share')" id="llmoTh_session_share">Session share</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Share of matched Gen Pop category rows (SEARCH ENGINE/AI / STREAMING), normalized to 100% for apples-to-apples with Index." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('gp_cat')" id="llmoTh_gp_cat">GP cat. share</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="(% of AI users ÷ Gen Pop penetration) × 100 — same basis as brand/retailer index." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('index')" id="llmoTh_index">Index</th>
                                     </tr>
                                 </thead>
                                 <tbody id="llmoRankerBody">
@@ -15425,6 +15427,78 @@
                     <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (US Gen Pop Unique Users by Date)</h3>
                     <div style="position: relative; height: 350px;">
                         <canvas id="llmoTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Extended insights (heatmap, funnel, cross-LLM, lift, entropy, WoW — requires llmo_insights in S3 after SP deploy) -->
+                <div id="llmoExtendedInsightsSection" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <h3 class="has-tooltip" style="margin: 0 0 0.5rem 0; font-size: 1.05rem; font-weight: 600;" data-tooltip="Derived from nightly summary + on-the-fly flow math. Redeploy SP_LLMO_DAILY after pulling latest setup_llmo_daily.sql so hourly/dow/funnel/cross-LLM populate.">Advanced insights</h3>
+                    <p id="llmoInsightPipelineNote" style="margin: 0 0 1rem 0; font-size: 0.72rem; color: var(--text-secondary); line-height: 1.45;"></p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+                        <div style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
+                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Prior period Δ (users)</div>
+                            <div id="llmoInsightWowText" style="font-size: 1.1rem; font-weight: 700;">—</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
+                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Top rising LLM (vs prior)</div>
+                            <div id="llmoInsightRisingText" style="font-size: 1.05rem; font-weight: 700;">—</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
+                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Gen Pop match (LLMs)</div>
+                            <div id="llmoInsightCoverageText" style="font-size: 1.05rem; font-weight: 700;">—</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
+                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Search term diversity</div>
+                            <div id="llmoInsightSearchText" style="font-size: 1.05rem; font-weight: 700;">—</div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">AI sessions by hour (US/Pacific)</h4>
+                            <div style="position: relative; height: 200px;"><canvas id="llmoInsightHourlyChart"></canvas></div>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">AI sessions by weekday (Mon–Sun)</h4>
+                            <div style="position: relative; height: 200px;"><canvas id="llmoInsightDowChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Post-AI funnel (distinct users)</h4>
+                            <p style="margin: 0 0 0.35rem 0; font-size: 0.68rem; color: var(--text-secondary);">1st / 2nd / 3rd post-AI click in range</p>
+                            <div style="position: relative; height: 160px;"><canvas id="llmoInsightFunnelChart"></canvas></div>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Session depth by LLM (users in bucket)</h4>
+                            <div style="position: relative; height: 220px;"><canvas id="llmoInsightDepthChart"></canvas></div>
+                        </div>
+                    </div>
+                    <h4 style="margin: 0.5rem 0 0.35rem 0; font-size: 0.85rem;">Cross-LLM usage (same day, 2+ agents)</h4>
+                    <div style="overflow-x: auto; max-height: 200px; margin-bottom: 1rem;">
+                        <table class="llmo-table" style="font-size: 0.75rem;">
+                            <thead><tr><th>Agent A</th><th>Agent B</th><th style="text-align:right;">Users</th></tr></thead>
+                            <tbody id="llmoInsightPairsBody"><tr><td colspan="3" style="color:var(--text-secondary);">—</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Destination mix by source LLM (% brand / retailer)</h4>
+                            <div style="overflow-x: auto; max-height: 220px;">
+                                <table class="llmo-table" style="font-size: 0.72rem;">
+                                    <thead><tr><th>Source LLM</th><th style="text-align:right;">Brand %</th><th style="text-align:right;">Retailer %</th></tr></thead>
+                                    <tbody id="llmoInsightLiftBody"><tr><td colspan="3" style="color:var(--text-secondary);">—</td></tr></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Destination diversity (entropy ↑ = more spread)</h4>
+                            <div style="overflow-x: auto; max-height: 220px;">
+                                <table class="llmo-table" style="font-size: 0.72rem;">
+                                    <thead><tr><th>Source LLM</th><th style="text-align:right;">Entropy</th><th style="text-align:right;">Top dest %</th></tr></thead>
+                                    <tbody id="llmoInsightEntropyBody"><tr><td colspan="3" style="color:var(--text-secondary);">—</td></tr></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -17542,6 +17616,9 @@
         var _llmoDemoTrendData = null;
         var _llmoTrendDatesCache = null;
         var _llmoTrendByLLMCache = null;
+        var _llmoRankerRowsCache = null;
+        var _llmoRankerSortKey = 'rank';
+        var _llmoRankerSortDir = 1;
         var _llmoLoaded = false;
 
         function _llmoTooltipsEnabled() {
@@ -17861,6 +17938,76 @@
             return n.toLocaleString();
         }
 
+        function _llmoRankerSortValue(r, key) {
+            if (!r) return 0;
+            switch (key) {
+                case 'rank': return Number(r.rank) || 0;
+                case 'name': return String(r.name || '').toLowerCase();
+                case 'unique_users': return Number(r.unique_users_projected) || 0;
+                case 'pct_of_total': return Number(r.pct_of_total) || 0;
+                case 'total_sessions': return Number(r.total_clicks_projected) || 0;
+                case 'avg_sess': return Number(r.avg_sessions_per_user) || 0;
+                case 'session_share': return Number(r.category_share) || 0;
+                case 'gp_cat':
+                    if (r.category_share_genpop_normalized != null && r.category_share_genpop_normalized !== undefined)
+                        return Number(r.category_share_genpop_normalized);
+                    return null;
+                case 'index':
+                    if (r.index_vs_genpop != null && r.index_vs_genpop !== undefined) return Number(r.index_vs_genpop);
+                    return null;
+                default: return 0;
+            }
+        }
+
+        function _llmoSortRankerRows(rows, key, dir) {
+            var out = rows.slice();
+            out.sort(function(a, b) {
+                var va = _llmoRankerSortValue(a, key);
+                var vb = _llmoRankerSortValue(b, key);
+                if (va === null && vb === null) return 0;
+                if (va === null) return 1;
+                if (vb === null) return -1;
+                var c = 0;
+                if (typeof va === 'string' && typeof vb === 'string') c = va.localeCompare(vb);
+                else c = (va > vb) ? 1 : (va < vb ? -1 : 0);
+                return c * dir;
+            });
+            return out;
+        }
+
+        function llmoUpdateRankerSortIndicators() {
+            var keys = ['rank', 'name', 'unique_users', 'pct_of_total', 'total_sessions', 'avg_sess', 'session_share', 'gp_cat', 'index'];
+            var labels = {
+                rank: '#',
+                name: 'LLM',
+                unique_users: 'Unique Users',
+                pct_of_total: '% of Total',
+                total_sessions: 'Total Sessions',
+                avg_sess: 'Avg sess./user',
+                session_share: 'Session share',
+                gp_cat: 'GP cat. share',
+                index: 'Index'
+            };
+            keys.forEach(function(k) {
+                var th = document.getElementById('llmoTh_' + k);
+                if (!th) return;
+                var base = labels[k] || k;
+                var arrow = '';
+                if (k === _llmoRankerSortKey) arrow = _llmoRankerSortDir === 1 ? ' \u25B2' : ' \u25BC';
+                th.textContent = base + arrow;
+            });
+        }
+
+        function llmoRankerHeaderClick(key) {
+            if (_llmoRankerSortKey === key) {
+                _llmoRankerSortDir *= -1;
+            } else {
+                _llmoRankerSortKey = key;
+                _llmoRankerSortDir = 1;
+            }
+            renderLLMOUsageTable();
+        }
+
         function renderLLMOSummaryCards(data) {
             document.getElementById('llmoTotalUsers').textContent = _llmoFmt(data.total_unique_users_projected);
             document.getElementById('llmoTotalClicks').textContent = _llmoFmt(data.total_clicks_projected);
@@ -17876,20 +18023,29 @@
 
         function renderLLMOUsageTable(llms) {
             var tbody = document.getElementById('llmoRankerBody');
-            if (!llms || llms.length === 0) {
+            if (llms && llms.length) {
+                _llmoRankerRowsCache = llms.slice();
+                _llmoRankerSortKey = 'rank';
+                _llmoRankerSortDir = 1;
+            }
+            var rows = _llmoRankerRowsCache;
+            if (!rows || rows.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="9" style="padding:2rem;text-align:center;color:var(--text-secondary);">No data available</td></tr>';
+                llmoUpdateRankerSortIndicators();
                 return;
             }
+            var sorted = _llmoSortRankerRows(rows, _llmoRankerSortKey, _llmoRankerSortDir);
             var html = '';
-            llms.forEach(function(r) {
+            sorted.forEach(function(r, i) {
                 var gpPct = (r.category_share_genpop_normalized != null && r.category_share_genpop_normalized !== undefined)
                     ? (r.category_share_genpop_normalized + '%') : '—';
                 var idx = (r.index_vs_genpop != null && r.index_vs_genpop !== undefined) ? formatIndex(r.index_vs_genpop) : '—';
                 var avgSu = (r.avg_sessions_per_user != null && r.avg_sessions_per_user !== undefined)
                     ? Number(r.avg_sessions_per_user).toFixed(2) : '—';
+                var dispNum = i + 1;
                 html += '<tr style="border-bottom:1px solid var(--border-color);">'
-                    + '<td style="padding:0.5rem;">' + r.rank + '</td>'
-                    + '<td style="padding:0.5rem;font-weight:600;">' + r.name + '</td>'
+                    + '<td style="padding:0.5rem;">' + dispNum + '</td>'
+                    + '<td style="padding:0.5rem;font-weight:600;">' + _llmoEsc(String(r.name || '')) + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.unique_users_projected) + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + r.pct_of_total + '%</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.total_clicks_projected) + '</td>'
@@ -17900,6 +18056,7 @@
                     + '</tr>';
             });
             tbody.innerHTML = html;
+            llmoUpdateRankerSortIndicators();
         }
 
         function renderLLMOCategoryShare(llms) {
