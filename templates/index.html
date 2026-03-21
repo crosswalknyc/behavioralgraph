@@ -15399,13 +15399,14 @@
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Unique Users</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">% of Total</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Total Sessions</th>
+                                        <th style="padding: 0.5rem; white-space: nowrap; text-align: right;" class="has-tooltip" data-tooltip="Average sessions per unique user for this LLM (platform) in the selected date range.">Avg sess./user</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;">Session share</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;" class="has-tooltip" data-tooltip="Share of matched Gen Pop category rows (SEARCH ENGINE/AI / STREAMING), normalized to 100% for apples-to-apples with Index.">GP cat. share</th>
                                         <th style="padding: 0.5rem; white-space: nowrap; text-align: right;" class="has-tooltip" data-tooltip="(% of AI users ÷ Gen Pop penetration) × 100 — same basis as brand/retailer index.">Index</th>
                                     </tr>
                                 </thead>
                                 <tbody id="llmoRankerBody">
-                                    <tr><td colspan="8" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a date and click Load</td></tr>
+                                    <tr><td colspan="9" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a date and click Load</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -17876,7 +17877,7 @@
         function renderLLMOUsageTable(llms) {
             var tbody = document.getElementById('llmoRankerBody');
             if (!llms || llms.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="padding:2rem;text-align:center;color:var(--text-secondary);">No data available</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" style="padding:2rem;text-align:center;color:var(--text-secondary);">No data available</td></tr>';
                 return;
             }
             var html = '';
@@ -17884,12 +17885,15 @@
                 var gpPct = (r.category_share_genpop_normalized != null && r.category_share_genpop_normalized !== undefined)
                     ? (r.category_share_genpop_normalized + '%') : '—';
                 var idx = (r.index_vs_genpop != null && r.index_vs_genpop !== undefined) ? formatIndex(r.index_vs_genpop) : '—';
+                var avgSu = (r.avg_sessions_per_user != null && r.avg_sessions_per_user !== undefined)
+                    ? Number(r.avg_sessions_per_user).toFixed(2) : '—';
                 html += '<tr style="border-bottom:1px solid var(--border-color);">'
                     + '<td style="padding:0.5rem;">' + r.rank + '</td>'
                     + '<td style="padding:0.5rem;font-weight:600;">' + r.name + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.unique_users_projected) + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + r.pct_of_total + '%</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + _llmoFmt(r.total_clicks_projected) + '</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">' + avgSu + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + r.category_share + '%</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + gpPct + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">' + idx + '</td>'

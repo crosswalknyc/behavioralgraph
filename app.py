@@ -7482,6 +7482,8 @@ def _llmo_combine_date_range(summary_data, date_str, date_end):
             'pct_of_total': round(uu / total_users * 100, 2) if total_users else 0,
             'total_clicks': cl, 'total_clicks_projected': round(cl * M),
             'category_share': round(cl / total_clicks_all * 100, 2) if total_clicks_all else 0,
+            # Sessions per unique user for this AI platform (range aggregate; same as total_sessions / unique_users)
+            'avg_sessions_per_user': round(cl / uu, 2) if uu else 0,
         })
 
     llm_data = _llmo_enrich_llm_genpop(llm_data)
