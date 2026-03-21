@@ -47981,31 +47981,29 @@
                     cacheStatus.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.7rem;">⚡ ${cacheInfo.file_count} files • Updated ${timeAgo}</span>`;
                 }
                 
-                // Populate category filter with master category grouping
+                // Populate category filter (Profile IQ only — #categoryFilter absent on LLMO / other products)
                 const categorySelect = document.getElementById('categoryFilter');
-                let categoryOptions = '<option value="">All Categories</option>';
-                
-                // Group categories by master category
-                const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
-                const categoriesByMaster = {};
-                allCategories.forEach(cat => {
-                    const master = getMasterCategory(cat);
-                    if (!categoriesByMaster[master]) categoriesByMaster[master] = [];
-                    categoriesByMaster[master].push(cat);
-                });
-                
-                masterOrder.forEach(master => {
-                    const cats = categoriesByMaster[master];
-                    if (!cats || cats.length === 0) return;
-                    const icon = MASTER_CATEGORY_ICONS[master] || '📁';
-                    categoryOptions += `<optgroup label="${icon} ${master}">`;
-                    cats.sort().forEach(cat => {
-                        categoryOptions += `<option value="${cat}">${cat}</option>`;
+                if (categorySelect) {
+                    let categoryOptions = '<option value="">All Categories</option>';
+                    const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                    const categoriesByMaster = {};
+                    allCategories.forEach(cat => {
+                        const master = getMasterCategory(cat);
+                        if (!categoriesByMaster[master]) categoriesByMaster[master] = [];
+                        categoriesByMaster[master].push(cat);
                     });
-                    categoryOptions += '</optgroup>';
-                });
-                
-                categorySelect.innerHTML = categoryOptions;
+                    masterOrder.forEach(master => {
+                        const cats = categoriesByMaster[master];
+                        if (!cats || cats.length === 0) return;
+                        const icon = MASTER_CATEGORY_ICONS[master] || '📁';
+                        categoryOptions += `<optgroup label="${icon} ${master}">`;
+                        cats.sort().forEach(cat => {
+                            categoryOptions += `<option value="${cat}">${cat}</option>`;
+                        });
+                        categoryOptions += '</optgroup>';
+                    });
+                    categorySelect.innerHTML = categoryOptions;
+                }
                 
                 // Reset display limit when loading fresh data
                 jobsDisplayLimit = 50;
@@ -48034,7 +48032,8 @@
         }
 
         function filterJobs() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            const searchEl = document.getElementById('searchInput');
+            const searchTerm = (searchEl && searchEl.value ? searchEl.value : '').toLowerCase().trim();
             const categoryFilter = document.getElementById('categoryFilter')?.value || '';
             
             let filtered = allJobs;
