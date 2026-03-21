@@ -15432,7 +15432,7 @@
 
                 <!-- Extended insights (heatmap, funnel, cross-LLM, lift, entropy, WoW — requires llmo_insights in S3 after SP deploy) -->
                 <div id="llmoExtendedInsightsSection" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 class="has-tooltip" style="margin: 0 0 0.5rem 0; font-size: 1.05rem; font-weight: 600;" data-tooltip="Derived from nightly summary + on-the-fly flow math. Redeploy SP_LLMO_DAILY after pulling latest setup_llmo_daily.sql so hourly/dow/funnel/cross-LLM populate.">Advanced insights</h3>
+                    <h3 class="has-tooltip" style="margin: 0 0 0.5rem 0; font-size: 1.05rem; font-weight: 600;" data-tooltip="Hourly/DOW/funnel/depth/cross-LLM come from llmo_insights in the nightly S3 summary (SP_LLMO_DAILY). Destination mix &amp; entropy use flows in the summary. WoW / Gen Pop match / search diversity computed in the app from the same summary.">Advanced insights</h3>
                     <p id="llmoInsightPipelineNote" style="margin: 0 0 1rem 0; font-size: 0.72rem; color: var(--text-secondary); line-height: 1.45;"></p>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
                         <div style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
@@ -17613,6 +17613,10 @@
         var _llmoBrowserChart = null;
         var _llmoDemoCharts = {};
         var _llmoDemoTrendChart = null;
+        var _llmoInsightHourlyChart = null;
+        var _llmoInsightDowChart = null;
+        var _llmoInsightFunnelChart = null;
+        var _llmoInsightDepthChart = null;
         var _llmoDemoTrendData = null;
         var _llmoTrendDatesCache = null;
         var _llmoTrendByLLMCache = null;
@@ -17626,7 +17630,7 @@
         }
         function syncLLMOChartTooltips() {
             var en = _llmoTooltipsEnabled();
-            [_llmoCategoryShareChart, _llmoTrendChart, _llmoAttributionChart, _llmoAttributionChart2, _llmoAttributionChart3, _llmoBrandConversionChart, _llmoBrowserChart, _llmoDemoTrendChart].forEach(function(ch) {
+            [_llmoCategoryShareChart, _llmoTrendChart, _llmoAttributionChart, _llmoAttributionChart2, _llmoAttributionChart3, _llmoBrandConversionChart, _llmoBrowserChart, _llmoDemoTrendChart, _llmoInsightHourlyChart, _llmoInsightDowChart, _llmoInsightFunnelChart, _llmoInsightDepthChart].forEach(function(ch) {
                 if (ch && ch.options && ch.options.plugins && ch.options.plugins.tooltip) {
                     ch.options.plugins.tooltip.enabled = en;
                     try { ch.update('none'); } catch (e) {}
@@ -17890,6 +17894,7 @@
                     renderLLMOAttribution(data.attribution_third || [], 'llmoAttributionChart3', '_llmoAttributionChart3', '#FBBC04');
                     renderLLMOBrandConversion(data);
                     renderLLMORetailerConversion(data);
+                    renderLLMOExtendedInsights(data);
                     setLLMOFlowsFromApi(data.flows);
                     renderLLMOBrowserPlatform(data.browsers, data.platforms);
                     _llmoTrendDatesCache = data.trend_dates;
@@ -18176,6 +18181,201 @@
                     }
                 }
             });
+        }
+
+        /** Advanced insights: uses llmo_extended_insights from /api/llmo-iq/data (S3 summary llmo_insights + on-the-fly lift/entropy). */
+        function renderLLMOExtendedInsights(data) {
+            var ext = (data && data.llmo_extended_insights) ? data.llmo_extended_insights : {};
+            var merged = ext.merged_from_summary || {};
+            var noteEl = document.getElementById('llmoInsightPipelineNote');
+            if (noteEl) {
+                noteEl.textContent = merged.multi_day_note || '';
+            }
+            var wowEl = document.getElementById('llmoInsightWowText');
+            if (wowEl) {
+                var wow = ext.wow;
+                if (wow && wow.pct_change_ai_users != null && wow.pct_change_ai_users === wow.pct_change_ai_users) {
+                    var sgn = wow.pct_change_ai_users > 0 ? '+' : '';
+                    wowEl.textContent = sgn + wow.pct_change_ai_users + '% vs prior (' + (wow.prior_period_start || '') + '–' + (wow.prior_period_end || '') + ')';
+                } else {
+                    wowEl.textContent = '—';
+                }
+            }
+            var riseEl = document.getElementById('llmoInsightRisingText');
+            if (riseEl) {
+                var rising = ext.rising_llm;
+                if (rising && rising.name) {
+                    var rp = rising.pct_change_vs_prior;
+                    riseEl.textContent = rising.name + (rp != null && rp === rp ? ' (' + (rp > 0 ? '+' : '') + rp + '%)' : '');
+                } else {
+                    riseEl.textContent = '—';
+                }
+            }
+            var covEl = document.getElementById('llmoInsightCoverageText');
+            if (covEl) {
+                var cov = ext.coverage || {};
+                if (cov.llms_total > 0) {
+                    covEl.textContent = (cov.llms_with_genpop_match || 0) + ' / ' + cov.llms_total + ' (' + (cov.match_pct || 0) + '%)';
+                } else {
+                    covEl.textContent = '—';
+                }
+            }
+            var stEl = document.getElementById('llmoInsightSearchText');
+            if (stEl) {
+                var st = ext.search_terms || {};
+                if (st.unique_terms > 0) {
+                    stEl.textContent = st.unique_terms + ' terms · ' + (st.total_term_occurrences || 0) + ' hits';
+                } else {
+                    stEl.textContent = '—';
+                }
+            }
+            var hLabels = [];
+            var hi;
+            for (hi = 0; hi < 24; hi++) hLabels.push(String(hi));
+            var hourly = (merged.hourly && merged.hourly.length) ? merged.hourly.slice() : [];
+            while (hourly.length < 24) hourly.push(0);
+            var hCtx = document.getElementById('llmoInsightHourlyChart');
+            if (hCtx) {
+                if (_llmoInsightHourlyChart) { try { _llmoInsightHourlyChart.destroy(); } catch (eH) {} _llmoInsightHourlyChart = null; }
+                _llmoInsightHourlyChart = new Chart(hCtx, {
+                    type: 'bar',
+                    data: { labels: hLabels, datasets: [{ label: 'AI sessions', data: hourly.slice(0, 24), backgroundColor: '#4285F4' }] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { enabled: _llmoTooltipsEnabled(), callbacks: { label: function(ctx) { return _llmoFmt(ctx.parsed.y); } } }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#e8e8e8', maxRotation: 0, font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                            y: { ticks: { color: '#e8e8e8', callback: function(v) { return _llmoFmt(v); } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+                        }
+                    }
+                });
+            }
+            var dowLabels = ext.dow_labels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            var dow = (merged.dow && merged.dow.length) ? merged.dow.slice() : [];
+            while (dow.length < 7) dow.push(0);
+            var dCtx = document.getElementById('llmoInsightDowChart');
+            if (dCtx) {
+                if (_llmoInsightDowChart) { try { _llmoInsightDowChart.destroy(); } catch (eD) {} _llmoInsightDowChart = null; }
+                _llmoInsightDowChart = new Chart(dCtx, {
+                    type: 'bar',
+                    data: { labels: dowLabels, datasets: [{ label: 'Sessions', data: dow.slice(0, 7), backgroundColor: '#34A853' }] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { enabled: _llmoTooltipsEnabled(), callbacks: { label: function(ctx) { return _llmoFmt(ctx.parsed.y); } } }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                            y: { ticks: { color: '#e8e8e8', callback: function(v) { return _llmoFmt(v); } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+                        }
+                    }
+                });
+            }
+            var fu = merged.funnel || {};
+            var f1 = Number(fu.post1_users) || 0, f2 = Number(fu.post2_users) || 0, f3 = Number(fu.post3_users) || 0;
+            var fCtx = document.getElementById('llmoInsightFunnelChart');
+            if (fCtx) {
+                if (_llmoInsightFunnelChart) { try { _llmoInsightFunnelChart.destroy(); } catch (eF) {} _llmoInsightFunnelChart = null; }
+                _llmoInsightFunnelChart = new Chart(fCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['1st post-AI', '2nd post-AI', '3rd post-AI'],
+                        datasets: [{ label: 'Distinct users', data: [f1, f2, f3], backgroundColor: ['#4285F4', '#34A853', '#FBBC04'] }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { enabled: _llmoTooltipsEnabled(), callbacks: { label: function(ctx) { return _llmoFmt(ctx.parsed.y); } } }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#e8e8e8' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                            y: { ticks: { color: '#e8e8e8', callback: function(v) { return _llmoFmt(v); } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+                        }
+                    }
+                });
+            }
+            var sd = merged.session_depth_by_llm || {};
+            var llmKeys = Object.keys(sd);
+            var depthRows = llmKeys.map(function(k) {
+                var b = sd[k] || {};
+                var n1 = Number(b['1']) || 0, n2 = Number(b['2_4']) || 0, n3 = Number(b['5p']) || 0;
+                return { k: k, t: n1 + n2 + n3, n1: n1, n2: n2, n3: n3 };
+            });
+            depthRows.sort(function(a, b) { return b.t - a.t; });
+            var topD = depthRows.slice(0, 15);
+            var depCtx = document.getElementById('llmoInsightDepthChart');
+            if (depCtx) {
+                if (_llmoInsightDepthChart) { try { _llmoInsightDepthChart.destroy(); } catch (eDep) {} _llmoInsightDepthChart = null; }
+                var labD = topD.map(function(r) { return r.k; });
+                _llmoInsightDepthChart = new Chart(depCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: labD.length ? labD : ['—'],
+                        datasets: [
+                            { label: '1 session', data: labD.length ? topD.map(function(r) { return r.n1; }) : [0], backgroundColor: '#4285F4', stack: 'd' },
+                            { label: '2–4', data: labD.length ? topD.map(function(r) { return r.n2; }) : [0], backgroundColor: '#34A853', stack: 'd' },
+                            { label: '5+', data: labD.length ? topD.map(function(r) { return r.n3; }) : [0], backgroundColor: '#FBBC04', stack: 'd' }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, boxWidth: 10 } },
+                            tooltip: { enabled: _llmoTooltipsEnabled() }
+                        },
+                        scales: {
+                            x: { stacked: true, ticks: { color: '#e8e8e8', callback: function(v) { return _llmoFmt(v); } }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true },
+                            y: { stacked: true, ticks: { color: '#e8e8e8', font: { size: 9 } }, grid: { display: false } }
+                        }
+                    }
+                });
+            }
+            var pairsBody = document.getElementById('llmoInsightPairsBody');
+            if (pairsBody) {
+                var pairs = merged.cross_llm_pairs || [];
+                if (!pairs.length) {
+                    pairsBody.innerHTML = '<tr><td colspan="3" style="color:var(--text-secondary);">—</td></tr>';
+                } else {
+                    pairsBody.innerHTML = pairs.map(function(p) {
+                        var esc = function(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+                        return '<tr><td>' + esc(p.a) + '</td><td>' + esc(p.b) + '</td><td style="text-align:right;">' + _llmoFmt(p.n) + '</td></tr>';
+                    }).join('');
+                }
+            }
+            var liftBody = document.getElementById('llmoInsightLiftBody');
+            if (liftBody) {
+                var lifts = ext.llm_brand_retailer_lift || [];
+                if (!lifts.length) {
+                    liftBody.innerHTML = '<tr><td colspan="3" style="color:var(--text-secondary);">—</td></tr>';
+                } else {
+                    liftBody.innerHTML = lifts.map(function(row) {
+                        var esc = function(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+                        return '<tr><td>' + esc(row.source) + '</td><td style="text-align:right;">' + (row.pct_brand_dest != null ? row.pct_brand_dest + '%' : '—') + '</td><td style="text-align:right;">' + (row.pct_retailer_dest != null ? row.pct_retailer_dest + '%' : '—') + '</td></tr>';
+                    }).join('');
+                }
+            }
+            var entBody = document.getElementById('llmoInsightEntropyBody');
+            if (entBody) {
+                var ents = ext.destination_entropy || [];
+                if (!ents.length) {
+                    entBody.innerHTML = '<tr><td colspan="3" style="color:var(--text-secondary);">—</td></tr>';
+                } else {
+                    entBody.innerHTML = ents.map(function(row) {
+                        var esc = function(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+                        return '<tr><td>' + esc(row.source) + '</td><td style="text-align:right;">' + (row.destination_entropy != null ? row.destination_entropy : '—') + '</td><td style="text-align:right;">' + (row.top_dest_share_pct != null ? row.top_dest_share_pct + '%' : '—') + '</td></tr>';
+                    }).join('');
+                }
+            }
         }
 
         function renderLLMOAttribution(attribution, canvasId, chartHolderName, barColor) {
