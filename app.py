@@ -12035,6 +12035,35 @@ def update_sec_actuals():
 _backfill_status = {}  # job_id -> {status, message, ...}
 
 
+def _backfill_extract_query_from_url(url, platform_lower):
+    """Extract search query from a URL using platform-specific parsing."""
+    from urllib.parse import urlparse, parse_qs, unquote_plus
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url if '://' in url else 'https://' + url)
+        qs = parse_qs(parsed.query, keep_blank_values=False)
+        param_priority = ['q', 'p', 'query', 'text', 'search_query',
+                          'wd', 'word', 'oq', 'kw', 'search', 'k']
+        for param in param_priority:
+            vals = qs.get(param)
+            if vals and vals[0].strip():
+                return unquote_plus(vals[0]).strip()
+        if 'perplexity' in platform_lower and parsed.path.startswith('/search/'):
+            seg = parsed.path.split('/search/', 1)[1].split('/')[0].split('?')[0]
+            if seg:
+                return unquote_plus(seg.replace('+', ' ')).strip()
+        if parsed.fragment:
+            frag_qs = parse_qs(parsed.fragment, keep_blank_values=False)
+            for param in param_priority:
+                vals = frag_qs.get(param)
+                if vals and vals[0].strip():
+                    return unquote_plus(vals[0]).strip()
+    except Exception:
+        pass
+    return None
+
+
 def _run_backfill_search(job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size):
     """Background worker: extract search queries and update S3 CSV."""
     import io
@@ -12048,8 +12077,6 @@ def _run_backfill_search(job_id, s3_key, df, behavior_start, behavior_end, brand
 
         _backfill_status[job_id]['message'] = 'Finding audience UIDs (sampled)...'
 
-        # Use COMMON_NAME exact match (fast) instead of LIKE on URL (slow full-scan)
-        # Pick top 5 brand variants by length (most specific) for COMMON_NAME matching
         top_variants = sorted(brand_variants[:30], key=len, reverse=True)[:5]
         cn_clauses = ' OR '.join(f"LOWER(COMMON_NAME) = '{v.lower().replace(chr(39), chr(39)*2)}'" for v in top_variants)
 
@@ -12074,16 +12101,72 @@ def _run_backfill_search(job_id, s3_key, df, behavior_start, behavior_end, brand
             _backfill_status[job_id] = {'status': 'done', 'message': 'No matching UIDs found', 'queries_added': 0}
             return
 
-        search_df = _bg.extract_search_queries(cur, behavior_start, behavior_end, sample_size)
+        # Inline search query extraction (same logic as BG.py extract_search_queries)
+        _backfill_status[job_id]['message'] = 'Fetching search engine URLs...'
+        print("[backfill-search] 🔍 Extracting search queries from clickstream URLs...")
+        try:
+            cur.execute(f"""
+                SELECT m.Brand AS platform, cf.URL, cf.UID
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+                JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m
+                    ON LOWER(cf.COMMON_NAME) = LOWER(m.Brand)
+                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+                  AND cf.DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
+                  AND LOWER(m.Section) LIKE '%search%'
+                  AND cf.URL IS NOT NULL
+                  AND LENGTH(cf.URL) > 10
+            """)
+            rows = cur.fetchall()
+        except Exception as e:
+            print(f"[backfill-search] ⚠️ Search query SQL failed: {e}")
+            conn.close()
+            _backfill_status[job_id] = {'status': 'error', 'message': f'Search query SQL failed: {e}'}
+            return
         conn.close()
 
-        if search_df is None or len(search_df) == 0:
-            _backfill_status[job_id] = {'status': 'done', 'message': 'No search queries found in URLs', 'queries_added': 0}
+        print(f"[backfill-search] Fetched {len(rows):,} search-engine URL rows")
+        _backfill_status[job_id]['message'] = f'Parsing {len(rows):,} URLs...'
+
+        if not rows:
+            _backfill_status[job_id] = {'status': 'done', 'message': 'No search-engine URLs found', 'queries_added': 0}
             return
 
+        query_uids = {}
+        parsed_count = 0
+        for platform, url, uid in rows:
+            decoded = _backfill_extract_query_from_url(url, (platform or '').lower())
+            if not decoded or len(decoded) < 3 or len(decoded) > 200:
+                continue
+            decoded = decoded[:120]
+            parsed_count += 1
+            key = (platform or 'Unknown', decoded.title())
+            if key not in query_uids:
+                query_uids[key] = set()
+            query_uids[key].add(uid)
+
+        print(f"[backfill-search] Parsed {parsed_count:,} queries ({100*parsed_count/max(len(rows),1):.1f}% hit rate)")
+
+        if not query_uids:
+            _backfill_status[job_id] = {'status': 'done', 'message': f'Fetched {len(rows)} URLs but no valid queries decoded', 'queries_added': 0}
+            return
+
+        ranked = sorted(query_uids.items(), key=lambda x: -len(x[1]))[:200]
+        denom = max(sample_size, 1)
+        new_rows = []
+        for (platform, query), uid_set in ranked:
+            cnt = len(uid_set)
+            pct = round(100.0 * cnt / denom, 4)
+            new_rows.append({
+                "Column": "SEARCH/AI",
+                "Value": f"{platform} | {query}",
+                "Percentage": pct,
+                "Original Raw Numbers (Database)": cnt,
+            })
+
+        search_df = pd.DataFrame(new_rows)
+        print(f"[backfill-search] ✅ {len(new_rows)} unique search queries across {len(set(r['Value'].split(' | ')[0] for r in new_rows))} platforms")
         _backfill_status[job_id]['message'] = f'Appending {len(search_df)} queries to CSV...'
 
-        # Remove existing SEARCH/AI rows and append new
         df_clean = df[df['Column'].str.upper() != 'SEARCH/AI']
         for col in df_clean.columns:
             if col not in search_df.columns:
@@ -12094,7 +12177,7 @@ def _run_backfill_search(job_id, s3_key, df, behavior_start, behavior_end, brand
         csv_buffer = io.StringIO()
         df_final.to_csv(csv_buffer, index=False)
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key, Body=csv_buffer.getvalue().encode('utf-8'))
-        print(f"[backfill-search] ✅ Uploaded updated CSV: {s3_key} ({len(df_final)} rows, +{len(search_df)} queries)")
+        print(f"[backfill-search] ✅ Uploaded: {s3_key} ({len(df_final)} rows, +{len(search_df)} queries)")
 
         _backfill_status[job_id] = {
             'status': 'done',
