@@ -12032,6 +12032,128 @@ def update_sec_actuals():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/backfill-search-queries', methods=['POST'])
+@requires_admin
+def backfill_search_queries():
+    """One-off: extract search queries from clickstream URLs for an existing
+    profile CSV in S3 and append SEARCH/AI rows.  Expects JSON body with
+    ``s3_key`` (the CSV key in dashboard-inputs)."""
+    import io, re
+    data = request.get_json() or {}
+    s3_key = (data.get('s3_key') or '').strip()
+    if not s3_key:
+        return jsonify({'success': False, 'error': 's3_key required'}), 400
+
+    try:
+        # 1. Download CSV from S3
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        csv_bytes = obj['Body'].read()
+        import pandas as pd
+        df = pd.read_csv(io.BytesIO(csv_bytes))
+        print(f"[backfill-search] Loaded {s3_key}: {len(df)} rows")
+
+        # 2. Parse metadata from INPUT_METADATA row
+        meta_rows = df[df['Column'].str.upper() == 'INPUT_METADATA']
+        if meta_rows.empty:
+            return jsonify({'success': False, 'error': 'No INPUT_METADATA row found in CSV'}), 400
+        meta_val = str(meta_rows.iloc[0].get('Value', ''))
+        m_bstart = re.search(r'BEHAVIOR_START:(\S+?)(?:_|$)', meta_val)
+        m_bend = re.search(r'BEHAVIOR_END:(\S+?)(?:_|$)', meta_val)
+        if not m_bstart or not m_bend:
+            return jsonify({'success': False, 'error': 'Cannot parse BEHAVIOR dates from metadata'}), 400
+        behavior_start = m_bstart.group(1)
+        behavior_end = m_bend.group(1)
+
+        # 3. Get brand variants from BRAND INPUT row
+        brand_rows = df[df['Column'].str.upper() == 'BRAND INPUT']
+        if brand_rows.empty:
+            return jsonify({'success': False, 'error': 'No BRAND INPUT row'}), 400
+        brand_variants = [v.strip() for v in str(brand_rows.iloc[0]['Value']).split(',') if v.strip()]
+
+        # 4. Get sample size
+        ss_rows = df[df['Column'].str.upper() == 'SAMPLE SIZE']
+        sample_size = 44700
+        if not ss_rows.empty:
+            try:
+                sample_size = int(float(str(ss_rows.iloc[0].get('Original Raw Numbers', '44700')).replace(',', '')))
+            except Exception:
+                pass
+
+        print(f"[backfill-search] brand_variants={len(brand_variants)}, dates={behavior_start}..{behavior_end}, sample={sample_size}")
+
+        # 5. Connect to Snowflake and create TEMP_UIDS from brand filter
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        cur = conn.cursor()
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+
+        # Build brand filter (same logic as pipeline)
+        clauses = []
+        for b in brand_variants[:30]:  # cap at 30 to keep SQL manageable
+            safe = b.lower().replace("'", "''").replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+            clauses.append(f"LOWER(URL) LIKE '%{safe}%' ESCAPE '\\\\'")
+        brand_filter = ' OR '.join(clauses) if clauses else '1=1'
+
+        cur.execute(f"""
+            CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
+            SELECT DISTINCT UID
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+            WHERE DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
+              AND ({brand_filter})
+              AND COMMON_NAME IS NOT NULL AND COMMON_NAME != ''
+            LIMIT 100000
+        """)
+        uid_count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
+        print(f"[backfill-search] Created TEMP_UIDS with {uid_count:,} UIDs")
+
+        if uid_count == 0:
+            conn.close()
+            return jsonify({'success': False, 'error': 'No matching UIDs found in clickstream'}), 404
+
+        # 6. Run search query extraction (uses the new Python-parsed version)
+        search_df = _bg.extract_search_queries(cur, behavior_start, behavior_end, sample_size)
+        conn.close()
+
+        if search_df is None or len(search_df) == 0:
+            return jsonify({'success': True, 'message': 'No search queries found in URLs', 'queries_added': 0})
+
+        print(f"[backfill-search] Extracted {len(search_df)} SEARCH/AI rows")
+
+        # 7. Remove any existing SEARCH/AI rows from the CSV and append new ones
+        df = df[df['Column'].str.upper() != 'SEARCH/AI']
+        # Align columns
+        for col in df.columns:
+            if col not in search_df.columns:
+                search_df[col] = '' if df[col].dtype == object else 0
+        search_df = search_df[[c for c in df.columns if c in search_df.columns]]
+        df = pd.concat([df, search_df], ignore_index=True)
+
+        # 8. Upload back to S3
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key, Body=csv_buffer.getvalue().encode('utf-8'))
+        print(f"[backfill-search] ✅ Uploaded updated CSV back to {s3_key} ({len(df)} rows)")
+
+        # Invalidate cache so dashboard picks up new data
+        for job in s3_cache.get('jobs', []):
+            if (job.get('s3_key') or job.get('key')) == s3_key:
+                job['_search_backfilled'] = True
+                break
+
+        return jsonify({
+            'success': True,
+            'message': f'Added {len(search_df)} SEARCH/AI query rows to {s3_key}',
+            'queries_added': len(search_df),
+            'uid_count': uid_count,
+            'sample_size': sample_size
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/quick-selects', methods=['GET'])
 @requires_admin
 def get_quick_selects():
