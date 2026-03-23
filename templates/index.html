@@ -13552,6 +13552,8 @@
                                     <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
                                     <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
                                     <button class="tab-btn has-tooltip" data-tooltip="Search/AI: What this audience is searching for across Google, Bing, ChatGPT, and other search/AI platforms." onclick="showTab('search-ai')"><span class="tab-icon">🔍</span><span class="tab-label">SEARCH/AI</span></button>
+                                    <button class="tab-btn has-tooltip" data-tooltip="ROAS Tracker: Marketing attribution breakdown showing which channels (email, social, ads) are driving this audience, with source-level detail." onclick="showTab('roas-tracker')"><span class="tab-icon">📊</span><span class="tab-label">ROAS TRACKER</span></button>
+                                    <button class="tab-btn has-tooltip" data-tooltip="E-Commerce: Product page views, add-to-cart, and purchase funnel data extracted from clickstream URLs for retail brands." onclick="showTab('ecommerce')"><span class="tab-icon">🛒</span><span class="tab-label">E-COMMERCE</span></button>
                                 </div>
                                 <div class="toolbar-section-label">DATA</div>
                             </div>
@@ -14499,6 +14501,61 @@
                 </div>
             </div>
             
+            <!-- ROAS Tracker Tab -->
+            <div id="tab-roas-tracker" class="tab-content">
+                <div id="roasTrackerContainer" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div id="roasStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;"></div>
+                    <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem;">
+                        <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                            <h3 style="margin: 0 0 1rem; font-size: 15px; color: var(--text-primary);">Channel Mix</h3>
+                            <canvas id="roasChannelChart" width="280" height="280"></canvas>
+                        </div>
+                        <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                            <h3 style="margin: 0 0 1rem; font-size: 15px; color: var(--text-primary);">Channel Penetration</h3>
+                            <div id="roasChannelTable"></div>
+                        </div>
+                    </div>
+                    <div id="roasSourceCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;"></div>
+                    <div id="roasEmpty" style="display: none; text-align: center; padding: 4rem 2rem; color: var(--text-secondary);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
+                        <h3 style="margin: 0 0 0.5rem;">No Attribution Data Available</h3>
+                        <p style="margin: 0; font-size: 14px;">UTM and click-ID attribution data will appear here when a profile with marketing touchpoints is loaded.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- E-Commerce Tab -->
+            <div id="tab-ecommerce" class="tab-content">
+                <div id="ecommerceContainer" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div id="ecomStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;"></div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                            <h3 style="margin: 0 0 1rem; font-size: 15px; color: var(--text-primary);">Top 10 Most Clicked Product Pages</h3>
+                            <div id="ecomTopPdpTable"></div>
+                        </div>
+                        <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                            <h3 style="margin: 0 0 1rem; font-size: 15px; color: var(--text-primary);">Top 10 Least Clicked Product Pages</h3>
+                            <div id="ecomBottomPdpTable"></div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                            <h3 style="margin: 0 0 1rem; font-size: 15px; color: var(--text-primary);">Top 10 Products by Add-to-Cart</h3>
+                            <div id="ecomCartTable"></div>
+                        </div>
+                        <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                            <h3 style="margin: 0 0 1rem; font-size: 15px; color: var(--text-primary);">Top 10 Products by Completed Purchase</h3>
+                            <div id="ecomPurchaseTable"></div>
+                        </div>
+                    </div>
+                    <div id="ecomEmpty" style="display: none; text-align: center; padding: 4rem 2rem; color: var(--text-secondary);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🛒</div>
+                        <h3 style="margin: 0 0 0.5rem;">No E-Commerce Data Available</h3>
+                        <p style="margin: 0; font-size: 14px;">Product page, cart, and purchase funnel data will appear here when a profile with retail clickstream is loaded.</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Segmentation Builder Tab -->
             <div id="tab-segmentation" class="tab-content">
                 <div class="segmentation-container">
@@ -28298,7 +28355,9 @@
             media: { icon: '📺', title: 'Media', desc: 'Media consumption patterns including TV, streaming, social media preferences.' },
             content: { icon: '🎬', title: 'Content', desc: 'Content consumption preferences including genres, formats, and viewing habits.' },
             segmentation: { icon: '🎛️', title: 'Segment Builder', desc: 'Build custom audience segments with demographic and behavioral filters.' },
-            comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' }
+            comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' },
+            'roas-tracker': { icon: '📊', title: 'ROAS Tracker', desc: 'Marketing attribution breakdown by channel (email, social, ads, affiliate) and source, with audience penetration.' },
+            ecommerce: { icon: '🛒', title: 'E-Commerce', desc: 'Product page views, add-to-cart, and purchase funnel data from retail clickstream.' }
         };
         
         function updateSegmentBuilderTitle() {
@@ -28374,6 +28433,8 @@
                     'interests': 'INTERESTS',
                     'location': 'LOCATION',
                     'search-ai': 'SEARCH/AI',
+                    'roas-tracker': 'ROAS TRACKER',
+                    'ecommerce': 'E-COMMERCE',
                     'rankers': 'RANKERS',
                     'affinity': 'AFFINITY',
                     'ecosystem': 'ECOSYSTEM',
@@ -29267,6 +29328,8 @@
             renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
             renderBehavioralCards(parsed.behavioral);
             renderSearchAiTab(parsed.searchAI, parsed.searchAIPlatforms);
+            renderRoasTrackerTab(parsed.roasTracker);
+            renderEcommerceTab(parsed.ecommerce);
             renderLocationTable(parsed.locations);
             
             // Render demographic insights
@@ -29297,7 +29360,9 @@
                 locations: [],
                 interests: {},
                 searchAI: [],
-                searchAIPlatforms: []
+                searchAIPlatforms: [],
+                roasTracker: [],
+                ecommerce: []
             };
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
@@ -29924,6 +29989,23 @@
                 // Capture SEARCH ENGINE/AI platform-level rows (always present)
                 if (category === 'SEARCH ENGINE/AI' && value) {
                     result.searchAIPlatforms.push({ name: value, pct, index, projection: usProjection, genPopPct, raw: rawNum });
+                }
+
+                // Parse ROAS TRACKER rows (Channel | Source)
+                if (category === 'ROAS TRACKER' && value) {
+                    const pipeIdx = value.indexOf(' | ');
+                    const channel = pipeIdx > 0 ? value.substring(0, pipeIdx).trim() : 'Other';
+                    const source = pipeIdx > 0 ? value.substring(pipeIdx + 3).trim() : value;
+                    result.roasTracker.push({ channel, source, pct, index, projection: usProjection, raw: rawNum });
+                }
+
+                // Parse E-COMMERCE rows (Stage | Store | Slug)
+                if (category === 'E-COMMERCE' && value) {
+                    const parts = value.split(' | ');
+                    const stage = (parts[0] || '').trim();
+                    const store = (parts[1] || '').trim();
+                    const slug = (parts[2] || '').trim();
+                    result.ecommerce.push({ stage, store, slug, pct, index, projection: usProjection, raw: rawNum });
                 }
 
                 // Behavioral (non-demographic categories) - include index and projection
@@ -31000,6 +31082,8 @@
             renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
             renderBehavioralCards(parsed.behavioral);
             renderSearchAiTab(parsed.searchAI, parsed.searchAIPlatforms);
+            renderRoasTrackerTab(parsed.roasTracker);
+            renderEcommerceTab(parsed.ecommerce);
             renderLocationTable(parsed.locations);
             
             // Render demographic insights
@@ -35256,7 +35340,9 @@
             'ACTIVEWEAR', 'FOOTWEAR', 'INTIMATES', 'PHARMA', 'TELECOM',
             'WORKOUT FACILITY', 'MEMBERSHIP', 'TICKETING', 'TOY', 'VENUE', 'EVENTS',
             // Interests
-            'INTEREST', 'INTERESTS', 'HOBBIES'
+            'INTEREST', 'INTERESTS', 'HOBBIES',
+            // Attribution & E-Commerce
+            'ROAS TRACKER', 'E-COMMERCE'
         ];
         const defaultPriorityCategories = [
             'MOST PURCHASED BRANDS', 'WHERE THEY SHOP', 'MOST PURCHASED CATEGORIES', 
@@ -35468,6 +35554,176 @@
             ${items.length > 150 ? `<div style="text-align:center;padding:0.75rem;color:var(--text-secondary);font-size:0.8rem;">Showing 150 of ${items.length} queries</div>` : ''}`;
         }
         // ===================== END SEARCH/AI =====================
+
+        // ===================== ROAS TRACKER TAB RENDERING =====================
+        let _roasChartInst = null;
+
+        function renderRoasTrackerTab(roasData) {
+            const data = roasData || [];
+            const emptyEl = document.getElementById('roasEmpty');
+            const statsEl = document.getElementById('roasStats');
+            const tableEl = document.getElementById('roasChannelTable');
+            const cardsEl = document.getElementById('roasSourceCards');
+
+            if (!data.length) {
+                if (emptyEl) emptyEl.style.display = '';
+                if (statsEl) statsEl.innerHTML = '';
+                if (tableEl) tableEl.innerHTML = '';
+                if (cardsEl) cardsEl.innerHTML = '';
+                return;
+            }
+            if (emptyEl) emptyEl.style.display = 'none';
+
+            // Aggregate by channel
+            const channelMap = {};
+            let totalRaw = 0;
+            data.forEach(d => {
+                if (!channelMap[d.channel]) channelMap[d.channel] = { sources: {}, totalPct: 0, totalRaw: 0 };
+                channelMap[d.channel].totalPct += d.pct;
+                channelMap[d.channel].totalRaw += (d.raw || 0);
+                totalRaw += (d.raw || 0);
+                if (!channelMap[d.channel].sources[d.source]) channelMap[d.channel].sources[d.source] = { pct: 0, raw: 0 };
+                channelMap[d.channel].sources[d.source].pct += d.pct;
+                channelMap[d.channel].sources[d.source].raw += (d.raw || 0);
+            });
+
+            const channels = Object.entries(channelMap).sort((a, b) => b[1].totalPct - a[1].totalPct);
+            const channelIcons = {
+                'Email': '📧', 'Social Media': '📱', 'Digital Ads': '💰', 'Affiliate': '🤝',
+                'Sms': '💬', 'Influencer': '⭐', 'Push Notification': '🔔', 'Other': '📋'
+            };
+
+            // Stats
+            if (statsEl) {
+                const topChannel = channels[0] ? channels[0][0] : 'N/A';
+                statsEl.innerHTML = `
+                    <div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;">
+                        <div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Attributed Touches</div>
+                        <div style="font-size:1.75rem;font-weight:700;color:var(--text-primary);margin-top:4px;">${totalRaw.toLocaleString()}</div>
+                    </div>
+                    <div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;">
+                        <div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Channels</div>
+                        <div style="font-size:1.75rem;font-weight:700;color:var(--text-primary);margin-top:4px;">${channels.length}</div>
+                    </div>
+                    <div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;">
+                        <div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Sources</div>
+                        <div style="font-size:1.75rem;font-weight:700;color:var(--text-primary);margin-top:4px;">${data.length}</div>
+                    </div>
+                    <div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;">
+                        <div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Top Channel</div>
+                        <div style="font-size:1.75rem;font-weight:700;color:var(--text-primary);margin-top:4px;">${channelIcons[topChannel] || '📋'} ${topChannel}</div>
+                    </div>`;
+            }
+
+            // Channel doughnut chart
+            const chartCanvas = document.getElementById('roasChannelChart');
+            if (chartCanvas && typeof Chart !== 'undefined') {
+                if (_roasChartInst) _roasChartInst.destroy();
+                const colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+                _roasChartInst = new Chart(chartCanvas.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: channels.map(c => c[0]),
+                        datasets: [{ data: channels.map(c => c[1].totalPct), backgroundColor: colors.slice(0, channels.length), borderWidth: 0 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true, cutout: '55%', plugins: { legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, font: { size: 11 } } } } }
+                });
+            }
+
+            // Channel penetration table
+            if (tableEl) {
+                const totalChannelPct = channels.reduce((s, c) => s + c[1].totalPct, 0) || 1;
+                const tRows = channels.map(([name, ch]) => {
+                    const share = ((ch.totalPct / totalChannelPct) * 100).toFixed(1);
+                    return `<tr><td style="padding:8px 12px;font-weight:600;">${channelIcons[name] || '📋'} ${name}</td><td style="padding:8px 12px;text-align:right;">${ch.totalPct.toFixed(2)}%</td><td style="padding:8px 12px;text-align:right;">${share}%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">${ch.totalRaw.toLocaleString()}</td></tr>`;
+                }).join('');
+                tableEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Touches</th></tr></thead><tbody>${tRows}</tbody></table>`;
+            }
+
+            // Source breakdown cards per channel
+            if (cardsEl) {
+                cardsEl.innerHTML = channels.map(([name, ch]) => {
+                    const sources = Object.entries(ch.sources).sort((a, b) => b[1].pct - a[1].pct);
+                    const chTotal = ch.totalPct || 1;
+                    const srcRows = sources.map(([src, s]) => {
+                        const share = ((s.pct / chTotal) * 100).toFixed(1);
+                        return `<tr><td style="padding:6px 10px;">${src}</td><td style="padding:6px 10px;text-align:right;font-weight:600;">${share}%</td><td style="padding:6px 10px;text-align:right;">${s.pct.toFixed(2)}%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">${s.raw.toLocaleString()}</td></tr>`;
+                    }).join('');
+                    return `<div style="background:var(--card-bg);border-radius:12px;padding:1.5rem;border:1px solid var(--border-color);">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;">
+                            <span style="font-size:1.5rem;">${channelIcons[name] || '📋'}</span>
+                            <div><h3 style="margin:0;font-size:15px;color:var(--text-primary);">${name}</h3><span style="font-size:12px;color:var(--text-secondary);">${ch.totalPct.toFixed(2)}% penetration &middot; ${sources.length} sources</span></div>
+                        </div>
+                        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                            <thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;">Source</th><th style="padding:6px 10px;text-align:right;">Share</th><th style="padding:6px 10px;text-align:right;">Penetration</th><th style="padding:6px 10px;text-align:right;">Touches</th></tr></thead>
+                            <tbody>${srcRows}</tbody>
+                        </table>
+                    </div>`;
+                }).join('');
+            }
+        }
+        // ===================== END ROAS TRACKER =====================
+
+        // ===================== E-COMMERCE TAB RENDERING =====================
+        function _ecomTable(items, containerId) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            if (!items.length) { el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);font-size:13px;">No data</div>'; return; }
+            const rows = items.map((item, i) =>
+                `<tr><td style="padding:8px 10px;color:var(--text-secondary);width:30px;">${i + 1}</td><td style="padding:8px 10px;font-weight:600;">${item.store}</td><td style="padding:8px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${item.slug}">${item.slug || '/'}</td><td style="padding:8px 10px;text-align:right;">${item.pct.toFixed(2)}%</td><td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">${(item.raw || 0).toLocaleString()}</td></tr>`
+            ).join('');
+            el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 10px;width:30px;">#</th><th style="padding:8px 10px;text-align:left;">Store</th><th style="padding:8px 10px;text-align:left;">Product / Path</th><th style="padding:8px 10px;text-align:right;">% of Audience</th><th style="padding:8px 10px;text-align:right;">Users</th></tr></thead><tbody>${rows}</tbody></table>`;
+        }
+
+        function renderEcommerceTab(ecomData) {
+            const data = ecomData || [];
+            const emptyEl = document.getElementById('ecomEmpty');
+            const statsEl = document.getElementById('ecomStats');
+
+            if (!data.length) {
+                if (emptyEl) emptyEl.style.display = '';
+                if (statsEl) statsEl.innerHTML = '';
+                ['ecomTopPdpTable','ecomBottomPdpTable','ecomCartTable','ecomPurchaseTable'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerHTML = '';
+                });
+                return;
+            }
+            if (emptyEl) emptyEl.style.display = 'none';
+
+            const pdps = data.filter(d => d.stage === 'PDP').sort((a, b) => b.pct - a.pct);
+            const carts = data.filter(d => d.stage === 'CART').sort((a, b) => b.pct - a.pct);
+            const purchases = data.filter(d => d.stage === 'PURCHASE').sort((a, b) => b.pct - a.pct);
+
+            const stores = new Set(data.map(d => d.store));
+            const totalRaw = data.reduce((s, d) => s + (d.raw || 0), 0);
+
+            if (statsEl) {
+                statsEl.innerHTML = `
+                    <div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;">
+                        <div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Product Pages</div>
+                        <div style="font-size:1.75rem;font-weight:700;color:var(--text-primary);margin-top:4px;">${pdps.length.toLocaleString()}</div>
+                    </div>
+                    <div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;">
+                        <div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Add-to-Cart</div>
+                        <div style="font-size:1.75rem;font-weight:700;color:var(--text-primary);margin-top:4px;">${carts.length.toLocaleString()}</div>
+                    </div>
+                    <div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;">
+                        <div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Purchases</div>
+                        <div style="font-size:1.75rem;font-weight:700;color:var(--text-primary);margin-top:4px;">${purchases.length.toLocaleString()}</div>
+                    </div>
+                    <div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;">
+                        <div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Stores</div>
+                        <div style="font-size:1.75rem;font-weight:700;color:var(--text-primary);margin-top:4px;">${stores.size}</div>
+                    </div>`;
+            }
+
+            _ecomTable(pdps.slice(0, 10), 'ecomTopPdpTable');
+            _ecomTable(pdps.length > 10 ? pdps.slice(-10).reverse() : [], 'ecomBottomPdpTable');
+            _ecomTable(carts.slice(0, 10), 'ecomCartTable');
+            _ecomTable(purchases.slice(0, 10), 'ecomPurchaseTable');
+        }
+        // ===================== END E-COMMERCE =====================
 
         function renderBehavioralCards(behavioral, highlightCategory = null, skipAggregation = false) {
             let aggregatedBehavioral;
