@@ -15484,7 +15484,7 @@
 
                 <!-- Usage Trend Line Chart -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (US Gen Pop Unique Users by Date)</h3>
+                    <h3 class="has-tooltip" data-tooltip="Daily unique users per AI platform, projected to US Gen Pop. Each line is one LLM; top 10 by volume shown. Hover a point to see the exact count." style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (US Gen Pop Unique Users by Date)</h3>
                     <div style="position: relative; height: 350px;">
                         <canvas id="llmoTrendChart"></canvas>
                     </div>
@@ -15495,45 +15495,45 @@
                     <h3 class="has-tooltip" style="margin: 0 0 0.5rem 0; font-size: 1.05rem; font-weight: 600;" data-tooltip="Hourly/DOW/funnel/depth/cross-LLM come from llmo_insights in the nightly S3 summary (SP_LLMO_DAILY). Destination mix &amp; entropy use flows in the summary. WoW / Gen Pop match / search diversity computed in the app from the same summary.">Advanced insights</h3>
                     <p id="llmoInsightPipelineNote" style="margin: 0 0 1rem 0; font-size: 0.72rem; color: var(--text-secondary); line-height: 1.45;"></p>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
-                        <div style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
+                        <div class="has-tooltip" data-tooltip="Compares total AI users in the selected window to the same-length window immediately before it. Positive = growth." style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
                             <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Prior period Δ (users)</div>
                             <div id="llmoInsightWowText" style="font-size: 1.1rem; font-weight: 700;">—</div>
                         </div>
-                        <div style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
+                        <div class="has-tooltip" data-tooltip="The AI platform with the largest percentage gain in unique users compared to the prior period of equal length." style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
                             <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Top rising LLM (vs prior)</div>
                             <div id="llmoInsightRisingText" style="font-size: 1.05rem; font-weight: 700;">—</div>
                         </div>
-                        <div style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
+                        <div class="has-tooltip" data-tooltip="How many of the tracked LLMs have a matching entry in the Gen Pop category data, enabling Index and GP category share calculations." style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
                             <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Gen Pop match (LLMs)</div>
                             <div id="llmoInsightCoverageText" style="font-size: 1.05rem; font-weight: 700;">—</div>
                         </div>
-                        <div style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
+                        <div class="has-tooltip" data-tooltip="Count of unique search queries (after PII/noise filtering) and total occurrences in the selected date range." style="background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.65rem 0.75rem;">
                             <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Search term diversity</div>
                             <div id="llmoInsightSearchText" style="font-size: 1.05rem; font-weight: 700;">—</div>
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                         <div>
-                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">AI sessions by hour (US/Pacific)</h4>
+                            <h4 class="has-tooltip" data-tooltip="Total AI-agent sessions broken out by hour of day in US/Pacific time. Identifies peak usage windows (e.g. morning commute, lunch, evening)." style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">AI sessions by hour (US/Pacific)</h4>
                             <div style="position: relative; height: 200px;"><canvas id="llmoInsightHourlyChart"></canvas></div>
                         </div>
                         <div>
-                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">AI sessions by weekday (Mon–Sun)</h4>
+                            <h4 class="has-tooltip" data-tooltip="Total AI-agent sessions by day of week (Monday through Sunday). Shows whether AI usage skews toward weekdays or weekends." style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">AI sessions by weekday (Mon–Sun)</h4>
                             <div style="position: relative; height: 200px;"><canvas id="llmoInsightDowChart"></canvas></div>
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                         <div>
-                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Post-AI funnel (distinct users)</h4>
+                            <h4 class="has-tooltip" data-tooltip="How many distinct users had a 1st, 2nd, and 3rd click after visiting an AI agent. Drop-off between stages shows how deep post-AI browsing goes." style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Post-AI funnel (distinct users)</h4>
                             <p style="margin: 0 0 0.35rem 0; font-size: 0.68rem; color: var(--text-secondary);">1st / 2nd / 3rd post-AI click in range</p>
                             <div style="position: relative; height: 160px;"><canvas id="llmoInsightFunnelChart"></canvas></div>
                         </div>
                         <div>
-                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Session depth by LLM (users in bucket)</h4>
+                            <h4 class="has-tooltip" data-tooltip="For each LLM, how many users had exactly 1 session, 2–4 sessions, or 5+ sessions in the date range. Identifies power users vs dabblers per platform." style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Session depth by LLM (users in bucket)</h4>
                             <div style="position: relative; height: 220px;"><canvas id="llmoInsightDepthChart"></canvas></div>
                         </div>
                     </div>
-                    <h4 style="margin: 0.5rem 0 0.35rem 0; font-size: 0.85rem;">Cross-LLM usage (same day, 2+ agents)</h4>
+                    <h4 class="has-tooltip" data-tooltip="Users who visited 2+ different AI agents on the same day. Top pairs show which platforms are used together most often (e.g. ChatGPT + Perplexity)." style="margin: 0.5rem 0 0.35rem 0; font-size: 0.85rem;">Cross-LLM usage (same day, 2+ agents)</h4>
                     <div style="overflow-x: auto; max-height: 200px; margin-bottom: 1rem;">
                         <table class="llmo-table" style="font-size: 0.75rem;">
                             <thead><tr><th>Agent A</th><th>Agent B</th><th style="text-align:right;">Users</th></tr></thead>
@@ -15542,7 +15542,7 @@
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                         <div>
-                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Destination mix by source LLM (% brand / retailer)</h4>
+                            <h4 class="has-tooltip" data-tooltip="For each source AI platform, what percentage of post-AI destinations were brand sites (Most Purchased Brands) vs retailer sites (Where To Shop). Shows which LLMs drive more commercial intent." style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Destination mix by source LLM (% brand / retailer)</h4>
                             <div style="overflow-x: auto; max-height: 220px;">
                                 <table class="llmo-table" style="font-size: 0.72rem;">
                                     <thead><tr><th>Source LLM</th><th style="text-align:right;">Brand %</th><th style="text-align:right;">Retailer %</th></tr></thead>
@@ -15551,7 +15551,7 @@
                             </div>
                         </div>
                         <div>
-                            <h4 style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Destination diversity (entropy ↑ = more spread)</h4>
+                            <h4 class="has-tooltip" data-tooltip="Shannon entropy of post-AI destinations per source LLM. Higher entropy = users spread across many sites. Low entropy + high top-dest % = users funnel to one dominant site." style="margin: 0 0 0.35rem 0; font-size: 0.85rem;">Destination diversity (entropy ↑ = more spread)</h4>
                             <div style="overflow-x: auto; max-height: 220px;">
                                 <table class="llmo-table" style="font-size: 0.72rem;">
                                     <thead><tr><th>Source LLM</th><th style="text-align:right;">Entropy</th><th style="text-align:right;">Top dest %</th></tr></thead>
@@ -15572,7 +15572,7 @@
                         </div>
                     </div>
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">1st click after AI (destination) <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
+                        <h3 class="has-tooltip" data-tooltip="The first non-AI site a user visited immediately after an AI agent session. Top 100 destinations ranked by unique users." style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">1st click after AI (destination) <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
                         <div class="llmo-attrib-chart-scroll">
                             <div class="llmo-attrib-chart-inner">
                                 <canvas id="llmoAttributionChart"></canvas>
@@ -15582,7 +15582,7 @@
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">2nd click after AI (destination) <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
+                        <h3 class="has-tooltip" data-tooltip="The second site visited after an AI session (one hop further). Shows where users navigate after their initial post-AI destination." style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">2nd click after AI (destination) <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
                         <div class="llmo-attrib-chart-scroll">
                             <div class="llmo-attrib-chart-inner">
                                 <canvas id="llmoAttributionChart2"></canvas>
@@ -15590,7 +15590,7 @@
                         </div>
                     </div>
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">3rd click after AI (destination) <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
+                        <h3 class="has-tooltip" data-tooltip="The third site visited after an AI session (two hops further). Captures deeper downstream browsing behavior." style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">3rd click after AI (destination) <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(top 100 — scroll)</span></h3>
                         <div class="llmo-attrib-chart-scroll">
                             <div class="llmo-attrib-chart-inner">
                                 <canvas id="llmoAttributionChart3"></canvas>
@@ -15704,7 +15704,7 @@
 
                     <!-- Browser breakdown -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Browser</h3>
+                        <h3 class="has-tooltip" data-tooltip="Browser distribution of AI-agent sessions (e.g. Chrome, Safari, Edge). Projected to Gen Pop unique users." style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Browser</h3>
                         <canvas id="llmoBrowserChart" style="max-width: 300px; max-height: 260px; margin: 0 auto; display: block;"></canvas>
                     </div>
                 </div>
@@ -15712,7 +15712,7 @@
                 <!-- AI User Demographics -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
                     <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem;">
-                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">AI User Demographics</h3>
+                        <h3 class="has-tooltip" data-tooltip="Gender, age, ethnicity, income, and education of AI-platform users, joined from panel demographic data. Use the AI agent dropdown to filter to a single LLM. Only participants who shared demographic data are included." style="margin: 0; font-size: 1.1rem; font-weight: 600;">AI User Demographics</h3>
                         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                             <label style="font-size: 0.8rem; color: var(--text-secondary);">AI agent:</label>
                             <select id="llmoDemoAgentFilter" onchange="refreshLLMODemographicsFilter()" style="background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.55rem; font-size: 0.8rem; cursor: pointer; min-width: 160px;">

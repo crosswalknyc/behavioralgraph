@@ -7427,10 +7427,12 @@ def _llmo_merge_llmo_insights(by_date, matching_dates):
         'funnel': {'post1_users': 0, 'post2_users': 0, 'post3_users': 0},
     }
     pair_map = {}
+    has_insights = 0
     for d in matching_dates:
         ins = (by_date.get(d) or {}).get('llmo_insights')
         if not isinstance(ins, dict):
             continue
+        has_insights += 1
         h = ins.get('hourly') or []
         for i in range(min(24, len(h))):
             merged['hourly'][i] += int(h[i] or 0)
@@ -7468,6 +7470,11 @@ def _llmo_merge_llmo_insights(by_date, matching_dates):
             'Hourly/dow are summed session counts. Session depth, funnel, and cross-LLM pair counts sum daily '
             'figures (same user across days may be counted more than once).'
         )
+    if has_insights == 0 and len(matching_dates) > 0:
+        print(f"[LLMO insights] WARNING: 0/{len(matching_dates)} dates had llmo_insights in S3 summary. "
+              "Redeploy SP_LLMO_DAILY and run CALL SP_LLMO_DAILY() to populate.")
+    elif has_insights < len(matching_dates):
+        print(f"[LLMO insights] {has_insights}/{len(matching_dates)} dates had llmo_insights data.")
     return merged
 
 
@@ -8174,31 +8181,87 @@ def _llmo_try_merge_search_themes_from_summary(summary_data, date_str, date_end)
     return _llmo_merge_search_theme_daily_payloads(payloads)
 
 
-def _llmo_try_demographics_from_summary(summary_data, date_str, date_end, agent=None):
-    """Use precomputed ``llmo_demographics`` from S3 summary for a single day only.
+def _llmo_merge_demographics_days(blobs):
+    """Merge multiple single-day demographics blobs by summing counts, recomputing pct.
 
-    Multi-day ranges cannot be merged from per-day aggregates (distinct users); those
-    still use Snowflake in ``llmo_iq_demographics``.
+    Not perfectly deduplicated across days (same user counted per day), but matches
+    the behavior noted elsewhere for multi-day metrics.
     """
-    if agent and str(agent).strip():
-        return None
-    if date_str != date_end:
-        return None
+    if len(blobs) == 1:
+        return blobs[0]
+    merged_dem = {}
+    merged_trend = {}
+    for blob in blobs:
+        dem = blob.get('demographics') or {}
+        for cat, items in dem.items():
+            if not isinstance(items, list):
+                continue
+            if cat not in merged_dem:
+                merged_dem[cat] = {}
+            for item in items:
+                v = item.get('value', '')
+                merged_dem[cat][v] = merged_dem[cat].get(v, 0) + (item.get('count') or 0)
+        dt = blob.get('demo_trend') or {}
+        for cat, by_date in dt.items():
+            if not isinstance(by_date, dict):
+                continue
+            merged_trend.setdefault(cat, {}).update(by_date)
+    demographics = {}
+    for cat, val_counts in merged_dem.items():
+        total = sum(val_counts.values())
+        items = sorted(val_counts.items(), key=lambda x: -x[1])
+        demographics[cat] = [
+            {'value': v, 'count': c, 'pct': round(c / total * 100, 2) if total else 0}
+            for v, c in items
+        ]
+    return {'demographics': demographics, 'demo_trend': merged_trend}
+
+
+def _llmo_try_demographics_from_summary(summary_data, date_str, date_end, agent=None):
+    """Use precomputed demographics from S3 summary.
+
+    Supports single-day and multi-day ranges (sums counts, recomputes pct).
+    When ``agent`` is provided, uses ``llmo_demographics_by_agent`` per-day data.
+    Falls back to None (live Snowflake) only if precomputed data is missing.
+    """
     if not summary_data or not isinstance(summary_data.get('by_date'), dict):
         return None
-    row = summary_data['by_date'].get(date_str)
-    if not isinstance(row, dict):
+    by_date = summary_data['by_date']
+    matching = sorted(d for d in by_date if isinstance(d, str) and date_str <= d <= date_end)
+    if not matching:
         return None
-    blob = row.get('llmo_demographics')
-    if not isinstance(blob, dict):
-        return None
-    dem = blob.get('demographics')
-    if not isinstance(dem, dict) or not dem:
-        return None
-    demo_trend = blob.get('demo_trend')
-    if not isinstance(demo_trend, dict):
-        demo_trend = {}
-    return {'success': True, 'demographics': dem, 'demo_trend': demo_trend}
+
+    agent_key = str(agent).strip().lower() if agent else ''
+
+    blobs = []
+    for d in matching:
+        row = by_date.get(d)
+        if not isinstance(row, dict):
+            return None
+        if agent_key:
+            by_agent = row.get('llmo_demographics_by_agent')
+            if not isinstance(by_agent, dict):
+                return None
+            blob = by_agent.get(agent_key)
+            if blob is None:
+                for k, v in by_agent.items():
+                    if agent_key in k or k in agent_key:
+                        blob = v
+                        break
+            if not isinstance(blob, dict):
+                return None
+        else:
+            blob = row.get('llmo_demographics')
+            if not isinstance(blob, dict):
+                return None
+        dem = blob.get('demographics')
+        if not isinstance(dem, dict) or not dem:
+            return None
+        blobs.append(blob)
+
+    merged = _llmo_merge_demographics_days(blobs)
+    return {'success': True, 'demographics': merged.get('demographics', {}),
+            'demo_trend': merged.get('demo_trend', {})}
 
 
 @app.route('/api/llmo-iq/search-themes', methods=['GET'])
