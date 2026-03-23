@@ -27867,10 +27867,12 @@
             // Combine gender data case-insensitively (used by insights, table, and chart)
             const filteredGenderData = genderData.filter(item => {
                 const gender = item.gender || '';
+                const genderLower = gender.trim().toLowerCase();
                 const count = parseNumber(item.count) || 0;
                 return gender && 
                        gender.toUpperCase() !== 'GENDER' && 
                        gender.toUpperCase() !== 'N/A' && 
+                       genderLower !== 'prefer not to say' &&
                        gender.trim() !== '' &&
                        count > 0;
             });
@@ -29971,6 +29973,37 @@
 
             normalizeAgeBucketsForDashboard(result);
             normalizeIncomeBucketsForDashboard(result);
+
+            // Remove "Prefer Not to Say" from all demographic categories and rebase to 100%
+            ['gender', 'education', 'relationship', 'sexual_orientation', 'parental_status'].forEach(cat => {
+                const demo = result.demographics[cat];
+                if (!demo || Object.keys(demo).length === 0) return;
+                const keysToRemove = Object.keys(demo).filter(k => {
+                    const lower = (k || '').trim().toLowerCase();
+                    return lower === 'prefer not to say' || lower === 'prefer_not_to_say';
+                });
+                if (keysToRemove.length === 0) return;
+                keysToRemove.forEach(k => {
+                    delete demo[k];
+                    if (result.demographicsIndex[cat]) delete result.demographicsIndex[cat][k];
+                    if (result.demographicsGenPop[cat]) delete result.demographicsGenPop[cat][k];
+                    if (result.demographicsProjection[cat]) delete result.demographicsProjection[cat][k];
+                });
+                const total = Object.values(demo).reduce((s, v) => s + v, 0);
+                if (total > 0 && total !== 100) {
+                    const scale = 100 / total;
+                    for (const k of Object.keys(demo)) {
+                        demo[k] = Math.round(demo[k] * scale * 100) / 100;
+                        if (result.demographicsIndex[cat] && result.demographicsGenPop[cat]) {
+                            const gp = result.demographicsGenPop[cat][k] || 0;
+                            if (gp > 0) result.demographicsIndex[cat][k] = Math.round((demo[k] / gp) * 100);
+                        }
+                        if (result.demographicsProjection[cat]) {
+                            result.demographicsProjection[cat][k] = Math.round((demo[k] / 100) * 329900000);
+                        }
+                    }
+                }
+            });
 
             // Deduplicate behavioral items: keep highest-pct entry per name within each category
             Object.keys(result.behavioral).forEach(cat => {
@@ -32424,6 +32457,21 @@
             const isProjection = dashDisplayMode === 'projection';
             const isGenPop = isSelectedProfileGenPop();
             const US_POPULATION = 329900000;
+
+            const _gpFallbackMap = { age: 'AGE', gender: 'GENDER', ethnicity: 'ETHNICITY', income: 'INCOME', education: 'EDUCATION', relationship: 'RELATIONSHIP', sexual_orientation: 'SEXUAL_ORIENTATION', parental_status: 'PARENTAL_STATUS', occupation: 'OCCUPATION' };
+            function getGenPopFallback(category, key) {
+                let gp = demographicsGenPop[category]?.[key] || 0;
+                if (gp > 0) return gp;
+                const gpKey = _gpFallbackMap[category];
+                if (!gpKey || !GENPOP_DEMOGRAPHICS?.[gpKey]) return 0;
+                gp = GENPOP_DEMOGRAPHICS[gpKey][key] || 0;
+                if (gp > 0) return gp;
+                const kLower = (key || '').toLowerCase();
+                for (const [gk, gv] of Object.entries(GENPOP_DEMOGRAPHICS[gpKey])) {
+                    if ((gk || '').toLowerCase() === kLower) return gv;
+                }
+                return 0;
+            }
             const ageChartEl = document.getElementById('ageChart');
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
@@ -32475,7 +32523,7 @@
             const sortedAgeResult = getSortedAgeData(demographics.age);
             const ageLabels = Object.keys(sortedAgeResult.display);
             const ageOriginalKeys = sortedAgeResult.originalKeys;
-            const ageGenPop = ageOriginalKeys.map(k => demographicsGenPop.age?.[k] || 0);
+            const ageGenPop = ageOriginalKeys.map(k => getGenPopFallback('age', k));
             const agePcts = ageLabels.map((k, i) => sortedAgeResult.display[k]);
             const ageData = isProjection 
                 ? ageOriginalKeys.map(k => demographicsProjection.age?.[k] || 0)
@@ -32567,7 +32615,7 @@
 
             // Gender - with Gen Pop in legend (green/red based on index)
             const genderLabels = Object.keys(demographics.gender);
-            const genderGenPop = genderLabels.map(k => demographicsGenPop.gender?.[k] || 0);
+            const genderGenPop = genderLabels.map(k => getGenPopFallback('gender', k));
             const genderPcts = Object.values(demographics.gender);
             const genderData = isProjection
                 ? genderLabels.map(k => demographicsProjection.gender?.[k] || 0)
@@ -32691,7 +32739,7 @@
                 const display = (l && l.toLowerCase()) === 'latino' || (l && l.toLowerCase()) === 'latinx' ? 'Hispanic or Latino' : (l || '');
                 return String(display).toUpperCase();
             });
-            const ethGenPop = ethLabels.map(k => demographicsGenPop.ethnicity?.[k] || 0);
+            const ethGenPop = ethLabels.map(k => getGenPopFallback('ethnicity', k));
             const ethPcts = Object.values(demographics.ethnicity);
             const ethData = isProjection
                 ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
@@ -32810,7 +32858,7 @@
             const sortedIncomeResult = getSortedIncomeData(demographics.income);
             const incomeLabels = Object.keys(sortedIncomeResult.display);
             const incomeOriginalKeys = sortedIncomeResult.originalKeys;
-            const incomeGenPop = incomeOriginalKeys.map(k => demographicsGenPop.income?.[k] || 0);
+            const incomeGenPop = incomeOriginalKeys.map(k => getGenPopFallback('income', k));
             const incomePcts = incomeLabels.map((k, i) => sortedIncomeResult.display[k]);
             const incomeData = isProjection 
                 ? incomeOriginalKeys.map(k => demographicsProjection.income?.[k] || 0)
@@ -32923,7 +32971,7 @@
             // Education - horizontal bar with Gen Pop
             if (demographics.education && Object.keys(demographics.education).length > 0) {
                 const eduLabels = Object.keys(demographics.education);
-                const eduGenPop = eduLabels.map(k => demographicsGenPop.education?.[k] || 0);
+                const eduGenPop = eduLabels.map(k => getGenPopFallback('education', k));
                 const eduPcts = Object.values(demographics.education);
                 const eduData = isProjection ? eduLabels.map(k => demographicsProjection.education?.[k] || 0) : eduPcts;
                 const eduMax = Math.max(...eduData) * 1.5; // 50% padding for labels
@@ -33008,7 +33056,7 @@
             // Relationship - doughnut with Gen Pop
             if (demographics.relationship && Object.keys(demographics.relationship).length > 0) {
                 const relLabels = Object.keys(demographics.relationship);
-                const relGenPop = relLabels.map(k => demographicsGenPop.relationship?.[k] || 0);
+                const relGenPop = relLabels.map(k => getGenPopFallback('relationship', k));
                 const relPcts = Object.values(demographics.relationship);
                 const relData = isProjection ? relLabels.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
@@ -33124,7 +33172,7 @@
                 const soLabels = Object.keys(demographics.sexual_orientation);
                 const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
-                const soGenPop = soLabels.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
+                const soGenPop = soLabels.map(k => getGenPopFallback('sexual_orientation', k));
                 const soPcts = Object.values(demographics.sexual_orientation);
                 const soData = isProjection ? soLabels.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
                 
@@ -33238,7 +33286,7 @@
             // Parental Status - doughnut with Gen Pop
             if (demographics.parental_status && Object.keys(demographics.parental_status).length > 0) {
                 const psLabels = Object.keys(demographics.parental_status);
-                const psGenPop = psLabels.map(k => demographicsGenPop.parental_status?.[k] || 0);
+                const psGenPop = psLabels.map(k => getGenPopFallback('parental_status', k));
                 const psPcts = Object.values(demographics.parental_status);
                 const psData = isProjection ? psLabels.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
                 
@@ -33350,7 +33398,7 @@
             // Occupation - bar chart with Gen Pop
             if (demographics.occupation && Object.keys(demographics.occupation).length > 0) {
                 const occLabels = Object.keys(demographics.occupation);
-                const occGenPop = occLabels.map(k => demographicsGenPop.occupation?.[k] || 0);
+                const occGenPop = occLabels.map(k => getGenPopFallback('occupation', k));
                 const occPcts = Object.values(demographics.occupation);
                 const occData = isProjection ? occLabels.map(k => demographicsProjection.occupation?.[k] || 0) : occPcts;
                 

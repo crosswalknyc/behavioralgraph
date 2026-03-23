@@ -12032,9 +12032,6 @@ def update_sec_actuals():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-_backfill_status = {}  # job_id -> {status, message, ...}
-
-
 def _backfill_extract_query_from_url(url, platform_lower):
     """Extract search query from a URL using platform-specific parsing."""
     from urllib.parse import urlparse, parse_qs, unquote_plus
@@ -12064,138 +12061,10 @@ def _backfill_extract_query_from_url(url, platform_lower):
     return None
 
 
-def _run_backfill_search(job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size):
-    """Background worker: extract search queries and update S3 CSV."""
-    import io
-    try:
-        _backfill_status[job_id] = {'status': 'running', 'message': 'Connecting to Snowflake...'}
-
-        import bg as _bg
-        conn = _bg.connect_snowflake()
-        cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-
-        _backfill_status[job_id]['message'] = 'Finding audience UIDs (sampled)...'
-
-        top_variants = sorted(brand_variants[:30], key=len, reverse=True)[:5]
-        cn_clauses = ' OR '.join(f"LOWER(COMMON_NAME) = '{v.lower().replace(chr(39), chr(39)*2)}'" for v in top_variants)
-
-        cur.execute(f"""
-            CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
-            SELECT DISTINCT UID
-            FROM (
-                SELECT UID FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL SAMPLE (10)
-                WHERE DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
-                  AND ({cn_clauses})
-                  AND COMMON_NAME IS NOT NULL AND COMMON_NAME != ''
-            )
-            LIMIT 50000
-        """)
-        uid_count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
-        print(f"[backfill-search] Created TEMP_UIDS with {uid_count:,} UIDs (sampled)")
-        _backfill_status[job_id]['message'] = f'Extracting search queries for {uid_count:,} UIDs...'
-        _backfill_status[job_id]['uid_count'] = uid_count
-
-        if uid_count == 0:
-            conn.close()
-            _backfill_status[job_id] = {'status': 'done', 'message': 'No matching UIDs found', 'queries_added': 0}
-            return
-
-        # Inline search query extraction (same logic as BG.py extract_search_queries)
-        _backfill_status[job_id]['message'] = 'Fetching search engine URLs...'
-        print("[backfill-search] 🔍 Extracting search queries from clickstream URLs...")
-        try:
-            cur.execute(f"""
-                SELECT m.Brand AS platform, cf.URL, cf.UID
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-                JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m
-                    ON LOWER(cf.COMMON_NAME) = LOWER(m.Brand)
-                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-                  AND cf.DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
-                  AND LOWER(m.Section) LIKE '%search%'
-                  AND cf.URL IS NOT NULL
-                  AND LENGTH(cf.URL) > 10
-            """)
-            rows = cur.fetchall()
-        except Exception as e:
-            print(f"[backfill-search] ⚠️ Search query SQL failed: {e}")
-            conn.close()
-            _backfill_status[job_id] = {'status': 'error', 'message': f'Search query SQL failed: {e}'}
-            return
-        conn.close()
-
-        print(f"[backfill-search] Fetched {len(rows):,} search-engine URL rows")
-        _backfill_status[job_id]['message'] = f'Parsing {len(rows):,} URLs...'
-
-        if not rows:
-            _backfill_status[job_id] = {'status': 'done', 'message': 'No search-engine URLs found', 'queries_added': 0}
-            return
-
-        query_uids = {}
-        parsed_count = 0
-        for platform, url, uid in rows:
-            decoded = _backfill_extract_query_from_url(url, (platform or '').lower())
-            if not decoded or len(decoded) < 3 or len(decoded) > 200:
-                continue
-            decoded = decoded[:120]
-            parsed_count += 1
-            key = (platform or 'Unknown', decoded.title())
-            if key not in query_uids:
-                query_uids[key] = set()
-            query_uids[key].add(uid)
-
-        print(f"[backfill-search] Parsed {parsed_count:,} queries ({100*parsed_count/max(len(rows),1):.1f}% hit rate)")
-
-        if not query_uids:
-            _backfill_status[job_id] = {'status': 'done', 'message': f'Fetched {len(rows)} URLs but no valid queries decoded', 'queries_added': 0}
-            return
-
-        ranked = sorted(query_uids.items(), key=lambda x: -len(x[1]))[:200]
-        denom = max(sample_size, 1)
-        new_rows = []
-        for (platform, query), uid_set in ranked:
-            cnt = len(uid_set)
-            pct = round(100.0 * cnt / denom, 4)
-            new_rows.append({
-                "Column": "SEARCH/AI",
-                "Value": f"{platform} | {query}",
-                "Percentage": pct,
-                "Original Raw Numbers (Database)": cnt,
-            })
-
-        search_df = pd.DataFrame(new_rows)
-        print(f"[backfill-search] ✅ {len(new_rows)} unique search queries across {len(set(r['Value'].split(' | ')[0] for r in new_rows))} platforms")
-        _backfill_status[job_id]['message'] = f'Appending {len(search_df)} queries to CSV...'
-
-        df_clean = df[df['Column'].str.upper() != 'SEARCH/AI']
-        for col in df_clean.columns:
-            if col not in search_df.columns:
-                search_df[col] = '' if df_clean[col].dtype == object else 0
-        search_df = search_df[[c for c in df_clean.columns if c in search_df.columns]]
-        df_final = pd.concat([df_clean, search_df], ignore_index=True)
-
-        csv_buffer = io.StringIO()
-        df_final.to_csv(csv_buffer, index=False)
-        s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key, Body=csv_buffer.getvalue().encode('utf-8'))
-        print(f"[backfill-search] ✅ Uploaded: {s3_key} ({len(df_final)} rows, +{len(search_df)} queries)")
-
-        _backfill_status[job_id] = {
-            'status': 'done',
-            'message': f'Added {len(search_df)} SEARCH/AI rows to {s3_key}',
-            'queries_added': len(search_df),
-            'uid_count': uid_count,
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        _backfill_status[job_id] = {'status': 'error', 'message': str(e)}
-
-
 @app.route('/api/admin/backfill-search-queries', methods=['POST'])
 def backfill_search_queries():
     """Extract search queries from clickstream URLs for an existing profile
-    CSV in S3 and append SEARCH/AI rows.  Runs in background; returns a
-    job_id to poll via GET.
+    CSV in S3 and append SEARCH/AI rows.  Fully synchronous.
     Auth: admin session OR X-Cron-Secret header."""
     secret = request.headers.get('X-Cron-Secret') or ''
     expected = os.environ.get('CRON_SECRET', '')
@@ -12204,18 +12073,21 @@ def backfill_search_queries():
     if not is_cron and not is_admin_user:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
 
-    import io, re, threading
+    import io, re
     data = request.get_json() or {}
     s3_key = (data.get('s3_key') or '').strip()
     if not s3_key:
         return jsonify({'success': False, 'error': 's3_key required'}), 400
 
     try:
+        # 1. Download CSV
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         csv_bytes = obj['Body'].read()
         import pandas as pd
         df = pd.read_csv(io.BytesIO(csv_bytes))
+        print(f"[backfill-search] Loaded {s3_key}: {len(df)} rows")
 
+        # 2. Parse metadata
         meta_rows = df[df['Column'].str.upper() == 'INPUT_METADATA']
         if meta_rows.empty:
             return jsonify({'success': False, 'error': 'No INPUT_METADATA row'}), 400
@@ -12238,33 +12110,108 @@ def backfill_search_queries():
             except Exception:
                 pass
 
-        job_id = str(uuid.uuid4())[:8]
-        _backfill_status[job_id] = {'status': 'running', 'message': 'Starting...'}
+        print(f"[backfill-search] brand_variants={len(brand_variants)}, dates={behavior_start}..{behavior_end}, sample={sample_size}")
 
-        # If ?sync=1 in query string, run synchronously (for testing)
-        if request.args.get('sync') == '1':
-            _run_backfill_search(job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size)
-            return jsonify({'success': True, 'job_id': job_id, **_backfill_status.get(job_id, {})})
+        # 3. Snowflake: create TEMP_UIDS (COMMON_NAME match, fast)
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        cur = conn.cursor()
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
 
-        try:
-            import eventlet
-            eventlet.spawn_n(_run_backfill_search, job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size)
-        except ImportError:
-            t = threading.Thread(target=_run_backfill_search, args=(job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size), daemon=True)
-            t.start()
+        top_variants = sorted(brand_variants[:30], key=len, reverse=True)[:5]
+        cn_clauses = ' OR '.join(f"LOWER(COMMON_NAME) = '{v.lower().replace(chr(39), chr(39)*2)}'" for v in top_variants)
 
-        return jsonify({'success': True, 'job_id': job_id, 'message': 'Backfill started in background. Poll GET /api/admin/backfill-search-queries?job_id=...'})
+        print(f"[backfill-search] Creating TEMP_UIDS with COMMON_NAME filter: {cn_clauses[:200]}")
+        cur.execute(f"""
+            CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
+            SELECT DISTINCT UID
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+            WHERE DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
+              AND ({cn_clauses})
+            LIMIT 50000
+        """)
+        uid_count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
+        print(f"[backfill-search] TEMP_UIDS: {uid_count:,} UIDs")
+
+        if uid_count == 0:
+            conn.close()
+            return jsonify({'success': True, 'message': 'No matching UIDs found', 'queries_added': 0})
+
+        # 4. Extract search engine URLs for these UIDs
+        print("[backfill-search] Fetching search engine URLs...")
+        cur.execute(f"""
+            SELECT m.Brand AS platform, cf.URL, cf.UID
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+            JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m
+                ON LOWER(cf.COMMON_NAME) = LOWER(m.Brand)
+            WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+              AND cf.DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
+              AND LOWER(m.Section) LIKE '%search%'
+              AND cf.URL IS NOT NULL
+              AND LENGTH(cf.URL) > 10
+        """)
+        rows = cur.fetchall()
+        conn.close()
+        print(f"[backfill-search] Fetched {len(rows):,} search URL rows")
+
+        if not rows:
+            return jsonify({'success': True, 'message': 'No search-engine URLs found for these UIDs', 'queries_added': 0, 'uid_count': uid_count})
+
+        # 5. Parse queries from URLs
+        query_uids = {}
+        parsed_count = 0
+        for platform, url, uid in rows:
+            decoded = _backfill_extract_query_from_url(url, (platform or '').lower())
+            if not decoded or len(decoded) < 3 or len(decoded) > 200:
+                continue
+            decoded = decoded[:120]
+            parsed_count += 1
+            key = (platform or 'Unknown', decoded.title())
+            if key not in query_uids:
+                query_uids[key] = set()
+            query_uids[key].add(uid)
+
+        print(f"[backfill-search] Parsed {parsed_count:,} queries ({100*parsed_count/max(len(rows),1):.1f}% hit rate)")
+
+        if not query_uids:
+            return jsonify({'success': True, 'message': f'Fetched {len(rows)} URLs but no valid queries decoded', 'queries_added': 0, 'uid_count': uid_count})
+
+        ranked = sorted(query_uids.items(), key=lambda x: -len(x[1]))[:200]
+        denom = max(sample_size, 1)
+        new_rows = []
+        for (platform, query), uid_set in ranked:
+            cnt = len(uid_set)
+            pct = round(100.0 * cnt / denom, 4)
+            new_rows.append({"Column": "SEARCH/AI", "Value": f"{platform} | {query}", "Percentage": pct, "Original Raw Numbers (Database)": cnt})
+
+        search_df = pd.DataFrame(new_rows)
+
+        # 6. Update CSV and upload to S3
+        df_clean = df[df['Column'].str.upper() != 'SEARCH/AI']
+        for col in df_clean.columns:
+            if col not in search_df.columns:
+                search_df[col] = '' if df_clean[col].dtype == object else 0
+        search_df = search_df[[c for c in df_clean.columns if c in search_df.columns]]
+        df_final = pd.concat([df_clean, search_df], ignore_index=True)
+
+        csv_buffer = io.StringIO()
+        df_final.to_csv(csv_buffer, index=False)
+        s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key, Body=csv_buffer.getvalue().encode('utf-8'))
+        print(f"[backfill-search] ✅ Uploaded: {s3_key} ({len(df_final)} rows, +{len(search_df)} queries)")
+
+        return jsonify({
+            'success': True,
+            'message': f'Added {len(search_df)} SEARCH/AI query rows to {s3_key}',
+            'queries_added': len(search_df),
+            'uid_count': uid_count,
+            'url_rows_fetched': len(rows),
+            'parse_hit_rate': f'{100*parsed_count/max(len(rows),1):.1f}%'
+        })
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/admin/backfill-search-queries', methods=['GET'])
-def backfill_search_status():
-    """Poll status of a backfill-search-queries job."""
-    job_id = request.args.get('job_id', '')
-    if job_id not in _backfill_status:
-        return jsonify({'success': False, 'error': 'Unknown job_id'}), 404
-    return jsonify({'success': True, **_backfill_status[job_id]})
 
 
 @app.route('/api/admin/quick-selects', methods=['GET'])
