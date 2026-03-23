@@ -14892,6 +14892,7 @@ def extract_utm_attribution(cur, behavior_start, behavior_end, actual_sample_siz
                 OR LOWER(cf.URL) LIKE '%gbraid%'
                 OR LOWER(cf.URL) LIKE '%li\\_fat\\_id%' ESCAPE '\\\\'
               )
+            LIMIT 500000
         """)
         rows = cur.fetchall()
     except Exception as e:
@@ -15003,6 +15004,7 @@ def extract_search_queries(cur, behavior_start, behavior_end, actual_sample_size
               AND LOWER(m.Section) LIKE '%search%'
               AND cf.URL IS NOT NULL
               AND LENGTH(cf.URL) > 10
+            LIMIT 500000
         """)
         rows = cur.fetchall()
     except Exception as e:
@@ -15106,6 +15108,7 @@ def extract_ecommerce_funnel(cur, behavior_start, behavior_end, actual_sample_si
               )
               AND cf.URL IS NOT NULL
               AND LENGTH(cf.URL) > 10
+            LIMIT 500000
         """)
         rows = cur.fetchall()
     except Exception as e:
