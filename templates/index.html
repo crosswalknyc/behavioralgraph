@@ -27825,7 +27825,7 @@
             console.log('📊 Final gender data (after merge):', genderData);
             
             // Filter age data - remove GENDER entries and invalid age ranges
-            const validAgeData = ageData.filter(item => {
+            const filteredAgeData = ageData.filter(item => {
                 const ageRange = item.age_range || item.age || '';
                 const ageRangeUpper = ageRange.toUpperCase().trim();
                 return ageRange && 
@@ -27834,6 +27834,35 @@
                        ageRange.trim() !== '' &&
                        (item.count || parseNumber(item.count) > 0);
             });
+            
+            // Consolidate age data: group by display label so duplicate buckets are summed
+            const ageGroups = {};
+            filteredAgeData.forEach(item => {
+                const ageRange = item.age_range || item.age || '';
+                const displayLabel = (typeof getAgeDisplayLabel === 'function') ? getAgeDisplayLabel(ageRange) : ageRange;
+                const normalizedKey = displayLabel.toUpperCase().trim();
+                
+                if (!ageGroups[normalizedKey]) {
+                    ageGroups[normalizedKey] = {
+                        age_range: displayLabel,
+                        count: 0,
+                        gen_pop: 0
+                    };
+                }
+                
+                ageGroups[normalizedKey].count += (parseNumber(item.count) || 0);
+                ageGroups[normalizedKey].gen_pop += (parseNumber(item.gen_pop) || parseNumber(item.genPop) || 0);
+            });
+            
+            const ageTotalCount = Object.values(ageGroups).reduce((sum, g) => sum + g.count, 0);
+            const validAgeData = Object.values(ageGroups)
+                .map(g => ({
+                    age_range: g.age_range,
+                    count: g.count,
+                    gen_pop: g.gen_pop,
+                    percentage: ageTotalCount > 0 ? ((g.count / ageTotalCount) * 100).toFixed(2) + '%' : 'N/A'
+                }))
+                .sort((a, b) => b.count - a.count);
             
             // Combine gender data case-insensitively (used by insights, table, and chart)
             const filteredGenderData = genderData.filter(item => {
