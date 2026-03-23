@@ -1166,6 +1166,31 @@ def auto_add_runs_to_all_users(s3_keys, key_category_map=None):
         print(f"⚠️ auto_add_runs_to_all_users error: {e}")
 
 
+def auto_add_to_quick_selects(s3_keys):
+    """Auto-add newly released/discovered profile S3 keys to the admin quick
+    selects JSON so they appear checked by default.  Keys already present
+    (including those explicitly set to ``false`` by an admin) are left
+    untouched so manual unchecks are preserved."""
+    if not s3_keys:
+        return
+    if isinstance(s3_keys, str):
+        s3_keys = [s3_keys]
+    try:
+        qs = load_json_from_s3(QUICK_SELECTS_FILE) or {}
+        profiles = qs.get('profiles', {})
+        added = 0
+        for key in s3_keys:
+            if key not in profiles:
+                profiles[key] = True
+                added += 1
+        if added:
+            qs['profiles'] = profiles
+            save_json_to_s3(QUICK_SELECTS_FILE, qs)
+            print(f"✅ Auto-added {added} new profile(s) to quick selects")
+    except Exception as e:
+        print(f"⚠️ auto_add_to_quick_selects error: {e}")
+
+
 def remove_run_from_all_users(s3_key):
     """Remove a specific profile S3 key from every user's allowed_runs."""
     if not s3_key:
@@ -14229,6 +14254,7 @@ def release_from_purgatory(purgatory_id):
         # Auto-add to qualifying users' allowed_runs based on their category subscriptions
         profile_category = item.get('category', '')
         auto_add_runs_to_all_users(new_key, key_category_map={new_key: profile_category})
+        auto_add_to_quick_selects(new_key)
         
         print(f"✅ Released from purgatory: {old_key} -> {new_key}")
         return True, new_key
@@ -16005,7 +16031,8 @@ def smart_cache_update():
         # Auto-add newly discovered profiles to qualifying users based on category subscriptions
         if new_s3_keys:
             auto_add_runs_to_all_users(new_s3_keys, key_category_map=new_key_cats)
-        
+            auto_add_to_quick_selects(new_s3_keys)
+
         return {'new': new_count, 'updated': updated_count, 'deleted': deleted_count, 'total': len(s3_cache['jobs'])}
         
     except Exception as e:
