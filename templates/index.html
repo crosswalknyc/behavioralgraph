@@ -14365,22 +14365,28 @@
                     <!-- Summary Stats Row -->
                     <div id="searchAiStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;"></div>
 
-                    <!-- Platform Breakdown + Top Queries -->
-                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem;">
-                        <!-- Platform Breakdown Doughnut -->
+                    <!-- Platform Usage (from SEARCH ENGINE/AI behavioral data) -->
+                    <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem;">
                         <div class="behavioral-card" style="padding: 1.25rem;">
                             <h3 style="margin: 0 0 1rem 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-                                <span>📊</span> Platform Breakdown
+                                <span>📊</span> Platform Usage
                                 <span class="module-action-btns" style="margin-left: auto;">
-                                    <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('search-ai', 'Platform Breakdown')" data-tooltip="Export CSV">CSV</button>
-                                    <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('search-ai', 'Platform Breakdown')" data-tooltip="Add to Deck">➕</button>
+                                    <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('search-ai', 'Platform Usage')" data-tooltip="Export CSV">CSV</button>
+                                    <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('search-ai', 'Platform Usage')" data-tooltip="Add to Deck">➕</button>
                                 </span>
                             </h3>
                             <canvas id="searchAiPlatformChart" width="300" height="300"></canvas>
-                            <div id="searchAiPlatformLegend" style="margin-top: 1rem; font-size: 0.8rem;"></div>
                         </div>
+                        <div class="behavioral-card" style="padding: 1.25rem;">
+                            <h3 style="margin: 0 0 1rem 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                                <span>📈</span> Platform Penetration
+                            </h3>
+                            <div id="searchAiPlatformTable" style="max-height: 500px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
 
-                        <!-- Top Queries Table -->
+                    <!-- Search Queries Section (from URL extraction) -->
+                    <div id="searchAiQueriesSection" style="display: none;">
                         <div class="behavioral-card" style="padding: 1.25rem;">
                             <h3 style="margin: 0 0 1rem 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                                 <span>🔍</span> Top Search Queries
@@ -14396,21 +14402,21 @@
                                 </select>
                                 <select id="searchAiSortBy" style="padding: 0.4rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;" onchange="filterSearchAiQueries()">
                                     <option value="penetration">Sort: Penetration %</option>
-                                    <option value="alpha">Sort: A → Z</option>
+                                    <option value="alpha">Sort: A &rarr; Z</option>
                                 </select>
                             </div>
                             <div id="searchAiQueryTable" style="max-height: 500px; overflow-y: auto;"></div>
                         </div>
-                    </div>
 
-                    <!-- Per-Platform Query Cards -->
-                    <div id="searchAiPlatformCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.25rem;"></div>
+                        <!-- Per-Platform Query Cards -->
+                        <div id="searchAiPlatformCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.25rem; margin-top: 1.5rem;"></div>
+                    </div>
 
                     <!-- Empty State -->
                     <div id="searchAiEmpty" style="display: none; text-align: center; padding: 4rem 2rem; color: var(--text-secondary);">
                         <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
                         <h3 style="color: var(--text-primary); margin-bottom: 0.5rem;">No Search/AI Data Available</h3>
-                        <p>This profile does not contain search query data. Search queries are extracted from clickstream URLs during profile analysis.</p>
+                        <p>This profile does not contain search engine or AI platform data.</p>
                     </div>
                 </div>
             </div>
@@ -15426,21 +15432,21 @@
 
                 <!-- Summary Cards -->
                 <div id="llmoSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                    <div class="llmo-card has-tooltip" data-tooltip="Distinct AI-platform users projected to US Gen Pop scale (panel × multiplier). Deduplicated within each day; multi-day totals may count the same user more than once." style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Users (US Gen Pop)</div>
                         <div id="llmoTotalUsers" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
                         <div id="llmoTotalUsersNote" style="font-size: 0.72rem; color: var(--text-secondary); font-style: italic; line-height: 1.35; margin-top: 0.15rem;">(Deduplicated by day, duplicated in aggregate)</div>
                     </div>
-                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                    <div class="llmo-card has-tooltip" data-tooltip="Total AI-agent page loads (sessions) projected to US Gen Pop scale. One user may generate multiple sessions per day." style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Sessions (US Gen Pop)</div>
                         <div id="llmoTotalClicks" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
                     </div>
-                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                    <div class="llmo-card has-tooltip" data-tooltip="Number of distinct AI platforms (e.g. ChatGPT, Claude, Perplexity) detected in the selected date range." style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">LLMs Tracked</div>
                         <div id="llmoLLMCount" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
                         <div style="font-size: 0.8rem; color: var(--text-secondary);">Unique platforms</div>
                     </div>
-                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                    <div class="llmo-card has-tooltip" data-tooltip="The AI platform with the most unique users in the selected date range and its share of all AI users." style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Top LLM</div>
                         <div id="llmoTopLLM" style="font-size: 1.25rem; font-weight: 700; margin: 0.25rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">--</div>
                         <div id="llmoTopLLMPct" style="font-size: 0.8rem; color: var(--text-secondary);">--</div>
@@ -15451,20 +15457,20 @@
                 <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- LLM Usage Ranker Table -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">LLM Usage Ranker</h3>
+                        <h3 class="has-tooltip" data-tooltip="Ranked table of all AI platforms by unique users. Click any column header to sort ascending/descending." style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">LLM Usage Ranker</h3>
                         <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
                             <table id="llmoRankerTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
                                 <thead>
                                     <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Sort by API rank (default order)" style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('rank')" id="llmoTh_rank">#</th>
-                                        <th class="llmo-ranker-th" style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('name')" id="llmoTh_name">LLM</th>
-                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('unique_users')" id="llmoTh_unique_users">Unique Users</th>
-                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('pct_of_total')" id="llmoTh_pct_of_total">% of Total</th>
-                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('total_sessions')" id="llmoTh_total_sessions">Total Sessions</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Sort by API rank (default order)." style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('rank')" id="llmoTh_rank">#</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="AI platform name (e.g. ChatGPT, Claude, Perplexity). Click to sort alphabetically." style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('name')" id="llmoTh_name">LLM</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Distinct users projected to US Gen Pop scale for this platform in the date range." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('unique_users')" id="llmoTh_unique_users">Unique Users</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="This platform's unique users as a percentage of all AI users in the date range." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('pct_of_total')" id="llmoTh_pct_of_total">% of Total</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Total session count (page loads) for this platform, projected to Gen Pop." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('total_sessions')" id="llmoTh_total_sessions">Total Sessions</th>
                                         <th class="llmo-ranker-th has-tooltip" data-tooltip="Average sessions per unique user for this LLM (platform) in the selected date range." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('avg_sess')" id="llmoTh_avg_sess">Avg sess./user</th>
-                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('session_share')" id="llmoTh_session_share">Session share</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="This platform's sessions as a share of all AI sessions across all LLMs." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('session_share')" id="llmoTh_session_share">Session share</th>
                                         <th class="llmo-ranker-th has-tooltip" data-tooltip="Share of matched Gen Pop category rows (SEARCH ENGINE/AI / STREAMING), normalized to 100% for apples-to-apples with Index." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('gp_cat')" id="llmoTh_gp_cat">GP cat. share</th>
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="(% of AI users ÷ Gen Pop penetration) × 100 — same basis as brand/retailer index." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('index')" id="llmoTh_index">Index</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="(% of AI users ÷ Gen Pop penetration) × 100 — values above 100 mean over-indexed vs the general population." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('index')" id="llmoTh_index">Index</th>
                                     </tr>
                                 </thead>
                                 <tbody id="llmoRankerBody">
@@ -15474,10 +15480,9 @@
                         </div>
                     </div>
 
-                    <!-- Category Share Doughnut (Gen Pop matched shares when available) -->
+                    <!-- Category Share Doughnut -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; align-items: center;">
-                        <h3 class="has-tooltip" style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;" data-tooltip="When Gen Pop matches exist, slices use normalized Gen Pop category share (same rows as Index). Otherwise session share across LLMs.">Category share (Gen Pop matched)</h3>
-                        <p style="margin: 0 0 0.75rem 0; font-size: 0.72rem; color: var(--text-secondary); align-self: flex-start; line-height: 1.35;">Apples-to-apples with Index: GP category rows (SEARCH ENGINE/AI / STREAMING) normalized to 100%.</p>
+                        <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;" data-tooltip="Each LLM's share of total AI sessions. When Gen Pop category matches exist, slices use the normalized Gen Pop category share (same rows as Index) for an apples-to-apples comparison. Otherwise falls back to raw session share.">Category share</h3>
                         <canvas id="llmoCategoryShareChart" style="max-width: 320px; max-height: 320px;"></canvas>
                     </div>
                 </div>
@@ -27820,7 +27825,7 @@
             console.log('📊 Final gender data (after merge):', genderData);
             
             // Filter age data - remove GENDER entries and invalid age ranges
-            const validAgeData = ageData.filter(item => {
+            const filteredAgeData = ageData.filter(item => {
                 const ageRange = item.age_range || item.age || '';
                 const ageRangeUpper = ageRange.toUpperCase().trim();
                 return ageRange && 
@@ -27830,13 +27835,44 @@
                        (item.count || parseNumber(item.count) > 0);
             });
             
+            // Consolidate age data: group by display label so duplicate buckets are summed
+            const ageGroups = {};
+            filteredAgeData.forEach(item => {
+                const ageRange = item.age_range || item.age || '';
+                const displayLabel = (typeof getAgeDisplayLabel === 'function') ? getAgeDisplayLabel(ageRange) : ageRange;
+                const normalizedKey = displayLabel.toUpperCase().trim();
+                
+                if (!ageGroups[normalizedKey]) {
+                    ageGroups[normalizedKey] = {
+                        age_range: displayLabel,
+                        count: 0,
+                        gen_pop: 0
+                    };
+                }
+                
+                ageGroups[normalizedKey].count += (parseNumber(item.count) || 0);
+                ageGroups[normalizedKey].gen_pop += (parseNumber(item.gen_pop) || parseNumber(item.genPop) || 0);
+            });
+            
+            const ageTotalCount = Object.values(ageGroups).reduce((sum, g) => sum + g.count, 0);
+            const validAgeData = Object.values(ageGroups)
+                .map(g => ({
+                    age_range: g.age_range,
+                    count: g.count,
+                    gen_pop: g.gen_pop,
+                    percentage: ageTotalCount > 0 ? ((g.count / ageTotalCount) * 100).toFixed(2) + '%' : 'N/A'
+                }))
+                .sort((a, b) => b.count - a.count);
+            
             // Combine gender data case-insensitively (used by insights, table, and chart)
             const filteredGenderData = genderData.filter(item => {
                 const gender = item.gender || '';
+                const genderLower = gender.trim().toLowerCase();
                 const count = parseNumber(item.count) || 0;
                 return gender && 
                        gender.toUpperCase() !== 'GENDER' && 
                        gender.toUpperCase() !== 'N/A' && 
+                       genderLower !== 'prefer not to say' &&
                        gender.trim() !== '' &&
                        count > 0;
             });
@@ -29230,7 +29266,7 @@
             
             renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
             renderBehavioralCards(parsed.behavioral);
-            renderSearchAiTab(parsed.searchAI);
+            renderSearchAiTab(parsed.searchAI, parsed.searchAIPlatforms);
             renderLocationTable(parsed.locations);
             
             // Render demographic insights
@@ -29260,7 +29296,8 @@
                 categories: {},
                 locations: [],
                 interests: {},
-                searchAI: []
+                searchAI: [],
+                searchAIPlatforms: []
             };
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
@@ -29876,12 +29913,17 @@
                     result.categories[category].push({ value, pct, index, genPopPct, projection: usProjection });
                 }
 
-                // Parse SEARCH/AI rows into dedicated searchAI array with platform extracted
+                // Parse SEARCH/AI query rows (extracted from URLs by BG.py)
                 if (category === 'SEARCH/AI' && value) {
                     const pipeIdx = value.indexOf(' | ');
                     const platform = pipeIdx > 0 ? value.substring(0, pipeIdx).trim() : 'Unknown';
                     const query = pipeIdx > 0 ? value.substring(pipeIdx + 3).trim() : value;
                     result.searchAI.push({ platform, query, pct, index, projection: usProjection, genPopPct, genPopProjection, raw: value });
+                }
+
+                // Capture SEARCH ENGINE/AI platform-level rows (always present)
+                if (category === 'SEARCH ENGINE/AI' && value) {
+                    result.searchAIPlatforms.push({ name: value, pct, index, projection: usProjection, genPopPct, raw: rawNum });
                 }
 
                 // Behavioral (non-demographic categories) - include index and projection
@@ -29931,6 +29973,37 @@
 
             normalizeAgeBucketsForDashboard(result);
             normalizeIncomeBucketsForDashboard(result);
+
+            // Remove "Prefer Not to Say" from all demographic categories and rebase to 100%
+            ['gender', 'education', 'relationship', 'sexual_orientation', 'parental_status'].forEach(cat => {
+                const demo = result.demographics[cat];
+                if (!demo || Object.keys(demo).length === 0) return;
+                const keysToRemove = Object.keys(demo).filter(k => {
+                    const lower = (k || '').trim().toLowerCase();
+                    return lower === 'prefer not to say' || lower === 'prefer_not_to_say';
+                });
+                if (keysToRemove.length === 0) return;
+                keysToRemove.forEach(k => {
+                    delete demo[k];
+                    if (result.demographicsIndex[cat]) delete result.demographicsIndex[cat][k];
+                    if (result.demographicsGenPop[cat]) delete result.demographicsGenPop[cat][k];
+                    if (result.demographicsProjection[cat]) delete result.demographicsProjection[cat][k];
+                });
+                const total = Object.values(demo).reduce((s, v) => s + v, 0);
+                if (total > 0 && total !== 100) {
+                    const scale = 100 / total;
+                    for (const k of Object.keys(demo)) {
+                        demo[k] = Math.round(demo[k] * scale * 100) / 100;
+                        if (result.demographicsIndex[cat] && result.demographicsGenPop[cat]) {
+                            const gp = result.demographicsGenPop[cat][k] || 0;
+                            if (gp > 0) result.demographicsIndex[cat][k] = Math.round((demo[k] / gp) * 100);
+                        }
+                        if (result.demographicsProjection[cat]) {
+                            result.demographicsProjection[cat][k] = Math.round((demo[k] / 100) * 329900000);
+                        }
+                    }
+                }
+            });
 
             // Deduplicate behavioral items: keep highest-pct entry per name within each category
             Object.keys(result.behavioral).forEach(cat => {
@@ -30926,7 +30999,7 @@
             // Render charts and data
             renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
             renderBehavioralCards(parsed.behavioral);
-            renderSearchAiTab(parsed.searchAI);
+            renderSearchAiTab(parsed.searchAI, parsed.searchAIPlatforms);
             renderLocationTable(parsed.locations);
             
             // Render demographic insights
@@ -32384,6 +32457,21 @@
             const isProjection = dashDisplayMode === 'projection';
             const isGenPop = isSelectedProfileGenPop();
             const US_POPULATION = 329900000;
+
+            const _gpFallbackMap = { age: 'AGE', gender: 'GENDER', ethnicity: 'ETHNICITY', income: 'INCOME', education: 'EDUCATION', relationship: 'RELATIONSHIP', sexual_orientation: 'SEXUAL_ORIENTATION', parental_status: 'PARENTAL_STATUS', occupation: 'OCCUPATION' };
+            function getGenPopFallback(category, key) {
+                let gp = demographicsGenPop[category]?.[key] || 0;
+                if (gp > 0) return gp;
+                const gpKey = _gpFallbackMap[category];
+                if (!gpKey || !GENPOP_DEMOGRAPHICS?.[gpKey]) return 0;
+                gp = GENPOP_DEMOGRAPHICS[gpKey][key] || 0;
+                if (gp > 0) return gp;
+                const kLower = (key || '').toLowerCase();
+                for (const [gk, gv] of Object.entries(GENPOP_DEMOGRAPHICS[gpKey])) {
+                    if ((gk || '').toLowerCase() === kLower) return gv;
+                }
+                return 0;
+            }
             const ageChartEl = document.getElementById('ageChart');
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
@@ -32435,7 +32523,7 @@
             const sortedAgeResult = getSortedAgeData(demographics.age);
             const ageLabels = Object.keys(sortedAgeResult.display);
             const ageOriginalKeys = sortedAgeResult.originalKeys;
-            const ageGenPop = ageOriginalKeys.map(k => demographicsGenPop.age?.[k] || 0);
+            const ageGenPop = ageOriginalKeys.map(k => getGenPopFallback('age', k));
             const agePcts = ageLabels.map((k, i) => sortedAgeResult.display[k]);
             const ageData = isProjection 
                 ? ageOriginalKeys.map(k => demographicsProjection.age?.[k] || 0)
@@ -32527,7 +32615,7 @@
 
             // Gender - with Gen Pop in legend (green/red based on index)
             const genderLabels = Object.keys(demographics.gender);
-            const genderGenPop = genderLabels.map(k => demographicsGenPop.gender?.[k] || 0);
+            const genderGenPop = genderLabels.map(k => getGenPopFallback('gender', k));
             const genderPcts = Object.values(demographics.gender);
             const genderData = isProjection
                 ? genderLabels.map(k => demographicsProjection.gender?.[k] || 0)
@@ -32651,7 +32739,7 @@
                 const display = (l && l.toLowerCase()) === 'latino' || (l && l.toLowerCase()) === 'latinx' ? 'Hispanic or Latino' : (l || '');
                 return String(display).toUpperCase();
             });
-            const ethGenPop = ethLabels.map(k => demographicsGenPop.ethnicity?.[k] || 0);
+            const ethGenPop = ethLabels.map(k => getGenPopFallback('ethnicity', k));
             const ethPcts = Object.values(demographics.ethnicity);
             const ethData = isProjection
                 ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
@@ -32770,7 +32858,7 @@
             const sortedIncomeResult = getSortedIncomeData(demographics.income);
             const incomeLabels = Object.keys(sortedIncomeResult.display);
             const incomeOriginalKeys = sortedIncomeResult.originalKeys;
-            const incomeGenPop = incomeOriginalKeys.map(k => demographicsGenPop.income?.[k] || 0);
+            const incomeGenPop = incomeOriginalKeys.map(k => getGenPopFallback('income', k));
             const incomePcts = incomeLabels.map((k, i) => sortedIncomeResult.display[k]);
             const incomeData = isProjection 
                 ? incomeOriginalKeys.map(k => demographicsProjection.income?.[k] || 0)
@@ -32883,7 +32971,7 @@
             // Education - horizontal bar with Gen Pop
             if (demographics.education && Object.keys(demographics.education).length > 0) {
                 const eduLabels = Object.keys(demographics.education);
-                const eduGenPop = eduLabels.map(k => demographicsGenPop.education?.[k] || 0);
+                const eduGenPop = eduLabels.map(k => getGenPopFallback('education', k));
                 const eduPcts = Object.values(demographics.education);
                 const eduData = isProjection ? eduLabels.map(k => demographicsProjection.education?.[k] || 0) : eduPcts;
                 const eduMax = Math.max(...eduData) * 1.5; // 50% padding for labels
@@ -32968,7 +33056,7 @@
             // Relationship - doughnut with Gen Pop
             if (demographics.relationship && Object.keys(demographics.relationship).length > 0) {
                 const relLabels = Object.keys(demographics.relationship);
-                const relGenPop = relLabels.map(k => demographicsGenPop.relationship?.[k] || 0);
+                const relGenPop = relLabels.map(k => getGenPopFallback('relationship', k));
                 const relPcts = Object.values(demographics.relationship);
                 const relData = isProjection ? relLabels.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
@@ -33084,7 +33172,7 @@
                 const soLabels = Object.keys(demographics.sexual_orientation);
                 const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
-                const soGenPop = soLabels.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
+                const soGenPop = soLabels.map(k => getGenPopFallback('sexual_orientation', k));
                 const soPcts = Object.values(demographics.sexual_orientation);
                 const soData = isProjection ? soLabels.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
                 
@@ -33198,7 +33286,7 @@
             // Parental Status - doughnut with Gen Pop
             if (demographics.parental_status && Object.keys(demographics.parental_status).length > 0) {
                 const psLabels = Object.keys(demographics.parental_status);
-                const psGenPop = psLabels.map(k => demographicsGenPop.parental_status?.[k] || 0);
+                const psGenPop = psLabels.map(k => getGenPopFallback('parental_status', k));
                 const psPcts = Object.values(demographics.parental_status);
                 const psData = isProjection ? psLabels.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
                 
@@ -33310,7 +33398,7 @@
             // Occupation - bar chart with Gen Pop
             if (demographics.occupation && Object.keys(demographics.occupation).length > 0) {
                 const occLabels = Object.keys(demographics.occupation);
-                const occGenPop = occLabels.map(k => demographicsGenPop.occupation?.[k] || 0);
+                const occGenPop = occLabels.map(k => getGenPopFallback('occupation', k));
                 const occPcts = Object.values(demographics.occupation);
                 const occData = isProjection ? occLabels.map(k => demographicsProjection.occupation?.[k] || 0) : occPcts;
                 
@@ -35184,80 +35272,130 @@
         ];
 
         // ===================== SEARCH/AI TAB RENDERING =====================
-        let _searchAiData = [];   // cached for filtering
+        let _searchAiData = [];       // query-level data (from SEARCH/AI rows)
+        let _searchAiPlatforms = [];  // platform-level data (from SEARCH ENGINE/AI rows)
         let _searchAiChartInst = null;
 
-        function renderSearchAiTab(searchAI) {
+        function renderSearchAiTab(searchAI, searchAIPlatforms) {
             _searchAiData = searchAI || [];
-            const container = document.getElementById('searchAiContainer');
+            _searchAiPlatforms = (searchAIPlatforms || []).slice().sort((a, b) => b.pct - a.pct);
+
             const emptyEl = document.getElementById('searchAiEmpty');
-            if (!_searchAiData.length) {
+            const queriesSection = document.getElementById('searchAiQueriesSection');
+            const hasPlats = _searchAiPlatforms.length > 0;
+            const hasQueries = _searchAiData.length > 0;
+
+            if (!hasPlats && !hasQueries) {
                 if (emptyEl) emptyEl.style.display = '';
                 document.getElementById('searchAiStats').innerHTML = '';
-                document.getElementById('searchAiPlatformCards').innerHTML = '';
-                document.getElementById('searchAiQueryTable').innerHTML = '';
+                document.getElementById('searchAiPlatformTable').innerHTML = '';
+                if (queriesSection) queriesSection.style.display = 'none';
                 if (_searchAiChartInst) { _searchAiChartInst.destroy(); _searchAiChartInst = null; }
                 return;
             }
             if (emptyEl) emptyEl.style.display = 'none';
 
-            // --- Aggregate by platform ---
-            const platMap = {};
-            _searchAiData.forEach(d => {
-                if (!platMap[d.platform]) platMap[d.platform] = { queries: 0, totalPct: 0 };
-                platMap[d.platform].queries++;
-                platMap[d.platform].totalPct += d.pct;
-            });
-            const platforms = Object.entries(platMap).sort((a, b) => b[1].totalPct - a[1].totalPct);
-
-            // --- Summary stats ---
+            // --- Summary stats (always from platform data) ---
             const statsEl = document.getElementById('searchAiStats');
-            const totalQueries = _searchAiData.length;
-            const totalPlatforms = platforms.length;
-            const topQuery = _searchAiData.length ? _searchAiData.reduce((a, b) => a.pct > b.pct ? a : b) : null;
-            statsEl.innerHTML = [
-                _statCard('🔍', 'Unique Queries', totalQueries.toLocaleString()),
-                _statCard('📡', 'Platforms', totalPlatforms),
-                _statCard('🏆', 'Top Query', topQuery ? topQuery.query : '—'),
-                _statCard('📈', 'Top Platform', platforms.length ? platforms[0][0] : '—'),
-            ].join('');
+            const topPlat = hasPlats ? _searchAiPlatforms[0] : null;
+            const aiPlatforms = _searchAiPlatforms.filter(p => {
+                const n = (p.name || '').toUpperCase();
+                return ['CHAT GPT', 'CHATGPT', 'PERPLEXITY', 'GEMINI', 'CLAUDE', 'CLAUDE AI', 'COPILOT', 'GROK', 'DEEP SEEK', 'DEEPSEEK', 'POE'].some(a => n.includes(a));
+            });
+            const aiPct = aiPlatforms.reduce((s, p) => s + p.pct, 0);
+            const cards = [];
+            cards.push(_statCard('📡', 'Platforms Tracked', hasPlats ? _searchAiPlatforms.length : '—'));
+            cards.push(_statCard('🏆', 'Top Platform', topPlat ? topPlat.name : '—'));
+            cards.push(_statCard('🤖', 'AI Platform Reach', aiPct > 0 ? aiPct.toFixed(1) + '%' : '—'));
+            if (hasQueries) cards.push(_statCard('🔍', 'Search Queries', _searchAiData.length.toLocaleString()));
+            else cards.push(_statCard('🌐', 'Top Penetration', topPlat ? topPlat.pct.toFixed(1) + '%' : '—'));
+            statsEl.innerHTML = cards.join('');
 
-            // --- Platform filter dropdown ---
-            const platFilter = document.getElementById('searchAiPlatformFilter');
-            platFilter.innerHTML = '<option value="all">All Platforms</option>' +
-                platforms.map(([p]) => `<option value="${p}">${p}</option>`).join('');
+            // --- Platform usage chart (doughnut from SEARCH ENGINE/AI) ---
+            _renderSearchAiPlatformChart(_searchAiPlatforms);
 
-            // --- Platform doughnut chart ---
-            _renderSearchAiPlatformChart(platforms);
+            // --- Platform penetration table ---
+            _renderSearchAiPlatformTable(_searchAiPlatforms);
 
-            // --- Query table ---
-            filterSearchAiQueries();
+            // --- Queries section (only if we have extracted queries) ---
+            if (queriesSection) {
+                if (hasQueries) {
+                    queriesSection.style.display = '';
+                    const platMap = {};
+                    _searchAiData.forEach(d => {
+                        if (!platMap[d.platform]) platMap[d.platform] = { queries: 0, totalPct: 0 };
+                        platMap[d.platform].queries++;
+                        platMap[d.platform].totalPct += d.pct;
+                    });
+                    const queryPlats = Object.entries(platMap).sort((a, b) => b[1].totalPct - a[1].totalPct);
 
-            // --- Per-platform cards ---
-            const cardsEl = document.getElementById('searchAiPlatformCards');
-            cardsEl.innerHTML = platforms.map(([plat, info]) => {
-                const items = _searchAiData.filter(d => d.platform === plat).sort((a, b) => b.pct - a.pct);
-                const rows = items.slice(0, 25).map((d, i) => `
-                    <tr>
-                        <td style="padding:4px 8px;color:var(--text-secondary);font-size:0.75rem;">${i + 1}</td>
-                        <td style="padding:4px 8px;">${_esc(d.query)}</td>
-                        <td style="padding:4px 8px;text-align:right;font-family:monospace;">${d.pct.toFixed(2)}%</td>
-                    </tr>`).join('');
-                return `<div class="behavioral-card" style="padding:1.25rem;">
-                    <h3 style="margin:0 0 0.75rem;font-size:0.95rem;color:var(--text-primary);display:flex;align-items:center;gap:0.4rem;">
-                        <span>${_platformIcon(plat)}</span> ${_esc(plat)}
-                        <span style="font-size:0.75rem;color:var(--text-secondary);margin-left:auto;">${info.queries} queries</span>
-                    </h3>
-                    <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
-                        <thead><tr style="border-bottom:1px solid var(--border-color);">
-                            <th style="padding:4px 8px;text-align:left;color:var(--text-secondary);width:30px;">#</th>
-                            <th style="padding:4px 8px;text-align:left;color:var(--text-secondary);">Query</th>
-                            <th style="padding:4px 8px;text-align:right;color:var(--text-secondary);">Penetration</th>
-                        </tr></thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                </div>`;
+                    const platFilter = document.getElementById('searchAiPlatformFilter');
+                    if (platFilter) platFilter.innerHTML = '<option value="all">All Platforms</option>' +
+                        queryPlats.map(([p]) => `<option value="${p}">${p}</option>`).join('');
+                    filterSearchAiQueries();
+
+                    const cardsEl = document.getElementById('searchAiPlatformCards');
+                    if (cardsEl) {
+                        cardsEl.innerHTML = queryPlats.map(([plat, info]) => {
+                            const items = _searchAiData.filter(d => d.platform === plat).sort((a, b) => b.pct - a.pct);
+                            const rows = items.slice(0, 25).map((d, i) => `
+                                <tr>
+                                    <td style="padding:4px 8px;color:var(--text-secondary);font-size:0.75rem;">${i + 1}</td>
+                                    <td style="padding:4px 8px;">${_esc(d.query)}</td>
+                                    <td style="padding:4px 8px;text-align:right;font-family:monospace;">${d.pct.toFixed(2)}%</td>
+                                </tr>`).join('');
+                            return `<div class="behavioral-card" style="padding:1.25rem;">
+                                <h3 style="margin:0 0 0.75rem;font-size:0.95rem;color:var(--text-primary);display:flex;align-items:center;gap:0.4rem;">
+                                    <span>${_platformIcon(plat)}</span> ${_esc(plat)}
+                                    <span style="font-size:0.75rem;color:var(--text-secondary);margin-left:auto;">${info.queries} queries</span>
+                                </h3>
+                                <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+                                    <thead><tr style="border-bottom:1px solid var(--border-color);">
+                                        <th style="padding:4px 8px;text-align:left;color:var(--text-secondary);width:30px;">#</th>
+                                        <th style="padding:4px 8px;text-align:left;color:var(--text-secondary);">Query</th>
+                                        <th style="padding:4px 8px;text-align:right;color:var(--text-secondary);">Penetration</th>
+                                    </tr></thead>
+                                    <tbody>${rows}</tbody>
+                                </table>
+                            </div>`;
+                        }).join('');
+                    }
+                } else {
+                    queriesSection.style.display = 'none';
+                }
+            }
+        }
+
+        function _renderSearchAiPlatformTable(platforms) {
+            const el = document.getElementById('searchAiPlatformTable');
+            if (!el || !platforms.length) { if (el) el.innerHTML = ''; return; }
+            const maxPct = platforms[0].pct;
+            const rows = platforms.map((p, i) => {
+                const barW = Math.max(2, (p.pct / maxPct) * 100);
+                const isAI = ['CHAT GPT', 'CHATGPT', 'PERPLEXITY', 'GEMINI', 'CLAUDE', 'CLAUDE AI', 'COPILOT', 'GROK', 'DEEP SEEK', 'DEEPSEEK', 'POE', 'ELEVENLABS', 'DUCK AI'].some(a => (p.name || '').toUpperCase().includes(a));
+                const badge = isAI ? '<span style="font-size:0.6rem;background:rgba(168,85,247,0.2);color:#a855f7;padding:1px 5px;border-radius:3px;margin-left:4px;">AI</span>' : '';
+                return `<tr style="border-bottom:1px solid var(--border-color); ${i % 2 === 0 ? 'background:rgba(255,255,255,0.02);' : ''}">
+                    <td style="padding:6px 8px;color:var(--text-secondary);font-size:0.75rem;width:28px;">${i + 1}</td>
+                    <td style="padding:6px 8px;font-size:0.85rem;white-space:nowrap;">${_platformIcon(p.name)} ${_esc(p.name)}${badge}</td>
+                    <td style="padding:6px 8px;width:45%;">
+                        <div style="background:rgba(102,217,239,0.12);border-radius:3px;height:18px;position:relative;">
+                            <div style="background:linear-gradient(90deg,rgba(102,217,239,0.6),rgba(102,217,239,0.25));height:100%;border-radius:3px;width:${barW}%;"></div>
+                        </div>
+                    </td>
+                    <td style="padding:6px 8px;text-align:right;font-family:monospace;font-size:0.82rem;white-space:nowrap;">${p.pct.toFixed(1)}%</td>
+                    <td style="padding:6px 8px;text-align:right;font-family:monospace;font-size:0.75rem;color:var(--text-secondary);white-space:nowrap;">${p.index != null ? p.index.toFixed(0) + 'x' : ''}</td>
+                </tr>`;
             }).join('');
+            el.innerHTML = `<table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="border-bottom:2px solid var(--border-color);">
+                    <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);font-size:0.7rem;width:28px;">#</th>
+                    <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);font-size:0.7rem;">Platform</th>
+                    <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);font-size:0.7rem;">Share</th>
+                    <th style="padding:6px 8px;text-align:right;color:var(--text-secondary);font-size:0.7rem;">Penetration</th>
+                    <th style="padding:6px 8px;text-align:right;color:var(--text-secondary);font-size:0.7rem;">Index</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
         }
 
         function _statCard(icon, label, value) {
@@ -35271,7 +35409,9 @@
 
         function _platformIcon(p) {
             const m = { 'Google': '🟢', 'Bing': '🔵', 'Yahoo': '🟣', 'DuckDuckGo': '🦆', 'ChatGPT': '🤖', 'Chat GPT': '🤖',
-                'Perplexity': '🧠', 'Copilot': '🪟', 'Gemini': '✨', 'Claude': '🟠', 'Brave': '🦁' };
+                'Perplexity': '🧠', 'Copilot': '🪟', 'Gemini': '✨', 'Claude': '🟠', 'Claude AI': '🟠', 'Brave': '🦁',
+                'Grok': '⚡', 'Deep Seek': '🔬', 'DeepSeek': '🔬', 'MSN': '🟦', 'Quora': '🔴', 'Poe': '💬',
+                'Duck AI': '🦆', 'Eduaide': '🎓', 'Slidesgo': '📑', 'Startpage': '🔒', 'Elevenlabs': '🔊' };
             return m[p] || '🔍';
         }
 
@@ -35279,16 +35419,18 @@
             const ctx = document.getElementById('searchAiPlatformChart');
             if (!ctx) return;
             if (_searchAiChartInst) { _searchAiChartInst.destroy(); _searchAiChartInst = null; }
-            const colors = ['#66d9ef', '#c8ff00', '#ff6b6b', '#ffd93d', '#6bcb77', '#a855f7', '#fb923c', '#38bdf8', '#f472b6', '#34d399'];
+            if (!platforms || !platforms.length) return;
+            const colors = ['#66d9ef', '#c8ff00', '#ff6b6b', '#ffd93d', '#6bcb77', '#a855f7', '#fb923c', '#38bdf8', '#f472b6', '#34d399',
+                            '#818cf8', '#e879f9', '#22d3ee', '#facc15', '#f87171', '#4ade80', '#c084fc', '#fb7185', '#a3e635', '#2dd4bf'];
             _searchAiChartInst = new Chart(ctx.getContext('2d'), {
                 type: 'doughnut',
                 data: {
-                    labels: platforms.map(([p]) => p),
-                    datasets: [{ data: platforms.map(([, v]) => v.totalPct), backgroundColor: colors.slice(0, platforms.length), borderWidth: 0 }]
+                    labels: platforms.map(p => p.name),
+                    datasets: [{ data: platforms.map(p => p.pct), backgroundColor: colors.slice(0, platforms.length), borderWidth: 0 }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: true, cutout: '60%',
-                    plugins: { legend: { display: true, position: 'bottom', labels: { color: '#e6f1ff', font: { size: 11 }, padding: 12 } } }
+                    plugins: { legend: { display: true, position: 'bottom', labels: { color: '#e6f1ff', font: { size: 11 }, padding: 10, boxWidth: 12 } } }
                 }
             });
         }
