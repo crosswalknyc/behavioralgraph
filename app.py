@@ -12118,16 +12118,21 @@ def backfill_search_queries():
         cur = conn.cursor()
         cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
 
-        top_variants = sorted(brand_variants[:30], key=len, reverse=True)[:5]
-        cn_clauses = ' OR '.join(f"LOWER(COMMON_NAME) = '{v.lower().replace(chr(39), chr(39)*2)}'" for v in top_variants)
+        # Use top 3 brand variants with URL LIKE + date-partitioned scan
+        top_variants = sorted(brand_variants[:20], key=len, reverse=True)[:3]
+        url_clauses = ' OR '.join(
+            f"LOWER(URL) LIKE '%{v.lower().replace(chr(39), chr(39)*2).replace(chr(37), chr(92)+chr(37)).replace(chr(95), chr(92)+chr(95))}%' ESCAPE '\\\\'"
+            for v in top_variants
+        )
 
-        print(f"[backfill-search] Creating TEMP_UIDS with COMMON_NAME filter: {cn_clauses[:200]}")
+        print(f"[backfill-search] Creating TEMP_UIDS with URL LIKE filter on top 3 variants")
         cur.execute(f"""
             CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
             SELECT DISTINCT UID
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
             WHERE DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
-              AND ({cn_clauses})
+              AND ({url_clauses})
+              AND UID IS NOT NULL
             LIMIT 50000
         """)
         uid_count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
