@@ -12241,8 +12241,17 @@ def backfill_search_queries():
         job_id = str(uuid.uuid4())[:8]
         _backfill_status[job_id] = {'status': 'running', 'message': 'Starting...'}
 
-        t = threading.Thread(target=_run_backfill_search, args=(job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size), daemon=True)
-        t.start()
+        # If ?sync=1 in query string, run synchronously (for testing)
+        if request.args.get('sync') == '1':
+            _run_backfill_search(job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size)
+            return jsonify({'success': True, 'job_id': job_id, **_backfill_status.get(job_id, {})})
+
+        try:
+            import eventlet
+            eventlet.spawn_n(_run_backfill_search, job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size)
+        except ImportError:
+            t = threading.Thread(target=_run_backfill_search, args=(job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size), daemon=True)
+            t.start()
 
         return jsonify({'success': True, 'job_id': job_id, 'message': 'Backfill started in background. Poll GET /api/admin/backfill-search-queries?job_id=...'})
     except Exception as e:
