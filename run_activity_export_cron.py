@@ -11,7 +11,7 @@ import time
 import urllib.request
 import urllib.error
 
-BASE = (os.environ.get('APP_URL') or 'https://behavioralgraph.onrender.com').rstrip('/')
+BASE = (os.environ.get('APP_URL') or 'https://behavioral-graph.onrender.com').rstrip('/')
 SECRET = os.environ.get('CRON_SECRET', '')
 MAX_RETRIES = 3
 RETRY_DELAY = 10  # seconds between retries

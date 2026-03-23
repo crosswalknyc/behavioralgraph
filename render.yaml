@@ -58,7 +58,7 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: APP_URL
-        value: "https://behavioralgraph.onrender.com"
+        value: "https://behavioral-graph.onrender.com"
       # Gunicorn: 1 worker + 1 thread to stay under 512MB; upgrade plan if OOM persists
       - key: GUNICORN_WORKERS
         value: "1"
@@ -79,6 +79,6 @@ services:
     startCommand: python run_activity_export_cron.py
     envVars:
       - key: APP_URL
-        value: "https://behavioralgraph.onrender.com"
+        value: "https://behavioral-graph.onrender.com"
       - key: CRON_SECRET
         value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
