@@ -12033,11 +12033,17 @@ def update_sec_actuals():
 
 
 @app.route('/api/admin/backfill-search-queries', methods=['POST'])
-@requires_admin
 def backfill_search_queries():
     """One-off: extract search queries from clickstream URLs for an existing
     profile CSV in S3 and append SEARCH/AI rows.  Expects JSON body with
-    ``s3_key`` (the CSV key in dashboard-inputs)."""
+    ``s3_key`` (the CSV key in dashboard-inputs).
+    Auth: admin session OR X-Cron-Secret header."""
+    secret = request.headers.get('X-Cron-Secret') or ''
+    expected = os.environ.get('CRON_SECRET', '')
+    is_cron = bool(expected and secret == expected)
+    is_admin = 'username' in session and session.get('role') in ('admin', 'super_admin')
+    if not is_cron and not is_admin:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     import io, re
     data = request.get_json() or {}
     s3_key = (data.get('s3_key') or '').strip()
