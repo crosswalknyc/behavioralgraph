@@ -12112,38 +12112,65 @@ def backfill_search_queries():
 
         print(f"[backfill-search] brand_variants={len(brand_variants)}, dates={behavior_start}..{behavior_end}, sample={sample_size}")
 
-        # 3. Snowflake: create TEMP_UIDS (COMMON_NAME match, fast)
+        # 3. Snowflake: fetch search-engine URLs directly (no expensive TEMP_UIDS recreation)
+        # Uses COMMON_NAME → HOST_MAPPING join to find search engines, then parses URLs.
+        # Queries CLICKSTREAM_FINAL in two fast steps:
+        #   a) Find UIDs via COMMON_NAME exact match (indexed, fast) for brand audience
+        #   b) Get search URLs for those UIDs via HOST_MAPPING Section LIKE '%search%'
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
         cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
 
-        # Use top 3 brand variants with URL LIKE + date-partitioned scan
-        top_variants = sorted(brand_variants[:20], key=len, reverse=True)[:3]
-        url_clauses = ' OR '.join(
-            f"LOWER(URL) LIKE '%{v.lower().replace(chr(39), chr(39)*2).replace(chr(37), chr(92)+chr(37)).replace(chr(95), chr(92)+chr(95))}%' ESCAPE '\\\\'"
-            for v in top_variants
-        )
+        # Step A: Build audience UIDs from COMMON_NAME matches (fast indexed lookup)
+        # The brand_variants are URL slugs; look up the actual COMMON_NAME values
+        # from HOST_MAPPING that correspond to the brand
+        top_slug = brand_variants[0] if brand_variants else ''
+        safe_slug = top_slug.lower().replace("'", "''")
+        print(f"[backfill-search] Finding COMMON_NAME values matching brand slug: {safe_slug}")
 
-        print(f"[backfill-search] Creating TEMP_UIDS with URL LIKE filter on top 3 variants")
         cur.execute(f"""
-            CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
-            SELECT DISTINCT UID
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-            WHERE DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
-              AND ({url_clauses})
-              AND UID IS NOT NULL
-            LIMIT 50000
+            SELECT DISTINCT Brand FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING
+            WHERE LOWER(Brand) LIKE '%{safe_slug}%'
+               OR LOWER(Brand) LIKE '%{safe_slug.replace("-", " ")}%'
+               OR LOWER(Brand) LIKE '%{safe_slug.replace("-", "")}%'
+            LIMIT 20
         """)
+        mapped_names = [r[0] for r in cur.fetchall()]
+        print(f"[backfill-search] HOST_MAPPING brand matches: {mapped_names}")
+
+        if mapped_names:
+            cn_filter = ' OR '.join(f"LOWER(cf.COMMON_NAME) = '{n.lower().replace(chr(39), chr(39)*2)}'" for n in mapped_names)
+            uid_sql = f"""
+                CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
+                SELECT DISTINCT UID FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+                WHERE cf.DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
+                  AND ({cn_filter})
+                LIMIT 50000
+            """
+        else:
+            # Fallback: use a small URL LIKE sample if no HOST_MAPPING match
+            safe_v = safe_slug.replace('%', '\\%').replace('_', '\\_')
+            uid_sql = f"""
+                CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
+                SELECT DISTINCT UID FROM (
+                    SELECT UID FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL SAMPLE (1)
+                    WHERE DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
+                      AND LOWER(URL) LIKE '%{safe_v}%' ESCAPE '\\\\'
+                ) LIMIT 50000
+            """
+
+        print("[backfill-search] Creating TEMP_UIDS...")
+        cur.execute(uid_sql)
         uid_count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
         print(f"[backfill-search] TEMP_UIDS: {uid_count:,} UIDs")
 
         if uid_count == 0:
             conn.close()
-            return jsonify({'success': True, 'message': 'No matching UIDs found', 'queries_added': 0})
+            return jsonify({'success': True, 'message': 'No matching UIDs found in clickstream', 'queries_added': 0})
 
-        # 4. Extract search engine URLs for these UIDs
-        print("[backfill-search] Fetching search engine URLs...")
+        # Step B: Get search-engine URLs for these UIDs
+        print("[backfill-search] Fetching search engine URLs for audience...")
         cur.execute(f"""
             SELECT m.Brand AS platform, cf.URL, cf.UID
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
