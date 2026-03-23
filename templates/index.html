@@ -12051,6 +12051,7 @@
                                             <option value="DIGITAL BANKING">Digital Banking</option>
                                             <option value="EVENTS">Events</option>
                                             <option value="FOOTWEAR">Footwear</option>
+                                            <option value="FRANCHISE">Franchise</option>
                                             <option value="GROCERY">Grocery</option>
                                             <option value="INTIMATES">Intimates</option>
                                             <option value="JEWELRY">Jewelry</option>
@@ -12504,6 +12505,7 @@
                                                     <option value="DIGITAL BANKING">Digital Banking</option>
                                                     <option value="EVENTS">Events</option>
                                                     <option value="FOOTWEAR">Footwear</option>
+                                                    <option value="FRANCHISE">Franchise</option>
                                                     <option value="GROCERY">Grocery</option>
                                                     <option value="INTIMATES">Intimates</option>
                                                     <option value="JEWELRY">Jewelry</option>
@@ -43505,7 +43507,7 @@
             document.getElementById('affinityContentUnder').innerHTML = renderAffinityList(contentItemsUnder);
             
             // Brand Affinities
-            const brandCategories = ['BRAND', 'WHERE THEY SHOP', 'MOST PURCHASED', 'APPAREL', 'AUTOMOTIVE'];
+            const brandCategories = ['BRAND', 'WHERE THEY SHOP', 'MOST PURCHASED', 'APPAREL', 'AUTOMOTIVE', 'FRANCHISE'];
             const allBrandItems = allItems
                 .filter(i => brandCategories.some(c => i.category.toUpperCase().includes(c)));
             
@@ -47862,7 +47864,7 @@
         
         // Master category mapping for organized display
         const MASTER_CATEGORIES = {
-            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'GROCERY', 'INTIMATES', 'JEWELRY', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
+            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
             'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'PODCAST', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - FOX', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
