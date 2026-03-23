@@ -12032,51 +12032,121 @@ def update_sec_actuals():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+_backfill_status = {}  # job_id -> {status, message, ...}
+
+
+def _run_backfill_search(job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size):
+    """Background worker: extract search queries and update S3 CSV."""
+    import io
+    try:
+        _backfill_status[job_id] = {'status': 'running', 'message': 'Connecting to Snowflake...'}
+
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        cur = conn.cursor()
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+
+        _backfill_status[job_id]['message'] = 'Finding audience UIDs (sampled)...'
+
+        # Use COMMON_NAME exact match (fast) instead of LIKE on URL (slow full-scan)
+        # Pick top 5 brand variants by length (most specific) for COMMON_NAME matching
+        top_variants = sorted(brand_variants[:30], key=len, reverse=True)[:5]
+        cn_clauses = ' OR '.join(f"LOWER(COMMON_NAME) = '{v.lower().replace(chr(39), chr(39)*2)}'" for v in top_variants)
+
+        cur.execute(f"""
+            CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
+            SELECT DISTINCT UID
+            FROM (
+                SELECT UID FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL SAMPLE (10)
+                WHERE DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
+                  AND ({cn_clauses})
+                  AND COMMON_NAME IS NOT NULL AND COMMON_NAME != ''
+            )
+            LIMIT 50000
+        """)
+        uid_count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
+        print(f"[backfill-search] Created TEMP_UIDS with {uid_count:,} UIDs (sampled)")
+        _backfill_status[job_id]['message'] = f'Extracting search queries for {uid_count:,} UIDs...'
+        _backfill_status[job_id]['uid_count'] = uid_count
+
+        if uid_count == 0:
+            conn.close()
+            _backfill_status[job_id] = {'status': 'done', 'message': 'No matching UIDs found', 'queries_added': 0}
+            return
+
+        search_df = _bg.extract_search_queries(cur, behavior_start, behavior_end, sample_size)
+        conn.close()
+
+        if search_df is None or len(search_df) == 0:
+            _backfill_status[job_id] = {'status': 'done', 'message': 'No search queries found in URLs', 'queries_added': 0}
+            return
+
+        _backfill_status[job_id]['message'] = f'Appending {len(search_df)} queries to CSV...'
+
+        # Remove existing SEARCH/AI rows and append new
+        df_clean = df[df['Column'].str.upper() != 'SEARCH/AI']
+        for col in df_clean.columns:
+            if col not in search_df.columns:
+                search_df[col] = '' if df_clean[col].dtype == object else 0
+        search_df = search_df[[c for c in df_clean.columns if c in search_df.columns]]
+        df_final = pd.concat([df_clean, search_df], ignore_index=True)
+
+        csv_buffer = io.StringIO()
+        df_final.to_csv(csv_buffer, index=False)
+        s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key, Body=csv_buffer.getvalue().encode('utf-8'))
+        print(f"[backfill-search] ✅ Uploaded updated CSV: {s3_key} ({len(df_final)} rows, +{len(search_df)} queries)")
+
+        _backfill_status[job_id] = {
+            'status': 'done',
+            'message': f'Added {len(search_df)} SEARCH/AI rows to {s3_key}',
+            'queries_added': len(search_df),
+            'uid_count': uid_count,
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        _backfill_status[job_id] = {'status': 'error', 'message': str(e)}
+
+
 @app.route('/api/admin/backfill-search-queries', methods=['POST'])
 def backfill_search_queries():
-    """One-off: extract search queries from clickstream URLs for an existing
-    profile CSV in S3 and append SEARCH/AI rows.  Expects JSON body with
-    ``s3_key`` (the CSV key in dashboard-inputs).
+    """Extract search queries from clickstream URLs for an existing profile
+    CSV in S3 and append SEARCH/AI rows.  Runs in background; returns a
+    job_id to poll via GET.
     Auth: admin session OR X-Cron-Secret header."""
     secret = request.headers.get('X-Cron-Secret') or ''
     expected = os.environ.get('CRON_SECRET', '')
     is_cron = bool(expected and secret == expected)
-    is_admin = 'username' in session and session.get('role') in ('admin', 'super_admin')
-    if not is_cron and not is_admin:
+    is_admin_user = 'username' in session and session.get('role') in ('admin', 'super_admin')
+    if not is_cron and not is_admin_user:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
-    import io, re
+
+    import io, re, threading
     data = request.get_json() or {}
     s3_key = (data.get('s3_key') or '').strip()
     if not s3_key:
         return jsonify({'success': False, 'error': 's3_key required'}), 400
 
     try:
-        # 1. Download CSV from S3
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         csv_bytes = obj['Body'].read()
         import pandas as pd
         df = pd.read_csv(io.BytesIO(csv_bytes))
-        print(f"[backfill-search] Loaded {s3_key}: {len(df)} rows")
 
-        # 2. Parse metadata from INPUT_METADATA row
         meta_rows = df[df['Column'].str.upper() == 'INPUT_METADATA']
         if meta_rows.empty:
-            return jsonify({'success': False, 'error': 'No INPUT_METADATA row found in CSV'}), 400
+            return jsonify({'success': False, 'error': 'No INPUT_METADATA row'}), 400
         meta_val = str(meta_rows.iloc[0].get('Value', ''))
         m_bstart = re.search(r'BEHAVIOR_START:(\S+?)(?:_|$)', meta_val)
         m_bend = re.search(r'BEHAVIOR_END:(\S+?)(?:_|$)', meta_val)
         if not m_bstart or not m_bend:
-            return jsonify({'success': False, 'error': 'Cannot parse BEHAVIOR dates from metadata'}), 400
+            return jsonify({'success': False, 'error': 'Cannot parse dates'}), 400
         behavior_start = m_bstart.group(1)
         behavior_end = m_bend.group(1)
 
-        # 3. Get brand variants from BRAND INPUT row
         brand_rows = df[df['Column'].str.upper() == 'BRAND INPUT']
-        if brand_rows.empty:
-            return jsonify({'success': False, 'error': 'No BRAND INPUT row'}), 400
-        brand_variants = [v.strip() for v in str(brand_rows.iloc[0]['Value']).split(',') if v.strip()]
+        brand_variants = [v.strip() for v in str(brand_rows.iloc[0]['Value']).split(',') if v.strip()] if not brand_rows.empty else []
 
-        # 4. Get sample size
         ss_rows = df[df['Column'].str.upper() == 'SAMPLE SIZE']
         sample_size = 44700
         if not ss_rows.empty:
@@ -12085,79 +12155,24 @@ def backfill_search_queries():
             except Exception:
                 pass
 
-        print(f"[backfill-search] brand_variants={len(brand_variants)}, dates={behavior_start}..{behavior_end}, sample={sample_size}")
+        job_id = str(uuid.uuid4())[:8]
+        _backfill_status[job_id] = {'status': 'running', 'message': 'Starting...'}
 
-        # 5. Connect to Snowflake and create TEMP_UIDS from brand filter
-        import bg as _bg
-        conn = _bg.connect_snowflake()
-        cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        t = threading.Thread(target=_run_backfill_search, args=(job_id, s3_key, df, behavior_start, behavior_end, brand_variants, sample_size), daemon=True)
+        t.start()
 
-        # Build brand filter (same logic as pipeline)
-        clauses = []
-        for b in brand_variants[:30]:  # cap at 30 to keep SQL manageable
-            safe = b.lower().replace("'", "''").replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
-            clauses.append(f"LOWER(URL) LIKE '%{safe}%' ESCAPE '\\\\'")
-        brand_filter = ' OR '.join(clauses) if clauses else '1=1'
-
-        cur.execute(f"""
-            CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
-            SELECT DISTINCT UID
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-            WHERE DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
-              AND ({brand_filter})
-              AND COMMON_NAME IS NOT NULL AND COMMON_NAME != ''
-            LIMIT 100000
-        """)
-        uid_count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
-        print(f"[backfill-search] Created TEMP_UIDS with {uid_count:,} UIDs")
-
-        if uid_count == 0:
-            conn.close()
-            return jsonify({'success': False, 'error': 'No matching UIDs found in clickstream'}), 404
-
-        # 6. Run search query extraction (uses the new Python-parsed version)
-        search_df = _bg.extract_search_queries(cur, behavior_start, behavior_end, sample_size)
-        conn.close()
-
-        if search_df is None or len(search_df) == 0:
-            return jsonify({'success': True, 'message': 'No search queries found in URLs', 'queries_added': 0})
-
-        print(f"[backfill-search] Extracted {len(search_df)} SEARCH/AI rows")
-
-        # 7. Remove any existing SEARCH/AI rows from the CSV and append new ones
-        df = df[df['Column'].str.upper() != 'SEARCH/AI']
-        # Align columns
-        for col in df.columns:
-            if col not in search_df.columns:
-                search_df[col] = '' if df[col].dtype == object else 0
-        search_df = search_df[[c for c in df.columns if c in search_df.columns]]
-        df = pd.concat([df, search_df], ignore_index=True)
-
-        # 8. Upload back to S3
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
-        s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key, Body=csv_buffer.getvalue().encode('utf-8'))
-        print(f"[backfill-search] ✅ Uploaded updated CSV back to {s3_key} ({len(df)} rows)")
-
-        # Invalidate cache so dashboard picks up new data
-        for job in s3_cache.get('jobs', []):
-            if (job.get('s3_key') or job.get('key')) == s3_key:
-                job['_search_backfilled'] = True
-                break
-
-        return jsonify({
-            'success': True,
-            'message': f'Added {len(search_df)} SEARCH/AI query rows to {s3_key}',
-            'queries_added': len(search_df),
-            'uid_count': uid_count,
-            'sample_size': sample_size
-        })
-
+        return jsonify({'success': True, 'job_id': job_id, 'message': 'Backfill started in background. Poll GET /api/admin/backfill-search-queries?job_id=...'})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/backfill-search-queries', methods=['GET'])
+def backfill_search_status():
+    """Poll status of a backfill-search-queries job."""
+    job_id = request.args.get('job_id', '')
+    if job_id not in _backfill_status:
+        return jsonify({'success': False, 'error': 'Unknown job_id'}), 404
+    return jsonify({'success': True, **_backfill_status[job_id]})
 
 
 @app.route('/api/admin/quick-selects', methods=['GET'])
