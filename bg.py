@@ -10943,7 +10943,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     -- Sports and activities
                     WHEN "COLUMN" IN ('golf', 'nba', 'mlb', 'mls', 'nhl', 'nfl', 'wnba', 'nwsl', 'soccer', 'premier league', 'rugby', 'volleyball') THEN 5
                     -- Technology and services
-                    WHEN "COLUMN" IN ('app/platform usage', 'search engine', 'telecom', 'digital banking', 'banking', 'credit provider', 'insurance') THEN 6
+                    WHEN "COLUMN" IN ('app/platform usage', 'search engine', 'telecom', 'digital banking', 'banking', 'credit provider', 'insurance', 'search/ai') THEN 6
                     -- Other categories
                     ELSE 7
                 END AS SECTION_ORDER
@@ -11164,7 +11164,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 -- Sports and activities
                 WHEN "COLUMN" IN ('GOLF', 'NBA', 'MLB', 'MLS', 'NHL', 'NFL', 'WNBA', 'NWSL', 'SOCCER', 'PREMIER LEAGUE', 'RUGBY', 'VOLLEYBALL') THEN 5
                 -- Technology and services
-                WHEN "COLUMN" IN ('APP/PLATFORM USAGE', 'SEARCH ENGINE', 'TELECOM', 'DIGITAL BANKING', 'BANKING', 'CREDIT PROVIDER', 'INSURANCE') THEN 6
+                WHEN "COLUMN" IN ('APP/PLATFORM USAGE', 'SEARCH ENGINE', 'TELECOM', 'DIGITAL BANKING', 'BANKING', 'CREDIT PROVIDER', 'INSURANCE', 'SEARCH/AI') THEN 6
                 -- Other categories
                 ELSE 7
             END,
@@ -11209,6 +11209,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Consolidate ESPN+ into ESPN across all categories
     df = consolidate_espn_brands(df)
     print("✅ DataFrame processing completed")
+
+    # Extract search queries from clickstream URLs and append to DataFrame
+    try:
+        search_df = extract_search_queries(cur, behavior_start, behavior_end, original_sample_size)
+        if len(search_df) > 0:
+            df = pd.concat([df, search_df], ignore_index=True)
+            print(f"✅ Appended {len(search_df)} SEARCH/AI query rows to DataFrame")
+    except Exception as e:
+        print(f"⚠️ Search query extraction skipped: {e}")
 
     # Separate demographics from behavioral data before filtering
     print("🔧 Separating demographics and behavioral data...")
@@ -14018,7 +14027,8 @@ def add_unique_purchase_confirmations_column_fallback(df):
         'STREAMING/CHANNEL', 'STREAMING/PLATFORM', 'STREAMING/MUSIC', 
         'SOCIAL MEDIA', 'SEARCH ENGINE', 'QSR', 'MEDIA', 'TICKETING',
         'WHERE THEY SHOP', 'BANKING', 'CREDIT PROVIDER', 'GOLF',
-        'EDUCATION & LEARNING', 'SOCCER', 'PREMIER LEAGUE', 'WNBA', 'NWSL'
+        'EDUCATION & LEARNING', 'SOCCER', 'PREMIER LEAGUE', 'WNBA', 'NWSL',
+        'FRANCHISE', 'SEARCH/AI'
     ]
     
     # Calculate raw numbers for each behavioral category
@@ -14615,7 +14625,7 @@ def boost_all_behavioral_by_2x(df: pd.DataFrame) -> pd.DataFrame:
         'SOCCER ATHLETE', 'WNBA ATHLETE', 'TALENT', 'COLLEGE/UNIVERSITY',
         'ACCESSORIES', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'HOME/OUTDOOR',
         'PETS', 'TECHNOLOGY BRAND', 'PHARMACY', 'FRANCHISE', 'MOVIE THEATER',
-        'TOYS', 'HEALTH & WELLNESS', 'HEAVY MACHINERY'
+        'TOYS', 'HEALTH & WELLNESS', 'HEAVY MACHINERY', 'SEARCH/AI'
     ])
     
     if 'Original Raw Numbers' not in df.columns:
@@ -14761,6 +14771,113 @@ def boost_search_engine_ai_additional_5x(df: pd.DataFrame) -> pd.DataFrame:
         print(f"✅ Applied additional 5x boost to SEARCH ENGINE/AI: {changes} entries updated (total: 30x)")
     
     return df
+
+
+def _extract_query_from_url(url, platform_lower):
+    """Extract search query from a URL using platform-specific parsing.
+    Returns the decoded query string or None."""
+    from urllib.parse import urlparse, parse_qs, unquote_plus
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url if '://' in url else 'https://' + url)
+        qs = parse_qs(parsed.query, keep_blank_values=False)
+
+        param_priority = ['q', 'p', 'query', 'text', 'search_query',
+                          'wd', 'word', 'oq', 'kw', 'search', 'k']
+        for param in param_priority:
+            vals = qs.get(param)
+            if vals and vals[0].strip():
+                return unquote_plus(vals[0]).strip()
+
+        if 'perplexity' in platform_lower and parsed.path.startswith('/search/'):
+            seg = parsed.path.split('/search/', 1)[1].split('/')[0].split('?')[0]
+            if seg:
+                return unquote_plus(seg.replace('+', ' ')).strip()
+
+        if parsed.fragment:
+            frag_qs = parse_qs(parsed.fragment, keep_blank_values=False)
+            for param in param_priority:
+                vals = frag_qs.get(param)
+                if vals and vals[0].strip():
+                    return unquote_plus(vals[0]).strip()
+
+    except Exception:
+        pass
+    return None
+
+
+def extract_search_queries(cur, behavior_start, behavior_end, actual_sample_size):
+    """Extract actual search queries from clickstream URLs for search engine visits.
+
+    Fetches raw URLs from CLICKSTREAM_FINAL where the COMMON_NAME maps to a
+    search-engine section in HOST_MAPPING, then parses each URL in Python
+    using per-platform logic (urllib.parse).  Returns a DataFrame with columns
+    [Column, Value, Percentage, Original Raw Numbers (Database)] ready to
+    concat onto the main pipeline DataFrame.
+    """
+    print("🔍 Extracting search queries from clickstream URLs...")
+
+    try:
+        cur.execute(f"""
+            SELECT
+                m.Brand   AS platform,
+                cf.URL,
+                cf.UID
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+            JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m
+                ON LOWER(cf.COMMON_NAME) = LOWER(m.Brand)
+            WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+              AND cf.DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
+              AND LOWER(m.Section) LIKE '%search%'
+              AND cf.URL IS NOT NULL
+              AND LENGTH(cf.URL) > 10
+        """)
+        rows = cur.fetchall()
+    except Exception as e:
+        print(f"⚠️ Search query extraction SQL failed: {e}")
+        return pd.DataFrame(columns=["Column", "Value", "Percentage", "Original Raw Numbers (Database)"])
+
+    print(f"  Fetched {len(rows):,} search-engine URL rows for Python parsing")
+    if not rows:
+        print("  No search-engine URLs found in clickstream data")
+        return pd.DataFrame(columns=["Column", "Value", "Percentage", "Original Raw Numbers (Database)"])
+
+    query_uids = {}
+    parsed_count = 0
+    for platform, url, uid in rows:
+        decoded = _extract_query_from_url(url, (platform or '').lower())
+        if not decoded or len(decoded) < 3 or len(decoded) > 200:
+            continue
+        decoded = decoded[:120]
+        parsed_count += 1
+        key = (platform or 'Unknown', decoded.title())
+        if key not in query_uids:
+            query_uids[key] = set()
+        query_uids[key].add(uid)
+
+    print(f"  Parsed {parsed_count:,} queries from {len(rows):,} URLs ({100*parsed_count/max(len(rows),1):.1f}% hit rate)")
+
+    if not query_uids:
+        print("  No valid search queries decoded after parsing")
+        return pd.DataFrame(columns=["Column", "Value", "Percentage", "Original Raw Numbers (Database)"])
+
+    ranked = sorted(query_uids.items(), key=lambda x: -len(x[1]))[:200]
+    denom = max(actual_sample_size, 1)
+    new_rows = []
+    for (platform, query), uid_set in ranked:
+        cnt = len(uid_set)
+        pct = round(100.0 * cnt / denom, 4)
+        new_rows.append({
+            "Column": "SEARCH/AI",
+            "Value": f"{platform} | {query}",
+            "Percentage": pct,
+            "Original Raw Numbers (Database)": cnt,
+        })
+
+    print(f"  ✅ Extracted {len(new_rows)} unique search queries across {len(set(r['Value'].split(' | ')[0] for r in new_rows))} platforms")
+    return pd.DataFrame(new_rows)
+
 
 def boost_search_engine_ai_custom(df: pd.DataFrame) -> pd.DataFrame:
     """Apply custom boost to SEARCH ENGINE/AI category.
@@ -16744,7 +16861,8 @@ def set_behavioral_original_raws_from_percentage(df: pd.DataFrame) -> pd.DataFra
         'NON PROFIT/CHARITY', 'EVENTS', 'VENUE', 'TRAVEL', 'AUTOMOBILE',
         'WORKOUT FACILITY', 'INSURANCE', 'INVESTMENTS', 'TELECOM', 'DEVICE',
         'TECHNOLOGY', 'GAMES', 'AMUSEMENT PARKS', 'BROADCAST/CABLE',
-        'INFLUENCERS', 'ORGANIZATIONAL MEMBERSHIPS', 'GOVERNMENT'
+        'INFLUENCERS', 'ORGANIZATIONAL MEMBERSHIPS', 'GOVERNMENT', 'FRANCHISE',
+        'SEARCH/AI'
     ])
     
     if 'Original Raw Numbers' not in df.columns:
@@ -20129,7 +20247,8 @@ def apply_final_verification(df_final):
         'TICKETING', 'WHERE THEY DINE', 'WHERE THEY SHOP', 'AMUSEMENT PARKS', 'APP/PLATFORM USAGE',
         'MEDIA', 'BANKING', 'TECHNOLOGY', 'DEVICE', 'DIGITAL BANKING', 'CREDIT PROVIDER',
         'WORKOUT FACILITY', 'INSURANCE', 'INVESTMENTS', 'GOVERNMENT', 'GOLF', 'EVENTS',
-        'BETTING', 'NON PROFIT/CHARITY', 'INTEREST', 'NFL', 'NBA', 'WNBA', 'MLS', 'SOCCER', 'PREMIER LEAGUE', 'NWSL'
+        'BETTING', 'NON PROFIT/CHARITY', 'INTEREST', 'NFL', 'NBA', 'WNBA', 'MLS', 'SOCCER', 'PREMIER LEAGUE', 'NWSL',
+        'FRANCHISE', 'SEARCH/AI'
     ]
     # Category caps and natural cascade removed per user request
     
@@ -20140,7 +20259,8 @@ def apply_final_verification(df_final):
         'TICKETING', 'WHERE THEY DINE', 'WHERE THEY SHOP', 'AMUSEMENT PARKS', 'APP/PLATFORM USAGE',
         'MEDIA', 'BANKING', 'TECHNOLOGY', 'DEVICE', 'DIGITAL BANKING', 'CREDIT PROVIDER',
         'WORKOUT FACILITY', 'INSURANCE', 'INVESTMENTS', 'GOVERNMENT', 'GOLF', 'EVENTS',
-        'BETTING', 'NON PROFIT/CHARITY', 'INTEREST', 'NFL', 'NBA', 'WNBA', 'MLS', 'SOCCER', 'PREMIER LEAGUE', 'NWSL'
+        'BETTING', 'NON PROFIT/CHARITY', 'INTEREST', 'NFL', 'NBA', 'WNBA', 'MLS', 'SOCCER', 'PREMIER LEAGUE', 'NWSL',
+        'FRANCHISE', 'SEARCH/AI'
     ]
     
     for category in behavioral_categories:
@@ -23749,7 +23869,8 @@ def recalculate_raw_numbers_after_cross_category_consistency(df):
         "STREAMING/CHANNEL", "STREAMING/PLATFORM", "STREAMING/MUSIC", 
         "SOCIAL MEDIA", "SEARCH ENGINE", "QSR", "MEDIA", "TICKETING",
         "WHERE THEY SHOP", "BANKING", "CREDIT PROVIDER", "GOLF",
-        "EDUCATION & LEARNING", "SOCCER", "PREMIER LEAGUE", "WNBA", "NWSL"
+        "EDUCATION & LEARNING", "SOCCER", "PREMIER LEAGUE", "WNBA", "NWSL",
+        "FRANCHISE", "SEARCH/AI"
     ]
     
     # Recalculate raw numbers for each behavioral category based on FINAL percentages
