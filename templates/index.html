@@ -15117,30 +15117,48 @@
                         </div>
                     </div>
                     <div id="roasIQDashboardPanels" style="display: none; overflow-y: auto; flex: 1; padding: 1.5rem;">
-                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-shrink: 0;">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; flex-shrink: 0; flex-wrap: wrap;">
                             <h2 id="roasIQDashTitle" style="margin: 0; font-size: 1.35rem;">ROAS IQ</h2>
                             <span id="roasIQDashMeta" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
                         </div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Projected US Consumers</div>
-                                <div id="roasIQKpiUids" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-lime);"></div>
+                        <!-- KPI Cards -->
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Projected Audience</div>
+                                <div id="roasIQKpiUids" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime); margin-top: 2px;"></div>
                             </div>
-                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">URLs Analyzed</div>
-                                <div id="roasIQKpiUrls" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-cyan);"></div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Attributed Consumers</div>
+                                <div id="roasIQKpiAttributed" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan); margin-top: 2px;"></div>
                             </div>
-                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Channels</div>
-                                <div id="roasIQKpiChannels" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange);"></div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Conversion Rate</div>
+                                <div id="roasIQKpiConvRate" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange); margin-top: 2px;"></div>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Channels</div>
+                                <div id="roasIQKpiChannels" style="font-size: 1.5rem; font-weight: 700; color: #8b5cf6; margin-top: 2px;"></div>
                             </div>
                         </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3>📊 Channel Mix</h3>
-                            <canvas id="roasIQChannelChart" height="260"></canvas>
+                        <!-- Charts Row: Horizontal Bar + Doughnut side by side -->
+                        <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
+                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Channel Penetration</h3>
+                                <canvas id="roasIQBarChart" height="220"></canvas>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
+                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Channel Mix</h3>
+                                <canvas id="roasIQChannelChart" height="220"></canvas>
+                            </div>
                         </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
-                            <h3>📋 Attribution Detail</h3>
+                        <!-- Conversion Chart -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
+                            <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Conversion Rate by Channel</h3>
+                            <canvas id="roasIQConvChart" height="180"></canvas>
+                        </div>
+                        <!-- Attribution Detail Table -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
+                            <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Attribution Detail</h3>
                             <div id="roasIQDetailTable" style="overflow-x: auto;"></div>
                         </div>
                     </div>
@@ -17900,44 +17918,126 @@
             return Math.round(raw * 15 / 10000000 * 329900000);
         }
 
+        var _roasIQViewBarInst = null;
+        var _roasIQViewConvInst = null;
+
         function renderRoasIQViewDashboard(data) {
             document.getElementById('roasIQEmptyState').style.display = 'none';
             document.getElementById('roasIQDashboardPanels').style.display = '';
             var results = data.results || [];
             var projUids = data.projected_uid_count || _roasProject(data.uid_count || 0);
             document.getElementById('roasIQDashTitle').textContent = data.project_name || 'ROAS IQ';
-            document.getElementById('roasIQDashMeta').textContent = (data.search_terms||[]).join(', ') + ' \u00b7 ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' \u00b7 ' + projUids.toLocaleString() + ' Projected US Consumers';
-            document.getElementById('roasIQKpiUids').textContent = projUids.toLocaleString();
-            document.getElementById('roasIQKpiUrls').textContent = (data.url_rows||0).toLocaleString();
+            document.getElementById('roasIQDashMeta').textContent = (data.search_terms||[]).join(', ') + ' \u00b7 ' + (data.start_date||'') + ' to ' + (data.end_date||'');
+
             var channelMap = {};
             var totalProjected = 0;
             results.forEach(function(r) {
                 var proj = r.projected || _roasProject(r.raw || 0);
-                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalProjected:0, sources:{} };
+                var projConv = r.projected_conversions || _roasProject(r.conversions || 0);
+                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalProjected:0, totalConv:0, totalProjConv:0, totalRaw:0, sources:{} };
                 channelMap[r.channel].totalPct += r.pct;
                 channelMap[r.channel].totalProjected += proj;
+                channelMap[r.channel].totalConv += (r.conversions || 0);
+                channelMap[r.channel].totalProjConv += projConv;
+                channelMap[r.channel].totalRaw += (r.raw || 0);
                 totalProjected += proj;
-                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, projected:0 };
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, projected:0, convRate: 0, projConv: 0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
                 channelMap[r.channel].sources[r.source].projected += proj;
+                channelMap[r.channel].sources[r.source].convRate = r.conv_rate || 0;
+                channelMap[r.channel].sources[r.source].projConv += projConv;
             });
             var channels = Object.entries(channelMap).sort(function(a,b) { return b[1].totalPct - a[1].totalPct; });
+
+            // KPIs
+            document.getElementById('roasIQKpiUids').textContent = projUids.toLocaleString();
+            document.getElementById('roasIQKpiAttributed').textContent = totalProjected.toLocaleString();
+            document.getElementById('roasIQKpiConvRate').textContent = (data.overall_conv_rate != null ? data.overall_conv_rate : 0) + '%';
             document.getElementById('roasIQKpiChannels').textContent = channels.length;
-            var canvas = document.getElementById('roasIQChannelChart');
-            if (canvas && typeof Chart !== 'undefined') {
-                if (_roasIQViewChartInst) _roasIQViewChartInst.destroy();
-                var colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
-                _roasIQViewChartInst = new Chart(canvas.getContext('2d'), { type:'doughnut', data:{ labels:channels.map(function(c){return c[0];}), datasets:[{data:channels.map(function(c){return c[1].totalPct;}), backgroundColor:colors.slice(0,channels.length), borderWidth:0}] }, options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,font:{size:11}}}}} });
+
+            var colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#a3e635'];
+            var chLabels = channels.map(function(c){return c[0];});
+            var chPcts = channels.map(function(c){return c[1].totalPct;});
+
+            // Horizontal bar chart - Channel Penetration
+            var barCanvas = document.getElementById('roasIQBarChart');
+            if (barCanvas && typeof Chart !== 'undefined') {
+                if (_roasIQViewBarInst) _roasIQViewBarInst.destroy();
+                _roasIQViewBarInst = new Chart(barCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: chLabels,
+                        datasets: [{
+                            label: 'Penetration %',
+                            data: chPcts,
+                            backgroundColor: colors.slice(0, channels.length),
+                            borderWidth: 0, borderRadius: 4, barPercentage: 0.7
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: true,
+                        scales: {
+                            x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v){return v+'%';} } },
+                            y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } }
+                        },
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.x.toFixed(2) + '% penetration'; } } } }
+                    }
+                });
             }
+
+            // Doughnut chart - Channel Mix
+            var doughnutCanvas = document.getElementById('roasIQChannelChart');
+            if (doughnutCanvas && typeof Chart !== 'undefined') {
+                if (_roasIQViewChartInst) _roasIQViewChartInst.destroy();
+                var total = chPcts.reduce(function(s,v){return s+v;},0)||1;
+                _roasIQViewChartInst = new Chart(doughnutCanvas.getContext('2d'), {
+                    type: 'doughnut',
+                    data: { labels: chLabels, datasets: [{ data: chPcts.map(function(v){return Math.round(v/total*1000)/10;}), backgroundColor: colors.slice(0, channels.length), borderWidth: 0 }] },
+                    options: { responsive: true, maintainAspectRatio: true, cutout: '55%', plugins: { legend: { position: 'right', labels: { padding: 10, usePointStyle: true, font: { size: 11 }, color: '#e8e8e8' } }, tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed + '%'; } } } } }
+                });
+            }
+
+            // Conversion rate bar chart
+            var convCanvas = document.getElementById('roasIQConvChart');
+            if (convCanvas && typeof Chart !== 'undefined') {
+                if (_roasIQViewConvInst) _roasIQViewConvInst.destroy();
+                var convRates = channels.map(function(c) { return c[1].totalRaw > 0 ? Math.round(10000.0 * c[1].totalConv / c[1].totalRaw) / 100 : 0; });
+                _roasIQViewConvInst = new Chart(convCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: chLabels,
+                        datasets: [{
+                            label: 'Conversion %',
+                            data: convRates,
+                            backgroundColor: colors.slice(0, channels.length).map(function(c){return c+'cc';}),
+                            borderColor: colors.slice(0, channels.length),
+                            borderWidth: 1, borderRadius: 4, barPercentage: 0.6
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: true,
+                        scales: {
+                            y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v){return v+'%';} }, beginAtZero: true },
+                            x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
+                        },
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.y.toFixed(2) + '% conversion'; } } } }
+                    }
+                });
+            }
+
+            // Detail table with conversion data
             var icons = {'Email':'\ud83d\udce7','Social Media':'\ud83d\udcf1','Digital Ads':'\ud83d\udcb0','Affiliate':'\ud83e\udd1d','Sms':'\ud83d\udcac','Influencer':'\u2b50','Push Notification':'\ud83d\udd14','Other':'\ud83d\udccb'};
-            var total = channels.reduce(function(s,c){return s+c[1].totalPct;},0)||1;
+            var mixTotal = channels.reduce(function(s,c){return s+c[1].totalPct;},0)||1;
             var rows = channels.map(function(pair) {
                 var n = pair[0], ch = pair[1];
+                var chConvRate = ch.totalRaw > 0 ? (100.0 * ch.totalConv / ch.totalRaw).toFixed(2) : '0.00';
                 var srcs = Object.entries(ch.sources).sort(function(a,b){return b[1].pct-a[1].pct;});
-                var srcRows = srcs.map(function(sp) { return '<tr style="background:var(--bg-body);"><td style="padding:4px 10px 4px 30px;color:var(--text-secondary);font-size:12px;">\u2514 '+sp[0]+'</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+sp[1].pct.toFixed(2)+'%</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+((sp[1].pct/total)*100).toFixed(1)+'%</td><td style="padding:4px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sp[1].projected.toLocaleString()+'</td></tr>'; }).join('');
-                return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'\ud83d\udccb')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td></tr>' + srcRows;
+                var srcRows = srcs.map(function(sp) {
+                    return '<tr style="background:var(--bg-body);"><td style="padding:4px 10px 4px 30px;color:var(--text-secondary);font-size:12px;">\u2514 '+sp[0]+'</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+sp[1].pct.toFixed(2)+'%</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+((sp[1].pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:4px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sp[1].projected.toLocaleString()+'</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+sp[1].convRate.toFixed(2)+'%</td><td style="padding:4px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sp[1].projConv.toLocaleString()+'</td></tr>';
+                }).join('');
+                return '<tr style="cursor:pointer;" onclick="this.classList.toggle(\'roas-expanded\');var s=this.nextElementSibling;while(s&&s.style.background){s.style.display=s.style.display===\'none\'?\'\':\' none\';s=s.nextElementSibling;}"><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'\ud83d\udccb')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjConv.toLocaleString()+'</td></tr>' + srcRows;
             }).join('');
-            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Projected US Consumers</th></tr></thead><tbody>'+rows+'</tbody></table>';
+            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rows+'</tbody></table>';
         }
 
         // ====================================================================
@@ -19795,25 +19895,31 @@
             const results = data.results || [];
             const projUids = data.projected_uid_count || _roasProject(data.uid_count || 0);
             const headerEl = document.getElementById('roasIQDashHeader');
-            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.25rem;">📊 ' + (data.project_name||'ROAS IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' &middot; ' + projUids.toLocaleString() + ' Projected US Consumers</span></div>';
+            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.25rem;">📊 ' + (data.project_name||'ROAS IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + '</span></div>';
             const channelMap = {};
             let totalProjected = 0;
             results.forEach(r => {
                 const proj = r.projected || _roasProject(r.raw || 0);
-                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalProjected: 0 };
+                const projConv = r.projected_conversions || _roasProject(r.conversions || 0);
+                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalProjected: 0, totalConv: 0, totalProjConv: 0, totalRaw: 0 };
                 channelMap[r.channel].totalPct += r.pct;
                 channelMap[r.channel].totalProjected += proj;
+                channelMap[r.channel].totalConv += (r.conversions || 0);
+                channelMap[r.channel].totalProjConv += projConv;
+                channelMap[r.channel].totalRaw += (r.raw || 0);
                 totalProjected += proj;
-                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, projected: 0 };
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, projected: 0, convRate: 0, projConv: 0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
                 channelMap[r.channel].sources[r.source].projected += proj;
+                channelMap[r.channel].sources[r.source].convRate = r.conv_rate || 0;
+                channelMap[r.channel].sources[r.source].projConv += projConv;
             });
             const channels = Object.entries(channelMap).sort((a,b) => b[1].totalPct - a[1].totalPct);
             const icons = {'Email':'📧','Social Media':'📱','Digital Ads':'💰','Affiliate':'🤝','Sms':'💬','Influencer':'⭐','Push Notification':'🔔','Other':'📋'};
             const statsEl = document.getElementById('roasIQStats');
             if (statsEl) {
-                const topCh = channels[0] ? channels[0][0] : 'N/A';
-                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Projected US Consumers</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+totalProjected.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Sources</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+results.length+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Top Channel</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+(icons[topCh]||'📋')+' '+topCh+'</div></div>';
+                const convRate = data.overall_conv_rate != null ? data.overall_conv_rate : 0;
+                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Projected Audience</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+projUids.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Attributed Consumers</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+totalProjected.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Rate</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+convRate+'%</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div>';
             }
             const canvas = document.getElementById('roasIQChart');
             if (canvas && typeof Chart !== 'undefined') {
@@ -19824,16 +19930,19 @@
             const tableEl = document.getElementById('roasIQChannelTable');
             if (tableEl) {
                 const total = channels.reduce((s,c)=>s+c[1].totalPct,0)||1;
-                const rows = channels.map(([n,ch])=>'<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td></tr>').join('');
-                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Projected US Consumers</th></tr></thead><tbody>'+rows+'</tbody></table>';
+                const rows = channels.map(([n,ch])=>{
+                    const chConvRate = ch.totalRaw > 0 ? (100.0 * ch.totalConv / ch.totalRaw).toFixed(2) : '0.00';
+                    return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
+                }).join('');
+                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rows+'</tbody></table>';
             }
             const cardsEl = document.getElementById('roasIQSourceCards');
             if (cardsEl) {
                 cardsEl.innerHTML = channels.map(([name,ch])=>{
                     const srcs = Object.entries(ch.sources).sort((a,b)=>b[1].pct-a[1].pct);
                     const chT = ch.totalPct||1;
-                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+d.projected.toLocaleString()+'</td></tr>').join('');
-                    return '<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;"><span style="font-size:1.5rem;">'+(icons[name]||'📋')+'</span><div><h3 style="margin:0;font-size:15px;">'+name+'</h3><span style="font-size:12px;color:var(--text-secondary);">'+ch.totalPct.toFixed(2)+'% pen · '+srcs.length+' sources</span></div></div><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;">Source</th><th style="padding:6px 10px;text-align:right;">Share</th><th style="padding:6px 10px;text-align:right;">Pen.</th><th style="padding:6px 10px;text-align:right;">Projected US Consumers</th></tr></thead><tbody>'+sr+'</tbody></table></div>';
+                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+d.projected.toLocaleString()+'</td><td style="padding:6px 10px;text-align:right;">'+d.convRate.toFixed(2)+'%</td></tr>').join('');
+                    return '<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;"><span style="font-size:1.5rem;">'+(icons[name]||'📋')+'</span><div><h3 style="margin:0;font-size:15px;">'+name+'</h3><span style="font-size:12px;color:var(--text-secondary);">'+ch.totalPct.toFixed(2)+'% pen · '+srcs.length+' sources</span></div></div><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;">Source</th><th style="padding:6px 10px;text-align:right;">Share</th><th style="padding:6px 10px;text-align:right;">Pen.</th><th style="padding:6px 10px;text-align:right;">Proj. Consumers</th><th style="padding:6px 10px;text-align:right;">Conv.</th></tr></thead><tbody>'+sr+'</tbody></table></div>';
                 }).join('');
             }
         }
