@@ -38349,8 +38349,27 @@
         Object.entries(GP_ACTUAL_DMA).forEach(([k, v]) => {
             _gpActualDmaIndex[k.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()] = v;
         });
+        // Pre-built canonical name → GP Actual lookup
+        const _canonicalGpActual = {};
+        (function buildCanonGpIndex() {
+            const normGp = {};
+            Object.entries(GP_ACTUAL_DMA).forEach(([k, v]) => {
+                normGp[k.toLowerCase().replace(/[^a-z0-9]/g, '')] = v;
+            });
+            CANONICAL_DMAS.forEach(c => {
+                const cn = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (normGp[cn]) { _canonicalGpActual[c] = normGp[cn]; return; }
+                const primary = cn.substring(0, Math.min(cn.length, 10));
+                for (const [k, v] of Object.entries(normGp)) {
+                    if (k.startsWith(primary) || primary.startsWith(k.substring(0, 8))) {
+                        _canonicalGpActual[c] = v; return;
+                    }
+                }
+            });
+        })();
         function getGPActualDMA(dmaName) {
             if (!dmaName) return null;
+            if (_canonicalGpActual[dmaName] != null) return _canonicalGpActual[dmaName];
             const raw = GP_ACTUAL_DMA[dmaName];
             if (raw != null) return raw;
             const norm = dmaName.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
@@ -38434,11 +38453,33 @@
             return arr;
         }
 
+        // Pre-built canonical name → DMA rank lookup
+        const _canonicalDmaRank = {};
+        (function buildCanonRankIndex() {
+            const normRanks = {};
+            Object.entries(DMA_RANKS).forEach(([k, v]) => {
+                normRanks[k.toLowerCase().replace(/[^a-z0-9]/g, '')] = v;
+            });
+            CANONICAL_DMAS.forEach(c => {
+                const cn = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (normRanks[cn]) { _canonicalDmaRank[c] = normRanks[cn]; return; }
+                const primary = cn.substring(0, Math.min(cn.length, 12));
+                for (const [k, v] of Object.entries(normRanks)) {
+                    if (k.startsWith(primary) || primary.startsWith(k.substring(0, 8))) {
+                        _canonicalDmaRank[c] = v; return;
+                    }
+                }
+            });
+        })();
+
         // Helper function to get DMA rank with fuzzy matching
         function getDMARank(dmaName) {
             if (dmaName == null || typeof dmaName !== 'string') return null;
             
-            // Direct match first
+            // Canonical lookup first (fast path for condensed names)
+            if (_canonicalDmaRank[dmaName]) return _canonicalDmaRank[dmaName];
+            
+            // Direct match
             if (DMA_RANKS[dmaName]) return DMA_RANKS[dmaName];
             
             // Normalize function for comparison
@@ -38654,6 +38695,9 @@
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(4) + '%';
+                const genPopDisplay = isProjection
+                    ? formatNumber(Math.round((loc.genPopPct || 0) / 100 * 329900000))
+                    : (loc.genPopPct || 0).toFixed(4) + '%';
                 const dmaRank = getDMARank(loc.name);
                 const gpActual = getGPActualDMA(loc.name);
                 const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
@@ -38663,6 +38707,7 @@
                         <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
+                        <span style="color: var(--text-secondary);">${genPopDisplay}</span>
                         <span style="color: var(--text-secondary);">${gpStr}</span>
                         <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
                     </div>
