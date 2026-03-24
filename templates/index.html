@@ -15129,23 +15129,19 @@
                             <h2 id="roasIQDashTitle" style="margin: 0; font-size: 1.35rem;">ROAS IQ</h2>
                             <span id="roasIQDashMeta" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
                         </div>
-                        <!-- KPI Cards -->
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Projected Audience</div>
-                                <div id="roasIQKpiUids" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime); margin-top: 2px;"></div>
+                        <!-- KPI Cards - row 1 -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 0.75rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Projected Audience</div>
+                                <div id="roasIQKpiUids" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-lime); margin-top: 4px;"></div>
                             </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Attributed Consumers</div>
-                                <div id="roasIQKpiAttributed" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan); margin-top: 2px;"></div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Attributed Consumers</div>
+                                <div id="roasIQKpiAttributed" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-cyan); margin-top: 4px;"></div>
                             </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Conversion Rate</div>
-                                <div id="roasIQKpiConvRate" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange); margin-top: 2px;"></div>
-                            </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Channels</div>
-                                <div id="roasIQKpiChannels" style="font-size: 1.5rem; font-weight: 700; color: #8b5cf6; margin-top: 2px;"></div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Conversion Rate</div>
+                                <div id="roasIQKpiConvRate" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-orange); margin-top: 4px;"></div>
                             </div>
                         </div>
                         <!-- Charts Row: Horizontal Bar + Doughnut side by side -->
@@ -15159,19 +15155,26 @@
                                 <canvas id="roasIQChannelChart" height="220"></canvas>
                             </div>
                         </div>
-                        <!-- Engagement KPIs -->
+                        <!-- KPI Cards - row 2 -->
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Avg Touches / User</div>
-                                <div id="roasIQKpiAvgTouch" style="font-size: 1.5rem; font-weight: 700; color: #14b8a6; margin-top: 2px;"></div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Channels</div>
+                                <div id="roasIQKpiChannels" style="font-size: 1.6rem; font-weight: 700; color: #8b5cf6; margin-top: 4px;"></div>
                             </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Multi-Touch Users</div>
-                                <div id="roasIQKpiMultiTouch" style="font-size: 1.5rem; font-weight: 700; color: #f97316; margin-top: 2px;"></div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Avg Touches / User</div>
+                                <div id="roasIQKpiAvgTouch" style="font-size: 1.6rem; font-weight: 700; color: #14b8a6; margin-top: 4px;"></div>
                             </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Proj. Conversions</div>
-                                <div id="roasIQKpiProjConv" style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-top: 2px;"></div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Multi-Touch Users</div>
+                                <div id="roasIQKpiMultiTouch" style="font-size: 1.6rem; font-weight: 700; color: #f97316; margin-top: 4px;"></div>
+                            </div>
+                        </div>
+                        <!-- KPI Cards - row 3 -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Proj. Conversions</div>
+                                <div id="roasIQKpiProjConv" style="font-size: 1.6rem; font-weight: 700; color: #10b981; margin-top: 4px;"></div>
                             </div>
                         </div>
                         <!-- Conversion Pie + Day of Week + Engagement row - 3 across -->
@@ -18055,30 +18058,24 @@
                 });
             }
 
-            // Conversion rate bar chart
+            // Conversion rate pie chart
             var convCanvas = document.getElementById('roasIQConvChart');
             if (convCanvas && typeof Chart !== 'undefined') {
                 if (_roasIQViewConvInst) _roasIQViewConvInst.destroy();
                 var convRates = channels.map(function(c) { return c[1].totalRaw > 0 ? Math.round(10000.0 * c[1].totalConv / c[1].totalRaw) / 100 : 0; });
                 _roasIQViewConvInst = new Chart(convCanvas.getContext('2d'), {
-                    type: 'bar',
+                    type: 'doughnut',
                     data: {
                         labels: chLabels,
                         datasets: [{
-                            label: 'Conversion %',
                             data: convRates,
-                            backgroundColor: colors.slice(0, channels.length).map(function(c){return c+'cc';}),
-                            borderColor: colors.slice(0, channels.length),
-                            borderWidth: 1, borderRadius: 4, barPercentage: 0.6
+                            backgroundColor: colors.slice(0, channels.length),
+                            borderWidth: 0
                         }]
                     },
                     options: {
-                        responsive: true, maintainAspectRatio: true,
-                        scales: {
-                            y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v){return v+'%';} }, beginAtZero: true },
-                            x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
-                        },
-                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.y.toFixed(2) + '% conversion'; } } } }
+                        responsive: true, maintainAspectRatio: false, cutout: '45%',
+                        plugins: { legend: { position: 'bottom', labels: { padding: 6, usePointStyle: true, font: { size: 10 }, color: '#e8e8e8', boxWidth: 8 } }, tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed.toFixed(2) + '%'; } } } }
                     }
                 });
             }
@@ -18152,7 +18149,7 @@
                 window._roasIQDayInst = new Chart(dayCanvas.getContext('2d'), {
                     type: 'bar',
                     data: { labels: dayNames, datasets: [{ label: 'Ad Touches', data: dayTotals, backgroundColor: '#6366f1aa', borderColor: '#6366f1', borderWidth: 1, borderRadius: 4 }] },
-                    options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 } } }, x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } }, plugins: { legend: { display: false } } }
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 10 } } }, x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 10 } } } }, plugins: { legend: { display: false } } }
                 });
             }
 
@@ -18172,12 +18169,12 @@
                 if (chartType === 'doughnut') {
                     window[instKey] = new Chart(cv.getContext('2d'), {
                         type: 'doughnut', data: { labels: labels, datasets: [{ data: vals, backgroundColor: demoColors.slice(0, labels.length), borderWidth: 0 }] },
-                        options: { responsive: true, maintainAspectRatio: false, cutout: '45%', plugins: { legend: { position: 'bottom', labels: { padding: 4, usePointStyle: true, font: { size: 9 }, color: '#e8e8e8', boxWidth: 8 } }, tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed + '%'; } } } } }
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '45%', plugins: { legend: { position: 'bottom', labels: { padding: 6, usePointStyle: true, font: { size: 10 }, color: '#e8e8e8', boxWidth: 10 } }, tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed + '%'; } } } } }
                     });
                 } else {
                     window[instKey] = new Chart(cv.getContext('2d'), {
                         type: 'bar', data: { labels: labels, datasets: [{ data: vals, backgroundColor: demoColors.slice(0, labels.length), borderWidth: 0, borderRadius: 3, barPercentage: 0.7 }] },
-                        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 9 }, callback: function(v){return v+'%';} } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 9 } } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.x + '%'; } } } } }
+                        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 10 }, callback: function(v){return v+'%';} } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 10 } } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.x + '%'; } } } } }
                     });
                 }
             }
