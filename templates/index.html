@@ -8077,7 +8077,7 @@
             justify-self: start;
         }
         #allLocationsContainer .location-row {
-            grid-template-columns: 58px minmax(0, 1fr) 44px 80px 72px 58px;
+            grid-template-columns: 58px minmax(0, 1fr) 44px 80px 72px 72px 58px;
         }
 
         .location-row.header {
@@ -14197,6 +14197,7 @@
                         <span>Location</span>
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                         <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                        <span class="has-tooltip" data-tooltip="Gen Pop % from our panel data" style="line-height:1.1;text-align:left;">Gen<br>Pop</span>
                         <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Nielsen 2026)" style="line-height:1.1;text-align:left;">GP<br>Actual</span>
                         <span class="index-col">Index</span>
                     </div>
@@ -15173,34 +15174,34 @@
                                 <div id="roasIQKpiProjConv" style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-top: 2px;"></div>
                             </div>
                         </div>
-                        <!-- Conversion + Day/Hour row -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
-                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Conversion Rate by Channel</h3>
-                                <canvas id="roasIQConvChart" height="200"></canvas>
+                        <!-- Conversion Pie + Day of Week + Engagement row - 3 across -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.85rem;">Conv. Rate by Channel</h3>
+                                <div style="height: 200px;"><canvas id="roasIQConvChart"></canvas></div>
                             </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
-                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Ad Engagement by Day of Week</h3>
-                                <canvas id="roasIQDayChart" height="200"></canvas>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.85rem;">Ad Engagement by Day</h3>
+                                <div style="height: 200px;"><canvas id="roasIQDayChart"></canvas></div>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.85rem;">Audience Gender</h3>
+                                <div style="height: 200px;"><canvas id="roasIQGenderChart"></canvas></div>
                             </div>
                         </div>
-                        <!-- Demographics Row - compact 4-across -->
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem; max-height: 220px; overflow: hidden;">
-                                <h3 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Gender</h3>
-                                <div style="height: 160px;"><canvas id="roasIQGenderChart"></canvas></div>
+                        <!-- Demographics row 2 - 3 across -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.85rem;">Audience Age</h3>
+                                <div style="height: 200px;"><canvas id="roasIQAgeChart"></canvas></div>
                             </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem; max-height: 220px; overflow: hidden;">
-                                <h3 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Age</h3>
-                                <div style="height: 160px;"><canvas id="roasIQAgeChart"></canvas></div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.85rem;">Audience Income</h3>
+                                <div style="height: 200px;"><canvas id="roasIQIncomeChart"></canvas></div>
                             </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem; max-height: 220px; overflow: hidden;">
-                                <h3 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Income</h3>
-                                <div style="height: 160px;"><canvas id="roasIQIncomeChart"></canvas></div>
-                            </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem; max-height: 220px; overflow: hidden;">
-                                <h3 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Ethnicity</h3>
-                                <div style="height: 160px;"><canvas id="roasIQEthnicityChart"></canvas></div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.85rem;">Audience Ethnicity</h3>
+                                <div style="height: 200px;"><canvas id="roasIQEthnicityChart"></canvas></div>
                             </div>
                         </div>
                         <!-- Sales Conversions -->
