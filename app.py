@@ -19678,23 +19678,30 @@ _UTM_CHANNEL_MAP = {
                      'convertkit', 'campaignmonitor', 'campaign_monitor', 'aweber',
                      'activecampaign', 'omnisend', 'emarsys', 'sailthru', 'responsys',
                      'marketo', 'pardot', 'eloqua', 'sendinblue', 'brevo', 'mailgun',
-                     'postmark', 'sparkpost', 'mandrill'},
-        'mediums': {'email', 'e-mail', 'newsletter', 'email_blast', 'email-marketing'},
+                     'postmark', 'sparkpost', 'mandrill', 'gmail', 'email',
+                     'yahoo_mail', 'outlook', 'mail'},
+        'mediums': {'email', 'e-mail', 'newsletter', 'email_blast', 'email-marketing',
+                    'email_marketing'},
     },
     'social media': {
         'sources': {'facebook', 'fb', 'instagram', 'ig', 'tiktok', 'twitter', 'x',
                      'snapchat', 'snap', 'pinterest', 'linkedin', 'reddit', 'youtube',
-                     'yt', 'threads', 'whatsapp', 'telegram', 'wechat', 'tumblr'},
+                     'yt', 'threads', 'whatsapp', 'telegram', 'wechat', 'tumblr',
+                     'meta', 'social', 'share'},
         'mediums': {'social', 'social-media', 'social_media', 'organic_social',
                      'paid_social', 'paidsocial'},
         'click_ids': {'fbclid', 'ttclid'},
     },
     'digital ads': {
-        'sources': {'google', 'bing', 'dv360', 'thetradedesk', 'criteo', 'taboola',
-                     'outbrain', 'adroll', 'amazon_ads', 'amazon', 'programmatic'},
+        'sources': {'google', 'google_ads', 'googleads', 'google-ads', 'adwords',
+                     'googleadwords', 'bing', 'microsoft', 'dv360', 'thetradedesk',
+                     'criteo', 'taboola', 'outbrain', 'adroll', 'amazon_ads', 'amazon',
+                     'programmatic', 'propellerads', 'adcash', 'rtbhouse', 'yandex',
+                     'xpromo', 'hoyolab', 'uniquelinks', 'googleleads'},
         'mediums': {'cpc', 'ppc', 'display', 'retargeting', 'remarketing', 'paid',
                      'banner', 'cpv', 'cpm', 'paid_search', 'paidsearch',
-                     'paid-search', 'shopping', 'performance_max', 'pmax'},
+                     'paid-search', 'shopping', 'performance_max', 'pmax',
+                     'sem', 'search', 'paid_media'},
         'click_ids': {'gclid', 'msclkid', 'dclid', 'wbraid', 'gbraid'},
     },
     'affiliate': {
@@ -19716,10 +19723,52 @@ _UTM_CHANNEL_MAP = {
     },
 }
 
+_NOISE_SOURCES = {
+    'organic', 'nav', 'navigation', 'direct', 'none', 'not set', '(not set)',
+    'app_launcher', 'app-launcher', 'pwa-homescreen', 'pwa_homescreen',
+    'chrome-profile-chooser', 'sign_in_no_continue', 'sign-in', 'sign_in',
+    'google-account', 'google_account', 'ext_sidebar', 'ext-sidebar',
+    'drive', 'google_jobs_apply', 'ogb', 'chatgpt.com', 'gemini',
+    'pwngames', 'internal', 'bookmark', '31',
+}
+
+_SOURCE_FAMILY_MAP = {
+    'google': {'google', 'google_ads', 'google-ads', 'googleads', 'adwords',
+               'googleadwords', 'googleleads', 'gbra', 'g', 'gg', 'sem',
+               'ppc', 'cpc', 'dv360', 'pmax', 'google_jobs_apply'},
+    'meta': {'facebook', 'fb', 'instagram', 'ig', 'meta', 'whatsapp'},
+    'microsoft': {'bing', 'microsoft', 'msclk', 'msn', 'outlook'},
+    'tiktok': {'tiktok', 'tt', 'tiktok_ads'},
+    'twitter / x': {'twitter', 'x'},
+    'pinterest': {'pinterest', 'pin'},
+    'linkedin': {'linkedin', 'li'},
+    'youtube': {'youtube', 'yt'},
+    'reddit': {'reddit'},
+    'snapchat': {'snapchat', 'snap'},
+    'criteo': {'criteo'},
+    'taboola': {'taboola'},
+    'outbrain': {'outbrain'},
+    'amazon': {'amazon', 'amazon_ads'},
+    'yandex': {'yandex'},
+    'rtbhouse': {'rtbhouse'},
+    'propellerads': {'propellerads'},
+    'adcash': {'adcash'},
+}
+
+def _get_source_family(source_lower):
+    for family, members in _SOURCE_FAMILY_MAP.items():
+        if source_lower in members:
+            return family
+    return None
+
 
 def _classify_utm_channel(utm_source, utm_medium, query_params):
     src = (utm_source or '').lower().strip()
     med = (utm_medium or '').lower().strip()
+
+    if src in _NOISE_SOURCES or med in ('organic', 'none', 'direct', '(none)', '(not set)', 'navigation', 'nav'):
+        return None, None
+
     for channel, rules in _UTM_CHANNEL_MAP.items():
         if src in rules.get('sources', set()):
             return channel, src
@@ -19729,10 +19778,23 @@ def _classify_utm_channel(utm_source, utm_medium, query_params):
             if query_params.get(cid):
                 label = src if src else cid.replace('clid', '').replace('id', '') or cid
                 return channel, label
+
+    if 'email' in src or 'mail' in src or 'newsletter' in med:
+        return 'email', src
     if 'influencer' in src or 'creator' in src:
         return 'influencer', src
     if 'affiliate' in src:
         return 'affiliate', src
+
+    family = _get_source_family(src)
+    if family:
+        if family in ('google', 'microsoft', 'yandex', 'criteo', 'taboola',
+                       'outbrain', 'amazon', 'rtbhouse', 'propellerads', 'adcash'):
+            return 'digital ads', src
+        if family in ('meta', 'twitter / x', 'pinterest', 'linkedin',
+                       'youtube', 'reddit', 'snapchat', 'tiktok'):
+            return 'social media', src
+
     if src or med:
         return 'other', src or med
     return None, None
@@ -19941,6 +20003,7 @@ def _run_roas_iq(job_id):
         channel_source_uids = {}
         channel_domains = {}
         uid_touch_counts = {}
+        source_domains = {}
         for url, uid in rows:
             try:
                 p = urlparse(url if '://' in url else 'https://' + url)
@@ -19962,6 +20025,10 @@ def _run_roas_iq(job_id):
                     if ch_title not in channel_domains:
                         channel_domains[ch_title] = {}
                     channel_domains[ch_title][domain] = channel_domains[ch_title].get(domain, 0) + 1
+                    sd_key = (ch_title, source_clean)
+                    if sd_key not in source_domains:
+                        source_domains[sd_key] = {}
+                    source_domains[sd_key][domain] = source_domains[sd_key].get(domain, 0) + 1
 
                 uid_touch_counts[uid] = uid_touch_counts.get(uid, 0) + 1
             except Exception:
@@ -19979,13 +20046,19 @@ def _run_roas_iq(job_id):
             total_ad_uids |= uid_set
             pct = round(100.0 * cnt / max(uid_count, 1), 4)
             conv_rate = round(100.0 * conv_cnt / max(cnt, 1), 2)
+            family = _get_source_family(source.lower().replace(' ', '_')) or source
+            top_dom = ''
+            sd = source_domains.get((channel, source), {})
+            if sd:
+                top_dom = max(sd.items(), key=lambda x: x[1])[0]
             results.append({
-                'channel': channel, 'source': source,
+                'channel': channel, 'source': source, 'family': family.title(),
                 'pct': pct, 'raw': cnt,
                 'projected': _project_to_us_pop(cnt),
                 'conversions': conv_cnt,
                 'projected_conversions': _project_to_us_pop(conv_cnt),
                 'conv_rate': conv_rate,
+                'top_domain': top_dom,
             })
 
         overall_ad_uid_count = len(total_ad_uids)
