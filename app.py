@@ -19865,6 +19865,7 @@ def _run_roas_iq(job_id):
         start_date = params['start_date']
         end_date = params['end_date']
         project_name = params['project_name']
+        scope = params.get('scope', 'overall')
 
         update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
         import bg as _bg
@@ -19881,7 +19882,20 @@ def _run_roas_iq(job_id):
             return
 
         projected_uid_count = _project_to_us_pop(uid_count)
-        update_job_status(job_id, progress=40, message=f'Found {projected_uid_count:,} projected US consumers. Fetching UTM URLs...')
+        scope_label = 'brand-specific' if scope == 'brand_specific' else 'overall ecosystem'
+        update_job_status(job_id, progress=40, message=f'Found {projected_uid_count:,} projected US consumers. Fetching {scope_label} UTM URLs...')
+
+        brand_filter_sql = ''
+        if scope == 'brand_specific':
+            brand_clauses = []
+            for term in search_terms:
+                safe = term.lower().replace("'", "''").strip()
+                if safe:
+                    brand_clauses.append(f"LOWER(cf.COMMON_NAME) LIKE '%{safe}%'")
+                    brand_clauses.append(f"LOWER(cf.URL) LIKE '%{safe}%'")
+            if brand_clauses:
+                brand_filter_sql = f"AND ({' OR '.join(brand_clauses)})"
+
         cur.execute(f"""
             SELECT cf.URL, cf.UID
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
@@ -19898,6 +19912,7 @@ def _run_roas_iq(job_id):
                 OR LOWER(cf.URL) LIKE '%wbraid%'
                 OR LOWER(cf.URL) LIKE '%gbraid%'
               )
+              {brand_filter_sql}
         """)
         rows = cur.fetchall()
 
@@ -20179,6 +20194,7 @@ def _run_roas_iq(job_id):
             'search_terms': search_terms,
             'start_date': start_date,
             'end_date': end_date,
+            'scope': scope,
             'uid_count': uid_count,
             'projected_uid_count': _project_to_us_pop(uid_count),
             'url_rows': len(rows),
@@ -20250,6 +20266,9 @@ def submit_roas_iq():
             return jsonify({'error': 'start_date and end_date required'}), 400
 
         search_terms = [t.strip() for t in search_terms_raw.replace('\n', ',').split(',') if t.strip()]
+        scope = (data.get('scope') or 'overall').strip()
+        if scope not in ('overall', 'brand_specific'):
+            scope = 'overall'
         job_id = str(uuid.uuid4())[:8]
         jobs[job_id] = {
             'status': 'queued', 'progress': 0, 'message': 'Queued',
@@ -20262,6 +20281,7 @@ def submit_roas_iq():
                 'search_terms': search_terms,
                 'start_date': start_date,
                 'end_date': end_date,
+                'scope': scope,
             },
         }
         if s3_client:

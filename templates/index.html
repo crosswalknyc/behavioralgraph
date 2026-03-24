@@ -13551,6 +13551,34 @@
                                     <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Search Terms <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated, matches COMMON_NAME)</span></label>
                                     <textarea id="roasIQSearchTerms" rows="3" placeholder="e.g. nike, adidas, puma" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
                                 </div>
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 13px;">Attribution Scope</label>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                        <label style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; border: 2px solid var(--accent-primary); background: rgba(99,102,241,0.08); cursor: pointer; font-size: 13px; transition: all 0.2s;" id="roasIQScopeOverallLabel">
+                                            <input type="radio" name="roasIQScope" value="overall" id="roasIQScopeOverall" checked style="accent-color: var(--accent-primary);">
+                                            <div><div style="font-weight: 600;">Overall Ecosystem</div><div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">All digital marketing across panelist activity</div></div>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; border: 2px solid var(--border-color); background: transparent; cursor: pointer; font-size: 13px; transition: all 0.2s;" id="roasIQScopeBrandLabel">
+                                            <input type="radio" name="roasIQScope" value="brand_specific" id="roasIQScopeBrand" style="accent-color: var(--accent-primary);">
+                                            <div><div style="font-weight: 600;">Brand-Specific</div><div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Only ads attributable to the search term</div></div>
+                                        </label>
+                                    </div>
+                                    <script>
+                                    document.querySelectorAll('input[name="roasIQScope"]').forEach(function(r) {
+                                        r.addEventListener('change', function() {
+                                            var oL = document.getElementById('roasIQScopeOverallLabel');
+                                            var bL = document.getElementById('roasIQScopeBrandLabel');
+                                            if (this.value === 'overall') {
+                                                oL.style.borderColor = 'var(--accent-primary)'; oL.style.background = 'rgba(99,102,241,0.08)';
+                                                bL.style.borderColor = 'var(--border-color)'; bL.style.background = 'transparent';
+                                            } else {
+                                                bL.style.borderColor = 'var(--accent-primary)'; bL.style.background = 'rgba(99,102,241,0.08)';
+                                                oL.style.borderColor = 'var(--border-color)'; oL.style.background = 'transparent';
+                                            }
+                                        });
+                                    });
+                                    </script>
+                                </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
                                     <div>
                                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
@@ -17995,7 +18023,8 @@
             var results = data.results || [];
             var projUids = data.projected_uid_count || _roasProject(data.uid_count || 0);
             document.getElementById('roasIQDashTitle').textContent = data.project_name || 'ROAS IQ';
-            document.getElementById('roasIQDashMeta').textContent = (data.search_terms||[]).join(', ') + ' \u00b7 ' + (data.start_date||'') + ' to ' + (data.end_date||'');
+            var scopeBadge = data.scope === 'brand_specific' ? ' · 🎯 Brand-Specific' : ' · 🌐 Overall Ecosystem';
+            document.getElementById('roasIQDashMeta').textContent = (data.search_terms||[]).join(', ') + ' \u00b7 ' + (data.start_date||'') + ' to ' + (data.end_date||'') + scopeBadge;
 
             var channelMap = {};
             var totalProjected = 0;
@@ -20029,7 +20058,8 @@
             document.getElementById('roasIQStatus').style.display = '';
             document.getElementById('roasIQStatusText').textContent = 'Submitting...';
             document.getElementById('roasIQProgressBar').style.width = '0%';
-            fetch('/api/roas-iq/submit', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin', body: JSON.stringify({ project_name: projectName, search_terms: searchTerms, start_date: startDate, end_date: endDate }) })
+            var scope = (document.querySelector('input[name="roasIQScope"]:checked') || {}).value || 'overall';
+            fetch('/api/roas-iq/submit', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin', body: JSON.stringify({ project_name: projectName, search_terms: searchTerms, start_date: startDate, end_date: endDate, scope: scope }) })
                 .then(r => r.json()).then(data => {
                     if (data.error) { document.getElementById('roasIQStatusText').textContent = 'Error: ' + data.error; document.getElementById('roasIQSubmitBtn').disabled = false; return; }
                     showAnalysisStatusModal();
@@ -20093,7 +20123,8 @@
             const results = data.results || [];
             const projUids = data.projected_uid_count || _roasProject(data.uid_count || 0);
             const headerEl = document.getElementById('roasIQDashHeader');
-            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.25rem;">📊 ' + (data.project_name||'ROAS IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + '</span></div>';
+            var scopeBadge2 = data.scope === 'brand_specific' ? ' &middot; 🎯 Brand-Specific' : ' &middot; 🌐 Overall Ecosystem';
+            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.25rem;">📊 ' + (data.project_name||'ROAS IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + scopeBadge2 + '</span></div>';
             const channelMap = {};
             let totalProjected = 0;
             results.forEach(r => {
