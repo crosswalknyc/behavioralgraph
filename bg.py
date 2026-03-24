@@ -10944,10 +10944,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     WHEN "COLUMN" IN ('golf', 'nba', 'mlb', 'mls', 'nhl', 'nfl', 'wnba', 'nwsl', 'soccer', 'premier league', 'rugby', 'volleyball') THEN 5
                     -- Technology and services
                     WHEN "COLUMN" IN ('app/platform usage', 'search engine', 'telecom', 'digital banking', 'banking', 'credit provider', 'insurance', 'search/ai') THEN 6
-                    -- Attribution and e-commerce
-                    WHEN "COLUMN" IN ('roas tracker', 'e-commerce') THEN 7
                     -- Other categories
-                    ELSE 8
+                    ELSE 7
                 END AS SECTION_ORDER
             FROM BEHAVIOR_FINAL
             ORDER BY SECTION_ORDER, "COLUMN", UID_COUNT DESC
@@ -11167,10 +11165,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 WHEN "COLUMN" IN ('GOLF', 'NBA', 'MLB', 'MLS', 'NHL', 'NFL', 'WNBA', 'NWSL', 'SOCCER', 'PREMIER LEAGUE', 'RUGBY', 'VOLLEYBALL') THEN 5
                 -- Technology and services
                 WHEN "COLUMN" IN ('APP/PLATFORM USAGE', 'SEARCH ENGINE', 'TELECOM', 'DIGITAL BANKING', 'BANKING', 'CREDIT PROVIDER', 'INSURANCE', 'SEARCH/AI') THEN 6
-                -- Attribution and e-commerce
-                WHEN "COLUMN" IN ('ROAS TRACKER', 'E-COMMERCE') THEN 7
                 -- Other categories
-                ELSE 8
+                ELSE 7
             END,
             CASE
                 WHEN "COLUMN" = 'GENDER' THEN 1
@@ -11222,24 +11218,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print(f"✅ Appended {len(search_df)} SEARCH/AI query rows to DataFrame")
     except Exception as e:
         print(f"⚠️ Search query extraction skipped: {e}")
-
-    # Extract UTM attribution data and append to DataFrame
-    try:
-        utm_df = extract_utm_attribution(cur, behavior_start, behavior_end, original_sample_size)
-        if len(utm_df) > 0:
-            df = pd.concat([df, utm_df], ignore_index=True)
-            print(f"✅ Appended {len(utm_df)} ROAS TRACKER rows to DataFrame")
-    except Exception as e:
-        print(f"⚠️ UTM attribution extraction skipped: {e}")
-
-    # Extract e-commerce funnel data and append to DataFrame
-    try:
-        ecom_df = extract_ecommerce_funnel(cur, behavior_start, behavior_end, original_sample_size)
-        if len(ecom_df) > 0:
-            df = pd.concat([df, ecom_df], ignore_index=True)
-            print(f"✅ Appended {len(ecom_df)} E-COMMERCE rows to DataFrame")
-    except Exception as e:
-        print(f"⚠️ E-commerce funnel extraction skipped: {e}")
 
     # Separate demographics from behavioral data before filtering
     print("🔧 Separating demographics and behavioral data...")
@@ -14050,7 +14028,7 @@ def add_unique_purchase_confirmations_column_fallback(df):
         'SOCIAL MEDIA', 'SEARCH ENGINE', 'QSR', 'MEDIA', 'TICKETING',
         'WHERE THEY SHOP', 'BANKING', 'CREDIT PROVIDER', 'GOLF',
         'EDUCATION & LEARNING', 'SOCCER', 'PREMIER LEAGUE', 'WNBA', 'NWSL',
-        'FRANCHISE', 'SEARCH/AI', 'ROAS TRACKER', 'E-COMMERCE'
+        'FRANCHISE', 'SEARCH/AI'
     ]
     
     # Calculate raw numbers for each behavioral category
@@ -14647,8 +14625,7 @@ def boost_all_behavioral_by_2x(df: pd.DataFrame) -> pd.DataFrame:
         'SOCCER ATHLETE', 'WNBA ATHLETE', 'TALENT', 'COLLEGE/UNIVERSITY',
         'ACCESSORIES', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'HOME/OUTDOOR',
         'PETS', 'TECHNOLOGY BRAND', 'PHARMACY', 'FRANCHISE', 'MOVIE THEATER',
-        'TOYS', 'HEALTH & WELLNESS', 'HEAVY MACHINERY', 'SEARCH/AI',
-        'ROAS TRACKER', 'E-COMMERCE'
+        'TOYS', 'HEALTH & WELLNESS', 'HEAVY MACHINERY', 'SEARCH/AI'
     ])
     
     if 'Original Raw Numbers' not in df.columns:
@@ -14796,155 +14773,6 @@ def boost_search_engine_ai_additional_5x(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-_UTM_CHANNEL_MAP = {
-    'email': {
-        'sources': {'klaviyo', 'mailchimp', 'sendgrid', 'hubspot', 'constant_contact',
-                     'constantcontact', 'braze', 'iterable', 'customer.io', 'drip',
-                     'convertkit', 'campaignmonitor', 'campaign_monitor', 'aweber',
-                     'activecampaign', 'omnisend', 'emarsys', 'sailthru', 'responsys',
-                     'marketo', 'pardot', 'eloqua', 'sendinblue', 'brevo', 'mailgun',
-                     'postmark', 'sparkpost', 'mandrill'},
-        'mediums': {'email', 'e-mail', 'newsletter', 'email_blast', 'email-marketing'},
-    },
-    'social media': {
-        'sources': {'facebook', 'fb', 'instagram', 'ig', 'tiktok', 'twitter', 'x',
-                     'snapchat', 'snap', 'pinterest', 'linkedin', 'reddit', 'youtube',
-                     'yt', 'threads', 'whatsapp', 'telegram', 'wechat', 'tumblr'},
-        'mediums': {'social', 'social-media', 'social_media', 'organic_social',
-                     'paid_social', 'paidsocial'},
-        'click_ids': {'fbclid', 'ttclid'},
-    },
-    'digital ads': {
-        'sources': {'google', 'bing', 'dv360', 'thetradedesk', 'criteo', 'taboola',
-                     'outbrain', 'adroll', 'amazon_ads', 'amazon', 'programmatic'},
-        'mediums': {'cpc', 'ppc', 'display', 'retargeting', 'remarketing', 'paid',
-                     'banner', 'cpv', 'cpm', 'paid_search', 'paidsearch',
-                     'paid-search', 'shopping', 'performance_max', 'pmax'},
-        'click_ids': {'gclid', 'msclkid', 'dclid', 'wbraid', 'gbraid'},
-    },
-    'affiliate': {
-        'sources': {'shareasale', 'cj', 'rakuten', 'impact', 'awin', 'partnerize',
-                     'pepperjam', 'flexoffers', 'skimlinks', 'sovrn'},
-        'mediums': {'affiliate', 'referral', 'partner', 'aff'},
-    },
-    'sms': {
-        'sources': {'attentive', 'postscript', 'sms', 'twilio', 'yotpo_sms'},
-        'mediums': {'sms', 'text', 'mms'},
-    },
-    'influencer': {
-        'sources': set(),
-        'mediums': {'influencer', 'creator', 'ugc', 'whitelisting', 'spark_ads'},
-    },
-    'push notification': {
-        'sources': {'onesignal', 'pushowl', 'firebase', 'airship', 'braze_push'},
-        'mediums': {'push', 'push_notification', 'web_push', 'app_push'},
-    },
-}
-
-
-def _classify_utm_channel(utm_source, utm_medium, query_params):
-    """Classify a URL's marketing channel from UTM params and click IDs."""
-    src = (utm_source or '').lower().strip()
-    med = (utm_medium or '').lower().strip()
-
-    for channel, rules in _UTM_CHANNEL_MAP.items():
-        if src in rules.get('sources', set()):
-            return channel, src
-        if med in rules.get('mediums', set()):
-            return channel, src or med
-        for cid in rules.get('click_ids', set()):
-            if query_params.get(cid):
-                label = src if src else cid.replace('clid', '').replace('id', '') or cid
-                return channel, label
-
-    if 'influencer' in src or 'creator' in src:
-        return 'influencer', src
-    if 'affiliate' in src:
-        return 'affiliate', src
-
-    if src or med:
-        return 'other', src or med
-    return None, None
-
-
-def extract_utm_attribution(cur, behavior_start, behavior_end, actual_sample_size):
-    """Extract marketing attribution data from UTM parameters and click IDs
-    in clickstream URLs.  Returns a DataFrame with Column='ROAS TRACKER'
-    and Value='Channel | Source' rows."""
-    from urllib.parse import urlparse, parse_qs, unquote_plus
-    print("📊 Extracting UTM attribution from clickstream URLs...")
-
-    try:
-        cur.execute(f"""
-            SELECT cf.URL, cf.UID
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-            WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-              AND cf.DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
-              AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
-              AND (
-                LOWER(cf.URL) LIKE '%utm\\_%' ESCAPE '\\\\'
-                OR LOWER(cf.URL) LIKE '%gclid%'
-                OR LOWER(cf.URL) LIKE '%fbclid%'
-                OR LOWER(cf.URL) LIKE '%ttclid%'
-                OR LOWER(cf.URL) LIKE '%msclkid%'
-                OR LOWER(cf.URL) LIKE '%dclid%'
-                OR LOWER(cf.URL) LIKE '%wbraid%'
-                OR LOWER(cf.URL) LIKE '%gbraid%'
-                OR LOWER(cf.URL) LIKE '%li\\_fat\\_id%' ESCAPE '\\\\'
-              )
-            LIMIT 500000
-        """)
-        rows = cur.fetchall()
-    except Exception as e:
-        print(f"⚠️ UTM attribution SQL failed: {e}")
-        return pd.DataFrame(columns=["Column", "Value", "Percentage", "Original Raw Numbers (Database)"])
-
-    print(f"  Fetched {len(rows):,} URLs with UTM/click-ID parameters")
-    if not rows:
-        return pd.DataFrame(columns=["Column", "Value", "Percentage", "Original Raw Numbers (Database)"])
-
-    channel_source_uids = {}  # (channel, source) -> set of UIDs
-    parsed = 0
-    for url, uid in rows:
-        try:
-            p = urlparse(url if '://' in url else 'https://' + url)
-            qs = parse_qs(p.query, keep_blank_values=False)
-            utm_source = (qs.get('utm_source', [''])[0] or '').strip()
-            utm_medium = (qs.get('utm_medium', [''])[0] or '').strip()
-            channel, source = _classify_utm_channel(utm_source, utm_medium, qs)
-            if not channel:
-                continue
-            parsed += 1
-            source_clean = unquote_plus(source).replace('+', ' ').title()[:60]
-            key = (channel.title(), source_clean)
-            if key not in channel_source_uids:
-                channel_source_uids[key] = set()
-            channel_source_uids[key].add(uid)
-        except Exception:
-            continue
-
-    print(f"  Classified {parsed:,} attributed URLs into {len(channel_source_uids)} channel-source pairs")
-    if not channel_source_uids:
-        return pd.DataFrame(columns=["Column", "Value", "Percentage", "Original Raw Numbers (Database)"])
-
-    ranked = sorted(channel_source_uids.items(), key=lambda x: -len(x[1]))[:300]
-    denom = max(actual_sample_size, 1)
-    new_rows = []
-    for (channel, source), uid_set in ranked:
-        cnt = len(uid_set)
-        pct = round(100.0 * cnt / denom, 4)
-        new_rows.append({
-            "Column": "ROAS TRACKER",
-            "Value": f"{channel} | {source}",
-            "Percentage": pct,
-            "Original Raw Numbers (Database)": cnt,
-        })
-
-    channels = set(r['Value'].split(' | ')[0] for r in new_rows)
-    print(f"  ✅ Extracted {len(new_rows)} attribution rows across {len(channels)} channels")
-    return pd.DataFrame(new_rows)
-
-
 def _extract_query_from_url(url, platform_lower):
     """Extract search query from a URL using platform-specific parsing.
     Returns the decoded query string or None."""
@@ -15004,7 +14832,6 @@ def extract_search_queries(cur, behavior_start, behavior_end, actual_sample_size
               AND LOWER(m.Section) LIKE '%search%'
               AND cf.URL IS NOT NULL
               AND LENGTH(cf.URL) > 10
-            LIMIT 500000
         """)
         rows = cur.fetchall()
     except Exception as e:
@@ -15049,117 +14876,6 @@ def extract_search_queries(cur, behavior_start, behavior_end, actual_sample_size
         })
 
     print(f"  ✅ Extracted {len(new_rows)} unique search queries across {len(set(r['Value'].split(' | ')[0] for r in new_rows))} platforms")
-    return pd.DataFrame(new_rows)
-
-
-_PDP_PATTERNS = ('/product/', '/products/', '/p/', '/dp/', '/pdp/', '/item/',
-                 '/ip/', '/buy/', '/shop/product/', '/detail/')
-_CART_PATTERNS = ('/cart', '/add-to-cart', '/addtocart', '/basket', '/bag',
-                  '/shopping-bag', '/shopping-cart')
-_CART_PARAMS = ('action=add', 'atc=', 'add_to_cart', 'addToCart')
-_PURCHASE_PATTERNS = ('/checkout', '/order-confirmation', '/order-complete',
-                      '/thank-you', '/thankyou', '/receipt',
-                      '/purchase-complete', '/order/confirm', '/payment/success')
-
-
-def _classify_ecom_stage(url_lower, path_lower):
-    """Classify a URL into an e-commerce funnel stage.
-    Returns ('PDP', product_slug), ('CART', slug), ('PURCHASE', slug), or (None, None)."""
-    for pat in _PURCHASE_PATTERNS:
-        if pat in path_lower:
-            slug = path_lower.split(pat)[-1].strip('/').split('?')[0].split('#')[0]
-            return 'PURCHASE', slug[:80] or pat.strip('/')
-
-    for pat in _CART_PATTERNS:
-        if pat in path_lower:
-            slug = path_lower.split(pat)[-1].strip('/').split('?')[0].split('#')[0]
-            return 'CART', slug[:80] or pat.strip('/')
-    for cp in _CART_PARAMS:
-        if cp in url_lower:
-            return 'CART', ''
-
-    for pat in _PDP_PATTERNS:
-        if pat in path_lower:
-            slug = path_lower.split(pat)[-1].strip('/').split('?')[0].split('#')[0]
-            if slug and len(slug) > 2:
-                return 'PDP', slug[:80]
-
-    return None, None
-
-
-def extract_ecommerce_funnel(cur, behavior_start, behavior_end, actual_sample_size):
-    """Extract e-commerce funnel data (PDP views, cart adds, purchases) from
-    clickstream URLs for brands in MOST PURCHASED BRANDS / WHERE THEY SHOP.
-    Returns a DataFrame with Column='E-COMMERCE' rows."""
-    from urllib.parse import urlparse
-    print("🛒 Extracting e-commerce funnel data from clickstream URLs...")
-
-    try:
-        cur.execute(f"""
-            SELECT m.Brand AS store, cf.URL, cf.UID
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-            JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m
-                ON LOWER(cf.COMMON_NAME) = LOWER(m.Brand)
-            WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-              AND cf.DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
-              AND (
-                LOWER(m.Section) LIKE '%most purchased%'
-                OR LOWER(m.Section) LIKE '%where they shop%'
-              )
-              AND cf.URL IS NOT NULL
-              AND LENGTH(cf.URL) > 10
-            LIMIT 500000
-        """)
-        rows = cur.fetchall()
-    except Exception as e:
-        print(f"⚠️ E-commerce funnel SQL failed: {e}")
-        return pd.DataFrame(columns=["Column", "Value", "Percentage", "Original Raw Numbers (Database)"])
-
-    print(f"  Fetched {len(rows):,} retail/brand URL rows for funnel parsing")
-    if not rows:
-        return pd.DataFrame(columns=["Column", "Value", "Percentage", "Original Raw Numbers (Database)"])
-
-    funnel_uids = {}  # (stage, store, slug) -> set of UIDs
-    classified = 0
-    for store, url, uid in rows:
-        try:
-            url_lower = url.lower() if url else ''
-            parsed = urlparse(url_lower if '://' in url_lower else 'https://' + url_lower)
-            path = parsed.path
-            stage, slug = _classify_ecom_stage(url_lower, path)
-            if not stage:
-                continue
-            classified += 1
-            store_clean = (store or 'Unknown').strip().title()[:40]
-            slug_display = slug.replace('-', ' ').replace('_', ' ').strip()[:60] if slug else ''
-            key = (stage, store_clean, slug_display)
-            if key not in funnel_uids:
-                funnel_uids[key] = set()
-            funnel_uids[key].add(uid)
-        except Exception:
-            continue
-
-    print(f"  Classified {classified:,} URLs into {len(funnel_uids)} funnel entries")
-    if not funnel_uids:
-        return pd.DataFrame(columns=["Column", "Value", "Percentage", "Original Raw Numbers (Database)"])
-
-    ranked = sorted(funnel_uids.items(), key=lambda x: -len(x[1]))[:300]
-    denom = max(actual_sample_size, 1)
-    new_rows = []
-    for (stage, store, slug), uid_set in ranked:
-        cnt = len(uid_set)
-        pct = round(100.0 * cnt / denom, 4)
-        val = f"{stage} | {store}" + (f" | {slug}" if slug else "")
-        new_rows.append({
-            "Column": "E-COMMERCE",
-            "Value": val,
-            "Percentage": pct,
-            "Original Raw Numbers (Database)": cnt,
-        })
-
-    stages = set(r['Value'].split(' | ')[0] for r in new_rows)
-    stores = set(r['Value'].split(' | ')[1] if ' | ' in r['Value'] else '' for r in new_rows)
-    print(f"  ✅ Extracted {len(new_rows)} e-commerce rows: {len(stages)} stages, {len(stores)} stores")
     return pd.DataFrame(new_rows)
 
 
@@ -20532,7 +20248,7 @@ def apply_final_verification(df_final):
         'MEDIA', 'BANKING', 'TECHNOLOGY', 'DEVICE', 'DIGITAL BANKING', 'CREDIT PROVIDER',
         'WORKOUT FACILITY', 'INSURANCE', 'INVESTMENTS', 'GOVERNMENT', 'GOLF', 'EVENTS',
         'BETTING', 'NON PROFIT/CHARITY', 'INTEREST', 'NFL', 'NBA', 'WNBA', 'MLS', 'SOCCER', 'PREMIER LEAGUE', 'NWSL',
-        'FRANCHISE', 'SEARCH/AI', 'ROAS TRACKER', 'E-COMMERCE'
+        'FRANCHISE', 'SEARCH/AI'
     ]
     # Category caps and natural cascade removed per user request
     
@@ -20544,7 +20260,7 @@ def apply_final_verification(df_final):
         'MEDIA', 'BANKING', 'TECHNOLOGY', 'DEVICE', 'DIGITAL BANKING', 'CREDIT PROVIDER',
         'WORKOUT FACILITY', 'INSURANCE', 'INVESTMENTS', 'GOVERNMENT', 'GOLF', 'EVENTS',
         'BETTING', 'NON PROFIT/CHARITY', 'INTEREST', 'NFL', 'NBA', 'WNBA', 'MLS', 'SOCCER', 'PREMIER LEAGUE', 'NWSL',
-        'FRANCHISE', 'SEARCH/AI', 'ROAS TRACKER', 'E-COMMERCE'
+        'FRANCHISE', 'SEARCH/AI'
     ]
     
     for category in behavioral_categories:
@@ -24154,7 +23870,7 @@ def recalculate_raw_numbers_after_cross_category_consistency(df):
         "SOCIAL MEDIA", "SEARCH ENGINE", "QSR", "MEDIA", "TICKETING",
         "WHERE THEY SHOP", "BANKING", "CREDIT PROVIDER", "GOLF",
         "EDUCATION & LEARNING", "SOCCER", "PREMIER LEAGUE", "WNBA", "NWSL",
-        "FRANCHISE", "SEARCH/AI", "ROAS TRACKER", "E-COMMERCE"
+        "FRANCHISE", "SEARCH/AI"
     ]
     
     # Recalculate raw numbers for each behavioral category based on FINAL percentages

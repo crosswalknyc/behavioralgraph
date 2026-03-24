@@ -2565,6 +2565,8 @@ def create_user():
             'allowed_behavioral_categories': req_data.get('allowed_behavioral_categories', cd.get('allowed_behavioral_categories', ['*']) if cd else ['*']),
             'has_profile_iq_access': req_data.get('has_profile_iq_access', cd.get('has_profile_iq_access', True) if cd else True),
             'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', cd.get('has_subscriber_iq_access', False) if cd else False),
+            'has_roas_iq_access': req_data.get('has_roas_iq_access', cd.get('has_roas_iq_access', True) if cd else True),
+            'has_ecommerce_iq_access': req_data.get('has_ecommerce_iq_access', cd.get('has_ecommerce_iq_access', True) if cd else True),
             'has_ticket_sales_iq_access': req_data.get('has_ticket_sales_iq_access', cd.get('has_ticket_sales_iq_access', True) if cd else True),
             'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', cd.get('has_hedge_fund_iq_access', False) if cd else False),
             'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
@@ -2666,6 +2668,10 @@ def update_user(username):
             user['has_profile_iq_access'] = req_data['has_profile_iq_access']
         if 'has_subscriber_iq_access' in req_data:
             user['has_subscriber_iq_access'] = req_data['has_subscriber_iq_access']
+        if 'has_roas_iq_access' in req_data:
+            user['has_roas_iq_access'] = req_data['has_roas_iq_access']
+        if 'has_ecommerce_iq_access' in req_data:
+            user['has_ecommerce_iq_access'] = req_data['has_ecommerce_iq_access']
         if 'has_ticket_sales_iq_access' in req_data:
             user['has_ticket_sales_iq_access'] = req_data['has_ticket_sales_iq_access']
         if 'has_hedge_fund_iq_access' in req_data:
@@ -2808,6 +2814,8 @@ def restore_defaults_all_users():
             user['allowed_behavioral_categories'] = list(allowed_behavioral_categories) if isinstance(allowed_behavioral_categories, list) else ['*']
             user['has_profile_iq_access'] = True
             user['has_subscriber_iq_access'] = False
+            user['has_roas_iq_access'] = True
+            user['has_ecommerce_iq_access'] = True
             user['has_ticket_sales_iq_access'] = True
             user['has_hedge_fund_iq_access'] = False
             user['hedge_fund_iq_tabs'] = user.get('hedge_fund_iq_tabs', [])
@@ -3193,6 +3201,8 @@ def api_set_company_defaults(company_name):
             'allowed_behavioral_categories': req.get('allowed_behavioral_categories', ['*']),
             'has_profile_iq_access': req.get('has_profile_iq_access', True),
             'has_subscriber_iq_access': req.get('has_subscriber_iq_access', False),
+            'has_roas_iq_access': req.get('has_roas_iq_access', True),
+            'has_ecommerce_iq_access': req.get('has_ecommerce_iq_access', True),
             'has_ticket_sales_iq_access': req.get('has_ticket_sales_iq_access', True),
             'has_hedge_fund_iq_access': req.get('has_hedge_fund_iq_access', False),
             'has_analysis_iq_access': req.get('has_analysis_iq_access', False),
@@ -3243,6 +3253,8 @@ def api_reset_company_users(company_name):
                 user['allowed_behavioral_categories'] = list(cd.get('allowed_behavioral_categories', ['*']))
                 user['has_profile_iq_access'] = cd.get('has_profile_iq_access', True)
                 user['has_subscriber_iq_access'] = cd.get('has_subscriber_iq_access', False)
+                user['has_roas_iq_access'] = cd.get('has_roas_iq_access', True)
+                user['has_ecommerce_iq_access'] = cd.get('has_ecommerce_iq_access', True)
                 user['has_ticket_sales_iq_access'] = cd.get('has_ticket_sales_iq_access', True)
                 user['has_hedge_fund_iq_access'] = cd.get('has_hedge_fund_iq_access', False)
                 user['has_analysis_iq_access'] = cd.get('has_analysis_iq_access', False)
@@ -3256,6 +3268,8 @@ def api_reset_company_users(company_name):
                 user['allowed_behavioral_categories'] = list(global_behavioral) if isinstance(global_behavioral, list) else ['*']
                 user['has_profile_iq_access'] = True
                 user['has_subscriber_iq_access'] = False
+                user['has_roas_iq_access'] = True
+                user['has_ecommerce_iq_access'] = True
                 user['has_ticket_sales_iq_access'] = True
                 user['has_hedge_fund_iq_access'] = False
                 user['has_analysis_iq_access'] = False
@@ -5071,6 +5085,8 @@ def compute_product_access_flags(user, role):
         return {
             'has_profile_iq_access': True,
             'has_subscriber_iq_access': True,
+            'has_roas_iq_access': True,
+            'has_ecommerce_iq_access': True,
             'has_hedge_fund_iq_access': True,
             'hedge_fund_iq_tickers': ['*'],
             'has_analysis_iq_access': True,
@@ -5088,6 +5104,8 @@ def compute_product_access_flags(user, role):
     return {
         'has_profile_iq_access': u.get('has_profile_iq_access', True),
         'has_subscriber_iq_access': bool(u.get('has_subscriber_iq_access', False)),
+        'has_roas_iq_access': bool(u.get('has_roas_iq_access', True)),
+        'has_ecommerce_iq_access': bool(u.get('has_ecommerce_iq_access', True)),
         'has_hedge_fund_iq_access': bool(u.get('has_hedge_fund_iq_access', False)),
         'hedge_fund_iq_tickers': u.get('hedge_fund_iq_tickers', ['*']) or ['*'],
         'has_analysis_iq_access': bool(u.get('has_analysis_iq_access', False)),
@@ -5158,6 +5176,8 @@ def index():
     _acc = apply_cloak_product_access_overrides(_acc)
     has_profile_iq = _acc['has_profile_iq_access']
     has_subscriber_iq = _acc['has_subscriber_iq_access']
+    has_roas_iq = _acc['has_roas_iq_access']
+    has_ecommerce_iq = _acc['has_ecommerce_iq_access']
     has_hedge_fund_iq = _acc['has_hedge_fund_iq_access']
     hedge_fund_iq_tickers = _acc['hedge_fund_iq_tickers']
     has_analysis_iq = _acc['has_analysis_iq_access']
@@ -5203,6 +5223,8 @@ def index():
                            company_logo=company_logo,
                            has_profile_iq_access=has_profile_iq,
                            has_subscriber_iq_access=has_subscriber_iq,
+                           has_roas_iq_access=has_roas_iq,
+                           has_ecommerce_iq_access=has_ecommerce_iq,
                            has_hedge_fund_iq_access=has_hedge_fund_iq,
                            hedge_fund_iq_tickers=hedge_fund_iq_tickers,
                            has_analysis_iq_access=has_analysis_iq,
@@ -19695,6 +19717,500 @@ def submit_watch_time():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# =====================================================================
+#  ROAS IQ  –  Standalone UTM / marketing-attribution analysis
+# =====================================================================
+
+_UTM_CHANNEL_MAP = {
+    'email': {
+        'sources': {'klaviyo', 'mailchimp', 'sendgrid', 'hubspot', 'constant_contact',
+                     'constantcontact', 'braze', 'iterable', 'customer.io', 'drip',
+                     'convertkit', 'campaignmonitor', 'campaign_monitor', 'aweber',
+                     'activecampaign', 'omnisend', 'emarsys', 'sailthru', 'responsys',
+                     'marketo', 'pardot', 'eloqua', 'sendinblue', 'brevo', 'mailgun',
+                     'postmark', 'sparkpost', 'mandrill'},
+        'mediums': {'email', 'e-mail', 'newsletter', 'email_blast', 'email-marketing'},
+    },
+    'social media': {
+        'sources': {'facebook', 'fb', 'instagram', 'ig', 'tiktok', 'twitter', 'x',
+                     'snapchat', 'snap', 'pinterest', 'linkedin', 'reddit', 'youtube',
+                     'yt', 'threads', 'whatsapp', 'telegram', 'wechat', 'tumblr'},
+        'mediums': {'social', 'social-media', 'social_media', 'organic_social',
+                     'paid_social', 'paidsocial'},
+        'click_ids': {'fbclid', 'ttclid'},
+    },
+    'digital ads': {
+        'sources': {'google', 'bing', 'dv360', 'thetradedesk', 'criteo', 'taboola',
+                     'outbrain', 'adroll', 'amazon_ads', 'amazon', 'programmatic'},
+        'mediums': {'cpc', 'ppc', 'display', 'retargeting', 'remarketing', 'paid',
+                     'banner', 'cpv', 'cpm', 'paid_search', 'paidsearch',
+                     'paid-search', 'shopping', 'performance_max', 'pmax'},
+        'click_ids': {'gclid', 'msclkid', 'dclid', 'wbraid', 'gbraid'},
+    },
+    'affiliate': {
+        'sources': {'shareasale', 'cj', 'rakuten', 'impact', 'awin', 'partnerize',
+                     'pepperjam', 'flexoffers', 'skimlinks', 'sovrn'},
+        'mediums': {'affiliate', 'referral', 'partner', 'aff'},
+    },
+    'sms': {
+        'sources': {'attentive', 'postscript', 'sms', 'twilio', 'yotpo_sms'},
+        'mediums': {'sms', 'text', 'mms'},
+    },
+    'influencer': {
+        'sources': set(),
+        'mediums': {'influencer', 'creator', 'ugc', 'whitelisting', 'spark_ads'},
+    },
+    'push notification': {
+        'sources': {'onesignal', 'pushowl', 'firebase', 'airship', 'braze_push'},
+        'mediums': {'push', 'push_notification', 'web_push', 'app_push'},
+    },
+}
+
+
+def _classify_utm_channel(utm_source, utm_medium, query_params):
+    src = (utm_source or '').lower().strip()
+    med = (utm_medium or '').lower().strip()
+    for channel, rules in _UTM_CHANNEL_MAP.items():
+        if src in rules.get('sources', set()):
+            return channel, src
+        if med in rules.get('mediums', set()):
+            return channel, src or med
+        for cid in rules.get('click_ids', set()):
+            if query_params.get(cid):
+                label = src if src else cid.replace('clid', '').replace('id', '') or cid
+                return channel, label
+    if 'influencer' in src or 'creator' in src:
+        return 'influencer', src
+    if 'affiliate' in src:
+        return 'affiliate', src
+    if src or med:
+        return 'other', src or med
+    return None, None
+
+
+_PDP_PATTERNS = ('/product/', '/products/', '/p/', '/dp/', '/pdp/', '/item/',
+                 '/ip/', '/buy/', '/shop/product/', '/detail/')
+_CART_PATTERNS = ('/cart', '/add-to-cart', '/addtocart', '/basket', '/bag',
+                  '/shopping-bag', '/shopping-cart')
+_CART_PARAMS = ('action=add', 'atc=', 'add_to_cart', 'addToCart')
+_PURCHASE_PATTERNS = ('/checkout', '/order-confirmation', '/order-complete',
+                      '/thank-you', '/thankyou', '/receipt',
+                      '/purchase-complete', '/order/confirm', '/payment/success')
+
+
+def _classify_ecom_stage(url_lower, path_lower):
+    for pat in _PURCHASE_PATTERNS:
+        if pat in path_lower:
+            slug = path_lower.split(pat)[-1].strip('/').split('?')[0].split('#')[0]
+            return 'PURCHASE', slug[:80] or pat.strip('/')
+    for pat in _CART_PATTERNS:
+        if pat in path_lower:
+            slug = path_lower.split(pat)[-1].strip('/').split('?')[0].split('#')[0]
+            return 'CART', slug[:80] or pat.strip('/')
+    for cp in _CART_PARAMS:
+        if cp in url_lower:
+            return 'CART', ''
+    for pat in _PDP_PATTERNS:
+        if pat in path_lower:
+            slug = path_lower.split(pat)[-1].strip('/').split('?')[0].split('#')[0]
+            if slug and len(slug) > 2:
+                return 'PDP', slug[:80]
+    return None, None
+
+
+ROAS_IQ_S3_PREFIX = 'roas-iq/'
+ECOMMERCE_IQ_S3_PREFIX = 'ecommerce-iq/'
+
+
+def _build_temp_uids_from_terms(cur, search_terms, start_date, end_date):
+    """Create TEMP_UIDS table from COMMON_NAME matching the search terms."""
+    or_clauses = []
+    for term in search_terms:
+        safe = term.lower().replace("'", "''").strip()
+        if safe:
+            or_clauses.append(f"LOWER(cf.COMMON_NAME) LIKE '%{safe}%'")
+    if not or_clauses:
+        return 0
+    where = ' OR '.join(or_clauses)
+    cur.execute(f"""
+        CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
+        SELECT DISTINCT UID
+        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+        WHERE cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+          AND ({where})
+        LIMIT 50000
+    """)
+    count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
+    return count
+
+
+def _run_roas_iq(job_id):
+    """Background worker for ROAS IQ analysis."""
+    from urllib.parse import urlparse, parse_qs, unquote_plus
+    try:
+        job = jobs[job_id]
+        params = job['params']
+        search_terms = params['search_terms']
+        start_date = params['start_date']
+        end_date = params['end_date']
+        project_name = params['project_name']
+
+        update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        cur = conn.cursor()
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+
+        update_job_status(job_id, progress=20, message='Finding audience from search terms...')
+        uid_count = _build_temp_uids_from_terms(cur, search_terms, start_date, end_date)
+        if uid_count == 0:
+            conn.close()
+            update_job_status(job_id, status='completed', progress=100,
+                              message='No matching UIDs found for those search terms.')
+            return
+
+        update_job_status(job_id, progress=40, message=f'Found {uid_count:,} UIDs. Fetching UTM URLs...')
+        cur.execute(f"""
+            SELECT cf.URL, cf.UID
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+            WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+              AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+              AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
+              AND (
+                LOWER(cf.URL) LIKE '%utm\\_%' ESCAPE '\\\\'
+                OR LOWER(cf.URL) LIKE '%gclid%'
+                OR LOWER(cf.URL) LIKE '%fbclid%'
+                OR LOWER(cf.URL) LIKE '%ttclid%'
+                OR LOWER(cf.URL) LIKE '%msclkid%'
+                OR LOWER(cf.URL) LIKE '%dclid%'
+                OR LOWER(cf.URL) LIKE '%wbraid%'
+                OR LOWER(cf.URL) LIKE '%gbraid%'
+              )
+            LIMIT 500000
+        """)
+        rows = cur.fetchall()
+        conn.close()
+
+        update_job_status(job_id, progress=60, message=f'Classifying {len(rows):,} attributed URLs...')
+        channel_source_uids = {}
+        for url, uid in rows:
+            try:
+                p = urlparse(url if '://' in url else 'https://' + url)
+                qs = parse_qs(p.query, keep_blank_values=False)
+                utm_source = (qs.get('utm_source', [''])[0] or '').strip()
+                utm_medium = (qs.get('utm_medium', [''])[0] or '').strip()
+                channel, source = _classify_utm_channel(utm_source, utm_medium, qs)
+                if not channel:
+                    continue
+                source_clean = unquote_plus(source).replace('+', ' ').title()[:60]
+                key = (channel.title(), source_clean)
+                if key not in channel_source_uids:
+                    channel_source_uids[key] = set()
+                channel_source_uids[key].add(uid)
+            except Exception:
+                continue
+
+        update_job_status(job_id, progress=80, message='Building results...')
+        ranked = sorted(channel_source_uids.items(), key=lambda x: -len(x[1]))[:300]
+        results = []
+        for (channel, source), uid_set in ranked:
+            cnt = len(uid_set)
+            pct = round(100.0 * cnt / max(uid_count, 1), 4)
+            results.append({'channel': channel, 'source': source, 'pct': pct, 'raw': cnt})
+
+        result_data = {
+            'project_name': project_name,
+            'search_terms': search_terms,
+            'start_date': start_date,
+            'end_date': end_date,
+            'uid_count': uid_count,
+            'url_rows': len(rows),
+            'results': results,
+            'created_at': datetime.now().isoformat(),
+            'created_by': job.get('username', ''),
+        }
+
+        ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
+        safe_name = project_name.replace(' ', '_')
+        s3_key = f"{ROAS_IQ_S3_PREFIX}{safe_name}_{ts}.json"
+        s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
+                             Body=json.dumps(result_data).encode('utf-8'),
+                             ContentType='application/json')
+
+        update_job_status(job_id, status='completed', progress=100,
+                          message=f'Done! {len(results)} attribution rows across {len(set(r["channel"] for r in results))} channels.',
+                          s3_key=s3_key)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        update_job_status(job_id, status='failed', error=str(e))
+
+
+@app.route('/api/roas-iq/submit', methods=['POST'])
+@requires_auth
+def submit_roas_iq():
+    """Submit a ROAS IQ analysis job."""
+    try:
+        username = session.get('username')
+        data = request.get_json() or {}
+        project_name = (data.get('project_name') or '').strip()
+        search_terms_raw = (data.get('search_terms') or '').strip()
+        start_date = (data.get('start_date') or '').strip()
+        end_date = (data.get('end_date') or '').strip()
+
+        if not project_name:
+            return jsonify({'error': 'project_name required'}), 400
+        if not search_terms_raw:
+            return jsonify({'error': 'search_terms required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'start_date and end_date required'}), 400
+
+        search_terms = [t.strip() for t in search_terms_raw.replace('\n', ',').split(',') if t.strip()]
+        job_id = str(uuid.uuid4())[:8]
+        jobs[job_id] = {
+            'status': 'queued', 'progress': 0, 'message': 'Queued',
+            'created_at': datetime.now().isoformat(),
+            'project_name': project_name, 'error': None, 'result_file': None,
+            'logs': [], 's3_key': None, 'username': username,
+            'type': 'roas_iq',
+            'params': {
+                'project_name': project_name,
+                'search_terms': search_terms,
+                'start_date': start_date,
+                'end_date': end_date,
+            },
+        }
+        if s3_client:
+            _save_job_status_to_s3(job_id, jobs[job_id])
+
+        thread = threading.Thread(target=_run_roas_iq, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({'job_id': job_id, 'message': 'ROAS IQ job submitted', 'status': 'queued'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/roas-iq/results/<path:s3_key>')
+@requires_auth
+def get_roas_iq_result(s3_key):
+    """Return a ROAS IQ result JSON from S3."""
+    try:
+        full_key = s3_key if s3_key.startswith(ROAS_IQ_S3_PREFIX) else ROAS_IQ_S3_PREFIX + s3_key
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
+        data = json.loads(obj['Body'].read().decode('utf-8'))
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 404
+
+
+@app.route('/api/roas-iq/list')
+@requires_auth
+def list_roas_iq():
+    """List all ROAS IQ result files."""
+    try:
+        resp = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=ROAS_IQ_S3_PREFIX)
+        files = []
+        for obj in resp.get('Contents', []):
+            key = obj['Key']
+            if key.endswith('.json'):
+                name = key.replace(ROAS_IQ_S3_PREFIX, '').replace('.json', '').rsplit('_', 4)
+                files.append({
+                    'key': key,
+                    'name': key.replace(ROAS_IQ_S3_PREFIX, '').replace('.json', ''),
+                    'last_modified': obj['LastModified'].isoformat(),
+                    'size': obj['Size'],
+                })
+        files.sort(key=lambda x: x['last_modified'], reverse=True)
+        return jsonify({'success': True, 'files': files})
+    except Exception as e:
+        return jsonify({'success': True, 'files': []})
+
+
+# =====================================================================
+#  E-COMMERCE IQ  –  Standalone e-commerce funnel analysis
+# =====================================================================
+
+def _run_ecommerce_iq(job_id):
+    """Background worker for E-Commerce IQ analysis."""
+    from urllib.parse import urlparse
+    try:
+        job = jobs[job_id]
+        params = job['params']
+        search_terms = params['search_terms']
+        start_date = params['start_date']
+        end_date = params['end_date']
+        project_name = params['project_name']
+
+        update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        cur = conn.cursor()
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+
+        update_job_status(job_id, progress=20, message='Finding audience from search terms...')
+        uid_count = _build_temp_uids_from_terms(cur, search_terms, start_date, end_date)
+        if uid_count == 0:
+            conn.close()
+            update_job_status(job_id, status='completed', progress=100,
+                              message='No matching UIDs found for those search terms.')
+            return
+
+        update_job_status(job_id, progress=40, message=f'Found {uid_count:,} UIDs. Fetching retail URLs...')
+        cur.execute(f"""
+            SELECT m.Brand AS store, cf.URL, cf.UID
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+            JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m
+                ON LOWER(cf.COMMON_NAME) = LOWER(m.Brand)
+            WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+              AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+              AND (
+                LOWER(m.Section) LIKE '%most purchased%'
+                OR LOWER(m.Section) LIKE '%where they shop%'
+              )
+              AND cf.URL IS NOT NULL
+              AND LENGTH(cf.URL) > 10
+            LIMIT 500000
+        """)
+        rows = cur.fetchall()
+        conn.close()
+
+        update_job_status(job_id, progress=60, message=f'Classifying {len(rows):,} retail URLs...')
+        funnel_uids = {}
+        for store, url, uid in rows:
+            try:
+                url_lower = url.lower() if url else ''
+                parsed = urlparse(url_lower if '://' in url_lower else 'https://' + url_lower)
+                stage, slug = _classify_ecom_stage(url_lower, parsed.path)
+                if not stage:
+                    continue
+                store_clean = (store or 'Unknown').strip().title()[:40]
+                slug_display = slug.replace('-', ' ').replace('_', ' ').strip()[:60] if slug else ''
+                key = (stage, store_clean, slug_display)
+                if key not in funnel_uids:
+                    funnel_uids[key] = set()
+                funnel_uids[key].add(uid)
+            except Exception:
+                continue
+
+        update_job_status(job_id, progress=80, message='Building results...')
+        ranked = sorted(funnel_uids.items(), key=lambda x: -len(x[1]))[:300]
+        results = []
+        for (stage, store, slug), uid_set in ranked:
+            cnt = len(uid_set)
+            pct = round(100.0 * cnt / max(uid_count, 1), 4)
+            results.append({'stage': stage, 'store': store, 'slug': slug, 'pct': pct, 'raw': cnt})
+
+        result_data = {
+            'project_name': project_name,
+            'search_terms': search_terms,
+            'start_date': start_date,
+            'end_date': end_date,
+            'uid_count': uid_count,
+            'url_rows': len(rows),
+            'results': results,
+            'created_at': datetime.now().isoformat(),
+            'created_by': job.get('username', ''),
+        }
+
+        ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
+        safe_name = project_name.replace(' ', '_')
+        s3_key = f"{ECOMMERCE_IQ_S3_PREFIX}{safe_name}_{ts}.json"
+        s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
+                             Body=json.dumps(result_data).encode('utf-8'),
+                             ContentType='application/json')
+
+        stages = set(r['stage'] for r in results)
+        stores = set(r['store'] for r in results)
+        update_job_status(job_id, status='completed', progress=100,
+                          message=f'Done! {len(results)} entries across {len(stages)} stages, {len(stores)} stores.',
+                          s3_key=s3_key)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        update_job_status(job_id, status='failed', error=str(e))
+
+
+@app.route('/api/ecommerce-iq/submit', methods=['POST'])
+@requires_auth
+def submit_ecommerce_iq():
+    """Submit an E-Commerce IQ analysis job."""
+    try:
+        username = session.get('username')
+        data = request.get_json() or {}
+        project_name = (data.get('project_name') or '').strip()
+        search_terms_raw = (data.get('search_terms') or '').strip()
+        start_date = (data.get('start_date') or '').strip()
+        end_date = (data.get('end_date') or '').strip()
+
+        if not project_name:
+            return jsonify({'error': 'project_name required'}), 400
+        if not search_terms_raw:
+            return jsonify({'error': 'search_terms required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'start_date and end_date required'}), 400
+
+        search_terms = [t.strip() for t in search_terms_raw.replace('\n', ',').split(',') if t.strip()]
+        job_id = str(uuid.uuid4())[:8]
+        jobs[job_id] = {
+            'status': 'queued', 'progress': 0, 'message': 'Queued',
+            'created_at': datetime.now().isoformat(),
+            'project_name': project_name, 'error': None, 'result_file': None,
+            'logs': [], 's3_key': None, 'username': username,
+            'type': 'ecommerce_iq',
+            'params': {
+                'project_name': project_name,
+                'search_terms': search_terms,
+                'start_date': start_date,
+                'end_date': end_date,
+            },
+        }
+        if s3_client:
+            _save_job_status_to_s3(job_id, jobs[job_id])
+
+        thread = threading.Thread(target=_run_ecommerce_iq, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({'job_id': job_id, 'message': 'E-Commerce IQ job submitted', 'status': 'queued'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ecommerce-iq/results/<path:s3_key>')
+@requires_auth
+def get_ecommerce_iq_result(s3_key):
+    """Return an E-Commerce IQ result JSON from S3."""
+    try:
+        full_key = s3_key if s3_key.startswith(ECOMMERCE_IQ_S3_PREFIX) else ECOMMERCE_IQ_S3_PREFIX + s3_key
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
+        data = json.loads(obj['Body'].read().decode('utf-8'))
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 404
+
+
+@app.route('/api/ecommerce-iq/list')
+@requires_auth
+def list_ecommerce_iq():
+    """List all E-Commerce IQ result files."""
+    try:
+        resp = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=ECOMMERCE_IQ_S3_PREFIX)
+        files = []
+        for obj in resp.get('Contents', []):
+            key = obj['Key']
+            if key.endswith('.json'):
+                files.append({
+                    'key': key,
+                    'name': key.replace(ECOMMERCE_IQ_S3_PREFIX, '').replace('.json', ''),
+                    'last_modified': obj['LastModified'].isoformat(),
+                    'size': obj['Size'],
+                })
+        files.sort(key=lambda x: x['last_modified'], reverse=True)
+        return jsonify({'success': True, 'files': files})
+    except Exception as e:
+        return jsonify({'success': True, 'files': []})
 
 
 def run_cross_show(job_id):
