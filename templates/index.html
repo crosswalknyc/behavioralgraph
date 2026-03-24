@@ -16593,7 +16593,10 @@
         let currentCSVData = null;
         let currentS3Key = null;
         let charts = {};
-        let genPopBaselineData = null; // Parsed Gen Pop file - resolved to file with most recent year in filename; used for Gen Pop % everywhere
+        let genPopBaselineData = null;
+        let cachePollingInterval = null;
+        let deckWorkspaceItems = JSON.parse(localStorage.getItem('deckWorkspaceItems') || '[]');
+        let workspaceDecks = JSON.parse(localStorage.getItem('workspaceDecks') || '{}'); // Parsed Gen Pop file - resolved to file with most recent year in filename; used for Gen Pop % everywhere
         
         // Subscriber IQ state variables (declared early for tooltip system access)
         let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
@@ -38350,24 +38353,8 @@
         Object.entries(GP_ACTUAL_DMA).forEach(([k, v]) => {
             _gpActualDmaIndex[k.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()] = v;
         });
-        // Pre-built canonical name → GP Actual lookup
+        // Pre-built canonical name → GP Actual lookup (populated after CANONICAL_DMAS is defined)
         const _canonicalGpActual = {};
-        (function buildCanonGpIndex() {
-            const normGp = {};
-            Object.entries(GP_ACTUAL_DMA).forEach(([k, v]) => {
-                normGp[k.toLowerCase().replace(/[^a-z0-9]/g, '')] = v;
-            });
-            CANONICAL_DMAS.forEach(c => {
-                const cn = c.toLowerCase().replace(/[^a-z0-9]/g, '');
-                if (normGp[cn]) { _canonicalGpActual[c] = normGp[cn]; return; }
-                const primary = cn.substring(0, Math.min(cn.length, 10));
-                for (const [k, v] of Object.entries(normGp)) {
-                    if (k.startsWith(primary) || primary.startsWith(k.substring(0, 8))) {
-                        _canonicalGpActual[c] = v; return;
-                    }
-                }
-            });
-        })();
         function getGPActualDMA(dmaName) {
             if (!dmaName) return null;
             if (_canonicalGpActual[dmaName] != null) return _canonicalGpActual[dmaName];
@@ -38407,6 +38394,22 @@
         CANONICAL_DMAS.forEach(c => {
             _canonNorm[c.toLowerCase().replace(/[^a-z0-9]/g, '')] = c;
         });
+        (function buildCanonGpIndex() {
+            const normGp = {};
+            Object.entries(GP_ACTUAL_DMA).forEach(([k, v]) => {
+                normGp[k.toLowerCase().replace(/[^a-z0-9]/g, '')] = v;
+            });
+            CANONICAL_DMAS.forEach(c => {
+                const cn = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (normGp[cn]) { _canonicalGpActual[c] = normGp[cn]; return; }
+                const primary = cn.substring(0, Math.min(cn.length, 10));
+                for (const [k, v] of Object.entries(normGp)) {
+                    if (k.startsWith(primary) || primary.startsWith(k.substring(0, 8))) {
+                        _canonicalGpActual[c] = v; return;
+                    }
+                }
+            });
+        })();
         function matchCanonicalDMA(rawName) {
             if (!rawName) return null;
             const norm = rawName.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -39915,9 +39918,7 @@
             });
         }
         
-        // Workspace/Deck items storage
-        let deckWorkspaceItems = JSON.parse(localStorage.getItem('deckWorkspaceItems') || '[]');
-        let workspaceDecks = JSON.parse(localStorage.getItem('workspaceDecks') || '{}');
+        // Workspace/Deck items storage (declarations moved to top of script)
         
         // Behavioral deck menu functions
         function toggleBehavioralDeckMenu(category) {
@@ -49116,8 +49117,6 @@
             }
             return 'OTHER';
         }
-        
-        let cachePollingInterval = null;
         
         // User's own results (from Analysis IQ)
         let myResults = [];
