@@ -34412,25 +34412,31 @@
                 if (gpOccTable) {
                     const rows = occLabels.map(label => {
                         const profPct = demographics.occupation[label] || 0;
+                        const genPopPct = demographicsGenPop.occupation?.[label] || 0;
+                        const occIdx = demographicsIndex.occupation?.[label] || 0;
                         const gpActual = getGPActualOccupation(label);
-                        const gpStr = gpActual != null ? gpActual.toFixed(1) + '%' : '—';
                         const profStr = isProjection
                             ? formatNumber(Math.round((profPct / 100) * 329900000))
                             : profPct.toFixed(1) + '%';
-                        const diff = gpActual != null ? profPct - gpActual : null;
-                        const diffColor = diff == null ? 'var(--text-secondary)' : (diff >= 0 ? '#10b981' : '#ef4444');
-                        const diffStr = diff != null ? (diff >= 0 ? '+' : '') + diff.toFixed(1) + 'pp' : '';
-                        return `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0.5rem;padding:0.25rem 0.5rem;font-size:0.7rem;align-items:center;border-bottom:1px solid var(--border-color);">
+                        const gpStr = isProjection
+                            ? formatNumber(Math.round((genPopPct / 100) * 329900000))
+                            : genPopPct.toFixed(1) + '%';
+                        const gpActStr = gpActual != null ? gpActual.toFixed(1) + '%' : '—';
+                        const idxVal = Math.round(occIdx);
+                        const idxColor = idxVal > 110 ? '#10b981' : idxVal < 90 ? '#ef4444' : 'var(--text-secondary)';
+                        const idxStr = idxVal > 0 ? String(idxVal) : '—';
+                        return `<div style="display:grid;grid-template-columns:1fr 62px 62px 72px 48px;gap:0.25rem;padding:0.25rem 0.5rem;font-size:0.7rem;align-items:center;border-bottom:1px solid var(--border-color);">
                             <span style="color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${label}">${label}</span>
                             <span style="color:var(--accent-cyan);font-weight:600;text-align:right;">${profStr}</span>
                             <span style="color:var(--text-secondary);text-align:right;">${gpStr}</span>
-                            <span style="color:${diffColor};font-weight:500;text-align:right;min-width:50px;">${diffStr}</span>
+                            <span style="color:var(--text-secondary);text-align:right;">${gpActStr}</span>
+                            <span style="color:${idxColor};font-weight:600;text-align:right;">${idxStr}</span>
                         </div>`;
                     });
                     gpOccTable.innerHTML = `
                         <div style="font-size:0.7rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:0.25rem;padding:0 0.5rem;">Gen Pop Actuals</div>
-                        <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0.5rem;padding:0.25rem 0.5rem;font-size:0.6rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;">
-                            <span>Occupation</span><span>Profile</span><span>GP Actual</span><span>Diff</span>
+                        <div style="display:grid;grid-template-columns:1fr 62px 62px 72px 48px;gap:0.25rem;padding:0.25rem 0.5rem;font-size:0.6rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;">
+                            <span>Occupation</span><span style="text-align:right;">Profile</span><span style="text-align:right;">Gen Pop</span><span style="text-align:right;">GP Actual</span><span style="text-align:right;">Index</span>
                         </div>
                         ${rows.join('')}`;
                 }
