@@ -11993,8 +11993,6 @@
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
-                            <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>📊 ROAS IQ</option>
-                            <option value="ecommerceIQ" {% if not has_ecommerce_iq_access %}disabled{% endif %}>🛒 E-Commerce IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
@@ -12397,6 +12395,14 @@
                     {% if 'ticket_sales_tracker' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('ticket-sales-tracker')" id="customAnalysisTabTicketSalesTracker">
                         🎬 Ticket Sales Tracker <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                    </button>
+                    {% endif %}
+                    {% if role == 'super_admin' or role == 'admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('roas-iq')" id="customAnalysisTabRoasIQ">
+                        📊 ROAS IQ
+                    </button>
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('ecommerce-iq')" id="customAnalysisTabEcommerceIQ">
+                        🛒 E-Commerce IQ
                     </button>
                     {% endif %}
                 </div>
@@ -13518,6 +13524,111 @@
                         </div>
                     </div>
                 </div>
+                <!-- ROAS IQ Tab Content -->
+                <div id="customAnalysisTabContentRoasIQ" class="custom-analysis-tab-content">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>📊 ROAS IQ</h2>
+                            <p class="section-description">Analyze marketing attribution (UTM parameters, click IDs) for any audience segment by search terms.</p>
+                            <form id="roasIQForm" onsubmit="event.preventDefault(); submitRoasIQ();">
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Name</label>
+                                    <input type="text" id="roasIQProjectName" placeholder="e.g. Nike Q1 Attribution" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                </div>
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Search Terms <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated, matches COMMON_NAME)</span></label>
+                                    <textarea id="roasIQSearchTerms" rows="3" placeholder="e.g. nike, adidas, puma" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
+                                        <input type="date" id="roasIQStartDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date</label>
+                                        <input type="date" id="roasIQEndDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                    </div>
+                                </div>
+                                <button type="submit" id="roasIQSubmitBtn" class="btn btn-primary" style="width: 100%;">Run ROAS Analysis</button>
+                            </form>
+                            <div id="roasIQStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
+                                <div id="roasIQStatusText" style="font-weight: 600; margin-bottom: 4px;"></div>
+                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;"><div id="roasIQProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div></div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <h2 style="margin:0;">Past Results</h2>
+                                <button type="button" class="btn btn-small" onclick="refreshRoasIQList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                            </div>
+                            <div id="roasIQResultsList" style="max-height: 320px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No results yet. Run an analysis.</div></div>
+                        </div>
+                    </div>
+                    <div id="roasIQDashboard" style="display: none; margin-top: 1.5rem;">
+                        <div id="roasIQDashHeader" style="margin-bottom: 1.5rem;"></div>
+                        <div id="roasIQStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
+                        <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Channel Mix</h3><canvas id="roasIQChart" width="280" height="280"></canvas></div>
+                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Channel Penetration</h3><div id="roasIQChannelTable"></div></div>
+                        </div>
+                        <div id="roasIQSourceCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;"></div>
+                    </div>
+                </div>
+
+                <!-- E-Commerce IQ Tab Content -->
+                <div id="customAnalysisTabContentEcommerceIQ" class="custom-analysis-tab-content">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>🛒 E-Commerce IQ</h2>
+                            <p class="section-description">Analyze product page views, cart adds, and purchases from clickstream data for any audience.</p>
+                            <form id="ecomIQForm" onsubmit="event.preventDefault(); submitEcomIQ();">
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Name</label>
+                                    <input type="text" id="ecomIQProjectName" placeholder="e.g. Nike Product Funnel" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                </div>
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Search Terms <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated, matches COMMON_NAME)</span></label>
+                                    <textarea id="ecomIQSearchTerms" rows="3" placeholder="e.g. nike, adidas, puma" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
+                                        <input type="date" id="ecomIQStartDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date</label>
+                                        <input type="date" id="ecomIQEndDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                    </div>
+                                </div>
+                                <button type="submit" id="ecomIQSubmitBtn" class="btn btn-primary" style="width: 100%;">Run E-Commerce Analysis</button>
+                            </form>
+                            <div id="ecomIQStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
+                                <div id="ecomIQStatusText" style="font-weight: 600; margin-bottom: 4px;"></div>
+                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;"><div id="ecomIQProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div></div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <h2 style="margin:0;">Past Results</h2>
+                                <button type="button" class="btn btn-small" onclick="refreshEcomIQList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                            </div>
+                            <div id="ecomIQResultsList" style="max-height: 320px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No results yet. Run an analysis.</div></div>
+                        </div>
+                    </div>
+                    <div id="ecomIQDashboard" style="display: none; margin-top: 1.5rem;">
+                        <div id="ecomIQDashHeader" style="margin-bottom: 1.5rem;"></div>
+                        <div id="ecomIQStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Most Clicked Product Pages</h3><div id="ecomIQTopPdp"></div></div>
+                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Least Clicked Product Pages</h3><div id="ecomIQBottomPdp"></div></div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Add-to-Cart</h3><div id="ecomIQCart"></div></div>
+                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Completed Purchase</h3><div id="ecomIQPurchase"></div></div>
+                        </div>
+                    </div>
+                </div>
+
             </div><!-- End tab content area -->
         </div><!-- End customAnalysisView -->
 
@@ -13553,7 +13664,6 @@
                                     <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
                                     <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
                                     <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
-                                    <button class="tab-btn has-tooltip" data-tooltip="Search/AI: What this audience is searching for across Google, Bing, ChatGPT, and other search/AI platforms." onclick="showTab('search-ai')"><span class="tab-icon">🔍</span><span class="tab-label">SEARCH/AI</span></button>
                                 </div>
                                 <div class="toolbar-section-label">DATA</div>
                             </div>
@@ -14360,69 +14470,6 @@
 
             <!-- (Ecosystem tab removed) -->
 
-            <!-- Search/AI Tab -->
-            <div id="tab-search-ai" class="tab-content">
-                <div id="searchAiContainer" style="display: flex; flex-direction: column; gap: 1.5rem;">
-
-                    <!-- Summary Stats Row -->
-                    <div id="searchAiStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;"></div>
-
-                    <!-- Platform Usage (from SEARCH ENGINE/AI behavioral data) -->
-                    <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem;">
-                        <div class="behavioral-card" style="padding: 1.25rem;">
-                            <h3 style="margin: 0 0 1rem 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-                                <span>📊</span> Platform Usage
-                                <span class="module-action-btns" style="margin-left: auto;">
-                                    <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('search-ai', 'Platform Usage')" data-tooltip="Export CSV">CSV</button>
-                                    <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('search-ai', 'Platform Usage')" data-tooltip="Add to Deck">➕</button>
-                                </span>
-                            </h3>
-                            <canvas id="searchAiPlatformChart" width="300" height="300"></canvas>
-                        </div>
-                        <div class="behavioral-card" style="padding: 1.25rem;">
-                            <h3 style="margin: 0 0 1rem 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-                                <span>📈</span> Platform Penetration
-                            </h3>
-                            <div id="searchAiPlatformTable" style="max-height: 500px; overflow-y: auto;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Search Queries Section (from URL extraction) -->
-                    <div id="searchAiQueriesSection" style="display: none;">
-                        <div class="behavioral-card" style="padding: 1.25rem;">
-                            <h3 style="margin: 0 0 1rem 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                                <span>🔍</span> Top Search Queries
-                                <span class="module-action-btns" style="margin-left: auto;">
-                                    <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('search-ai', 'Top Search Queries')" data-tooltip="Export CSV">CSV</button>
-                                    <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('search-ai', 'Top Search Queries')" data-tooltip="Add to Deck">➕</button>
-                                </span>
-                            </h3>
-                            <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                                <input type="text" id="searchAiQueryFilter" placeholder="Filter queries..." style="flex: 1; min-width: 200px; padding: 0.4rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;" oninput="filterSearchAiQueries()">
-                                <select id="searchAiPlatformFilter" style="padding: 0.4rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;" onchange="filterSearchAiQueries()">
-                                    <option value="all">All Platforms</option>
-                                </select>
-                                <select id="searchAiSortBy" style="padding: 0.4rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;" onchange="filterSearchAiQueries()">
-                                    <option value="penetration">Sort: Penetration %</option>
-                                    <option value="alpha">Sort: A &rarr; Z</option>
-                                </select>
-                            </div>
-                            <div id="searchAiQueryTable" style="max-height: 500px; overflow-y: auto;"></div>
-                        </div>
-
-                        <!-- Per-Platform Query Cards -->
-                        <div id="searchAiPlatformCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.25rem; margin-top: 1.5rem;"></div>
-                    </div>
-
-                    <!-- Empty State -->
-                    <div id="searchAiEmpty" style="display: none; text-align: center; padding: 4rem 2rem; color: var(--text-secondary);">
-                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
-                        <h3 style="color: var(--text-primary); margin-bottom: 0.5rem;">No Search/AI Data Available</h3>
-                        <p>This profile does not contain search engine or AI platform data.</p>
-                    </div>
-                </div>
-            </div>
-
             <!-- Top Insights Tab -->
             <div id="tab-insights" class="tab-content active">
                 <div class="insights-container">
@@ -15044,67 +15091,6 @@
             </div>
         </div><!-- End subscriberIQView -->
 
-        <div id="roasIQView" style="display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem;">
-            <div class="dashboard-layout">
-                <div class="persistent-sidebar">
-                    <div class="sidebar-header-section">
-                        <h3>ROAS IQ Results</h3>
-                        <button type="button" class="btn btn-small" onclick="refreshRoasIQList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
-                    </div>
-                    <div id="roasIQResultsList" class="profile-select-tree" style="font-size: 13px;"></div>
-                </div>
-                <div class="dashboard-tab-content" style="display: flex; flex-direction: column; overflow: auto; padding: 1.5rem;">
-                    <div id="roasIQEmpty">
-                        <div style="text-align: center; padding: 3rem 2rem;">
-                            <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
-                            <h2 style="margin: 0 0 1rem;">ROAS IQ</h2>
-                            <p style="color: var(--text-secondary); margin-bottom: 2rem;">Enter search terms to analyze marketing attribution (UTM parameters, click IDs) for any audience segment.</p>
-                        </div>
-                        <div style="max-width: 500px; margin: 0 auto; background: var(--card-bg); border-radius: 12px; padding: 2rem; border: 1px solid var(--border-color);">
-                            <div style="margin-bottom: 1rem;">
-                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Name</label>
-                                <input type="text" id="roasIQProjectName" placeholder="e.g. Nike Q1 Attribution" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                            </div>
-                            <div style="margin-bottom: 1rem;">
-                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Search Terms <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated, matches COMMON_NAME)</span></label>
-                                <textarea id="roasIQSearchTerms" rows="3" placeholder="e.g. nike, adidas, puma" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                                <div>
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
-                                    <input type="date" id="roasIQStartDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                </div>
-                                <div>
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date</label>
-                                    <input type="date" id="roasIQEndDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                </div>
-                            </div>
-                            <button type="button" id="roasIQSubmitBtn" onclick="submitRoasIQ()" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--accent-primary); color: white; border: none; font-weight: 600; font-size: 14px; cursor: pointer;">Run ROAS Analysis</button>
-                            <div id="roasIQStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
-                                <div id="roasIQStatusText" style="font-weight: 600; margin-bottom: 4px;"></div>
-                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;"><div id="roasIQProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="roasIQDashboard" style="display: none;">
-                        <div id="roasIQDashHeader" style="margin-bottom: 1.5rem;"></div>
-                        <div id="roasIQStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
-                        <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
-                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Channel Mix</h3>
-                                <canvas id="roasIQChart" width="280" height="280"></canvas>
-                            </div>
-                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
-                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Channel Penetration</h3>
-                                <div id="roasIQChannelTable"></div>
-                            </div>
-                        </div>
-                        <div id="roasIQSourceCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Subscriber IQ Compare All Modal -->
         <div id="subscriberCompareAllModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10050; overflow-y: auto; align-items: flex-start; justify-content: center; padding: 2rem 1rem;">
             <div style="max-width: 1200px; width: 100%; background: var(--bg-card); border-radius: 12px; padding: 1.5rem; position: relative; margin: 0 auto;">
@@ -15447,76 +15433,6 @@
             </div>
         </div><!-- End ticketSalesTrackerView -->
 
-        <div id="ecommerceIQView" style="display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem;">
-            <div class="dashboard-layout">
-                <div class="persistent-sidebar">
-                    <div class="sidebar-header-section">
-                        <h3>E-Commerce IQ Results</h3>
-                        <button type="button" class="btn btn-small" onclick="refreshEcomIQList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
-                    </div>
-                    <div id="ecomIQResultsList" class="profile-select-tree" style="font-size: 13px;"></div>
-                </div>
-                <div class="dashboard-tab-content" style="display: flex; flex-direction: column; overflow: auto; padding: 1.5rem;">
-                    <div id="ecomIQEmpty">
-                        <div style="text-align: center; padding: 3rem 2rem;">
-                            <div style="font-size: 3rem; margin-bottom: 1rem;">🛒</div>
-                            <h2 style="margin: 0 0 1rem;">E-Commerce IQ</h2>
-                            <p style="color: var(--text-secondary); margin-bottom: 2rem;">Analyze product page views, cart adds, and purchases from clickstream data for any audience.</p>
-                        </div>
-                        <div style="max-width: 500px; margin: 0 auto; background: var(--card-bg); border-radius: 12px; padding: 2rem; border: 1px solid var(--border-color);">
-                            <div style="margin-bottom: 1rem;">
-                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Name</label>
-                                <input type="text" id="ecomIQProjectName" placeholder="e.g. Nike Product Funnel" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                            </div>
-                            <div style="margin-bottom: 1rem;">
-                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Search Terms <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated, matches COMMON_NAME)</span></label>
-                                <textarea id="ecomIQSearchTerms" rows="3" placeholder="e.g. nike, adidas, puma" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                                <div>
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
-                                    <input type="date" id="ecomIQStartDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                </div>
-                                <div>
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date</label>
-                                    <input type="date" id="ecomIQEndDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                </div>
-                            </div>
-                            <button type="button" id="ecomIQSubmitBtn" onclick="submitEcomIQ()" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--accent-primary); color: white; border: none; font-weight: 600; font-size: 14px; cursor: pointer;">Run E-Commerce Analysis</button>
-                            <div id="ecomIQStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
-                                <div id="ecomIQStatusText" style="font-weight: 600; margin-bottom: 4px;"></div>
-                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;"><div id="ecomIQProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="ecomIQDashboard" style="display: none;">
-                        <div id="ecomIQDashHeader" style="margin-bottom: 1.5rem;"></div>
-                        <div id="ecomIQStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
-                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Most Clicked Product Pages</h3>
-                                <div id="ecomIQTopPdp"></div>
-                            </div>
-                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
-                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Least Clicked Product Pages</h3>
-                                <div id="ecomIQBottomPdp"></div>
-                            </div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
-                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Add-to-Cart</h3>
-                                <div id="ecomIQCart"></div>
-                            </div>
-                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
-                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Completed Purchase</h3>
-                                <div id="ecomIQPurchase"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- LLMO IQ VIEW (US Gen Pop projection; /api/llmo-iq/*) -->
         <div id="llmoIQView" style="display: none;">
             {% if not has_llmo_iq_access %}
@@ -15565,21 +15481,21 @@
 
                 <!-- Summary Cards -->
                 <div id="llmoSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                    <div class="llmo-card has-tooltip" data-tooltip="Distinct AI-platform users projected to US Gen Pop scale (panel × multiplier). Deduplicated within each day; multi-day totals may count the same user more than once." style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Users (US Gen Pop)</div>
                         <div id="llmoTotalUsers" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
                         <div id="llmoTotalUsersNote" style="font-size: 0.72rem; color: var(--text-secondary); font-style: italic; line-height: 1.35; margin-top: 0.15rem;">(Deduplicated by day, duplicated in aggregate)</div>
                     </div>
-                    <div class="llmo-card has-tooltip" data-tooltip="Total AI-agent page loads (sessions) projected to US Gen Pop scale. One user may generate multiple sessions per day." style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total AI Sessions (US Gen Pop)</div>
                         <div id="llmoTotalClicks" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
                     </div>
-                    <div class="llmo-card has-tooltip" data-tooltip="Number of distinct AI platforms (e.g. ChatGPT, Claude, Perplexity) detected in the selected date range." style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">LLMs Tracked</div>
                         <div id="llmoLLMCount" style="font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0;">--</div>
                         <div style="font-size: 0.8rem; color: var(--text-secondary);">Unique platforms</div>
                     </div>
-                    <div class="llmo-card has-tooltip" data-tooltip="The AI platform with the most unique users in the selected date range and its share of all AI users." style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
+                    <div class="llmo-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Top LLM</div>
                         <div id="llmoTopLLM" style="font-size: 1.25rem; font-weight: 700; margin: 0.25rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">--</div>
                         <div id="llmoTopLLMPct" style="font-size: 0.8rem; color: var(--text-secondary);">--</div>
@@ -15590,20 +15506,20 @@
                 <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- LLM Usage Ranker Table -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; overflow: hidden;">
-                        <h3 class="has-tooltip" data-tooltip="Ranked table of all AI platforms by unique users. Click any column header to sort ascending/descending." style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">LLM Usage Ranker</h3>
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">LLM Usage Ranker</h3>
                         <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
                             <table id="llmoRankerTable" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
                                 <thead>
                                     <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Sort by API rank (default order)." style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('rank')" id="llmoTh_rank">#</th>
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="AI platform name (e.g. ChatGPT, Claude, Perplexity). Click to sort alphabetically." style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('name')" id="llmoTh_name">LLM</th>
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Distinct users projected to US Gen Pop scale for this platform in the date range." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('unique_users')" id="llmoTh_unique_users">Unique Users</th>
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="This platform's unique users as a percentage of all AI users in the date range." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('pct_of_total')" id="llmoTh_pct_of_total">% of Total</th>
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Total session count (page loads) for this platform, projected to Gen Pop." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('total_sessions')" id="llmoTh_total_sessions">Total Sessions</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Sort by API rank (default order)" style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('rank')" id="llmoTh_rank">#</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem;" onclick="llmoRankerHeaderClick('name')" id="llmoTh_name">LLM</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('unique_users')" id="llmoTh_unique_users">Unique Users</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('pct_of_total')" id="llmoTh_pct_of_total">% of Total</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('total_sessions')" id="llmoTh_total_sessions">Total Sessions</th>
                                         <th class="llmo-ranker-th has-tooltip" data-tooltip="Average sessions per unique user for this LLM (platform) in the selected date range." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('avg_sess')" id="llmoTh_avg_sess">Avg sess./user</th>
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="This platform's sessions as a share of all AI sessions across all LLMs." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('session_share')" id="llmoTh_session_share">Session share</th>
+                                        <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('session_share')" id="llmoTh_session_share">Session share</th>
                                         <th class="llmo-ranker-th has-tooltip" data-tooltip="Share of matched Gen Pop category rows (SEARCH ENGINE/AI / STREAMING), normalized to 100% for apples-to-apples with Index." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('gp_cat')" id="llmoTh_gp_cat">GP cat. share</th>
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="(% of AI users ÷ Gen Pop penetration) × 100 — values above 100 mean over-indexed vs the general population." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('index')" id="llmoTh_index">Index</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="(% of AI users ÷ Gen Pop penetration) × 100 — same basis as brand/retailer index." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('index')" id="llmoTh_index">Index</th>
                                     </tr>
                                 </thead>
                                 <tbody id="llmoRankerBody">
@@ -15613,9 +15529,10 @@
                         </div>
                     </div>
 
-                    <!-- Category Share Doughnut -->
+                    <!-- Category Share Doughnut (Gen Pop matched shares when available) -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; align-items: center;">
-                        <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;" data-tooltip="Each LLM's share of total AI sessions. When Gen Pop category matches exist, slices use the normalized Gen Pop category share (same rows as Index) for an apples-to-apples comparison. Otherwise falls back to raw session share.">Category share</h3>
+                        <h3 class="has-tooltip" style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;" data-tooltip="When Gen Pop matches exist, slices use normalized Gen Pop category share (same rows as Index). Otherwise session share across LLMs.">Category share (Gen Pop matched)</h3>
+                        <p style="margin: 0 0 0.75rem 0; font-size: 0.72rem; color: var(--text-secondary); align-self: flex-start; line-height: 1.35;">Apples-to-apples with Index: GP category rows (SEARCH ENGINE/AI / STREAMING) normalized to 100%.</p>
                         <canvas id="llmoCategoryShareChart" style="max-width: 320px; max-height: 320px;"></canvas>
                     </div>
                 </div>
@@ -16806,7 +16723,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -16835,8 +16752,6 @@
             const navHandlers = {
                 profileIQ: showProfileIQ,
                 subscriberIQ: showSubscriberIQ,
-                roasIQ: showRoasIQ,
-                ecommerceIQ: showEcommerceIQ,
                 llmoIQ: showLLMOIQ,
                 rankerIQ: showRankerIQ,
                 ticketSalesIQ: showTicketSalesIQ,
@@ -16872,12 +16787,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'roasIQView', 'ecommerceIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -16889,8 +16804,6 @@
             var viewNavProductTooltips = {
                 profileIQ: 'Profile IQ: Build and analyze custom audience profiles based on engagement and behavior.',
                 subscriberIQ: 'Subscriber IQ: Explore subscriber demographics, retention, and engagement metrics.',
-                roasIQ: 'ROAS IQ: Analyze marketing attribution (UTM, click IDs) for any audience by search terms.',
-                ecommerceIQ: 'E-Commerce IQ: Analyze product page views, cart adds, and purchases for any audience by search terms.',
                 llmoIQ: 'LLMO IQ: Analyze AI platform usage, attribution, and search behavior across LLMs.',
                 rankerIQ: 'Ranker: Compare and rank titles, genres, or properties by performance.',
                 ticketSalesIQ: 'Impact IQ: Measure impact and performance of titles via ticket sales and engagement.',
@@ -17607,20 +17520,6 @@
             checkProfileReleasedNotifications();
         }
         
-        window.showRoasIQ = function() {
-            var dd = document.getElementById('viewNavDropdown');
-            var opt = dd ? dd.querySelector('option[value="roasIQ"]') : null;
-            if (opt && opt.disabled) return;
-            refreshRoasIQList();
-        };
-
-        window.showEcommerceIQ = function() {
-            var dd = document.getElementById('viewNavDropdown');
-            var opt = dd ? dd.querySelector('option[value="ecommerceIQ"]') : null;
-            if (opt && opt.disabled) return;
-            refreshEcomIQList();
-        };
-
         window.showSubscriberIQ = function() {
             const dd = document.getElementById('viewNavDropdown');
             const opt = dd?.querySelector('option[value="subscriberIQ"]');
@@ -19415,7 +19314,8 @@
             // Update tab buttons - use optional chaining for tabs that may not exist
             const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater', 
                            'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow', 
-                           'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker'];
+                           'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker',
+                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -19425,7 +19325,8 @@
             const contentIds = ['customAnalysisTabContentProfileIQ', 'customAnalysisTabContentTalentSearch', 
                                'customAnalysisTabContentTalentTheater', 'customAnalysisTabContentSVODAcquisition',
                                'customAnalysisTabContentCampaignROI', 'customAnalysisTabContentCrossShow',
-                               'customAnalysisTabContentWatchTime', 'customAnalysisTabContentTicketSalesTracker'];
+                               'customAnalysisTabContentWatchTime', 'customAnalysisTabContentTicketSalesTracker',
+                               'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ'];
             contentIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -19474,11 +19375,199 @@
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
                 if (typeof loadTicketSalesTrackerResults === 'function') loadTicketSalesTrackerResults();
+            } else if (tabName === 'roas-iq') {
+                const tab = document.getElementById('customAnalysisTabRoasIQ');
+                const content = document.getElementById('customAnalysisTabContentRoasIQ');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                if (typeof refreshRoasIQList === 'function') refreshRoasIQList();
+            } else if (tabName === 'ecommerce-iq') {
+                const tab = document.getElementById('customAnalysisTabEcommerceIQ');
+                const content = document.getElementById('customAnalysisTabContentEcommerceIQ');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                if (typeof refreshEcomIQList === 'function') refreshEcomIQList();
             }
         }
         
         // Custom Analysis Profile IQ now uses original formView - no custom form handler needed
-        
+
+        // ===================== ROAS IQ =====================
+        let _roasIQChartInst = null;
+        let _roasIQPollingId = null;
+
+        function refreshRoasIQList() {
+            fetch('/api/roas-iq/list').then(r => r.json()).then(data => {
+                const el = document.getElementById('roasIQResultsList');
+                if (!el) return;
+                const files = (data.files || []);
+                if (!files.length) { el.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No results yet. Run an analysis.</div>'; return; }
+                el.innerHTML = files.map(f => `<div class="profile-tree-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="loadRoasIQResult('${f.key}')">${f.name}</div>`).join('');
+            }).catch(() => {});
+        }
+
+        function submitRoasIQ() {
+            const projectName = document.getElementById('roasIQProjectName').value.trim();
+            const searchTerms = document.getElementById('roasIQSearchTerms').value.trim();
+            const startDate = document.getElementById('roasIQStartDate').value;
+            const endDate = document.getElementById('roasIQEndDate').value;
+            if (!projectName || !searchTerms || !startDate || !endDate) { alert('Please fill in all fields.'); return; }
+            document.getElementById('roasIQSubmitBtn').disabled = true;
+            document.getElementById('roasIQStatus').style.display = '';
+            document.getElementById('roasIQStatusText').textContent = 'Submitting...';
+            document.getElementById('roasIQProgressBar').style.width = '0%';
+            fetch('/api/roas-iq/submit', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ project_name: projectName, search_terms: searchTerms, start_date: startDate, end_date: endDate }) })
+                .then(r => r.json()).then(data => {
+                    if (data.error) { document.getElementById('roasIQStatusText').textContent = 'Error: ' + data.error; document.getElementById('roasIQSubmitBtn').disabled = false; return; }
+                    _pollRoasIQ(data.job_id);
+                }).catch(() => { document.getElementById('roasIQStatusText').textContent = 'Submit failed'; document.getElementById('roasIQSubmitBtn').disabled = false; });
+        }
+
+        function _pollRoasIQ(jobId) {
+            if (_roasIQPollingId) clearInterval(_roasIQPollingId);
+            _roasIQPollingId = setInterval(() => {
+                fetch('/api/job-status/' + jobId).then(r => r.json()).then(data => {
+                    document.getElementById('roasIQStatusText').textContent = data.message || data.status;
+                    document.getElementById('roasIQProgressBar').style.width = (data.progress || 0) + '%';
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        clearInterval(_roasIQPollingId);
+                        document.getElementById('roasIQSubmitBtn').disabled = false;
+                        if (data.status === 'completed' && data.s3_key) { loadRoasIQResult(data.s3_key); refreshRoasIQList(); }
+                    }
+                }).catch(() => {});
+            }, 2000);
+        }
+
+        function loadRoasIQResult(s3Key) {
+            fetch('/api/roas-iq/results/' + encodeURIComponent(s3Key)).then(r => r.json()).then(resp => {
+                if (!resp.success || !resp.data) return;
+                renderRoasIQDashboard(resp.data);
+            }).catch(() => {});
+        }
+
+        function renderRoasIQDashboard(data) {
+            document.getElementById('roasIQDashboard').style.display = '';
+            const results = data.results || [];
+            const headerEl = document.getElementById('roasIQDashHeader');
+            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.25rem;">📊 ' + (data.project_name||'ROAS IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' &middot; ' + (data.uid_count||0).toLocaleString() + ' UIDs</span></div>';
+            const channelMap = {};
+            let totalRaw = 0;
+            results.forEach(r => {
+                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalRaw: 0 };
+                channelMap[r.channel].totalPct += r.pct;
+                channelMap[r.channel].totalRaw += (r.raw||0);
+                totalRaw += (r.raw||0);
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, raw: 0 };
+                channelMap[r.channel].sources[r.source].pct += r.pct;
+                channelMap[r.channel].sources[r.source].raw += (r.raw||0);
+            });
+            const channels = Object.entries(channelMap).sort((a,b) => b[1].totalPct - a[1].totalPct);
+            const icons = {'Email':'📧','Social Media':'📱','Digital Ads':'💰','Affiliate':'🤝','Sms':'💬','Influencer':'⭐','Push Notification':'🔔','Other':'📋'};
+            const statsEl = document.getElementById('roasIQStats');
+            if (statsEl) {
+                const topCh = channels[0] ? channels[0][0] : 'N/A';
+                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Attributed Touches</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+totalRaw.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Sources</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+results.length+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Top Channel</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+(icons[topCh]||'📋')+' '+topCh+'</div></div>';
+            }
+            const canvas = document.getElementById('roasIQChart');
+            if (canvas && typeof Chart !== 'undefined') {
+                if (_roasIQChartInst) _roasIQChartInst.destroy();
+                const colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+                _roasIQChartInst = new Chart(canvas.getContext('2d'), { type:'doughnut', data:{ labels:channels.map(c=>c[0]), datasets:[{data:channels.map(c=>c[1].totalPct), backgroundColor:colors.slice(0,channels.length), borderWidth:0}] }, options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,font:{size:11}}}}} });
+            }
+            const tableEl = document.getElementById('roasIQChannelTable');
+            if (tableEl) {
+                const total = channels.reduce((s,c)=>s+c[1].totalPct,0)||1;
+                const rows = channels.map(([n,ch])=>'<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalRaw.toLocaleString()+'</td></tr>').join('');
+                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Touches</th></tr></thead><tbody>'+rows+'</tbody></table>';
+            }
+            const cardsEl = document.getElementById('roasIQSourceCards');
+            if (cardsEl) {
+                cardsEl.innerHTML = channels.map(([name,ch])=>{
+                    const srcs = Object.entries(ch.sources).sort((a,b)=>b[1].pct-a[1].pct);
+                    const chT = ch.totalPct||1;
+                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+d.raw.toLocaleString()+'</td></tr>').join('');
+                    return '<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;"><span style="font-size:1.5rem;">'+(icons[name]||'📋')+'</span><div><h3 style="margin:0;font-size:15px;">'+name+'</h3><span style="font-size:12px;color:var(--text-secondary);">'+ch.totalPct.toFixed(2)+'% pen · '+srcs.length+' sources</span></div></div><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;">Source</th><th style="padding:6px 10px;text-align:right;">Share</th><th style="padding:6px 10px;text-align:right;">Pen.</th><th style="padding:6px 10px;text-align:right;">Touches</th></tr></thead><tbody>'+sr+'</tbody></table></div>';
+                }).join('');
+            }
+        }
+
+        // ===================== E-COMMERCE IQ =====================
+        let _ecomIQPollingId = null;
+
+        function refreshEcomIQList() {
+            fetch('/api/ecommerce-iq/list').then(r => r.json()).then(data => {
+                const el = document.getElementById('ecomIQResultsList');
+                if (!el) return;
+                const files = (data.files || []);
+                if (!files.length) { el.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No results yet. Run an analysis.</div>'; return; }
+                el.innerHTML = files.map(f => `<div class="profile-tree-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="loadEcomIQResult('${f.key}')">${f.name}</div>`).join('');
+            }).catch(() => {});
+        }
+
+        function submitEcomIQ() {
+            const pn = document.getElementById('ecomIQProjectName').value.trim();
+            const st = document.getElementById('ecomIQSearchTerms').value.trim();
+            const sd = document.getElementById('ecomIQStartDate').value;
+            const ed = document.getElementById('ecomIQEndDate').value;
+            if (!pn || !st || !sd || !ed) { alert('Please fill in all fields.'); return; }
+            document.getElementById('ecomIQSubmitBtn').disabled = true;
+            document.getElementById('ecomIQStatus').style.display = '';
+            document.getElementById('ecomIQStatusText').textContent = 'Submitting...';
+            document.getElementById('ecomIQProgressBar').style.width = '0%';
+            fetch('/api/ecommerce-iq/submit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ project_name:pn, search_terms:st, start_date:sd, end_date:ed }) })
+                .then(r => r.json()).then(data => {
+                    if (data.error) { document.getElementById('ecomIQStatusText').textContent = 'Error: ' + data.error; document.getElementById('ecomIQSubmitBtn').disabled = false; return; }
+                    _pollEcomIQ(data.job_id);
+                }).catch(() => { document.getElementById('ecomIQStatusText').textContent = 'Submit failed'; document.getElementById('ecomIQSubmitBtn').disabled = false; });
+        }
+
+        function _pollEcomIQ(jobId) {
+            if (_ecomIQPollingId) clearInterval(_ecomIQPollingId);
+            _ecomIQPollingId = setInterval(() => {
+                fetch('/api/job-status/' + jobId).then(r => r.json()).then(data => {
+                    document.getElementById('ecomIQStatusText').textContent = data.message || data.status;
+                    document.getElementById('ecomIQProgressBar').style.width = (data.progress || 0) + '%';
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        clearInterval(_ecomIQPollingId);
+                        document.getElementById('ecomIQSubmitBtn').disabled = false;
+                        if (data.status === 'completed' && data.s3_key) { loadEcomIQResult(data.s3_key); refreshEcomIQList(); }
+                    }
+                }).catch(() => {});
+            }, 2000);
+        }
+
+        function loadEcomIQResult(s3Key) {
+            fetch('/api/ecommerce-iq/results/' + encodeURIComponent(s3Key)).then(r => r.json()).then(resp => {
+                if (!resp.success || !resp.data) return;
+                renderEcomIQDashboard(resp.data);
+            }).catch(() => {});
+        }
+
+        function _ecomIQTable(items, elId) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            if (!items.length) { el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);font-size:13px;">No data</div>'; return; }
+            const rows = items.map((item, i) => '<tr><td style="padding:8px 10px;color:var(--text-secondary);width:30px;">'+(i+1)+'</td><td style="padding:8px 10px;font-weight:600;">'+item.store+'</td><td style="padding:8px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+item.slug+'">'+(item.slug||'/')+'</td><td style="padding:8px 10px;text-align:right;">'+item.pct.toFixed(2)+'%</td><td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">'+(item.raw||0).toLocaleString()+'</td></tr>').join('');
+            el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 10px;width:30px;">#</th><th style="padding:8px 10px;text-align:left;">Store</th><th style="padding:8px 10px;text-align:left;">Product / Path</th><th style="padding:8px 10px;text-align:right;">% of Audience</th><th style="padding:8px 10px;text-align:right;">Users</th></tr></thead><tbody>'+rows+'</tbody></table>';
+        }
+
+        function renderEcomIQDashboard(data) {
+            document.getElementById('ecomIQDashboard').style.display = '';
+            const results = data.results || [];
+            const headerEl = document.getElementById('ecomIQDashHeader');
+            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.25rem;">🛒 ' + (data.project_name||'E-Commerce IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' &middot; ' + (data.uid_count||0).toLocaleString() + ' UIDs</span></div>';
+            const pdps = results.filter(r=>r.stage==='PDP').sort((a,b)=>b.pct-a.pct);
+            const carts = results.filter(r=>r.stage==='CART').sort((a,b)=>b.pct-a.pct);
+            const purchases = results.filter(r=>r.stage==='PURCHASE').sort((a,b)=>b.pct-a.pct);
+            const stores = new Set(results.map(r=>r.store));
+            const statsEl = document.getElementById('ecomIQStats');
+            if (statsEl) statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Product Pages</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+pdps.length.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Add-to-Cart</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+carts.length.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Purchases</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+purchases.length.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Stores</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+stores.size+'</div></div>';
+            _ecomIQTable(pdps.slice(0,10), 'ecomIQTopPdp');
+            _ecomIQTable(pdps.length > 10 ? pdps.slice(-10).reverse() : [], 'ecomIQBottomPdp');
+            _ecomIQTable(carts.slice(0,10), 'ecomIQCart');
+            _ecomIQTable(purchases.slice(0,10), 'ecomIQPurchase');
+        }
+
         // Custom Talent Search Form Handler
         document.getElementById('customTalentSearchForm')?.addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -27979,32 +28068,25 @@
             const filteredAgeData = ageData.filter(item => {
                 const ageRange = item.age_range || item.age || '';
                 const ageRangeUpper = ageRange.toUpperCase().trim();
-                return ageRange && 
+                return ageRange &&
                        !genderKeywords.some(kw => ageRangeUpper.includes(kw)) &&
                        ageRangeUpper !== 'AGE' &&
                        ageRange.trim() !== '' &&
                        (item.count || parseNumber(item.count) > 0);
             });
-            
+
             // Consolidate age data: group by display label so duplicate buckets are summed
             const ageGroups = {};
             filteredAgeData.forEach(item => {
                 const ageRange = item.age_range || item.age || '';
                 const displayLabel = (typeof getAgeDisplayLabel === 'function') ? getAgeDisplayLabel(ageRange) : ageRange;
                 const normalizedKey = displayLabel.toUpperCase().trim();
-                
                 if (!ageGroups[normalizedKey]) {
-                    ageGroups[normalizedKey] = {
-                        age_range: displayLabel,
-                        count: 0,
-                        gen_pop: 0
-                    };
+                    ageGroups[normalizedKey] = { age_range: displayLabel, count: 0, gen_pop: 0 };
                 }
-                
                 ageGroups[normalizedKey].count += (parseNumber(item.count) || 0);
                 ageGroups[normalizedKey].gen_pop += (parseNumber(item.gen_pop) || parseNumber(item.genPop) || 0);
             });
-            
             const ageTotalCount = Object.values(ageGroups).reduce((sum, g) => sum + g.count, 0);
             const validAgeData = Object.values(ageGroups)
                 .map(g => ({
@@ -28018,12 +28100,10 @@
             // Combine gender data case-insensitively (used by insights, table, and chart)
             const filteredGenderData = genderData.filter(item => {
                 const gender = item.gender || '';
-                const genderLower = gender.trim().toLowerCase();
                 const count = parseNumber(item.count) || 0;
                 return gender && 
                        gender.toUpperCase() !== 'GENDER' && 
                        gender.toUpperCase() !== 'N/A' && 
-                       genderLower !== 'prefer not to say' &&
                        gender.trim() !== '' &&
                        count > 0;
             });
@@ -28524,7 +28604,6 @@
                     'behavioral': 'BEHAVIORAL',
                     'interests': 'INTERESTS',
                     'location': 'LOCATION',
-                    'search-ai': 'SEARCH/AI',
                     'rankers': 'RANKERS',
                     'affinity': 'AFFINITY',
                     'ecosystem': 'ECOSYSTEM',
@@ -29417,7 +29496,6 @@
             
             renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
             renderBehavioralCards(parsed.behavioral);
-            renderSearchAiTab(parsed.searchAI, parsed.searchAIPlatforms);
             renderLocationTable(parsed.locations);
             
             // Render demographic insights
@@ -29446,9 +29524,7 @@
                 behavioral: {},
                 categories: {},
                 locations: [],
-                interests: {},
-                searchAI: [],
-                searchAIPlatforms: []
+                interests: {} // For interests data
             };
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
@@ -30064,19 +30140,6 @@
                     result.categories[category].push({ value, pct, index, genPopPct, projection: usProjection });
                 }
 
-                // Parse SEARCH/AI query rows (extracted from URLs by BG.py)
-                if (category === 'SEARCH/AI' && value) {
-                    const pipeIdx = value.indexOf(' | ');
-                    const platform = pipeIdx > 0 ? value.substring(0, pipeIdx).trim() : 'Unknown';
-                    const query = pipeIdx > 0 ? value.substring(pipeIdx + 3).trim() : value;
-                    result.searchAI.push({ platform, query, pct, index, projection: usProjection, genPopPct, genPopProjection, raw: value });
-                }
-
-                // Capture SEARCH ENGINE/AI platform-level rows (always present)
-                if (category === 'SEARCH ENGINE/AI' && value) {
-                    result.searchAIPlatforms.push({ name: value, pct, index, projection: usProjection, genPopPct, raw: rawNum });
-                }
-
                 // Behavioral (non-demographic categories) - include index and projection
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && !['LOCATION'].includes(category) && value) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
@@ -30124,37 +30187,6 @@
 
             normalizeAgeBucketsForDashboard(result);
             normalizeIncomeBucketsForDashboard(result);
-
-            // Remove "Prefer Not to Say" from all demographic categories and rebase to 100%
-            ['gender', 'education', 'relationship', 'sexual_orientation', 'parental_status'].forEach(cat => {
-                const demo = result.demographics[cat];
-                if (!demo || Object.keys(demo).length === 0) return;
-                const keysToRemove = Object.keys(demo).filter(k => {
-                    const lower = (k || '').trim().toLowerCase();
-                    return lower === 'prefer not to say' || lower === 'prefer_not_to_say';
-                });
-                if (keysToRemove.length === 0) return;
-                keysToRemove.forEach(k => {
-                    delete demo[k];
-                    if (result.demographicsIndex[cat]) delete result.demographicsIndex[cat][k];
-                    if (result.demographicsGenPop[cat]) delete result.demographicsGenPop[cat][k];
-                    if (result.demographicsProjection[cat]) delete result.demographicsProjection[cat][k];
-                });
-                const total = Object.values(demo).reduce((s, v) => s + v, 0);
-                if (total > 0 && total !== 100) {
-                    const scale = 100 / total;
-                    for (const k of Object.keys(demo)) {
-                        demo[k] = Math.round(demo[k] * scale * 100) / 100;
-                        if (result.demographicsIndex[cat] && result.demographicsGenPop[cat]) {
-                            const gp = result.demographicsGenPop[cat][k] || 0;
-                            if (gp > 0) result.demographicsIndex[cat][k] = Math.round((demo[k] / gp) * 100);
-                        }
-                        if (result.demographicsProjection[cat]) {
-                            result.demographicsProjection[cat][k] = Math.round((demo[k] / 100) * 329900000);
-                        }
-                    }
-                }
-            });
 
             // Deduplicate behavioral items: keep highest-pct entry per name within each category
             Object.keys(result.behavioral).forEach(cat => {
@@ -31150,7 +31182,6 @@
             // Render charts and data
             renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
             renderBehavioralCards(parsed.behavioral);
-            renderSearchAiTab(parsed.searchAI, parsed.searchAIPlatforms);
             renderLocationTable(parsed.locations);
             
             // Render demographic insights
@@ -32608,21 +32639,6 @@
             const isProjection = dashDisplayMode === 'projection';
             const isGenPop = isSelectedProfileGenPop();
             const US_POPULATION = 329900000;
-
-            const _gpFallbackMap = { age: 'AGE', gender: 'GENDER', ethnicity: 'ETHNICITY', income: 'INCOME', education: 'EDUCATION', relationship: 'RELATIONSHIP', sexual_orientation: 'SEXUAL_ORIENTATION', parental_status: 'PARENTAL_STATUS', occupation: 'OCCUPATION' };
-            function getGenPopFallback(category, key) {
-                let gp = demographicsGenPop[category]?.[key] || 0;
-                if (gp > 0) return gp;
-                const gpKey = _gpFallbackMap[category];
-                if (!gpKey || !GENPOP_DEMOGRAPHICS?.[gpKey]) return 0;
-                gp = GENPOP_DEMOGRAPHICS[gpKey][key] || 0;
-                if (gp > 0) return gp;
-                const kLower = (key || '').toLowerCase();
-                for (const [gk, gv] of Object.entries(GENPOP_DEMOGRAPHICS[gpKey])) {
-                    if ((gk || '').toLowerCase() === kLower) return gv;
-                }
-                return 0;
-            }
             const ageChartEl = document.getElementById('ageChart');
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
@@ -32674,7 +32690,7 @@
             const sortedAgeResult = getSortedAgeData(demographics.age);
             const ageLabels = Object.keys(sortedAgeResult.display);
             const ageOriginalKeys = sortedAgeResult.originalKeys;
-            const ageGenPop = ageOriginalKeys.map(k => getGenPopFallback('age', k));
+            const ageGenPop = ageOriginalKeys.map(k => demographicsGenPop.age?.[k] || 0);
             const agePcts = ageLabels.map((k, i) => sortedAgeResult.display[k]);
             const ageData = isProjection 
                 ? ageOriginalKeys.map(k => demographicsProjection.age?.[k] || 0)
@@ -32766,7 +32782,7 @@
 
             // Gender - with Gen Pop in legend (green/red based on index)
             const genderLabels = Object.keys(demographics.gender);
-            const genderGenPop = genderLabels.map(k => getGenPopFallback('gender', k));
+            const genderGenPop = genderLabels.map(k => demographicsGenPop.gender?.[k] || 0);
             const genderPcts = Object.values(demographics.gender);
             const genderData = isProjection
                 ? genderLabels.map(k => demographicsProjection.gender?.[k] || 0)
@@ -32890,7 +32906,7 @@
                 const display = (l && l.toLowerCase()) === 'latino' || (l && l.toLowerCase()) === 'latinx' ? 'Hispanic or Latino' : (l || '');
                 return String(display).toUpperCase();
             });
-            const ethGenPop = ethLabels.map(k => getGenPopFallback('ethnicity', k));
+            const ethGenPop = ethLabels.map(k => demographicsGenPop.ethnicity?.[k] || 0);
             const ethPcts = Object.values(demographics.ethnicity);
             const ethData = isProjection
                 ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
@@ -33009,7 +33025,7 @@
             const sortedIncomeResult = getSortedIncomeData(demographics.income);
             const incomeLabels = Object.keys(sortedIncomeResult.display);
             const incomeOriginalKeys = sortedIncomeResult.originalKeys;
-            const incomeGenPop = incomeOriginalKeys.map(k => getGenPopFallback('income', k));
+            const incomeGenPop = incomeOriginalKeys.map(k => demographicsGenPop.income?.[k] || 0);
             const incomePcts = incomeLabels.map((k, i) => sortedIncomeResult.display[k]);
             const incomeData = isProjection 
                 ? incomeOriginalKeys.map(k => demographicsProjection.income?.[k] || 0)
@@ -33122,7 +33138,7 @@
             // Education - horizontal bar with Gen Pop
             if (demographics.education && Object.keys(demographics.education).length > 0) {
                 const eduLabels = Object.keys(demographics.education);
-                const eduGenPop = eduLabels.map(k => getGenPopFallback('education', k));
+                const eduGenPop = eduLabels.map(k => demographicsGenPop.education?.[k] || 0);
                 const eduPcts = Object.values(demographics.education);
                 const eduData = isProjection ? eduLabels.map(k => demographicsProjection.education?.[k] || 0) : eduPcts;
                 const eduMax = Math.max(...eduData) * 1.5; // 50% padding for labels
@@ -33207,7 +33223,7 @@
             // Relationship - doughnut with Gen Pop
             if (demographics.relationship && Object.keys(demographics.relationship).length > 0) {
                 const relLabels = Object.keys(demographics.relationship);
-                const relGenPop = relLabels.map(k => getGenPopFallback('relationship', k));
+                const relGenPop = relLabels.map(k => demographicsGenPop.relationship?.[k] || 0);
                 const relPcts = Object.values(demographics.relationship);
                 const relData = isProjection ? relLabels.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
@@ -33323,7 +33339,7 @@
                 const soLabels = Object.keys(demographics.sexual_orientation);
                 const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
-                const soGenPop = soLabels.map(k => getGenPopFallback('sexual_orientation', k));
+                const soGenPop = soLabels.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
                 const soPcts = Object.values(demographics.sexual_orientation);
                 const soData = isProjection ? soLabels.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
                 
@@ -33437,7 +33453,7 @@
             // Parental Status - doughnut with Gen Pop
             if (demographics.parental_status && Object.keys(demographics.parental_status).length > 0) {
                 const psLabels = Object.keys(demographics.parental_status);
-                const psGenPop = psLabels.map(k => getGenPopFallback('parental_status', k));
+                const psGenPop = psLabels.map(k => demographicsGenPop.parental_status?.[k] || 0);
                 const psPcts = Object.values(demographics.parental_status);
                 const psData = isProjection ? psLabels.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
                 
@@ -33549,7 +33565,7 @@
             // Occupation - bar chart with Gen Pop
             if (demographics.occupation && Object.keys(demographics.occupation).length > 0) {
                 const occLabels = Object.keys(demographics.occupation);
-                const occGenPop = occLabels.map(k => getGenPopFallback('occupation', k));
+                const occGenPop = occLabels.map(k => demographicsGenPop.occupation?.[k] || 0);
                 const occPcts = Object.values(demographics.occupation);
                 const occData = isProjection ? occLabels.map(k => demographicsProjection.occupation?.[k] || 0) : occPcts;
                 
@@ -35422,395 +35438,6 @@
             'ORGANIZATIONAL MEMBERSHIPS', 'PORN MEDIA', 'TELECOM'
         ];
 
-        // ===================== SEARCH/AI TAB RENDERING =====================
-        let _searchAiData = [];       // query-level data (from SEARCH/AI rows)
-        let _searchAiPlatforms = [];  // platform-level data (from SEARCH ENGINE/AI rows)
-        let _searchAiChartInst = null;
-
-        function renderSearchAiTab(searchAI, searchAIPlatforms) {
-            _searchAiData = searchAI || [];
-            _searchAiPlatforms = (searchAIPlatforms || []).slice().sort((a, b) => b.pct - a.pct);
-
-            const emptyEl = document.getElementById('searchAiEmpty');
-            const queriesSection = document.getElementById('searchAiQueriesSection');
-            const hasPlats = _searchAiPlatforms.length > 0;
-            const hasQueries = _searchAiData.length > 0;
-
-            if (!hasPlats && !hasQueries) {
-                if (emptyEl) emptyEl.style.display = '';
-                document.getElementById('searchAiStats').innerHTML = '';
-                document.getElementById('searchAiPlatformTable').innerHTML = '';
-                if (queriesSection) queriesSection.style.display = 'none';
-                if (_searchAiChartInst) { _searchAiChartInst.destroy(); _searchAiChartInst = null; }
-                return;
-            }
-            if (emptyEl) emptyEl.style.display = 'none';
-
-            // --- Summary stats (always from platform data) ---
-            const statsEl = document.getElementById('searchAiStats');
-            const topPlat = hasPlats ? _searchAiPlatforms[0] : null;
-            const aiPlatforms = _searchAiPlatforms.filter(p => {
-                const n = (p.name || '').toUpperCase();
-                return ['CHAT GPT', 'CHATGPT', 'PERPLEXITY', 'GEMINI', 'CLAUDE', 'CLAUDE AI', 'COPILOT', 'GROK', 'DEEP SEEK', 'DEEPSEEK', 'POE'].some(a => n.includes(a));
-            });
-            const aiPct = aiPlatforms.reduce((s, p) => s + p.pct, 0);
-            const cards = [];
-            cards.push(_statCard('📡', 'Platforms Tracked', hasPlats ? _searchAiPlatforms.length : '—'));
-            cards.push(_statCard('🏆', 'Top Platform', topPlat ? topPlat.name : '—'));
-            cards.push(_statCard('🤖', 'AI Platform Reach', aiPct > 0 ? aiPct.toFixed(1) + '%' : '—'));
-            if (hasQueries) cards.push(_statCard('🔍', 'Search Queries', _searchAiData.length.toLocaleString()));
-            else cards.push(_statCard('🌐', 'Top Penetration', topPlat ? topPlat.pct.toFixed(1) + '%' : '—'));
-            statsEl.innerHTML = cards.join('');
-
-            // --- Platform usage chart (doughnut from SEARCH ENGINE/AI) ---
-            _renderSearchAiPlatformChart(_searchAiPlatforms);
-
-            // --- Platform penetration table ---
-            _renderSearchAiPlatformTable(_searchAiPlatforms);
-
-            // --- Queries section (only if we have extracted queries) ---
-            if (queriesSection) {
-                if (hasQueries) {
-                    queriesSection.style.display = '';
-                    const platMap = {};
-                    _searchAiData.forEach(d => {
-                        if (!platMap[d.platform]) platMap[d.platform] = { queries: 0, totalPct: 0 };
-                        platMap[d.platform].queries++;
-                        platMap[d.platform].totalPct += d.pct;
-                    });
-                    const queryPlats = Object.entries(platMap).sort((a, b) => b[1].totalPct - a[1].totalPct);
-
-                    const platFilter = document.getElementById('searchAiPlatformFilter');
-                    if (platFilter) platFilter.innerHTML = '<option value="all">All Platforms</option>' +
-                        queryPlats.map(([p]) => `<option value="${p}">${p}</option>`).join('');
-                    filterSearchAiQueries();
-
-                    const cardsEl = document.getElementById('searchAiPlatformCards');
-                    if (cardsEl) {
-                        cardsEl.innerHTML = queryPlats.map(([plat, info]) => {
-                            const items = _searchAiData.filter(d => d.platform === plat).sort((a, b) => b.pct - a.pct);
-                            const rows = items.slice(0, 25).map((d, i) => `
-                                <tr>
-                                    <td style="padding:4px 8px;color:var(--text-secondary);font-size:0.75rem;">${i + 1}</td>
-                                    <td style="padding:4px 8px;">${_esc(d.query)}</td>
-                                    <td style="padding:4px 8px;text-align:right;font-family:monospace;">${d.pct.toFixed(2)}%</td>
-                                </tr>`).join('');
-                            return `<div class="behavioral-card" style="padding:1.25rem;">
-                                <h3 style="margin:0 0 0.75rem;font-size:0.95rem;color:var(--text-primary);display:flex;align-items:center;gap:0.4rem;">
-                                    <span>${_platformIcon(plat)}</span> ${_esc(plat)}
-                                    <span style="font-size:0.75rem;color:var(--text-secondary);margin-left:auto;">${info.queries} queries</span>
-                                </h3>
-                                <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
-                                    <thead><tr style="border-bottom:1px solid var(--border-color);">
-                                        <th style="padding:4px 8px;text-align:left;color:var(--text-secondary);width:30px;">#</th>
-                                        <th style="padding:4px 8px;text-align:left;color:var(--text-secondary);">Query</th>
-                                        <th style="padding:4px 8px;text-align:right;color:var(--text-secondary);">Penetration</th>
-                                    </tr></thead>
-                                    <tbody>${rows}</tbody>
-                                </table>
-                            </div>`;
-                        }).join('');
-                    }
-                } else {
-                    queriesSection.style.display = 'none';
-                }
-            }
-        }
-
-        function _renderSearchAiPlatformTable(platforms) {
-            const el = document.getElementById('searchAiPlatformTable');
-            if (!el || !platforms.length) { if (el) el.innerHTML = ''; return; }
-            const maxPct = platforms[0].pct;
-            const rows = platforms.map((p, i) => {
-                const barW = Math.max(2, (p.pct / maxPct) * 100);
-                const isAI = ['CHAT GPT', 'CHATGPT', 'PERPLEXITY', 'GEMINI', 'CLAUDE', 'CLAUDE AI', 'COPILOT', 'GROK', 'DEEP SEEK', 'DEEPSEEK', 'POE', 'ELEVENLABS', 'DUCK AI'].some(a => (p.name || '').toUpperCase().includes(a));
-                const badge = isAI ? '<span style="font-size:0.6rem;background:rgba(168,85,247,0.2);color:#a855f7;padding:1px 5px;border-radius:3px;margin-left:4px;">AI</span>' : '';
-                return `<tr style="border-bottom:1px solid var(--border-color); ${i % 2 === 0 ? 'background:rgba(255,255,255,0.02);' : ''}">
-                    <td style="padding:6px 8px;color:var(--text-secondary);font-size:0.75rem;width:28px;">${i + 1}</td>
-                    <td style="padding:6px 8px;font-size:0.85rem;white-space:nowrap;">${_platformIcon(p.name)} ${_esc(p.name)}${badge}</td>
-                    <td style="padding:6px 8px;width:45%;">
-                        <div style="background:rgba(102,217,239,0.12);border-radius:3px;height:18px;position:relative;">
-                            <div style="background:linear-gradient(90deg,rgba(102,217,239,0.6),rgba(102,217,239,0.25));height:100%;border-radius:3px;width:${barW}%;"></div>
-                        </div>
-                    </td>
-                    <td style="padding:6px 8px;text-align:right;font-family:monospace;font-size:0.82rem;white-space:nowrap;">${p.pct.toFixed(1)}%</td>
-                    <td style="padding:6px 8px;text-align:right;font-family:monospace;font-size:0.75rem;color:var(--text-secondary);white-space:nowrap;">${p.index != null ? p.index.toFixed(0) + 'x' : ''}</td>
-                </tr>`;
-            }).join('');
-            el.innerHTML = `<table style="width:100%;border-collapse:collapse;">
-                <thead><tr style="border-bottom:2px solid var(--border-color);">
-                    <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);font-size:0.7rem;width:28px;">#</th>
-                    <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);font-size:0.7rem;">Platform</th>
-                    <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);font-size:0.7rem;">Share</th>
-                    <th style="padding:6px 8px;text-align:right;color:var(--text-secondary);font-size:0.7rem;">Penetration</th>
-                    <th style="padding:6px 8px;text-align:right;color:var(--text-secondary);font-size:0.7rem;">Index</th>
-                </tr></thead>
-                <tbody>${rows}</tbody>
-            </table>`;
-        }
-
-        function _statCard(icon, label, value) {
-            return `<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:1rem 1.25rem;display:flex;flex-direction:column;gap:0.25rem;">
-                <span style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">${icon} ${label}</span>
-                <span style="font-size:1.15rem;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${typeof value === 'string' ? _esc(value) : value}</span>
-            </div>`;
-        }
-
-        function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-        function _platformIcon(p) {
-            const m = { 'Google': '🟢', 'Bing': '🔵', 'Yahoo': '🟣', 'DuckDuckGo': '🦆', 'ChatGPT': '🤖', 'Chat GPT': '🤖',
-                'Perplexity': '🧠', 'Copilot': '🪟', 'Gemini': '✨', 'Claude': '🟠', 'Claude AI': '🟠', 'Brave': '🦁',
-                'Grok': '⚡', 'Deep Seek': '🔬', 'DeepSeek': '🔬', 'MSN': '🟦', 'Quora': '🔴', 'Poe': '💬',
-                'Duck AI': '🦆', 'Eduaide': '🎓', 'Slidesgo': '📑', 'Startpage': '🔒', 'Elevenlabs': '🔊' };
-            return m[p] || '🔍';
-        }
-
-        function _renderSearchAiPlatformChart(platforms) {
-            const ctx = document.getElementById('searchAiPlatformChart');
-            if (!ctx) return;
-            if (_searchAiChartInst) { _searchAiChartInst.destroy(); _searchAiChartInst = null; }
-            if (!platforms || !platforms.length) return;
-            const colors = ['#66d9ef', '#c8ff00', '#ff6b6b', '#ffd93d', '#6bcb77', '#a855f7', '#fb923c', '#38bdf8', '#f472b6', '#34d399',
-                            '#818cf8', '#e879f9', '#22d3ee', '#facc15', '#f87171', '#4ade80', '#c084fc', '#fb7185', '#a3e635', '#2dd4bf'];
-            _searchAiChartInst = new Chart(ctx.getContext('2d'), {
-                type: 'doughnut',
-                data: {
-                    labels: platforms.map(p => p.name),
-                    datasets: [{ data: platforms.map(p => p.pct), backgroundColor: colors.slice(0, platforms.length), borderWidth: 0 }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: true, cutout: '60%',
-                    plugins: { legend: { display: true, position: 'bottom', labels: { color: '#e6f1ff', font: { size: 11 }, padding: 10, boxWidth: 12 } } }
-                }
-            });
-        }
-
-        function filterSearchAiQueries() {
-            const filter = (document.getElementById('searchAiQueryFilter')?.value || '').toLowerCase();
-            const platFilter = document.getElementById('searchAiPlatformFilter')?.value || 'all';
-            const sortBy = document.getElementById('searchAiSortBy')?.value || 'penetration';
-
-            let items = _searchAiData.slice();
-            if (platFilter !== 'all') items = items.filter(d => d.platform === platFilter);
-            if (filter) items = items.filter(d => d.query.toLowerCase().includes(filter) || d.platform.toLowerCase().includes(filter));
-            if (sortBy === 'alpha') items.sort((a, b) => a.query.localeCompare(b.query));
-            else items.sort((a, b) => b.pct - a.pct);
-
-            const table = document.getElementById('searchAiQueryTable');
-            if (!table) return;
-            const rows = items.slice(0, 150).map((d, i) => `
-                <tr style="border-bottom:1px solid var(--border-color); ${i % 2 === 0 ? 'background:rgba(255,255,255,0.02);' : ''}">
-                    <td style="padding:6px 10px;color:var(--text-secondary);font-size:0.75rem;width:35px;">${i + 1}</td>
-                    <td style="padding:6px 10px;font-size:0.85rem;">${_esc(d.query)}</td>
-                    <td style="padding:6px 10px;font-size:0.8rem;color:var(--accent-primary);">${_platformIcon(d.platform)} ${_esc(d.platform)}</td>
-                    <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:0.82rem;">${d.pct.toFixed(2)}%</td>
-                </tr>`).join('');
-
-            table.innerHTML = `<table style="width:100%;border-collapse:collapse;">
-                <thead><tr style="border-bottom:2px solid var(--border-color);">
-                    <th style="padding:6px 10px;text-align:left;color:var(--text-secondary);font-size:0.75rem;width:35px;">#</th>
-                    <th style="padding:6px 10px;text-align:left;color:var(--text-secondary);font-size:0.75rem;">Search Query</th>
-                    <th style="padding:6px 10px;text-align:left;color:var(--text-secondary);font-size:0.75rem;">Platform</th>
-                    <th style="padding:6px 10px;text-align:right;color:var(--text-secondary);font-size:0.75rem;">Penetration</th>
-                </tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-            ${items.length > 150 ? `<div style="text-align:center;padding:0.75rem;color:var(--text-secondary);font-size:0.8rem;">Showing 150 of ${items.length} queries</div>` : ''}`;
-        }
-        // ===================== END SEARCH/AI =====================
-
-        // ===================== ROAS IQ =====================
-        let _roasIQChartInst = null;
-        let _roasIQPollingId = null;
-
-        function refreshRoasIQList() {
-            fetch('/api/roas-iq/list').then(r => r.json()).then(data => {
-                const el = document.getElementById('roasIQResultsList');
-                if (!el) return;
-                const files = (data.files || []);
-                if (!files.length) { el.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No results yet. Run an analysis.</div>'; return; }
-                el.innerHTML = files.map(f => `<div class="profile-tree-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="loadRoasIQResult('${f.key}')">${f.name}</div>`).join('');
-            }).catch(() => {});
-        }
-
-        function submitRoasIQ() {
-            const projectName = document.getElementById('roasIQProjectName').value.trim();
-            const searchTerms = document.getElementById('roasIQSearchTerms').value.trim();
-            const startDate = document.getElementById('roasIQStartDate').value;
-            const endDate = document.getElementById('roasIQEndDate').value;
-            if (!projectName || !searchTerms || !startDate || !endDate) { alert('Please fill in all fields.'); return; }
-            document.getElementById('roasIQSubmitBtn').disabled = true;
-            document.getElementById('roasIQStatus').style.display = '';
-            document.getElementById('roasIQStatusText').textContent = 'Submitting...';
-            document.getElementById('roasIQProgressBar').style.width = '0%';
-            fetch('/api/roas-iq/submit', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ project_name: projectName, search_terms: searchTerms, start_date: startDate, end_date: endDate }) })
-                .then(r => r.json()).then(data => {
-                    if (data.error) { document.getElementById('roasIQStatusText').textContent = 'Error: ' + data.error; document.getElementById('roasIQSubmitBtn').disabled = false; return; }
-                    _pollRoasIQ(data.job_id);
-                }).catch(e => { document.getElementById('roasIQStatusText').textContent = 'Submit failed'; document.getElementById('roasIQSubmitBtn').disabled = false; });
-        }
-
-        function _pollRoasIQ(jobId) {
-            if (_roasIQPollingId) clearInterval(_roasIQPollingId);
-            _roasIQPollingId = setInterval(() => {
-                fetch('/api/job-status/' + jobId).then(r => r.json()).then(data => {
-                    document.getElementById('roasIQStatusText').textContent = data.message || data.status;
-                    document.getElementById('roasIQProgressBar').style.width = (data.progress || 0) + '%';
-                    if (data.status === 'completed' || data.status === 'failed') {
-                        clearInterval(_roasIQPollingId);
-                        document.getElementById('roasIQSubmitBtn').disabled = false;
-                        if (data.status === 'completed' && data.s3_key) {
-                            loadRoasIQResult(data.s3_key);
-                            refreshRoasIQList();
-                        }
-                    }
-                }).catch(() => {});
-            }, 2000);
-        }
-
-        function loadRoasIQResult(s3Key) {
-            fetch('/api/roas-iq/results/' + encodeURIComponent(s3Key)).then(r => r.json()).then(resp => {
-                if (!resp.success || !resp.data) return;
-                renderRoasIQDashboard(resp.data);
-            }).catch(() => {});
-        }
-
-        function renderRoasIQDashboard(data) {
-            document.getElementById('roasIQEmpty').style.display = 'none';
-            document.getElementById('roasIQDashboard').style.display = '';
-            const results = data.results || [];
-            const headerEl = document.getElementById('roasIQDashHeader');
-            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;"><h2 style="margin:0;font-size:1.25rem;">📊 ' + (data.project_name||'ROAS IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' &middot; ' + (data.uid_count||0).toLocaleString() + ' UIDs</span></div>';
-
-            const channelMap = {};
-            let totalRaw = 0;
-            results.forEach(r => {
-                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalRaw: 0 };
-                channelMap[r.channel].totalPct += r.pct;
-                channelMap[r.channel].totalRaw += (r.raw||0);
-                totalRaw += (r.raw||0);
-                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, raw: 0 };
-                channelMap[r.channel].sources[r.source].pct += r.pct;
-                channelMap[r.channel].sources[r.source].raw += (r.raw||0);
-            });
-            const channels = Object.entries(channelMap).sort((a,b) => b[1].totalPct - a[1].totalPct);
-            const icons = {'Email':'📧','Social Media':'📱','Digital Ads':'💰','Affiliate':'🤝','Sms':'💬','Influencer':'⭐','Push Notification':'🔔','Other':'📋'};
-
-            const statsEl = document.getElementById('roasIQStats');
-            if (statsEl) {
-                const topCh = channels[0] ? channels[0][0] : 'N/A';
-                statsEl.innerHTML = '<div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Attributed Touches</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">' + totalRaw.toLocaleString() + '</div></div><div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">' + channels.length + '</div></div><div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Sources</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">' + results.length + '</div></div><div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Top Channel</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">' + (icons[topCh]||'📋') + ' ' + topCh + '</div></div>';
-            }
-
-            const canvas = document.getElementById('roasIQChart');
-            if (canvas && typeof Chart !== 'undefined') {
-                if (_roasIQChartInst) _roasIQChartInst.destroy();
-                const colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
-                _roasIQChartInst = new Chart(canvas.getContext('2d'), { type:'doughnut', data:{ labels:channels.map(c=>c[0]), datasets:[{data:channels.map(c=>c[1].totalPct), backgroundColor:colors.slice(0,channels.length), borderWidth:0}] }, options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,font:{size:11}}}}} });
-            }
-
-            const tableEl = document.getElementById('roasIQChannelTable');
-            if (tableEl) {
-                const total = channels.reduce((s,c)=>s+c[1].totalPct,0)||1;
-                const rows = channels.map(([n,ch])=>'<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalRaw.toLocaleString()+'</td></tr>').join('');
-                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Touches</th></tr></thead><tbody>'+rows+'</tbody></table>';
-            }
-
-            const cardsEl = document.getElementById('roasIQSourceCards');
-            if (cardsEl) {
-                cardsEl.innerHTML = channels.map(([name,ch])=>{
-                    const srcs = Object.entries(ch.sources).sort((a,b)=>b[1].pct-a[1].pct);
-                    const chT = ch.totalPct||1;
-                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+d.raw.toLocaleString()+'</td></tr>').join('');
-                    return '<div style="background:var(--card-bg);border-radius:12px;padding:1.5rem;border:1px solid var(--border-color);"><div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;"><span style="font-size:1.5rem;">'+(icons[name]||'📋')+'</span><div><h3 style="margin:0;font-size:15px;">'+name+'</h3><span style="font-size:12px;color:var(--text-secondary);">'+ch.totalPct.toFixed(2)+'% pen · '+srcs.length+' sources</span></div></div><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;">Source</th><th style="padding:6px 10px;text-align:right;">Share</th><th style="padding:6px 10px;text-align:right;">Pen.</th><th style="padding:6px 10px;text-align:right;">Touches</th></tr></thead><tbody>'+sr+'</tbody></table></div>';
-                }).join('');
-            }
-        }
-        // ===================== END ROAS IQ =====================
-
-        // ===================== E-COMMERCE IQ =====================
-        let _ecomIQPollingId = null;
-
-        function refreshEcomIQList() {
-            fetch('/api/ecommerce-iq/list').then(r => r.json()).then(data => {
-                const el = document.getElementById('ecomIQResultsList');
-                if (!el) return;
-                const files = (data.files || []);
-                if (!files.length) { el.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No results yet. Run an analysis.</div>'; return; }
-                el.innerHTML = files.map(f => `<div class="profile-tree-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="loadEcomIQResult('${f.key}')">${f.name}</div>`).join('');
-            }).catch(() => {});
-        }
-
-        function submitEcomIQ() {
-            const pn = document.getElementById('ecomIQProjectName').value.trim();
-            const st = document.getElementById('ecomIQSearchTerms').value.trim();
-            const sd = document.getElementById('ecomIQStartDate').value;
-            const ed = document.getElementById('ecomIQEndDate').value;
-            if (!pn || !st || !sd || !ed) { alert('Please fill in all fields.'); return; }
-            document.getElementById('ecomIQSubmitBtn').disabled = true;
-            document.getElementById('ecomIQStatus').style.display = '';
-            document.getElementById('ecomIQStatusText').textContent = 'Submitting...';
-            document.getElementById('ecomIQProgressBar').style.width = '0%';
-            fetch('/api/ecommerce-iq/submit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ project_name:pn, search_terms:st, start_date:sd, end_date:ed }) })
-                .then(r => r.json()).then(data => {
-                    if (data.error) { document.getElementById('ecomIQStatusText').textContent = 'Error: ' + data.error; document.getElementById('ecomIQSubmitBtn').disabled = false; return; }
-                    _pollEcomIQ(data.job_id);
-                }).catch(e => { document.getElementById('ecomIQStatusText').textContent = 'Submit failed'; document.getElementById('ecomIQSubmitBtn').disabled = false; });
-        }
-
-        function _pollEcomIQ(jobId) {
-            if (_ecomIQPollingId) clearInterval(_ecomIQPollingId);
-            _ecomIQPollingId = setInterval(() => {
-                fetch('/api/job-status/' + jobId).then(r => r.json()).then(data => {
-                    document.getElementById('ecomIQStatusText').textContent = data.message || data.status;
-                    document.getElementById('ecomIQProgressBar').style.width = (data.progress || 0) + '%';
-                    if (data.status === 'completed' || data.status === 'failed') {
-                        clearInterval(_ecomIQPollingId);
-                        document.getElementById('ecomIQSubmitBtn').disabled = false;
-                        if (data.status === 'completed' && data.s3_key) { loadEcomIQResult(data.s3_key); refreshEcomIQList(); }
-                    }
-                }).catch(() => {});
-            }, 2000);
-        }
-
-        function loadEcomIQResult(s3Key) {
-            fetch('/api/ecommerce-iq/results/' + encodeURIComponent(s3Key)).then(r => r.json()).then(resp => {
-                if (!resp.success || !resp.data) return;
-                renderEcomIQDashboard(resp.data);
-            }).catch(() => {});
-        }
-
-        function _ecomIQTable(items, elId) {
-            const el = document.getElementById(elId);
-            if (!el) return;
-            if (!items.length) { el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);font-size:13px;">No data</div>'; return; }
-            const rows = items.map((item, i) => '<tr><td style="padding:8px 10px;color:var(--text-secondary);width:30px;">'+(i+1)+'</td><td style="padding:8px 10px;font-weight:600;">'+item.store+'</td><td style="padding:8px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+item.slug+'">'+(item.slug||'/')+'</td><td style="padding:8px 10px;text-align:right;">'+item.pct.toFixed(2)+'%</td><td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">'+(item.raw||0).toLocaleString()+'</td></tr>').join('');
-            el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 10px;width:30px;">#</th><th style="padding:8px 10px;text-align:left;">Store</th><th style="padding:8px 10px;text-align:left;">Product / Path</th><th style="padding:8px 10px;text-align:right;">% of Audience</th><th style="padding:8px 10px;text-align:right;">Users</th></tr></thead><tbody>'+rows+'</tbody></table>';
-        }
-
-        function renderEcomIQDashboard(data) {
-            document.getElementById('ecomIQEmpty').style.display = 'none';
-            document.getElementById('ecomIQDashboard').style.display = '';
-            const results = data.results || [];
-            const headerEl = document.getElementById('ecomIQDashHeader');
-            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;"><h2 style="margin:0;font-size:1.25rem;">🛒 ' + (data.project_name||'E-Commerce IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' &middot; ' + (data.uid_count||0).toLocaleString() + ' UIDs</span></div>';
-
-            const pdps = results.filter(r=>r.stage==='PDP').sort((a,b)=>b.pct-a.pct);
-            const carts = results.filter(r=>r.stage==='CART').sort((a,b)=>b.pct-a.pct);
-            const purchases = results.filter(r=>r.stage==='PURCHASE').sort((a,b)=>b.pct-a.pct);
-            const stores = new Set(results.map(r=>r.store));
-
-            const statsEl = document.getElementById('ecomIQStats');
-            if (statsEl) statsEl.innerHTML = '<div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Product Pages</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+pdps.length.toLocaleString()+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Add-to-Cart</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+carts.length.toLocaleString()+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Purchases</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+purchases.length.toLocaleString()+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Stores</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+stores.size+'</div></div>';
-
-            _ecomIQTable(pdps.slice(0,10), 'ecomIQTopPdp');
-            _ecomIQTable(pdps.length > 10 ? pdps.slice(-10).reverse() : [], 'ecomIQBottomPdp');
-            _ecomIQTable(carts.slice(0,10), 'ecomIQCart');
-            _ecomIQTable(purchases.slice(0,10), 'ecomIQPurchase');
-        }
-        // ===================== END E-COMMERCE IQ =====================
-
         function renderBehavioralCards(behavioral, highlightCategory = null, skipAggregation = false) {
             let aggregatedBehavioral;
             
@@ -35925,10 +35552,10 @@
                 });
             }
             
-            // Exclude INTEREST/INTERESTS and SEARCH/AI from behavioral (they have their own tabs)
+            // Exclude INTEREST/INTERESTS from behavioral (they have their own INTERESTS tab)
             sortedCats = sortedCats.filter(cat => {
                 const u = cat.toUpperCase();
-                return u !== 'INTEREST' && u !== 'INTERESTS' && u !== 'SEARCH/AI';
+                return u !== 'INTEREST' && u !== 'INTERESTS';
             });
             
             // Don't show separate cards for categories that are in the Sports or Most Purchased Brands slicers (one card each with a dropdown)
