@@ -18072,19 +18072,55 @@
                 });
             }
 
-            // Detail table with conversion data
+            // Build family-grouped detail table: Channel > Family > Source
             var icons = {'Email':'\ud83d\udce7','Social Media':'\ud83d\udcf1','Digital Ads':'\ud83d\udcb0','Affiliate':'\ud83e\udd1d','Sms':'\ud83d\udcac','Influencer':'\u2b50','Push Notification':'\ud83d\udd14','Other':'\ud83d\udccb'};
             var mixTotal = channels.reduce(function(s,c){return s+c[1].totalPct;},0)||1;
-            var rows = channels.map(function(pair) {
+
+            // Build family groupings per channel from raw results
+            var channelFamilies = {};
+            results.forEach(function(r) {
+                var ch = r.channel;
+                var fam = r.family || r.source;
+                var proj = r.projected || _roasProject(r.raw || 0);
+                var projConv = r.projected_conversions || _roasProject(r.conversions || 0);
+                if (!channelFamilies[ch]) channelFamilies[ch] = {};
+                if (!channelFamilies[ch][fam]) channelFamilies[ch][fam] = { pct:0, projected:0, raw:0, conv:0, projConv:0, sources:{} };
+                channelFamilies[ch][fam].pct += r.pct;
+                channelFamilies[ch][fam].projected += proj;
+                channelFamilies[ch][fam].raw += (r.raw||0);
+                channelFamilies[ch][fam].conv += (r.conversions||0);
+                channelFamilies[ch][fam].projConv += projConv;
+                if (r.source !== fam) {
+                    channelFamilies[ch][fam].sources[r.source] = { pct: r.pct, projected: proj, convRate: r.conv_rate||0, projConv: projConv, topDomain: r.top_domain||'' };
+                }
+            });
+
+            var rowsHtml = '';
+            var rowIdx = 0;
+            channels.forEach(function(pair) {
                 var n = pair[0], ch = pair[1];
                 var chConvRate = ch.totalRaw > 0 ? (100.0 * ch.totalConv / ch.totalRaw).toFixed(2) : '0.00';
-                var srcs = Object.entries(ch.sources).sort(function(a,b){return b[1].pct-a[1].pct;});
-                var srcRows = srcs.map(function(sp) {
-                    return '<tr style="background:var(--bg-body);"><td style="padding:4px 10px 4px 30px;color:var(--text-secondary);font-size:12px;">\u2514 '+sp[0]+'</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+sp[1].pct.toFixed(2)+'%</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+((sp[1].pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:4px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sp[1].projected.toLocaleString()+'</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+sp[1].convRate.toFixed(2)+'%</td><td style="padding:4px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sp[1].projConv.toLocaleString()+'</td></tr>';
-                }).join('');
-                return '<tr style="cursor:pointer;" onclick="this.classList.toggle(\'roas-expanded\');var s=this.nextElementSibling;while(s&&s.style.background){s.style.display=s.style.display===\'none\'?\'\':\' none\';s=s.nextElementSibling;}"><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'\ud83d\udccb')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjConv.toLocaleString()+'</td></tr>' + srcRows;
-            }).join('');
-            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rows+'</tbody></table>';
+                var chIdx = rowIdx++;
+                rowsHtml += '<tr style="cursor:pointer;border-bottom:1px solid var(--border-color);" data-roas-level="channel" data-roas-idx="'+chIdx+'" onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');var t=el.closest(\'tbody\');t.querySelectorAll(\'[data-roas-parent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';if(!show)r.setAttribute(\'data-open\',\'0\');if(!show){t.querySelectorAll(\'[data-roas-grandparent=\\\'\'+r.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(g){g.style.display=\'none\';});}});})(this)"><td style="padding:8px 12px;font-weight:700;">'+(icons[n]||'\ud83d\udccb')+' '+n+' <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">&#9654;</span></td><td style="padding:8px 12px;text-align:right;font-weight:600;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
+
+                var families = channelFamilies[n] || {};
+                var famEntries = Object.entries(families).sort(function(a,b){return b[1].pct-a[1].pct;});
+                famEntries.forEach(function(fe) {
+                    var fName = fe[0], fData = fe[1];
+                    var srcEntries = Object.entries(fData.sources);
+                    var famConvRate = fData.raw > 0 ? (100.0 * fData.conv / fData.raw).toFixed(2) : '0.00';
+                    var fIdx = rowIdx++;
+                    var hasChildren = srcEntries.length > 0;
+                    var clickHandler = hasChildren ? 'onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');el.closest(\'tbody\').querySelectorAll(\'[data-roas-grandparent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';});})(this)" style="cursor:pointer;display:none;"' : 'style="display:none;"';
+                    rowsHtml += '<tr data-roas-level="family" data-roas-parent="'+chIdx+'" data-roas-idx="'+fIdx+'" '+clickHandler+'><td style="padding:5px 10px 5px 28px;font-weight:600;font-size:13px;">'+fName+(hasChildren?' <span style="font-size:9px;color:var(--text-secondary);">&#9654;</span>':'')+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+fData.pct.toFixed(2)+'%</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+((fData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projected.toLocaleString()+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+famConvRate+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projConv.toLocaleString()+'</td></tr>';
+
+                    srcEntries.sort(function(a,b){return b[1].pct-a[1].pct;}).forEach(function(se) {
+                        var sName = se[0], sData = se[1];
+                        rowsHtml += '<tr data-roas-level="source" data-roas-grandparent="'+fIdx+'" style="display:none;background:var(--bg-body);"><td style="padding:3px 10px 3px 48px;color:var(--text-secondary);font-size:12px;">\u2514 '+sName+(sData.topDomain?' <span style="opacity:0.5;font-size:10px;">('+sData.topDomain+')</span>':'')+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.pct.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+((sData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projected.toLocaleString()+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.convRate.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projConv.toLocaleString()+'</td></tr>';
+                    });
+                });
+            });
+            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Family / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>';
 
             // Engagement KPIs
             var avgTouchEl = document.getElementById('roasIQKpiAvgTouch');
