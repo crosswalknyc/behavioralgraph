@@ -19965,7 +19965,7 @@ def _run_roas_iq(job_id):
         rows = cur.fetchall()
 
         update_job_status(job_id, progress=45, message='Loading purchase confirmation patterns...')
-        converted_uids = set()
+        uid_conv_domains = {}
         conversion_details = []
         try:
             slugs_result = cur.execute("""
@@ -19991,14 +19991,17 @@ def _run_roas_iq(job_id):
                 """)
                 conv_rows = cur.fetchall()
                 for uid, url in conv_rows:
-                    converted_uids.add(uid)
                     try:
                         _p = urlparse(url if '://' in url else 'https://' + url)
                         domain = _p.netloc.lower().replace('www.', '')
-                        conversion_details.append({'uid': uid, 'domain': domain})
+                        if domain:
+                            if uid not in uid_conv_domains:
+                                uid_conv_domains[uid] = set()
+                            uid_conv_domains[uid].add(domain)
+                            conversion_details.append({'uid': uid, 'domain': domain})
                     except Exception:
                         pass
-                print(f"✅ Found {len(converted_uids)} UIDs with verified purchase confirmations from {len(conv_rows)} URLs")
+                print(f"✅ Found {len(uid_conv_domains)} UIDs with verified purchase confirmations on {len(set(d for ds in uid_conv_domains.values() for d in ds))} domains")
             else:
                 print("⚠️ No ORDER_CONFIRMS slugs found")
         except Exception as e:
@@ -20083,6 +20086,7 @@ def _run_roas_iq(job_id):
         channel_domains = {}
         uid_touch_counts = {}
         source_domains = {}
+        uid_source_domains = {}
         for url, uid in rows:
             try:
                 p = urlparse(url if '://' in url else 'https://' + url)
@@ -20109,6 +20113,11 @@ def _run_roas_iq(job_id):
                         source_domains[sd_key] = {}
                     source_domains[sd_key][domain] = source_domains[sd_key].get(domain, 0) + 1
 
+                    usd_key = (key, uid)
+                    if usd_key not in uid_source_domains:
+                        uid_source_domains[usd_key] = set()
+                    uid_source_domains[usd_key].add(domain)
+
                 uid_touch_counts[uid] = uid_touch_counts.get(uid, 0) + 1
             except Exception:
                 continue
@@ -20118,9 +20127,16 @@ def _run_roas_iq(job_id):
         results = []
         total_converted_in_ads = 0
         total_ad_uids = set()
+        overall_conv_uids = set()
         for (channel, source), uid_set in ranked:
             cnt = len(uid_set)
-            conv_cnt = len(uid_set & converted_uids)
+            conv_cnt = 0
+            for uid in uid_set:
+                uid_ad_domains = uid_source_domains.get(((channel, source), uid), set())
+                uid_purchase_domains = uid_conv_domains.get(uid, set())
+                if uid_ad_domains & uid_purchase_domains:
+                    conv_cnt += 1
+                    overall_conv_uids.add(uid)
             total_converted_in_ads += conv_cnt
             total_ad_uids |= uid_set
             pct = round(100.0 * cnt / max(uid_count, 1), 4)
@@ -20141,7 +20157,7 @@ def _run_roas_iq(job_id):
             })
 
         overall_ad_uid_count = len(total_ad_uids)
-        overall_conv_count = len(total_ad_uids & converted_uids)
+        overall_conv_count = len(overall_conv_uids)
         overall_conv_rate = round(100.0 * overall_conv_count / max(overall_ad_uid_count, 1), 2)
 
         top_domains = {}
@@ -20152,21 +20168,70 @@ def _run_roas_iq(job_id):
         avg_touches = round(sum(touch_vals) / max(len(touch_vals), 1), 1) if touch_vals else 0
         multi_touch_pct = round(100.0 * sum(1 for v in touch_vals if v > 1) / max(len(touch_vals), 1), 1) if touch_vals else 0
 
-        retailer_conversions = {}
+        verified_retailer_uids = {}
         for cd in conversion_details:
             dom = cd['domain']
             if dom:
-                if dom not in retailer_conversions:
-                    retailer_conversions[dom] = set()
-                retailer_conversions[dom].add(cd['uid'])
+                if dom not in verified_retailer_uids:
+                    verified_retailer_uids[dom] = set()
+                verified_retailer_uids[dom].add(cd['uid'])
+
+        all_domain_uids = {}
+        for (ch, src), uid_set in channel_source_uids.items():
+            sd = source_domains.get((ch, src), {})
+            for dom in sd:
+                if dom not in all_domain_uids:
+                    all_domain_uids[dom] = set()
+                all_domain_uids[dom] |= uid_set
+
+        _BRAND_KEYWORDS = {
+            'amazon', 'walmart', 'target', 'bestbuy', 'costco', 'ebay', 'etsy',
+            'macys', 'nordstrom', 'nike', 'adidas', 'apple', 'samsung', 'sony',
+            'microsoft', 'google', 'shopify', 'wayfair', 'chewy', 'sephora',
+            'ulta', 'homedepot', 'lowes', 'ikea', 'zara', 'hm', 'gap',
+            'oldnavy', 'kohls', 'tjmaxx', 'marshalls', 'ross', 'burlington',
+            'newegg', 'overstock', 'zappos', 'asos', 'shein', 'temu',
+            'wish', 'aliexpress', 'booking', 'expedia', 'airbnb', 'hotels',
+            'zillow', 'redfin', 'realtor', 'trulia', 'cars', 'autotrader',
+            'carvana', 'vroom', 'geico', 'progressive', 'statefarm', 'allstate',
+            'netflix', 'hulu', 'disney', 'peacock', 'paramount', 'hbo', 'spotify',
+            'pandora', 'tidal', 'deezer', 'audible', 'kindle',
+            'grubhub', 'doordash', 'ubereats', 'instacart', 'postmates',
+            'shop', 'store', 'buy', 'order', 'cart', 'checkout',
+            'rakuten', 'groupon', 'slickdeals', 'retailmenot',
+            'paypal', 'venmo', 'stripe', 'square', 'klarna', 'afterpay',
+            'staples', 'officedepot', 'gamestop', 'petsmart', 'petco',
+            'walgreens', 'cvs', 'rite_aid', 'kroger', 'safeway', 'publix',
+            'wholefoods', 'traderjoes', 'aldi', 'lidl',
+        }
+
+        def _is_brand_domain(dom):
+            base = dom.split('.')[0] if '.' in dom else dom
+            if any(kw in base.lower() for kw in _BRAND_KEYWORDS):
+                return True
+            if dom.endswith('.shop') or dom.endswith('.store'):
+                return True
+            return False
+
         sales_conversions = []
-        for dom, uid_set in sorted(retailer_conversions.items(), key=lambda x: -len(x[1])):
+        seen_doms = set()
+        for dom in sorted(all_domain_uids.keys(), key=lambda d: -len(all_domain_uids[d])):
+            if not _is_brand_domain(dom):
+                continue
+            if dom in seen_doms:
+                continue
+            seen_doms.add(dom)
+            uid_set = all_domain_uids[dom]
             cnt = len(uid_set)
+            verified_cnt = len(verified_retailer_uids.get(dom, set()) & uid_set)
             sales_conversions.append({
                 'retailer': dom,
-                'buyers': cnt,
-                'projected_buyers': _project_to_us_pop(cnt),
+                'audience_uids': cnt,
+                'projected_audience': _project_to_us_pop(cnt),
                 'pct_of_audience': round(100.0 * cnt / max(uid_count, 1), 4),
+                'verified_purchases': verified_cnt,
+                'projected_buyers': _project_to_us_pop(verified_cnt),
+                'conv_rate': round(100.0 * verified_cnt / max(cnt, 1), 2),
             })
 
         result_data = {
