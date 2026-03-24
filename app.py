@@ -19839,7 +19839,7 @@ def _run_roas_iq(job_id):
         """)
         rows = cur.fetchall()
 
-        update_job_status(job_id, progress=50, message='Detecting conversions...')
+        update_job_status(job_id, progress=45, message='Detecting conversions...')
         cur.execute(f"""
             SELECT DISTINCT cf.UID
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
@@ -19862,10 +19862,85 @@ def _run_roas_iq(job_id):
               )
         """)
         converted_uids = set(r[0] for r in cur.fetchall())
+
+        update_job_status(job_id, progress=50, message='Pulling demographics for ad-exposed audience...')
+        cur.execute("""
+            CREATE OR REPLACE TEMP TABLE ROAS_AD_UIDS AS
+            SELECT DISTINCT UID FROM TEMP_UIDS
+        """)
+        demo_data = {}
+        try:
+            cur.execute("""
+                SELECT
+                    'GENDER' AS CAT, d.GENDER AS VAL, COUNT(DISTINCT d.UID) AS CNT
+                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+                INNER JOIN ROAS_AD_UIDS u ON d.UID = u.UID
+                WHERE d.GENDER IS NOT NULL AND d.GENDER != ''
+                GROUP BY d.GENDER
+                UNION ALL
+                SELECT 'AGE', d.AGE, COUNT(DISTINCT d.UID)
+                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+                INNER JOIN ROAS_AD_UIDS u ON d.UID = u.UID
+                WHERE d.AGE IS NOT NULL AND d.AGE NOT IN ('', 'Other', 'Prefer not to say')
+                GROUP BY d.AGE
+                UNION ALL
+                SELECT 'INCOME', d.INCOME, COUNT(DISTINCT d.UID)
+                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+                INNER JOIN ROAS_AD_UIDS u ON d.UID = u.UID
+                WHERE d.INCOME IS NOT NULL AND d.INCOME != ''
+                GROUP BY d.INCOME
+                UNION ALL
+                SELECT 'ETHNICITY', d.ETHNICITY, COUNT(DISTINCT d.UID)
+                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+                INNER JOIN ROAS_AD_UIDS u ON d.UID = u.UID
+                WHERE d.ETHNICITY IS NOT NULL AND d.ETHNICITY != ''
+                GROUP BY d.ETHNICITY
+            """)
+            for cat, val, cnt in cur.fetchall():
+                if cat not in demo_data:
+                    demo_data[cat] = []
+                demo_data[cat].append({'value': val, 'count': cnt, 'projected': _project_to_us_pop(cnt)})
+            for cat in demo_data:
+                total_cat = sum(d['count'] for d in demo_data[cat])
+                for d in demo_data[cat]:
+                    d['pct'] = round(100.0 * d['count'] / max(total_cat, 1), 2)
+                demo_data[cat].sort(key=lambda x: -x['count'])
+        except Exception as e:
+            print(f"⚠️ Demographics query failed: {e}")
+
+        update_job_status(job_id, progress=55, message='Analyzing engagement patterns...')
+        day_hour_data = []
+        try:
+            cur.execute(f"""
+                SELECT
+                    DAYOFWEEK(cf.DELIVERED) AS DOW,
+                    HOUR(cf.DELIVERED) AS HR,
+                    COUNT(*) AS TOUCHES
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+                  AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                  AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
+                  AND (
+                    LOWER(cf.URL) LIKE '%utm\\_%' ESCAPE '\\\\'
+                    OR LOWER(cf.URL) LIKE '%gclid%' OR LOWER(cf.URL) LIKE '%fbclid%'
+                    OR LOWER(cf.URL) LIKE '%ttclid%' OR LOWER(cf.URL) LIKE '%msclkid%'
+                    OR LOWER(cf.URL) LIKE '%dclid%' OR LOWER(cf.URL) LIKE '%wbraid%'
+                    OR LOWER(cf.URL) LIKE '%gbraid%'
+                  )
+                GROUP BY DOW, HR
+                ORDER BY DOW, HR
+            """)
+            for dow, hr, touches in cur.fetchall():
+                day_hour_data.append({'dow': dow, 'hour': hr, 'touches': touches})
+        except Exception as e:
+            print(f"⚠️ Day/hour query failed: {e}")
+
         conn.close()
 
         update_job_status(job_id, progress=60, message=f'Classifying {len(rows):,} attributed URLs...')
         channel_source_uids = {}
+        channel_domains = {}
+        uid_touch_counts = {}
         for url, uid in rows:
             try:
                 p = urlparse(url if '://' in url else 'https://' + url)
@@ -19876,14 +19951,23 @@ def _run_roas_iq(job_id):
                 if not channel:
                     continue
                 source_clean = unquote_plus(source).replace('+', ' ').title()[:60]
-                key = (channel.title(), source_clean)
+                ch_title = channel.title()
+                key = (ch_title, source_clean)
                 if key not in channel_source_uids:
                     channel_source_uids[key] = set()
                 channel_source_uids[key].add(uid)
+
+                domain = p.netloc.lower().replace('www.', '')
+                if domain:
+                    if ch_title not in channel_domains:
+                        channel_domains[ch_title] = {}
+                    channel_domains[ch_title][domain] = channel_domains[ch_title].get(domain, 0) + 1
+
+                uid_touch_counts[uid] = uid_touch_counts.get(uid, 0) + 1
             except Exception:
                 continue
 
-        update_job_status(job_id, progress=80, message='Building results...')
+        update_job_status(job_id, progress=75, message='Building results...')
         ranked = sorted(channel_source_uids.items(), key=lambda x: -len(x[1]))[:300]
         results = []
         total_converted_in_ads = 0
@@ -19908,6 +19992,14 @@ def _run_roas_iq(job_id):
         overall_conv_count = len(total_ad_uids & converted_uids)
         overall_conv_rate = round(100.0 * overall_conv_count / max(overall_ad_uid_count, 1), 2)
 
+        top_domains = {}
+        for ch, doms in channel_domains.items():
+            top_domains[ch] = sorted(doms.items(), key=lambda x: -x[1])[:10]
+
+        touch_vals = list(uid_touch_counts.values())
+        avg_touches = round(sum(touch_vals) / max(len(touch_vals), 1), 1) if touch_vals else 0
+        multi_touch_pct = round(100.0 * sum(1 for v in touch_vals if v > 1) / max(len(touch_vals), 1), 1) if touch_vals else 0
+
         result_data = {
             'project_name': project_name,
             'search_terms': search_terms,
@@ -19920,6 +20012,13 @@ def _run_roas_iq(job_id):
             'projected_converted': _project_to_us_pop(overall_conv_count),
             'overall_conv_rate': overall_conv_rate,
             'results': results,
+            'demographics': demo_data,
+            'day_hour': day_hour_data,
+            'top_domains': top_domains,
+            'avg_touches_per_user': avg_touches,
+            'multi_touch_pct': multi_touch_pct,
+            'total_ad_users': overall_ad_uid_count,
+            'projected_ad_users': _project_to_us_pop(overall_ad_uid_count),
             'created_at': datetime.now().isoformat(),
             'created_by': job.get('username', ''),
         }
