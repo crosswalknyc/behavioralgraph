@@ -8115,9 +8115,13 @@
         .location-row span:nth-child(2),
         .location-row span:nth-child(3),
         .location-row span:nth-child(4),
-        .location-row span:nth-child(5) {
+        .location-row span:nth-child(5),
+        .location-row span:nth-child(6) {
             text-align: left !important;
             justify-self: start;
+        }
+        #allLocationsContainer .location-row {
+            grid-template-columns: 58px minmax(0, 1fr) 44px 80px 72px 58px;
         }
 
         .location-row.header {
@@ -14208,30 +14212,42 @@
                 <div class="location-stats" id="locationStats"></div>
                 
                 <!-- All Locations by Percentage -->
-                <div class="all-locations-section location-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="All Locations">
-                    <h3 style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="display: flex; align-items: center; gap: 0.3rem;">
+                <div id="allLocationsContainer" class="location-table location-section" style="margin-top: 0;" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="All Locations">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
                             <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
-                            <span>📍 All Locations by %</span>
-                        </span>
-                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('location', 'All Locations')" data-tooltip="Export CSV: Download all locations data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'All Locations')" data-tooltip="Add to Deck: Save all locations to your presentation deck.">➕</button></span>
-                    </h3>
-                    <div class="all-locations-controls">
-                        <input type="text" id="allLocationsSearch" placeholder="🔍 Search locations..." oninput="filterAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 160px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                        <select id="allLocationsSort" onchange="rerenderAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <option value="pct-desc">% Descending</option>
-                            <option value="pct-asc">% Ascending</option>
-                            <option value="name-asc">A → Z</option>
-                            <option value="name-desc">Z → A</option>
-                            <option value="index-desc">Index ↓</option>
-                            <option value="index-asc">Index ↑</option>
-                        </select>
-                        <span id="allLocationsCount" style="font-size: 0.7rem; color: var(--text-secondary);"></span>
+                            <span>📊 All Locations by Percentage</span>
+                            <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('location', 'All Locations')" data-tooltip="Export CSV: Download all location data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'All Locations')" data-tooltip="Add to Deck: Save all locations data to your presentation deck.">➕</button></span>
+                        </h3>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
+                            <select id="locationSortAll" onchange="sortLocationTableBySelect('all', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by column" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 120px;">
+                                <option value="percentage-desc">Profile % ↓</option>
+                                <option value="percentage-asc">Profile % ↑</option>
+                                <option value="genpop-desc">GP ↓</option>
+                                <option value="genpop-asc">GP ↑</option>
+                                <option value="index-desc">Index ↓</option>
+                                <option value="index-asc">Index ↑</option>
+                                <option value="rank-asc">DMA Rank ↓</option>
+                                <option value="rank-desc">DMA Rank ↑</option>
+                                <option value="profilerank-asc">Profile Rank ↓</option>
+                                <option value="profilerank-desc">Profile Rank ↑</option>
+                            </select>
+                            <input type="text" id="locationSearchAll" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search All Locations" oninput="filterAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 120px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                        </div>
                     </div>
-                    <div id="allLocationsGridHeader"></div>
-                    <div id="allLocationsGrid" class="all-locations-grid"></div>
+                    <div class="location-row header">
+                        <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
+                        <span>Location</span>
+                        <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
+                        <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                        <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Nielsen 2026)" style="line-height:1.1;text-align:left;">GP<br>Actual</span>
+                        <span class="index-col">Index</span>
+                    </div>
+                    <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
+                    <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
                 </div>
-
+                
                 <!-- Regional Breakdown -->
                 <div class="regional-breakdown location-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Regional Breakdown">
                     <h3 style="display: flex; justify-content: space-between; align-items: center;">
@@ -14333,41 +14349,6 @@
                     </div>
                 </div>
                 
-                <!-- All Locations by Percentage -->
-                <div class="location-table location-section" style="margin-top: 1rem;" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="All Locations">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-                        <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
-                            <span>📊 All Locations by Percentage</span>
-                            <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('location', 'All Locations')" data-tooltip="Export CSV: Download all location data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'All Locations')" data-tooltip="Add to Deck: Save all locations data to your presentation deck.">➕</button></span>
-                        </h3>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                            <select id="locationSortAll" onchange="sortLocationTableBySelect('all', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by column" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 120px;">
-                                <option value="percentage-desc">Profile % ↓</option>
-                                <option value="percentage-asc">Profile % ↑</option>
-                                <option value="genpop-desc">GP ↓</option>
-                                <option value="genpop-asc">GP ↑</option>
-                                <option value="index-desc">Index ↓</option>
-                                <option value="index-asc">Index ↑</option>
-                                <option value="rank-asc">DMA Rank ↓</option>
-                                <option value="rank-desc">DMA Rank ↑</option>
-                                <option value="profilerank-asc">Profile Rank ↓</option>
-                                <option value="profilerank-desc">Profile Rank ↑</option>
-                            </select>
-                            <input type="text" id="locationSearchAll" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search All Locations" oninput="filterAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 120px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                        </div>
-                    </div>
-                    <div class="location-row header">
-                        <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
-                        <span>Location</span>
-                        <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                        <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
-                        <span class="index-col">Index</span>
-                    </div>
-                    <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
-                    <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
-                </div>
             </div>
 
             <!-- Rankers Tab -->
@@ -15247,25 +15228,23 @@
                                 <canvas id="roasIQDayChart" height="200"></canvas>
                             </div>
                         </div>
-                        <!-- Demographics Row -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
-                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Audience Gender</h3>
-                                <canvas id="roasIQGenderChart" height="180"></canvas>
+                        <!-- Demographics Row - compact 4-across -->
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem; max-height: 220px; overflow: hidden;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Gender</h3>
+                                <div style="height: 160px;"><canvas id="roasIQGenderChart"></canvas></div>
                             </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
-                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Audience Age</h3>
-                                <canvas id="roasIQAgeChart" height="180"></canvas>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem; max-height: 220px; overflow: hidden;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Age</h3>
+                                <div style="height: 160px;"><canvas id="roasIQAgeChart"></canvas></div>
                             </div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
-                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Audience Income</h3>
-                                <canvas id="roasIQIncomeChart" height="180"></canvas>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem; max-height: 220px; overflow: hidden;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Income</h3>
+                                <div style="height: 160px;"><canvas id="roasIQIncomeChart"></canvas></div>
                             </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
-                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Audience Ethnicity</h3>
-                                <canvas id="roasIQEthnicityChart" height="180"></canvas>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem; max-height: 220px; overflow: hidden;">
+                                <h3 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Ethnicity</h3>
+                                <div style="height: 160px;"><canvas id="roasIQEthnicityChart"></canvas></div>
                             </div>
                         </div>
                         <!-- Top Landing Domains -->
@@ -18231,12 +18210,12 @@
                 if (chartType === 'doughnut') {
                     window[instKey] = new Chart(cv.getContext('2d'), {
                         type: 'doughnut', data: { labels: labels, datasets: [{ data: vals, backgroundColor: demoColors.slice(0, labels.length), borderWidth: 0 }] },
-                        options: { responsive: true, maintainAspectRatio: true, cutout: '50%', plugins: { legend: { position: 'right', labels: { padding: 8, usePointStyle: true, font: { size: 10 }, color: '#e8e8e8' } }, tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed + '%'; } } } } }
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '45%', plugins: { legend: { position: 'bottom', labels: { padding: 4, usePointStyle: true, font: { size: 9 }, color: '#e8e8e8', boxWidth: 8 } }, tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed + '%'; } } } } }
                     });
                 } else {
                     window[instKey] = new Chart(cv.getContext('2d'), {
-                        type: 'bar', data: { labels: labels, datasets: [{ data: vals, backgroundColor: demoColors.slice(0, labels.length), borderWidth: 0, borderRadius: 4 }] },
-                        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: true, scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 10 }, callback: function(v){return v+'%';} } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 10 } } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.x + '%'; } } } } }
+                        type: 'bar', data: { labels: labels, datasets: [{ data: vals, backgroundColor: demoColors.slice(0, labels.length), borderWidth: 0, borderRadius: 3, barPercentage: 0.7 }] },
+                        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 9 }, callback: function(v){return v+'%';} } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 9 } } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.x + '%'; } } } } }
                     });
                 }
             }
@@ -38700,12 +38679,15 @@
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(4) + '%';
                 const dmaRank = getDMARank(loc.name);
+                const gpActual = getGPActualDMA(loc.name);
+                const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
                         <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
+                        <span style="color: var(--text-secondary);">${gpStr}</span>
                         <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
                     </div>
                 `;
