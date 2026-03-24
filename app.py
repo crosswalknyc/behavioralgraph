@@ -19890,7 +19890,6 @@ def _run_roas_iq(job_id):
                 OR LOWER(cf.URL) LIKE '%wbraid%'
                 OR LOWER(cf.URL) LIKE '%gbraid%'
               )
-            LIMIT 500000
         """)
         rows = cur.fetchall()
         conn.close()
@@ -20092,7 +20091,6 @@ def _run_ecommerce_iq(job_id):
               )
               AND cf.URL IS NOT NULL
               AND LENGTH(cf.URL) > 10
-            LIMIT 500000
         """)
         rows = cur.fetchall()
         conn.close()
