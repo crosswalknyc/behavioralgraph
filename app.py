@@ -19788,7 +19788,6 @@ def _build_temp_uids_from_terms(cur, search_terms, start_date, end_date):
         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
         WHERE cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
           AND ({where})
-        LIMIT 50000
     """)
     count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
     return count
@@ -19839,6 +19838,30 @@ def _run_roas_iq(job_id):
               )
         """)
         rows = cur.fetchall()
+
+        update_job_status(job_id, progress=50, message='Detecting conversions...')
+        cur.execute(f"""
+            SELECT DISTINCT cf.UID
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+            WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+              AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+              AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
+              AND (
+                LOWER(cf.URL) LIKE '%thank%you%'
+                OR LOWER(cf.URL) LIKE '%thankyou%'
+                OR LOWER(cf.URL) LIKE '%order-confirm%'
+                OR LOWER(cf.URL) LIKE '%order_confirm%'
+                OR LOWER(cf.URL) LIKE '%purchase-complete%'
+                OR LOWER(cf.URL) LIKE '%purchase_complete%'
+                OR LOWER(cf.URL) LIKE '%checkout/success%'
+                OR LOWER(cf.URL) LIKE '%checkout/complete%'
+                OR LOWER(cf.URL) LIKE '%confirmation%'
+                OR LOWER(cf.URL) LIKE '%order_id=%'
+                OR LOWER(cf.URL) LIKE '%transaction_id=%'
+                OR LOWER(cf.URL) LIKE '%receipt%'
+              )
+        """)
+        converted_uids = set(r[0] for r in cur.fetchall())
         conn.close()
 
         update_job_status(job_id, progress=60, message=f'Classifying {len(rows):,} attributed URLs...')
@@ -19863,10 +19886,27 @@ def _run_roas_iq(job_id):
         update_job_status(job_id, progress=80, message='Building results...')
         ranked = sorted(channel_source_uids.items(), key=lambda x: -len(x[1]))[:300]
         results = []
+        total_converted_in_ads = 0
+        total_ad_uids = set()
         for (channel, source), uid_set in ranked:
             cnt = len(uid_set)
+            conv_cnt = len(uid_set & converted_uids)
+            total_converted_in_ads += conv_cnt
+            total_ad_uids |= uid_set
             pct = round(100.0 * cnt / max(uid_count, 1), 4)
-            results.append({'channel': channel, 'source': source, 'pct': pct, 'raw': cnt, 'projected': _project_to_us_pop(cnt)})
+            conv_rate = round(100.0 * conv_cnt / max(cnt, 1), 2)
+            results.append({
+                'channel': channel, 'source': source,
+                'pct': pct, 'raw': cnt,
+                'projected': _project_to_us_pop(cnt),
+                'conversions': conv_cnt,
+                'projected_conversions': _project_to_us_pop(conv_cnt),
+                'conv_rate': conv_rate,
+            })
+
+        overall_ad_uid_count = len(total_ad_uids)
+        overall_conv_count = len(total_ad_uids & converted_uids)
+        overall_conv_rate = round(100.0 * overall_conv_count / max(overall_ad_uid_count, 1), 2)
 
         result_data = {
             'project_name': project_name,
@@ -19876,6 +19916,9 @@ def _run_roas_iq(job_id):
             'uid_count': uid_count,
             'projected_uid_count': _project_to_us_pop(uid_count),
             'url_rows': len(rows),
+            'total_converted': overall_conv_count,
+            'projected_converted': _project_to_us_pop(overall_conv_count),
+            'overall_conv_rate': overall_conv_rate,
             'results': results,
             'created_at': datetime.now().isoformat(),
             'created_by': job.get('username', ''),
