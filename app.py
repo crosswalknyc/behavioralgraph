@@ -20020,6 +20020,7 @@ def _run_roas_iq(job_id):
 
         update_job_status(job_id, progress=60, message=f'Classifying {len(rows):,} attributed URLs...')
         channel_source_uids = {}
+        channel_source_clicks = {}
         channel_domains = {}
         uid_touch_counts = {}
         source_domains = {}
@@ -20039,6 +20040,7 @@ def _run_roas_iq(job_id):
                 if key not in channel_source_uids:
                     channel_source_uids[key] = set()
                 channel_source_uids[key].add(uid)
+                channel_source_clicks[key] = channel_source_clicks.get(key, 0) + 1
 
                 domain = p.netloc.lower().replace('www.', '')
                 if domain:
@@ -20076,8 +20078,9 @@ def _run_roas_iq(job_id):
                     overall_conv_uids.add(uid)
             total_converted_in_ads += conv_cnt
             total_ad_uids |= uid_set
+            click_count = channel_source_clicks.get((channel, source), cnt)
             pct = round(100.0 * cnt / max(uid_count, 1), 4)
-            conv_rate = round(100.0 * conv_cnt / max(cnt, 1), 2)
+            conv_rate = round(100.0 * conv_cnt / max(click_count, 1), 2)
             family = _get_source_family(source.lower().replace(' ', '_')) or source
             top_dom = ''
             sd = source_domains.get((channel, source), {})
@@ -20086,6 +20089,7 @@ def _run_roas_iq(job_id):
             results.append({
                 'channel': channel, 'source': source, 'family': family.title(),
                 'pct': pct, 'raw': cnt,
+                'click_count': click_count,
                 'projected': _project_to_us_pop(cnt),
                 'conversions': conv_cnt,
                 'projected_conversions': _project_to_us_pop(conv_cnt),
@@ -20095,7 +20099,8 @@ def _run_roas_iq(job_id):
 
         overall_ad_uid_count = len(total_ad_uids)
         overall_conv_count = len(overall_conv_uids)
-        overall_conv_rate = round(100.0 * overall_conv_count / max(overall_ad_uid_count, 1), 2)
+        total_classified_clicks = sum(channel_source_clicks.values())
+        overall_conv_rate = round(100.0 * overall_conv_count / max(total_classified_clicks, 1), 2)
 
         top_domains = {}
         for ch, doms in channel_domains.items():
@@ -20114,61 +20119,33 @@ def _run_roas_iq(job_id):
                 verified_retailer_uids[dom].add(cd['uid'])
 
         all_domain_uids = {}
+        all_domain_clicks = {}
         for (ch, src), uid_set in channel_source_uids.items():
             sd = source_domains.get((ch, src), {})
-            for dom in sd:
+            for dom, dom_click_cnt in sd.items():
                 if dom not in all_domain_uids:
                     all_domain_uids[dom] = set()
                 all_domain_uids[dom] |= uid_set
-
-        _BRAND_KEYWORDS = {
-            'amazon', 'walmart', 'target', 'bestbuy', 'costco', 'ebay', 'etsy',
-            'macys', 'nordstrom', 'nike', 'adidas', 'apple', 'samsung', 'sony',
-            'microsoft', 'google', 'shopify', 'wayfair', 'chewy', 'sephora',
-            'ulta', 'homedepot', 'lowes', 'ikea', 'zara', 'hm', 'gap',
-            'oldnavy', 'kohls', 'tjmaxx', 'marshalls', 'ross', 'burlington',
-            'newegg', 'overstock', 'zappos', 'asos', 'shein', 'temu',
-            'wish', 'aliexpress', 'booking', 'expedia', 'airbnb', 'hotels',
-            'zillow', 'redfin', 'realtor', 'trulia', 'cars', 'autotrader',
-            'carvana', 'vroom', 'geico', 'progressive', 'statefarm', 'allstate',
-            'netflix', 'hulu', 'disney', 'peacock', 'paramount', 'hbo', 'spotify',
-            'pandora', 'tidal', 'deezer', 'audible', 'kindle',
-            'grubhub', 'doordash', 'ubereats', 'instacart', 'postmates',
-            'shop', 'store', 'buy', 'order', 'cart', 'checkout',
-            'rakuten', 'groupon', 'slickdeals', 'retailmenot',
-            'paypal', 'venmo', 'stripe', 'square', 'klarna', 'afterpay',
-            'staples', 'officedepot', 'gamestop', 'petsmart', 'petco',
-            'walgreens', 'cvs', 'rite_aid', 'kroger', 'safeway', 'publix',
-            'wholefoods', 'traderjoes', 'aldi', 'lidl',
-        }
-
-        def _is_brand_domain(dom):
-            base = dom.split('.')[0] if '.' in dom else dom
-            if any(kw in base.lower() for kw in _BRAND_KEYWORDS):
-                return True
-            if dom.endswith('.shop') or dom.endswith('.store'):
-                return True
-            return False
+                all_domain_clicks[dom] = all_domain_clicks.get(dom, 0) + dom_click_cnt
 
         sales_conversions = []
         seen_doms = set()
         for dom in sorted(all_domain_uids.keys(), key=lambda d: -len(all_domain_uids[d])):
-            if not _is_brand_domain(dom):
-                continue
             if dom in seen_doms:
                 continue
             seen_doms.add(dom)
             uid_set = all_domain_uids[dom]
             cnt = len(uid_set)
+            dom_clicks = all_domain_clicks.get(dom, cnt)
             verified_cnt = len(verified_retailer_uids.get(dom, set()) & uid_set)
             sales_conversions.append({
                 'retailer': dom,
                 'audience_uids': cnt,
-                'projected_audience': _project_to_us_pop(cnt),
+                'duplicated_clicks': dom_clicks,
                 'pct_of_audience': round(100.0 * cnt / max(uid_count, 1), 4),
                 'verified_purchases': verified_cnt,
                 'projected_buyers': _project_to_us_pop(verified_cnt),
-                'conv_rate': round(100.0 * verified_cnt / max(cnt, 1), 2),
+                'conv_rate': round(100.0 * verified_cnt / max(dom_clicks, 1), 2),
             })
 
         result_data = {
@@ -20179,6 +20156,7 @@ def _run_roas_iq(job_id):
             'uid_count': uid_count,
             'projected_uid_count': _project_to_us_pop(uid_count),
             'url_rows': len(rows),
+            'total_classified_clicks': total_classified_clicks,
             'total_converted': overall_conv_count,
             'projected_converted': _project_to_us_pop(overall_conv_count),
             'overall_conv_rate': overall_conv_rate,

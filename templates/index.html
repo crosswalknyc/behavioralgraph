@@ -15136,11 +15136,11 @@
                         <!-- KPI Cards - row 1 -->
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 0.75rem;">
                             <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Projected Audience</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Duplicated Audience</div>
                                 <div id="roasIQKpiUids" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-lime); margin-top: 4px;"></div>
                             </div>
                             <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Attributed Consumers</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Duplicated Clicks</div>
                                 <div id="roasIQKpiAttributed" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-cyan); margin-top: 4px;"></div>
                             </div>
                             <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
@@ -18002,12 +18002,14 @@
             results.forEach(function(r) {
                 var proj = r.projected || _roasProject(r.raw || 0);
                 var projConv = r.projected_conversions || _roasProject(r.conversions || 0);
-                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalProjected:0, totalConv:0, totalProjConv:0, totalRaw:0, sources:{} };
+                var clicks = r.click_count || r.raw || 0;
+                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalProjected:0, totalConv:0, totalProjConv:0, totalRaw:0, totalClicks:0, sources:{} };
                 channelMap[r.channel].totalPct += r.pct;
                 channelMap[r.channel].totalProjected += proj;
                 channelMap[r.channel].totalConv += (r.conversions || 0);
                 channelMap[r.channel].totalProjConv += projConv;
                 channelMap[r.channel].totalRaw += (r.raw || 0);
+                channelMap[r.channel].totalClicks += clicks;
                 totalProjected += proj;
                 if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, projected:0, convRate: 0, projConv: 0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
@@ -18019,7 +18021,8 @@
 
             // KPIs
             document.getElementById('roasIQKpiUids').textContent = projUids.toLocaleString();
-            document.getElementById('roasIQKpiAttributed').textContent = totalProjected.toLocaleString();
+            var duplicatedClicks = data.total_classified_clicks || data.url_rows || 0;
+            document.getElementById('roasIQKpiAttributed').textContent = duplicatedClicks.toLocaleString();
             document.getElementById('roasIQKpiConvRate').textContent = (data.overall_conv_rate != null ? data.overall_conv_rate : 0) + '%';
             document.getElementById('roasIQKpiChannels').textContent = channels.length;
 
@@ -18069,7 +18072,7 @@
             var convCanvas = document.getElementById('roasIQConvChart');
             if (convCanvas && typeof Chart !== 'undefined') {
                 if (_roasIQViewConvInst) _roasIQViewConvInst.destroy();
-                var convRates = channels.map(function(c) { return c[1].totalRaw > 0 ? Math.round(10000.0 * c[1].totalConv / c[1].totalRaw) / 100 : 0; });
+                var convRates = channels.map(function(c) { return c[1].totalClicks > 0 ? Math.round(10000.0 * c[1].totalConv / c[1].totalClicks) / 100 : 0; });
                 _roasIQViewConvInst = new Chart(convCanvas.getContext('2d'), {
                     type: 'doughnut',
                     data: {
@@ -18098,11 +18101,13 @@
                 var fam = r.family || r.source;
                 var proj = r.projected || _roasProject(r.raw || 0);
                 var projConv = r.projected_conversions || _roasProject(r.conversions || 0);
+                var clicks = r.click_count || r.raw || 0;
                 if (!channelFamilies[ch]) channelFamilies[ch] = {};
-                if (!channelFamilies[ch][fam]) channelFamilies[ch][fam] = { pct:0, projected:0, raw:0, conv:0, projConv:0, sources:{} };
+                if (!channelFamilies[ch][fam]) channelFamilies[ch][fam] = { pct:0, projected:0, raw:0, clicks:0, conv:0, projConv:0, sources:{} };
                 channelFamilies[ch][fam].pct += r.pct;
                 channelFamilies[ch][fam].projected += proj;
                 channelFamilies[ch][fam].raw += (r.raw||0);
+                channelFamilies[ch][fam].clicks += clicks;
                 channelFamilies[ch][fam].conv += (r.conversions||0);
                 channelFamilies[ch][fam].projConv += projConv;
                 if (r.source !== fam) {
@@ -18114,7 +18119,7 @@
             var rowIdx = 0;
             channels.forEach(function(pair) {
                 var n = pair[0], ch = pair[1];
-                var chConvRate = ch.totalRaw > 0 ? (100.0 * ch.totalConv / ch.totalRaw).toFixed(2) : '0.00';
+                var chConvRate = ch.totalClicks > 0 ? (100.0 * ch.totalConv / ch.totalClicks).toFixed(2) : '0.00';
                 var chIdx = rowIdx++;
                 rowsHtml += '<tr style="cursor:pointer;border-bottom:1px solid var(--border-color);" data-roas-level="channel" data-roas-idx="'+chIdx+'" onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');var t=el.closest(\'tbody\');t.querySelectorAll(\'[data-roas-parent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';if(!show)r.setAttribute(\'data-open\',\'0\');if(!show){t.querySelectorAll(\'[data-roas-grandparent=\\\'\'+r.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(g){g.style.display=\'none\';});}});})(this)"><td style="padding:8px 12px;font-weight:700;">'+(icons[n]||'\ud83d\udccb')+' '+n+' <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">&#9654;</span></td><td style="padding:8px 12px;text-align:right;font-weight:600;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
 
@@ -18123,7 +18128,7 @@
                 famEntries.forEach(function(fe) {
                     var fName = fe[0], fData = fe[1];
                     var srcEntries = Object.entries(fData.sources);
-                    var famConvRate = fData.raw > 0 ? (100.0 * fData.conv / fData.raw).toFixed(2) : '0.00';
+                    var famConvRate = fData.clicks > 0 ? (100.0 * fData.conv / fData.clicks).toFixed(2) : '0.00';
                     var fIdx = rowIdx++;
                     var hasChildren = srcEntries.length > 0;
                     var clickHandler = hasChildren ? 'onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');el.closest(\'tbody\').querySelectorAll(\'[data-roas-grandparent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';});})(this)" style="cursor:pointer;display:none;"' : 'style="display:none;"';
@@ -18199,9 +18204,9 @@
                 if (salesData.length) {
                     var sRows = salesData.map(function(s, i) {
                         var verifiedBadge = (s.verified_purchases || 0) > 0 ? '<span style="color:#10b981;font-size:11px;margin-left:4px;">✓ verified</span>' : '';
-                        return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:var(--text-secondary);width:30px;">'+(i+1)+'</td><td style="padding:6px 10px;font-weight:600;">'+s.retailer+verifiedBadge+'</td><td style="padding:6px 10px;text-align:right;">'+(s.projected_audience||0).toLocaleString()+'</td><td style="padding:6px 10px;text-align:right;">'+s.pct_of_audience.toFixed(3)+'%</td><td style="padding:6px 10px;text-align:right;">'+(s.conv_rate||0).toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;">'+(s.projected_buyers||0).toLocaleString()+'</td></tr>';
+                        return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:var(--text-secondary);width:30px;">'+(i+1)+'</td><td style="padding:6px 10px;font-weight:600;">'+s.retailer+verifiedBadge+'</td><td style="padding:6px 10px;text-align:right;">'+(s.duplicated_clicks||0).toLocaleString()+'</td><td style="padding:6px 10px;text-align:right;">'+s.pct_of_audience.toFixed(3)+'%</td><td style="padding:6px 10px;text-align:right;">'+(s.conv_rate||0).toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;">'+(s.projected_buyers||0).toLocaleString()+'</td></tr>';
                     }).join('');
-                    salesEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:6px 10px;width:30px;">#</th><th style="padding:6px 10px;text-align:left;">Brand / Retailer</th><th style="padding:6px 10px;text-align:right;">Proj. Audience</th><th style="padding:6px 10px;text-align:right;">% of Audience</th><th style="padding:6px 10px;text-align:right;">Conv. Rate</th><th style="padding:6px 10px;text-align:right;">Proj. Buyers</th></tr></thead><tbody>'+sRows+'</tbody></table>';
+                    salesEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:6px 10px;width:30px;">#</th><th style="padding:6px 10px;text-align:left;">Brand / Retailer</th><th style="padding:6px 10px;text-align:right;">Dup. Clicks</th><th style="padding:6px 10px;text-align:right;">% of Audience</th><th style="padding:6px 10px;text-align:right;">Conv. Rate</th><th style="padding:6px 10px;text-align:right;">Proj. Buyers</th></tr></thead><tbody>'+sRows+'</tbody></table>';
                 } else {
                     salesEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-secondary);font-size:13px;">No brand or retailer domains detected in this audience\'s ad-attributed traffic.</div>';
                 }
@@ -20094,12 +20099,14 @@
             results.forEach(r => {
                 const proj = r.projected || _roasProject(r.raw || 0);
                 const projConv = r.projected_conversions || _roasProject(r.conversions || 0);
-                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalProjected: 0, totalConv: 0, totalProjConv: 0, totalRaw: 0 };
+                const clicks = r.click_count || r.raw || 0;
+                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalProjected: 0, totalConv: 0, totalProjConv: 0, totalRaw: 0, totalClicks: 0 };
                 channelMap[r.channel].totalPct += r.pct;
                 channelMap[r.channel].totalProjected += proj;
                 channelMap[r.channel].totalConv += (r.conversions || 0);
                 channelMap[r.channel].totalProjConv += projConv;
                 channelMap[r.channel].totalRaw += (r.raw || 0);
+                channelMap[r.channel].totalClicks += clicks;
                 totalProjected += proj;
                 if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, projected: 0, convRate: 0, projConv: 0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
@@ -20109,10 +20116,11 @@
             });
             const channels = Object.entries(channelMap).sort((a,b) => b[1].totalPct - a[1].totalPct);
             const icons = {'Email':'📧','Social Media':'📱','Digital Ads':'💰','Affiliate':'🤝','Sms':'💬','Influencer':'⭐','Push Notification':'🔔','Other':'📋'};
+            const duplicatedClicks2 = data.total_classified_clicks || data.url_rows || 0;
             const statsEl = document.getElementById('roasIQStats');
             if (statsEl) {
                 const convRate = data.overall_conv_rate != null ? data.overall_conv_rate : 0;
-                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Projected Audience</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+projUids.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Attributed Consumers</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+totalProjected.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Rate</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+convRate+'%</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div>';
+                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Duplicated Audience</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+projUids.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Duplicated Clicks</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+duplicatedClicks2.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Rate</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+convRate+'%</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div>';
             }
             const canvas = document.getElementById('roasIQChart');
             if (canvas && typeof Chart !== 'undefined') {
@@ -20124,7 +20132,7 @@
             if (tableEl) {
                 const total = channels.reduce((s,c)=>s+c[1].totalPct,0)||1;
                 const rows = channels.map(([n,ch])=>{
-                    const chConvRate = ch.totalRaw > 0 ? (100.0 * ch.totalConv / ch.totalRaw).toFixed(2) : '0.00';
+                    const chConvRate = ch.totalClicks > 0 ? (100.0 * ch.totalConv / ch.totalClicks).toFixed(2) : '0.00';
                     return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
                 }).join('');
                 tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rows+'</tbody></table>';
