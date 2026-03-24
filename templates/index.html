@@ -19406,7 +19406,9 @@
                 var ctx = document.getElementById(canvasId);
                 if (!ctx) return;
                 if (_llmoDemoCharts[cat]) { _llmoDemoCharts[cat].destroy(); _llmoDemoCharts[cat] = null; }
-                var items = demographics[cat];
+                var items = (demographics[cat] || []).filter(function(i) {
+                    return !(i.value || '').toLowerCase().includes('prefer not');
+                });
                 if (!items || items.length === 0) return;
 
                 _llmoDemoCharts[cat] = new Chart(ctx, {
@@ -25416,6 +25418,7 @@
             let html = '';
             keys.forEach(field => {
                 let arr = demo[field] || [];
+                arr = arr.filter(r => !(r.value || '').toLowerCase().includes('prefer not'));
                 if (field === 'LOCATION' && typeof getDMARank === 'function') arr = arr.filter(r => getDMARank(r.value || '') != null);
                 if (!arr.length) return;
                 const id = 'tstChart' + field.replace(/\s/g,'');
@@ -25443,6 +25446,7 @@
             container.innerHTML = html;
             keys.forEach(field => {
                 let arr = demo[field] || [];
+                arr = arr.filter(r => !(r.value || '').toLowerCase().includes('prefer not'));
                 if (field === 'LOCATION' && typeof getDMARank === 'function') arr = arr.filter(r => getDMARank(r.value || '') != null);
                 if (!arr.length) return;
                 const id = 'tstChart' + field.replace(/\s/g,'');
@@ -25559,6 +25563,7 @@
                     arr.forEach(r => {
                         const v = (r.value != null && r.value !== '' ? r.value : '').toString().trim();
                         if (!v) return;
+                        if (v.toLowerCase().includes('prefer not')) return;
                         if (field === 'LOCATION' && typeof getDMARank === 'function' && getDMARank(v) == null) return;
                         if (!valueToPct[v]) valueToPct[v] = {};
                         valueToPct[v][tName] = r.percent;
@@ -25661,6 +25666,7 @@
             let html = '';
             keys.forEach(field => {
                 let arr = demo[field] || [];
+                arr = arr.filter(r => !(r.value || '').toLowerCase().includes('prefer not'));
                 if (field === 'LOCATION' && typeof getDMARank === 'function') arr = arr.filter(r => getDMARank(r.value || '') != null);
                 if (!arr.length) return;
                 const id = 'tstPerChart' + field.replace(/\s/g,'') + safeTheater;
@@ -25686,6 +25692,7 @@
             ['demo_per_gender','demo_per_age','demo_per_income','demo_per_ethnicity','demo_per_location'].forEach(k => { if (tstCharts[k]) { tstCharts[k].destroy(); tstCharts[k] = null; } });
             keys.forEach(field => {
                 let arr = demo[field] || [];
+                arr = arr.filter(r => !(r.value || '').toLowerCase().includes('prefer not'));
                 if (field === 'LOCATION' && typeof getDMARank === 'function') arr = arr.filter(r => getDMARank(r.value || '') != null);
                 if (!arr.length) return;
                 const id = 'tstPerChart' + field.replace(/\s/g,'') + safeTheater;
@@ -28416,6 +28423,16 @@
                     ageGroups[key].gen_pop += rawGP;
                 }
             });
+            // If 55-64 is absent but 65 or Older exists, the raw data provided "65 or Older"
+            // directly instead of "60+". Split it using the same 25/75 ratio.
+            if (!ageGroups['55-64'] && ageGroups['65 OR OLDER']) {
+                var senior = ageGroups['65 OR OLDER'];
+                var split55 = Math.round(senior.count * 0.25);
+                var splitGp55 = Math.round(senior.gen_pop * 0.25);
+                ageGroups['55-64'] = { age_range: '55-64', count: split55, gen_pop: splitGp55 };
+                senior.count -= split55;
+                senior.gen_pop -= splitGp55;
+            }
             const ageTotalCount = Object.values(ageGroups).reduce((sum, g) => sum + g.count, 0);
             const validAgeData = Object.values(ageGroups)
                 .map(g => ({
@@ -28492,11 +28509,14 @@
                 console.log(`📊 Aggregating gender: "${gender}" -> "${normalizedKey}" (${displayName}): count=${count}, total now=${genderGroups[normalizedKey].count}`);
             });
             
+            // Remove "Prefer Not To Say" and rebase
+            delete genderGroups['PREFER NOT TO SAY'];
+
             // Convert to array and sort by count descending
             const validGenderData = Object.values(genderGroups)
                 .sort((a, b) => b.count - a.count);
             
-            // Calculate total for percentage recalculation
+            // Calculate total for percentage recalculation (rebased without "Prefer Not To Say")
             const genderTotalCount = validGenderData.reduce((sum, g) => sum + g.count, 0);
             validGenderData.forEach(g => {
                 g.percentage = genderTotalCount > 0 ? ((g.count / genderTotalCount) * 100).toFixed(2) + '%' : 'N/A';
@@ -30088,6 +30108,35 @@
                 res.demographicsGenPop.income = Object.keys(newGp).length ? newGp : res.demographicsGenPop.income;
                 res.demographicsProjection.income = Object.keys(newProj).length ? newProj : res.demographicsProjection.income;
             }
+
+            function stripPreferNotToSay(res) {
+                var cats = ['gender', 'education', 'relationship', 'sexual_orientation', 'parental_status'];
+                cats.forEach(function(cat) {
+                    var demo = res.demographics[cat];
+                    if (!demo || typeof demo !== 'object') return;
+                    var keysToRemove = Object.keys(demo).filter(function(k) {
+                        return k.toLowerCase().indexOf('prefer not') !== -1 || k.toLowerCase() === 'none';
+                    });
+                    if (!keysToRemove.length) return;
+                    keysToRemove.forEach(function(k) {
+                        delete demo[k];
+                        if (res.demographicsIndex && res.demographicsIndex[cat]) delete res.demographicsIndex[cat][k];
+                        if (res.demographicsGenPop && res.demographicsGenPop[cat]) delete res.demographicsGenPop[cat][k];
+                        if (res.demographicsProjection && res.demographicsProjection[cat]) delete res.demographicsProjection[cat][k];
+                    });
+                    var total = Object.values(demo).reduce(function(s, v) { return s + (parseFloat(v) || 0); }, 0);
+                    if (total > 0 && total !== 100) {
+                        var scale = 100 / total;
+                        Object.keys(demo).forEach(function(k) {
+                            demo[k] = Math.round(demo[k] * scale * 100) / 100;
+                            var gp = res.demographicsGenPop && res.demographicsGenPop[cat] ? res.demographicsGenPop[cat][k] : 0;
+                            if (res.demographicsIndex && res.demographicsIndex[cat] && gp > 0) {
+                                res.demographicsIndex[cat][k] = Math.round((demo[k] / gp) * 100);
+                            }
+                        });
+                    }
+                });
+            }
             
             // Universal helper to get Gen Pop value from loaded genPopBaselineData
             // Always prioritizes the loaded Gen Pop file (most recent year)
@@ -30516,6 +30565,7 @@
 
             normalizeAgeBucketsForDashboard(result);
             normalizeIncomeBucketsForDashboard(result);
+            stripPreferNotToSay(result);
 
             // Deduplicate behavioral items: keep highest-pct entry per name within each category
             Object.keys(result.behavioral).forEach(cat => {
