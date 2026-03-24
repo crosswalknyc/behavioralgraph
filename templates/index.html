@@ -15203,9 +15203,14 @@
                                 <div style="height: 160px;"><canvas id="roasIQEthnicityChart"></canvas></div>
                             </div>
                         </div>
+                        <!-- Sales Conversions -->
+                        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
+                            <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Sales Conversions by Retailer</h3>
+                            <div id="roasIQSalesTable" style="overflow-x: auto; max-height: 400px; overflow-y: auto;"></div>
+                        </div>
                         <!-- Top Landing Domains -->
                         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
-                            <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Top Landing Domains by Channel</h3>
+                            <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Landing Domains by Channel</h3>
                             <div id="roasIQDomainsTable" style="overflow-x: auto;"></div>
                         </div>
                         <!-- Attribution Detail Table -->
@@ -18182,7 +18187,21 @@
             _roasDemoChart('roasIQIncomeChart', demos.INCOME, 'bar');
             _roasDemoChart('roasIQEthnicityChart', demos.ETHNICITY, 'doughnut');
 
-            // Top domains table
+            // Sales Conversions table
+            var salesData = data.sales_conversions || [];
+            var salesEl = document.getElementById('roasIQSalesTable');
+            if (salesEl) {
+                if (salesData.length) {
+                    var sRows = salesData.map(function(s, i) {
+                        return '<tr><td style="padding:6px 10px;color:var(--text-secondary);width:30px;">'+(i+1)+'</td><td style="padding:6px 10px;font-weight:600;">'+s.retailer+'</td><td style="padding:6px 10px;text-align:right;">'+s.pct_of_audience.toFixed(3)+'%</td><td style="padding:6px 10px;text-align:right;">'+s.projected_buyers.toLocaleString()+'</td></tr>';
+                    }).join('');
+                    salesEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:6px 10px;width:30px;">#</th><th style="padding:6px 10px;text-align:left;">Retailer / Brand</th><th style="padding:6px 10px;text-align:right;">% of Audience</th><th style="padding:6px 10px;text-align:right;">Proj. Buyers</th></tr></thead><tbody>'+sRows+'</tbody></table>';
+                } else {
+                    salesEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-secondary);font-size:13px;">No verified purchase confirmations detected for this audience.</div>';
+                }
+            }
+
+            // Top domains table (scrollable, show first 10, scroll for more)
             var topDoms = data.top_domains || {};
             var domsEl = document.getElementById('roasIQDomainsTable');
             if (domsEl) {
@@ -18192,12 +18211,13 @@
                     chNames.forEach(function(ch) {
                         var doms = topDoms[ch] || [];
                         if (!doms.length) return;
-                        domHtml += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;color:var(--text-secondary);">' + (icons[ch]||'') + ' ' + ch + '</h4>';
+                        domHtml += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;color:var(--text-secondary);">' + (icons[ch]||'') + ' ' + ch + ' <span style="font-size:11px;opacity:0.6;">(' + doms.length + ')</span></h4>';
+                        domHtml += '<div style="max-height:260px;overflow-y:auto;">';
                         domHtml += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
                         doms.forEach(function(pair, i) {
-                            domHtml += '<tr><td style="padding:3px 6px;color:var(--text-secondary);">' + (i+1) + '.</td><td style="padding:3px 6px;">' + pair[0] + '</td><td style="padding:3px 6px;text-align:right;color:var(--text-secondary);">' + pair[1].toLocaleString() + '</td></tr>';
+                            domHtml += '<tr><td style="padding:3px 6px;color:var(--text-secondary);width:28px;">' + (i+1) + '.</td><td style="padding:3px 6px;">' + pair[0] + '</td><td style="padding:3px 6px;text-align:right;color:var(--text-secondary);">' + pair[1].toLocaleString() + '</td></tr>';
                         });
-                        domHtml += '</table></div>';
+                        domHtml += '</table></div></div>';
                     });
                     domHtml += '</div>';
                     domsEl.innerHTML = domHtml;
