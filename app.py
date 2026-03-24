@@ -20016,6 +20016,28 @@ def _run_roas_iq(job_id):
         except Exception as e:
             print(f"⚠️ Day/hour query failed: {e}")
 
+        update_job_status(job_id, progress=57, message='Fetching brand/retailer data from HOST_MAPPING...')
+        brand_click_rows = []
+        try:
+            cur.execute(f"""
+                SELECT m.Brand, cf.UID
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+                JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m
+                    ON LOWER(cf.COMMON_NAME) = LOWER(m.Brand)
+                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+                  AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                  AND (
+                    LOWER(m.Section) LIKE '%most purchased%'
+                    OR LOWER(m.Section) LIKE '%where they shop%'
+                  )
+                  AND cf.COMMON_NAME IS NOT NULL
+                  AND cf.COMMON_NAME != ''
+            """)
+            brand_click_rows = cur.fetchall()
+            print(f"✅ HOST_MAPPING brand query returned {len(brand_click_rows)} rows")
+        except Exception as e:
+            print(f"⚠️ HOST_MAPPING brand query failed: {e}")
+
         conn.close()
 
         update_job_status(job_id, progress=60, message=f'Classifying {len(rows):,} attributed URLs...')
@@ -20118,34 +20140,29 @@ def _run_roas_iq(job_id):
                     verified_retailer_uids[dom] = set()
                 verified_retailer_uids[dom].add(cd['uid'])
 
-        all_domain_uids = {}
-        all_domain_clicks = {}
-        for (ch, src), uid_set in channel_source_uids.items():
-            sd = source_domains.get((ch, src), {})
-            for dom, dom_click_cnt in sd.items():
-                if dom not in all_domain_uids:
-                    all_domain_uids[dom] = set()
-                all_domain_uids[dom] |= uid_set
-                all_domain_clicks[dom] = all_domain_clicks.get(dom, 0) + dom_click_cnt
+        brand_uids = {}
+        brand_clicks = {}
+        for brand, uid in brand_click_rows:
+            brand_clicks[brand] = brand_clicks.get(brand, 0) + 1
+            if brand not in brand_uids:
+                brand_uids[brand] = set()
+            brand_uids[brand].add(uid)
 
         sales_conversions = []
-        seen_doms = set()
-        for dom in sorted(all_domain_uids.keys(), key=lambda d: -len(all_domain_uids[d])):
-            if dom in seen_doms:
-                continue
-            seen_doms.add(dom)
-            uid_set = all_domain_uids[dom]
-            cnt = len(uid_set)
-            dom_clicks = all_domain_clicks.get(dom, cnt)
-            verified_cnt = len(verified_retailer_uids.get(dom, set()) & uid_set)
+        for brand in sorted(brand_clicks, key=lambda b: -brand_clicks[b]):
+            uids = brand_uids[brand]
+            click_count = brand_clicks[brand]
+            proj_clicks = _project_to_us_pop(click_count)
+            verified_cnt = sum(1 for uid in uids if uid in uid_conv_domains)
+            proj_verified = _project_to_us_pop(verified_cnt)
             sales_conversions.append({
-                'retailer': dom,
-                'audience_uids': cnt,
-                'duplicated_clicks': dom_clicks,
-                'pct_of_audience': round(100.0 * cnt / max(uid_count, 1), 4),
+                'retailer': brand,
+                'audience_uids': len(uids),
+                'duplicated_clicks': proj_clicks,
+                'pct_of_audience': round(100.0 * len(uids) / max(uid_count, 1), 4),
                 'verified_purchases': verified_cnt,
-                'projected_buyers': _project_to_us_pop(verified_cnt),
-                'conv_rate': round(100.0 * verified_cnt / max(dom_clicks, 1), 2),
+                'projected_buyers': proj_verified,
+                'conv_rate': round(100.0 * proj_verified / max(proj_clicks, 1), 2),
             })
 
         result_data = {
@@ -20157,6 +20174,7 @@ def _run_roas_iq(job_id):
             'projected_uid_count': _project_to_us_pop(uid_count),
             'url_rows': len(rows),
             'total_classified_clicks': total_classified_clicks,
+            'projected_classified_clicks': _project_to_us_pop(total_classified_clicks),
             'total_converted': overall_conv_count,
             'projected_converted': _project_to_us_pop(overall_conv_count),
             'overall_conv_rate': overall_conv_rate,

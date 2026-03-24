@@ -18021,7 +18021,7 @@
 
             // KPIs
             document.getElementById('roasIQKpiUids').textContent = projUids.toLocaleString();
-            var duplicatedClicks = data.total_classified_clicks || data.url_rows || 0;
+            var duplicatedClicks = data.projected_classified_clicks || _roasProject(data.total_classified_clicks || data.url_rows || 0);
             document.getElementById('roasIQKpiAttributed').textContent = duplicatedClicks.toLocaleString();
             document.getElementById('roasIQKpiConvRate').textContent = (data.overall_conv_rate != null ? data.overall_conv_rate : 0) + '%';
             document.getElementById('roasIQKpiChannels').textContent = channels.length;
@@ -18206,7 +18206,7 @@
                         var verifiedBadge = (s.verified_purchases || 0) > 0 ? '<span style="color:#10b981;font-size:11px;margin-left:4px;">✓ verified</span>' : '';
                         return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:var(--text-secondary);width:30px;">'+(i+1)+'</td><td style="padding:6px 10px;font-weight:600;">'+s.retailer+verifiedBadge+'</td><td style="padding:6px 10px;text-align:right;">'+(s.duplicated_clicks||0).toLocaleString()+'</td><td style="padding:6px 10px;text-align:right;">'+s.pct_of_audience.toFixed(3)+'%</td><td style="padding:6px 10px;text-align:right;">'+(s.conv_rate||0).toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;">'+(s.projected_buyers||0).toLocaleString()+'</td></tr>';
                     }).join('');
-                    salesEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:6px 10px;width:30px;">#</th><th style="padding:6px 10px;text-align:left;">Brand / Retailer</th><th style="padding:6px 10px;text-align:right;">Dup. Clicks</th><th style="padding:6px 10px;text-align:right;">% of Audience</th><th style="padding:6px 10px;text-align:right;">Conv. Rate</th><th style="padding:6px 10px;text-align:right;">Proj. Buyers</th></tr></thead><tbody>'+sRows+'</tbody></table>';
+                    salesEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:6px 10px;width:30px;">#</th><th style="padding:6px 10px;text-align:left;">Brand / Retailer</th><th style="padding:6px 10px;text-align:right;">Proj. Dup. Clicks</th><th style="padding:6px 10px;text-align:right;">% of Audience</th><th style="padding:6px 10px;text-align:right;">Conv. Rate</th><th style="padding:6px 10px;text-align:right;">Proj. Buyers</th></tr></thead><tbody>'+sRows+'</tbody></table>';
                 } else {
                     salesEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-secondary);font-size:13px;">No brand or retailer domains detected in this audience\'s ad-attributed traffic.</div>';
                 }
@@ -20116,7 +20116,7 @@
             });
             const channels = Object.entries(channelMap).sort((a,b) => b[1].totalPct - a[1].totalPct);
             const icons = {'Email':'📧','Social Media':'📱','Digital Ads':'💰','Affiliate':'🤝','Sms':'💬','Influencer':'⭐','Push Notification':'🔔','Other':'📋'};
-            const duplicatedClicks2 = data.total_classified_clicks || data.url_rows || 0;
+            const duplicatedClicks2 = data.projected_classified_clicks || _roasProject(data.total_classified_clicks || data.url_rows || 0);
             const statsEl = document.getElementById('roasIQStats');
             if (statsEl) {
                 const convRate = data.overall_conv_rate != null ? data.overall_conv_rate : 0;
