@@ -7997,6 +7997,50 @@
             font-size: 0.65rem;
             opacity: 0.8;
         }
+        /* All Locations by Percentage */
+        .all-locations-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .all-locations-section h3 { margin: 0 0 0.75rem 0; }
+        .all-locations-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .all-locations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 0.4rem;
+            max-height: 420px;
+            overflow-y: auto;
+        }
+        .all-loc-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.5rem;
+            align-items: center;
+            padding: 0.35rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            background: var(--bg-input);
+        }
+        .all-loc-row .loc-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-primary);
+        }
+        .all-loc-row .loc-pct {
+            font-weight: 600;
+            white-space: nowrap;
+            color: var(--accent-cyan);
+        }
         .regional-breakdown {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -14162,7 +14206,31 @@
             <div id="tab-location" class="tab-content">
                 <div class="location-stats" id="locationStats"></div>
                 
-                <!-- Regional Breakdown - at top for quick overview -->
+                <!-- All Locations by Percentage -->
+                <div class="all-locations-section location-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="All Locations">
+                    <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="display: flex; align-items: center; gap: 0.3rem;">
+                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
+                            <span>📍 All Locations by %</span>
+                        </span>
+                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('location', 'All Locations')" data-tooltip="Export CSV: Download all locations data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'All Locations')" data-tooltip="Add to Deck: Save all locations to your presentation deck.">➕</button></span>
+                    </h3>
+                    <div class="all-locations-controls">
+                        <input type="text" id="allLocationsSearch" placeholder="🔍 Search locations..." oninput="filterAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 160px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                        <select id="allLocationsSort" onchange="rerenderAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <option value="pct-desc">% Descending</option>
+                            <option value="pct-asc">% Ascending</option>
+                            <option value="name-asc">A → Z</option>
+                            <option value="name-desc">Z → A</option>
+                            <option value="index-desc">Index ↓</option>
+                            <option value="index-asc">Index ↑</option>
+                        </select>
+                        <span id="allLocationsCount" style="font-size: 0.7rem; color: var(--text-secondary);"></span>
+                    </div>
+                    <div id="allLocationsGrid" class="all-locations-grid"></div>
+                </div>
+
+                <!-- Regional Breakdown -->
                 <div class="regional-breakdown location-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Regional Breakdown">
                     <h3 style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="display: flex; align-items: center; gap: 0.3rem;">
@@ -38361,6 +38429,51 @@
             return null;
         }
         
+        var _allLocsCached = [];
+        function renderAllLocationsByPct(locations) {
+            _allLocsCached = locations || [];
+            rerenderAllLocations();
+        }
+        function rerenderAllLocations() {
+            const locs = _allLocsCached;
+            if (!locs.length) {
+                const g = document.getElementById('allLocationsGrid');
+                if (g) g.innerHTML = '<p style="color:var(--text-secondary);font-size:0.8rem;">No location data</p>';
+                return;
+            }
+            const isProj = dashDisplayMode === 'projection';
+            const US_POP = 329900000;
+            const sortVal = (document.getElementById('allLocationsSort') || {}).value || 'pct-desc';
+            let sorted = [...locs];
+            if (sortVal === 'pct-desc') sorted.sort((a, b) => b.pct - a.pct);
+            else if (sortVal === 'pct-asc') sorted.sort((a, b) => a.pct - b.pct);
+            else if (sortVal === 'name-asc') sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            else if (sortVal === 'name-desc') sorted.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+            else if (sortVal === 'index-desc') sorted.sort((a, b) => (b.index || 0) - (a.index || 0));
+            else if (sortVal === 'index-asc') sorted.sort((a, b) => (a.index || 0) - (b.index || 0));
+
+            const search = ((document.getElementById('allLocationsSearch') || {}).value || '').toLowerCase().trim();
+            if (search) sorted = sorted.filter(l => (l.name || '').toLowerCase().includes(search));
+
+            const grid = document.getElementById('allLocationsGrid');
+            if (!grid) return;
+            const maxPct = Math.max(...sorted.map(l => l.pct || 0), 0.01);
+            grid.innerHTML = sorted.map(loc => {
+                const pctDisplay = isProj
+                    ? formatNumber(Math.round((loc.pct / 100) * US_POP))
+                    : loc.pct.toFixed(2) + '%';
+                const barW = Math.max(((loc.pct / maxPct) * 100), 2);
+                const idxColor = (loc.index || 100) >= 100 ? '#10b981' : '#ef4444';
+                return `<div class="all-loc-row" style="background: linear-gradient(to right, ${idxColor}22 ${barW}%, var(--bg-input) ${barW}%);">
+                    <span class="loc-name" title="${(loc.name || '').replace(/"/g, '&quot;')}">${normalizeDmaDisplay(loc.name)}</span>
+                    <span class="loc-pct" style="color:${idxColor}">${pctDisplay}</span>
+                </div>`;
+            }).join('');
+            const cnt = document.getElementById('allLocationsCount');
+            if (cnt) cnt.textContent = sorted.length + ' locations';
+        }
+        function filterAllLocations() { rerenderAllLocations(); }
+
         function renderLocationTable(locations) {
             const isProjection = dashDisplayMode === 'projection';
             // Sort by index for ranking (higher index = over-indexes more)
@@ -38375,6 +38488,9 @@
             
             // Render heat map
             renderHeatmap(locations);
+
+            // Render top-of-page all locations by %
+            renderAllLocationsByPct(locations);
 
             // Sort over-indexing DMAs based on sort state
             const topState = locationSortState.top;
