@@ -15151,10 +15151,57 @@
                                 <canvas id="roasIQChannelChart" height="220"></canvas>
                             </div>
                         </div>
-                        <!-- Conversion Chart -->
+                        <!-- Engagement KPIs -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Avg Touches / User</div>
+                                <div id="roasIQKpiAvgTouch" style="font-size: 1.5rem; font-weight: 700; color: #14b8a6; margin-top: 2px;"></div>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Multi-Touch Users</div>
+                                <div id="roasIQKpiMultiTouch" style="font-size: 1.5rem; font-weight: 700; color: #f97316; margin-top: 2px;"></div>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Proj. Conversions</div>
+                                <div id="roasIQKpiProjConv" style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-top: 2px;"></div>
+                            </div>
+                        </div>
+                        <!-- Conversion + Day/Hour row -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
+                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Conversion Rate by Channel</h3>
+                                <canvas id="roasIQConvChart" height="200"></canvas>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
+                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Ad Engagement by Day of Week</h3>
+                                <canvas id="roasIQDayChart" height="200"></canvas>
+                            </div>
+                        </div>
+                        <!-- Demographics Row -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
+                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Audience Gender</h3>
+                                <canvas id="roasIQGenderChart" height="180"></canvas>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
+                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Audience Age</h3>
+                                <canvas id="roasIQAgeChart" height="180"></canvas>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
+                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Audience Income</h3>
+                                <canvas id="roasIQIncomeChart" height="180"></canvas>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
+                                <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Audience Ethnicity</h3>
+                                <canvas id="roasIQEthnicityChart" height="180"></canvas>
+                            </div>
+                        </div>
+                        <!-- Top Landing Domains -->
                         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
-                            <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Conversion Rate by Channel</h3>
-                            <canvas id="roasIQConvChart" height="180"></canvas>
+                            <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Top Landing Domains by Channel</h3>
+                            <div id="roasIQDomainsTable" style="overflow-x: auto;"></div>
                         </div>
                         <!-- Attribution Detail Table -->
                         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
@@ -18038,6 +18085,85 @@
                 return '<tr style="cursor:pointer;" onclick="this.classList.toggle(\'roas-expanded\');var s=this.nextElementSibling;while(s&&s.style.background){s.style.display=s.style.display===\'none\'?\'\':\' none\';s=s.nextElementSibling;}"><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'\ud83d\udccb')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjConv.toLocaleString()+'</td></tr>' + srcRows;
             }).join('');
             document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rows+'</tbody></table>';
+
+            // Engagement KPIs
+            var avgTouchEl = document.getElementById('roasIQKpiAvgTouch');
+            if (avgTouchEl) avgTouchEl.textContent = (data.avg_touches_per_user || 0).toFixed(1);
+            var multiTouchEl = document.getElementById('roasIQKpiMultiTouch');
+            if (multiTouchEl) multiTouchEl.textContent = (data.multi_touch_pct || 0) + '%';
+            var projConvEl = document.getElementById('roasIQKpiProjConv');
+            if (projConvEl) projConvEl.textContent = (data.projected_converted || 0).toLocaleString();
+
+            // Day-of-week chart
+            var dayData = data.day_hour || [];
+            var dayCanvas = document.getElementById('roasIQDayChart');
+            if (dayCanvas && typeof Chart !== 'undefined' && dayData.length) {
+                if (window._roasIQDayInst) window._roasIQDayInst.destroy();
+                var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                var dayTotals = [0,0,0,0,0,0,0];
+                dayData.forEach(function(d) { if (d.dow >= 0 && d.dow < 7) dayTotals[d.dow] += d.touches; });
+                window._roasIQDayInst = new Chart(dayCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: { labels: dayNames, datasets: [{ label: 'Ad Touches', data: dayTotals, backgroundColor: '#6366f1aa', borderColor: '#6366f1', borderWidth: 1, borderRadius: 4 }] },
+                    options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 } } }, x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } }, plugins: { legend: { display: false } } }
+                });
+            }
+
+            // Demographics charts helper
+            function _roasDemoChart(canvasId, catData, chartType) {
+                var cv = document.getElementById(canvasId);
+                if (!cv || !catData || !catData.length || typeof Chart === 'undefined') return;
+                var instKey = '_' + canvasId + 'Inst';
+                if (window[instKey]) window[instKey].destroy();
+                var filtered = catData.filter(function(d) { return d.value && d.value.toLowerCase().indexOf('prefer not') === -1 && d.value.toLowerCase() !== 'none'; });
+                if (!filtered.length) return;
+                var totalPct = filtered.reduce(function(s,d) { return s + d.pct; }, 0);
+                var scale = totalPct > 0 && totalPct !== 100 ? (100 / totalPct) : 1;
+                var labels = filtered.map(function(d) { return d.value; });
+                var vals = filtered.map(function(d) { return Math.round(d.pct * scale * 100) / 100; });
+                var demoColors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#a3e635','#e879f9','#fb923c'];
+                if (chartType === 'doughnut') {
+                    window[instKey] = new Chart(cv.getContext('2d'), {
+                        type: 'doughnut', data: { labels: labels, datasets: [{ data: vals, backgroundColor: demoColors.slice(0, labels.length), borderWidth: 0 }] },
+                        options: { responsive: true, maintainAspectRatio: true, cutout: '50%', plugins: { legend: { position: 'right', labels: { padding: 8, usePointStyle: true, font: { size: 10 }, color: '#e8e8e8' } }, tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed + '%'; } } } } }
+                    });
+                } else {
+                    window[instKey] = new Chart(cv.getContext('2d'), {
+                        type: 'bar', data: { labels: labels, datasets: [{ data: vals, backgroundColor: demoColors.slice(0, labels.length), borderWidth: 0, borderRadius: 4 }] },
+                        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: true, scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 10 }, callback: function(v){return v+'%';} } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 10 } } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.x + '%'; } } } } }
+                    });
+                }
+            }
+
+            var demos = data.demographics || {};
+            _roasDemoChart('roasIQGenderChart', demos.GENDER, 'doughnut');
+            _roasDemoChart('roasIQAgeChart', demos.AGE, 'bar');
+            _roasDemoChart('roasIQIncomeChart', demos.INCOME, 'bar');
+            _roasDemoChart('roasIQEthnicityChart', demos.ETHNICITY, 'doughnut');
+
+            // Top domains table
+            var topDoms = data.top_domains || {};
+            var domsEl = document.getElementById('roasIQDomainsTable');
+            if (domsEl) {
+                var chNames = Object.keys(topDoms).sort();
+                if (chNames.length) {
+                    var domHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">';
+                    chNames.forEach(function(ch) {
+                        var doms = topDoms[ch] || [];
+                        if (!doms.length) return;
+                        domHtml += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;color:var(--text-secondary);">' + (icons[ch]||'') + ' ' + ch + '</h4>';
+                        domHtml += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+                        doms.forEach(function(pair, i) {
+                            domHtml += '<tr><td style="padding:3px 6px;color:var(--text-secondary);">' + (i+1) + '.</td><td style="padding:3px 6px;">' + pair[0] + '</td><td style="padding:3px 6px;text-align:right;color:var(--text-secondary);">' + pair[1].toLocaleString() + '</td></tr>';
+                        });
+                        domHtml += '</table></div>';
+                    });
+                    domHtml += '</div>';
+                    domsEl.innerHTML = domHtml;
+                } else {
+                    domsEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-secondary);font-size:13px;">No domain data available</div>';
+                }
+            }
         }
 
         // ====================================================================
