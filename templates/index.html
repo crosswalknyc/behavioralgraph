@@ -11994,6 +11994,7 @@
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>📊 ROAS IQ</option>
+                            <option value="ecommerceIQ" {% if not has_ecommerce_iq_access %}disabled{% endif %}>🛒 E-Commerce IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
@@ -15446,6 +15447,76 @@
             </div>
         </div><!-- End ticketSalesTrackerView -->
 
+        <div id="ecommerceIQView" style="display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem;">
+            <div class="dashboard-layout">
+                <div class="persistent-sidebar">
+                    <div class="sidebar-header-section">
+                        <h3>E-Commerce IQ Results</h3>
+                        <button type="button" class="btn btn-small" onclick="refreshEcomIQList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                    </div>
+                    <div id="ecomIQResultsList" class="profile-select-tree" style="font-size: 13px;"></div>
+                </div>
+                <div class="dashboard-tab-content" style="display: flex; flex-direction: column; overflow: auto; padding: 1.5rem;">
+                    <div id="ecomIQEmpty">
+                        <div style="text-align: center; padding: 3rem 2rem;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">🛒</div>
+                            <h2 style="margin: 0 0 1rem;">E-Commerce IQ</h2>
+                            <p style="color: var(--text-secondary); margin-bottom: 2rem;">Analyze product page views, cart adds, and purchases from clickstream data for any audience.</p>
+                        </div>
+                        <div style="max-width: 500px; margin: 0 auto; background: var(--card-bg); border-radius: 12px; padding: 2rem; border: 1px solid var(--border-color);">
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Name</label>
+                                <input type="text" id="ecomIQProjectName" placeholder="e.g. Nike Product Funnel" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                            </div>
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Search Terms <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated, matches COMMON_NAME)</span></label>
+                                <textarea id="ecomIQSearchTerms" rows="3" placeholder="e.g. nike, adidas, puma" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                                <div>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
+                                    <input type="date" id="ecomIQStartDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date</label>
+                                    <input type="date" id="ecomIQEndDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                </div>
+                            </div>
+                            <button type="button" id="ecomIQSubmitBtn" onclick="submitEcomIQ()" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--accent-primary); color: white; border: none; font-weight: 600; font-size: 14px; cursor: pointer;">Run E-Commerce Analysis</button>
+                            <div id="ecomIQStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
+                                <div id="ecomIQStatusText" style="font-weight: 600; margin-bottom: 4px;"></div>
+                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;"><div id="ecomIQProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="ecomIQDashboard" style="display: none;">
+                        <div id="ecomIQDashHeader" style="margin-bottom: 1.5rem;"></div>
+                        <div id="ecomIQStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Most Clicked Product Pages</h3>
+                                <div id="ecomIQTopPdp"></div>
+                            </div>
+                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Least Clicked Product Pages</h3>
+                                <div id="ecomIQBottomPdp"></div>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Add-to-Cart</h3>
+                                <div id="ecomIQCart"></div>
+                            </div>
+                            <div style="background: var(--card-bg); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border-color);">
+                                <h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Completed Purchase</h3>
+                                <div id="ecomIQPurchase"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- LLMO IQ VIEW (US Gen Pop projection; /api/llmo-iq/*) -->
         <div id="llmoIQView" style="display: none;">
             {% if not has_llmo_iq_access %}
@@ -16735,7 +16806,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, roasIQ: showRoasIQ, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -16765,6 +16836,7 @@
                 profileIQ: showProfileIQ,
                 subscriberIQ: showSubscriberIQ,
                 roasIQ: showRoasIQ,
+                ecommerceIQ: showEcommerceIQ,
                 llmoIQ: showLLMOIQ,
                 rankerIQ: showRankerIQ,
                 ticketSalesIQ: showTicketSalesIQ,
@@ -16800,12 +16872,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', roasIQ: 'roasIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'roasIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'roasIQView', 'ecommerceIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -16818,6 +16890,7 @@
                 profileIQ: 'Profile IQ: Build and analyze custom audience profiles based on engagement and behavior.',
                 subscriberIQ: 'Subscriber IQ: Explore subscriber demographics, retention, and engagement metrics.',
                 roasIQ: 'ROAS IQ: Analyze marketing attribution (UTM, click IDs) for any audience by search terms.',
+                ecommerceIQ: 'E-Commerce IQ: Analyze product page views, cart adds, and purchases for any audience by search terms.',
                 llmoIQ: 'LLMO IQ: Analyze AI platform usage, attribution, and search behavior across LLMs.',
                 rankerIQ: 'Ranker: Compare and rank titles, genres, or properties by performance.',
                 ticketSalesIQ: 'Impact IQ: Measure impact and performance of titles via ticket sales and engagement.',
@@ -17539,6 +17612,13 @@
             var opt = dd ? dd.querySelector('option[value="roasIQ"]') : null;
             if (opt && opt.disabled) return;
             refreshRoasIQList();
+        };
+
+        window.showEcommerceIQ = function() {
+            var dd = document.getElementById('viewNavDropdown');
+            var opt = dd ? dd.querySelector('option[value="ecommerceIQ"]') : null;
+            if (opt && opt.disabled) return;
+            refreshEcomIQList();
         };
 
         window.showSubscriberIQ = function() {
@@ -35648,6 +35728,88 @@
             }
         }
         // ===================== END ROAS IQ =====================
+
+        // ===================== E-COMMERCE IQ =====================
+        let _ecomIQPollingId = null;
+
+        function refreshEcomIQList() {
+            fetch('/api/ecommerce-iq/list').then(r => r.json()).then(data => {
+                const el = document.getElementById('ecomIQResultsList');
+                if (!el) return;
+                const files = (data.files || []);
+                if (!files.length) { el.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No results yet. Run an analysis.</div>'; return; }
+                el.innerHTML = files.map(f => `<div class="profile-tree-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="loadEcomIQResult('${f.key}')">${f.name}</div>`).join('');
+            }).catch(() => {});
+        }
+
+        function submitEcomIQ() {
+            const pn = document.getElementById('ecomIQProjectName').value.trim();
+            const st = document.getElementById('ecomIQSearchTerms').value.trim();
+            const sd = document.getElementById('ecomIQStartDate').value;
+            const ed = document.getElementById('ecomIQEndDate').value;
+            if (!pn || !st || !sd || !ed) { alert('Please fill in all fields.'); return; }
+            document.getElementById('ecomIQSubmitBtn').disabled = true;
+            document.getElementById('ecomIQStatus').style.display = '';
+            document.getElementById('ecomIQStatusText').textContent = 'Submitting...';
+            document.getElementById('ecomIQProgressBar').style.width = '0%';
+            fetch('/api/ecommerce-iq/submit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ project_name:pn, search_terms:st, start_date:sd, end_date:ed }) })
+                .then(r => r.json()).then(data => {
+                    if (data.error) { document.getElementById('ecomIQStatusText').textContent = 'Error: ' + data.error; document.getElementById('ecomIQSubmitBtn').disabled = false; return; }
+                    _pollEcomIQ(data.job_id);
+                }).catch(e => { document.getElementById('ecomIQStatusText').textContent = 'Submit failed'; document.getElementById('ecomIQSubmitBtn').disabled = false; });
+        }
+
+        function _pollEcomIQ(jobId) {
+            if (_ecomIQPollingId) clearInterval(_ecomIQPollingId);
+            _ecomIQPollingId = setInterval(() => {
+                fetch('/api/job-status/' + jobId).then(r => r.json()).then(data => {
+                    document.getElementById('ecomIQStatusText').textContent = data.message || data.status;
+                    document.getElementById('ecomIQProgressBar').style.width = (data.progress || 0) + '%';
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        clearInterval(_ecomIQPollingId);
+                        document.getElementById('ecomIQSubmitBtn').disabled = false;
+                        if (data.status === 'completed' && data.s3_key) { loadEcomIQResult(data.s3_key); refreshEcomIQList(); }
+                    }
+                }).catch(() => {});
+            }, 2000);
+        }
+
+        function loadEcomIQResult(s3Key) {
+            fetch('/api/ecommerce-iq/results/' + encodeURIComponent(s3Key)).then(r => r.json()).then(resp => {
+                if (!resp.success || !resp.data) return;
+                renderEcomIQDashboard(resp.data);
+            }).catch(() => {});
+        }
+
+        function _ecomIQTable(items, elId) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            if (!items.length) { el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);font-size:13px;">No data</div>'; return; }
+            const rows = items.map((item, i) => '<tr><td style="padding:8px 10px;color:var(--text-secondary);width:30px;">'+(i+1)+'</td><td style="padding:8px 10px;font-weight:600;">'+item.store+'</td><td style="padding:8px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+item.slug+'">'+(item.slug||'/')+'</td><td style="padding:8px 10px;text-align:right;">'+item.pct.toFixed(2)+'%</td><td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">'+(item.raw||0).toLocaleString()+'</td></tr>').join('');
+            el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 10px;width:30px;">#</th><th style="padding:8px 10px;text-align:left;">Store</th><th style="padding:8px 10px;text-align:left;">Product / Path</th><th style="padding:8px 10px;text-align:right;">% of Audience</th><th style="padding:8px 10px;text-align:right;">Users</th></tr></thead><tbody>'+rows+'</tbody></table>';
+        }
+
+        function renderEcomIQDashboard(data) {
+            document.getElementById('ecomIQEmpty').style.display = 'none';
+            document.getElementById('ecomIQDashboard').style.display = '';
+            const results = data.results || [];
+            const headerEl = document.getElementById('ecomIQDashHeader');
+            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;"><h2 style="margin:0;font-size:1.25rem;">🛒 ' + (data.project_name||'E-Commerce IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' &middot; ' + (data.uid_count||0).toLocaleString() + ' UIDs</span></div>';
+
+            const pdps = results.filter(r=>r.stage==='PDP').sort((a,b)=>b.pct-a.pct);
+            const carts = results.filter(r=>r.stage==='CART').sort((a,b)=>b.pct-a.pct);
+            const purchases = results.filter(r=>r.stage==='PURCHASE').sort((a,b)=>b.pct-a.pct);
+            const stores = new Set(results.map(r=>r.store));
+
+            const statsEl = document.getElementById('ecomIQStats');
+            if (statsEl) statsEl.innerHTML = '<div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Product Pages</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+pdps.length.toLocaleString()+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Add-to-Cart</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+carts.length.toLocaleString()+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Purchases</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+purchases.length.toLocaleString()+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:1.25rem;border:1px solid var(--border-color);text-align:center;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Stores</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+stores.size+'</div></div>';
+
+            _ecomIQTable(pdps.slice(0,10), 'ecomIQTopPdp');
+            _ecomIQTable(pdps.length > 10 ? pdps.slice(-10).reverse() : [], 'ecomIQBottomPdp');
+            _ecomIQTable(carts.slice(0,10), 'ecomIQCart');
+            _ecomIQTable(purchases.slice(0,10), 'ecomIQPurchase');
+        }
+        // ===================== END E-COMMERCE IQ =====================
 
         function renderBehavioralCards(behavioral, highlightCategory = null, skipAggregation = false) {
             let aggregatedBehavioral;
