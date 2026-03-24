@@ -20083,26 +20083,24 @@ def _run_roas_iq(job_id):
             except Exception:
                 continue
 
+        uid_confirmation_count = {}
+        for cd in conversion_details:
+            uid = cd['uid']
+            uid_confirmation_count[uid] = uid_confirmation_count.get(uid, 0) + 1
+
         update_job_status(job_id, progress=75, message='Building results...')
         ranked = sorted(channel_source_uids.items(), key=lambda x: -len(x[1]))[:300]
         results = []
-        total_converted_in_ads = 0
         total_ad_uids = set()
-        overall_conv_uids = set()
+        total_confirmations_all = 0
         for (channel, source), uid_set in ranked:
             cnt = len(uid_set)
-            conv_cnt = 0
-            for uid in uid_set:
-                uid_ad_domains = uid_source_domains.get(((channel, source), uid), set())
-                uid_purchase_domains = uid_conv_domains.get(uid, set())
-                if uid_ad_domains & uid_purchase_domains:
-                    conv_cnt += 1
-                    overall_conv_uids.add(uid)
-            total_converted_in_ads += conv_cnt
+            confirmations = sum(uid_confirmation_count.get(uid, 0) for uid in uid_set)
+            total_confirmations_all += confirmations
             total_ad_uids |= uid_set
             click_count = channel_source_clicks.get((channel, source), cnt)
             pct = round(100.0 * cnt / max(uid_count, 1), 4)
-            conv_rate = round(100.0 * conv_cnt / max(click_count, 1), 2)
+            conv_rate = round(100.0 * confirmations / max(click_count, 1), 2)
             family = _get_source_family(source.lower().replace(' ', '_')) or source
             top_dom = ''
             sd = source_domains.get((channel, source), {})
@@ -20113,16 +20111,15 @@ def _run_roas_iq(job_id):
                 'pct': pct, 'raw': cnt,
                 'click_count': click_count,
                 'projected': _project_to_us_pop(cnt),
-                'conversions': conv_cnt,
-                'projected_conversions': _project_to_us_pop(conv_cnt),
+                'conversions': confirmations,
+                'projected_conversions': _project_to_us_pop(confirmations),
                 'conv_rate': conv_rate,
                 'top_domain': top_dom,
             })
 
         overall_ad_uid_count = len(total_ad_uids)
-        overall_conv_count = len(overall_conv_uids)
         total_classified_clicks = sum(channel_source_clicks.values())
-        overall_conv_rate = round(100.0 * overall_conv_count / max(total_classified_clicks, 1), 2)
+        overall_conv_rate = round(100.0 * total_confirmations_all / max(total_classified_clicks, 1), 2)
 
         top_domains = {}
         for ch, doms in channel_domains.items():
@@ -20175,8 +20172,8 @@ def _run_roas_iq(job_id):
             'url_rows': len(rows),
             'total_classified_clicks': total_classified_clicks,
             'projected_classified_clicks': _project_to_us_pop(total_classified_clicks),
-            'total_converted': overall_conv_count,
-            'projected_converted': _project_to_us_pop(overall_conv_count),
+            'total_converted': total_confirmations_all,
+            'projected_converted': _project_to_us_pop(total_confirmations_all),
             'overall_conv_rate': overall_conv_rate,
             'results': results,
             'demographics': demo_data,
