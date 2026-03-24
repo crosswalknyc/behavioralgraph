@@ -661,6 +661,8 @@
         #talentTheaterIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #hedgeFundIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #ticketSalesTrackerView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
+        #roasIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
+        #ecommerceIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
         #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #llmoIQView .llmo-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
         #llmoIQView .llmo-table { width: 100%; font-size: 0.85rem; border-collapse: collapse; }
@@ -11998,6 +12000,8 @@
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
                             <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
+                            <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
+                            <option value="ecommerceIQ" {% if not has_ecommerce_iq_access %}disabled{% endif %}>🛒 E-Commerce IQ</option>
                             <option value="workspace">🗂️ Workspace</option>
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
@@ -15091,6 +15095,112 @@
             </div>
         </div><!-- End subscriberIQView -->
 
+        <!-- ROAS IQ VIEW -->
+        <div id="roasIQView">
+            <div class="dashboard-layout">
+                <div class="persistent-sidebar">
+                    <div class="sidebar-header-section">
+                        <h3>ROAS IQ Results</h3>
+                        <div style="display: flex; gap: 0.25rem; align-items: center;">
+                            <input type="text" id="roasIQSearchInput" placeholder="Search results..." class="sidebar-search has-tooltip" data-tooltip="Search ROAS IQ results by name." onkeyup="filterRoasIQResults()" style="flex: 1;">
+                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh result list" onclick="loadRoasIQProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                        </div>
+                    </div>
+                    <div id="roasIQProfileTree" class="profile-select-tree subscriber-shows-tree"></div>
+                </div>
+                <div class="dashboard-tab-content" id="roasIQDashboardContent" style="display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="roasIQEmptyState" class="dashboard-empty-state">
+                        <div class="empty-state-content">
+                            <div class="empty-state-icon">💰</div>
+                            <h2>Select a Result</h2>
+                            <p>Choose a ROAS IQ result from the sidebar to view channel attribution and ad-spend insights.</p>
+                        </div>
+                    </div>
+                    <div id="roasIQDashboardPanels" style="display: none; overflow-y: auto; flex: 1; padding: 1.5rem;">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-shrink: 0;">
+                            <h2 id="roasIQDashTitle" style="margin: 0; font-size: 1.35rem;">ROAS IQ</h2>
+                            <span id="roasIQDashMeta" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Total UIDs</div>
+                                <div id="roasIQKpiUids" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-lime);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">URLs Analyzed</div>
+                                <div id="roasIQKpiUrls" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-cyan);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Channels</div>
+                                <div id="roasIQKpiChannels" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange);"></div>
+                            </div>
+                        </div>
+                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+                            <h3>📊 Channel Mix</h3>
+                            <canvas id="roasIQChannelChart" height="260"></canvas>
+                        </div>
+                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                            <h3>📋 Attribution Detail</h3>
+                            <div id="roasIQDetailTable" style="overflow-x: auto;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End roasIQView -->
+
+        <!-- E-COMMERCE IQ VIEW -->
+        <div id="ecommerceIQView">
+            <div class="dashboard-layout">
+                <div class="persistent-sidebar">
+                    <div class="sidebar-header-section">
+                        <h3>E-Commerce IQ Results</h3>
+                        <div style="display: flex; gap: 0.25rem; align-items: center;">
+                            <input type="text" id="ecomIQSearchInput" placeholder="Search results..." class="sidebar-search has-tooltip" data-tooltip="Search E-Commerce IQ results by name." onkeyup="filterEcomIQResults()" style="flex: 1;">
+                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh result list" onclick="loadEcomIQProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                        </div>
+                    </div>
+                    <div id="ecomIQProfileTree" class="profile-select-tree subscriber-shows-tree"></div>
+                </div>
+                <div class="dashboard-tab-content" id="ecomIQDashboardContent" style="display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="ecomIQEmptyState" class="dashboard-empty-state">
+                        <div class="empty-state-content">
+                            <div class="empty-state-icon">🛒</div>
+                            <h2>Select a Result</h2>
+                            <p>Choose an E-Commerce IQ result from the sidebar to view purchase funnel and retailer insights.</p>
+                        </div>
+                    </div>
+                    <div id="ecomIQDashboardPanels" style="display: none; overflow-y: auto; flex: 1; padding: 1.5rem;">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-shrink: 0;">
+                            <h2 id="ecomIQDashTitle" style="margin: 0; font-size: 1.35rem;">E-Commerce IQ</h2>
+                            <span id="ecomIQDashMeta" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Total UIDs</div>
+                                <div id="ecomIQKpiUids" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-lime);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">URLs Analyzed</div>
+                                <div id="ecomIQKpiUrls" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-cyan);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Stages</div>
+                                <div id="ecomIQKpiStages" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange);"></div>
+                            </div>
+                        </div>
+                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+                            <h3>📊 Funnel Overview</h3>
+                            <canvas id="ecomIQFunnelChart" height="260"></canvas>
+                        </div>
+                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                            <h3>📋 E-Commerce Detail</h3>
+                            <div id="ecomIQDetailTable" style="overflow-x: auto;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End ecommerceIQView -->
+
         <!-- Subscriber IQ Compare All Modal -->
         <div id="subscriberCompareAllModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10050; overflow-y: auto; align-items: flex-start; justify-content: center; padding: 2rem 1rem;">
             <div style="max-width: 1200px; width: 100%; background: var(--bg-card); border-radius: 12px; padding: 1.5rem; position: relative; margin: 0 auto;">
@@ -16723,7 +16833,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -16757,6 +16867,8 @@
                 ticketSalesIQ: showTicketSalesIQ,
                 ticketSalesTracker: showTicketSalesTracker,
                 hedgeFundIQ: showHedgeFundIQ,
+                roasIQ: showRoasIQ,
+                ecommerceIQ: showEcommerceIQ,
                 dashboard: showDashboardView,
                 workspace: function() {
                     if (typeof showProfileIQ === 'function') showProfileIQ();
@@ -16787,12 +16899,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'roasIQView', 'ecommerceIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -16809,6 +16921,8 @@
                 ticketSalesIQ: 'Impact IQ: Measure impact and performance of titles via ticket sales and engagement.',
                 ticketSalesTracker: 'Ticket Sales Tracker: Track ticket sales and box office performance over time.',
                 hedgeFundIQ: 'Hedge Fund IQ: View hedge fund and institutional engagement and exposure.',
+                roasIQ: 'ROAS IQ: Analyze return on ad spend by channel, source, and campaign attribution.',
+                ecommerceIQ: 'E-Commerce IQ: Explore purchase funnel activity across retailers and product pages.',
                 workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
                 admin: 'Admin: Manage users, access, and system settings.',
@@ -17512,6 +17626,10 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const roasIQViewEl = document.getElementById('roasIQView');
+            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
+            const ecomIQViewEl = document.getElementById('ecommerceIQView');
+            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             hideLLMOIQView();
             
             // Load profiles
@@ -17549,6 +17667,10 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const roasIQViewEl = document.getElementById('roasIQView');
+            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
+            const ecomIQViewEl = document.getElementById('ecommerceIQView');
+            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             hideLLMOIQView();
             
             // Load subscriber profiles
@@ -17608,6 +17730,10 @@
             }
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const roasIQViewEl = document.getElementById('roasIQView');
+            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
+            const ecomIQViewEl = document.getElementById('ecommerceIQView');
+            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             hideLLMOIQView();
             
             // Load ranker data
@@ -17637,6 +17763,10 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const roasIQViewEl = document.getElementById('roasIQView');
+            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
+            const ecomIQViewEl = document.getElementById('ecommerceIQView');
+            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             hideLLMOIQView();
             loadTicketSalesProfiles();
         }
@@ -17664,6 +17794,10 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const roasIQViewEl = document.getElementById('roasIQView');
+            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
+            const ecomIQViewEl = document.getElementById('ecommerceIQView');
+            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             hideLLMOIQView();
             if (typeof loadTSTProfiles === 'function') loadTSTProfiles();
             checkProfileReleasedNotifications();
@@ -17694,6 +17828,10 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const roasIQViewEl = document.getElementById('roasIQView');
+            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
+            const ecomIQViewEl = document.getElementById('ecommerceIQView');
+            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             hideLLMOIQView();
             
             // Load tickers
@@ -17708,6 +17846,169 @@
             }
         }
         
+        // ====================================================================
+        // ROAS IQ - Top-level product view
+        // ====================================================================
+        var _roasIQViewChartInst = null;
+
+        window.showRoasIQ = function() {
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="roasIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('roasIQ');
+            if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
+            if (typeof loadAndApplyLiveFeatures === 'function') loadAndApplyLiveFeatures();
+            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView'].forEach(function(id) {
+                var el = document.getElementById(id); if (el) el.style.display = 'none';
+            });
+            hideLLMOIQView();
+            var rv = document.getElementById('roasIQView'); if (rv) rv.style.display = 'flex';
+            loadRoasIQProfiles();
+        }
+
+        function loadRoasIQProfiles() {
+            fetch('/api/roas-iq/list', { credentials:'same-origin' }).then(r => r.json()).then(data => {
+                var tree = document.getElementById('roasIQProfileTree');
+                if (!tree) return;
+                var files = (data.files || []);
+                if (!files.length) { tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No released results yet.</div>'; return; }
+                tree.innerHTML = files.map(function(f) {
+                    return '<div class="profile-tree-item" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;" onclick="selectRoasIQResult(\'' + f.key.replace(/'/g,"\\'") + '\')" title="' + f.last_modified + '">' + (f.name || f.key) + '</div>';
+                }).join('');
+            }).catch(function() {});
+        }
+
+        function filterRoasIQResults() {
+            var query = (document.getElementById('roasIQSearchInput')?.value || '').toLowerCase();
+            var items = document.getElementById('roasIQProfileTree')?.querySelectorAll('.profile-tree-item') || [];
+            items.forEach(function(el) { el.style.display = el.textContent.toLowerCase().includes(query) ? '' : 'none'; });
+        }
+
+        function selectRoasIQResult(key) {
+            document.querySelectorAll('#roasIQProfileTree .profile-tree-item').forEach(function(el) { el.classList.remove('active'); });
+            var items = document.querySelectorAll('#roasIQProfileTree .profile-tree-item');
+            items.forEach(function(el) { if (el.getAttribute('onclick')?.includes(key)) el.classList.add('active'); });
+            fetch('/api/roas-iq/results/' + encodeURIComponent(key), { credentials:'same-origin' }).then(function(r) { return r.json(); }).then(function(resp) {
+                if (!resp.success || !resp.data) return;
+                renderRoasIQViewDashboard(resp.data);
+            }).catch(function() {});
+        }
+
+        function renderRoasIQViewDashboard(data) {
+            document.getElementById('roasIQEmptyState').style.display = 'none';
+            document.getElementById('roasIQDashboardPanels').style.display = '';
+            var results = data.results || [];
+            document.getElementById('roasIQDashTitle').textContent = data.project_name || 'ROAS IQ';
+            document.getElementById('roasIQDashMeta').textContent = (data.search_terms||[]).join(', ') + ' \u00b7 ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' \u00b7 ' + (data.uid_count||0).toLocaleString() + ' UIDs';
+            document.getElementById('roasIQKpiUids').textContent = (data.uid_count||0).toLocaleString();
+            document.getElementById('roasIQKpiUrls').textContent = (data.url_rows||0).toLocaleString();
+            var channelMap = {};
+            var totalRaw = 0;
+            results.forEach(function(r) {
+                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalRaw:0, sources:{} };
+                channelMap[r.channel].totalPct += r.pct;
+                channelMap[r.channel].totalRaw += (r.raw||0);
+                totalRaw += (r.raw||0);
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, raw:0 };
+                channelMap[r.channel].sources[r.source].pct += r.pct;
+                channelMap[r.channel].sources[r.source].raw += (r.raw||0);
+            });
+            var channels = Object.entries(channelMap).sort(function(a,b) { return b[1].totalPct - a[1].totalPct; });
+            document.getElementById('roasIQKpiChannels').textContent = channels.length;
+            var canvas = document.getElementById('roasIQChannelChart');
+            if (canvas && typeof Chart !== 'undefined') {
+                if (_roasIQViewChartInst) _roasIQViewChartInst.destroy();
+                var colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+                _roasIQViewChartInst = new Chart(canvas.getContext('2d'), { type:'doughnut', data:{ labels:channels.map(function(c){return c[0];}), datasets:[{data:channels.map(function(c){return c[1].totalPct;}), backgroundColor:colors.slice(0,channels.length), borderWidth:0}] }, options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true,font:{size:11}}}}} });
+            }
+            var icons = {'Email':'\ud83d\udce7','Social Media':'\ud83d\udcf1','Digital Ads':'\ud83d\udcb0','Affiliate':'\ud83e\udd1d','Sms':'\ud83d\udcac','Influencer':'\u2b50','Push Notification':'\ud83d\udd14','Other':'\ud83d\udccb'};
+            var total = channels.reduce(function(s,c){return s+c[1].totalPct;},0)||1;
+            var rows = channels.map(function(pair) {
+                var n = pair[0], ch = pair[1];
+                var srcs = Object.entries(ch.sources).sort(function(a,b){return b[1].pct-a[1].pct;});
+                var srcRows = srcs.map(function(sp) { return '<tr style="background:var(--bg-body);"><td style="padding:4px 10px 4px 30px;color:var(--text-secondary);font-size:12px;">\u2514 '+sp[0]+'</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+sp[1].pct.toFixed(2)+'%</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+((sp[1].pct/total)*100).toFixed(1)+'%</td><td style="padding:4px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sp[1].raw.toLocaleString()+'</td></tr>'; }).join('');
+                return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'\ud83d\udccb')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalRaw.toLocaleString()+'</td></tr>' + srcRows;
+            }).join('');
+            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Touches</th></tr></thead><tbody>'+rows+'</tbody></table>';
+        }
+
+        // ====================================================================
+        // E-COMMERCE IQ - Top-level product view
+        // ====================================================================
+        var _ecomIQViewChartInst = null;
+
+        window.showEcommerceIQ = function() {
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="ecommerceIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('ecommerceIQ');
+            if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
+            if (typeof loadAndApplyLiveFeatures === 'function') loadAndApplyLiveFeatures();
+            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView'].forEach(function(id) {
+                var el = document.getElementById(id); if (el) el.style.display = 'none';
+            });
+            hideLLMOIQView();
+            var ev = document.getElementById('ecommerceIQView'); if (ev) ev.style.display = 'flex';
+            loadEcomIQProfiles();
+        }
+
+        function loadEcomIQProfiles() {
+            fetch('/api/ecommerce-iq/list', { credentials:'same-origin' }).then(r => r.json()).then(data => {
+                var tree = document.getElementById('ecomIQProfileTree');
+                if (!tree) return;
+                var files = (data.files || []);
+                if (!files.length) { tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No released results yet.</div>'; return; }
+                tree.innerHTML = files.map(function(f) {
+                    return '<div class="profile-tree-item" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;" onclick="selectEcomIQResult(\'' + f.key.replace(/'/g,"\\'") + '\')" title="' + f.last_modified + '">' + (f.name || f.key) + '</div>';
+                }).join('');
+            }).catch(function() {});
+        }
+
+        function filterEcomIQResults() {
+            var query = (document.getElementById('ecomIQSearchInput')?.value || '').toLowerCase();
+            var items = document.getElementById('ecomIQProfileTree')?.querySelectorAll('.profile-tree-item') || [];
+            items.forEach(function(el) { el.style.display = el.textContent.toLowerCase().includes(query) ? '' : 'none'; });
+        }
+
+        function selectEcomIQResult(key) {
+            document.querySelectorAll('#ecomIQProfileTree .profile-tree-item').forEach(function(el) { el.classList.remove('active'); });
+            var items = document.querySelectorAll('#ecomIQProfileTree .profile-tree-item');
+            items.forEach(function(el) { if (el.getAttribute('onclick')?.includes(key)) el.classList.add('active'); });
+            fetch('/api/ecommerce-iq/results/' + encodeURIComponent(key), { credentials:'same-origin' }).then(function(r) { return r.json(); }).then(function(resp) {
+                if (!resp.success || !resp.data) return;
+                renderEcomIQViewDashboard(resp.data);
+            }).catch(function() {});
+        }
+
+        function renderEcomIQViewDashboard(data) {
+            document.getElementById('ecomIQEmptyState').style.display = 'none';
+            document.getElementById('ecomIQDashboardPanels').style.display = '';
+            var results = data.results || [];
+            document.getElementById('ecomIQDashTitle').textContent = data.project_name || 'E-Commerce IQ';
+            document.getElementById('ecomIQDashMeta').textContent = (data.search_terms||[]).join(', ') + ' \u00b7 ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' \u00b7 ' + (data.uid_count||0).toLocaleString() + ' UIDs';
+            document.getElementById('ecomIQKpiUids').textContent = (data.uid_count||0).toLocaleString();
+            document.getElementById('ecomIQKpiUrls').textContent = (data.url_rows||0).toLocaleString();
+            var pdps = results.filter(function(r){return r.stage==='PDP';}).sort(function(a,b){return b.pct-a.pct;});
+            var carts = results.filter(function(r){return r.stage==='CART';}).sort(function(a,b){return b.pct-a.pct;});
+            var purchases = results.filter(function(r){return r.stage==='PURCHASE';}).sort(function(a,b){return b.pct-a.pct;});
+            var stages = new Set(results.map(function(r){return r.stage;}));
+            document.getElementById('ecomIQKpiStages').textContent = stages.size;
+            var canvas = document.getElementById('ecomIQFunnelChart');
+            if (canvas && typeof Chart !== 'undefined') {
+                if (_ecomIQViewChartInst) _ecomIQViewChartInst.destroy();
+                _ecomIQViewChartInst = new Chart(canvas.getContext('2d'), { type:'bar', data:{ labels:['Product Pages','Add-to-Cart','Purchases'], datasets:[{label:'Count',data:[pdps.length, carts.length, purchases.length], backgroundColor:['#6366f1','#f59e0b','#10b981'], borderWidth:0, borderRadius:6}] }, options:{responsive:true,maintainAspectRatio:true,scales:{y:{beginAtZero:true,ticks:{font:{size:11}}},x:{ticks:{font:{size:11}}}},plugins:{legend:{display:false}}} });
+            }
+            var buildTable = function(items) {
+                if (!items.length) return '<div style="text-align:center;padding:1.5rem;color:var(--text-secondary);font-size:13px;">No data</div>';
+                return '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 10px;width:30px;">#</th><th style="padding:8px 10px;text-align:left;">Store</th><th style="padding:8px 10px;text-align:left;">Product / Path</th><th style="padding:8px 10px;text-align:right;">% of Audience</th><th style="padding:8px 10px;text-align:right;">Users</th></tr></thead><tbody>' + items.map(function(item,i) { return '<tr><td style="padding:8px 10px;color:var(--text-secondary);width:30px;">'+(i+1)+'</td><td style="padding:8px 10px;font-weight:600;">'+item.store+'</td><td style="padding:8px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+item.slug+'">'+(item.slug||'/')+'</td><td style="padding:8px 10px;text-align:right;">'+item.pct.toFixed(2)+'%</td><td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">'+(item.raw||0).toLocaleString()+'</td></tr>'; }).join('') + '</tbody></table>';
+            };
+            var html = '';
+            html += '<h4 style="margin:1rem 0 0.5rem;">📦 Top Product Pages (PDP)</h4>' + buildTable(pdps.slice(0,15));
+            html += '<h4 style="margin:1.5rem 0 0.5rem;">🛒 Add-to-Cart</h4>' + buildTable(carts.slice(0,15));
+            html += '<h4 style="margin:1.5rem 0 0.5rem;">💳 Purchases</h4>' + buildTable(purchases.slice(0,15));
+            document.getElementById('ecomIQDetailTable').innerHTML = html;
+        }
+
         // ====================================================================
         // LLMO IQ - Large Language Model Optimization Dashboard
         // ====================================================================
@@ -19294,6 +19595,10 @@
             if (talentSearchView) talentSearchView.style.display = 'none';
             const talentTheaterView = document.getElementById('talentTheaterIQView');
             if (talentTheaterView) talentTheaterView.style.display = 'none';
+            const roasIQViewEl = document.getElementById('roasIQView');
+            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
+            const ecomIQViewEl = document.getElementById('ecommerceIQView');
+            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             hideLLMOIQView();
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) {
