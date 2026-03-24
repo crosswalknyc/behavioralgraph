@@ -38382,6 +38382,60 @@
             return null;
         }
 
+        // Canonical 210 DMAs from match sheet — only these are displayed
+        const CANONICAL_DMA_STATE = {"Abilene Sweetwater":"TX","Albany":"GA","Albany Schenectady Troy":"NY","Albuquerque Santa Fe":"NM","Alexandria":"LA","Alpena":"MI","Amarillo":"TX","Anchorage":"AK","Atlanta":"GA","Augusta Aiken SC":"GA","Austin":"TX","Bakersfield":"CA","Baltimore":"MD","Bangor":"ME","Baton Rouge":"LA","Beaumont Port Arthur":"TX","Bend":"OR","Billings":"MT","Biloxi Gulfport":"MS","Binghamton":"NY","Birmingham":"AL","Bismarck Minot Dickinson":"ND","Bluefield Beckley Oak Hill":"WV","Boise":"ID","Boston":"MA","Bowling Green":"KY","Buffalo":"NY","Burlington Plattsburgh NY":"VT","Butte Bozeman":"MT","Casper Riverton":"WY","Cedar Rapids Waterloo Iowa City Dubuque":"IA","Champaign Springfield Decatur":"IL","Charleston":"SC","Charleston Huntington":"WV","Charlotte":"NC","Charlottesville":"VA","Chattanooga":"TN","Cheyenne Scottsbluff NE":"WY","Chicago":"IL","Chico Redding":"CA","Cincinnati":"OH","Clarksburg Weston":"WV","Cleveland Akron":"OH","Colorado Springs Pueblo":"CO","Columbia":"SC","Columbia Jefferson City":"MO","Columbus Opelika AL":"GA","Columbus":"OH","Columbus Tupelo West Point":"MS","Corpus Christi":"TX","Dallas Fort Worth":"TX","Davenport Rock Island Moline IL":"IA","Dayton":"OH","Denver":"CO","Des Moines Ames":"IA","Detroit":"MI","Dothan":"AL","Duluth Superior WI":"MN","El Paso":"TX","Elmira":"NY","Erie":"PA","Eugene":"OR","Eureka":"CA","Evansville":"IN","Fairbanks":"AK","Fargo":"ND","Flint Saginaw Bay City":"MI","Fresno Visalia":"CA","Fort Myers Naples":"FL","Fort Smith Fayetteville Springdale Rogers":"AR","Fort Wayne":"IN","Gainesville":"FL","Glendive":"MT","Grand Junction Montrose":"CO","Grand Rapids Kalamazoo Battle Creek":"MI","Great Falls":"MT","Green Bay Appleton":"WI","Greensboro High Point Winston Salem":"NC","Greenville New Bern Washington":"NC","Greenville Spartanburg Asheville NC Anderson":"SC","Greenwood Greenville":"MS","Harlingen Weslaco Brownsville McAllen":"TX","Harrisburg Lancaster Lebanon York":"PA","Harrisonburg":"VA","Hartford New Haven":"CT","Hattiesburg Laurel":"MS","Helena":"MT","Honolulu":"HI","Houston":"TX","Huntsville Decatur":"AL","Idaho Falls Pocatello":"ID","Indianapolis":"IN","Jackson MS":"MS","Jackson TN":"TN","Jacksonville":"FL","Johnstown Altoona State College":"PA","Jonesboro":"AR","Joplin Pittsburg KS":"MO","Juneau":"AK","Kansas City":"MO","Knoxville":"TN","La Crosse Eau Claire":"WI","Lafayette IN":"IN","Lafayette LA":"LA","Lake Charles":"LA","Lansing":"MI","Laredo":"TX","Las Vegas":"NV","Lexington":"KY","Lima":"OH","Lincoln Hastings Kearney":"NE","Little Rock Pine Bluff":"AR","Los Angeles":"CA","Louisville":"KY","Lubbock":"TX","Macon":"GA","Madison":"WI","Mankato":"MN","Marquette":"MI","Medford Klamath Falls":"OR","Memphis":"TN","Meridian":"MS","Miami Ft Lauderdale":"FL","Milwaukee":"WI","Minneapolis St Paul":"MN","Missoula":"MT","Mobile Pensacola FL":"AL","Monroe El Dorado AR":"LA","Monterey Salinas":"CA","Montgomery Selma":"AL","Myrtle Beach Florence":"SC","Nashville":"TN","New Orleans":"LA","New York":"NY","Norfolk Portsmouth Newport News":"VA","North Platte":"NE","Odessa Midland":"TX","Oklahoma City":"OK","Omaha":"NE","Orlando Daytona Beach Melbourne":"FL","Ottumwa Kirksville MO":"IA","Paducah Cape Girardeau MO Harrisburg IL":"KY","Palm Springs":"CA","Panama City":"FL","Parkersburg":"WV","Peoria Bloomington":"IL","Philadelphia":"PA","Phoenix":"AZ","Pittsburgh":"PA","Portland":"OR","Portland Auburn":"ME","Presque Isle":"ME","Providence New Bedford MA":"RI","Quincy Hannibal MO Keokuk IA":"IL","Raleigh Durham":"NC","Rapid City":"SD","Reno":"NV","Richmond Petersburg":"VA","Roanoke Lynchburg":"VA","Rochester Mason City IA Austin":"MN","Rochester":"NY","Rockford":"IL","Sacramento Stockton Modesto":"CA","Salisbury":"MD","Salt Lake City":"UT","San Angelo":"TX","San Antonio":"TX","San Diego":"CA","San Francisco Oakland San Jose":"CA","Santa Barbara Santa Maria San Luis Obispo":"CA","Savannah":"GA","Seattle Tacoma":"WA","Sherman Ada OK":"TX","Shreveport":"LA","Sioux City":"IA","Sioux Falls":"SD","South Bend Elkhart":"IN","Spokane":"WA","Springfield":"MO","Springfield Holyoke":"MA","St Joseph":"MO","St Louis":"MO","Syracuse":"NY","Tallahassee Thomasville GA":"FL","Tampa St Petersburg":"FL","Terre Haute":"IN","Toledo":"OH","Topeka":"KS","Traverse City Cadillac":"MI","Tri Cities TN VA":"TN","Tucson":"AZ","Tulsa":"OK","Twin Falls":"ID","Tyler Longview":"TX","Utica":"NY","Victoria":"TX","Waco Temple Bryan":"TX","Washington":"DC","Watertown":"NY","Wausau Rhinelander":"WI","West Palm Beach Ft Pierce":"FL","Wheeling Steubenville OH":"WV","Wichita Falls Lawton OK":"TX","Wichita Hutchinson":"KS","Wilkes Barre Scranton Hazleton":"PA","Wilmington":"NC","Yakima Pasco Richland Kennewick":"WA","Youngstown":"OH","Yuma El Centro CA":"AZ","Zanesville":"OH"};
+        const CANONICAL_DMAS = ["Abilene Sweetwater","Albany","Albany Schenectady Troy","Albuquerque Santa Fe","Alexandria","Alpena","Amarillo","Anchorage","Atlanta","Augusta Aiken SC","Austin","Bakersfield","Baltimore","Bangor","Baton Rouge","Beaumont Port Arthur","Bend","Billings","Biloxi Gulfport","Binghamton","Birmingham","Bismarck Minot Dickinson","Bluefield Beckley Oak Hill","Boise","Boston","Bowling Green","Buffalo","Burlington Plattsburgh NY","Butte Bozeman","Casper Riverton","Cedar Rapids Waterloo Iowa City Dubuque","Champaign Springfield Decatur","Charleston","Charleston Huntington","Charlotte","Charlottesville","Chattanooga","Cheyenne Scottsbluff NE","Chicago","Chico Redding","Cincinnati","Clarksburg Weston","Cleveland Akron","Colorado Springs Pueblo","Columbia","Columbia Jefferson City","Columbus Opelika AL","Columbus","Columbus Tupelo West Point","Corpus Christi","Dallas Fort Worth","Davenport Rock Island Moline IL","Dayton","Denver","Des Moines Ames","Detroit","Dothan","Duluth Superior WI","El Paso","Elmira","Erie","Eugene","Eureka","Evansville","Fairbanks","Fargo","Flint Saginaw Bay City","Fresno Visalia","Fort Myers Naples","Fort Smith Fayetteville Springdale Rogers","Fort Wayne","Gainesville","Glendive","Grand Junction Montrose","Grand Rapids Kalamazoo Battle Creek","Great Falls","Green Bay Appleton","Greensboro High Point Winston Salem","Greenville New Bern Washington","Greenville Spartanburg Asheville NC Anderson","Greenwood Greenville","Harlingen Weslaco Brownsville McAllen","Harrisburg Lancaster Lebanon York","Harrisonburg","Hartford New Haven","Hattiesburg Laurel","Helena","Honolulu","Houston","Huntsville Decatur","Idaho Falls Pocatello","Indianapolis","Jackson MS","Jackson TN","Jacksonville","Johnstown Altoona State College","Jonesboro","Joplin Pittsburg KS","Juneau","Kansas City","Knoxville","La Crosse Eau Claire","Lafayette IN","Lafayette LA","Lake Charles","Lansing","Laredo","Las Vegas","Lexington","Lima","Lincoln Hastings Kearney","Little Rock Pine Bluff","Los Angeles","Louisville","Lubbock","Macon","Madison","Mankato","Marquette","Medford Klamath Falls","Memphis","Meridian","Miami Ft Lauderdale","Milwaukee","Minneapolis St Paul","Missoula","Mobile Pensacola FL","Monroe El Dorado AR","Monterey Salinas","Montgomery Selma","Myrtle Beach Florence","Nashville","New Orleans","New York","Norfolk Portsmouth Newport News","North Platte","Odessa Midland","Oklahoma City","Omaha","Orlando Daytona Beach Melbourne","Ottumwa Kirksville MO","Paducah Cape Girardeau MO Harrisburg IL","Palm Springs","Panama City","Parkersburg","Peoria Bloomington","Philadelphia","Phoenix","Pittsburgh","Portland","Portland Auburn","Presque Isle","Providence New Bedford MA","Quincy Hannibal MO Keokuk IA","Raleigh Durham","Rapid City","Reno","Richmond Petersburg","Roanoke Lynchburg","Rochester Mason City IA Austin","Rochester","Rockford","Sacramento Stockton Modesto","Salisbury","Salt Lake City","San Angelo","San Antonio","San Diego","San Francisco Oakland San Jose","Santa Barbara Santa Maria San Luis Obispo","Savannah","Seattle Tacoma","Sherman Ada OK","Shreveport","Sioux City","Sioux Falls","South Bend Elkhart","Spokane","Springfield","Springfield Holyoke","St Joseph","St Louis","Syracuse","Tallahassee Thomasville GA","Tampa St Petersburg","Terre Haute","Toledo","Topeka","Traverse City Cadillac","Tri Cities TN VA","Tucson","Tulsa","Twin Falls","Tyler Longview","Utica","Victoria","Waco Temple Bryan","Washington","Watertown","Wausau Rhinelander","West Palm Beach Ft Pierce","Wheeling Steubenville OH","Wichita Falls Lawton OK","Wichita Hutchinson","Wilkes Barre Scranton Hazleton","Wilmington","Yakima Pasco Richland Kennewick","Youngstown","Yuma El Centro CA","Zanesville"];
+        const _canonNorm = {};
+        CANONICAL_DMAS.forEach(c => {
+            _canonNorm[c.toLowerCase().replace(/[^a-z0-9]/g, '')] = c;
+        });
+        function matchCanonicalDMA(rawName) {
+            if (!rawName) return null;
+            const norm = rawName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (_canonNorm[norm]) return _canonNorm[norm];
+            const words = rawName.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim().split(' ');
+            const primary = words.slice(0, 2).filter(w => w.length > 1).join('');
+            let best = null, bestLen = 0;
+            for (const [k, v] of Object.entries(_canonNorm)) {
+                if (k.startsWith(primary) && k.length > bestLen) { best = v; bestLen = k.length; }
+                if (!best && norm.startsWith(k.substring(0, Math.min(k.length, 8)))) { best = v; bestLen = k.length; }
+            }
+            return best;
+        }
+        function condenseDMALocations(locations) {
+            const buckets = {};
+            let unmatchedPct = 0;
+            locations.forEach(loc => {
+                const canon = matchCanonicalDMA(loc.name);
+                if (!canon) { unmatchedPct += (loc.pct || 0); return; }
+                if (!buckets[canon]) buckets[canon] = { name: canon, pct: 0, index: 0, genPopPct: 0, projection: 0, _count: 0 };
+                buckets[canon].pct += (loc.pct || 0);
+                buckets[canon].index += (loc.index || 0);
+                buckets[canon].genPopPct += (loc.genPopPct || 0);
+                buckets[canon].projection += (loc.projection || 0);
+                buckets[canon]._count++;
+            });
+            const arr = Object.values(buckets).map(b => {
+                b.index = b._count > 0 ? Math.round(b.index / b._count) : 100;
+                delete b._count;
+                return b;
+            });
+            const totalPct = arr.reduce((s, l) => s + l.pct, 0);
+            if (totalPct > 0 && Math.abs(totalPct - 100) > 0.01) {
+                const scale = 100 / totalPct;
+                arr.forEach(l => {
+                    l.pct *= scale;
+                    l.projection = Math.round(l.projection * scale);
+                });
+                const gpTotal = arr.reduce((s, l) => s + l.genPopPct, 0);
+                if (gpTotal > 0) {
+                    const gpScale = 100 / gpTotal;
+                    arr.forEach(l => { l.genPopPct *= gpScale; });
+                }
+            }
+            return arr;
+        }
+
         // Helper function to get DMA rank with fuzzy matching
         function getDMARank(dmaName) {
             if (dmaName == null || typeof dmaName !== 'string') return null;
@@ -38452,6 +38506,7 @@
         }
         
         function renderLocationTable(locations) {
+            locations = condenseDMALocations(locations);
             const isProjection = dashDisplayMode === 'projection';
             // Sort by index for ranking (higher index = over-indexes more)
             const sorted = [...locations].sort((a, b) => b.index - a.index);
@@ -48070,12 +48125,10 @@
         };
         
         function getStateFromLocation(locationName) {
+            if (CANONICAL_DMA_STATE[locationName]) return CANONICAL_DMA_STATE[locationName];
             const upper = locationName.toUpperCase();
-            // Check for state abbreviation at end
             const stateMatch = upper.match(/\b([A-Z]{2})$/);
             if (stateMatch) return stateMatch[1];
-            
-            // Check for known cities
             for (const [city, state] of Object.entries(STATE_ABBREVS)) {
                 if (upper.includes(city)) return state;
             }
