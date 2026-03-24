@@ -15123,7 +15123,7 @@
                         </div>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Total UIDs</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Projected US Consumers</div>
                                 <div id="roasIQKpiUids" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-lime);"></div>
                             </div>
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
@@ -17896,24 +17896,30 @@
             }).catch(function() {});
         }
 
+        function _roasProject(raw) {
+            return Math.round(raw * 15 / 10000000 * 329900000);
+        }
+
         function renderRoasIQViewDashboard(data) {
             document.getElementById('roasIQEmptyState').style.display = 'none';
             document.getElementById('roasIQDashboardPanels').style.display = '';
             var results = data.results || [];
+            var projUids = data.projected_uid_count || _roasProject(data.uid_count || 0);
             document.getElementById('roasIQDashTitle').textContent = data.project_name || 'ROAS IQ';
-            document.getElementById('roasIQDashMeta').textContent = (data.search_terms||[]).join(', ') + ' \u00b7 ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' \u00b7 ' + (data.uid_count||0).toLocaleString() + ' UIDs';
-            document.getElementById('roasIQKpiUids').textContent = (data.uid_count||0).toLocaleString();
+            document.getElementById('roasIQDashMeta').textContent = (data.search_terms||[]).join(', ') + ' \u00b7 ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' \u00b7 ' + projUids.toLocaleString() + ' Projected US Consumers';
+            document.getElementById('roasIQKpiUids').textContent = projUids.toLocaleString();
             document.getElementById('roasIQKpiUrls').textContent = (data.url_rows||0).toLocaleString();
             var channelMap = {};
-            var totalRaw = 0;
+            var totalProjected = 0;
             results.forEach(function(r) {
-                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalRaw:0, sources:{} };
+                var proj = r.projected || _roasProject(r.raw || 0);
+                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalProjected:0, sources:{} };
                 channelMap[r.channel].totalPct += r.pct;
-                channelMap[r.channel].totalRaw += (r.raw||0);
-                totalRaw += (r.raw||0);
-                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, raw:0 };
+                channelMap[r.channel].totalProjected += proj;
+                totalProjected += proj;
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, projected:0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
-                channelMap[r.channel].sources[r.source].raw += (r.raw||0);
+                channelMap[r.channel].sources[r.source].projected += proj;
             });
             var channels = Object.entries(channelMap).sort(function(a,b) { return b[1].totalPct - a[1].totalPct; });
             document.getElementById('roasIQKpiChannels').textContent = channels.length;
@@ -17928,10 +17934,10 @@
             var rows = channels.map(function(pair) {
                 var n = pair[0], ch = pair[1];
                 var srcs = Object.entries(ch.sources).sort(function(a,b){return b[1].pct-a[1].pct;});
-                var srcRows = srcs.map(function(sp) { return '<tr style="background:var(--bg-body);"><td style="padding:4px 10px 4px 30px;color:var(--text-secondary);font-size:12px;">\u2514 '+sp[0]+'</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+sp[1].pct.toFixed(2)+'%</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+((sp[1].pct/total)*100).toFixed(1)+'%</td><td style="padding:4px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sp[1].raw.toLocaleString()+'</td></tr>'; }).join('');
-                return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'\ud83d\udccb')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalRaw.toLocaleString()+'</td></tr>' + srcRows;
+                var srcRows = srcs.map(function(sp) { return '<tr style="background:var(--bg-body);"><td style="padding:4px 10px 4px 30px;color:var(--text-secondary);font-size:12px;">\u2514 '+sp[0]+'</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+sp[1].pct.toFixed(2)+'%</td><td style="padding:4px 10px;text-align:right;font-size:12px;">'+((sp[1].pct/total)*100).toFixed(1)+'%</td><td style="padding:4px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sp[1].projected.toLocaleString()+'</td></tr>'; }).join('');
+                return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'\ud83d\udccb')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td></tr>' + srcRows;
             }).join('');
-            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Touches</th></tr></thead><tbody>'+rows+'</tbody></table>';
+            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Projected US Consumers</th></tr></thead><tbody>'+rows+'</tbody></table>';
         }
 
         // ====================================================================
@@ -19725,25 +19731,55 @@
             document.getElementById('roasIQStatus').style.display = '';
             document.getElementById('roasIQStatusText').textContent = 'Submitting...';
             document.getElementById('roasIQProgressBar').style.width = '0%';
-            fetch('/api/roas-iq/submit', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ project_name: projectName, search_terms: searchTerms, start_date: startDate, end_date: endDate }) })
+            fetch('/api/roas-iq/submit', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin', body: JSON.stringify({ project_name: projectName, search_terms: searchTerms, start_date: startDate, end_date: endDate }) })
                 .then(r => r.json()).then(data => {
                     if (data.error) { document.getElementById('roasIQStatusText').textContent = 'Error: ' + data.error; document.getElementById('roasIQSubmitBtn').disabled = false; return; }
-                    _pollRoasIQ(data.job_id);
+                    showAnalysisStatusModal();
+                    _pollRoasIQ(data.job_id, data.project_name || projectName);
                 }).catch(() => { document.getElementById('roasIQStatusText').textContent = 'Submit failed'; document.getElementById('roasIQSubmitBtn').disabled = false; });
         }
 
-        function _pollRoasIQ(jobId) {
+        function _pollRoasIQ(jobId, projectName) {
             if (_roasIQPollingId) clearInterval(_roasIQPollingId);
+            var attempts = 0;
+            var maxAttempts = 600;
             _roasIQPollingId = setInterval(() => {
-                fetch('/api/job-status/' + jobId).then(r => r.json()).then(data => {
+                attempts++;
+                fetch('/api/job-status/' + jobId, { credentials: 'same-origin' }).then(r => {
+                    if (r.status === 401) {
+                        clearInterval(_roasIQPollingId);
+                        showAnalysisStatusModalError('Session expired. Please log in again.');
+                        setTimeout(function() { window.location.href = '/login'; }, 1500);
+                        return Promise.reject('auth');
+                    }
+                    return r.json();
+                }).then(data => {
+                    if (!data) return;
                     document.getElementById('roasIQStatusText').textContent = data.message || data.status;
                     document.getElementById('roasIQProgressBar').style.width = (data.progress || 0) + '%';
-                    if (data.status === 'completed' || data.status === 'failed') {
+                    if (document.getElementById('analysisStatusModal')?.classList.contains('active')) {
+                        updateAnalysisStatusModal({
+                            project_name: projectName || 'ROAS IQ',
+                            message: data.message || 'Processing...',
+                            progress: data.progress || 0
+                        });
+                    }
+                    if (data.status === 'completed') {
                         clearInterval(_roasIQPollingId);
                         document.getElementById('roasIQSubmitBtn').disabled = false;
-                        if (data.status === 'completed' && data.s3_key) { loadRoasIQResult(data.s3_key); refreshRoasIQList(); }
+                        closeAnalysisStatusModal();
+                        showAnalysisCompletePopup(jobId, data.s3_key, 'roas_iq');
+                        if (data.s3_key) { loadRoasIQResult(data.s3_key); refreshRoasIQList(); }
+                    } else if (data.status === 'failed') {
+                        clearInterval(_roasIQPollingId);
+                        document.getElementById('roasIQSubmitBtn').disabled = false;
+                        showAnalysisStatusModalError(data.error || data.message || 'Analysis failed');
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(_roasIQPollingId);
+                        document.getElementById('roasIQSubmitBtn').disabled = false;
+                        showAnalysisStatusModalError('Polling stopped after 20 minutes. The job may still be running.');
                     }
-                }).catch(() => {});
+                }).catch(e => { if (e !== 'auth') console.error('ROAS IQ poll error:', e); });
             }, 2000);
         }
 
@@ -19757,25 +19793,27 @@
         function renderRoasIQDashboard(data) {
             document.getElementById('roasIQDashboard').style.display = '';
             const results = data.results || [];
+            const projUids = data.projected_uid_count || _roasProject(data.uid_count || 0);
             const headerEl = document.getElementById('roasIQDashHeader');
-            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.25rem;">📊 ' + (data.project_name||'ROAS IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' &middot; ' + (data.uid_count||0).toLocaleString() + ' UIDs</span></div>';
+            if (headerEl) headerEl.innerHTML = '<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;"><h2 style="margin:0;font-size:1.25rem;">📊 ' + (data.project_name||'ROAS IQ') + '</h2><span style="color:var(--text-secondary);font-size:13px;">' + (data.search_terms||[]).join(', ') + ' &middot; ' + (data.start_date||'') + ' to ' + (data.end_date||'') + ' &middot; ' + projUids.toLocaleString() + ' Projected US Consumers</span></div>';
             const channelMap = {};
-            let totalRaw = 0;
+            let totalProjected = 0;
             results.forEach(r => {
-                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalRaw: 0 };
+                const proj = r.projected || _roasProject(r.raw || 0);
+                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalProjected: 0 };
                 channelMap[r.channel].totalPct += r.pct;
-                channelMap[r.channel].totalRaw += (r.raw||0);
-                totalRaw += (r.raw||0);
-                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, raw: 0 };
+                channelMap[r.channel].totalProjected += proj;
+                totalProjected += proj;
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, projected: 0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
-                channelMap[r.channel].sources[r.source].raw += (r.raw||0);
+                channelMap[r.channel].sources[r.source].projected += proj;
             });
             const channels = Object.entries(channelMap).sort((a,b) => b[1].totalPct - a[1].totalPct);
             const icons = {'Email':'📧','Social Media':'📱','Digital Ads':'💰','Affiliate':'🤝','Sms':'💬','Influencer':'⭐','Push Notification':'🔔','Other':'📋'};
             const statsEl = document.getElementById('roasIQStats');
             if (statsEl) {
                 const topCh = channels[0] ? channels[0][0] : 'N/A';
-                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Attributed Touches</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+totalRaw.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Sources</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+results.length+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Top Channel</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+(icons[topCh]||'📋')+' '+topCh+'</div></div>';
+                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Projected US Consumers</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+totalProjected.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Sources</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+results.length+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Top Channel</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+(icons[topCh]||'📋')+' '+topCh+'</div></div>';
             }
             const canvas = document.getElementById('roasIQChart');
             if (canvas && typeof Chart !== 'undefined') {
@@ -19786,16 +19824,16 @@
             const tableEl = document.getElementById('roasIQChannelTable');
             if (tableEl) {
                 const total = channels.reduce((s,c)=>s+c[1].totalPct,0)||1;
-                const rows = channels.map(([n,ch])=>'<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalRaw.toLocaleString()+'</td></tr>').join('');
-                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Touches</th></tr></thead><tbody>'+rows+'</tbody></table>';
+                const rows = channels.map(([n,ch])=>'<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td></tr>').join('');
+                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Projected US Consumers</th></tr></thead><tbody>'+rows+'</tbody></table>';
             }
             const cardsEl = document.getElementById('roasIQSourceCards');
             if (cardsEl) {
                 cardsEl.innerHTML = channels.map(([name,ch])=>{
                     const srcs = Object.entries(ch.sources).sort((a,b)=>b[1].pct-a[1].pct);
                     const chT = ch.totalPct||1;
-                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+d.raw.toLocaleString()+'</td></tr>').join('');
-                    return '<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;"><span style="font-size:1.5rem;">'+(icons[name]||'📋')+'</span><div><h3 style="margin:0;font-size:15px;">'+name+'</h3><span style="font-size:12px;color:var(--text-secondary);">'+ch.totalPct.toFixed(2)+'% pen · '+srcs.length+' sources</span></div></div><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;">Source</th><th style="padding:6px 10px;text-align:right;">Share</th><th style="padding:6px 10px;text-align:right;">Pen.</th><th style="padding:6px 10px;text-align:right;">Touches</th></tr></thead><tbody>'+sr+'</tbody></table></div>';
+                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+d.projected.toLocaleString()+'</td></tr>').join('');
+                    return '<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;"><span style="font-size:1.5rem;">'+(icons[name]||'📋')+'</span><div><h3 style="margin:0;font-size:15px;">'+name+'</h3><span style="font-size:12px;color:var(--text-secondary);">'+ch.totalPct.toFixed(2)+'% pen · '+srcs.length+' sources</span></div></div><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;">Source</th><th style="padding:6px 10px;text-align:right;">Share</th><th style="padding:6px 10px;text-align:right;">Pen.</th><th style="padding:6px 10px;text-align:right;">Projected US Consumers</th></tr></thead><tbody>'+sr+'</tbody></table></div>';
                 }).join('');
             }
         }
@@ -63567,7 +63605,8 @@
                 'svod_acquisition': '📺 Subscriber IQ',
                 'talent_theater': '🎬 Impact IQ',
                 'profile_analysis': '🎯 Profile Analysis',
-                'ticket_sales_tracker': '🎫 Ticket Sales Tracker'
+                'ticket_sales_tracker': '🎫 Ticket Sales Tracker',
+                'roas_iq': '📊 ROAS IQ'
             };
             document.getElementById('analysisCompleteType').textContent = typeLabels[analysisType] || '🎯 Profile Analysis';
             

@@ -1220,6 +1220,15 @@ CREDITS_TICKET_SALES_TRACKER = 10
 CREDITS_SVOD = 10
 CREDITS_CAMPAIGN_ROI = 5
 CREDITS_WATCH_TIME = 1
+CREDITS_ROAS_IQ = 8
+
+ROAS_BOOST_FACTOR = 15
+ROAS_SAMPLE_SIZE = 10_000_000
+US_POPULATION = 329_900_000
+
+def _project_to_us_pop(raw_count):
+    """Project a sample UID count to US gen pop estimate."""
+    return round(raw_count * ROAS_BOOST_FACTOR / ROAS_SAMPLE_SIZE * US_POPULATION)
 
 def _get_company_pool(data, company_name):
     """Return the company pool dict if the company has one, else None."""
@@ -19873,7 +19882,8 @@ def _run_roas_iq(job_id):
                               message='No matching UIDs found for those search terms.')
             return
 
-        update_job_status(job_id, progress=40, message=f'Found {uid_count:,} UIDs. Fetching UTM URLs...')
+        projected_uid_count = _project_to_us_pop(uid_count)
+        update_job_status(job_id, progress=40, message=f'Found {projected_uid_count:,} projected US consumers. Fetching UTM URLs...')
         cur.execute(f"""
             SELECT cf.URL, cf.UID
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
@@ -19919,7 +19929,7 @@ def _run_roas_iq(job_id):
         for (channel, source), uid_set in ranked:
             cnt = len(uid_set)
             pct = round(100.0 * cnt / max(uid_count, 1), 4)
-            results.append({'channel': channel, 'source': source, 'pct': pct, 'raw': cnt})
+            results.append({'channel': channel, 'source': source, 'pct': pct, 'raw': cnt, 'projected': _project_to_us_pop(cnt)})
 
         result_data = {
             'project_name': project_name,
@@ -19927,6 +19937,7 @@ def _run_roas_iq(job_id):
             'start_date': start_date,
             'end_date': end_date,
             'uid_count': uid_count,
+            'projected_uid_count': _project_to_us_pop(uid_count),
             'url_rows': len(rows),
             'results': results,
             'created_at': datetime.now().isoformat(),
@@ -20000,11 +20011,15 @@ def submit_roas_iq():
         if s3_client:
             _save_job_status_to_s3(job_id, jobs[job_id])
 
+        desc = f"ROAS IQ: {project_name} ({start_date}–{end_date})"
+        if not consume_credit(username, description=desc, job_id=job_id, pull_type='ROAS IQ', credits_used=CREDITS_ROAS_IQ):
+            return jsonify({'error': f'ROAS IQ requires {CREDITS_ROAS_IQ} credits. Insufficient credits.'}), 403
+
         thread = threading.Thread(target=_run_roas_iq, args=(job_id,))
         thread.daemon = True
         thread.start()
 
-        return jsonify({'job_id': job_id, 'message': 'ROAS IQ job submitted', 'status': 'queued'})
+        return jsonify({'job_id': job_id, 'message': 'ROAS IQ job submitted', 'status': 'queued', 'project_name': project_name})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
