@@ -20019,24 +20019,36 @@ def _run_roas_iq(job_id):
         update_job_status(job_id, progress=57, message='Fetching brand/retailer data from HOST_MAPPING...')
         brand_click_rows = []
         try:
-            cur.execute(f"""
-                SELECT m.Brand, cf.UID
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-                JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m
-                    ON LOWER(cf.COMMON_NAME) = LOWER(m.Brand)
-                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-                  AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                  AND (
+            cur.execute("""
+                CREATE OR REPLACE TEMP TABLE ROAS_BRAND_NAMES AS
+                SELECT DISTINCT LOWER(TRIM(pipe_split.value)) AS brand_lower,
+                       TRIM(pipe_split.value) AS brand_display
+                FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m,
+                     LATERAL FLATTEN(input => SPLIT(m.Brand, '|')) AS pipe_split
+                WHERE (
                     LOWER(m.Section) LIKE '%most purchased%'
                     OR LOWER(m.Section) LIKE '%where they shop%'
-                  )
+                )
+                AND TRIM(pipe_split.value) != ''
+            """)
+            brand_name_count = cur.execute("SELECT COUNT(*) FROM ROAS_BRAND_NAMES").fetchone()[0]
+            print(f"✅ HOST_MAPPING: found {brand_name_count} brand names in most-purchased/where-they-shop")
+
+            cur.execute(f"""
+                SELECT bn.brand_display, cf.UID
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+                JOIN ROAS_BRAND_NAMES bn
+                    ON LOWER(cf.COMMON_NAME) = bn.brand_lower
+                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+                  AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
                   AND cf.COMMON_NAME IS NOT NULL
                   AND cf.COMMON_NAME != ''
             """)
             brand_click_rows = cur.fetchall()
-            print(f"✅ HOST_MAPPING brand query returned {len(brand_click_rows)} rows")
+            print(f"✅ HOST_MAPPING brand query returned {len(brand_click_rows)} rows across audience")
         except Exception as e:
             print(f"⚠️ HOST_MAPPING brand query failed: {e}")
+            import traceback; traceback.print_exc()
 
         conn.close()
 
