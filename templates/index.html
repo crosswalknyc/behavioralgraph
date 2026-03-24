@@ -8079,6 +8079,10 @@
         #allLocationsContainer .location-row {
             grid-template-columns: 58px minmax(0, 1fr) 44px 80px 72px 72px 58px;
         }
+        #allLocationsContainer.hide-cw-gp .cw-gp-col { display: none; }
+        #allLocationsContainer.hide-cw-gp .location-row {
+            grid-template-columns: 58px minmax(0, 1fr) 44px 80px 72px 58px;
+        }
 
         .location-row.header {
             font-weight: 600;
@@ -14192,14 +14196,14 @@
                             <input type="text" id="locationSearchAll" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search All Locations" oninput="filterAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 120px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
                     </div>
-                    <div class="location-row header">
+                    <div class="location-row header" id="allLocationsHeader">
                         <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
                         <span>Location</span>
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                         <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
-                        <span class="has-tooltip" data-tooltip="Gen Pop % from our panel data" style="line-height:1.1;text-align:left;">Gen<br>Pop</span>
-                        <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Nielsen 2026)" style="line-height:1.1;text-align:left;">GP<br>Actual</span>
-                        <span class="index-col">Index</span>
+                        <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data" style="line-height:1.1;text-align:left;">CW<br>Gen Pop</span>
+                        <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)" style="line-height:1.1;text-align:left;">GP<br>Census</span>
+                        <span class="index-col has-tooltip" data-tooltip="CrossWalk Gen Pop Index">CW GP<br>Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
                     <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -34410,6 +34414,8 @@
                 // Render GP Actuals reference table for Occupation
                 const gpOccTable = document.getElementById('occupationGpActualsTable');
                 if (gpOccTable) {
+                    const showCwGp = !isGenPop;
+                    const occGridCols = showCwGp ? '1fr 62px 68px 72px 58px' : '1fr 62px 72px 58px';
                     const rows = occLabels.map(label => {
                         const profPct = demographics.occupation[label] || 0;
                         const genPopPct = demographicsGenPop.occupation?.[label] || 0;
@@ -34418,25 +34424,27 @@
                         const profStr = isProjection
                             ? formatNumber(Math.round((profPct / 100) * 329900000))
                             : profPct.toFixed(1) + '%';
-                        const gpStr = isProjection
+                        const cwGpStr = isProjection
                             ? formatNumber(Math.round((genPopPct / 100) * 329900000))
                             : genPopPct.toFixed(1) + '%';
-                        const gpActStr = gpActual != null ? gpActual.toFixed(1) + '%' : '—';
+                        const gpCensusStr = gpActual != null ? gpActual.toFixed(1) + '%' : '—';
                         const idxVal = Math.round(occIdx);
                         const idxColor = idxVal > 110 ? '#10b981' : idxVal < 90 ? '#ef4444' : 'var(--text-secondary)';
                         const idxStr = idxVal > 0 ? String(idxVal) : '—';
-                        return `<div style="display:grid;grid-template-columns:1fr 62px 62px 72px 48px;gap:0.25rem;padding:0.25rem 0.5rem;font-size:0.7rem;align-items:center;border-bottom:1px solid var(--border-color);">
+                        const cwGpCol = showCwGp ? `<span style="color:var(--text-secondary);text-align:right;">${cwGpStr}</span>` : '';
+                        return `<div style="display:grid;grid-template-columns:${occGridCols};gap:0.25rem;padding:0.25rem 0.5rem;font-size:0.7rem;align-items:center;border-bottom:1px solid var(--border-color);">
                             <span style="color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${label}">${label}</span>
                             <span style="color:var(--accent-cyan);font-weight:600;text-align:right;">${profStr}</span>
-                            <span style="color:var(--text-secondary);text-align:right;">${gpStr}</span>
-                            <span style="color:var(--text-secondary);text-align:right;">${gpActStr}</span>
+                            ${cwGpCol}
+                            <span style="color:var(--text-secondary);text-align:right;">${gpCensusStr}</span>
                             <span style="color:${idxColor};font-weight:600;text-align:right;">${idxStr}</span>
                         </div>`;
                     });
+                    const cwGpHeader = showCwGp ? '<span style="text-align:right;">CW Gen Pop</span>' : '';
                     gpOccTable.innerHTML = `
                         <div style="font-size:0.7rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:0.25rem;padding:0 0.5rem;">Gen Pop Actuals</div>
-                        <div style="display:grid;grid-template-columns:1fr 62px 62px 72px 48px;gap:0.25rem;padding:0.25rem 0.5rem;font-size:0.6rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;">
-                            <span>Occupation</span><span style="text-align:right;">Profile</span><span style="text-align:right;">Gen Pop</span><span style="text-align:right;">GP Actual</span><span style="text-align:right;">Index</span>
+                        <div style="display:grid;grid-template-columns:${occGridCols};gap:0.25rem;padding:0.25rem 0.5rem;font-size:0.6rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;">
+                            <span>Occupation</span><span style="text-align:right;">Profile</span>${cwGpHeader}<span style="text-align:right;">GP Census</span><span style="text-align:right;">CW GP Index</span>
                         </div>
                         ${rows.join('')}`;
                 }
@@ -38694,6 +38702,10 @@
             }
             
             // Render ALL locations
+            const _locIsGenPop = isSelectedProfileGenPop();
+            const _locShowCwGp = !_locIsGenPop;
+            const locContainer = document.getElementById('allLocationsContainer');
+            if (locContainer) locContainer.classList.toggle('hide-cw-gp', !_locShowCwGp);
             document.getElementById('locationListAll').innerHTML = sortedAll.map((loc, i) => {
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
@@ -38711,7 +38723,7 @@
                         <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
-                        <span style="color: var(--text-secondary);">${genPopDisplay}</span>
+                        <span class="cw-gp-col" style="color: var(--text-secondary);">${genPopDisplay}</span>
                         <span style="color: var(--text-secondary);">${gpStr}</span>
                         <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
                     </div>
