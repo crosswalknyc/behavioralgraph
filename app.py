@@ -19901,29 +19901,45 @@ def _run_roas_iq(job_id):
         """)
         rows = cur.fetchall()
 
-        update_job_status(job_id, progress=45, message='Detecting conversions...')
-        cur.execute(f"""
-            SELECT DISTINCT cf.UID
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-            WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-              AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-              AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
-              AND (
-                LOWER(cf.URL) LIKE '%thank%you%'
-                OR LOWER(cf.URL) LIKE '%thankyou%'
-                OR LOWER(cf.URL) LIKE '%order-confirm%'
-                OR LOWER(cf.URL) LIKE '%order_confirm%'
-                OR LOWER(cf.URL) LIKE '%purchase-complete%'
-                OR LOWER(cf.URL) LIKE '%purchase_complete%'
-                OR LOWER(cf.URL) LIKE '%checkout/success%'
-                OR LOWER(cf.URL) LIKE '%checkout/complete%'
-                OR LOWER(cf.URL) LIKE '%confirmation%'
-                OR LOWER(cf.URL) LIKE '%order_id=%'
-                OR LOWER(cf.URL) LIKE '%transaction_id=%'
-                OR LOWER(cf.URL) LIKE '%receipt%'
-              )
-        """)
-        converted_uids = set(r[0] for r in cur.fetchall())
+        update_job_status(job_id, progress=45, message='Loading purchase confirmation patterns...')
+        converted_uids = set()
+        conversion_details = []
+        try:
+            slugs_result = cur.execute("""
+                SELECT DISTINCT SLUGS
+                FROM BEHAVIORALGRAPH.PUBLIC.ORDER_CONFIRMS
+                WHERE SLUGS IS NOT NULL AND SLUGS != ''
+            """).fetchall()
+            slugs_list = [row[0] for row in slugs_result if row[0]]
+            if slugs_list:
+                slug_clauses = []
+                for slug in slugs_list:
+                    safe_slug = slug.lower().replace("'", "''").replace('%', '\\%').replace('_', '\\_')
+                    slug_clauses.append(f"LOWER(cf.URL) LIKE '%{safe_slug}%' ESCAPE '\\\\'")
+                slug_filter = ' OR '.join(slug_clauses)
+                update_job_status(job_id, progress=47, message=f'Scanning {len(slugs_list)} retailer confirmation patterns...')
+                cur.execute(f"""
+                    SELECT cf.UID, cf.URL
+                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+                    WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+                      AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                      AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
+                      AND ({slug_filter})
+                """)
+                conv_rows = cur.fetchall()
+                for uid, url in conv_rows:
+                    converted_uids.add(uid)
+                    try:
+                        _p = urlparse(url if '://' in url else 'https://' + url)
+                        domain = _p.netloc.lower().replace('www.', '')
+                        conversion_details.append({'uid': uid, 'domain': domain})
+                    except Exception:
+                        pass
+                print(f"✅ Found {len(converted_uids)} UIDs with verified purchase confirmations from {len(conv_rows)} URLs")
+            else:
+                print("⚠️ No ORDER_CONFIRMS slugs found")
+        except Exception as e:
+            print(f"⚠️ ORDER_CONFIRMS conversion query failed: {e}")
 
         update_job_status(job_id, progress=50, message='Pulling demographics for ad-exposed audience...')
         cur.execute("""
@@ -20067,11 +20083,28 @@ def _run_roas_iq(job_id):
 
         top_domains = {}
         for ch, doms in channel_domains.items():
-            top_domains[ch] = sorted(doms.items(), key=lambda x: -x[1])[:10]
+            top_domains[ch] = sorted(doms.items(), key=lambda x: -x[1])[:500]
 
         touch_vals = list(uid_touch_counts.values())
         avg_touches = round(sum(touch_vals) / max(len(touch_vals), 1), 1) if touch_vals else 0
         multi_touch_pct = round(100.0 * sum(1 for v in touch_vals if v > 1) / max(len(touch_vals), 1), 1) if touch_vals else 0
+
+        retailer_conversions = {}
+        for cd in conversion_details:
+            dom = cd['domain']
+            if dom:
+                if dom not in retailer_conversions:
+                    retailer_conversions[dom] = set()
+                retailer_conversions[dom].add(cd['uid'])
+        sales_conversions = []
+        for dom, uid_set in sorted(retailer_conversions.items(), key=lambda x: -len(x[1])):
+            cnt = len(uid_set)
+            sales_conversions.append({
+                'retailer': dom,
+                'buyers': cnt,
+                'projected_buyers': _project_to_us_pop(cnt),
+                'pct_of_audience': round(100.0 * cnt / max(uid_count, 1), 4),
+            })
 
         result_data = {
             'project_name': project_name,
@@ -20088,6 +20121,7 @@ def _run_roas_iq(job_id):
             'demographics': demo_data,
             'day_hour': day_hour_data,
             'top_domains': top_domains,
+            'sales_conversions': sales_conversions,
             'avg_touches_per_user': avg_touches,
             'multi_touch_pct': multi_touch_pct,
             'total_ad_users': overall_ad_uid_count,
