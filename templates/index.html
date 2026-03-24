@@ -16943,7 +16943,9 @@
                         ['rankerIQ', !!d.has_rankers_iq_access],
                         ['ticketSalesIQ', !!d.has_ticket_sales_iq_access],
                         ['ticketSalesTracker', !!d.has_ticket_sales_tracker_access],
-                        ['hedgeFundIQ', !!d.has_hedge_fund_iq_access]
+                        ['hedgeFundIQ', !!d.has_hedge_fund_iq_access],
+                        ['roasIQ', !!d.has_roas_iq_access],
+                        ['ecommerceIQ', !!d.has_ecommerce_iq_access]
                     ];
                     pairs.forEach(function (pv) {
                         var opt = viewDropdown.querySelector('option[value="' + pv[0] + '"]');

@@ -14699,6 +14699,8 @@ def release_purgatory_item():
                     print(f"✅ Saved SVOD category for {result} -> {svod_meta[result]['category']}")
                 except Exception as e:
                     print(f"⚠️ Failed to save SVOD category: {e}")
+            if source_type in ('roas_iq', 'ecommerce_iq') and result:
+                print(f"✅ Released {source_type} result: {result}")
             
             # Notify the creator: in-dashboard notification (with source_type); email only for Profile IQ
             created_by = item.get('created_by')
@@ -19871,10 +19873,25 @@ def _run_roas_iq(job_id):
 
         ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
         safe_name = project_name.replace(' ', '_')
-        s3_key = f"{ROAS_IQ_S3_PREFIX}{safe_name}_{ts}.json"
+        base_key = f"{ROAS_IQ_S3_PREFIX}{safe_name}_{ts}.json"
+        s3_key = S3_PURGATORY_PREFIX + base_key
+
+        update_job_status(job_id, progress=90, message='Uploading to purgatory...')
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
+
+        created_by = job.get('username', '')
+        purgatory_id = add_to_purgatory(
+            s3_key=s3_key,
+            bucket=S3_BUCKET,
+            created_by=created_by,
+            project_name=project_name,
+            category='ROAS IQ',
+            source_type='roas_iq'
+        )
+        jobs[job_id]['purgatory_id'] = purgatory_id
+        print(f"✅ ROAS IQ uploaded to purgatory: {s3_key}")
 
         update_job_status(job_id, status='completed', progress=100,
                           message=f'Done! {len(results)} attribution rows across {len(set(r["channel"] for r in results))} channels.',
@@ -19946,17 +19963,20 @@ def get_roas_iq_result(s3_key):
 @app.route('/api/roas-iq/list')
 @requires_auth
 def list_roas_iq():
-    """List all ROAS IQ result files."""
+    """List released (non-purgatory) ROAS IQ result files."""
     try:
-        resp = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=ROAS_IQ_S3_PREFIX)
+        paginator = s3_client.get_paginator('list_objects_v2')
         files = []
-        for obj in resp.get('Contents', []):
-            key = obj['Key']
-            if key.endswith('.json'):
-                name = key.replace(ROAS_IQ_S3_PREFIX, '').replace('.json', '').rsplit('_', 4)
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=ROAS_IQ_S3_PREFIX):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.json') or key.startswith(S3_PURGATORY_PREFIX):
+                    continue
+                name_part = key.replace(ROAS_IQ_S3_PREFIX, '').replace('.json', '')
+                display_name = re.sub(r'_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', '', name_part).replace('_', ' ')
                 files.append({
                     'key': key,
-                    'name': key.replace(ROAS_IQ_S3_PREFIX, '').replace('.json', ''),
+                    'name': display_name,
                     'last_modified': obj['LastModified'].isoformat(),
                     'size': obj['Size'],
                 })
@@ -20054,10 +20074,25 @@ def _run_ecommerce_iq(job_id):
 
         ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
         safe_name = project_name.replace(' ', '_')
-        s3_key = f"{ECOMMERCE_IQ_S3_PREFIX}{safe_name}_{ts}.json"
+        base_key = f"{ECOMMERCE_IQ_S3_PREFIX}{safe_name}_{ts}.json"
+        s3_key = S3_PURGATORY_PREFIX + base_key
+
+        update_job_status(job_id, progress=90, message='Uploading to purgatory...')
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
+
+        created_by = job.get('username', '')
+        purgatory_id = add_to_purgatory(
+            s3_key=s3_key,
+            bucket=S3_BUCKET,
+            created_by=created_by,
+            project_name=project_name,
+            category='E-Commerce IQ',
+            source_type='ecommerce_iq'
+        )
+        jobs[job_id]['purgatory_id'] = purgatory_id
+        print(f"✅ E-Commerce IQ uploaded to purgatory: {s3_key}")
 
         stages = set(r['stage'] for r in results)
         stores = set(r['store'] for r in results)
@@ -20131,16 +20166,20 @@ def get_ecommerce_iq_result(s3_key):
 @app.route('/api/ecommerce-iq/list')
 @requires_auth
 def list_ecommerce_iq():
-    """List all E-Commerce IQ result files."""
+    """List released (non-purgatory) E-Commerce IQ result files."""
     try:
-        resp = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=ECOMMERCE_IQ_S3_PREFIX)
+        paginator = s3_client.get_paginator('list_objects_v2')
         files = []
-        for obj in resp.get('Contents', []):
-            key = obj['Key']
-            if key.endswith('.json'):
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=ECOMMERCE_IQ_S3_PREFIX):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.json') or key.startswith(S3_PURGATORY_PREFIX):
+                    continue
+                name_part = key.replace(ECOMMERCE_IQ_S3_PREFIX, '').replace('.json', '')
+                display_name = re.sub(r'_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', '', name_part).replace('_', ' ')
                 files.append({
                     'key': key,
-                    'name': key.replace(ECOMMERCE_IQ_S3_PREFIX, '').replace('.json', ''),
+                    'name': display_name,
                     'last_modified': obj['LastModified'].isoformat(),
                     'size': obj['Size'],
                 })
