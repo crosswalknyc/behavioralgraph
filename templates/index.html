@@ -28075,17 +28075,39 @@
                        (item.count || parseNumber(item.count) > 0);
             });
 
-            // Consolidate age data: group by display label so duplicate buckets are summed
+            // Consolidate age data: redistribute old brackets proportionally (same ratios as Profile IQ)
+            const _svodOldToNew = {
+                '<16': [['17 and Under', 1]], 'under 16': [['17 and Under', 1]],
+                '16-18': [['17 and Under', 0.67], ['18-24', 0.33]], '17-18': [['17 and Under', 0.67], ['18-24', 0.33]],
+                '19-20': [['18-24', 1]], '18-20': [['18-24', 1]],
+                '21-25': [['18-24', 0.8], ['25-34', 0.2]], '26-30': [['25-34', 1]],
+                '31-40': [['25-34', 0.4], ['35-44', 0.6]],
+                '41-49': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]],
+                '41-59': [['35-44', 0.21], ['45-54', 0.53], ['55-64', 0.26]],
+                '60+': [['55-64', 0.25], ['65 or Older', 0.75]],
+                '65+': [['55-64', 0.25], ['65 or Older', 0.75]],
+                'over 65': [['55-64', 0.25], ['65 or Older', 0.75]]
+            };
             const ageGroups = {};
             filteredAgeData.forEach(item => {
-                const ageRange = item.age_range || item.age || '';
-                const displayLabel = (typeof getAgeDisplayLabel === 'function') ? getAgeDisplayLabel(ageRange) : ageRange;
-                const normalizedKey = displayLabel.toUpperCase().trim();
-                if (!ageGroups[normalizedKey]) {
-                    ageGroups[normalizedKey] = { age_range: displayLabel, count: 0, gen_pop: 0 };
+                const ageRange = (item.age_range || item.age || '').trim();
+                const rawCount = parseNumber(item.count) || 0;
+                const rawGP = parseNumber(item.gen_pop) || parseNumber(item.genPop) || 0;
+                const mapping = _svodOldToNew[ageRange] || _svodOldToNew[ageRange.toLowerCase()];
+                if (mapping) {
+                    mapping.forEach(([bucket, ratio]) => {
+                        const key = bucket.toUpperCase();
+                        if (!ageGroups[key]) ageGroups[key] = { age_range: bucket, count: 0, gen_pop: 0 };
+                        ageGroups[key].count += Math.round(rawCount * ratio);
+                        ageGroups[key].gen_pop += Math.round(rawGP * ratio);
+                    });
+                } else {
+                    const displayLabel = (typeof getAgeDisplayLabel === 'function') ? getAgeDisplayLabel(ageRange) : ageRange;
+                    const key = displayLabel.toUpperCase().trim();
+                    if (!ageGroups[key]) ageGroups[key] = { age_range: displayLabel, count: 0, gen_pop: 0 };
+                    ageGroups[key].count += rawCount;
+                    ageGroups[key].gen_pop += rawGP;
                 }
-                ageGroups[normalizedKey].count += (parseNumber(item.count) || 0);
-                ageGroups[normalizedKey].gen_pop += (parseNumber(item.gen_pop) || parseNumber(item.genPop) || 0);
             });
             const ageTotalCount = Object.values(ageGroups).reduce((sum, g) => sum + g.count, 0);
             const validAgeData = Object.values(ageGroups)
