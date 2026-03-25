@@ -20151,6 +20151,8 @@ def _run_roas_iq(job_id):
         uid_touch_counts = {}
         source_domains = {}
         uid_source_domains = {}
+        ad_domain_uids = {}
+        ad_domain_clicks = {}
         for url, uid in rows:
             try:
                 p = urlparse(url if '://' in url else 'https://' + url)
@@ -20182,6 +20184,11 @@ def _run_roas_iq(job_id):
                     if usd_key not in uid_source_domains:
                         uid_source_domains[usd_key] = set()
                     uid_source_domains[usd_key].add(domain)
+
+                    ad_domain_clicks[domain] = ad_domain_clicks.get(domain, 0) + 1
+                    if domain not in ad_domain_uids:
+                        ad_domain_uids[domain] = set()
+                    ad_domain_uids[domain].add(uid)
 
                 uid_touch_counts[uid] = uid_touch_counts.get(uid, 0) + 1
             except Exception:
@@ -20243,23 +20250,54 @@ def _run_roas_iq(job_id):
                     verified_retailer_uids[dom] = set()
                 verified_retailer_uids[dom].add(cd['uid'])
 
-        brand_uids = {}
-        brand_clicks = {}
+        # Build brand display name lookup from HOST_MAPPING results
+        brand_display_names = {}
         for brand, uid in brand_click_rows:
-            brand_clicks[brand] = brand_clicks.get(brand, 0) + 1
-            if brand not in brand_uids:
-                brand_uids[brand] = set()
-            brand_uids[brand].add(uid)
+            bl = brand.lower().strip()
+            if bl and bl not in brand_display_names:
+                brand_display_names[bl] = brand
+
+        # Ad platforms / trackers / generic domains to exclude from brand list
+        _AD_PLATFORM_DOMAINS = {
+            'google.com', 'googleapis.com', 'gstatic.com', 'googlesyndication.com',
+            'googleadservices.com', 'googletagmanager.com', 'google-analytics.com',
+            'doubleclick.net', 'facebook.com', 'facebook.net', 'fbcdn.net', 'fb.com',
+            'instagram.com', 'twitter.com', 'x.com', 't.co', 'tiktok.com',
+            'snapchat.com', 'pinterest.com', 'linkedin.com', 'reddit.com',
+            'youtube.com', 'youtu.be', 'bing.com', 'yahoo.com', 'duckduckgo.com',
+            'amazon-adsystem.com', 'criteo.com', 'taboola.com', 'outbrain.com',
+            'adroll.com', 'demdex.net', 'adsrvr.org', 'rubiconproject.com',
+            'pubmatic.com', 'openx.net', 'casalemedia.com', 'bidswitch.net',
+            'cloudfront.net', 'akamaihd.net', 'cloudflare.com', 'jsdelivr.net',
+            'unpkg.com', 'cdnjs.cloudflare.com', 'bootstrapcdn.com',
+            'apple.com', 'icloud.com', 'microsoft.com', 'live.com', 'outlook.com',
+            'office.com', 'windows.net', 'msn.com',
+            'bit.ly', 'ow.ly', 'tinyurl.com', 'lnkd.in', 'goo.gl',
+            'mailchimp.com', 'sendgrid.net', 'constantcontact.com',
+            'hubspot.com', 'marketo.com', 'pardot.com', 'salesforce.com',
+            'segment.io', 'segment.com', 'mixpanel.com', 'amplitude.com',
+            'hotjar.com', 'optimizely.com', 'crazyegg.com',
+        }
 
         sales_conversions = []
-        for brand in sorted(brand_clicks, key=lambda b: -brand_clicks[b]):
-            uids = brand_uids[brand]
-            click_count = brand_clicks[brand]
+        for domain in sorted(ad_domain_clicks, key=lambda d: -ad_domain_clicks[d]):
+            if domain in _AD_PLATFORM_DOMAINS:
+                continue
+            # Skip very short or IP-like domains
+            if len(domain) < 4 or domain.replace('.', '').isdigit():
+                continue
+            uids = ad_domain_uids.get(domain, set())
+            click_count = ad_domain_clicks[domain]
             proj_clicks = _proj(click_count)
             verified_cnt = sum(1 for uid in uids if uid in uid_conv_domains)
             proj_verified = _proj(verified_cnt)
+            display_name = brand_display_names.get(domain.replace('.com', '').replace('.net', '').replace('.org', ''), domain)
+            if display_name == domain:
+                # Try matching the domain root against HOST_MAPPING brand names
+                domain_root = domain.split('.')[0] if '.' in domain else domain
+                display_name = brand_display_names.get(domain_root, domain)
             sales_conversions.append({
-                'retailer': brand,
+                'retailer': display_name,
                 'audience_uids': len(uids),
                 'duplicated_clicks': proj_clicks,
                 'pct_of_audience': round(100.0 * len(uids) / max(sampled_uid_count, 1), 4),
@@ -20267,6 +20305,8 @@ def _run_roas_iq(job_id):
                 'projected_buyers': proj_verified,
                 'conv_rate': round(100.0 * proj_verified / max(proj_clicks, 1), 2),
             })
+            if len(sales_conversions) >= 100:
+                break
 
         result_data = {
             'project_name': project_name,
