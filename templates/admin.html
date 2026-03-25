@@ -2124,6 +2124,7 @@
                                         <input type="checkbox" id="cdAanTicketSalesIQ" checked> Ticket Sales IQ
                                     </label>
                                 </div>
+                                <button class="btn btn-small btn-primary" style="margin-top: 0.4rem;" onclick="applyAccessToNewToAllUsers()">Apply to All Users in Company</button>
                             </div>
                             <!-- Default Credits -->
                             <div style="margin-bottom: 0.75rem;">
@@ -3843,6 +3844,37 @@
                     alert('Error: ' + (data.error || 'Unknown'));
                 }
             } catch (e) { alert('Failed to remove: ' + e.message); }
+        }
+
+        async function applyAccessToNewToAllUsers() {
+            if (!_currentCompany) return;
+            const aan = {
+                profile_iq: document.getElementById('cdAanProfileIQ').checked,
+                subscriber_iq: document.getElementById('cdAanSubscriberIQ').checked,
+                roas_iq: document.getElementById('cdAanImpactIQ').checked,
+                ecommerce_iq: document.getElementById('cdAanEcommerceIQ').checked,
+                llmo_iq: document.getElementById('cdAanLLMOIQ').checked,
+                hedge_fund_iq: document.getElementById('cdAanHedgeFundIQ').checked,
+                analysis_iq: document.getElementById('cdAanAnalysisIQ').checked,
+                rankers_iq: document.getElementById('cdAanRankersIQ').checked,
+                ticket_sales_tracker: document.getElementById('cdAanTicketSalesTracker').checked,
+                ticket_sales_iq: document.getElementById('cdAanTicketSalesIQ').checked,
+            };
+            if (!confirm(`Apply these "Access to New" settings to ALL users in "${_currentCompany}"?`)) return;
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/apply-auto-access-new`, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auto_access_new: aan })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert(data.message);
+                    loadUsers();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown'));
+                }
+            } catch (e) { alert('Failed: ' + e.message); }
         }
 
         async function resetCompanyUsers() {

@@ -3303,6 +3303,29 @@ def api_reset_company_users(company_name):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/companies/<path:company_name>/apply-auto-access-new', methods=['POST'])
+@requires_admin
+def api_apply_auto_access_new(company_name):
+    """Apply auto_access_new settings to all users in a company without touching other fields."""
+    try:
+        req = request.get_json() or {}
+        aan = req.get('auto_access_new', {})
+        if not aan:
+            return jsonify({'success': False, 'error': 'No auto_access_new data provided'}), 400
+        data = load_users()
+        users = data.get('users', {})
+        count = 0
+        for username, user in users.items():
+            if (user.get('company') or '').strip().lower() != company_name.strip().lower():
+                continue
+            user['auto_access_new'] = dict(aan)
+            count += 1
+        save_users(data)
+        return jsonify({'success': True, 'message': f'Applied Access to New settings to {count} user(s) in {company_name}', 'count': count})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/companies/<path:company_name>/reset-run-access', methods=['POST'])
 @requires_admin
 def api_reset_company_run_access(company_name):

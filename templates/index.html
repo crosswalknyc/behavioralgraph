@@ -15739,7 +15739,7 @@
                                         <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('total_sessions')" id="llmoTh_total_sessions">Total Sessions</th>
                                         <th class="llmo-ranker-th has-tooltip" data-tooltip="Average sessions per unique user for this LLM (platform) in the selected date range." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('avg_sess')" id="llmoTh_avg_sess">Avg sess./user</th>
                                         <th class="llmo-ranker-th" style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('session_share')" id="llmoTh_session_share">Session share</th>
-                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Share of matched Gen Pop category rows (SEARCH ENGINE/AI / STREAMING), normalized to 100% for apples-to-apples with Index." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('gp_cat')" id="llmoTh_gp_cat">GP cat. share</th>
+                                        <th class="llmo-ranker-th has-tooltip" data-tooltip="Gen Pop category share of displayed LLMs, rebased to 100%." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('gp_cat')" id="llmoTh_gp_cat">GP cat. share</th>
                                         <th class="llmo-ranker-th has-tooltip" data-tooltip="(% of AI users ÷ Gen Pop penetration) × 100 — same basis as brand/retailer index." style="padding: 0.5rem; text-align: right;" onclick="llmoRankerHeaderClick('index')" id="llmoTh_index">Index</th>
                                     </tr>
                                 </thead>
@@ -15750,10 +15750,8 @@
                         </div>
                     </div>
 
-                    <!-- Category Share Doughnut (Gen Pop matched shares when available) -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; align-items: center;">
-                        <h3 class="has-tooltip" style="margin: 0 0 0.35rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;" data-tooltip="When Gen Pop matches exist, slices use normalized Gen Pop category share (same rows as Index). Otherwise session share across LLMs.">Category share (Gen Pop matched)</h3>
-                        <p style="margin: 0 0 0.75rem 0; font-size: 0.72rem; color: var(--text-secondary); align-self: flex-start; line-height: 1.35;">Apples-to-apples with Index: GP category rows (SEARCH ENGINE/AI / STREAMING) normalized to 100%.</p>
+                        <h3 class="has-tooltip" style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600; align-self: flex-start;" data-tooltip="Gen Pop category share of displayed LLMs, rebased to 100%.">Category share</h3>
                         <canvas id="llmoCategoryShareChart" style="max-width: 320px; max-height: 320px;"></canvas>
                     </div>
                 </div>
@@ -18887,8 +18885,7 @@
                             callbacks: {
                                 label: function(ctx) {
                                     var pct = ctx.parsed;
-                                    var suf = useGp ? '% (Gen Pop cat. share)' : '% (session share)';
-                                    return ctx.label + ': ' + pct + suf;
+                                    return ctx.label + ': ' + pct + '%';
                                 }
                             }
                         }
