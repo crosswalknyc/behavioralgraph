@@ -28705,6 +28705,7 @@
             
             // Gender keywords to identify gender entries (OTHER excluded — filtered out entirely)
             const genderKeywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY'];
+            const _excludedDemoValues = new Set(['GENDER', 'N/A', 'OTHER', 'PREFER NOT TO SAY']);
             
             // Fallback: check if demographics is an array or object with different structure
             if (!ageData.length && !genderData.length && data.demographics) {
@@ -28822,7 +28823,6 @@
                 }))
                 .sort((a, b) => b.count - a.count);
             
-            const _excludedDemoValues = new Set(['GENDER', 'N/A', 'OTHER', 'PREFER NOT TO SAY']);
             const filteredGenderData = genderData.filter(item => {
                 const gender = (item.gender || '').trim();
                 const count = parseNumber(item.count) || 0;

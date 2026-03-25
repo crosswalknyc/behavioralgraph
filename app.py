@@ -2587,7 +2587,8 @@ def create_user():
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
             'has_llmo_iq_access': req_data.get('has_llmo_iq_access', cd.get('has_llmo_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
-            'has_purgatory_approval': False
+            'has_purgatory_approval': False,
+            'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
         }
         
         # Purgatory clearance: only super_admin can grant (or set on create)
@@ -2702,6 +2703,8 @@ def update_user(username):
             user['rankers_iq_options'] = req_data['rankers_iq_options']
         if 'has_llmo_iq_access' in req_data:
             user['has_llmo_iq_access'] = bool(req_data['has_llmo_iq_access'])
+        if 'auto_access_new' in req_data:
+            user['auto_access_new'] = req_data['auto_access_new']
         if 'collab_team' in req_data:
             user['collab_team'] = req_data['collab_team']
         # Activity CSV export (per user): emails comma-separated, cadence
