@@ -20196,15 +20196,15 @@ def _run_roas_iq(job_id):
         ranked = sorted(channel_source_uids.items(), key=lambda x: -len(x[1]))[:300]
         results = []
         total_ad_uids = set()
-        total_confirmations_all = 0
         for (channel, source), uid_set in ranked:
             cnt = len(uid_set)
-            confirmations = sum(uid_confirmation_count.get(uid, 0) for uid in uid_set)
-            total_confirmations_all += confirmations
+            unique_converters = sum(1 for uid in uid_set if uid_confirmation_count.get(uid, 0) > 0)
             total_ad_uids |= uid_set
             click_count = channel_source_clicks.get((channel, source), cnt)
+            projected_clicks = _proj(click_count)
+            projected_converters = _proj(unique_converters)
             pct = round(100.0 * cnt / max(sampled_uid_count, 1), 4)
-            conv_rate = round(100.0 * confirmations / max(click_count, 1), 2)
+            conv_rate = round(100.0 * projected_converters / max(projected_clicks, 1), 2)
             family = _get_source_family(source.lower().replace(' ', '_')) or source
             top_dom = ''
             sd = source_domains.get((channel, source), {})
@@ -20214,16 +20214,18 @@ def _run_roas_iq(job_id):
                 'channel': channel, 'source': source, 'family': family.title(),
                 'pct': pct, 'raw': cnt,
                 'click_count': click_count,
+                'projected_click_count': projected_clicks,
                 'projected': _proj(cnt),
-                'conversions': confirmations,
-                'projected_conversions': _proj(confirmations),
+                'conversions': unique_converters,
+                'projected_conversions': projected_converters,
                 'conv_rate': conv_rate,
                 'top_domain': top_dom,
             })
 
         overall_ad_uid_count = len(total_ad_uids)
         total_classified_clicks = sum(channel_source_clicks.values())
-        overall_conv_rate = round(100.0 * total_confirmations_all / max(total_classified_clicks, 1), 2)
+        total_unique_converters = sum(1 for uid in total_ad_uids if uid_confirmation_count.get(uid, 0) > 0)
+        overall_conv_rate = round(100.0 * _proj(total_unique_converters) / max(_proj(total_classified_clicks), 1), 2)
 
         top_domains = {}
         for ch, doms in channel_domains.items():
@@ -20277,8 +20279,8 @@ def _run_roas_iq(job_id):
             'url_rows': len(rows),
             'total_classified_clicks': total_classified_clicks,
             'projected_classified_clicks': _proj(total_classified_clicks),
-            'total_converted': total_confirmations_all,
-            'projected_converted': _proj(total_confirmations_all),
+            'total_converted': total_unique_converters,
+            'projected_converted': _proj(total_unique_converters),
             'overall_conv_rate': overall_conv_rate,
             'results': results,
             'demographics': demo_data,

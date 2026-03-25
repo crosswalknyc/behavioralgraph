@@ -18033,19 +18033,22 @@
             var totalProjected = 0;
             results.forEach(function(r) {
                 var proj = r.projected || _roasProject(r.raw || 0);
+                var projClicks = r.projected_click_count || _roasProject(r.click_count || r.raw || 0);
                 var projConv = r.projected_conversions || _roasProject(r.conversions || 0);
                 var clicks = r.click_count || r.raw || 0;
-                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalProjected:0, totalConv:0, totalProjConv:0, totalRaw:0, totalClicks:0, sources:{} };
+                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalProjected:0, totalProjClicks:0, totalConv:0, totalProjConv:0, totalRaw:0, totalClicks:0, sources:{} };
                 channelMap[r.channel].totalPct += r.pct;
                 channelMap[r.channel].totalProjected += proj;
+                channelMap[r.channel].totalProjClicks += projClicks;
                 channelMap[r.channel].totalConv += (r.conversions || 0);
                 channelMap[r.channel].totalProjConv += projConv;
                 channelMap[r.channel].totalRaw += (r.raw || 0);
                 channelMap[r.channel].totalClicks += clicks;
                 totalProjected += proj;
-                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, projected:0, convRate: 0, projConv: 0 };
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, projected:0, projClicks:0, convRate: 0, projConv: 0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
                 channelMap[r.channel].sources[r.source].projected += proj;
+                channelMap[r.channel].sources[r.source].projClicks += projClicks;
                 channelMap[r.channel].sources[r.source].convRate = r.conv_rate || 0;
                 channelMap[r.channel].sources[r.source].projConv += projConv;
             });
@@ -18104,7 +18107,7 @@
             var convCanvas = document.getElementById('roasIQConvChart');
             if (convCanvas && typeof Chart !== 'undefined') {
                 if (_roasIQViewConvInst) _roasIQViewConvInst.destroy();
-                var convRates = channels.map(function(c) { return c[1].totalClicks > 0 ? Math.round(10000.0 * c[1].totalConv / c[1].totalClicks) / 100 : 0; });
+                var convRates = channels.map(function(c) { return c[1].totalProjClicks > 0 ? Math.round(10000.0 * c[1].totalProjConv / c[1].totalProjClicks) / 100 : 0; });
                 _roasIQViewConvInst = new Chart(convCanvas.getContext('2d'), {
                     type: 'doughnut',
                     data: {
@@ -18131,19 +18134,19 @@
             results.forEach(function(r) {
                 var ch = r.channel;
                 var fam = r.family || r.source;
-                var proj = r.projected || _roasProject(r.raw || 0);
+                var projClicks = r.projected_click_count || _roasProject(r.click_count || r.raw || 0);
                 var projConv = r.projected_conversions || _roasProject(r.conversions || 0);
                 var clicks = r.click_count || r.raw || 0;
                 if (!channelFamilies[ch]) channelFamilies[ch] = {};
-                if (!channelFamilies[ch][fam]) channelFamilies[ch][fam] = { pct:0, projected:0, raw:0, clicks:0, conv:0, projConv:0, sources:{} };
+                if (!channelFamilies[ch][fam]) channelFamilies[ch][fam] = { pct:0, projClicks:0, raw:0, clicks:0, conv:0, projConv:0, sources:{} };
                 channelFamilies[ch][fam].pct += r.pct;
-                channelFamilies[ch][fam].projected += proj;
+                channelFamilies[ch][fam].projClicks += projClicks;
                 channelFamilies[ch][fam].raw += (r.raw||0);
                 channelFamilies[ch][fam].clicks += clicks;
                 channelFamilies[ch][fam].conv += (r.conversions||0);
                 channelFamilies[ch][fam].projConv += projConv;
                 if (r.source !== fam) {
-                    channelFamilies[ch][fam].sources[r.source] = { pct: r.pct, projected: proj, convRate: r.conv_rate||0, projConv: projConv, topDomain: r.top_domain||'' };
+                    channelFamilies[ch][fam].sources[r.source] = { pct: r.pct, projClicks: projClicks, convRate: r.conv_rate||0, projConv: projConv, topDomain: r.top_domain||'' };
                 }
             });
 
@@ -18151,28 +18154,28 @@
             var rowIdx = 0;
             channels.forEach(function(pair) {
                 var n = pair[0], ch = pair[1];
-                var chConvRate = ch.totalClicks > 0 ? (100.0 * ch.totalConv / ch.totalClicks).toFixed(2) : '0.00';
+                var chConvRate = ch.totalProjClicks > 0 ? (100.0 * ch.totalProjConv / ch.totalProjClicks).toFixed(2) : '0.00';
                 var chIdx = rowIdx++;
-                rowsHtml += '<tr style="cursor:pointer;border-bottom:1px solid var(--border-color);" data-roas-level="channel" data-roas-idx="'+chIdx+'" onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');var t=el.closest(\'tbody\');t.querySelectorAll(\'[data-roas-parent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';if(!show)r.setAttribute(\'data-open\',\'0\');if(!show){t.querySelectorAll(\'[data-roas-grandparent=\\\'\'+r.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(g){g.style.display=\'none\';});}});})(this)"><td style="padding:8px 12px;font-weight:700;">'+(icons[n]||'\ud83d\udccb')+' '+n+' <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">&#9654;</span></td><td style="padding:8px 12px;text-align:right;font-weight:600;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
+                rowsHtml += '<tr style="cursor:pointer;border-bottom:1px solid var(--border-color);" data-roas-level="channel" data-roas-idx="'+chIdx+'" onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');var t=el.closest(\'tbody\');t.querySelectorAll(\'[data-roas-parent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';if(!show)r.setAttribute(\'data-open\',\'0\');if(!show){t.querySelectorAll(\'[data-roas-grandparent=\\\'\'+r.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(g){g.style.display=\'none\';});}});})(this)"><td style="padding:8px 12px;font-weight:700;">'+(icons[n]||'\ud83d\udccb')+' '+n+' <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">&#9654;</span></td><td style="padding:8px 12px;text-align:right;font-weight:600;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjClicks.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
 
                 var families = channelFamilies[n] || {};
                 var famEntries = Object.entries(families).sort(function(a,b){return b[1].pct-a[1].pct;});
                 famEntries.forEach(function(fe) {
                     var fName = fe[0], fData = fe[1];
                     var srcEntries = Object.entries(fData.sources);
-                    var famConvRate = fData.clicks > 0 ? (100.0 * fData.conv / fData.clicks).toFixed(2) : '0.00';
+                    var famConvRate = fData.projClicks > 0 ? (100.0 * fData.projConv / fData.projClicks).toFixed(2) : '0.00';
                     var fIdx = rowIdx++;
                     var hasChildren = srcEntries.length > 0;
                     var clickHandler = hasChildren ? 'onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');el.closest(\'tbody\').querySelectorAll(\'[data-roas-grandparent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';});})(this)" style="cursor:pointer;display:none;"' : 'style="display:none;"';
-                    rowsHtml += '<tr data-roas-level="family" data-roas-parent="'+chIdx+'" data-roas-idx="'+fIdx+'" '+clickHandler+'><td style="padding:5px 10px 5px 28px;font-weight:600;font-size:13px;">'+fName+(hasChildren?' <span style="font-size:9px;color:var(--text-secondary);">&#9654;</span>':'')+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+fData.pct.toFixed(2)+'%</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+((fData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projected.toLocaleString()+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+famConvRate+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projConv.toLocaleString()+'</td></tr>';
+                    rowsHtml += '<tr data-roas-level="family" data-roas-parent="'+chIdx+'" data-roas-idx="'+fIdx+'" '+clickHandler+'><td style="padding:5px 10px 5px 28px;font-weight:600;font-size:13px;">'+fName+(hasChildren?' <span style="font-size:9px;color:var(--text-secondary);">&#9654;</span>':'')+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+fData.pct.toFixed(2)+'%</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+((fData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projClicks.toLocaleString()+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+famConvRate+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projConv.toLocaleString()+'</td></tr>';
 
                     srcEntries.sort(function(a,b){return b[1].pct-a[1].pct;}).forEach(function(se) {
                         var sName = se[0], sData = se[1];
-                        rowsHtml += '<tr data-roas-level="source" data-roas-grandparent="'+fIdx+'" style="display:none;background:var(--bg-body);"><td style="padding:3px 10px 3px 48px;color:var(--text-secondary);font-size:12px;">\u2514 '+sName+(sData.topDomain?' <span style="opacity:0.5;font-size:10px;">('+sData.topDomain+')</span>':'')+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.pct.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+((sData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projected.toLocaleString()+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.convRate.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projConv.toLocaleString()+'</td></tr>';
+                        rowsHtml += '<tr data-roas-level="source" data-roas-grandparent="'+fIdx+'" style="display:none;background:var(--bg-body);"><td style="padding:3px 10px 3px 48px;color:var(--text-secondary);font-size:12px;">\u2514 '+sName+(sData.topDomain?' <span style="opacity:0.5;font-size:10px;">('+sData.topDomain+')</span>':'')+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.pct.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+((sData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projClicks.toLocaleString()+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.convRate.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projConv.toLocaleString()+'</td></tr>';
                     });
                 });
             });
-            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Family / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>';
+            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Family / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Clicks</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>';
 
             // Engagement KPIs
             var avgTouchEl = document.getElementById('roasIQKpiAvgTouch');
@@ -20169,19 +20172,21 @@
             let totalProjected = 0;
             results.forEach(r => {
                 const proj = r.projected || _roasProject(r.raw || 0);
+                const projClicks = r.projected_click_count || _roasProject(r.click_count || r.raw || 0);
                 const projConv = r.projected_conversions || _roasProject(r.conversions || 0);
                 const clicks = r.click_count || r.raw || 0;
-                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalProjected: 0, totalConv: 0, totalProjConv: 0, totalRaw: 0, totalClicks: 0 };
+                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalProjected: 0, totalProjClicks: 0, totalConv: 0, totalProjConv: 0, totalRaw: 0, totalClicks: 0 };
                 channelMap[r.channel].totalPct += r.pct;
                 channelMap[r.channel].totalProjected += proj;
+                channelMap[r.channel].totalProjClicks += projClicks;
                 channelMap[r.channel].totalConv += (r.conversions || 0);
                 channelMap[r.channel].totalProjConv += projConv;
                 channelMap[r.channel].totalRaw += (r.raw || 0);
                 channelMap[r.channel].totalClicks += clicks;
                 totalProjected += proj;
-                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, projected: 0, convRate: 0, projConv: 0 };
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, projClicks: 0, convRate: 0, projConv: 0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
-                channelMap[r.channel].sources[r.source].projected += proj;
+                channelMap[r.channel].sources[r.source].projClicks += projClicks;
                 channelMap[r.channel].sources[r.source].convRate = r.conv_rate || 0;
                 channelMap[r.channel].sources[r.source].projConv += projConv;
             });
@@ -20203,17 +20208,17 @@
             if (tableEl) {
                 const total = channels.reduce((s,c)=>s+c[1].totalPct,0)||1;
                 const rows = channels.map(([n,ch])=>{
-                    const chConvRate = ch.totalClicks > 0 ? (100.0 * ch.totalConv / ch.totalClicks).toFixed(2) : '0.00';
-                    return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
+                    const chConvRate = ch.totalProjClicks > 0 ? (100.0 * ch.totalProjConv / ch.totalProjClicks).toFixed(2) : '0.00';
+                    return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjClicks.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
                 }).join('');
-                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rows+'</tbody></table>';
+                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Clicks</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rows+'</tbody></table>';
             }
             const cardsEl = document.getElementById('roasIQSourceCards');
             if (cardsEl) {
                 cardsEl.innerHTML = channels.map(([name,ch])=>{
                     const srcs = Object.entries(ch.sources).sort((a,b)=>b[1].pct-a[1].pct);
                     const chT = ch.totalPct||1;
-                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+d.projected.toLocaleString()+'</td><td style="padding:6px 10px;text-align:right;">'+d.convRate.toFixed(2)+'%</td></tr>').join('');
+                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+(d.projClicks||0).toLocaleString()+'</td><td style="padding:6px 10px;text-align:right;">'+d.convRate.toFixed(2)+'%</td></tr>').join('');
                     return '<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;"><span style="font-size:1.5rem;">'+(icons[name]||'📋')+'</span><div><h3 style="margin:0;font-size:15px;">'+name+'</h3><span style="font-size:12px;color:var(--text-secondary);">'+ch.totalPct.toFixed(2)+'% pen · '+srcs.length+' sources</span></div></div><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;">Source</th><th style="padding:6px 10px;text-align:right;">Share</th><th style="padding:6px 10px;text-align:right;">Pen.</th><th style="padding:6px 10px;text-align:right;">Proj. Consumers</th><th style="padding:6px 10px;text-align:right;">Conv.</th></tr></thead><tbody>'+sr+'</tbody></table></div>';
                 }).join('');
             }
