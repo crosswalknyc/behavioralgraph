@@ -15252,7 +15252,7 @@
                         <!-- Top Landing Domains -->
                         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
                             <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Landing Domains by Channel</h3>
-                            <div id="roasIQDomainsTable" style="overflow-x: auto;"></div>
+                            <div id="roasIQDomainsTable" style="overflow-x: auto; max-height: 600px; overflow-y: auto;"></div>
                         </div>
                         <!-- Attribution Detail Table -->
                         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
@@ -18258,7 +18258,7 @@
                         var doms = topDoms[ch] || [];
                         if (!doms.length) return;
                         domHtml += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;color:var(--text-secondary);">' + (icons[ch]||'') + ' ' + ch + ' <span style="font-size:11px;opacity:0.6;">(' + doms.length + ')</span></h4>';
-                        domHtml += '<div style="max-height:260px;overflow-y:auto;">';
+                        domHtml += '<div>';
                         domHtml += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
                         doms.forEach(function(pair, i) {
                             domHtml += '<tr><td style="padding:3px 6px;color:var(--text-secondary);width:28px;">' + (i+1) + '.</td><td style="padding:3px 6px;">' + pair[0] + '</td><td style="padding:3px 6px;text-align:right;color:var(--text-secondary);">' + pair[1].toLocaleString() + '</td></tr>';
