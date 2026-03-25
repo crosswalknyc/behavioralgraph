@@ -28846,13 +28846,12 @@
             // Normalize gender key function - handles all variations
             const normalizeGenderKey = (gender) => {
                 const normalized = gender.toUpperCase().trim().replace(/\s+/g, ' ');
-                // Handle common variations
-                if (normalized === 'MALE' || normalized.startsWith('MALE')) return 'MALE';
-                if (normalized === 'FEMALE' || normalized.startsWith('FEMALE')) return 'FEMALE';
-                if (normalized.includes('TRANS') && normalized.includes('MALE')) return 'TRANS MALE';
                 if (normalized.includes('TRANS') && normalized.includes('FEMALE')) return 'TRANS FEMALE';
+                if (normalized.includes('TRANS') && normalized.includes('MALE')) return 'TRANS MALE';
                 if (normalized.includes('NON') && normalized.includes('BINARY')) return 'NON-BINARY';
-                if (normalized.includes('PREFER') || normalized.includes('NOT') && normalized.includes('SAY')) return 'PREFER NOT TO SAY';
+                if (normalized.includes('PREFER') || (normalized.includes('NOT') && normalized.includes('SAY'))) return 'PREFER NOT TO SAY';
+                if (normalized === 'MALE' || normalized === 'M') return 'MALE';
+                if (normalized === 'FEMALE' || normalized === 'F') return 'FEMALE';
                 return normalized;
             };
             
@@ -30977,7 +30976,15 @@
                 const total = Object.values(bucket).reduce((s, v) => s + (v || 0), 0);
                 if (total > 0 && Math.abs(total - 100) > 0.5) {
                     const scale = 100 / total;
-                    for (const k of Object.keys(bucket)) bucket[k] = Math.round(bucket[k] * scale * 100) / 100;
+                    const gpBucket = result.demographicsGenPop?.[demoKey] || {};
+                    const idxBucket = result.demographicsIndex?.[demoKey];
+                    for (const k of Object.keys(bucket)) {
+                        bucket[k] = Math.round(bucket[k] * scale * 100) / 100;
+                        const gp = gpBucket[k] || 0;
+                        if (idxBucket && gp > 0) {
+                            idxBucket[k] = Math.round((bucket[k] / gp) * 100);
+                        }
+                    }
                 }
             });
 
@@ -32019,6 +32026,29 @@
             await loadDashboardProfiles();
         }
         
+        // Rebuild demographicsGenPop using the profile's own keys but values from the Gen Pop baseline.
+        // This avoids key-casing mismatches (e.g. 'FEMALE' in profile vs 'Female' in Gen Pop file).
+        function _rebuildDemoGenPop(profileDemo, gpDemo) {
+            const out = {};
+            for (const cat of Object.keys(profileDemo || {})) {
+                const bucket = profileDemo[cat];
+                const gpBucket = gpDemo[cat] || {};
+                if (!bucket || typeof bucket !== 'object') continue;
+                out[cat] = {};
+                for (const key of Object.keys(bucket)) {
+                    const keyLower = (key || '').toLowerCase();
+                    let val = gpBucket[key];
+                    if (val == null) {
+                        for (const [gk, gv] of Object.entries(gpBucket)) {
+                            if ((gk || '').toLowerCase() === keyLower) { val = gv; break; }
+                        }
+                    }
+                    out[cat][key] = val != null ? val : 0;
+                }
+            }
+            return out;
+        }
+
         async function loadDashboardProfiles() {
             const container = document.getElementById('dashProfileTree');
             
@@ -32082,10 +32112,13 @@
                 if (typeof loadGenPopBaseline === 'function') {
                     loadGenPopBaseline().then(() => {
                         if (currentDashboardData && genPopBaselineData) {
-                            renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, genPopBaselineData.demographics || {});
+                            // Rebuild demographicsGenPop using profile keys + fresh Gen Pop baseline values
+                            const freshGP = _rebuildDemoGenPop(currentDashboardData.demographics, genPopBaselineData.demographics || {});
+                            currentDashboardData.demographicsGenPop = freshGP;
+                            renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, freshGP);
                             if (currentDashboardData.behavioral) renderBehavioralCards(currentDashboardData.behavioral);
                             if (Array.isArray(currentDashboardData.locations)) renderLocationTable(currentDashboardData.locations);
-                            if (typeof renderDemoInsights === 'function') renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, genPopBaselineData.demographics || {});
+                            if (typeof renderDemoInsights === 'function') renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, freshGP);
                         }
                     });
                 }
