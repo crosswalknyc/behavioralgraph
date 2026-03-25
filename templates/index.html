@@ -18739,7 +18739,9 @@
                         return Number(r.category_share_genpop_normalized);
                     return null;
                 case 'index':
-                    if (r.index_vs_genpop != null && r.index_vs_genpop !== undefined) return Number(r.index_vs_genpop);
+                    var _gpN = (r.category_share_genpop_normalized != null) ? Number(r.category_share_genpop_normalized) : 0;
+                    var _ssN = Number(r.category_share) || 0;
+                    if (_gpN > 0 && _ssN > 0) return Math.round((_ssN / _gpN) * 100);
                     return null;
                 default: return 0;
             }
@@ -18823,9 +18825,12 @@
             var sorted = _llmoSortRankerRows(rows, _llmoRankerSortKey, _llmoRankerSortDir);
             var html = '';
             sorted.forEach(function(r, i) {
-                var gpPct = (r.category_share_genpop_normalized != null && r.category_share_genpop_normalized !== undefined)
-                    ? (r.category_share_genpop_normalized + '%') : '—';
-                var idx = (r.index_vs_genpop != null && r.index_vs_genpop !== undefined) ? formatIndex(r.index_vs_genpop) : '—';
+                var gpNorm = (r.category_share_genpop_normalized != null && r.category_share_genpop_normalized !== undefined)
+                    ? Number(r.category_share_genpop_normalized) : 0;
+                var gpPct = gpNorm > 0 ? (gpNorm + '%') : '—';
+                var sessShare = Number(r.category_share) || 0;
+                var calcIdx = (gpNorm > 0 && sessShare > 0) ? Math.round((sessShare / gpNorm) * 100) : 0;
+                var idx = calcIdx > 0 ? formatIndex(calcIdx) : '—';
                 var avgSu = (r.avg_sessions_per_user != null && r.avg_sessions_per_user !== undefined)
                     ? Number(r.avg_sessions_per_user).toFixed(2) : '—';
                 var dispNum = i + 1;
@@ -19373,10 +19378,20 @@
                 });
             }
 
+            var _gpTotalBrand = rows.reduce(function(s, r) {
+                var v = r.genpop_penetration != null ? Number(r.genpop_penetration) : 0;
+                return s + (v > 0 ? v : 0);
+            }, 0);
+            var _calcBrandIdx = function(r) {
+                var rawGP = r.genpop_penetration != null ? Number(r.genpop_penetration) : 0;
+                var gpPct = (_gpTotalBrand > 0 && rawGP > 0) ? (rawGP / _gpTotalBrand * 100) : 0;
+                var cs = Number(r.category_share) || 0;
+                return (gpPct > 0 && cs > 0) ? Math.round((cs / gpPct) * 100) : 0;
+            };
+
             var gpNum = function(r) { return r.genpop_penetration != null ? Number(r.genpop_penetration) : 0; };
-            var idxNum = function(r) { return r.index_vs_genpop != null ? Number(r.index_vs_genpop) : 0; };
             if (sortVal === 'index') {
-                rows.sort(function(a, b) { return idxNum(b) - idxNum(a); });
+                rows.sort(function(a, b) { return _calcBrandIdx(b) - _calcBrandIdx(a); });
             } else if (sortVal === 'genpop') {
                 if (isProj) {
                     rows.sort(function(a, b) {
@@ -19412,13 +19427,14 @@
                 listEl.innerHTML = '<div style="grid-column: 1 / -1; padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No brands match this slice or search.</div>';
             } else {
                 listEl.innerHTML = displayRows.map(function(item) {
-                    var index = item.index_vs_genpop != null ? Number(item.index_vs_genpop) : 0;
                     var rawGP = item.genpop_penetration != null ? Number(item.genpop_penetration) : 0;
                     var genPopPct = (_gpTotal > 0 && rawGP > 0) ? (rawGP / _gpTotal * 100) : 0;
                     var profilePct = item.pct_of_ai_users != null ? Number(item.pct_of_ai_users) : 0;
-                    var indexColor = index >= 100 ? '#10b981' : '#ef4444';
                     var hasShare = item.category_share != null && !isNaN(Number(item.category_share));
-                    var shareStr = hasShare ? Number(item.category_share).toFixed(2) + '%' : 'N/A';
+                    var catShare = hasShare ? Number(item.category_share) : 0;
+                    var index = (genPopPct > 0 && catShare > 0) ? Math.round((catShare / genPopPct) * 100) : 0;
+                    var indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                    var shareStr = hasShare ? catShare.toFixed(2) + '%' : 'N/A';
                     var profileDisplay = isProj
                         ? (!item.unique_users_projected ? 'N/A' : formatNumber(Math.round(item.unique_users_projected)))
                         : (hasShare ? shareStr : formatValueOrNA(profilePct, true));
@@ -19503,10 +19519,20 @@
                 });
             }
 
+            var _gpTotalRetailer = rows.reduce(function(s, r) {
+                var v = r.genpop_penetration != null ? Number(r.genpop_penetration) : 0;
+                return s + (v > 0 ? v : 0);
+            }, 0);
+            var _calcRetailerIdx = function(r) {
+                var rawGP = r.genpop_penetration != null ? Number(r.genpop_penetration) : 0;
+                var gpPct = (_gpTotalRetailer > 0 && rawGP > 0) ? (rawGP / _gpTotalRetailer * 100) : 0;
+                var cs = Number(r.category_share) || 0;
+                return (gpPct > 0 && cs > 0) ? Math.round((cs / gpPct) * 100) : 0;
+            };
+
             var gpNum = function(r) { return r.genpop_penetration != null ? Number(r.genpop_penetration) : 0; };
-            var idxNum = function(r) { return r.index_vs_genpop != null ? Number(r.index_vs_genpop) : 0; };
             if (sortVal === 'index') {
-                rows.sort(function(a, b) { return idxNum(b) - idxNum(a); });
+                rows.sort(function(a, b) { return _calcRetailerIdx(b) - _calcRetailerIdx(a); });
             } else if (sortVal === 'genpop') {
                 if (isProj) {
                     rows.sort(function(a, b) {
@@ -19542,10 +19568,10 @@
                 listEl.innerHTML = '<div style="grid-column: 1 / -1; padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No retailers match this slice or search.</div>';
             } else {
                 listEl.innerHTML = displayRows.map(function(item) {
-                    var index = item.index_vs_genpop != null ? Number(item.index_vs_genpop) : 0;
                     var rawGP = item.genpop_penetration != null ? Number(item.genpop_penetration) : 0;
                     var genPopPct = (_gpTotal > 0 && rawGP > 0) ? (rawGP / _gpTotal * 100) : 0;
                     var catShare = item.category_share != null ? Number(item.category_share) : 0;
+                    var index = (genPopPct > 0 && catShare > 0) ? Math.round((catShare / genPopPct) * 100) : 0;
                     var indexColor = index >= 100 ? '#10b981' : '#ef4444';
                     var shareStr = (catShare == null || isNaN(catShare) || catShare === 0) ? 'N/A' : catShare.toFixed(2) + '%';
                     var profileDisplay = isProj
@@ -30976,7 +31002,15 @@
                 const total = Object.values(bucket).reduce((s, v) => s + (v || 0), 0);
                 if (total > 0 && Math.abs(total - 100) > 0.5) {
                     const scale = 100 / total;
-                    for (const k of Object.keys(bucket)) bucket[k] = Math.round(bucket[k] * scale * 100) / 100;
+                    const gpBucket = result.demographicsGenPop?.[demoKey] || {};
+                    const idxBucket = result.demographicsIndex?.[demoKey];
+                    for (const k of Object.keys(bucket)) {
+                        bucket[k] = Math.round(bucket[k] * scale * 100) / 100;
+                        const gp = gpBucket[k] || 0;
+                        if (idxBucket && gp > 0) {
+                            idxBucket[k] = Math.round((bucket[k] / gp) * 100);
+                        }
+                    }
                 }
             });
 
@@ -32018,6 +32052,29 @@
             await loadDashboardProfiles();
         }
         
+        // Rebuild demographicsGenPop using the profile's own keys but values from the Gen Pop baseline.
+        // This avoids key-casing mismatches (e.g. 'FEMALE' in profile vs 'Female' in Gen Pop file).
+        function _rebuildDemoGenPop(profileDemo, gpDemo) {
+            const out = {};
+            for (const cat of Object.keys(profileDemo || {})) {
+                const bucket = profileDemo[cat];
+                const gpBucket = gpDemo[cat] || {};
+                if (!bucket || typeof bucket !== 'object') continue;
+                out[cat] = {};
+                for (const key of Object.keys(bucket)) {
+                    const keyLower = (key || '').toLowerCase();
+                    let val = gpBucket[key];
+                    if (val == null) {
+                        for (const [gk, gv] of Object.entries(gpBucket)) {
+                            if ((gk || '').toLowerCase() === keyLower) { val = gv; break; }
+                        }
+                    }
+                    out[cat][key] = val != null ? val : 0;
+                }
+            }
+            return out;
+        }
+
         async function loadDashboardProfiles() {
             const container = document.getElementById('dashProfileTree');
             
@@ -32081,10 +32138,13 @@
                 if (typeof loadGenPopBaseline === 'function') {
                     loadGenPopBaseline().then(() => {
                         if (currentDashboardData && genPopBaselineData) {
-                            renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, genPopBaselineData.demographics || {});
+                            // Rebuild demographicsGenPop using profile keys + fresh Gen Pop baseline values
+                            const freshGP = _rebuildDemoGenPop(currentDashboardData.demographics, genPopBaselineData.demographics || {});
+                            currentDashboardData.demographicsGenPop = freshGP;
+                            renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, freshGP);
                             if (currentDashboardData.behavioral) renderBehavioralCards(currentDashboardData.behavioral);
                             if (Array.isArray(currentDashboardData.locations)) renderLocationTable(currentDashboardData.locations);
-                            if (typeof renderDemoInsights === 'function') renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, genPopBaselineData.demographics || {});
+                            if (typeof renderDemoInsights === 'function') renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, freshGP);
                         }
                     });
                 }

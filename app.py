@@ -19990,6 +19990,9 @@ def _run_roas_iq(job_id):
         cur = conn.cursor()
         cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
 
+        ROAS_MAX_UIDS = 50000
+        ROAS_MAX_URL_ROWS = 500000
+
         update_job_status(job_id, progress=20, message='Finding audience from search terms...')
         uid_count = _build_temp_uids_from_terms(cur, search_terms, start_date, end_date)
         if uid_count == 0:
@@ -19998,7 +20001,23 @@ def _run_roas_iq(job_id):
                               message='No matching UIDs found for those search terms.')
             return
 
-        projected_uid_count = _project_to_us_pop(uid_count)
+        if uid_count > ROAS_MAX_UIDS:
+            print(f"🔄 ROAS IQ: sampling {ROAS_MAX_UIDS:,} UIDs from {uid_count:,} total")
+            cur.execute(f"""
+                CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
+                SELECT UID FROM TEMP_UIDS SAMPLE ({ROAS_MAX_UIDS} ROWS)
+            """)
+            sampled_uid_count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
+            sample_scale = uid_count / max(sampled_uid_count, 1)
+        else:
+            sampled_uid_count = uid_count
+            sample_scale = 1.0
+
+        def _proj(raw):
+            """Project a sampled raw count to US population, accounting for sampling ratio."""
+            return _project_to_us_pop(round(raw * sample_scale))
+
+        projected_uid_count = _proj(sampled_uid_count)
         scope_label = 'brand-specific' if scope == 'brand_specific' else 'overall ecosystem'
         update_job_status(job_id, progress=40, message=f'Found {projected_uid_count:,} projected US consumers. Fetching {scope_label} UTM URLs...')
 
@@ -20030,8 +20049,10 @@ def _run_roas_iq(job_id):
                 OR LOWER(cf.URL) LIKE '%gbraid%'
               )
               {brand_filter_sql}
+            LIMIT {ROAS_MAX_URL_ROWS}
         """)
         rows = cur.fetchall()
+        print(f"✅ ROAS IQ UTM query returned {len(rows):,} rows (limit {ROAS_MAX_URL_ROWS:,})")
 
         update_job_status(job_id, progress=45, message='Loading purchase confirmation patterns...')
         uid_conv_domains = {}
@@ -20057,6 +20078,7 @@ def _run_roas_iq(job_id):
                       AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
                       AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
                       AND ({slug_filter})
+                    LIMIT {ROAS_MAX_URL_ROWS}
                 """)
                 conv_rows = cur.fetchall()
                 for uid, url in conv_rows:
@@ -20112,7 +20134,7 @@ def _run_roas_iq(job_id):
             for cat, val, cnt in cur.fetchall():
                 if cat not in demo_data:
                     demo_data[cat] = []
-                demo_data[cat].append({'value': val, 'count': cnt, 'projected': _project_to_us_pop(cnt)})
+                demo_data[cat].append({'value': val, 'count': cnt, 'projected': _proj(cnt)})
             for cat in demo_data:
                 total_cat = sum(d['count'] for d in demo_data[cat])
                 for d in demo_data[cat]:
@@ -20175,6 +20197,7 @@ def _run_roas_iq(job_id):
                   AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
                   AND cf.COMMON_NAME IS NOT NULL
                   AND cf.COMMON_NAME != ''
+                LIMIT {ROAS_MAX_URL_ROWS}
             """)
             brand_click_rows = cur.fetchall()
             print(f"✅ HOST_MAPPING brand query returned {len(brand_click_rows)} rows across audience")
@@ -20243,7 +20266,7 @@ def _run_roas_iq(job_id):
             total_confirmations_all += confirmations
             total_ad_uids |= uid_set
             click_count = channel_source_clicks.get((channel, source), cnt)
-            pct = round(100.0 * cnt / max(uid_count, 1), 4)
+            pct = round(100.0 * cnt / max(sampled_uid_count, 1), 4)
             conv_rate = round(100.0 * confirmations / max(click_count, 1), 2)
             family = _get_source_family(source.lower().replace(' ', '_')) or source
             top_dom = ''
@@ -20254,9 +20277,9 @@ def _run_roas_iq(job_id):
                 'channel': channel, 'source': source, 'family': family.title(),
                 'pct': pct, 'raw': cnt,
                 'click_count': click_count,
-                'projected': _project_to_us_pop(cnt),
+                'projected': _proj(cnt),
                 'conversions': confirmations,
-                'projected_conversions': _project_to_us_pop(confirmations),
+                'projected_conversions': _proj(confirmations),
                 'conv_rate': conv_rate,
                 'top_domain': top_dom,
             })
@@ -20293,14 +20316,14 @@ def _run_roas_iq(job_id):
         for brand in sorted(brand_clicks, key=lambda b: -brand_clicks[b]):
             uids = brand_uids[brand]
             click_count = brand_clicks[brand]
-            proj_clicks = _project_to_us_pop(click_count)
+            proj_clicks = _proj(click_count)
             verified_cnt = sum(1 for uid in uids if uid in uid_conv_domains)
-            proj_verified = _project_to_us_pop(verified_cnt)
+            proj_verified = _proj(verified_cnt)
             sales_conversions.append({
                 'retailer': brand,
                 'audience_uids': len(uids),
                 'duplicated_clicks': proj_clicks,
-                'pct_of_audience': round(100.0 * len(uids) / max(uid_count, 1), 4),
+                'pct_of_audience': round(100.0 * len(uids) / max(sampled_uid_count, 1), 4),
                 'verified_purchases': verified_cnt,
                 'projected_buyers': proj_verified,
                 'conv_rate': round(100.0 * proj_verified / max(proj_clicks, 1), 2),
@@ -20312,13 +20335,13 @@ def _run_roas_iq(job_id):
             'start_date': start_date,
             'end_date': end_date,
             'scope': scope,
-            'uid_count': uid_count,
-            'projected_uid_count': _project_to_us_pop(uid_count),
+            'uid_count': sampled_uid_count,
+            'projected_uid_count': _proj(sampled_uid_count),
             'url_rows': len(rows),
             'total_classified_clicks': total_classified_clicks,
-            'projected_classified_clicks': _project_to_us_pop(total_classified_clicks),
+            'projected_classified_clicks': _proj(total_classified_clicks),
             'total_converted': total_confirmations_all,
-            'projected_converted': _project_to_us_pop(total_confirmations_all),
+            'projected_converted': _proj(total_confirmations_all),
             'overall_conv_rate': overall_conv_rate,
             'results': results,
             'demographics': demo_data,
@@ -20328,7 +20351,7 @@ def _run_roas_iq(job_id):
             'avg_touches_per_user': avg_touches,
             'multi_touch_pct': multi_touch_pct,
             'total_ad_users': overall_ad_uid_count,
-            'projected_ad_users': _project_to_us_pop(overall_ad_uid_count),
+            'projected_ad_users': _proj(overall_ad_uid_count),
             'created_at': datetime.now().isoformat(),
             'created_by': job.get('username', ''),
         }
