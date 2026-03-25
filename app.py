@@ -1140,6 +1140,9 @@ def auto_add_runs_to_all_users(s3_keys, key_category_map=None):
         users = data.get('users', {})
         changed = False
         for username, user in users.items():
+            aan = user.get('auto_access_new', {})
+            if aan and aan.get('profile_iq') is False:
+                continue
             runs = user.get('allowed_runs', ['*'])
             if isinstance(runs, list) and '*' in runs:
                 continue
@@ -3222,6 +3225,7 @@ def api_set_company_defaults(company_name):
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
             'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
             'credits': req.get('credits', 5),
+            'auto_access_new': req.get('auto_access_new', {}),
         }
         save_users(data)
         return jsonify({'success': True, 'message': f'Defaults saved for {company_name}'})
@@ -3274,6 +3278,7 @@ def api_reset_company_users(company_name):
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
                 user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
+                user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
                 user['allowed_categories'] = ['*']
                 user['allowed_runs'] = list(global_runs) if isinstance(global_runs, list) else ['*']
@@ -3289,6 +3294,7 @@ def api_reset_company_users(company_name):
                 user['has_ticket_sales_tracker_access'] = False
                 user['has_llmo_iq_access'] = False
                 user['credits'] = 5
+                user['auto_access_new'] = {}
             count += 1
         save_users(data)
         src = 'company defaults' if cd else 'global defaults'
