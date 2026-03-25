@@ -19888,6 +19888,11 @@ ROAS_IQ_S3_PREFIX = 'roas-iq/'
 ECOMMERCE_IQ_S3_PREFIX = 'ecommerce-iq/'
 
 
+ROAS_IQ_MAX_UIDS = 50_000
+ROAS_IQ_MAX_URL_ROWS = 500_000
+ROAS_IQ_MAX_CONV_ROWS = 200_000
+ROAS_IQ_MAX_BRAND_ROWS = 500_000
+
 def _build_temp_uids_from_terms(cur, search_terms, start_date, end_date):
     """Create TEMP_UIDS table from COMMON_NAME matching the search terms."""
     or_clauses = []
@@ -19904,6 +19909,7 @@ def _build_temp_uids_from_terms(cur, search_terms, start_date, end_date):
         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
         WHERE cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
           AND ({where})
+        LIMIT {ROAS_IQ_MAX_UIDS}
     """)
     count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
     return count
@@ -19967,6 +19973,7 @@ def _run_roas_iq(job_id):
                 OR LOWER(cf.URL) LIKE '%gbraid%'
               )
               {brand_filter_sql}
+            LIMIT {ROAS_IQ_MAX_URL_ROWS}
         """)
         rows = cur.fetchall()
 
@@ -19994,6 +20001,7 @@ def _run_roas_iq(job_id):
                       AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
                       AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
                       AND ({slug_filter})
+                    LIMIT {ROAS_IQ_MAX_CONV_ROWS}
                 """)
                 conv_rows = cur.fetchall()
                 for uid, url in conv_rows:
@@ -20112,6 +20120,7 @@ def _run_roas_iq(job_id):
                   AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
                   AND cf.COMMON_NAME IS NOT NULL
                   AND cf.COMMON_NAME != ''
+                LIMIT {ROAS_IQ_MAX_BRAND_ROWS}
             """)
             brand_click_rows = cur.fetchall()
             print(f"✅ HOST_MAPPING brand query returned {len(brand_click_rows)} rows across audience")
@@ -20436,6 +20445,7 @@ def _run_ecommerce_iq(job_id):
               )
               AND cf.URL IS NOT NULL
               AND LENGTH(cf.URL) > 10
+            LIMIT {ROAS_IQ_MAX_URL_ROWS}
         """)
         rows = cur.fetchall()
         conn.close()
