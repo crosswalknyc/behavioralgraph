@@ -19403,12 +19403,18 @@
             var displayRows = rows.slice(0, 100);
             var US_POP = 329900000;
 
+            var _gpTotal = rows.reduce(function(s, r) {
+                var v = r.genpop_penetration != null ? Number(r.genpop_penetration) : 0;
+                return s + (v > 0 ? v : 0);
+            }, 0);
+
             if (displayRows.length === 0) {
                 listEl.innerHTML = '<div style="grid-column: 1 / -1; padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No brands match this slice or search.</div>';
             } else {
                 listEl.innerHTML = displayRows.map(function(item) {
                     var index = item.index_vs_genpop != null ? Number(item.index_vs_genpop) : 0;
-                    var genPopPct = item.genpop_penetration != null ? Number(item.genpop_penetration) : 0;
+                    var rawGP = item.genpop_penetration != null ? Number(item.genpop_penetration) : 0;
+                    var genPopPct = (_gpTotal > 0 && rawGP > 0) ? (rawGP / _gpTotal * 100) : 0;
                     var profilePct = item.pct_of_ai_users != null ? Number(item.pct_of_ai_users) : 0;
                     var indexColor = index >= 100 ? '#10b981' : '#ef4444';
                     var hasShare = item.category_share != null && !isNaN(Number(item.category_share));
@@ -19416,7 +19422,7 @@
                     var profileDisplay = isProj
                         ? (!item.unique_users_projected ? 'N/A' : formatNumber(Math.round(item.unique_users_projected)))
                         : (hasShare ? shareStr : formatValueOrNA(profilePct, true));
-                    var genPopProj = genPopPct > 0 ? Math.round(US_POP * (genPopPct / 100)) : 0;
+                    var genPopProj = rawGP > 0 ? Math.round(US_POP * (rawGP / 100)) : 0;
                     var genPopDisplay = isProj
                         ? (genPopProj === 0 ? 'N/A' : formatNumber(genPopProj))
                         : formatValueOrNA(genPopPct, true);
@@ -19527,19 +19533,25 @@
             var displayRows = rows.slice(0, 100);
             var US_POP = 329900000;
 
+            var _gpTotal = rows.reduce(function(s, r) {
+                var v = r.genpop_penetration != null ? Number(r.genpop_penetration) : 0;
+                return s + (v > 0 ? v : 0);
+            }, 0);
+
             if (displayRows.length === 0) {
                 listEl.innerHTML = '<div style="grid-column: 1 / -1; padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No retailers match this slice or search.</div>';
             } else {
                 listEl.innerHTML = displayRows.map(function(item) {
                     var index = item.index_vs_genpop != null ? Number(item.index_vs_genpop) : 0;
-                    var genPopPct = item.genpop_penetration != null ? Number(item.genpop_penetration) : 0;
+                    var rawGP = item.genpop_penetration != null ? Number(item.genpop_penetration) : 0;
+                    var genPopPct = (_gpTotal > 0 && rawGP > 0) ? (rawGP / _gpTotal * 100) : 0;
                     var catShare = item.category_share != null ? Number(item.category_share) : 0;
                     var indexColor = index >= 100 ? '#10b981' : '#ef4444';
                     var shareStr = (catShare == null || isNaN(catShare) || catShare === 0) ? 'N/A' : catShare.toFixed(2) + '%';
                     var profileDisplay = isProj
                         ? (!item.unique_users_projected ? 'N/A' : formatNumber(Math.round(item.unique_users_projected)))
                         : shareStr;
-                    var genPopProj = genPopPct > 0 ? Math.round(US_POP * (genPopPct / 100)) : 0;
+                    var genPopProj = rawGP > 0 ? Math.round(US_POP * (rawGP / 100)) : 0;
                     var genPopDisplay = isProj
                         ? (genPopProj === 0 ? 'N/A' : formatNumber(genPopProj))
                         : formatValueOrNA(genPopPct, true);
