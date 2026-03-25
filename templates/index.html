@@ -28846,12 +28846,13 @@
             // Normalize gender key function - handles all variations
             const normalizeGenderKey = (gender) => {
                 const normalized = gender.toUpperCase().trim().replace(/\s+/g, ' ');
-                if (normalized.includes('TRANS') && normalized.includes('FEMALE')) return 'TRANS FEMALE';
+                // Handle common variations
+                if (normalized === 'MALE' || normalized.startsWith('MALE')) return 'MALE';
+                if (normalized === 'FEMALE' || normalized.startsWith('FEMALE')) return 'FEMALE';
                 if (normalized.includes('TRANS') && normalized.includes('MALE')) return 'TRANS MALE';
+                if (normalized.includes('TRANS') && normalized.includes('FEMALE')) return 'TRANS FEMALE';
                 if (normalized.includes('NON') && normalized.includes('BINARY')) return 'NON-BINARY';
-                if (normalized.includes('PREFER') || (normalized.includes('NOT') && normalized.includes('SAY'))) return 'PREFER NOT TO SAY';
-                if (normalized === 'MALE' || normalized === 'M') return 'MALE';
-                if (normalized === 'FEMALE' || normalized === 'F') return 'FEMALE';
+                if (normalized.includes('PREFER') || normalized.includes('NOT') && normalized.includes('SAY')) return 'PREFER NOT TO SAY';
                 return normalized;
             };
             
