@@ -8066,15 +8066,18 @@
             align-items: center;
             text-align: left;
         }
-        .location-row span,
         .location-row span:nth-child(1),
-        .location-row span:nth-child(2),
+        .location-row span:nth-child(2) {
+            text-align: left !important;
+            justify-self: start;
+        }
         .location-row span:nth-child(3),
         .location-row span:nth-child(4),
         .location-row span:nth-child(5),
-        .location-row span:nth-child(6) {
-            text-align: left !important;
-            justify-self: start;
+        .location-row span:nth-child(6),
+        .location-row span:nth-child(7) {
+            text-align: right !important;
+            justify-self: end;
         }
         #allLocationsContainer .location-row {
             grid-template-columns: 58px minmax(0, 1fr) 44px 80px 72px 72px 58px;
@@ -8096,11 +8099,13 @@
             user-select: none;
             display: flex;
             align-items: center;
-            justify-content: flex-start;
+            justify-content: flex-end;
             gap: 0.25rem;
             transition: color 0.2s;
-            text-align: left !important;
-            justify-self: start;
+        }
+        .location-row.header span:nth-child(1),
+        .location-row.header span:nth-child(2) {
+            justify-content: flex-start;
         }
 
         .location-row.header span:hover {
@@ -14229,8 +14234,8 @@
                         <span>Location</span>
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                         <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
-                        <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data" style="line-height:1.1;text-align:left;">CW<br>Gen Pop</span>
-                        <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)" style="line-height:1.1;text-align:left;">GP<br>Census</span>
+                        <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data" style="line-height:1.1;">CW<br>Gen Pop</span>
+                        <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)" style="line-height:1.1;">GP<br>Census</span>
                         <span class="index-col has-tooltip" data-tooltip="CrossWalk Gen Pop Index">CW GP<br>Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
@@ -22893,7 +22898,7 @@
                         <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #10b981;">
                             <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${normalizeDmaDisplay(loc.name)}</div>
                             <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                ${(loc.pct || 0).toFixed(4)}% | Index: <span style="color: #10b981; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
+                                ${(loc.pct || 0).toFixed(3)}% | Index: <span style="color: #10b981; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
                             </div>
                         </div>
                     `;
@@ -22911,7 +22916,7 @@
                             <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #ef4444;">
                                 <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${normalizeDmaDisplay(loc.name)}</div>
                                 <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                    ${(loc.pct || 0).toFixed(4)}% | Index: <span style="color: #ef4444; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
+                                    ${(loc.pct || 0).toFixed(3)}% | Index: <span style="color: #ef4444; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
                                 </div>
                             </div>
                         `;
@@ -38722,7 +38727,7 @@
                 const indexColor = '#10b981'; // Green for over-indexing
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(4) + '%';
+                    : loc.pct.toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
@@ -38772,7 +38777,7 @@
                 const indexColor = '#ef4444'; // Red for under-indexing
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(4) + '%';
+                    : loc.pct.toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
@@ -38826,10 +38831,10 @@
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(4) + '%';
+                    : loc.pct.toFixed(3) + '%';
                 const genPopDisplay = isProjection
                     ? formatNumber(Math.round((loc.genPopPct || 0) / 100 * 329900000))
-                    : (loc.genPopPct || 0).toFixed(4) + '%';
+                    : (loc.genPopPct || 0).toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
                 const gpActual = getGPActualDMA(loc.name);
                 const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
@@ -39798,7 +39803,7 @@
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(4) + '%';
+                    : loc.pct.toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
@@ -39866,7 +39871,7 @@
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(4) + '%';
+                    : loc.pct.toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
