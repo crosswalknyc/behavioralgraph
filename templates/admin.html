@@ -2088,6 +2088,43 @@
                                     </label>
                                 </div>
                             </div>
+                            <!-- Access to New Releases -->
+                            <div style="margin-bottom: 0.75rem;">
+                                <h5 style="margin: 0 0 0.4rem; font-size: 0.8rem; color: var(--text-secondary);">Access to New Releases</h5>
+                                <p style="color: var(--text-secondary); font-size: 0.68rem; margin: 0 0 0.3rem;">Users automatically receive new items released from purgatory in checked categories.</p>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.25rem;">
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanProfileIQ" checked> Profile IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanSubscriberIQ" checked> Subscriber IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanImpactIQ" checked> Impact IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanEcommerceIQ" checked> E-Commerce IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanLLMOIQ" checked> LLMO IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanHedgeFundIQ" checked> Hedge Fund IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanAnalysisIQ" checked> Analysis IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanRankersIQ" checked> Rankers IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanTicketSalesTracker" checked> Ticket Sales Tracker
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdAanTicketSalesIQ" checked> Ticket Sales IQ
+                                    </label>
+                                </div>
+                            </div>
                             <!-- Default Credits -->
                             <div style="margin-bottom: 0.75rem;">
                                 <label style="font-size: 0.8rem; color: var(--text-secondary);">Default Credits</label>
@@ -2357,6 +2394,48 @@
 
                 <div class="access-section">
                     <h4 style="margin-bottom: 1rem;">🎯 Dashboard Access</h4>
+
+                    <!-- Access to New Releases -->
+                    <div style="margin-bottom: 1rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;" onclick="document.getElementById('accessToNewGrid').style.display = document.getElementById('accessToNewGrid').style.display === 'none' ? 'grid' : 'none'; this.querySelector('.collapse-icon').classList.toggle('rotated');">
+                            <span style="font-size: 1rem;">🆕</span>
+                            <h5 style="margin: 0; font-size: 0.85rem; color: var(--accent-cyan); font-weight: 600;">Access to New Releases</h5>
+                            <span class="collapse-icon rotated" style="font-size: 0.7rem; transition: transform 0.2s;">▼</span>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 0.7rem; margin: 0 0 0.5rem;">When checked, user automatically receives access to new items released from purgatory in that category.</p>
+                        <div id="accessToNewGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.3rem;">
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanProfileIQ" checked> Profile IQ
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanSubscriberIQ" checked> Subscriber IQ
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanImpactIQ" checked> Impact IQ
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanEcommerceIQ" checked> E-Commerce IQ
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanLLMOIQ" checked> LLMO IQ
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanHedgeFundIQ" checked> Hedge Fund IQ
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanAnalysisIQ" checked> Analysis IQ
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanRankersIQ" checked> Rankers IQ
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanTicketSalesTracker" checked> Ticket Sales Tracker
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                <input type="checkbox" id="aanTicketSalesIQ" checked> Ticket Sales IQ
+                            </label>
+                        </div>
+                    </div>
                     
                     <!-- Profile IQ Access -->
                     <div class="dashboard-access-item">
@@ -3659,6 +3738,18 @@
                     document.getElementById('cdLLMOIQ').checked = !!d.has_llmo_iq_access;
                     document.getElementById('cdTicketTracker').checked = !!d.has_ticket_sales_tracker_access;
                     document.getElementById('cdDefaultCredits').value = d.credits ?? 5;
+                    // Access to New Releases
+                    const cdAan = d.auto_access_new || {};
+                    document.getElementById('cdAanProfileIQ').checked = cdAan.profile_iq !== false;
+                    document.getElementById('cdAanSubscriberIQ').checked = cdAan.subscriber_iq !== false;
+                    document.getElementById('cdAanImpactIQ').checked = cdAan.roas_iq !== false;
+                    document.getElementById('cdAanEcommerceIQ').checked = cdAan.ecommerce_iq !== false;
+                    document.getElementById('cdAanLLMOIQ').checked = cdAan.llmo_iq !== false;
+                    document.getElementById('cdAanHedgeFundIQ').checked = cdAan.hedge_fund_iq !== false;
+                    document.getElementById('cdAanAnalysisIQ').checked = cdAan.analysis_iq !== false;
+                    document.getElementById('cdAanRankersIQ').checked = cdAan.rankers_iq !== false;
+                    document.getElementById('cdAanTicketSalesTracker').checked = cdAan.ticket_sales_tracker !== false;
+                    document.getElementById('cdAanTicketSalesIQ').checked = cdAan.ticket_sales_iq !== false;
                     const allowedCats = d.allowed_categories || ['*'];
                     const allCats = allowedCats.includes('*');
                     document.getElementById('cdAllCategories').checked = allCats;
@@ -3698,6 +3789,18 @@
                 has_llmo_iq_access: document.getElementById('cdLLMOIQ').checked,
                 has_ticket_sales_tracker_access: document.getElementById('cdTicketTracker').checked,
                 credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
+                auto_access_new: {
+                    profile_iq: document.getElementById('cdAanProfileIQ').checked,
+                    subscriber_iq: document.getElementById('cdAanSubscriberIQ').checked,
+                    roas_iq: document.getElementById('cdAanImpactIQ').checked,
+                    ecommerce_iq: document.getElementById('cdAanEcommerceIQ').checked,
+                    llmo_iq: document.getElementById('cdAanLLMOIQ').checked,
+                    hedge_fund_iq: document.getElementById('cdAanHedgeFundIQ').checked,
+                    analysis_iq: document.getElementById('cdAanAnalysisIQ').checked,
+                    rankers_iq: document.getElementById('cdAanRankersIQ').checked,
+                    ticket_sales_tracker: document.getElementById('cdAanTicketSalesTracker').checked,
+                    ticket_sales_iq: document.getElementById('cdAanTicketSalesIQ').checked,
+                },
             };
             try {
                 const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/defaults`, {
@@ -6410,6 +6513,18 @@
             
             // Preload Hedge Fund tickers so they're ready when user expands section
             loadHedgeFundTickersForAccess();
+
+            // Access to New Releases: default all ON for new users
+            document.getElementById('aanProfileIQ').checked = true;
+            document.getElementById('aanSubscriberIQ').checked = true;
+            document.getElementById('aanImpactIQ').checked = true;
+            document.getElementById('aanEcommerceIQ').checked = true;
+            document.getElementById('aanLLMOIQ').checked = true;
+            document.getElementById('aanHedgeFundIQ').checked = true;
+            document.getElementById('aanAnalysisIQ').checked = true;
+            document.getElementById('aanRankersIQ').checked = true;
+            document.getElementById('aanTicketSalesTracker').checked = true;
+            document.getElementById('aanTicketSalesIQ').checked = true;
             
             document.getElementById('userModal').classList.add('show');
         }
@@ -6458,6 +6573,19 @@
             // Set Rankers IQ access and options
             setRankersIQAccess(user);
             toggleRankersIQSection();
+
+            // Access to New Releases
+            const aan = user.auto_access_new || {};
+            document.getElementById('aanProfileIQ').checked = aan.profile_iq !== false;
+            document.getElementById('aanSubscriberIQ').checked = aan.subscriber_iq !== false;
+            document.getElementById('aanImpactIQ').checked = aan.roas_iq !== false;
+            document.getElementById('aanEcommerceIQ').checked = aan.ecommerce_iq !== false;
+            document.getElementById('aanLLMOIQ').checked = aan.llmo_iq !== false;
+            document.getElementById('aanHedgeFundIQ').checked = aan.hedge_fund_iq !== false;
+            document.getElementById('aanAnalysisIQ').checked = aan.analysis_iq !== false;
+            document.getElementById('aanRankersIQ').checked = aan.rankers_iq !== false;
+            document.getElementById('aanTicketSalesTracker').checked = aan.ticket_sales_tracker !== false;
+            document.getElementById('aanTicketSalesIQ').checked = aan.ticket_sales_iq !== false;
             
             document.getElementById('originalUsername').value = username;
             document.getElementById('newUsername').disabled = false; // Allow editing username
@@ -8266,7 +8394,19 @@
                 collab_team: getSelectedTeamMembers(),
                 has_purgatory_approval: currentUserRole === 'super_admin' ? document.getElementById('hasPurgatoryApproval').checked : undefined,
                 activity_export_emails: (document.getElementById('activityExportEmails').value || '').trim(),
-                activity_export_cadence: (document.getElementById('activityExportCadence').value || '').trim()
+                activity_export_cadence: (document.getElementById('activityExportCadence').value || '').trim(),
+                auto_access_new: {
+                    profile_iq: document.getElementById('aanProfileIQ').checked,
+                    subscriber_iq: document.getElementById('aanSubscriberIQ').checked,
+                    roas_iq: document.getElementById('aanImpactIQ').checked,
+                    ecommerce_iq: document.getElementById('aanEcommerceIQ').checked,
+                    llmo_iq: document.getElementById('aanLLMOIQ').checked,
+                    hedge_fund_iq: document.getElementById('aanHedgeFundIQ').checked,
+                    analysis_iq: document.getElementById('aanAnalysisIQ').checked,
+                    rankers_iq: document.getElementById('aanRankersIQ').checked,
+                    ticket_sales_tracker: document.getElementById('aanTicketSalesTracker').checked,
+                    ticket_sales_iq: document.getElementById('aanTicketSalesIQ').checked,
+                }
             };
             
             // Include original username if changed

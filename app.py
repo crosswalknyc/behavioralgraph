@@ -1140,6 +1140,9 @@ def auto_add_runs_to_all_users(s3_keys, key_category_map=None):
         users = data.get('users', {})
         changed = False
         for username, user in users.items():
+            aan = user.get('auto_access_new', {})
+            if aan and aan.get('profile_iq') is False:
+                continue
             runs = user.get('allowed_runs', ['*'])
             if isinstance(runs, list) and '*' in runs:
                 continue
@@ -2587,7 +2590,8 @@ def create_user():
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
             'has_llmo_iq_access': req_data.get('has_llmo_iq_access', cd.get('has_llmo_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
-            'has_purgatory_approval': False
+            'has_purgatory_approval': False,
+            'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
         }
         
         # Purgatory clearance: only super_admin can grant (or set on create)
@@ -2702,6 +2706,8 @@ def update_user(username):
             user['rankers_iq_options'] = req_data['rankers_iq_options']
         if 'has_llmo_iq_access' in req_data:
             user['has_llmo_iq_access'] = bool(req_data['has_llmo_iq_access'])
+        if 'auto_access_new' in req_data:
+            user['auto_access_new'] = req_data['auto_access_new']
         if 'collab_team' in req_data:
             user['collab_team'] = req_data['collab_team']
         # Activity CSV export (per user): emails comma-separated, cadence
@@ -3219,6 +3225,7 @@ def api_set_company_defaults(company_name):
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
             'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
             'credits': req.get('credits', 5),
+            'auto_access_new': req.get('auto_access_new', {}),
         }
         save_users(data)
         return jsonify({'success': True, 'message': f'Defaults saved for {company_name}'})
@@ -3271,6 +3278,7 @@ def api_reset_company_users(company_name):
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
                 user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
+                user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
                 user['allowed_categories'] = ['*']
                 user['allowed_runs'] = list(global_runs) if isinstance(global_runs, list) else ['*']
@@ -3286,6 +3294,7 @@ def api_reset_company_users(company_name):
                 user['has_ticket_sales_tracker_access'] = False
                 user['has_llmo_iq_access'] = False
                 user['credits'] = 5
+                user['auto_access_new'] = {}
             count += 1
         save_users(data)
         src = 'company defaults' if cd else 'global defaults'
@@ -9399,11 +9408,12 @@ def get_segment_data():
                     return 'Another Race/Ethnicity'
                 return val
 
+            _excluded_demo = {'OTHER', 'PREFER NOT TO SAY'}
             for row in demo_results:
                 gender, age, income, ethnicity, count = row
-                if gender:
+                if gender and gender.strip().upper() not in _excluded_demo:
                     demographics['gender'][gender] = demographics['gender'].get(gender, 0) + count
-                if age:
+                if age and age.strip().upper() not in _excluded_demo:
                     demographics['age'][age] = demographics['age'].get(age, 0) + count
                 if income:
                     demographics['income'][income] = demographics['income'].get(income, 0) + count
@@ -9411,11 +9421,12 @@ def get_segment_data():
                     key = _display_ethnicity(ethnicity)
                     demographics['ethnicity'][key] = demographics['ethnicity'].get(key, 0) + count
             
-            # Convert counts to percentages
-            total_demo = sum(demographics['gender'].values()) if demographics['gender'] else actual_segment_size
+            # Convert counts to percentages (rebased to 100% per category)
             for demo_type in demographics:
-                for key in demographics[demo_type]:
-                    demographics[demo_type][key] = (demographics[demo_type][key] / total_demo * 100) if total_demo > 0 else 0
+                cat_total = sum(demographics[demo_type].values())
+                if cat_total > 0:
+                    for key in demographics[demo_type]:
+                        demographics[demo_type][key] = (demographics[demo_type][key] / cat_total * 100)
             
             conn.close()
             
@@ -9880,16 +9891,17 @@ def parse_subscriber_iq_csv(csv_content):
             if first_col and first_col not in ['', 'AGE']:
                 # Filter out gender entries that might have been mixed in
                 first_col_upper = first_col.upper().strip()
-                gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER']
+                gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY']
+                skip_keywords = ['OTHER', 'PREFER NOT TO SAY']
                 
                 # Count/percentage/gen_pop: CSV format is col C (2) for count, col I (8) for percentage, col J (9) for gen_pop
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _pct = (row[8].strip() if len(row) > 8 else '') or (row[7].strip() if len(row) > 7 else '')
                 _gen = (row[9].strip() if len(row) > 9 else '') or (row[5].strip() if len(row) > 5 else '')
                 
-                # Only add if it's not a gender entry and looks like an age range
-                if not any(keyword in first_col_upper for keyword in gender_keywords):
-                    # Check if it looks like an age range (contains numbers or age-like patterns)
+                if any(keyword == first_col_upper for keyword in skip_keywords):
+                    print(f"   ⚠️ Skipping '{first_col}' in age section (excluded category)")
+                elif not any(keyword in first_col_upper for keyword in gender_keywords):
                     if any(char.isdigit() for char in first_col) or '-' in first_col or '+' in first_col or 'to' in first_col_upper or 'and' in first_col_upper:
                         parsed['demographics']['age'].append({
                             'age_range': first_col,
@@ -9900,7 +9912,6 @@ def parse_subscriber_iq_csv(csv_content):
                     else:
                         print(f"   ⚠️ Skipping potential gender entry in age section: '{first_col}'")
                 else:
-                    # This is a gender entry - add it to gender data instead
                     print(f"   ⚠️ Found gender entry '{first_col}' in age section, moving to gender data")
                     parsed['demographics']['gender'].append({
                         'gender': first_col,
@@ -9911,6 +9922,10 @@ def parse_subscriber_iq_csv(csv_content):
         
         elif current_section == 'demographics_gender':
             if first_col and first_col not in ['', 'GENDER']:
+                first_col_upper_g = first_col.upper().strip()
+                if first_col_upper_g in ('OTHER', 'PREFER NOT TO SAY'):
+                    print(f"   ⚠️ Skipping '{first_col}' in gender section (excluded category)")
+                    continue
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _pct = (row[8].strip() if len(row) > 8 else '') or (row[7].strip() if len(row) > 7 else '')
                 _gen = (row[9].strip() if len(row) > 9 else '') or (row[5].strip() if len(row) > 5 else '')
@@ -10169,9 +10184,11 @@ def parse_subscriber_iq_csv(csv_content):
                 demo_sub = 'gender'
                 continue
             if demo_sub and first_col and first_col not in ('AGE', 'GENDER'):
+                first_col_fb_upper = first_col.upper().strip()
+                if first_col_fb_upper in ('OTHER', 'PREFER NOT TO SAY'):
+                    continue
                 _c = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _p = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
-                # Prefer column 9 for US projected (gen_pop), then 8, then 5 (match main demographics section)
                 _g = (row[9].strip() if len(row) > 9 else '') or (row[8].strip() if len(row) > 8 else '') or (row[5].strip() if len(row) > 5 else '')
                 if demo_sub == 'age' and (any(c.isdigit() for c in first_col) or '-' in first_col or '+' in first_col):
                     parsed['demographics']['age'].append({'age_range': first_col, 'count': _c, 'percentage': _p, 'gen_pop': _g})
@@ -10202,6 +10219,20 @@ def parse_subscriber_iq_csv(csv_content):
         if total > 0:
             parsed['key_metrics']['avg_days_to_signup'] = f"{(weighted / total):.1f}"
             print(f"   📊 Computed avg_days_to_signup from signup_timing: {parsed['key_metrics']['avg_days_to_signup']}")
+
+    # Rebase demographic percentages to 100% after excluding filtered entries
+    for demo_kind in ('age', 'gender'):
+        items = parsed.get('demographics', {}).get(demo_kind, [])
+        if not items:
+            continue
+        total_count = 0
+        for it in items:
+            c = parse_number(it.get('count', 0))
+            total_count += c if c else 0
+        if total_count > 0:
+            for it in items:
+                c = parse_number(it.get('count', 0)) or 0
+                it['percentage'] = f"{(c / total_count) * 100:.2f}%"
 
     # Log parsing summary
     print(f"📊 Parsing complete:")
@@ -19928,6 +19959,7 @@ def _run_roas_iq(job_id):
         start_date = params['start_date']
         end_date = params['end_date']
         project_name = params['project_name']
+        scope = params.get('scope', 'overall')
 
         update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
         import bg as _bg
@@ -19944,7 +19976,20 @@ def _run_roas_iq(job_id):
             return
 
         projected_uid_count = _project_to_us_pop(uid_count)
-        update_job_status(job_id, progress=40, message=f'Found {projected_uid_count:,} projected US consumers. Fetching UTM URLs...')
+        scope_label = 'brand-specific' if scope == 'brand_specific' else 'overall ecosystem'
+        update_job_status(job_id, progress=40, message=f'Found {projected_uid_count:,} projected US consumers. Fetching {scope_label} UTM URLs...')
+
+        brand_filter_sql = ''
+        if scope == 'brand_specific':
+            brand_clauses = []
+            for term in search_terms:
+                safe = term.lower().replace("'", "''").strip()
+                if safe:
+                    brand_clauses.append(f"LOWER(cf.COMMON_NAME) LIKE '%{safe}%'")
+                    brand_clauses.append(f"LOWER(cf.URL) LIKE '%{safe}%'")
+            if brand_clauses:
+                brand_filter_sql = f"AND ({' OR '.join(brand_clauses)})"
+
         cur.execute(f"""
             SELECT cf.URL, cf.UID
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
@@ -19961,6 +20006,7 @@ def _run_roas_iq(job_id):
                 OR LOWER(cf.URL) LIKE '%wbraid%'
                 OR LOWER(cf.URL) LIKE '%gbraid%'
               )
+              {brand_filter_sql}
         """)
         rows = cur.fetchall()
 
@@ -20082,24 +20128,36 @@ def _run_roas_iq(job_id):
         update_job_status(job_id, progress=57, message='Fetching brand/retailer data from HOST_MAPPING...')
         brand_click_rows = []
         try:
-            cur.execute(f"""
-                SELECT m.Brand, cf.UID
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-                JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m
-                    ON LOWER(cf.COMMON_NAME) = LOWER(m.Brand)
-                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-                  AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                  AND (
+            cur.execute("""
+                CREATE OR REPLACE TEMP TABLE ROAS_BRAND_NAMES AS
+                SELECT DISTINCT LOWER(TRIM(pipe_split.value)) AS brand_lower,
+                       TRIM(pipe_split.value) AS brand_display
+                FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m,
+                     LATERAL FLATTEN(input => SPLIT(m.Brand, '|')) AS pipe_split
+                WHERE (
                     LOWER(m.Section) LIKE '%most purchased%'
                     OR LOWER(m.Section) LIKE '%where they shop%'
-                  )
+                )
+                AND TRIM(pipe_split.value) != ''
+            """)
+            brand_name_count = cur.execute("SELECT COUNT(*) FROM ROAS_BRAND_NAMES").fetchone()[0]
+            print(f"✅ HOST_MAPPING: found {brand_name_count} brand names in most-purchased/where-they-shop")
+
+            cur.execute(f"""
+                SELECT bn.brand_display, cf.UID
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
+                JOIN ROAS_BRAND_NAMES bn
+                    ON LOWER(cf.COMMON_NAME) = bn.brand_lower
+                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
+                  AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
                   AND cf.COMMON_NAME IS NOT NULL
                   AND cf.COMMON_NAME != ''
             """)
             brand_click_rows = cur.fetchall()
-            print(f"✅ HOST_MAPPING brand query returned {len(brand_click_rows)} rows")
+            print(f"✅ HOST_MAPPING brand query returned {len(brand_click_rows)} rows across audience")
         except Exception as e:
             print(f"⚠️ HOST_MAPPING brand query failed: {e}")
+            import traceback; traceback.print_exc()
 
         conn.close()
 
@@ -20230,6 +20288,7 @@ def _run_roas_iq(job_id):
             'search_terms': search_terms,
             'start_date': start_date,
             'end_date': end_date,
+            'scope': scope,
             'uid_count': uid_count,
             'projected_uid_count': _project_to_us_pop(uid_count),
             'url_rows': len(rows),
@@ -20301,6 +20360,9 @@ def submit_roas_iq():
             return jsonify({'error': 'start_date and end_date required'}), 400
 
         search_terms = [t.strip() for t in search_terms_raw.replace('\n', ',').split(',') if t.strip()]
+        scope = (data.get('scope') or 'overall').strip()
+        if scope not in ('overall', 'brand_specific'):
+            scope = 'overall'
         job_id = str(uuid.uuid4())[:8]
         jobs[job_id] = {
             'status': 'queued', 'progress': 0, 'message': 'Queued',
@@ -20313,6 +20375,7 @@ def submit_roas_iq():
                 'search_terms': search_terms,
                 'start_date': start_date,
                 'end_date': end_date,
+                'scope': scope,
             },
         }
         if s3_client:
