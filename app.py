@@ -9336,11 +9336,12 @@ def get_segment_data():
                     return 'Another Race/Ethnicity'
                 return val
 
+            _excluded_demo = {'OTHER', 'PREFER NOT TO SAY'}
             for row in demo_results:
                 gender, age, income, ethnicity, count = row
-                if gender:
+                if gender and gender.strip().upper() not in _excluded_demo:
                     demographics['gender'][gender] = demographics['gender'].get(gender, 0) + count
-                if age:
+                if age and age.strip().upper() not in _excluded_demo:
                     demographics['age'][age] = demographics['age'].get(age, 0) + count
                 if income:
                     demographics['income'][income] = demographics['income'].get(income, 0) + count
@@ -9348,11 +9349,12 @@ def get_segment_data():
                     key = _display_ethnicity(ethnicity)
                     demographics['ethnicity'][key] = demographics['ethnicity'].get(key, 0) + count
             
-            # Convert counts to percentages
-            total_demo = sum(demographics['gender'].values()) if demographics['gender'] else actual_segment_size
+            # Convert counts to percentages (rebased to 100% per category)
             for demo_type in demographics:
-                for key in demographics[demo_type]:
-                    demographics[demo_type][key] = (demographics[demo_type][key] / total_demo * 100) if total_demo > 0 else 0
+                cat_total = sum(demographics[demo_type].values())
+                if cat_total > 0:
+                    for key in demographics[demo_type]:
+                        demographics[demo_type][key] = (demographics[demo_type][key] / cat_total * 100)
             
             conn.close()
             
@@ -9817,16 +9819,17 @@ def parse_subscriber_iq_csv(csv_content):
             if first_col and first_col not in ['', 'AGE']:
                 # Filter out gender entries that might have been mixed in
                 first_col_upper = first_col.upper().strip()
-                gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER']
+                gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY']
+                skip_keywords = ['OTHER', 'PREFER NOT TO SAY']
                 
                 # Count/percentage/gen_pop: CSV format is col C (2) for count, col I (8) for percentage, col J (9) for gen_pop
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _pct = (row[8].strip() if len(row) > 8 else '') or (row[7].strip() if len(row) > 7 else '')
                 _gen = (row[9].strip() if len(row) > 9 else '') or (row[5].strip() if len(row) > 5 else '')
                 
-                # Only add if it's not a gender entry and looks like an age range
-                if not any(keyword in first_col_upper for keyword in gender_keywords):
-                    # Check if it looks like an age range (contains numbers or age-like patterns)
+                if any(keyword == first_col_upper for keyword in skip_keywords):
+                    print(f"   ⚠️ Skipping '{first_col}' in age section (excluded category)")
+                elif not any(keyword in first_col_upper for keyword in gender_keywords):
                     if any(char.isdigit() for char in first_col) or '-' in first_col or '+' in first_col or 'to' in first_col_upper or 'and' in first_col_upper:
                         parsed['demographics']['age'].append({
                             'age_range': first_col,
@@ -9837,7 +9840,6 @@ def parse_subscriber_iq_csv(csv_content):
                     else:
                         print(f"   ⚠️ Skipping potential gender entry in age section: '{first_col}'")
                 else:
-                    # This is a gender entry - add it to gender data instead
                     print(f"   ⚠️ Found gender entry '{first_col}' in age section, moving to gender data")
                     parsed['demographics']['gender'].append({
                         'gender': first_col,
@@ -9848,6 +9850,10 @@ def parse_subscriber_iq_csv(csv_content):
         
         elif current_section == 'demographics_gender':
             if first_col and first_col not in ['', 'GENDER']:
+                first_col_upper_g = first_col.upper().strip()
+                if first_col_upper_g in ('OTHER', 'PREFER NOT TO SAY'):
+                    print(f"   ⚠️ Skipping '{first_col}' in gender section (excluded category)")
+                    continue
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _pct = (row[8].strip() if len(row) > 8 else '') or (row[7].strip() if len(row) > 7 else '')
                 _gen = (row[9].strip() if len(row) > 9 else '') or (row[5].strip() if len(row) > 5 else '')
@@ -10106,9 +10112,11 @@ def parse_subscriber_iq_csv(csv_content):
                 demo_sub = 'gender'
                 continue
             if demo_sub and first_col and first_col not in ('AGE', 'GENDER'):
+                first_col_fb_upper = first_col.upper().strip()
+                if first_col_fb_upper in ('OTHER', 'PREFER NOT TO SAY'):
+                    continue
                 _c = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _p = (row[4].strip() if len(row) > 4 else '') or (row[7].strip() if len(row) > 7 else '')
-                # Prefer column 9 for US projected (gen_pop), then 8, then 5 (match main demographics section)
                 _g = (row[9].strip() if len(row) > 9 else '') or (row[8].strip() if len(row) > 8 else '') or (row[5].strip() if len(row) > 5 else '')
                 if demo_sub == 'age' and (any(c.isdigit() for c in first_col) or '-' in first_col or '+' in first_col):
                     parsed['demographics']['age'].append({'age_range': first_col, 'count': _c, 'percentage': _p, 'gen_pop': _g})
@@ -10139,6 +10147,20 @@ def parse_subscriber_iq_csv(csv_content):
         if total > 0:
             parsed['key_metrics']['avg_days_to_signup'] = f"{(weighted / total):.1f}"
             print(f"   📊 Computed avg_days_to_signup from signup_timing: {parsed['key_metrics']['avg_days_to_signup']}")
+
+    # Rebase demographic percentages to 100% after excluding filtered entries
+    for demo_kind in ('age', 'gender'):
+        items = parsed.get('demographics', {}).get(demo_kind, [])
+        if not items:
+            continue
+        total_count = 0
+        for it in items:
+            c = parse_number(it.get('count', 0))
+            total_count += c if c else 0
+        if total_count > 0:
+            for it in items:
+                c = parse_number(it.get('count', 0)) or 0
+                it['percentage'] = f"{(c / total_count) * 100:.2f}%"
 
     # Log parsing summary
     print(f"📊 Parsing complete:")

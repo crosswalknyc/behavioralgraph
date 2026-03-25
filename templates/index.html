@@ -28703,8 +28703,8 @@
             let ageData = data.demographics?.age || [];
             let genderData = data.demographics?.gender || [];
             
-            // Gender keywords to identify gender entries
-            const genderKeywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER'];
+            // Gender keywords to identify gender entries (OTHER excluded — filtered out entirely)
+            const genderKeywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY'];
             
             // Fallback: check if demographics is an array or object with different structure
             if (!ageData.length && !genderData.length && data.demographics) {
@@ -28737,8 +28737,8 @@
             const cleanedAgeData = [];
             ageData.forEach(item => {
                 const key = (item.age_range || item.age || '').toUpperCase().trim();
+                if (_excludedDemoValues.has(key)) return;
                 if (key && genderKeywords.some(kw => key.includes(kw))) {
-                    // This is actually a gender entry
                     genderFromAge.push({
                         gender: item.age_range || item.age || '',
                         count: item.count || '',
@@ -28757,11 +28757,11 @@
             console.log('📊 Final age data (after cleanup):', ageData);
             console.log('📊 Final gender data (after merge):', genderData);
             
-            // Filter age data - remove GENDER entries and invalid age ranges
             const filteredAgeData = ageData.filter(item => {
                 const ageRange = item.age_range || item.age || '';
                 const ageRangeUpper = ageRange.toUpperCase().trim();
                 return ageRange &&
+                       !_excludedDemoValues.has(ageRangeUpper) &&
                        !genderKeywords.some(kw => ageRangeUpper.includes(kw)) &&
                        ageRangeUpper !== 'AGE' &&
                        ageRange.trim() !== '' &&
@@ -28822,14 +28822,12 @@
                 }))
                 .sort((a, b) => b.count - a.count);
             
-            // Combine gender data case-insensitively (used by insights, table, and chart)
+            const _excludedDemoValues = new Set(['GENDER', 'N/A', 'OTHER', 'PREFER NOT TO SAY']);
             const filteredGenderData = genderData.filter(item => {
-                const gender = item.gender || '';
+                const gender = (item.gender || '').trim();
                 const count = parseNumber(item.count) || 0;
-                return gender && 
-                       gender.toUpperCase() !== 'GENDER' && 
-                       gender.toUpperCase() !== 'N/A' && 
-                       gender.trim() !== '' &&
+                return gender &&
+                       !_excludedDemoValues.has(gender.toUpperCase()) &&
                        count > 0;
             });
             
@@ -28888,8 +28886,8 @@
                 console.log(`📊 Aggregating gender: "${gender}" -> "${normalizedKey}" (${displayName}): count=${count}, total now=${genderGroups[normalizedKey].count}`);
             });
             
-            // Remove "Prefer Not To Say" and rebase
             delete genderGroups['PREFER NOT TO SAY'];
+            delete genderGroups['OTHER'];
 
             // Convert to array and sort by count descending
             const validGenderData = Object.values(genderGroups)
@@ -30811,7 +30809,7 @@
                     result.demographicsProjection.age[value] = usProjection;
                     if (rawNumbers > 0) result.demographicsAgeRaw[value] = rawNumbers;
                 }
-                if (category === 'GENDER' && value) {
+                if (category === 'GENDER' && value && !['OTHER', 'PREFER NOT TO SAY'].includes(value.toUpperCase().trim())) {
                     result.demographics.gender[value] = pct;
                     result.demographicsIndex.gender[value] = index;
                     result.demographicsGenPop.gender[value] = genPopPct;
@@ -30961,6 +30959,17 @@
             // Sort behavioral by percentage
             Object.keys(result.behavioral).forEach(cat => {
                 result.behavioral[cat].sort((a, b) => b.pct - a.pct);
+            });
+
+            // Rebase demographics percentages to 100% after filtering out excluded values
+            ['gender', 'age', 'income', 'ethnicity', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'].forEach(demoKey => {
+                const bucket = result.demographics[demoKey];
+                if (!bucket || typeof bucket !== 'object') return;
+                const total = Object.values(bucket).reduce((s, v) => s + (v || 0), 0);
+                if (total > 0 && Math.abs(total - 100) > 0.5) {
+                    const scale = 100 / total;
+                    for (const k of Object.keys(bucket)) bucket[k] = Math.round(bucket[k] * scale * 100) / 100;
+                }
             });
 
             return result;
