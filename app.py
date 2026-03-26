@@ -20194,10 +20194,23 @@ def _run_roas_iq(job_id):
             except Exception:
                 continue
 
-        uid_confirmation_count = {}
-        for cd in conversion_details:
-            uid = cd['uid']
-            uid_confirmation_count[uid] = uid_confirmation_count.get(uid, 0) + 1
+        # Build per-UID set of all ad-attributed landing domains
+        uid_all_ad_domains = {}
+        for (key, uid), doms in uid_source_domains.items():
+            if uid not in uid_all_ad_domains:
+                uid_all_ad_domains[uid] = set()
+            uid_all_ad_domains[uid] |= doms
+
+        # Only count a UID as a converter if their confirmation page domain
+        # overlaps with a domain from their ad-attributed URLs.
+        # This prevents counting unrelated purchases (e.g. Amazon grocery order)
+        # as conversions for a Nike ad.
+        uid_confirmed_on_ad_domain = set()
+        for uid, conf_domains in uid_conv_domains.items():
+            ad_doms = uid_all_ad_domains.get(uid, set())
+            if conf_domains & ad_doms:
+                uid_confirmed_on_ad_domain.add(uid)
+        print(f"✅ Domain-matched converters: {len(uid_confirmed_on_ad_domain)} of {len(uid_conv_domains)} UIDs with confirmations")
 
         update_job_status(job_id, progress=75, message='Building results...')
         ranked = sorted(channel_source_uids.items(), key=lambda x: -len(x[1]))[:300]
@@ -20205,7 +20218,16 @@ def _run_roas_iq(job_id):
         total_ad_uids = set()
         for (channel, source), uid_set in ranked:
             cnt = len(uid_set)
-            unique_converters = sum(1 for uid in uid_set if uid_confirmation_count.get(uid, 0) > 0)
+            # Count converters: UID must have a confirmation on a domain that
+            # also appears in their ad-attributed URLs for this source
+            source_converters = 0
+            for uid in uid_set:
+                if uid not in uid_confirmed_on_ad_domain:
+                    continue
+                src_doms = uid_source_domains.get(((channel, source), uid), set())
+                if uid_conv_domains.get(uid, set()) & src_doms:
+                    source_converters += 1
+            unique_converters = source_converters
             total_ad_uids |= uid_set
             click_count = channel_source_clicks.get((channel, source), cnt)
             projected_clicks = _proj(click_count)
@@ -20231,7 +20253,7 @@ def _run_roas_iq(job_id):
 
         overall_ad_uid_count = len(total_ad_uids)
         total_classified_clicks = sum(channel_source_clicks.values())
-        total_unique_converters = sum(1 for uid in total_ad_uids if uid_confirmation_count.get(uid, 0) > 0)
+        total_unique_converters = sum(1 for uid in total_ad_uids if uid in uid_confirmed_on_ad_domain)
         overall_conv_rate = round(100.0 * _proj(total_unique_converters) / max(_proj(total_classified_clicks), 1), 2)
 
         top_domains = {}
