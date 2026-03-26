@@ -31008,8 +31008,8 @@
                     }
                 }
 
-                // Location/DMA - only include DMAs that have a DMA number (exclude unknown/unnamed markets)
-                if (category === 'LOCATION' && value && getDMARank(value) != null) {
+                // Location/DMA - include DMAs that have a DMA rank or map to a known canonical DMA
+                if (category === 'LOCATION' && value && (getDMARank(value) != null || getDMARank(matchCanonicalDMA(value) || '') != null)) {
                     result.locations.push({ name: value, pct: pct, index: index, genPopPct: genPopPct, projection: usProjection });
                 }
 
@@ -38967,8 +38967,8 @@
                     ? formatNumber(Math.round((loc.genPopPct || 0) / 100 * 329900000))
                     : (loc.genPopPct || 0).toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
-                const gpActual = getGPActualDMA(loc.name);
-                const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
+                const gpCensusVal = loc.genPopPct || 0;
+                const gpStr = gpCensusVal > 0 ? gpCensusVal.toFixed(3) + '%' : '—';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
@@ -40011,8 +40011,8 @@
                     ? formatNumber(Math.round((loc.genPopPct || 0) / 100 * 329900000))
                     : (loc.genPopPct || 0).toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
-                const gpActual = getGPActualDMA(loc.name);
-                const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
+                const gpCensusVal = loc.genPopPct || 0;
+                const gpStr = gpCensusVal > 0 ? gpCensusVal.toFixed(3) + '%' : '—';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
