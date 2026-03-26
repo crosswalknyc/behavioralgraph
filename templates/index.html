@@ -28097,6 +28097,27 @@
                 const parse = (lbl) => { const m = lbl.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (m) { let y = parseInt(m[3]); if (y < 100) y += 2000; return new Date(y, parseInt(m[1]) - 1, parseInt(m[2])); } return new Date(0); };
                 return parse(a) - parse(b);
             };
+            const parseDateLabel = (lbl) => {
+                const m = String(lbl || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                if (!m) return null;
+                let y = parseInt(m[3], 10);
+                if (y < 100) y += 2000;
+                const d = new Date(y, parseInt(m[1], 10) - 1, parseInt(m[2], 10));
+                return isNaN(d.getTime()) ? null : d;
+            };
+            const parseDateRangeBounds = (s) => {
+                const text = String(s || '');
+                const m = text.match(/(\d{4}-\d{1,2}-\d{1,2})\s*(?:to|-)\s*(\d{4}-\d{1,2}-\d{1,2})/i);
+                if (!m) return { start: null, end: null };
+                const a = m[1].split('-').map(n => parseInt(n, 10));
+                const b = m[2].split('-').map(n => parseInt(n, 10));
+                const start = new Date(a[0], a[1] - 1, a[2]);
+                const end = new Date(b[0], b[1] - 1, b[2]);
+                return {
+                    start: isNaN(start.getTime()) ? null : start,
+                    end: isNaN(end.getTime()) ? null : end
+                };
+            };
             
             // If we have actual dates, use them; otherwise fall back to relative labels
             if (hasActualDates && Object.keys(timingByDate).length > 0) {
@@ -28130,6 +28151,51 @@
                 if (dateMap) {
                     const sortedDates = Object.keys(dateMap).sort(sortByDateLabel);
                     timingData = sortedDates.map(dl => ({ timing: dl, signups: String(dateMap[dl]) }));
+                }
+            }
+
+            // Extend timeline to the final day of the attribution window and fill missing days with 0.
+            const bounds = parseDateRangeBounds(dateRangeStr);
+            const attrWindowDays = parseInt((data.metadata && data.metadata.attribution_window) || '', 10);
+            let latestEpisodeDate = null;
+            for (const d of Object.values(episodeDateMap)) {
+                if (d instanceof Date && !isNaN(d.getTime()) && (!latestEpisodeDate || d > latestEpisodeDate)) {
+                    latestEpisodeDate = d;
+                }
+            }
+            let expectedEndDate = null;
+            if (latestEpisodeDate && Number.isFinite(attrWindowDays) && attrWindowDays >= 0) {
+                expectedEndDate = addDays(latestEpisodeDate, attrWindowDays);
+            } else if (bounds.end) {
+                expectedEndDate = bounds.end;
+            }
+            const hasDateLabels = timingData.length > 0 && timingData.every(t => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(t.timing || '').trim()));
+            if (hasDateLabels && expectedEndDate) {
+                const byDay = {};
+                let latestObserved = null;
+                for (const t of timingData) {
+                    const d = parseDateLabel(t.timing);
+                    if (!d) continue;
+                    const key = formatDateLabel(d);
+                    byDay[key] = (byDay[key] || 0) + (parseNumber(t.signups) || 0);
+                    if (!latestObserved || d > latestObserved) latestObserved = d;
+                }
+                let fillStart = bounds.start;
+                if (!fillStart) {
+                    const ordered = Object.keys(byDay).sort(sortByDateLabel);
+                    fillStart = ordered.length ? parseDateLabel(ordered[0]) : null;
+                }
+                let fillEnd = expectedEndDate;
+                if (latestObserved && latestObserved > fillEnd) fillEnd = latestObserved;
+                if (fillStart && fillEnd && fillStart <= fillEnd) {
+                    const dense = [];
+                    const cursor = new Date(fillStart);
+                    while (cursor <= fillEnd) {
+                        const key = formatDateLabel(cursor);
+                        dense.push({ timing: key, signups: String(byDay[key] || 0) });
+                        cursor.setDate(cursor.getDate() + 1);
+                    }
+                    timingData = dense;
                 }
             }
             let avgDaysToSignup = metrics.avg_days_to_signup;
@@ -38549,12 +38615,15 @@
             CANONICAL_DMAS.forEach(c => {
                 const cn = _dmaNorm(c);
                 if (normGp[cn]) { _canonicalGpActual[c] = normGp[cn]; return; }
+                let bestVal = null, bestDiff = Infinity;
                 const primary = cn.substring(0, Math.min(cn.length, 10));
                 for (const [k, v] of Object.entries(normGp)) {
-                    if (k.startsWith(primary) || primary.startsWith(k.substring(0, 8))) {
-                        _canonicalGpActual[c] = v; return;
+                    if (k.startsWith(primary) || (cn.length >= 8 && primary.startsWith(k.substring(0, 8)))) {
+                        const diff = Math.abs(k.length - cn.length);
+                        if (diff < bestDiff) { bestDiff = diff; bestVal = v; }
                     }
                 }
+                if (bestVal !== null) { _canonicalGpActual[c] = bestVal; }
             });
         })();
         function matchCanonicalDMA(rawName) {
@@ -38566,10 +38635,12 @@
                 .replace(/\bft\.?$/g,'fort').replace(/\bst\.?$/g,'saint')
                 .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ');
             const primary = words.slice(0, 2).filter(w => w.length > 1).join('');
-            let best = null, bestLen = 0;
+            let best = null, bestDiff = Infinity;
             for (const [k, v] of Object.entries(_canonNorm)) {
-                if (k.startsWith(primary) && k.length > bestLen) { best = v; bestLen = k.length; }
-                if (!best && norm.startsWith(k.substring(0, Math.min(k.length, 8)))) { best = v; bestLen = k.length; }
+                if (k.startsWith(primary) || norm.startsWith(k.substring(0, Math.min(k.length, 8)))) {
+                    const diff = Math.abs(k.length - norm.length);
+                    if (diff < bestDiff) { bestDiff = diff; best = v; }
+                }
             }
             return best;
         }
@@ -38615,12 +38686,15 @@
             CANONICAL_DMAS.forEach(c => {
                 const cn = _dmaNorm(c);
                 if (normRanks[cn]) { _canonicalDmaRank[c] = normRanks[cn]; return; }
+                let bestRank = null, bestDiff = Infinity;
                 const primary = cn.substring(0, Math.min(cn.length, 12));
                 for (const [k, v] of Object.entries(normRanks)) {
-                    if (k.startsWith(primary) || primary.startsWith(k.substring(0, 8))) {
-                        _canonicalDmaRank[c] = v; return;
+                    if (k.startsWith(primary) || (cn.length >= 8 && primary.startsWith(k.substring(0, 8)))) {
+                        const diff = Math.abs(k.length - cn.length);
+                        if (diff < bestDiff) { bestDiff = diff; bestRank = v; }
                     }
                 }
+                if (bestRank !== null) { _canonicalDmaRank[c] = bestRank; }
             });
         })();
 
