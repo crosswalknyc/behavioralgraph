@@ -25669,7 +25669,14 @@
             if(keyLower==='location') {
                 const dmaKey = (v||'').toUpperCase().trim();
                 if(genPopBaselineData?.locations?.length) {
-                    const loc = genPopBaselineData.locations.find(l=>(l.name||'').toUpperCase().trim()===dmaKey);
+                    const canonInput = matchCanonicalDMA(v || '');
+                    const loc = genPopBaselineData.locations.find(l => {
+                        const ln = (l.name || '').trim();
+                        if (!ln) return false;
+                        if (ln.toUpperCase() === dmaKey) return true;
+                        const canonLoc = matchCanonicalDMA(ln);
+                        return canonInput && canonLoc && canonInput === canonLoc;
+                    });
                     if(loc && (loc.pct!=null||loc.percent!=null)) return parseFloat(loc.pct||loc.percent||0);
                 }
                 if(TST_GENPOP_DMA[dmaKey]!=null) return TST_GENPOP_DMA[dmaKey];
@@ -30595,7 +30602,14 @@
                 // For locations
                 if (catLower === 'location' && genPopBaselineData.locations) {
                     const dmaKey = valStr.toUpperCase();
-                    const loc = genPopBaselineData.locations.find(l => (l.name || '').toUpperCase().trim() === dmaKey);
+                    const canonInput = matchCanonicalDMA(valStr);
+                    const loc = genPopBaselineData.locations.find(l => {
+                        const ln = (l.name || '').trim();
+                        if (!ln) return false;
+                        if (ln.toUpperCase() === dmaKey) return true;
+                        const canonLoc = matchCanonicalDMA(ln);
+                        return canonInput && canonLoc && canonInput === canonLoc;
+                    });
                     if (loc && (loc.pct != null || loc.genPopPct != null)) {
                         return parseFloat(loc.pct ?? loc.genPopPct) || 0;
                     }
@@ -38685,20 +38699,48 @@
         function renderLocationTable(locations) {
             locations = condenseDMALocations(locations);
             const isProjection = dashDisplayMode === 'projection';
+            const _escAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
+            const _dmaDebugBadge = (rawName, canonName, cwGp) => {
+                const cw = (cwGp == null || Number.isNaN(Number(cwGp))) ? 'N/A' : `${Number(cwGp).toFixed(3)}%`;
+                const tip = `Raw DMA: ${rawName || 'N/A'} | Canonical DMA: ${canonName || 'N/A'} | CW Gen Pop: ${cw}`;
+                return `<span title="${_escAttr(tip)}" style="margin-left:0.35rem; font-size:0.68rem; color:var(--text-secondary); cursor:help;">🧭</span>`;
+            };
 
-            // Recalculate index and genPopPct from fresh Gen Pop baseline
+            // Recalculate index and genPopPct from fresh Gen Pop baseline.
+            // IMPORTANT: canonicalize baseline DMAs the same way as profile DMAs
+            // so rows like "Phoenix" and "Phoenix (Prescott), AZ" match correctly.
             if (genPopBaselineData && Array.isArray(genPopBaselineData.locations)) {
                 const gpMap = {};
-                genPopBaselineData.locations.forEach(function(gl) {
-                    gpMap[(gl.name || '').toUpperCase().trim()] = gl.pct || gl.genPopPct || 0;
+                const condensedBaseline = condenseDMALocations(genPopBaselineData.locations);
+                condensedBaseline.forEach(function(gl) {
+                    const canon = matchCanonicalDMA(gl.name || '');
+                    const key = canon || (gl.name || '').trim();
+                    if (!key) return;
+                    gpMap[key] = (gpMap[key] || 0) + (gl.pct || gl.genPopPct || 0);
                 });
                 locations.forEach(function(loc) {
-                    const gpPct = gpMap[(loc.name || '').toUpperCase().trim()] || 0;
+                    const canon = matchCanonicalDMA(loc.name || '');
+                    const key = canon || (loc.name || '').trim();
+                    const gpPct = gpMap[key] || 0;
                     if (gpPct > 0) {
                         loc.genPopPct = gpPct;
                         loc.index = Math.round((loc.pct / gpPct) * 100);
                     }
                 });
+                // Debug visibility: report canonical DMA key mismatches between profile and CW baseline.
+                const profileKeys = new Set(locations.map(l => matchCanonicalDMA(l.name || '') || (l.name || '').trim()).filter(Boolean));
+                const baselineKeys = new Set(Object.keys(gpMap));
+                const missingInBaseline = [...profileKeys].filter(k => !baselineKeys.has(k));
+                const unusedBaseline = [...baselineKeys].filter(k => !profileKeys.has(k));
+                if (missingInBaseline.length || unusedBaseline.length) {
+                    console.warn('[DMA Debug] Canonical key mismatch', {
+                        missingInBaseline,
+                        unusedBaselineCount: unusedBaseline.length,
+                        unusedBaselineSample: unusedBaseline.slice(0, 15)
+                    });
+                } else {
+                    console.debug('[DMA Debug] Canonical profile and CW baseline DMA keys aligned:', profileKeys.size);
+                }
             }
 
             // Sort by index for ranking (higher index = over-indexes more)
@@ -38750,10 +38792,12 @@
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
+                const canonName = matchCanonicalDMA(loc.name || '') || (loc.name || '');
+                const debugBadge = _dmaDebugBadge(loc.name, canonName, loc.genPopPct);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${normalizeDmaDisplay(loc.name)}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}${debugBadge}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
@@ -38800,10 +38844,12 @@
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
+                const canonName = matchCanonicalDMA(loc.name || '') || (loc.name || '');
+                const debugBadge = _dmaDebugBadge(loc.name, canonName, loc.genPopPct);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${normalizeDmaDisplay(loc.name)}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}${debugBadge}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
@@ -38859,10 +38905,12 @@
                 const dmaRank = getDMARank(loc.name);
                 const gpActual = getGPActualDMA(loc.name);
                 const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
+                const canonName = matchCanonicalDMA(loc.name || '') || (loc.name || '');
+                const debugBadge = _dmaDebugBadge(loc.name, canonName, loc.genPopPct);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${normalizeDmaDisplay(loc.name)}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}${debugBadge}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
                         <span class="cw-gp-col" style="color: var(--text-secondary);">${genPopDisplay}</span>
