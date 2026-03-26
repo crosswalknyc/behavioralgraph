@@ -2115,6 +2115,57 @@ def _apply_pct_plan_to_df_out(df_out, indices, pct_plan, total_count):
     return changes
 
 
+def _detect_gender_skew_hint(gender_skew_hint, research_text):
+    """Infer target gender skew from model hint or research text."""
+    hint = str(gender_skew_hint or '').strip().lower()
+    if any(k in hint for k in ('female', 'women', 'woman')):
+        return 'female'
+    if any(k in hint for k in ('male', 'men', 'man')):
+        return 'male'
+    if 'balanced' in hint or 'mixed' in hint:
+        return 'balanced'
+
+    txt = str(research_text or '').lower()
+    if re.search(r'\b(skews?|primarily|majority)\s+(female|women)\b', txt):
+        return 'female'
+    if re.search(r'\b(skews?|primarily|majority)\s+(male|men)\b', txt):
+        return 'male'
+    if re.search(r'\bmore\s+women\s+than\s+men\b', txt):
+        return 'female'
+    if re.search(r'\bmore\s+men\s+than\s+women\b', txt):
+        return 'male'
+    return 'balanced'
+
+
+def _enforce_gender_skew_in_plan(gender_plan, labels, skew_hint):
+    """
+    Ensure Male/Female ordering matches intended skew from title research.
+    Keeps total stable by swapping when skew is violated.
+    """
+    if not gender_plan or not labels:
+        return gender_plan, []
+    label_map = {str(lbl).strip().lower(): str(lbl).strip() for lbl in labels}
+    male_lbl = label_map.get('male')
+    female_lbl = label_map.get('female')
+    if not male_lbl or not female_lbl:
+        return gender_plan, []
+
+    try:
+        male_val = float(gender_plan.get(male_lbl, 0.0))
+        female_val = float(gender_plan.get(female_lbl, 0.0))
+    except (ValueError, TypeError):
+        return gender_plan, []
+
+    changes = []
+    if skew_hint == 'female' and female_val < male_val:
+        gender_plan[female_lbl], gender_plan[male_lbl] = male_val, female_val
+        changes.append("Adjusted gender plan to female-skew based on title research.")
+    elif skew_hint == 'male' and male_val < female_val:
+        gender_plan[male_lbl], gender_plan[female_lbl] = female_val, male_val
+        changes.append("Adjusted gender plan to male-skew based on title research.")
+    return gender_plan, changes
+
+
 def ai_align_final_demographics_with_research(df_out, platform_name):
     """
     Final-step demographic alignment agent (GPT-4o):
@@ -2221,10 +2272,15 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
         f'CURRENT GENDER ROWS: {gender_rows}\n\n'
         f'Use ONLY these exact AGE labels: {age_labels}\n'
         f'Use ONLY these exact GENDER labels: {gender_labels}\n\n'
+        f'CRITICAL GENDER RULE:\n'
+        f'- Infer whether this title is male-skew, female-skew, or balanced from the research.\n'
+        f'- Ensure the Male/Female percentages reflect that skew in the final output.\n'
+        f'- Do not invert the known audience skew.\n\n'
         f'Return ONLY JSON with numeric percentages (no % symbol):\n'
         f'{{\n'
         f'  "age": {{"<label>": <pct>, ...}},\n'
         f'  "gender": {{"<label>": <pct>, ...}},\n'
+        f'  "gender_skew": "male|female|balanced",\n'
         f'  "reasoning": "brief rationale"\n'
         f'}}\n'
         f'Each provided section should sum to about 100.'
@@ -2250,10 +2306,14 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
             nps_count
         ))
     if section_rows["GENDER"]:
+        skew_hint = _detect_gender_skew_hint(parsed.get("gender_skew"), research)
+        gender_plan = parsed.get("gender", {}) or {}
+        gender_plan, skew_changes = _enforce_gender_skew_in_plan(gender_plan, gender_labels, skew_hint)
+        changes.extend(skew_changes)
         changes.extend(_apply_pct_plan_to_df_out(
             df_out,
             section_rows["GENDER"],
-            parsed.get("gender", {}),
+            gender_plan,
             nps_count
         ))
 
