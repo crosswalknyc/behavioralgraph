@@ -16636,6 +16636,7 @@
         let openSubscriberTabs = []; // Array of { id, name, dateRange, data }
         let activeSubscriberTabId = null;
         const expandedSubscriberCategories = new Set(); // For hierarchical tree (match Profile IQ)
+        const expandedSubscriberShows = new Set(); // For nested season groups in Subscriber IQ sidebar
         
         // When true, user only has Hedge Fund IQ (no Profile IQ) — default to Hedge Fund IQ landing on load
         window.defaultViewHedgeFundIQ = {{ 'true' if default_view_hedge_fund_iq else 'false' }};
@@ -26851,6 +26852,21 @@
                 if (!byCategory[category][showName]) byCategory[category][showName] = [];
                 byCategory[category][showName].push(file);
             });
+
+            function parseSeasonInfo(showName) {
+                const raw = String(showName || '').trim();
+                const m = raw.match(/^(.*?)(?:\s+Season\s*([0-9]+))\s*$/i);
+                if (!m) {
+                    return { baseTitle: raw, seasonNumber: null, seasonLabel: null };
+                }
+                const baseTitle = (m[1] || '').trim() || raw;
+                const seasonNumber = parseInt(m[2], 10);
+                return {
+                    baseTitle,
+                    seasonNumber: Number.isFinite(seasonNumber) ? seasonNumber : null,
+                    seasonLabel: Number.isFinite(seasonNumber) ? `Season ${seasonNumber}` : 'Season'
+                };
+            }
             
             const sortedCategories = Object.keys(byCategory).sort();
             let html = '';
@@ -26861,6 +26877,21 @@
                 const catCount = showNames.reduce((sum, sn) => sum + shows[sn].length, 0);
                 const catId = 'subscriber_cat_' + category.replace(/[^a-zA-Z0-9]/g, '_');
                 const isExpanded = expandedSubscriberCategories.has(catId);
+
+                // Group seasonal variants under a base title (e.g., "Only Murders in the Building" -> seasons).
+                const grouped = {};
+                showNames.forEach(showName => {
+                    const latestFile = shows[showName][0];
+                    const parsed = parseSeasonInfo(showName);
+                    const baseKey = parsed.baseTitle || showName;
+                    if (!grouped[baseKey]) {
+                        grouped[baseKey] = { standalone: [], seasons: [] };
+                    }
+                    const entry = { showName, file: latestFile, seasonNumber: parsed.seasonNumber, seasonLabel: parsed.seasonLabel };
+                    if (parsed.seasonNumber == null) grouped[baseKey].standalone.push(entry);
+                    else grouped[baseKey].seasons.push(entry);
+                });
+                const baseTitles = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
                 
                 html += `
                     <div class="profile-cat-item master-cat ${isExpanded ? 'open' : ''}" onclick="toggleSubscriberCategory('${catId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
@@ -26869,12 +26900,58 @@
                         <span class="profile-cat-count">(${catCount})</span>
                     </div>
                     <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}" style="padding-left: 0.5rem;">
-                        ${showNames.map(showName => {
-                            const files = shows[showName];
-                            const latestFile = files[0];
-                            const idEsc = escKey(latestFile.s3_key);
-                            const isActive = activeSubscriberTabId === latestFile.s3_key;
-                            const name = escAttr(showName);
+                        ${baseTitles.map(baseTitle => {
+                            const group = grouped[baseTitle];
+                            const hasSeasons = (group.seasons || []).length > 0;
+                            const onlyOneSeasonNoStandalone = hasSeasons && group.seasons.length === 1 && (group.standalone || []).length === 0;
+                            const baseSafe = baseTitle.replace(/[^a-zA-Z0-9]/g, '_');
+                            const showGroupId = `subscriber_show_${catId}_${baseSafe}`;
+                            const showExpanded = expandedSubscriberShows.has(showGroupId);
+
+                            if (hasSeasons && !onlyOneSeasonNoStandalone) {
+                                const seasonByNumber = {};
+                                group.seasons.forEach(s => {
+                                    const k = String(s.seasonNumber);
+                                    if (!(k in seasonByNumber)) seasonByNumber[k] = s; // Keep latest only.
+                                });
+                                const seasonRows = Object.values(seasonByNumber).sort((a, b) => (a.seasonNumber || 999) - (b.seasonNumber || 999));
+                                const standalones = (group.standalone || []).slice();
+                                return `
+                                    <div class="profile-cat-item ${showExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleSubscriberShowGroup('${showGroupId}')" style="margin: 0.2rem 0 0.1rem 0; background: rgba(90, 154, 217, 0.06); font-size: 0.82rem;">
+                                        <span class="cat-arrow">▸</span>
+                                        <span class="profile-cat-label">${escAttr(baseTitle)}</span>
+                                        <span class="profile-cat-count">(${seasonRows.length + standalones.length})</span>
+                                    </div>
+                                    <div class="profile-cat-children ${showExpanded ? 'open' : ''}" style="padding-left: 0.7rem;">
+                                        ${seasonRows.map(seasonEntry => {
+                                            const idEsc = escKey(seasonEntry.file.s3_key);
+                                            const isActive = activeSubscriberTabId === seasonEntry.file.s3_key;
+                                            const title = escAttr(seasonEntry.showName);
+                                            const label = escAttr(seasonEntry.seasonLabel || seasonEntry.showName);
+                                            return `
+                                                <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${title}">
+                                                    ${label}
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                        ${standalones.map(item => {
+                                            const idEsc = escKey(item.file.s3_key);
+                                            const isActive = activeSubscriberTabId === item.file.s3_key;
+                                            const label = escAttr(item.showName);
+                                            return `
+                                                <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${label}">
+                                                    ${label}
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                `;
+                            }
+
+                            const single = hasSeasons ? group.seasons[0] : group.standalone[0];
+                            const idEsc = escKey(single.file.s3_key);
+                            const isActive = activeSubscriberTabId === single.file.s3_key;
+                            const name = escAttr(single.showName);
                             return `
                                 <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${name}">
                                     ${name}
@@ -26897,6 +26974,15 @@
                 expandedSubscriberCategories.delete(catId);
             } else {
                 expandedSubscriberCategories.add(catId);
+            }
+            renderSubscriberProfileTree();
+        }
+
+        function toggleSubscriberShowGroup(groupId) {
+            if (expandedSubscriberShows.has(groupId)) {
+                expandedSubscriberShows.delete(groupId);
+            } else {
+                expandedSubscriberShows.add(groupId);
             }
             renderSubscriberProfileTree();
         }
