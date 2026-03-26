@@ -38779,8 +38779,7 @@
             // so rows like "Phoenix" and "Phoenix (Prescott), AZ" match correctly.
             if (genPopBaselineData && Array.isArray(genPopBaselineData.locations)) {
                 const gpMap = {};
-                const condensedBaseline = condenseDMALocations(genPopBaselineData.locations);
-                condensedBaseline.forEach(function(gl) {
+                genPopBaselineData.locations.forEach(function(gl) {
                     const canon = matchCanonicalDMA(gl.name || '');
                     const key = canon || (gl.name || '').trim();
                     if (!key) return;
