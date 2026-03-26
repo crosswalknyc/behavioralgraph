@@ -38685,6 +38685,22 @@
         function renderLocationTable(locations) {
             locations = condenseDMALocations(locations);
             const isProjection = dashDisplayMode === 'projection';
+
+            // Recalculate index and genPopPct from fresh Gen Pop baseline
+            if (genPopBaselineData && Array.isArray(genPopBaselineData.locations)) {
+                const gpMap = {};
+                genPopBaselineData.locations.forEach(function(gl) {
+                    gpMap[(gl.name || '').toUpperCase().trim()] = gl.pct || gl.genPopPct || 0;
+                });
+                locations.forEach(function(loc) {
+                    const gpPct = gpMap[(loc.name || '').toUpperCase().trim()] || 0;
+                    if (gpPct > 0) {
+                        loc.genPopPct = gpPct;
+                        loc.index = Math.round((loc.pct / gpPct) * 100);
+                    }
+                });
+            }
+
             // Sort by index for ranking (higher index = over-indexes more)
             const sorted = [...locations].sort((a, b) => b.index - a.index);
             
