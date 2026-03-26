@@ -19925,7 +19925,7 @@ def _run_roas_iq(job_id):
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        cur.execute("USE WAREHOUSE ROASIQ")
 
         ROAS_MAX_UIDS = 50000
         ROAS_MAX_URL_ROWS = 500000
@@ -20477,7 +20477,7 @@ def _run_ecommerce_iq(job_id):
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        cur.execute("USE WAREHOUSE ECOMIQ")
 
         update_job_status(job_id, progress=20, message='Finding audience from search terms...')
         uid_count = _build_temp_uids_from_terms(cur, search_terms, start_date, end_date)
