@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 import sys
 import re
+import json
+import os
 
 
 # =========================
@@ -461,6 +463,183 @@ def compute_demographics(df_demo, demo_fields=None):
     return result
 
 
+def _extract_json_object(text):
+    if not text:
+        return None
+    raw = str(text).strip()
+    if raw.startswith("```"):
+        raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    start = raw.find('{')
+    if start < 0:
+        return None
+    depth = 0
+    end = start
+    for i in range(start, len(raw)):
+        if raw[i] == '{':
+            depth += 1
+        elif raw[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    raw_json = raw[start:end]
+    raw_json = re.sub(r'//.*?$', '', raw_json, flags=re.MULTILINE)
+    raw_json = re.sub(r',\s*}', '}', raw_json)
+    raw_json = re.sub(r',\s*]', ']', raw_json)
+    try:
+        return json.loads(raw_json)
+    except Exception:
+        return None
+
+
+def _normalize_pct_plan(raw_map, labels):
+    if not labels:
+        return {}
+    label_map = {str(lbl).strip().upper(): str(lbl).strip().upper() for lbl in labels}
+    vals = {}
+    for k, v in (raw_map or {}).items():
+        key = str(k).strip().upper()
+        if key in label_map:
+            try:
+                vals[label_map[key]] = max(0.0, float(v))
+            except (ValueError, TypeError):
+                continue
+    if not vals:
+        even = round(100.0 / len(labels), 2)
+        return {str(lbl).strip().upper(): even for lbl in labels}
+    total = sum(vals.values())
+    if total <= 0:
+        even = round(100.0 / len(labels), 2)
+        return {str(lbl).strip().upper(): even for lbl in labels}
+    norm = {}
+    running = 0.0
+    ordered = [str(lbl).strip().upper() for lbl in labels]
+    for i, lbl in enumerate(ordered):
+        if i == len(ordered) - 1:
+            norm[lbl] = round(max(0.0, 100.0 - running), 2)
+        else:
+            v = (vals.get(lbl, 0.0) * 100.0) / total
+            v = round(v, 2)
+            norm[lbl] = v
+            running += v
+    return norm
+
+
+def _default_ticket_demo_plan(genre):
+    g = (genre or "").lower()
+    if "family" in g or "animation" in g:
+        return {
+            "gender": {"FEMALE": 52.0, "MALE": 46.0, "NON-BINARY": 1.0, "TRANS MALE": 0.5, "TRANS FEMALE": 0.5},
+            "age": {"17 AND UNDER": 28.0, "18-24": 18.0, "25-34": 20.0, "35-44": 14.0, "45-54": 10.0, "55-64": 6.0, "65 OR OLDER": 4.0},
+        }
+    if "action" in g or "adventure" in g or "sci-fi" in g:
+        return {
+            "gender": {"MALE": 54.0, "FEMALE": 44.0, "NON-BINARY": 1.0, "TRANS MALE": 0.5, "TRANS FEMALE": 0.5},
+            "age": {"18-24": 24.0, "25-34": 28.0, "35-44": 20.0, "45-54": 13.0, "17 AND UNDER": 8.0, "55-64": 5.0, "65 OR OLDER": 2.0},
+        }
+    return {
+        "gender": {"FEMALE": 50.0, "MALE": 48.0, "NON-BINARY": 1.0, "TRANS MALE": 0.5, "TRANS FEMALE": 0.5},
+        "age": {"18-24": 18.0, "25-34": 24.0, "35-44": 20.0, "45-54": 14.0, "55-64": 10.0, "17 AND UNDER": 8.0, "65 OR OLDER": 6.0},
+    }
+
+
+def ai_align_ticket_sales_totals_and_demographics(movie_name, genre, total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall):
+    """
+    Final AI pass for Ticket Sales Tracker:
+    - Validate US-only projected ticket sales against research (downward-only adjustment)
+    - Align overall AGE/GENDER demographics to title audience profile
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, []
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+    except Exception:
+        return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, []
+
+    research = ""
+    try:
+        research_prompt = (
+            f'Research US-only ticket sales and audience demographics for the film "{movie_name}". '
+            f'Provide domestic US box office range and likely AGE/GENDER audience skew from credible sources.'
+        )
+        rr = client.chat.completions.create(
+            model="gpt-4o-search-preview",
+            messages=[{"role": "user", "content": research_prompt}],
+            web_search_options={"search_context_size": "medium"},
+        )
+        research = (rr.choices[0].message.content or "").strip() if rr.choices else ""
+    except Exception:
+        research = ""
+
+    default_plan = _default_ticket_demo_plan(genre)
+    if not research:
+        age_labels = list((demo_overall.get("AGE") or {}).keys())
+        gender_labels = list((demo_overall.get("GENDER") or {}).keys())
+        if age_labels:
+            demo_overall["AGE"] = _normalize_pct_plan(default_plan.get("age", {}), age_labels)
+        if gender_labels:
+            demo_overall["GENDER"] = _normalize_pct_plan(default_plan.get("gender", {}), gender_labels)
+        return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, ["Applied fallback demographic plan (no web research)."]
+
+    prompt = (
+        f'You are validating Ticket Sales Tracker output for US only.\n\n'
+        f'MOVIE: {movie_name}\nGENRE: {genre}\n'
+        f'OUR TOTAL TICKETS (US projected): {float(total_tickets_gen_pop):.2f}\n'
+        f'OUR PROJECTED TICKET SALES (US projected): {float(projected_sales_gen_pop):.2f}\n'
+        f'CURRENT OVERALL DEMOGRAPHICS: {demo_overall}\n\n'
+        f'RESEARCH:\n{research}\n\n'
+        f'Return ONLY JSON:\n'
+        f'{{\n'
+        f'  "sales_adjustment_factor": <0.05-1.0, use <1 only if inflated; never >1>,\n'
+        f'  "gender": {{"MALE": <pct>, "FEMALE": <pct>, "NON-BINARY": <pct>, "TRANS MALE": <pct>, "TRANS FEMALE": <pct>}},\n'
+        f'  "age": {{"17 AND UNDER": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, "45-54": <pct>, "55-64": <pct>, "65 OR OLDER": <pct>}},\n'
+        f'  "reasoning": "brief"\n'
+        f'}}'
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+        )
+        parsed = _extract_json_object(resp.choices[0].message.content if resp.choices else "")
+    except Exception:
+        parsed = None
+
+    changes = []
+    if not parsed:
+        return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, changes
+
+    factor = 1.0
+    try:
+        factor = float(parsed.get("sales_adjustment_factor", 1.0))
+    except (ValueError, TypeError):
+        factor = 1.0
+    factor = max(0.05, min(1.0, factor))
+    if factor < 0.999:
+        old_sales = projected_sales_gen_pop
+        total_tickets = max(0, int(round(total_tickets * factor)))
+        total_tickets_gen_pop = max(0.0, total_tickets_gen_pop * factor)
+        projected_sales_base = max(0.0, projected_sales_base * factor)
+        projected_sales_gen_pop = max(0.0, projected_sales_gen_pop * factor)
+        changes.append(f"Reduced projected US ticket sales by factor {factor:.3f} ({old_sales:,.2f} -> {projected_sales_gen_pop:,.2f}).")
+
+    if "AGE" in demo_overall and demo_overall["AGE"]:
+        demo_overall["AGE"] = _normalize_pct_plan(parsed.get("age", default_plan.get("age", {})), list(demo_overall["AGE"].keys()))
+        changes.append("Aligned AGE demographics to title audience profile.")
+    if "GENDER" in demo_overall and demo_overall["GENDER"]:
+        demo_overall["GENDER"] = _normalize_pct_plan(parsed.get("gender", default_plan.get("gender", {})), list(demo_overall["GENDER"].keys()))
+        changes.append("Aligned GENDER demographics to title audience profile.")
+
+    reason = str(parsed.get("reasoning") or "").strip()
+    if reason:
+        changes.append(f"AI rationale: {reason}")
+    return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, changes
+
+
 # =======================
 # === Output writing  ===
 # =======================
@@ -524,6 +703,21 @@ def write_output(results, p):
 
     # Demographics - overall
     demo_overall = compute_demographics(df_demo_overall)
+
+    # Final AI validation/alignment (US ticket sales + demographics)
+    total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, ai_changes = ai_align_ticket_sales_totals_and_demographics(
+        p["movie_name"],
+        p.get("genre", ""),
+        total_tickets,
+        total_tickets_gen_pop,
+        projected_sales_base,
+        projected_sales_gen_pop,
+        demo_overall
+    )
+    if ai_changes:
+        print("🤖 Applied AI ticket-sales alignment:")
+        for c in ai_changes:
+            print(f"   • {c}")
     rows.append(("", "DEMOGRAPHICS (Overall - all theater UIDs)", "", "", "", ""))
     for field in ["GENDER", "AGE", "INCOME", "ETHNICITY", "LOCATION"]:
         if field in demo_overall:
