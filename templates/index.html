@@ -38967,8 +38967,8 @@
                     ? formatNumber(Math.round((loc.genPopPct || 0) / 100 * 329900000))
                     : (loc.genPopPct || 0).toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
-                const gpCensusVal = loc.genPopPct || 0;
-                const gpStr = gpCensusVal > 0 ? gpCensusVal.toFixed(3) + '%' : '—';
+                const gpActual = getGPActualDMA(loc.name);
+                const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
@@ -40011,8 +40011,8 @@
                     ? formatNumber(Math.round((loc.genPopPct || 0) / 100 * 329900000))
                     : (loc.genPopPct || 0).toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
-                const gpCensusVal = loc.genPopPct || 0;
-                const gpStr = gpCensusVal > 0 ? gpCensusVal.toFixed(3) + '%' : '—';
+                const gpActual = getGPActualDMA(loc.name);
+                const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
