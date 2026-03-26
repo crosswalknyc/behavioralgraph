@@ -38699,12 +38699,6 @@
         function renderLocationTable(locations) {
             locations = condenseDMALocations(locations);
             const isProjection = dashDisplayMode === 'projection';
-            const _escAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
-            const _dmaDebugBadge = (rawName, canonName, cwGp) => {
-                const cw = (cwGp == null || Number.isNaN(Number(cwGp))) ? 'N/A' : `${Number(cwGp).toFixed(3)}%`;
-                const tip = `Raw DMA: ${rawName || 'N/A'} | Canonical DMA: ${canonName || 'N/A'} | CW Gen Pop: ${cw}`;
-                return `<span title="${_escAttr(tip)}" style="margin-left:0.35rem; font-size:0.68rem; color:var(--text-secondary); cursor:help;">🧭</span>`;
-            };
 
             // Recalculate index and genPopPct from fresh Gen Pop baseline.
             // IMPORTANT: canonicalize baseline DMAs the same way as profile DMAs
@@ -38792,12 +38786,10 @@
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
-                const canonName = matchCanonicalDMA(loc.name || '') || (loc.name || '');
-                const debugBadge = _dmaDebugBadge(loc.name, canonName, loc.genPopPct);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${normalizeDmaDisplay(loc.name)}${debugBadge}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
@@ -38844,12 +38836,10 @@
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
-                const canonName = matchCanonicalDMA(loc.name || '') || (loc.name || '');
-                const debugBadge = _dmaDebugBadge(loc.name, canonName, loc.genPopPct);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${normalizeDmaDisplay(loc.name)}${debugBadge}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
@@ -38905,12 +38895,10 @@
                 const dmaRank = getDMARank(loc.name);
                 const gpActual = getGPActualDMA(loc.name);
                 const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
-                const canonName = matchCanonicalDMA(loc.name || '') || (loc.name || '');
-                const debugBadge = _dmaDebugBadge(loc.name, canonName, loc.genPopPct);
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
-                        <span>${normalizeDmaDisplay(loc.name)}${debugBadge}</span>
+                        <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
                         <span class="cw-gp-col" style="color: var(--text-secondary);">${genPopDisplay}</span>
