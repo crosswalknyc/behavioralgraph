@@ -10574,8 +10574,7 @@ def get_subscriber_iq_data(s3_key):
                     t['gen_pop'] = str(int(gen_pop_sum))
                     break
 
-        # Episode-Level Signup Timing section removed from dashboard (but data still available)
-        parsed.pop('episode_signup_timing', None)
+        # Keep episode_signup_timing in payload so timing charts can build full daily series.
         
         # Uppercase platform name in metadata for display
         if parsed.get('metadata') and parsed['metadata'].get('platform'):

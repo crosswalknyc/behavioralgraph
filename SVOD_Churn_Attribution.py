@@ -890,7 +890,6 @@ def run_query(conn, p):
     FROM TEMP_NEW_PLATFORM_SIGNUPS
     GROUP BY DAYS_TO_SIGNUP
     ORDER BY DAYS_TO_SIGNUP
-    LIMIT 14
     """
     df_timing = pd.read_sql(timing_query, conn)
     print("   ✅ Signup timing calculated\n")
@@ -2022,6 +2021,324 @@ def ai_validate_demographics(show_name, platform_name, df_demo, new_signups):
     return df_demo, changes
 
 
+def _extract_json_object(text):
+    """Extract the first outer JSON object from a model response."""
+    if not text:
+        return None
+    raw = str(text).strip()
+    if raw.startswith("```"):
+        raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    start = raw.find('{')
+    if start < 0:
+        return None
+    depth = 0
+    end = start
+    for i in range(start, len(raw)):
+        if raw[i] == '{':
+            depth += 1
+        elif raw[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    raw_json = raw[start:end]
+    raw_json = re.sub(r'//.*?$', '', raw_json, flags=re.MULTILINE)
+    raw_json = re.sub(r',\s*}', '}', raw_json)
+    raw_json = re.sub(r',\s*]', ']', raw_json)
+    try:
+        return json.loads(raw_json)
+    except Exception:
+        return None
+
+
+def _normalize_pct_plan_for_labels(raw_map, labels):
+    """Normalize a raw percentage mapping onto provided labels so sum == 100."""
+    if not labels:
+        return {}
+    label_map = {str(lbl).strip().lower(): str(lbl).strip() for lbl in labels}
+    vals = {}
+    for k, v in (raw_map or {}).items():
+        key = str(k).strip().lower()
+        if key in label_map:
+            try:
+                vals[label_map[key]] = max(0.0, float(v))
+            except (ValueError, TypeError):
+                continue
+    if not vals:
+        even = round(100.0 / len(labels), 4)
+        return {lbl: even for lbl in labels}
+    total = sum(vals.values())
+    if total <= 0:
+        even = round(100.0 / len(labels), 4)
+        return {lbl: even for lbl in labels}
+    norm = {}
+    for lbl in labels:
+        if lbl in vals:
+            norm[lbl] = (vals[lbl] * 100.0) / total
+        else:
+            norm[lbl] = 0.0
+    # If there are labels with 0 and we still have room due to rounding, leave as-is;
+    # downstream count reconciliation ensures integer totals align exactly.
+    return norm
+
+
+def _apply_pct_plan_to_df_out(df_out, indices, pct_plan, total_count):
+    """
+    Apply percentage plan to a set of df_out row indices.
+    Ensures integer counts sum exactly to total_count.
+    """
+    if not indices or total_count <= 0:
+        return []
+    labels = [str(df_out.loc[idx, "Category"]).strip() for idx in indices]
+    norm = _normalize_pct_plan_for_labels(pct_plan, labels)
+    changes = []
+    assigned = 0
+    for i, idx in enumerate(indices):
+        lbl = str(df_out.loc[idx, "Category"]).strip()
+        pct = float(norm.get(lbl, 0.0))
+        if i == len(indices) - 1:
+            new_count = total_count - assigned
+        else:
+            new_count = int(round(total_count * pct / 100.0))
+            assigned += new_count
+        old_count = 0
+        try:
+            old_count = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+        except (ValueError, TypeError):
+            old_count = 0
+        new_pct = round((new_count * 100.0 / total_count), 2) if total_count > 0 else 0.0
+        df_out.loc[idx, "Count"] = new_count
+        df_out.loc[idx, "Percentage"] = f"{new_pct:.2f}%"
+        df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(new_count))
+        if old_count != new_count:
+            changes.append(f"{lbl}: {old_count} -> {new_count}")
+    return changes
+
+
+def ai_align_final_demographics_with_research(df_out, platform_name):
+    """
+    Final-step demographic alignment agent (GPT-4o):
+    - Reads Show/Content Tracked from output rows
+    - Researches primary audience (web-enabled model)
+    - Uses GPT-4o to align AGE/GENDER rows before file save
+    """
+    try:
+        from openai import OpenAI
+        client = OpenAI()
+    except Exception:
+        return df_out, []
+
+    # Pull show title from final output rows (Show/Content Tracked row).
+    show_name = ""
+    for idx in df_out.index:
+        cat = str(df_out.loc[idx, "Category"] or "").strip()
+        if cat == "Show/Content Tracked":
+            show_name = str(df_out.loc[idx, "Count Label"] or "").strip()
+            break
+    if not show_name:
+        return df_out, []
+
+    # Pull New Platform Signups count from final output rows.
+    nps_count = 0
+    for idx in df_out.index:
+        cat = str(df_out.loc[idx, "Category"] or "").strip()
+        if cat == "New Platform Signups":
+            try:
+                nps_count = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+            except (ValueError, TypeError):
+                nps_count = 0
+            break
+    if nps_count <= 0:
+        return df_out, []
+
+    # Locate final AGE/GENDER demographic rows in output frame.
+    current_section = None
+    section_rows = {"AGE": [], "GENDER": []}
+    for idx in df_out.index:
+        cat = str(df_out.loc[idx, "Category"] or "").strip()
+        clabel = str(df_out.loc[idx, "Count Label"] or "").strip()
+        if cat == "AGE":
+            current_section = "AGE"
+            continue
+        if cat == "GENDER":
+            current_section = "GENDER"
+            continue
+        if cat and clabel != "people":
+            if current_section in section_rows and cat not in ("", "DEMOGRAPHICS - New Signups"):
+                current_section = None
+        if current_section and clabel == "people":
+            section_rows[current_section].append(idx)
+    if not section_rows["AGE"] and not section_rows["GENDER"]:
+        return df_out, []
+
+    # Build current distribution summary for prompt grounding.
+    def _collect_section(indices):
+        out = []
+        for idx in indices:
+            lbl = str(df_out.loc[idx, "Category"] or "").strip()
+            cnt = 0
+            pct = str(df_out.loc[idx, "Percentage"] or "").strip()
+            try:
+                cnt = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+            except (ValueError, TypeError):
+                cnt = 0
+            out.append({"label": lbl, "count": cnt, "pct": pct})
+        return out
+
+    age_rows = _collect_section(section_rows["AGE"])
+    gender_rows = _collect_section(section_rows["GENDER"])
+
+    # Step 1: external research (web-enabled model).
+    research = ""
+    try:
+        research_prompt = (
+            f'Research the primary audience demographics for "{show_name}" on {platform_name}. '
+            f'Find reputable sources (Nielsen, Samba TV, YouGov, Morning Consult, platform disclosures, '
+            f'major trade press) and summarize likely AGE and GENDER audience tendencies with approximate percentages.'
+        )
+        resp = client.chat.completions.create(
+            model="gpt-4o-search-preview",
+            messages=[{"role": "user", "content": research_prompt}],
+            web_search_options={"search_context_size": "medium"},
+        )
+        research = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    except Exception:
+        research = ""
+
+    if not research:
+        return df_out, []
+
+    # Step 2: GPT-4o correction plan constrained to existing labels.
+    age_labels = [r["label"] for r in age_rows]
+    gender_labels = [r["label"] for r in gender_rows]
+    correction_prompt = (
+        f'You are aligning final dashboard demographics for subscriber acquisition output.\n\n'
+        f'SHOW/CONTENT TRACKED: {show_name}\n'
+        f'PLATFORM: {platform_name}\n'
+        f'NEW PLATFORM SIGNUPS COUNT: {nps_count}\n\n'
+        f'RESEARCH SUMMARY:\n{research}\n\n'
+        f'CURRENT AGE ROWS: {age_rows}\n'
+        f'CURRENT GENDER ROWS: {gender_rows}\n\n'
+        f'Use ONLY these exact AGE labels: {age_labels}\n'
+        f'Use ONLY these exact GENDER labels: {gender_labels}\n\n'
+        f'Return ONLY JSON with numeric percentages (no % symbol):\n'
+        f'{{\n'
+        f'  "age": {{"<label>": <pct>, ...}},\n'
+        f'  "gender": {{"<label>": <pct>, ...}},\n'
+        f'  "reasoning": "brief rationale"\n'
+        f'}}\n'
+        f'Each provided section should sum to about 100.'
+    )
+    try:
+        resp2 = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": correction_prompt}],
+            temperature=0.1,
+        )
+        parsed = _extract_json_object(resp2.choices[0].message.content if resp2.choices else "")
+    except Exception:
+        parsed = None
+    if not parsed:
+        return df_out, []
+
+    changes = []
+    if section_rows["AGE"]:
+        changes.extend(_apply_pct_plan_to_df_out(
+            df_out,
+            section_rows["AGE"],
+            parsed.get("age", {}),
+            nps_count
+        ))
+    if section_rows["GENDER"]:
+        changes.extend(_apply_pct_plan_to_df_out(
+            df_out,
+            section_rows["GENDER"],
+            parsed.get("gender", {}),
+            nps_count
+        ))
+
+    rationale = str(parsed.get("reasoning") or "").strip()
+    if rationale:
+        changes.append(f"Final agent rationale: {rationale}")
+    return df_out, changes
+
+
+def enforce_attribution_summary_consistency(df_out):
+    """
+    Ensure Attributed Signups + Dormant to Reactive == New Platform Signups.
+    If needed, proportionally scale attribution rows to exactly match NPS.
+    """
+    def _to_int(v):
+        try:
+            return int(float(str(v).replace(",", "")))
+        except (ValueError, TypeError):
+            return 0
+
+    def _to_pct_str(num, den):
+        pct = round((num * 100.0) / den, 2) if den > 0 else 0.0
+        return f"{pct}%"
+
+    nps_row = None
+    attr_row = None
+    dorm_row = None
+    total_row = None
+    watchers_row = None
+
+    for idx in df_out.index:
+        cat = str(df_out.loc[idx, "Category"] or "").strip()
+        if cat == "New Platform Signups":
+            nps_row = idx
+        elif cat == "Attributed Signups":
+            attr_row = idx
+        elif cat == "Dormant to Reactive":
+            dorm_row = idx
+        elif cat == "TOTAL SIGNUPS":
+            total_row = idx
+        elif cat == "Total Show Watchers":
+            watchers_row = idx
+
+    if nps_row is None or attr_row is None or dorm_row is None:
+        return df_out, []
+
+    nps = max(_to_int(df_out.loc[nps_row, "Count"]), 0)
+    attr = max(_to_int(df_out.loc[attr_row, "Count"]), 0)
+    dorm = max(_to_int(df_out.loc[dorm_row, "Count"]), 0)
+    total_pair = attr + dorm
+    changes = []
+
+    if total_pair != nps:
+        if total_pair <= 0:
+            new_attr = 0
+            new_dorm = nps
+        else:
+            new_attr = int(round((attr * nps) / total_pair))
+            new_attr = max(0, min(new_attr, nps))
+            new_dorm = nps - new_attr
+
+        df_out.loc[attr_row, "Count"] = new_attr
+        df_out.loc[dorm_row, "Count"] = new_dorm
+        if total_row is not None:
+            df_out.loc[total_row, "Count"] = nps
+
+        watchers = max(_to_int(df_out.loc[watchers_row, "Count"]) if watchers_row is not None else 0, 0)
+        df_out.loc[attr_row, "Percentage"] = _to_pct_str(new_attr, watchers)
+        df_out.loc[dorm_row, "Percentage"] = _to_pct_str(new_dorm, watchers)
+        if total_row is not None:
+            df_out.loc[total_row, "Percentage"] = _to_pct_str(nps, watchers)
+
+        df_out.loc[attr_row, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(new_attr))
+        df_out.loc[dorm_row, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(new_dorm))
+        if total_row is not None:
+            df_out.loc[total_row, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(nps))
+
+        changes.append(
+            f"Attribution reconciled: Attributed {attr} + Dormant {dorm} -> "
+            f"Attributed {new_attr} + Dormant {new_dorm} (NPS {nps})"
+        )
+
+    return df_out, changes
+
+
 # =======================
 # === Output writing  ===
 # =======================
@@ -2152,7 +2469,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             rows.append(("", "", "", "", "", "", "", "", "", ""))
             display_label = episode_label_lookup.get(int(ep_num), f"Episode {int(ep_num)}")
             rows.append((display_label, "", "", "", "", "", "", "", "", ""))
-            for _, row in ep_data.head(10).iterrows():
+            for _, row in ep_data.iterrows():
                 days = int(row["DAYS_TO_SIGNUP"])
                 count = int(row["SIGNUP_COUNT"])
                 pct = float(row["PERCENTAGE"]) if row.get("PERCENTAGE") is not None and not pd.isna(row["PERCENTAGE"]) else 0.0
@@ -2488,6 +2805,24 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     else:
         note = validation.get('overall_assessment', validation.get('note', 'Metrics look plausible'))
         print(f"✅ AI validation passed: {note}")
+
+    # Final-step GPT-4o audience alignment:
+    # Use Show/Content Tracked + external research to align AGE/GENDER before save.
+    print("🧠 Running final demographic alignment agent (GPT-4o)...")
+    df_out, final_demo_changes = ai_align_final_demographics_with_research(df_out, p['platform_name'])
+    if final_demo_changes:
+        print("   Applied final demographic alignment changes:")
+        for c in final_demo_changes:
+            print(f"     → {c}")
+    else:
+        print("   No final demographic adjustments applied.")
+
+    # Hard final consistency guard for attribution summary rows.
+    df_out, attrib_changes = enforce_attribution_summary_consistency(df_out)
+    if attrib_changes:
+        print("   Applied attribution reconciliation:")
+        for c in attrib_changes:
+            print(f"     → {c}")
 
     # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
     output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
