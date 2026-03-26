@@ -39888,18 +39888,29 @@
             }
             
             // Render filtered results
+            const _locIsGenPop2 = isSelectedProfileGenPop();
+            const _locShowCwGp2 = !_locIsGenPop2;
+            const locContainer2 = document.getElementById('allLocationsContainer');
+            if (locContainer2) locContainer2.classList.toggle('hide-cw-gp', !_locShowCwGp2);
             listEl.innerHTML = sorted.map((loc, i) => {
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
+                const genPopDisplay = isProjection
+                    ? formatNumber(Math.round((loc.genPopPct || 0) / 100 * 329900000))
+                    : (loc.genPopPct || 0).toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
+                const gpActual = getGPActualDMA(loc.name);
+                const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
                         <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
+                        <span class="cw-gp-col" style="color: var(--text-secondary);">${genPopDisplay}</span>
+                        <span style="color: var(--text-secondary);">${gpStr}</span>
                         <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
                     </div>
                 `;
