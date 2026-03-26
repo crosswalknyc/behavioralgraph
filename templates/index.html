@@ -15022,6 +15022,9 @@
                             </div>
                             <!-- Action Buttons (right-aligned) -->
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
+                                <div class="display-mode-toggle" onclick="closeAllSubscriberTabs()" title="Close all open Subscriber IQ tabs">
+                                    <span>CLOSE ALL TABS</span>
+                                </div>
                                 <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
                                     <span id="subscriberHoverToggleLabel">HOVER ON</span>
                                 </div>
@@ -27423,6 +27426,26 @@
                 const newActiveTab = openSubscriberTabs[Math.max(0, tabIndex - 1)];
                 switchToSubscriberTab(newActiveTab.id);
             }
+        }
+
+        function closeAllSubscriberTabs() {
+            if (!Array.isArray(openSubscriberTabs) || openSubscriberTabs.length === 0) {
+                return;
+            }
+            if (!confirm('Close all open Subscriber IQ tabs?')) {
+                return;
+            }
+            openSubscriberTabs = [];
+            activeSubscriberTabId = null;
+            currentSubscriberData = null;
+            saveSubscriberTabs();
+            renderSubscriberTabsBar();
+
+            const fixedHeader = document.querySelector('.subscriber-fixed-header');
+            const emptyState = document.getElementById('subscriberEmptyState');
+            if (fixedHeader) fixedHeader.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'flex';
+            renderSubscriberProfileTree();
         }
         
         function showSubscriberTab(tabName) {
