@@ -15047,8 +15047,6 @@
 
                         <!-- Episodes Tab -->
                         <div id="subscriber-tab-episodes" class="tab-content">
-                            <div id="subscriberEpisodesInsights" class="tab-insights-section"></div>
-                            
                             <div class="tab-section">
                                 <h3>📺 Episode Performance</h3>
                                 <p class="section-description">Which episodes drove the most platform signups</p>
@@ -15059,13 +15057,6 @@
                         <!-- Timing Tab -->
                         <div id="subscriber-tab-timing" class="tab-content">
                             <div id="subscriberTimingInsights" class="tab-insights-section"></div>
-                            
-                            <div class="tab-section">
-                                <h3>⏱️ Signup Timing Overview</h3>
-                                <p class="section-description">Key metrics on when people signed up after show premiere</p>
-                                <div id="subscriberTimingMetrics" class="timing-metrics-grid"></div>
-                            </div>
-                            
                             <div class="tab-section">
                                 <h3>📊 Signup Distribution</h3>
                                 <p class="section-description">Distribution of signups by days after premiere</p>
@@ -27856,56 +27847,9 @@
         }
         
         function renderSubscriberEpisodes(data) {
-            // Render Insights
             const insightsContainer = document.getElementById('subscriberEpisodesInsights');
             if (insightsContainer) {
-                const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
-                    const aSignups = a.signups || 0;
-                    const bSignups = b.signups || 0;
-                    return bSignups - aSignups;
-                });
-                
-                const _insightProject = (raw) => {
-                    const n = parseNumber(raw);
-                    return (n && n > 0) ? Math.round((n / 10000000) * 329900000) : 0;
-                };
-                const _insightDisplay = (ep) => {
-                    const gp = parseNumber(ep.gen_pop);
-                    if (gp && gp > 0) return gp;
-                    return _insightProject(ep.signups);
-                };
-                const insights = [];
-                if (episodes.length > 0) {
-                    const topEpisode = episodes[0];
-                    const topProjected = _insightDisplay(topEpisode);
-                    const top3Total = episodes.slice(0, 3).reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
-                    const allTotal = episodes.reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
-                    const top3Pct = allTotal > 0 ? ((top3Total / allTotal) * 100).toFixed(2) : 0;
-                    
-                    insights.push({
-                        icon: '🎬',
-                        text: `<strong>Episode ${topEpisode.episode} drove the most signups</strong> with ${formatNumber(topProjected)} projected US subscribers (${topEpisode.percentage || 'N/A'} of total).`
-                    });
-                    
-                    if (episodes.length >= 3) {
-                        insights.push({
-                            icon: '📊',
-                            text: `<strong>Top 3 episodes accounted for ${top3Pct}%</strong> of all signups, indicating concentrated performance in key episodes.`
-                        });
-                    }
-                }
-                
-                insightsContainer.innerHTML = insights.length > 0 ? `
-                    <h4>💡 Key Episode Insights</h4>
-                    <div class="tab-insights-list">
-                        ${insights.map(i => `
-                            <div class="tab-insight-item">
-                                <span class="tab-insight-icon">${i.icon}</span>
-                                <div class="tab-insight-text">${i.text}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '';
+                insightsContainer.innerHTML = '';
             }
             
             const container = document.getElementById('subscriberEpisodeAttribution');
@@ -27926,7 +27870,12 @@
                 container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode data available</p>';
             } else {
                 const totalSignups = episodes.reduce((s, e) => s + (Number(e.signups) || 0), 0);
-                const pct = (ep) => (ep.percentage && ep.percentage !== 'N/A' ? ep.percentage : (totalSignups ? ((Number(ep.signups) || 0) / totalSignups * 100).toFixed(1) + '%' : 'N/A'));
+                const pct = (ep) => {
+                    if (ep.percentage && ep.percentage !== 'N/A') {
+                        return String(ep.percentage).replace(/watchers/gi, 'new signups');
+                    }
+                    return totalSignups ? ((Number(ep.signups) || 0) / totalSignups * 100).toFixed(1) + '%' : 'N/A';
+                };
                 const getEpLabel = (ep) => {
                     const epStr = String(ep.episode || '');
                     const isDateEpisode = epStr.includes('/');
