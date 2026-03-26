@@ -8374,7 +8374,7 @@ def llmo_iq_demographics():
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        cur.execute("USE WAREHOUSE LLMIQ")
 
         if agent:
             cur.execute("""
