@@ -21621,20 +21621,25 @@
 
             const ideasHtml = ideas.map((idea, idx) => {
                 const crosswalkEdge = idea.crosswalk_edge || '';
-                const fundamentalStrategy = idea.fundamental_strategy || '';
+                const realStory = idea.the_real_story || idea.what_consensus_misses || '';
+                const fundamentalAngle = idea.fundamental_strategy || '';
+                const tradeStructure = idea.trade_structure || idea.signal_interpretation || '';
+                const catalyst = idea.catalyst_window || '';
+                const killSwitch = idea.falsification_criteria || '';
+                const riskMgmt = idea.position_risk || '';
                 return `
-                <div class="insight-card-v2" style="margin-bottom: 1rem; border-left: 3px solid var(--accent-cyan);">
-                    <div style="display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: baseline;">
-                        <h4 style="margin: 0; color: var(--text-primary);">#${idx + 1} ${idea.thesis || 'Untitled idea'}</h4>
-                        <span style="font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600;">Confidence: ${idea.confidence || 0}%</span>
+                <div class="insight-card-v2" style="margin-bottom: 1rem; border-left: 4px solid var(--accent-cyan); background: linear-gradient(135deg, rgba(102,217,239,0.05) 0%, rgba(166,226,46,0.03) 100%);">
+                    <div style="display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: baseline; margin-bottom: 0.75rem;">
+                        <h4 style="margin: 0; color: var(--text-primary); font-size: 1.05rem;">#${idx + 1} ${idea.thesis || 'Untitled idea'}</h4>
+                        <span style="font-size: 0.85rem; color: var(--accent-cyan); font-weight: 700;">Conf: ${idea.confidence || 0}%</span>
                     </div>
-                    ${crosswalkEdge ? `<p style="margin: 0.75rem 0; padding: 8px; background: rgba(166,226,46,0.08); border-radius: 4px; color: var(--text-primary);"><strong style="color: var(--accent-green);">📊 Crosswalk Edge:</strong> ${crosswalkEdge}</p>` : ''}
-                    ${fundamentalStrategy ? `<p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--accent-green);">📈 Fundamental Strategy:</strong> ${fundamentalStrategy}</p>` : ''}
-                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">What Consensus Misses:</strong> ${idea.what_consensus_misses || 'N/A'}</p>
-                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Signal Interpretation:</strong> ${idea.signal_interpretation || 'N/A'}</p>
-                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">⏱️ Catalyst:</strong> ${idea.catalyst_window || 'N/A'} <span style="opacity: 0.7;">(${idea.horizon || 'short'})</span></p>
-                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">❌ Falsification:</strong> ${idea.falsification_criteria || 'N/A'}</p>
-                    <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">⚖️ Risk Framing:</strong> ${idea.position_risk || 'N/A'}</p>
+                    ${crosswalkEdge ? `<div style="margin: 0.75rem 0; padding: 10px; background: rgba(166,226,46,0.1); border-radius: 6px; border-left: 3px solid var(--accent-green);"><strong style="color: var(--accent-green);">🎯 Crosswalk Edge:</strong><p style="margin: 4px 0 0 0; color: var(--text-primary);">${crosswalkEdge}</p></div>` : ''}
+                    ${realStory ? `<p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--accent-cyan);">💡 The Real Story:</strong> ${realStory}</p>` : ''}
+                    ${fundamentalAngle ? `<p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--accent-orange);">📈 Fundamental Angle:</strong> ${fundamentalAngle}</p>` : ''}
+                    ${tradeStructure ? `<p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">🔧 Trade Structure:</strong> ${tradeStructure}</p>` : ''}
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">⚡ Catalyst:</strong> ${catalyst || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">🚫 Kill Switch:</strong> ${killSwitch || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">⚖️ Risk Mgmt:</strong> ${riskMgmt || 'N/A'}</p>
                 </div>
             `}).join('');
 

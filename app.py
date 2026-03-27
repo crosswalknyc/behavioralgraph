@@ -11392,21 +11392,25 @@ def _normalize_hf_alpha_ideas(raw_ideas):
         if not thesis:
             continue
         crosswalk_edge = str(item.get('crosswalk_edge') or '').strip()
-        fundamental_strategy = str(item.get('fundamental_strategy') or '').strip()
-        what_consensus_misses = str(item.get('what_consensus_misses') or '').strip()
-        if not crosswalk_edge and what_consensus_misses:
-            crosswalk_edge = what_consensus_misses
+        the_real_story = str(item.get('the_real_story') or item.get('what_consensus_misses') or '').strip()
+        fundamental_angle = str(item.get('fundamental_angle') or item.get('fundamental_strategy') or '').strip()
+        trade_structure = str(item.get('trade_structure') or item.get('signal_interpretation') or '').strip()
+        catalyst = str(item.get('catalyst') or item.get('catalyst_window') or '').strip()
+        kill_switch = str(item.get('kill_switch') or item.get('falsification_criteria') or '').strip()
+        risk_mgmt = str(item.get('risk_management') or item.get('position_risk') or '').strip()
         normalized.append({
             'rank': idx + 1,
             'thesis': thesis,
             'crosswalk_edge': crosswalk_edge,
-            'fundamental_strategy': fundamental_strategy,
-            'what_consensus_misses': what_consensus_misses,
-            'signal_interpretation': str(item.get('signal_interpretation') or '').strip(),
+            'the_real_story': the_real_story,
+            'fundamental_strategy': fundamental_angle,
+            'trade_structure': trade_structure,
+            'what_consensus_misses': the_real_story,
+            'signal_interpretation': trade_structure,
             'horizon': str(item.get('horizon') or 'short').strip() or 'short',
-            'catalyst_window': str(item.get('catalyst_window') or '').strip(),
-            'falsification_criteria': str(item.get('falsification_criteria') or '').strip(),
-            'position_risk': str(item.get('position_risk') or '').strip(),
+            'catalyst_window': catalyst,
+            'falsification_criteria': kill_switch,
+            'position_risk': risk_mgmt,
             'confidence': max(1, min(100, int(float(item.get('confidence') or 50)))),
             'evidence_refs': [str(x).strip() for x in (item.get('evidence_refs') or []) if str(x).strip()][:4],
         })
@@ -11697,10 +11701,9 @@ def _compute_hf_quarter_context(ticker_payload, generation_day):
 def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
     """Generate weekly Hedge Fund IQ alpha ideas for one ticker.
 
-    This is the brain of the Alpha Ideas system. It:
-    1. Loads novelty memory from past 4 weeks to avoid repetition
-    2. Researches Street/macro context AND company guidance/consensus
-    3. Synthesizes creative, data-led ideas that leverage Crosswalk's unique KPI signal
+    Philosophy: Crosswalk's edge is the SYNTHESIS of our signal with deep external research.
+    The KPI data is a loose directional signal; the real alpha comes from understanding
+    WHY the numbers look the way they do and finding creative trading angles.
     """
     generation_day = generation_day or _hf_alpha_today_str()
     generated_at = datetime.now(HF_ALPHA_TZ).isoformat()
@@ -11717,36 +11720,56 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
         fallback = _default_hf_alpha_packet(ticker_payload, generated_at, 'OpenAI unavailable in environment.')
         return fallback, ['OpenAI not configured; used internal fallback ideas.']
 
-    kpi_direction = 'unknown'
-    kpi_magnitude = 'unknown'
     trend_pct = stats.get('projected_growth_pct')
-    week_delta = stats.get('weekly_delta')
+    qtd_total = stats.get('qtd_total')
+    prior_q_total = stats.get('prior_quarter_total')
+    net_growth_desc = "unknown trajectory"
     if trend_pct is not None:
-        if trend_pct > 5:
-            kpi_direction = 'accelerating'
-            kpi_magnitude = 'strong positive'
-        elif trend_pct > 0:
-            kpi_direction = 'positive'
-            kpi_magnitude = 'moderate positive'
+        if trend_pct < -20:
+            net_growth_desc = f"significant decline ({trend_pct:+.1f}% projected net growth)"
         elif trend_pct < -5:
-            kpi_direction = 'decelerating'
-            kpi_magnitude = 'strong negative'
-        elif trend_pct < 0:
-            kpi_direction = 'weakening'
-            kpi_magnitude = 'moderate negative'
+            net_growth_desc = f"moderate decline ({trend_pct:+.1f}% projected net growth)"
+        elif trend_pct < 5:
+            net_growth_desc = f"roughly flat ({trend_pct:+.1f}% projected net growth)"
+        elif trend_pct < 20:
+            net_growth_desc = f"moderate growth ({trend_pct:+.1f}% projected net growth)"
         else:
-            kpi_direction = 'flat'
-            kpi_magnitude = 'neutral'
+            net_growth_desc = f"strong growth ({trend_pct:+.1f}% projected net growth)"
 
     research = ''
+    deep_context = ''
     guidance_research = ''
     research_warning = ''
     try:
+        deep_research_prompt = (
+            f'I need DEEP institutional research on {ticker} for a hedge fund. '
+            f'Focus on the KPI "{kpi_name}" which is showing {net_growth_desc}. '
+            f'CRITICAL: Explain WHY the numbers might look this way. Research: '
+            f'(1) Any major corporate actions (divestitures, acquisitions, asset sales), '
+            f'(2) Strategic shifts or business model changes, '
+            f'(3) Competitive dynamics and market share shifts, '
+            f'(4) Regulatory or macro factors affecting this specific KPI, '
+            f'(5) What management has said about this metric on recent calls, '
+            f'(6) Any one-time items that would distort the numbers. '
+            f'Be specific with dates, deal values, and counterparties where available.'
+        )
+        dr = client.chat.completions.create(
+            model=HF_ALPHA_RESEARCH_MODEL,
+            messages=[{"role": "user", "content": deep_research_prompt}],
+            web_search_options={"search_context_size": "high"},
+        )
+        deep_context = (dr.choices[0].message.content or '').strip() if dr.choices else ''
+    except Exception as e:
+        research_warning = f'Deep research unavailable ({e}). '
+
+    try:
         research_prompt = (
-            f'Provide concise institutional buy-side context for {ticker} around KPI "{kpi_name}". '
-            f'Include: (1) current Street narrative and key debates, (2) recent analyst rating changes, '
-            f'(3) sector-level themes affecting this name, (4) any upcoming catalysts in next 4-8 weeks. '
-            f'Use concrete source-backed statements. Focus on information a PM at Citadel would care about.'
+            f'Provide concise buy-side context for {ticker}: '
+            f'(1) Current Street consensus and ratings distribution, '
+            f'(2) Key debates among analysts, '
+            f'(3) Upcoming catalysts in next 8 weeks, '
+            f'(4) How does the Street view {kpi_name} trends? '
+            f'Focus on what a PM at Citadel would need to know.'
         )
         rr = client.chat.completions.create(
             model=HF_ALPHA_RESEARCH_MODEL,
@@ -11755,13 +11778,13 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
         )
         research = (rr.choices[0].message.content or '').strip() if rr.choices else ''
     except Exception as e:
-        research_warning = f'Street research unavailable ({e}). '
+        research_warning += f'Street research unavailable ({e}). '
 
     try:
         guidance_prompt = (
-            f'For {ticker}, provide: (1) management guidance for current and next quarter if available, '
-            f'(2) Street consensus estimates (revenue, EPS) vs. guidance, (3) any recent guidance changes, '
-            f'(4) key metrics management emphasizes on earnings calls. Be specific with numbers.'
+            f'For {ticker}: (1) What is management guidance for {kpi_name} and related revenue? '
+            f'(2) Street consensus estimates vs guidance, (3) Recent guidance changes or updates, '
+            f'(4) Key metrics management emphasizes. Include specific numbers.'
         )
         gr = client.chat.completions.create(
             model=HF_ALPHA_RESEARCH_MODEL,
@@ -11774,91 +11797,92 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
 
     novelty_constraint = ""
     if novelty.get('past_theses'):
-        past_ideas_str = '\n'.join([f"  - {t}" for t in novelty['past_theses'][:12]])
+        past_ideas_str = '\n'.join([f"  - {t}" for t in novelty['past_theses'][:10]])
         novelty_constraint = f"""
-CRITICAL NOVELTY CONSTRAINT (past {novelty['weeks_available']} weeks of ideas - DO NOT repeat):
+NOVELTY: Don't repeat these ideas from past weeks:
 {past_ideas_str}
-
-Your ideas must be FRESH and DIFFERENT from the above. Find new angles, new catalysts, new ways to interpret the signal."""
+"""
 
     synthesis_base_prompt = f"""
-You are a senior quantitative PM at a top multi-manager hedge fund (Citadel, Millennium, Balyasny, Two Sigma).
-Your edge: Crosswalk IQ provides you PROPRIETARY, REAL-TIME KPI data that Street analysts don't have.
+You are a senior PM at a top hedge fund. Crosswalk IQ is your COMPETITIVE EDGE - we provide 
+proprietary KPI tracking AND expert research synthesis that no one else has.
 
 ═══════════════════════════════════════════════════════════════════════════════
-YOUR UNIQUE DATA EDGE (this is what makes alpha possible):
+CROSSWALK IQ SIGNAL (use as directional guide, not gospel):
 ═══════════════════════════════════════════════════════════════════════════════
 
 Ticker: {ticker}
-Proprietary KPI tracked: "{kpi_name}"
-Stock-impact weight: {relevance if relevance is not None else "TBD"}% (how much this KPI moves the stock)
-Crosswalk accuracy rating: {accuracy_rating}
-KPI signal direction: {kpi_direction} ({kpi_magnitude})
+KPI: "{kpi_name}"
+Our signal: {net_growth_desc}
+QTD value: {qtd_total if qtd_total else 'not available'}
+Prior quarter: {prior_q_total if prior_q_total else 'not available'}
+Stock impact weight: {relevance if relevance is not None else "N/A"}%
+Quarter context: {quarter_ctx.get('quarter', 'N/A')} - {quarter_ctx.get('days_left_in_quarter', 'N/A')} days left
 
-DETAILED KPI STATISTICS (your informational edge):
-{json.dumps(stats, indent=2, default=str)}
-
-QUARTER TIMING (critical for trade structure):
-{json.dumps(quarter_ctx, indent=2, default=str)}
+Full stats: {json.dumps(stats, indent=2, default=str)}
 
 ═══════════════════════════════════════════════════════════════════════════════
-EXTERNAL CONTEXT (align your data-driven thesis with reality):
+DEEP RESEARCH (this is WHERE THE ALPHA IS - understand WHY):
 ═══════════════════════════════════════════════════════════════════════════════
 
-STREET NARRATIVE & CATALYSTS:
-{research or "Limited external context available - weight internal signal more heavily."}
+{deep_context or "Deep context not available - rely on Street research below."}
 
-COMPANY GUIDANCE & CONSENSUS:
-{guidance_research or "Guidance data not available - focus on KPI signal vs. historical patterns."}
+═══════════════════════════════════════════════════════════════════════════════
+STREET CONSENSUS & CATALYSTS:
+═══════════════════════════════════════════════════════════════════════════════
+
+{research or "Limited Street context."}
+
+═══════════════════════════════════════════════════════════════════════════════
+COMPANY GUIDANCE:
+═══════════════════════════════════════════════════════════════════════════════
+
+{guidance_research or "Guidance not available."}
 
 ═══════════════════════════════════════════════════════════════════════════════
 {novelty_constraint}
 
-YOUR TASK: Generate 4-5 CREATIVE, ACTIONABLE alpha ideas that a sophisticated fundamental/quant PM would actually trade.
+YOUR TASK: Generate 4-5 CREATIVE, INNOVATIVE alpha ideas. You are writing for the 
+smartest PMs in the world who already know the obvious stuff. Give them EDGE.
 
-KEY REQUIREMENTS:
-1. **DATA-LED**: Every idea must START from the Crosswalk KPI signal. The thesis should flow: "Our {kpi_name} data shows X → this implies Y for earnings/revenue → the Street expects Z → therefore trade..."
-2. **CREATIVE ANGLES**: Don't just say "KPI is up so go long". Think second/third-order effects:
-   - Cross-asset implications (options vol, credit spreads, sector rotation)
-   - Supply chain read-throughs (if our data shows X for {ticker}, what does it mean for suppliers/competitors?)
-   - Timing arbitrage (can we trade ahead of lagged data releases?)
-   - Event-driven overlays (how does our signal interact with upcoming catalysts?)
-3. **FUNDAMENTAL FUND FOCUS**: Include ideas that work for long-only fundamental PMs, not just quant:
-   - How does guidance compare to what our data implies?
-   - Where might management under/over-promise based on our signal?
-   - What questions should fundamental analysts ask management?
-4. **SPECIFIC & FALSIFIABLE**: Every idea needs concrete entry/exit criteria based on the data
+CRITICAL PHILOSOPHY:
+1. **Crosswalk's edge is SYNTHESIS** - Our signal + deep research + creative thinking = alpha
+2. **Don't be mechanical** - If our KPI shows decline, don't just say "short it". WHY is it declining? 
+   Is it a divestiture? A strategic shift? One-time item? The WHY creates the trade.
+3. **Think creatively** - Second/third order effects, relative value, options structures, 
+   timing plays, supply chain read-throughs, event overlays
+4. **Frame everything as Crosswalk's edge** - Even when the insight comes from research, 
+   frame it as "Crosswalk IQ's analysis reveals..." or "Our research identifies..."
+5. **Be specific** - Name counterparties, deal values, dates, specific catalysts
 
-Return ONLY valid JSON with this schema:
+EXAMPLE OF GOOD CREATIVE THINKING:
+- "Our data shows LUMN broadband down 30%, but research reveals this is due to the AT&T 
+  divestiture of 11 states. The organic business may actually be stable. Trade: Long LUMN 
+  into earnings as Street hasn't adjusted models for the new perimeter."
+
+Return JSON:
 {{
-  "crosswalk_data_summary": "<2-3 sentence summary of what the Crosswalk KPI signal is telling us>",
-  "street_context": "<2-3 sentences on where Street expectations sit vs our signal>",
-  "guidance_vs_signal": "<2-3 sentences on company guidance vs what our data implies>",
-  "risk_flags": ["<specific risk to the data signal>", "<macro/event risk>"],
-  "confidence": <1-100 based on data quality + alignment with external context>,
+  "crosswalk_insight": "<2-3 sentences: What does Crosswalk IQ's signal + research reveal that others miss?>",
+  "street_vs_reality": "<2-3 sentences: How does Street view this vs what's really happening?>",  
+  "guidance_alignment": "<2-3 sentences: Does management guidance align with our view?>",
+  "risk_flags": ["<key risk 1>", "<key risk 2>"],
+  "confidence": <1-100>,
   "alpha_ideas": [
     {{
-      "thesis": "<specific trade hypothesis anchored in Crosswalk data>",
-      "crosswalk_edge": "<explicitly state: 'Our {kpi_name} data shows [X] which the Street hasn't priced because [Y]'>",
-      "what_consensus_misses": "<specific blind spot this data reveals>",
-      "fundamental_strategy": "<for fundamental PMs: how to use this in stock analysis/management meetings>",
-      "signal_interpretation": "<exactly how this KPI maps to P&L impact>",
-      "horizon": "short|medium",
-      "catalyst_window": "<specific timing tied to data or events>",
-      "falsification_criteria": "<what data change would invalidate this - be specific with thresholds>",
-      "position_risk": "<sizing, hedges, and risk management>",
-      "confidence": <1-100>,
-      "evidence_refs": ["Crosswalk {kpi_name} QTD: [value]", "<external source>"]
+      "thesis": "<specific creative trade idea>",
+      "crosswalk_edge": "<Why Crosswalk IQ gives you an edge here - can be signal, research, or synthesis>",
+      "the_real_story": "<What's actually happening that the market misses?>",
+      "fundamental_angle": "<How should fundamental PMs think about this?>",
+      "trade_structure": "<Specific implementation: long/short, options, relative value, timing>",
+      "catalyst": "<What event or data will prove this out?>",
+      "kill_switch": "<When are you wrong? Specific criteria to exit>",
+      "risk_management": "<Position sizing and hedges>",
+      "confidence": <1-100>
     }}
   ]
 }}
 
-QUALITY GATES:
-- If an idea doesn't explicitly reference the Crosswalk data, it's rejected
-- If an idea could be generated without our proprietary KPI, it's not alpha
-- Ideas must be different from previous weeks (see novelty constraint above)
-- At least one idea should be creative/non-obvious (cross-asset, supply-chain, or timing angle)
-- At least one idea should be actionable for fundamental long-only PMs
+BE CREATIVE. BE SPECIFIC. PROVIDE REAL EDGE. This goes to the smartest investors in the world.
 """
     parsed = None
     changes = []
@@ -11868,19 +11892,19 @@ QUALITY GATES:
             if attempt == 1:
                 retry_suffix = """
 
-STRICT RETRY - YOUR PREVIOUS OUTPUT FAILED QUALITY CHECKS:
-1. Make EVERY idea explicitly reference the Crosswalk KPI data with specific values
-2. Include the 'crosswalk_edge' and 'fundamental_strategy' fields for each idea
-3. Be MORE creative - think like a PM hunting for edge, not a generic analyst
-4. Provide at least 4 distinct ideas with different angles/time horizons"""
+RETRY: Be MORE creative and specific. Don't give generic ideas. Think about:
+- What corporate actions explain the numbers?
+- What relative value trades make sense?
+- What options structures capture the thesis?
+- What do the smartest PMs not yet see?"""
             resp = client.chat.completions.create(
                 model=HF_ALPHA_SYNTH_MODEL,
                 messages=[
-                    {"role": "system", "content": "You are an elite quantitative PM. Your alpha comes from proprietary alternative data. Respond with strict JSON only. Think like you're managing $500M and need to justify every position to your risk committee."},
+                    {"role": "system", "content": "You are an elite hedge fund PM known for creative, non-consensus ideas. Crosswalk IQ is your edge. Be specific and innovative. JSON only."},
                     {"role": "user", "content": synthesis_base_prompt + retry_suffix},
                 ],
-                temperature=0.4 if attempt == 0 else 0.25,
-                max_tokens=3000,
+                temperature=0.5 if attempt == 0 else 0.35,
+                max_tokens=3500,
             )
             parsed = _extract_json_object(resp.choices[0].message.content if resp.choices else '')
             packet = {
@@ -11889,10 +11913,10 @@ STRICT RETRY - YOUR PREVIOUS OUTPUT FAILED QUALITY CHECKS:
                 'kpi_name': kpi_name,
                 'accuracy_rating': accuracy_rating,
                 'relevance_percentage': relevance,
-                'crosswalk_data_summary': str((parsed or {}).get('crosswalk_data_summary') or '').strip(),
-                'street_context': str((parsed or {}).get('street_context') or '').strip(),
-                'guidance_vs_signal': str((parsed or {}).get('guidance_vs_signal') or '').strip(),
-                'world_events': str((parsed or {}).get('world_events') or (parsed or {}).get('guidance_vs_signal') or '').strip(),
+                'crosswalk_data_summary': str((parsed or {}).get('crosswalk_insight') or '').strip(),
+                'street_context': str((parsed or {}).get('street_vs_reality') or '').strip(),
+                'guidance_vs_signal': str((parsed or {}).get('guidance_alignment') or '').strip(),
+                'world_events': str((parsed or {}).get('guidance_alignment') or '').strip(),
                 'alpha_ideas': (parsed or {}).get('alpha_ideas') or [],
                 'risk_flags': (parsed or {}).get('risk_flags') or [],
                 'confidence': (parsed or {}).get('confidence') or 55,
@@ -11920,50 +11944,66 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
         ticker = escape(str(pkt.get('ticker') or 'UNKNOWN'))
         kpi = escape(str(pkt.get('kpi_name') or 'KPI'))
         ideas = pkt.get('alpha_ideas') or []
-        crosswalk_summary = escape(str(pkt.get('crosswalk_data_summary') or ''))
-        guidance_signal = escape(str(pkt.get('guidance_vs_signal') or ''))
-        street = escape(str(pkt.get('street_context') or ''))
+        crosswalk_insight = escape(str(pkt.get('crosswalk_data_summary') or ''))
+        street_reality = escape(str(pkt.get('street_context') or ''))
+        guidance = escape(str(pkt.get('guidance_vs_signal') or ''))
         conf = int(pkt.get('confidence') or 50)
         risk_flags = pkt.get('risk_flags') or []
         idea_html = ""
-        for i, idea in enumerate(ideas[:4], start=1):
+        for i, idea in enumerate(ideas[:5], start=1):
             thesis = escape(str(idea.get('thesis') or ''))
-            crosswalk_edge = escape(str(idea.get('crosswalk_edge') or idea.get('what_consensus_misses') or ''))
+            crosswalk_edge = escape(str(idea.get('crosswalk_edge') or ''))
+            real_story = escape(str(idea.get('the_real_story') or idea.get('what_consensus_misses') or ''))
             fundamental = escape(str(idea.get('fundamental_strategy') or ''))
+            trade_struct = escape(str(idea.get('trade_structure') or idea.get('signal_interpretation') or ''))
             catalyst = escape(str(idea.get('catalyst_window') or ''))
-            falsification = escape(str(idea.get('falsification_criteria') or ''))
+            kill_switch = escape(str(idea.get('falsification_criteria') or ''))
             risk = escape(str(idea.get('position_risk') or ''))
             idea_conf = int(idea.get('confidence') or 50)
             idea_html += f"""
-                <div class="email-card" style="margin: 12px 0; padding: 12px; background: rgba(102,217,239,0.05); border-left: 3px solid #66d9ef; border-radius: 4px;">
-                    <div style="font-weight: 600; color: #f8f8f2; margin-bottom: 8px;">{i}. {thesis}</div>
-                    <p style="margin: 6px 0; font-size: 0.9em;"><strong style="color:#66d9ef;">📊 Crosswalk Edge:</strong> {crosswalk_edge}</p>
-                    {f'<p style="margin: 6px 0; font-size: 0.9em;"><strong style="color:#a6e22e;">📈 Fundamental Strategy:</strong> {fundamental}</p>' if fundamental else ''}
-                    <p style="margin: 6px 0; font-size: 0.9em;"><strong>⏱️ Catalyst:</strong> {catalyst}</p>
-                    <p style="margin: 6px 0; font-size: 0.9em;"><strong>❌ Falsification:</strong> {falsification}</p>
-                    <p style="margin: 6px 0; font-size: 0.9em;"><strong>⚖️ Risk:</strong> {risk} <span style="color:#888;">(Conf: {idea_conf}%)</span></p>
+                <div style="margin: 16px 0; padding: 16px; background: linear-gradient(135deg, rgba(102,217,239,0.08) 0%, rgba(166,226,46,0.05) 100%); border-left: 4px solid #66d9ef; border-radius: 6px;">
+                    <div style="font-weight: 700; color: #f8f8f2; font-size: 1.05em; margin-bottom: 12px;">{i}. {thesis}</div>
+                    {f'<p style="margin: 8px 0; padding: 8px; background: rgba(166,226,46,0.1); border-radius: 4px;"><strong style="color:#a6e22e;">🎯 Crosswalk Edge:</strong> {crosswalk_edge}</p>' if crosswalk_edge else ''}
+                    {f'<p style="margin: 8px 0;"><strong style="color:#66d9ef;">💡 The Real Story:</strong> {real_story}</p>' if real_story else ''}
+                    {f'<p style="margin: 8px 0;"><strong style="color:#fd971f;">📈 Fundamental Angle:</strong> {fundamental}</p>' if fundamental else ''}
+                    {f'<p style="margin: 8px 0;"><strong>🔧 Trade Structure:</strong> {trade_struct}</p>' if trade_struct else ''}
+                    <p style="margin: 8px 0;"><strong>⚡ Catalyst:</strong> {catalyst}</p>
+                    <p style="margin: 8px 0;"><strong>🚫 Kill Switch:</strong> {kill_switch}</p>
+                    <p style="margin: 8px 0;"><strong>⚖️ Risk Mgmt:</strong> {risk}</p>
+                    <div style="margin-top: 8px; text-align: right;"><span style="color:#66d9ef; font-weight:600; font-size: 0.9em;">Confidence: {idea_conf}%</span></div>
                 </div>
             """
         risk_html = ""
         if risk_flags:
-            flags_str = ', '.join([escape(str(f)) for f in risk_flags[:3]])
-            risk_html = f'<p style="color:#f92672; font-size: 0.85em;"><strong>⚠️ Risk Flags:</strong> {flags_str}</p>'
+            flags_str = ' • '.join([escape(str(f)) for f in risk_flags[:3]])
+            risk_html = f'<p style="color:#f92672; font-size: 0.85em; margin-top: 12px;"><strong>⚠️ Key Risks:</strong> {flags_str}</p>'
         sections.append(f"""
-            <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                <h3 style="color:#66d9ef; margin: 0 0 8px 0;">{ticker} — {kpi}</h3>
-                <p style="margin: 8px 0; background: rgba(166,226,46,0.1); padding: 10px; border-radius: 4px;"><strong style="color:#a6e22e;">📊 Crosswalk Data Signal:</strong> {crosswalk_summary}</p>
-                {f'<p style="margin: 8px 0;"><strong>📋 Guidance vs. Signal:</strong> {guidance_signal}</p>' if guidance_signal else ''}
-                <p style="margin: 8px 0;"><strong>🏛️ Street Context:</strong> {street}</p>
-                <p style="margin: 8px 0;"><strong>Crosswalk IQ Confidence:</strong> <span style="color:#66d9ef; font-weight:600;">{conf}%</span></p>
+            <div style="margin-bottom: 32px; padding: 20px; background: rgba(39,40,34,0.6); border-radius: 8px; border: 1px solid rgba(102,217,239,0.2);">
+                <h3 style="color:#66d9ef; margin: 0 0 16px 0; font-size: 1.3em; border-bottom: 1px solid rgba(102,217,239,0.3); padding-bottom: 8px;">{ticker} — {kpi}</h3>
+                <div style="margin: 12px 0; padding: 12px; background: rgba(166,226,46,0.1); border-radius: 6px; border-left: 3px solid #a6e22e;">
+                    <strong style="color:#a6e22e;">🔍 Crosswalk IQ Insight:</strong>
+                    <p style="margin: 8px 0 0 0; color: #f8f8f2;">{crosswalk_insight}</p>
+                </div>
+                <div style="margin: 12px 0;">
+                    <strong style="color:#66d9ef;">📊 Street vs. Reality:</strong>
+                    <p style="margin: 4px 0 0 0;">{street_reality}</p>
+                </div>
+                {f'<div style="margin: 12px 0;"><strong style="color:#fd971f;">📋 Guidance Check:</strong><p style="margin: 4px 0 0 0;">{guidance}</p></div>' if guidance else ''}
+                <div style="margin: 12px 0;"><strong>Crosswalk IQ Confidence:</strong> <span style="color:#66d9ef; font-weight:700; font-size: 1.1em;">{conf}%</span></div>
                 {risk_html}
-                <h4 style="color:#f8f8f2; margin: 16px 0 8px 0;">Alpha Ideas:</h4>
+                <h4 style="color:#f8f8f2; margin: 20px 0 12px 0; font-size: 1.1em;">💡 Alpha Ideas:</h4>
                 {idea_html}
             </div>
         """)
-    cta = f'<p style="margin-top: 20px;"><a class="email-btn" href="{escape(app_base_url)}">Open Hedge Fund IQ Dashboard</a></p>'
+    cta = f'<p style="margin-top: 24px; text-align: center;"><a class="email-btn" href="{escape(app_base_url)}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%); color: #272822; font-weight: 700; text-decoration: none; border-radius: 6px;">Open Hedge Fund IQ Dashboard →</a></p>'
     body = f"""
-        <p style="font-size: 1.1em;">Weekly Alpha Ideas for <strong>{escape(username)}</strong> — Week of {escape(as_of_date)} (ET)</p>
-        <p style="color:#888; font-size: 0.9em; margin-bottom: 20px;">Ideas generated from proprietary Crosswalk IQ KPI data combined with real-time market research.</p>
+        <div style="text-align: center; margin-bottom: 24px;">
+            <h2 style="color: #f8f8f2; margin: 0;">Weekly Alpha Ideas</h2>
+            <p style="color: #888; margin: 8px 0 0 0;">For <strong style="color:#66d9ef;">{escape(username)}</strong> — Week of {escape(as_of_date)} (ET)</p>
+        </div>
+        <p style="color:#a6e22e; font-size: 0.95em; margin-bottom: 24px; padding: 12px; background: rgba(166,226,46,0.1); border-radius: 6px; text-align: center;">
+            <strong>Crosswalk IQ Advantage:</strong> Proprietary KPI signals + deep market research + creative synthesis = your edge.
+        </p>
         {''.join(sections)}
         {cta}
     """
