@@ -2170,6 +2170,8 @@ def _email_base_styles():
     return """
     body { font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: #0a1929; color: #e6f1ff; padding: 20px; margin: 0; }
     .email-container { max-width: 600px; margin: 0 auto; background: #0d2137; border-radius: 12px; padding: 30px; }
+    .email-logo-wrap { text-align: center; margin-bottom: 14px; }
+    .email-logo { height: 32px; width: auto; display: inline-block; }
     .email-header { color: #66d9ef; font-size: 20px; margin-bottom: 20px; font-weight: 600; }
     .email-body { line-height: 1.7; color: #e6f1ff; }
     .email-body p { margin: 0 0 1rem 0; }
@@ -2184,6 +2186,9 @@ def _email_base_styles():
 def _wrap_email_html(body_content, title=None):
     """Wrap body HTML in dashboard-style layout and Crosswalk IQ Team signature."""
     header = f'<div class="email-header">{title}</div>' if title else ''
+    app_base = (os.environ.get('APP_BASE_URL') or os.environ.get('APP_URL') or 'https://behavioralgraph.onrender.com').rstrip('/')
+    logo_url = f"{app_base}/static/crosswalk-logo-small.png"
+    logo = f'<div class="email-logo-wrap"><img class="email-logo" src="{escape(logo_url)}" alt="Crosswalk IQ"></div>'
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -2192,6 +2197,7 @@ def _wrap_email_html(body_content, title=None):
 </head>
 <body>
     <div class="email-container">
+        {logo}
         {header}
         <div class="email-body">
             {body_content}
