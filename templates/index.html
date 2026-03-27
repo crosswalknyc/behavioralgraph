@@ -21577,6 +21577,9 @@
             const riskFlags = Array.isArray(alpha.risk_flags) ? alpha.risk_flags : [];
             const sourceTag = (apiPayload && apiPayload.source) ? String(apiPayload.source).toUpperCase() : 'CACHE';
             const generatedAt = alpha.generated_at || '';
+            const crosswalkSummary = alpha.crosswalk_data_summary || '';
+            const guidanceVsSignal = alpha.guidance_vs_signal || '';
+
             const metaHtml = `
                 <div class="insight-card-v2" style="margin-bottom: 1rem;">
                     <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: center;">
@@ -21585,7 +21588,7 @@
                             <div style="font-weight: 700; color: var(--text-primary);">${alpha.ticker || 'N/A'} - ${alpha.kpi_name || 'N/A'}</div>
                         </div>
                         <div>
-                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Confidence</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Crosswalk IQ Confidence</div>
                             <div style="font-weight: 700; color: var(--accent-cyan);">${alpha.confidence || 0}%</div>
                         </div>
                         <div>
@@ -21598,34 +21601,50 @@
                         </div>
                     </div>
                 </div>
+                ${crosswalkSummary ? `
+                <div class="insight-card-v2" style="margin-bottom: 1rem; border-left: 3px solid var(--accent-green); background: rgba(166,226,46,0.05);">
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-green);">📊 Crosswalk Data Signal</h4>
+                    <p style="margin: 0; color: var(--text-primary);">${crosswalkSummary}</p>
+                </div>
+                ` : ''}
+                ${guidanceVsSignal ? `
                 <div class="insight-card-v2" style="margin-bottom: 1rem;">
-                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">Market Setup</h4>
-                    <p style="margin: 0 0 0.75rem 0; color: var(--text-primary);">${alpha.street_context || 'N/A'}</p>
-                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">World / Event Context</h4>
-                    <p style="margin: 0; color: var(--text-primary);">${alpha.world_events || 'N/A'}</p>
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">📋 Guidance vs. Signal</h4>
+                    <p style="margin: 0; color: var(--text-primary);">${guidanceVsSignal}</p>
+                </div>
+                ` : ''}
+                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">🏛️ Street Context</h4>
+                    <p style="margin: 0; color: var(--text-primary);">${alpha.street_context || 'N/A'}</p>
                 </div>
             `;
 
-            const ideasHtml = ideas.map((idea, idx) => `
-                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+            const ideasHtml = ideas.map((idea, idx) => {
+                const crosswalkEdge = idea.crosswalk_edge || '';
+                const fundamentalStrategy = idea.fundamental_strategy || '';
+                return `
+                <div class="insight-card-v2" style="margin-bottom: 1rem; border-left: 3px solid var(--accent-cyan);">
                     <div style="display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: baseline;">
                         <h4 style="margin: 0; color: var(--text-primary);">#${idx + 1} ${idea.thesis || 'Untitled idea'}</h4>
                         <span style="font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600;">Confidence: ${idea.confidence || 0}%</span>
                     </div>
-                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Consensus Miss:</strong> ${idea.what_consensus_misses || 'N/A'}</p>
-                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Signal:</strong> ${idea.signal_interpretation || 'N/A'}</p>
-                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Catalyst:</strong> ${idea.catalyst_window || 'N/A'} (${idea.horizon || 'short'})</p>
-                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Falsification:</strong> ${idea.falsification_criteria || 'N/A'}</p>
-                    <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Risk Framing:</strong> ${idea.position_risk || 'N/A'}</p>
+                    ${crosswalkEdge ? `<p style="margin: 0.75rem 0; padding: 8px; background: rgba(166,226,46,0.08); border-radius: 4px; color: var(--text-primary);"><strong style="color: var(--accent-green);">📊 Crosswalk Edge:</strong> ${crosswalkEdge}</p>` : ''}
+                    ${fundamentalStrategy ? `<p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--accent-green);">📈 Fundamental Strategy:</strong> ${fundamentalStrategy}</p>` : ''}
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">What Consensus Misses:</strong> ${idea.what_consensus_misses || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Signal Interpretation:</strong> ${idea.signal_interpretation || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">⏱️ Catalyst:</strong> ${idea.catalyst_window || 'N/A'} <span style="opacity: 0.7;">(${idea.horizon || 'short'})</span></p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">❌ Falsification:</strong> ${idea.falsification_criteria || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">⚖️ Risk Framing:</strong> ${idea.position_risk || 'N/A'}</p>
                 </div>
-            `).join('');
+            `}).join('');
 
             const riskHtml = `
                 <div class="insight-card-v2">
-                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">Risk Flags & Metadata</h4>
-                    <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Accuracy:</strong> ${alpha.accuracy_rating || 'Unknown'}</p>
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">📋 Metadata & Risk Flags</h4>
+                    <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Accuracy Rating:</strong> ${alpha.accuracy_rating || 'Unknown'}</p>
                     <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Generated:</strong> ${generatedAt || 'N/A'}</p>
-                    <p style="margin: 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Risk Flags:</strong> ${riskFlags.length ? riskFlags.join(' | ') : 'None'}</p>
+                    ${alpha.novelty_weeks_checked ? `<p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Novelty Check:</strong> ${alpha.novelty_weeks_checked} weeks of prior ideas reviewed</p>` : ''}
+                    <p style="margin: 0; color: ${riskFlags.length ? 'var(--accent-orange)' : 'var(--text-secondary)'};"><strong style="color: var(--text-primary);">⚠️ Risk Flags:</strong> ${riskFlags.length ? riskFlags.join(' | ') : 'None'}</p>
                 </div>
             `;
 

@@ -11249,6 +11249,47 @@ def _load_latest_hf_alpha_cache(ticker_slug, max_lookback_days=7):
     return None, None
 
 
+def _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=None):
+    """Load past N weeks of Alpha Ideas for a ticker to enable novelty constraints.
+
+    Returns a dict with:
+      - 'past_theses': list of thesis strings from past weeks
+      - 'past_themes': list of summarized themes/patterns
+      - 'weeks_available': how many weeks of history found
+    """
+    current_day = datetime.now(HF_ALPHA_TZ).date()
+    if current_day_str:
+        try:
+            current_day = datetime.strptime(current_day_str, '%Y-%m-%d').date()
+        except Exception:
+            pass
+    past_theses = []
+    past_themes = []
+    weeks_found = 0
+    for w in range(1, weeks_back + 1):
+        target_day = current_day - timedelta(weeks=w)
+        for d in range(-2, 3):
+            check_day = target_day + timedelta(days=d)
+            day_str = check_day.strftime('%Y-%m-%d')
+            cached = _load_hf_alpha_cache(day_str, ticker_slug)
+            if cached:
+                ideas = cached.get('alpha_ideas') or []
+                for idea in ideas:
+                    thesis = str(idea.get('thesis') or '').strip()
+                    if thesis and thesis not in past_theses:
+                        past_theses.append(thesis)
+                street = str(cached.get('street_context') or '').strip()
+                if street and street not in past_themes:
+                    past_themes.append(street[:300])
+                weeks_found += 1
+                break
+    return {
+        'past_theses': past_theses[-20:],
+        'past_themes': past_themes[-8:],
+        'weeks_available': weeks_found
+    }
+
+
 def _extract_json_object(text):
     text = (text or '').strip()
     if not text:
@@ -11584,7 +11625,13 @@ def _compute_hf_quarter_context(ticker_payload, generation_day):
 
 
 def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
-    """Generate daily Hedge Fund IQ alpha ideas for one ticker."""
+    """Generate weekly Hedge Fund IQ alpha ideas for one ticker.
+
+    This is the brain of the Alpha Ideas system. It:
+    1. Loads novelty memory from past 4 weeks to avoid repetition
+    2. Researches Street/macro context AND company guidance/consensus
+    3. Synthesizes creative, data-led ideas that leverage Crosswalk's unique KPI signal
+    """
     generation_day = generation_day or _hf_alpha_today_str()
     generated_at = datetime.now(HF_ALPHA_TZ).isoformat()
     ticker = ticker_payload.get('ticker') or ticker_payload.get('original_ticker') or 'UNKNOWN'
@@ -11593,18 +11640,43 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
     relevance = ticker_payload.get('relevance_percentage')
     accuracy_rating = stats.get('accuracy_rating') or 'Unknown'
     quarter_ctx = _compute_hf_quarter_context(ticker_payload, generation_day)
+    ticker_slug = ticker_payload.get('s3_key') or ticker
+    novelty = _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=generation_day)
     client = get_openai_client()
     if not client:
         fallback = _default_hf_alpha_packet(ticker_payload, generated_at, 'OpenAI unavailable in environment.')
         return fallback, ['OpenAI not configured; used internal fallback ideas.']
 
+    kpi_direction = 'unknown'
+    kpi_magnitude = 'unknown'
+    trend_pct = stats.get('projected_growth_pct')
+    week_delta = stats.get('weekly_delta')
+    if trend_pct is not None:
+        if trend_pct > 5:
+            kpi_direction = 'accelerating'
+            kpi_magnitude = 'strong positive'
+        elif trend_pct > 0:
+            kpi_direction = 'positive'
+            kpi_magnitude = 'moderate positive'
+        elif trend_pct < -5:
+            kpi_direction = 'decelerating'
+            kpi_magnitude = 'strong negative'
+        elif trend_pct < 0:
+            kpi_direction = 'weakening'
+            kpi_magnitude = 'moderate negative'
+        else:
+            kpi_direction = 'flat'
+            kpi_magnitude = 'neutral'
+
     research = ''
+    guidance_research = ''
     research_warning = ''
     try:
         research_prompt = (
-            f'Provide concise buy-side context for {ticker} around KPI "{kpi_name}". '
-            f'Include: current Street narrative, top debates, and relevant macro/company events that may shift expectations over the next 1-8 weeks. '
-            f'Use concrete source-backed statements.'
+            f'Provide concise institutional buy-side context for {ticker} around KPI "{kpi_name}". '
+            f'Include: (1) current Street narrative and key debates, (2) recent analyst rating changes, '
+            f'(3) sector-level themes affecting this name, (4) any upcoming catalysts in next 4-8 weeks. '
+            f'Use concrete source-backed statements. Focus on information a PM at Citadel would care about.'
         )
         rr = client.chat.completions.create(
             model=HF_ALPHA_RESEARCH_MODEL,
@@ -11613,48 +11685,110 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
         )
         research = (rr.choices[0].message.content or '').strip() if rr.choices else ''
     except Exception as e:
-        research_warning = f'External research unavailable ({e}).'
+        research_warning = f'Street research unavailable ({e}). '
+
+    try:
+        guidance_prompt = (
+            f'For {ticker}, provide: (1) management guidance for current and next quarter if available, '
+            f'(2) Street consensus estimates (revenue, EPS) vs. guidance, (3) any recent guidance changes, '
+            f'(4) key metrics management emphasizes on earnings calls. Be specific with numbers.'
+        )
+        gr = client.chat.completions.create(
+            model=HF_ALPHA_RESEARCH_MODEL,
+            messages=[{"role": "user", "content": guidance_prompt}],
+            web_search_options={"search_context_size": "medium"},
+        )
+        guidance_research = (gr.choices[0].message.content or '').strip() if gr.choices else ''
+    except Exception as e:
+        research_warning += f'Guidance research unavailable ({e}).'
+
+    novelty_constraint = ""
+    if novelty.get('past_theses'):
+        past_ideas_str = '\n'.join([f"  - {t}" for t in novelty['past_theses'][:12]])
+        novelty_constraint = f"""
+CRITICAL NOVELTY CONSTRAINT (past {novelty['weeks_available']} weeks of ideas - DO NOT repeat):
+{past_ideas_str}
+
+Your ideas must be FRESH and DIFFERENT from the above. Find new angles, new catalysts, new ways to interpret the signal."""
 
     synthesis_base_prompt = f"""
-You are producing elite hedge-fund alpha ideas for sophisticated PMs.
+You are a senior quantitative PM at a top multi-manager hedge fund (Citadel, Millennium, Balyasny, Two Sigma).
+Your edge: Crosswalk IQ provides you PROPRIETARY, REAL-TIME KPI data that Street analysts don't have.
+
+═══════════════════════════════════════════════════════════════════════════════
+YOUR UNIQUE DATA EDGE (this is what makes alpha possible):
+═══════════════════════════════════════════════════════════════════════════════
 
 Ticker: {ticker}
-KPI tracked: {kpi_name}
-Stock impact (relevance): {relevance if relevance is not None else "Unknown"}%
-Accuracy rating: {accuracy_rating}
-Recent internal KPI stats: {json.dumps(stats, default=str)}
-Quarter timing context: {json.dumps(quarter_ctx, default=str)}
-Research context:
-{research or "No external context available. Use internal KPI-only ideas and explicitly flag limited context."}
+Proprietary KPI tracked: "{kpi_name}"
+Stock-impact weight: {relevance if relevance is not None else "TBD"}% (how much this KPI moves the stock)
+Crosswalk accuracy rating: {accuracy_rating}
+KPI signal direction: {kpi_direction} ({kpi_magnitude})
 
-Return ONLY JSON with this exact schema:
+DETAILED KPI STATISTICS (your informational edge):
+{json.dumps(stats, indent=2, default=str)}
+
+QUARTER TIMING (critical for trade structure):
+{json.dumps(quarter_ctx, indent=2, default=str)}
+
+═══════════════════════════════════════════════════════════════════════════════
+EXTERNAL CONTEXT (align your data-driven thesis with reality):
+═══════════════════════════════════════════════════════════════════════════════
+
+STREET NARRATIVE & CATALYSTS:
+{research or "Limited external context available - weight internal signal more heavily."}
+
+COMPANY GUIDANCE & CONSENSUS:
+{guidance_research or "Guidance data not available - focus on KPI signal vs. historical patterns."}
+
+═══════════════════════════════════════════════════════════════════════════════
+{novelty_constraint}
+
+YOUR TASK: Generate 4-5 CREATIVE, ACTIONABLE alpha ideas that a sophisticated fundamental/quant PM would actually trade.
+
+KEY REQUIREMENTS:
+1. **DATA-LED**: Every idea must START from the Crosswalk KPI signal. The thesis should flow: "Our {kpi_name} data shows X → this implies Y for earnings/revenue → the Street expects Z → therefore trade..."
+2. **CREATIVE ANGLES**: Don't just say "KPI is up so go long". Think second/third-order effects:
+   - Cross-asset implications (options vol, credit spreads, sector rotation)
+   - Supply chain read-throughs (if our data shows X for {ticker}, what does it mean for suppliers/competitors?)
+   - Timing arbitrage (can we trade ahead of lagged data releases?)
+   - Event-driven overlays (how does our signal interact with upcoming catalysts?)
+3. **FUNDAMENTAL FUND FOCUS**: Include ideas that work for long-only fundamental PMs, not just quant:
+   - How does guidance compare to what our data implies?
+   - Where might management under/over-promise based on our signal?
+   - What questions should fundamental analysts ask management?
+4. **SPECIFIC & FALSIFIABLE**: Every idea needs concrete entry/exit criteria based on the data
+
+Return ONLY valid JSON with this schema:
 {{
-  "street_context": "<2-4 sentence setup>",
-  "world_events": "<2-4 sentence macro/company event setup>",
-  "risk_flags": ["<risk 1>", "<risk 2>"],
-  "confidence": <1-100>,
+  "crosswalk_data_summary": "<2-3 sentence summary of what the Crosswalk KPI signal is telling us>",
+  "street_context": "<2-3 sentences on where Street expectations sit vs our signal>",
+  "guidance_vs_signal": "<2-3 sentences on company guidance vs what our data implies>",
+  "risk_flags": ["<specific risk to the data signal>", "<macro/event risk>"],
+  "confidence": <1-100 based on data quality + alignment with external context>,
   "alpha_ideas": [
     {{
-      "thesis": "<concrete trade hypothesis>",
-      "what_consensus_misses": "<what street likely misses>",
-      "signal_interpretation": "<how this KPI signal maps to earnings/revisions/positioning>",
+      "thesis": "<specific trade hypothesis anchored in Crosswalk data>",
+      "crosswalk_edge": "<explicitly state: 'Our {kpi_name} data shows [X] which the Street hasn't priced because [Y]'>",
+      "what_consensus_misses": "<specific blind spot this data reveals>",
+      "fundamental_strategy": "<for fundamental PMs: how to use this in stock analysis/management meetings>",
+      "signal_interpretation": "<exactly how this KPI maps to P&L impact>",
       "horizon": "short|medium",
-      "catalyst_window": "<timing>",
-      "falsification_criteria": "<what invalidates idea>",
-      "position_risk": "<position sizing and risk framing>",
+      "catalyst_window": "<specific timing tied to data or events>",
+      "falsification_criteria": "<what data change would invalidate this - be specific with thresholds>",
+      "position_risk": "<sizing, hedges, and risk management>",
       "confidence": <1-100>,
-      "evidence_refs": ["<source or evidence note>", "<source or evidence note>"]
+      "evidence_refs": ["Crosswalk {kpi_name} QTD: [value]", "<external source>"]
     }}
   ]
 }}
 
-Constraints:
-- Produce 4-5 high-specificity ideas.
-- Every idea must include catalyst_window + falsification_criteria + position_risk.
-- Avoid generic language.
-- You MUST account for quarter timing:
-  - If `quarter_urgency` is `high` or `elevated`, explicitly frame ideas through quarter-to-date signal vs. imminent reporting risk.
-  - Use QTD signal persistence and days_left_in_quarter when setting catalyst_window and risk framing.
+QUALITY GATES:
+- If an idea doesn't explicitly reference the Crosswalk data, it's rejected
+- If an idea could be generated without our proprietary KPI, it's not alpha
+- Ideas must be different from previous weeks (see novelty constraint above)
+- At least one idea should be creative/non-obvious (cross-asset, supply-chain, or timing angle)
+- At least one idea should be actionable for fundamental long-only PMs
 """
     parsed = None
     changes = []
@@ -11662,15 +11796,21 @@ Constraints:
         try:
             retry_suffix = ""
             if attempt == 1:
-                retry_suffix = "\nSTRICT RETRY: previous output failed quality checks; increase specificity, include explicit evidence refs, and provide at least 4 ideas."
+                retry_suffix = """
+
+STRICT RETRY - YOUR PREVIOUS OUTPUT FAILED QUALITY CHECKS:
+1. Make EVERY idea explicitly reference the Crosswalk KPI data with specific values
+2. Include the 'crosswalk_edge' and 'fundamental_strategy' fields for each idea
+3. Be MORE creative - think like a PM hunting for edge, not a generic analyst
+4. Provide at least 4 distinct ideas with different angles/time horizons"""
             resp = client.chat.completions.create(
                 model=HF_ALPHA_SYNTH_MODEL,
                 messages=[
-                    {"role": "system", "content": "You are a top-tier cross-asset PM + data scientist. Respond with strict JSON only."},
+                    {"role": "system", "content": "You are an elite quantitative PM. Your alpha comes from proprietary alternative data. Respond with strict JSON only. Think like you're managing $500M and need to justify every position to your risk committee."},
                     {"role": "user", "content": synthesis_base_prompt + retry_suffix},
                 ],
-                temperature=0.35 if attempt == 0 else 0.2,
-                max_tokens=2200,
+                temperature=0.4 if attempt == 0 else 0.25,
+                max_tokens=3000,
             )
             parsed = _extract_json_object(resp.choices[0].message.content if resp.choices else '')
             packet = {
@@ -11679,12 +11819,15 @@ Constraints:
                 'kpi_name': kpi_name,
                 'accuracy_rating': accuracy_rating,
                 'relevance_percentage': relevance,
+                'crosswalk_data_summary': str((parsed or {}).get('crosswalk_data_summary') or '').strip(),
                 'street_context': str((parsed or {}).get('street_context') or '').strip(),
-                'world_events': str((parsed or {}).get('world_events') or '').strip(),
+                'guidance_vs_signal': str((parsed or {}).get('guidance_vs_signal') or '').strip(),
+                'world_events': str((parsed or {}).get('world_events') or (parsed or {}).get('guidance_vs_signal') or '').strip(),
                 'alpha_ideas': (parsed or {}).get('alpha_ideas') or [],
                 'risk_flags': (parsed or {}).get('risk_flags') or [],
                 'confidence': (parsed or {}).get('confidence') or 55,
                 'generated_at': generated_at,
+                'novelty_weeks_checked': novelty.get('weeks_available', 0),
             }
             ok, reason = _validate_hf_alpha_packet(packet)
             if ok:
@@ -11707,37 +11850,54 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
         ticker = escape(str(pkt.get('ticker') or 'UNKNOWN'))
         kpi = escape(str(pkt.get('kpi_name') or 'KPI'))
         ideas = pkt.get('alpha_ideas') or []
+        crosswalk_summary = escape(str(pkt.get('crosswalk_data_summary') or ''))
+        guidance_signal = escape(str(pkt.get('guidance_vs_signal') or ''))
+        street = escape(str(pkt.get('street_context') or ''))
+        conf = int(pkt.get('confidence') or 50)
+        risk_flags = pkt.get('risk_flags') or []
         idea_html = ""
-        for i, idea in enumerate(ideas[:3], start=1):
+        for i, idea in enumerate(ideas[:4], start=1):
             thesis = escape(str(idea.get('thesis') or ''))
+            crosswalk_edge = escape(str(idea.get('crosswalk_edge') or idea.get('what_consensus_misses') or ''))
+            fundamental = escape(str(idea.get('fundamental_strategy') or ''))
             catalyst = escape(str(idea.get('catalyst_window') or ''))
             falsification = escape(str(idea.get('falsification_criteria') or ''))
             risk = escape(str(idea.get('position_risk') or ''))
+            idea_conf = int(idea.get('confidence') or 50)
             idea_html += f"""
-                <div class="email-card" style="margin: 10px 0;">
-                    <div class="email-card-title">{i}. {thesis}</div>
-                    <p><strong>Catalyst:</strong> {catalyst}</p>
-                    <p><strong>Falsification:</strong> {falsification}</p>
-                    <p><strong>Risk Framing:</strong> {risk}</p>
+                <div class="email-card" style="margin: 12px 0; padding: 12px; background: rgba(102,217,239,0.05); border-left: 3px solid #66d9ef; border-radius: 4px;">
+                    <div style="font-weight: 600; color: #f8f8f2; margin-bottom: 8px;">{i}. {thesis}</div>
+                    <p style="margin: 6px 0; font-size: 0.9em;"><strong style="color:#66d9ef;">📊 Crosswalk Edge:</strong> {crosswalk_edge}</p>
+                    {f'<p style="margin: 6px 0; font-size: 0.9em;"><strong style="color:#a6e22e;">📈 Fundamental Strategy:</strong> {fundamental}</p>' if fundamental else ''}
+                    <p style="margin: 6px 0; font-size: 0.9em;"><strong>⏱️ Catalyst:</strong> {catalyst}</p>
+                    <p style="margin: 6px 0; font-size: 0.9em;"><strong>❌ Falsification:</strong> {falsification}</p>
+                    <p style="margin: 6px 0; font-size: 0.9em;"><strong>⚖️ Risk:</strong> {risk} <span style="color:#888;">(Conf: {idea_conf}%)</span></p>
                 </div>
             """
-        street = escape(str(pkt.get('street_context') or ''))
-        world = escape(str(pkt.get('world_events') or ''))
-        conf = int(pkt.get('confidence') or 50)
+        risk_html = ""
+        if risk_flags:
+            flags_str = ', '.join([escape(str(f)) for f in risk_flags[:3]])
+            risk_html = f'<p style="color:#f92672; font-size: 0.85em;"><strong>⚠️ Risk Flags:</strong> {flags_str}</p>'
         sections.append(f"""
-            <h3 style="color:#66d9ef; margin: 20px 0 8px 0;">{ticker} — {kpi}</h3>
-            <p><strong>Crosswalk Context:</strong> {street}</p>
-            <p><strong>World/Event Context:</strong> {world}</p>
-            <p><strong>Crosswalk IQ Confidence:</strong> {conf}%</p>
-            {idea_html}
+            <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <h3 style="color:#66d9ef; margin: 0 0 8px 0;">{ticker} — {kpi}</h3>
+                <p style="margin: 8px 0; background: rgba(166,226,46,0.1); padding: 10px; border-radius: 4px;"><strong style="color:#a6e22e;">📊 Crosswalk Data Signal:</strong> {crosswalk_summary}</p>
+                {f'<p style="margin: 8px 0;"><strong>📋 Guidance vs. Signal:</strong> {guidance_signal}</p>' if guidance_signal else ''}
+                <p style="margin: 8px 0;"><strong>🏛️ Street Context:</strong> {street}</p>
+                <p style="margin: 8px 0;"><strong>Crosswalk IQ Confidence:</strong> <span style="color:#66d9ef; font-weight:600;">{conf}%</span></p>
+                {risk_html}
+                <h4 style="color:#f8f8f2; margin: 16px 0 8px 0;">Alpha Ideas:</h4>
+                {idea_html}
+            </div>
         """)
-    cta = f'<p><a class="email-btn" href="{escape(app_base_url)}">Open Hedge Fund IQ</a></p>'
+    cta = f'<p style="margin-top: 20px;"><a class="email-btn" href="{escape(app_base_url)}">Open Hedge Fund IQ Dashboard</a></p>'
     body = f"""
-        <p>Daily Alpha Ideas for <strong>{escape(username)}</strong> — {escape(as_of_date)} (ET).</p>
+        <p style="font-size: 1.1em;">Weekly Alpha Ideas for <strong>{escape(username)}</strong> — Week of {escape(as_of_date)} (ET)</p>
+        <p style="color:#888; font-size: 0.9em; margin-bottom: 20px;">Ideas generated from proprietary Crosswalk IQ KPI data combined with real-time market research.</p>
         {''.join(sections)}
         {cta}
     """
-    return _wrap_email_html(body, title="Hedge Fund IQ — Alpha Ideas")
+    return _wrap_email_html(body, title="Hedge Fund IQ — Weekly Alpha Ideas")
 
 
 def _get_hf_digest_recipients():
@@ -11846,8 +12006,8 @@ def send_hf_alpha_ideas_digest(
             skipped.append({'username': rec['username'], 'reason': 'No entitled ticker ideas'})
             continue
         html_content = _build_hf_alpha_email_html(rec['username'], packets, run_day, app_url)
-        subject = f"Hedge Fund IQ Alpha Ideas — {run_day}"
-        text = f"Hedge Fund IQ Alpha Ideas ({run_day}) for {rec['username']}. Open dashboard: {app_url}"
+        subject = f"Hedge Fund IQ — Weekly Alpha Ideas ({run_day})"
+        text = f"Hedge Fund IQ Weekly Alpha Ideas (week of {run_day}) for {rec['username']}. Open dashboard: {app_url}"
         if dry_run:
             sent.append({'username': rec['username'], 'email': rec['email'], 'dry_run': True, 'ticker_count': len(packets)})
             continue
@@ -12470,7 +12630,7 @@ def admin_run_hf_alpha_ideas():
 
 @app.route('/api/cron/hf-alpha-ideas', methods=['GET', 'POST'])
 def cron_hf_alpha_ideas():
-    """Weekday cron endpoint for Hedge Fund IQ alpha generation + digest send."""
+    """Weekly Monday cron endpoint for Hedge Fund IQ alpha generation + digest send."""
     secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
     expected = os.environ.get('CRON_SECRET', '')
     if not expected or secret != expected:
@@ -12489,6 +12649,8 @@ def cron_hf_alpha_ideas():
         now_et = datetime.now(HF_ALPHA_TZ)
         if now_et.weekday() >= 5 and not force:
             return jsonify({'success': True, 'skipped': True, 'reason': 'Weekend (ET)', 'timestamp_et': now_et.isoformat()})
+        if now_et.weekday() != 0 and not force:
+            return jsonify({'success': True, 'skipped': True, 'reason': 'Weekly send is Monday-only (ET)', 'weekday': now_et.strftime('%A'), 'timestamp_et': now_et.isoformat()})
         result = send_hf_alpha_ideas_digest(
             dry_run=dry_run,
             test_email=test_email,
