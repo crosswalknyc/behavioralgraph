@@ -11657,21 +11657,57 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
         fallback = _default_hf_alpha_packet(ticker_payload, generated_at, 'OpenAI unavailable in environment.')
         return fallback, ['OpenAI not configured; used internal fallback ideas.']
 
-    trend_pct = stats.get('projected_growth_pct')
-    qtd_total = stats.get('qtd_total')
-    prior_q_total = stats.get('prior_quarter_total')
+    raw_data = ticker_payload.get('data') or []
+    current_consumers = None
+    historical_consumers = None
+    daily_subs = None
+    daily_cancels = None
+    yoy_consumers = None
+    for row in reversed(raw_data):
+        if current_consumers is None:
+            current_consumers = row.get('Total Consumers') or row.get('Current Consumers')
+            daily_subs = row.get('Total Subs') or row.get('Subscriptions')
+            daily_cancels = row.get('Total Cancels') or row.get('Cancellations')
+        break
+    if raw_data:
+        one_year_ago_idx = max(0, len(raw_data) - 365)
+        historical_consumers = raw_data[one_year_ago_idx].get('Total Consumers') or raw_data[one_year_ago_idx].get('Current Consumers')
+        if len(raw_data) > 90:
+            q_ago = raw_data[-91] if len(raw_data) > 90 else raw_data[0]
+            yoy_consumers = q_ago.get('Total Consumers') or q_ago.get('Current Consumers')
+
+    actual_yoy_change = None
+    if current_consumers and historical_consumers and historical_consumers > 0:
+        actual_yoy_change = ((current_consumers - historical_consumers) / historical_consumers) * 100
+    
+    daily_net = None
+    if daily_subs is not None and daily_cancels is not None:
+        daily_net = (daily_subs or 0) - (daily_cancels or 0)
+
     net_growth_desc = "unknown trajectory"
-    if trend_pct is not None:
-        if trend_pct < -20:
-            net_growth_desc = f"significant decline ({trend_pct:+.1f}% projected net growth)"
-        elif trend_pct < -5:
-            net_growth_desc = f"moderate decline ({trend_pct:+.1f}% projected net growth)"
-        elif trend_pct < 5:
-            net_growth_desc = f"roughly flat ({trend_pct:+.1f}% projected net growth)"
-        elif trend_pct < 20:
-            net_growth_desc = f"moderate growth ({trend_pct:+.1f}% projected net growth)"
+    if actual_yoy_change is not None:
+        if actual_yoy_change < -30:
+            net_growth_desc = f"SEVERE decline ({actual_yoy_change:+.1f}% YoY, losing ~{abs(daily_net):,.0f}/day)" if daily_net else f"SEVERE decline ({actual_yoy_change:+.1f}% YoY)"
+        elif actual_yoy_change < -10:
+            net_growth_desc = f"significant decline ({actual_yoy_change:+.1f}% YoY)"
+        elif actual_yoy_change < -2:
+            net_growth_desc = f"moderate decline ({actual_yoy_change:+.1f}% YoY)"
+        elif actual_yoy_change < 2:
+            net_growth_desc = f"roughly flat ({actual_yoy_change:+.1f}% YoY)"
+        elif actual_yoy_change < 10:
+            net_growth_desc = f"moderate growth ({actual_yoy_change:+.1f}% YoY)"
         else:
-            net_growth_desc = f"strong growth ({trend_pct:+.1f}% projected net growth)"
+            net_growth_desc = f"strong growth ({actual_yoy_change:+.1f}% YoY)"
+    
+    data_context = f"""
+ACTUAL DATA (from Crosswalk panel):
+- Current {kpi_name}: {current_consumers:,.0f if current_consumers else 'N/A'}
+- One year ago: {historical_consumers:,.0f if historical_consumers else 'N/A'}
+- YoY change: {actual_yoy_change:+.1f}% if actual_yoy_change else 'N/A'
+- Daily subs: {daily_subs:,.0f if daily_subs else 'N/A'}
+- Daily cancels: {daily_cancels:,.0f if daily_cancels else 'N/A'}  
+- Daily net: {daily_net:+,.0f if daily_net else 'N/A'}
+"""
 
     research = ''
     deep_context = ''
@@ -11679,16 +11715,16 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
     research_warning = ''
     try:
         deep_research_prompt = (
-            f'I need DEEP institutional research on {ticker} for a hedge fund. '
-            f'Focus on the KPI "{kpi_name}" which is showing {net_growth_desc}. '
-            f'CRITICAL: Explain WHY the numbers might look this way. Research: '
-            f'(1) Any major corporate actions (divestitures, acquisitions, asset sales), '
-            f'(2) Strategic shifts or business model changes, '
-            f'(3) Competitive dynamics and market share shifts, '
-            f'(4) Regulatory or macro factors affecting this specific KPI, '
-            f'(5) What management has said about this metric on recent calls, '
-            f'(6) Any one-time items that would distort the numbers. '
-            f'Be specific with dates, deal values, and counterparties where available.'
+            f'I need DEEP institutional research on {ticker} for a hedge fund PM. '
+            f'Our alternative data shows {kpi_name} is {net_growth_desc}. '
+            f'Current level: {current_consumers:,.0f if current_consumers else "unknown"}. '
+            f'CRITICAL QUESTION: WHY? What explains these numbers? Research SPECIFICALLY: '
+            f'(1) Has {ticker} done ANY divestitures, asset sales, or sold business units recently? To whom? Which states/regions? '
+            f'(2) Any M&A activity - acquisitions or spin-offs? '
+            f'(3) Major strategic pivots or business model changes? '
+            f'(4) What has management said about {kpi_name} on recent earnings calls? '
+            f'Be VERY specific with dates, deal values, counterparties, and states/regions affected. '
+            f'I need to understand if the YoY decline is organic or due to divestitures/restructuring.'
         )
         dr = client.chat.completions.create(
             model=HF_ALPHA_RESEARCH_MODEL,
@@ -11741,31 +11777,29 @@ NOVELTY: Don't repeat these ideas from past weeks:
 """
 
     synthesis_base_prompt = f"""
-You are a senior PM at a top hedge fund. Crosswalk IQ is your COMPETITIVE EDGE - we provide 
-proprietary KPI tracking AND expert research synthesis that no one else has.
+You are a senior PM at a top hedge fund. Crosswalk IQ gives you a UNIQUE EDGE through:
+1. Proprietary alternative data on {kpi_name}
+2. Deep research synthesis explaining WHY the numbers look the way they do
+3. Creative idea generation that connects the dots
 
 ═══════════════════════════════════════════════════════════════════════════════
-CROSSWALK IQ SIGNAL (use as directional guide, not gospel):
+CROSSWALK IQ DATA SIGNAL:
 ═══════════════════════════════════════════════════════════════════════════════
 
 Ticker: {ticker}
 KPI: "{kpi_name}"
-Our signal: {net_growth_desc}
-QTD value: {qtd_total if qtd_total else 'not available'}
-Prior quarter: {prior_q_total if prior_q_total else 'not available'}
-Stock impact weight: {relevance if relevance is not None else "N/A"}%
-Quarter context: {quarter_ctx.get('quarter', 'N/A')} - {quarter_ctx.get('days_left_in_quarter', 'N/A')} days left
-
-Full stats: {json.dumps(stats, indent=2, default=str)}
+Signal: {net_growth_desc}
+{data_context}
+Quarter: {quarter_ctx.get('quarter', 'N/A')} ({quarter_ctx.get('days_left_in_quarter', 'N/A')} days left, urgency: {quarter_ctx.get('quarter_urgency', 'normal')})
 
 ═══════════════════════════════════════════════════════════════════════════════
-DEEP RESEARCH (this is WHERE THE ALPHA IS - understand WHY):
+CRITICAL RESEARCH (THE KEY TO UNDERSTANDING THE DATA):
 ═══════════════════════════════════════════════════════════════════════════════
 
-{deep_context or "Deep context not available - rely on Street research below."}
+{deep_context or "Research not available - be cautious with interpretations."}
 
 ═══════════════════════════════════════════════════════════════════════════════
-STREET CONSENSUS & CATALYSTS:
+STREET VIEW:
 ═══════════════════════════════════════════════════════════════════════════════
 
 {research or "Limited Street context."}
@@ -11779,47 +11813,57 @@ COMPANY GUIDANCE:
 ═══════════════════════════════════════════════════════════════════════════════
 {novelty_constraint}
 
-YOUR TASK: Generate 4-5 CREATIVE, INNOVATIVE alpha ideas. You are writing for the 
-smartest PMs in the world who already know the obvious stuff. Give them EDGE.
+YOUR TASK: Generate 4-5 GENUINELY CREATIVE alpha ideas that synthesize our data with the research.
 
-CRITICAL PHILOSOPHY:
-1. **Crosswalk's edge is SYNTHESIS** - Our signal + deep research + creative thinking = alpha
-2. **Don't be mechanical** - If our KPI shows decline, don't just say "short it". WHY is it declining? 
-   Is it a divestiture? A strategic shift? One-time item? The WHY creates the trade.
-3. **Think creatively** - Second/third order effects, relative value, options structures, 
-   timing plays, supply chain read-throughs, event overlays
-4. **Frame everything as Crosswalk's edge** - Even when the insight comes from research, 
-   frame it as "Crosswalk IQ's analysis reveals..." or "Our research identifies..."
-5. **Be specific** - Name counterparties, deal values, dates, specific catalysts
+THE KEY INSIGHT FRAMEWORK:
+1. Look at our data signal ({net_growth_desc})
+2. Understand WHY from the research (is it organic decline? divestiture? strategic shift?)
+3. Ask: "What does this REALLY mean for the stock that the Street hasn't figured out?"
+4. Generate a CREATIVE trade based on that insight
 
-EXAMPLE OF GOOD CREATIVE THINKING:
-- "Our data shows LUMN broadband down 30%, but research reveals this is due to the AT&T 
-  divestiture of 11 states. The organic business may actually be stable. Trade: Long LUMN 
-  into earnings as Street hasn't adjusted models for the new perimeter."
+DON'T:
+- Just say "data down = short" or "data up = long"
+- Ignore the research context
+- Give generic ideas any analyst could write
 
-Return JSON:
+DO:
+- Explain the REAL story (e.g., "decline is from divestiture, not organic loss")
+- Think about second-order effects (e.g., "if LUMN sold to AT&T, what does that mean for AT&T's exposure?")
+- Consider relative value (e.g., "long LUMN vs short peer who hasn't restructured")
+- Find creative angles (e.g., "the new smaller LUMN perimeter has better unit economics")
+- Use specific numbers, dates, counterparties from the research
+
+EXAMPLE OF A GREAT IDEA:
+"Crosswalk data shows LUMN broadband subscribers down 58% YoY. Research reveals this is largely 
+due to the $2B sale of consumer operations in 20 states to Brightspeed in 2022 and fiber expansion 
+focus. The REMAINING footprint shows stable-to-improving trends. Trade: Long LUMN calls ahead of 
+Q1 earnings as Street models still reflect the old, larger perimeter. The 'new LUMN' story hasn't 
+been priced in."
+
+Return JSON (be specific and creative!):
 {{
-  "crosswalk_insight": "<2-3 sentences: What does Crosswalk IQ's signal + research reveal that others miss?>",
-  "street_vs_reality": "<2-3 sentences: How does Street view this vs what's really happening?>",  
-  "guidance_alignment": "<2-3 sentences: Does management guidance align with our view?>",
-  "risk_flags": ["<key risk 1>", "<key risk 2>"],
+  "crosswalk_insight": "<What does our data + research reveal? Be specific about the numbers and the WHY>",
+  "street_vs_reality": "<What does Street think vs what's actually happening?>",
+  "guidance_alignment": "<Does company guidance support our thesis?>",
+  "risk_flags": ["<specific risk>", "<specific risk>"],
   "confidence": <1-100>,
   "alpha_ideas": [
     {{
-      "thesis": "<specific creative trade idea>",
-      "crosswalk_edge": "<Why Crosswalk IQ gives you an edge here - can be signal, research, or synthesis>",
-      "the_real_story": "<What's actually happening that the market misses?>",
-      "fundamental_angle": "<How should fundamental PMs think about this?>",
-      "trade_structure": "<Specific implementation: long/short, options, relative value, timing>",
-      "catalyst": "<What event or data will prove this out?>",
-      "kill_switch": "<When are you wrong? Specific criteria to exit>",
-      "risk_management": "<Position sizing and hedges>",
+      "thesis": "<Specific, creative trade idea with clear logic>",
+      "crosswalk_edge": "<Specifically: what does Crosswalk's signal + research reveal that creates this opportunity?>",
+      "the_real_story": "<The actual narrative the market is missing - be specific>",
+      "fundamental_angle": "<For fundamental PMs: how to think about this, what to ask management>",
+      "trade_structure": "<Specific: long/short equity, options (which strikes/expiries), pair trade, etc.>",
+      "catalyst": "<Specific event/date that will prove the thesis>",
+      "kill_switch": "<Specific criteria: when is the thesis wrong?>",
+      "risk_management": "<Position sizing guidance, hedges>",
       "confidence": <1-100>
     }}
   ]
 }}
 
-BE CREATIVE. BE SPECIFIC. PROVIDE REAL EDGE. This goes to the smartest investors in the world.
+Remember: This goes to PMs at Citadel, Millennium, Point72. They've seen every generic idea. 
+Give them something CREATIVE and SPECIFIC that they can actually trade.
 """
     parsed = None
     changes = []
