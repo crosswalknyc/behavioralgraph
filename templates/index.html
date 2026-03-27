@@ -15022,6 +15022,9 @@
                             </div>
                             <!-- Action Buttons (right-aligned) -->
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
+                                <div class="display-mode-toggle" onclick="closeAllSubscriberTabs()" title="Close all open Subscriber IQ tabs">
+                                    <span>CLOSE ALL TABS</span>
+                                </div>
                                 <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
                                     <span id="subscriberHoverToggleLabel">HOVER ON</span>
                                 </div>
@@ -15047,8 +15050,6 @@
 
                         <!-- Episodes Tab -->
                         <div id="subscriber-tab-episodes" class="tab-content">
-                            <div id="subscriberEpisodesInsights" class="tab-insights-section"></div>
-                            
                             <div class="tab-section">
                                 <h3>📺 Episode Performance</h3>
                                 <p class="section-description">Which episodes drove the most platform signups</p>
@@ -15059,13 +15060,6 @@
                         <!-- Timing Tab -->
                         <div id="subscriber-tab-timing" class="tab-content">
                             <div id="subscriberTimingInsights" class="tab-insights-section"></div>
-                            
-                            <div class="tab-section">
-                                <h3>⏱️ Signup Timing Overview</h3>
-                                <p class="section-description">Key metrics on when people signed up after show premiere</p>
-                                <div id="subscriberTimingMetrics" class="timing-metrics-grid"></div>
-                            </div>
-                            
                             <div class="tab-section">
                                 <h3>📊 Signup Distribution</h3>
                                 <p class="section-description">Distribution of signups by days after premiere</p>
@@ -15252,7 +15246,7 @@
                         <!-- Top Landing Domains -->
                         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
                             <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Landing Domains by Channel</h3>
-                            <div id="roasIQDomainsTable" style="overflow-x: auto;"></div>
+                            <div id="roasIQDomainsTable" style="overflow-x: auto; max-height: 600px; overflow-y: auto;"></div>
                         </div>
                         <!-- Attribution Detail Table -->
                         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
@@ -16104,6 +16098,7 @@
                                     <button class="tab-btn" onclick="showTickerTab('daily')">📋 Daily Metrics</button>
                                     <button class="tab-btn" onclick="showTickerTab('historic')">📅 Historic Performance</button>
                                     <button class="tab-btn" onclick="showTickerTab('profile')">👥 Customer Profile</button>
+                                    <button class="tab-btn" onclick="showTickerTab('alphaideas')">🧠 Alpha Ideas</button>
                                     <button class="tab-btn" id="tickerCompareTabBtn" onclick="showTickerTab('compare')" style="display: none;">⚖️ Compare</button>
                                 </div>
                                 
@@ -16422,6 +16417,22 @@
                                 <div class="loading-placeholder">Loading customer profile...</div>
                             </div>
                         </div>
+
+                        <!-- Alpha Ideas Tab -->
+                        <div id="alphaideasTab" class="ticker-tab-content" style="display: none;">
+                            <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                    <h3 style="margin: 0; color: var(--accent-cyan);">🧠 Alpha Ideas</h3>
+                                    <button class="dash-action-btn" onclick="loadTickerAlphaIdeas(true)">🔄 Refresh Ideas</button>
+                                </div>
+                                <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.85rem;">
+                                    Daily AI-generated trade hypotheses using internal KPI signal, stock-impact weighting, and external market context.
+                                </p>
+                            </div>
+                            <div id="tickerAlphaIdeasContent">
+                                <div class="loading-placeholder">Open a ticker to load alpha ideas.</div>
+                            </div>
+                        </div>
                         
                         <!-- Ticker Comparison Tab -->
                         <div id="tickerCompareTab" class="ticker-tab-content" style="display: none;">
@@ -16642,6 +16653,7 @@
         let openSubscriberTabs = []; // Array of { id, name, dateRange, data }
         let activeSubscriberTabId = null;
         const expandedSubscriberCategories = new Set(); // For hierarchical tree (match Profile IQ)
+        const expandedSubscriberShows = new Set(); // For nested season groups in Subscriber IQ sidebar
         
         // When true, user only has Hedge Fund IQ (no Profile IQ) — default to Hedge Fund IQ landing on load
         window.defaultViewHedgeFundIQ = {{ 'true' if default_view_hedge_fund_iq else 'false' }};
@@ -18033,19 +18045,22 @@
             var totalProjected = 0;
             results.forEach(function(r) {
                 var proj = r.projected || _roasProject(r.raw || 0);
+                var projClicks = r.projected_click_count || _roasProject(r.click_count || r.raw || 0);
                 var projConv = r.projected_conversions || _roasProject(r.conversions || 0);
                 var clicks = r.click_count || r.raw || 0;
-                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalProjected:0, totalConv:0, totalProjConv:0, totalRaw:0, totalClicks:0, sources:{} };
+                if (!channelMap[r.channel]) channelMap[r.channel] = { totalPct:0, totalProjected:0, totalProjClicks:0, totalConv:0, totalProjConv:0, totalRaw:0, totalClicks:0, sources:{} };
                 channelMap[r.channel].totalPct += r.pct;
                 channelMap[r.channel].totalProjected += proj;
+                channelMap[r.channel].totalProjClicks += projClicks;
                 channelMap[r.channel].totalConv += (r.conversions || 0);
                 channelMap[r.channel].totalProjConv += projConv;
                 channelMap[r.channel].totalRaw += (r.raw || 0);
                 channelMap[r.channel].totalClicks += clicks;
                 totalProjected += proj;
-                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, projected:0, convRate: 0, projConv: 0 };
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct:0, projected:0, projClicks:0, convRate: 0, projConv: 0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
                 channelMap[r.channel].sources[r.source].projected += proj;
+                channelMap[r.channel].sources[r.source].projClicks += projClicks;
                 channelMap[r.channel].sources[r.source].convRate = r.conv_rate || 0;
                 channelMap[r.channel].sources[r.source].projConv += projConv;
             });
@@ -18104,7 +18119,7 @@
             var convCanvas = document.getElementById('roasIQConvChart');
             if (convCanvas && typeof Chart !== 'undefined') {
                 if (_roasIQViewConvInst) _roasIQViewConvInst.destroy();
-                var convRates = channels.map(function(c) { return c[1].totalClicks > 0 ? Math.round(10000.0 * c[1].totalConv / c[1].totalClicks) / 100 : 0; });
+                var convRates = channels.map(function(c) { return c[1].totalProjClicks > 0 ? Math.round(10000.0 * c[1].totalProjConv / c[1].totalProjClicks) / 100 : 0; });
                 _roasIQViewConvInst = new Chart(convCanvas.getContext('2d'), {
                     type: 'doughnut',
                     data: {
@@ -18131,19 +18146,19 @@
             results.forEach(function(r) {
                 var ch = r.channel;
                 var fam = r.family || r.source;
-                var proj = r.projected || _roasProject(r.raw || 0);
+                var projClicks = r.projected_click_count || _roasProject(r.click_count || r.raw || 0);
                 var projConv = r.projected_conversions || _roasProject(r.conversions || 0);
                 var clicks = r.click_count || r.raw || 0;
                 if (!channelFamilies[ch]) channelFamilies[ch] = {};
-                if (!channelFamilies[ch][fam]) channelFamilies[ch][fam] = { pct:0, projected:0, raw:0, clicks:0, conv:0, projConv:0, sources:{} };
+                if (!channelFamilies[ch][fam]) channelFamilies[ch][fam] = { pct:0, projClicks:0, raw:0, clicks:0, conv:0, projConv:0, sources:{} };
                 channelFamilies[ch][fam].pct += r.pct;
-                channelFamilies[ch][fam].projected += proj;
+                channelFamilies[ch][fam].projClicks += projClicks;
                 channelFamilies[ch][fam].raw += (r.raw||0);
                 channelFamilies[ch][fam].clicks += clicks;
                 channelFamilies[ch][fam].conv += (r.conversions||0);
                 channelFamilies[ch][fam].projConv += projConv;
                 if (r.source !== fam) {
-                    channelFamilies[ch][fam].sources[r.source] = { pct: r.pct, projected: proj, convRate: r.conv_rate||0, projConv: projConv, topDomain: r.top_domain||'' };
+                    channelFamilies[ch][fam].sources[r.source] = { pct: r.pct, projClicks: projClicks, convRate: r.conv_rate||0, projConv: projConv, topDomain: r.top_domain||'' };
                 }
             });
 
@@ -18151,28 +18166,28 @@
             var rowIdx = 0;
             channels.forEach(function(pair) {
                 var n = pair[0], ch = pair[1];
-                var chConvRate = ch.totalClicks > 0 ? (100.0 * ch.totalConv / ch.totalClicks).toFixed(2) : '0.00';
+                var chConvRate = ch.totalProjClicks > 0 ? (100.0 * ch.totalProjConv / ch.totalProjClicks).toFixed(2) : '0.00';
                 var chIdx = rowIdx++;
-                rowsHtml += '<tr style="cursor:pointer;border-bottom:1px solid var(--border-color);" data-roas-level="channel" data-roas-idx="'+chIdx+'" onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');var t=el.closest(\'tbody\');t.querySelectorAll(\'[data-roas-parent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';if(!show)r.setAttribute(\'data-open\',\'0\');if(!show){t.querySelectorAll(\'[data-roas-grandparent=\\\'\'+r.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(g){g.style.display=\'none\';});}});})(this)"><td style="padding:8px 12px;font-weight:700;">'+(icons[n]||'\ud83d\udccb')+' '+n+' <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">&#9654;</span></td><td style="padding:8px 12px;text-align:right;font-weight:600;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
+                rowsHtml += '<tr style="cursor:pointer;border-bottom:1px solid var(--border-color);" data-roas-level="channel" data-roas-idx="'+chIdx+'" onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');var t=el.closest(\'tbody\');t.querySelectorAll(\'[data-roas-parent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';if(!show)r.setAttribute(\'data-open\',\'0\');if(!show){t.querySelectorAll(\'[data-roas-grandparent=\\\'\'+r.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(g){g.style.display=\'none\';});}});})(this)"><td style="padding:8px 12px;font-weight:700;">'+(icons[n]||'\ud83d\udccb')+' '+n+' <span style="font-size:10px;color:var(--text-secondary);font-weight:400;">&#9654;</span></td><td style="padding:8px 12px;text-align:right;font-weight:600;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjClicks.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
 
                 var families = channelFamilies[n] || {};
                 var famEntries = Object.entries(families).sort(function(a,b){return b[1].pct-a[1].pct;});
                 famEntries.forEach(function(fe) {
                     var fName = fe[0], fData = fe[1];
                     var srcEntries = Object.entries(fData.sources);
-                    var famConvRate = fData.clicks > 0 ? (100.0 * fData.conv / fData.clicks).toFixed(2) : '0.00';
+                    var famConvRate = fData.projClicks > 0 ? (100.0 * fData.projConv / fData.projClicks).toFixed(2) : '0.00';
                     var fIdx = rowIdx++;
                     var hasChildren = srcEntries.length > 0;
                     var clickHandler = hasChildren ? 'onclick="(function(el){var show=el.getAttribute(\'data-open\')!==\'1\';el.setAttribute(\'data-open\',show?\'1\':\'0\');el.closest(\'tbody\').querySelectorAll(\'[data-roas-grandparent=\\\'\'+el.getAttribute(\'data-roas-idx\')+\'\\\']\').forEach(function(r){r.style.display=show?\'\':\'none\';});})(this)" style="cursor:pointer;display:none;"' : 'style="display:none;"';
-                    rowsHtml += '<tr data-roas-level="family" data-roas-parent="'+chIdx+'" data-roas-idx="'+fIdx+'" '+clickHandler+'><td style="padding:5px 10px 5px 28px;font-weight:600;font-size:13px;">'+fName+(hasChildren?' <span style="font-size:9px;color:var(--text-secondary);">&#9654;</span>':'')+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+fData.pct.toFixed(2)+'%</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+((fData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projected.toLocaleString()+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+famConvRate+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projConv.toLocaleString()+'</td></tr>';
+                    rowsHtml += '<tr data-roas-level="family" data-roas-parent="'+chIdx+'" data-roas-idx="'+fIdx+'" '+clickHandler+'><td style="padding:5px 10px 5px 28px;font-weight:600;font-size:13px;">'+fName+(hasChildren?' <span style="font-size:9px;color:var(--text-secondary);">&#9654;</span>':'')+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+fData.pct.toFixed(2)+'%</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+((fData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projClicks.toLocaleString()+'</td><td style="padding:5px 10px;text-align:right;font-size:13px;">'+famConvRate+'%</td><td style="padding:5px 10px;text-align:right;color:var(--text-secondary);font-size:13px;">'+fData.projConv.toLocaleString()+'</td></tr>';
 
                     srcEntries.sort(function(a,b){return b[1].pct-a[1].pct;}).forEach(function(se) {
                         var sName = se[0], sData = se[1];
-                        rowsHtml += '<tr data-roas-level="source" data-roas-grandparent="'+fIdx+'" style="display:none;background:var(--bg-body);"><td style="padding:3px 10px 3px 48px;color:var(--text-secondary);font-size:12px;">\u2514 '+sName+(sData.topDomain?' <span style="opacity:0.5;font-size:10px;">('+sData.topDomain+')</span>':'')+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.pct.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+((sData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projected.toLocaleString()+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.convRate.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projConv.toLocaleString()+'</td></tr>';
+                        rowsHtml += '<tr data-roas-level="source" data-roas-grandparent="'+fIdx+'" style="display:none;background:var(--bg-body);"><td style="padding:3px 10px 3px 48px;color:var(--text-secondary);font-size:12px;">\u2514 '+sName+(sData.topDomain?' <span style="opacity:0.5;font-size:10px;">('+sData.topDomain+')</span>':'')+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.pct.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+((sData.pct/mixTotal)*100).toFixed(1)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projClicks.toLocaleString()+'</td><td style="padding:3px 10px;text-align:right;font-size:12px;">'+sData.convRate.toFixed(2)+'%</td><td style="padding:3px 10px;text-align:right;color:var(--text-secondary);font-size:12px;">'+sData.projConv.toLocaleString()+'</td></tr>';
                     });
                 });
             });
-            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Family / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>';
+            document.getElementById('roasIQDetailTable').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel / Family / Source</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Clicks</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>';
 
             // Engagement KPIs
             var avgTouchEl = document.getElementById('roasIQKpiAvgTouch');
@@ -18255,7 +18270,7 @@
                         var doms = topDoms[ch] || [];
                         if (!doms.length) return;
                         domHtml += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;color:var(--text-secondary);">' + (icons[ch]||'') + ' ' + ch + ' <span style="font-size:11px;opacity:0.6;">(' + doms.length + ')</span></h4>';
-                        domHtml += '<div style="max-height:260px;overflow-y:auto;">';
+                        domHtml += '<div>';
                         domHtml += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
                         doms.forEach(function(pair, i) {
                             domHtml += '<tr><td style="padding:3px 6px;color:var(--text-secondary);width:28px;">' + (i+1) + '.</td><td style="padding:3px 6px;">' + pair[0] + '</td><td style="padding:3px 6px;text-align:right;color:var(--text-secondary);">' + pair[1].toLocaleString() + '</td></tr>';
@@ -20169,19 +20184,21 @@
             let totalProjected = 0;
             results.forEach(r => {
                 const proj = r.projected || _roasProject(r.raw || 0);
+                const projClicks = r.projected_click_count || _roasProject(r.click_count || r.raw || 0);
                 const projConv = r.projected_conversions || _roasProject(r.conversions || 0);
                 const clicks = r.click_count || r.raw || 0;
-                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalProjected: 0, totalConv: 0, totalProjConv: 0, totalRaw: 0, totalClicks: 0 };
+                if (!channelMap[r.channel]) channelMap[r.channel] = { sources: {}, totalPct: 0, totalProjected: 0, totalProjClicks: 0, totalConv: 0, totalProjConv: 0, totalRaw: 0, totalClicks: 0 };
                 channelMap[r.channel].totalPct += r.pct;
                 channelMap[r.channel].totalProjected += proj;
+                channelMap[r.channel].totalProjClicks += projClicks;
                 channelMap[r.channel].totalConv += (r.conversions || 0);
                 channelMap[r.channel].totalProjConv += projConv;
                 channelMap[r.channel].totalRaw += (r.raw || 0);
                 channelMap[r.channel].totalClicks += clicks;
                 totalProjected += proj;
-                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, projected: 0, convRate: 0, projConv: 0 };
+                if (!channelMap[r.channel].sources[r.source]) channelMap[r.channel].sources[r.source] = { pct: 0, projClicks: 0, convRate: 0, projConv: 0 };
                 channelMap[r.channel].sources[r.source].pct += r.pct;
-                channelMap[r.channel].sources[r.source].projected += proj;
+                channelMap[r.channel].sources[r.source].projClicks += projClicks;
                 channelMap[r.channel].sources[r.source].convRate = r.conv_rate || 0;
                 channelMap[r.channel].sources[r.source].projConv += projConv;
             });
@@ -20203,17 +20220,17 @@
             if (tableEl) {
                 const total = channels.reduce((s,c)=>s+c[1].totalPct,0)||1;
                 const rows = channels.map(([n,ch])=>{
-                    const chConvRate = ch.totalClicks > 0 ? (100.0 * ch.totalConv / ch.totalClicks).toFixed(2) : '0.00';
-                    return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjected.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
+                    const chConvRate = ch.totalProjClicks > 0 ? (100.0 * ch.totalProjConv / ch.totalProjClicks).toFixed(2) : '0.00';
+                    return '<tr><td style="padding:8px 12px;font-weight:600;">'+(icons[n]||'📋')+' '+n+'</td><td style="padding:8px 12px;text-align:right;">'+ch.totalPct.toFixed(2)+'%</td><td style="padding:8px 12px;text-align:right;">'+((ch.totalPct/total)*100).toFixed(1)+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjClicks.toLocaleString()+'</td><td style="padding:8px 12px;text-align:right;">'+chConvRate+'%</td><td style="padding:8px 12px;text-align:right;color:var(--text-secondary);">'+ch.totalProjConv.toLocaleString()+'</td></tr>';
                 }).join('');
-                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Consumers</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rows+'</tbody></table>';
+                tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:8px 12px;text-align:left;">Channel</th><th style="padding:8px 12px;text-align:right;">Penetration</th><th style="padding:8px 12px;text-align:right;">Mix Share</th><th style="padding:8px 12px;text-align:right;">Proj. Clicks</th><th style="padding:8px 12px;text-align:right;">Conv. Rate</th><th style="padding:8px 12px;text-align:right;">Proj. Conversions</th></tr></thead><tbody>'+rows+'</tbody></table>';
             }
             const cardsEl = document.getElementById('roasIQSourceCards');
             if (cardsEl) {
                 cardsEl.innerHTML = channels.map(([name,ch])=>{
                     const srcs = Object.entries(ch.sources).sort((a,b)=>b[1].pct-a[1].pct);
                     const chT = ch.totalPct||1;
-                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+d.projected.toLocaleString()+'</td><td style="padding:6px 10px;text-align:right;">'+d.convRate.toFixed(2)+'%</td></tr>').join('');
+                    const sr = srcs.map(([s,d])=>'<tr><td style="padding:6px 10px;">'+s+'</td><td style="padding:6px 10px;text-align:right;font-weight:600;">'+((d.pct/chT)*100).toFixed(1)+'%</td><td style="padding:6px 10px;text-align:right;">'+d.pct.toFixed(2)+'%</td><td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">'+(d.projClicks||0).toLocaleString()+'</td><td style="padding:6px 10px;text-align:right;">'+d.convRate.toFixed(2)+'%</td></tr>').join('');
                     return '<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;"><span style="font-size:1.5rem;">'+(icons[name]||'📋')+'</span><div><h3 style="margin:0;font-size:15px;">'+name+'</h3><span style="font-size:12px;color:var(--text-secondary);">'+ch.totalPct.toFixed(2)+'% pen · '+srcs.length+' sources</span></div></div><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;">Source</th><th style="padding:6px 10px;text-align:right;">Share</th><th style="padding:6px 10px;text-align:right;">Pen.</th><th style="padding:6px 10px;text-align:right;">Proj. Consumers</th><th style="padding:6px 10px;text-align:right;">Conv.</th></tr></thead><tbody>'+sr+'</tbody></table></div>';
                 }).join('');
             }
@@ -21086,6 +21103,7 @@
         
         let hedgeFundTickers = [];
         let currentTickerData = null;
+        let currentTickerAlphaIdeas = null;
         let dailyChurnChart = null;
         let liveChartAnimation = null;
         let tickerSortMode = 'master'; // 'master', 'alpha', 'alpha-desc', 'industry', 'kpi'
@@ -21380,7 +21398,12 @@
             if (mainTabs) {
                 const buttons = mainTabs.querySelectorAll('.tab-btn');
                 buttons.forEach(btn => {
-                    if (btn.textContent.toLowerCase().includes(tabName === 'livedata' ? 'live' : tabName)) {
+                    const txt = (btn.textContent || '').toLowerCase();
+                    if (
+                        (tabName === 'livedata' && txt.includes('live')) ||
+                        (tabName === 'alphaideas' && txt.includes('alpha ideas')) ||
+                        txt.includes(tabName)
+                    ) {
                         btn.classList.add('active');
                     }
                 });
@@ -21501,12 +21524,131 @@
                 if (event && event.target) event.target.classList.add('active');
                 // Load profile data if not already loaded
                 loadTickerProfile();
+            } else if (tabName === 'alphaideas') {
+                document.getElementById('alphaideasTab').style.display = 'block';
+                if (event && event.target) event.target.classList.add('active');
+                loadTickerAlphaIdeas(false);
             } else if (tabName === 'compare') {
                 document.getElementById('tickerCompareTab').style.display = 'block';
                 if (event && event.target) event.target.classList.add('active');
                 // Render ticker selection chips
                 renderTickerCompareSelection();
             }
+        }
+
+        async function loadTickerAlphaIdeas(forceRefresh = false) {
+            const container = document.getElementById('tickerAlphaIdeasContent');
+            if (!container) return;
+            if (!currentTickerData) {
+                container.innerHTML = '<div class="loading-placeholder">No ticker selected.</div>';
+                return;
+            }
+            container.innerHTML = '<div class="loading-placeholder">Generating alpha ideas...</div>';
+            try {
+                const tickerKey = currentTickerData.s3_key || currentTickerData.ticker;
+                const qs = forceRefresh ? '?refresh=1' : '';
+                const response = await fetch(`/api/hedge-fund-iq/alpha-ideas/${encodeURIComponent(tickerKey)}${qs}`, { credentials: 'same-origin' });
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await response.json();
+                if (!data.success) {
+                    container.innerHTML = `<div class="loading-placeholder" style="color: var(--accent-red);">Failed to load alpha ideas: ${data.error || 'Unknown error'}</div>`;
+                    return;
+                }
+                currentTickerAlphaIdeas = data.alpha || null;
+                renderTickerAlphaIdeas(data);
+            } catch (err) {
+                container.innerHTML = `<div class="loading-placeholder" style="color: var(--accent-red);">Error loading alpha ideas: ${err.message}</div>`;
+            }
+        }
+
+        function renderTickerAlphaIdeas(apiPayload) {
+            const container = document.getElementById('tickerAlphaIdeasContent');
+            if (!container) return;
+            const alpha = (apiPayload && apiPayload.alpha) || currentTickerAlphaIdeas || {};
+            const ideas = Array.isArray(alpha.alpha_ideas) ? alpha.alpha_ideas : [];
+            if (ideas.length === 0) {
+                container.innerHTML = '<div class="loading-placeholder">No alpha ideas available yet for this ticker.</div>';
+                return;
+            }
+
+            const riskFlags = Array.isArray(alpha.risk_flags) ? alpha.risk_flags : [];
+            const sourceTag = (apiPayload && apiPayload.source) ? String(apiPayload.source).toUpperCase() : 'CACHE';
+            const generatedAt = alpha.generated_at || '';
+            const crosswalkSummary = alpha.crosswalk_data_summary || '';
+            const guidanceVsSignal = alpha.guidance_vs_signal || '';
+
+            const metaHtml = `
+                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Ticker / KPI</div>
+                            <div style="font-weight: 700; color: var(--text-primary);">${alpha.ticker || 'N/A'} - ${alpha.kpi_name || 'N/A'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Crosswalk IQ Confidence</div>
+                            <div style="font-weight: 700; color: var(--accent-cyan);">${alpha.confidence || 0}%</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Stock Impact</div>
+                            <div style="font-weight: 700; color: var(--text-primary);">${alpha.relevance_percentage != null ? alpha.relevance_percentage + '%' : 'N/A'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Source</div>
+                            <div style="font-weight: 700; color: var(--text-primary);">${sourceTag}</div>
+                        </div>
+                    </div>
+                </div>
+                ${crosswalkSummary ? `
+                <div class="insight-card-v2" style="margin-bottom: 1rem; border-left: 3px solid var(--accent-green); background: rgba(166,226,46,0.05);">
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-green);">📊 Crosswalk Data Signal</h4>
+                    <p style="margin: 0; color: var(--text-primary);">${crosswalkSummary}</p>
+                </div>
+                ` : ''}
+                ${guidanceVsSignal ? `
+                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">📋 Guidance vs. Signal</h4>
+                    <p style="margin: 0; color: var(--text-primary);">${guidanceVsSignal}</p>
+                </div>
+                ` : ''}
+                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">🏛️ Street Context</h4>
+                    <p style="margin: 0; color: var(--text-primary);">${alpha.street_context || 'N/A'}</p>
+                </div>
+            `;
+
+            const ideasHtml = ideas.map((idea, idx) => {
+                const crosswalkEdge = idea.crosswalk_edge || '';
+                const fundamentalStrategy = idea.fundamental_strategy || '';
+                return `
+                <div class="insight-card-v2" style="margin-bottom: 1rem; border-left: 3px solid var(--accent-cyan);">
+                    <div style="display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: baseline;">
+                        <h4 style="margin: 0; color: var(--text-primary);">#${idx + 1} ${idea.thesis || 'Untitled idea'}</h4>
+                        <span style="font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600;">Confidence: ${idea.confidence || 0}%</span>
+                    </div>
+                    ${crosswalkEdge ? `<p style="margin: 0.75rem 0; padding: 8px; background: rgba(166,226,46,0.08); border-radius: 4px; color: var(--text-primary);"><strong style="color: var(--accent-green);">📊 Crosswalk Edge:</strong> ${crosswalkEdge}</p>` : ''}
+                    ${fundamentalStrategy ? `<p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--accent-green);">📈 Fundamental Strategy:</strong> ${fundamentalStrategy}</p>` : ''}
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">What Consensus Misses:</strong> ${idea.what_consensus_misses || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Signal Interpretation:</strong> ${idea.signal_interpretation || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">⏱️ Catalyst:</strong> ${idea.catalyst_window || 'N/A'} <span style="opacity: 0.7;">(${idea.horizon || 'short'})</span></p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">❌ Falsification:</strong> ${idea.falsification_criteria || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">⚖️ Risk Framing:</strong> ${idea.position_risk || 'N/A'}</p>
+                </div>
+            `}).join('');
+
+            const riskHtml = `
+                <div class="insight-card-v2">
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">📋 Metadata & Risk Flags</h4>
+                    <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Accuracy Rating:</strong> ${alpha.accuracy_rating || 'Unknown'}</p>
+                    <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Generated:</strong> ${generatedAt || 'N/A'}</p>
+                    ${alpha.novelty_weeks_checked ? `<p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Novelty Check:</strong> ${alpha.novelty_weeks_checked} weeks of prior ideas reviewed</p>` : ''}
+                    <p style="margin: 0; color: ${riskFlags.length ? 'var(--accent-orange)' : 'var(--text-secondary)'};"><strong style="color: var(--text-primary);">⚠️ Risk Flags:</strong> ${riskFlags.length ? riskFlags.join(' | ') : 'None'}</p>
+                </div>
+            `;
+
+            container.innerHTML = metaHtml + ideasHtml + riskHtml;
         }
         
         // ============ TICKER COMPARISON ============
@@ -25664,7 +25806,14 @@
             if(keyLower==='location') {
                 const dmaKey = (v||'').toUpperCase().trim();
                 if(genPopBaselineData?.locations?.length) {
-                    const loc = genPopBaselineData.locations.find(l=>(l.name||'').toUpperCase().trim()===dmaKey);
+                    const canonInput = matchCanonicalDMA(v || '');
+                    const loc = genPopBaselineData.locations.find(l => {
+                        const ln = (l.name || '').trim();
+                        if (!ln) return false;
+                        if (ln.toUpperCase() === dmaKey) return true;
+                        const canonLoc = matchCanonicalDMA(ln);
+                        return canonInput && canonLoc && canonInput === canonLoc;
+                    });
                     if(loc && (loc.pct!=null||loc.percent!=null)) return parseFloat(loc.pct||loc.percent||0);
                 }
                 if(TST_GENPOP_DMA[dmaKey]!=null) return TST_GENPOP_DMA[dmaKey];
@@ -26845,6 +26994,21 @@
                 if (!byCategory[category][showName]) byCategory[category][showName] = [];
                 byCategory[category][showName].push(file);
             });
+
+            function parseSeasonInfo(showName) {
+                const raw = String(showName || '').trim();
+                const m = raw.match(/^(.*?)(?:\s+Season\s*([0-9]+))\s*$/i);
+                if (!m) {
+                    return { baseTitle: raw, seasonNumber: null, seasonLabel: null };
+                }
+                const baseTitle = (m[1] || '').trim() || raw;
+                const seasonNumber = parseInt(m[2], 10);
+                return {
+                    baseTitle,
+                    seasonNumber: Number.isFinite(seasonNumber) ? seasonNumber : null,
+                    seasonLabel: Number.isFinite(seasonNumber) ? `Season ${seasonNumber}` : 'Season'
+                };
+            }
             
             const sortedCategories = Object.keys(byCategory).sort();
             let html = '';
@@ -26855,6 +27019,21 @@
                 const catCount = showNames.reduce((sum, sn) => sum + shows[sn].length, 0);
                 const catId = 'subscriber_cat_' + category.replace(/[^a-zA-Z0-9]/g, '_');
                 const isExpanded = expandedSubscriberCategories.has(catId);
+
+                // Group seasonal variants under a base title (e.g., "Only Murders in the Building" -> seasons).
+                const grouped = {};
+                showNames.forEach(showName => {
+                    const latestFile = shows[showName][0];
+                    const parsed = parseSeasonInfo(showName);
+                    const baseKey = parsed.baseTitle || showName;
+                    if (!grouped[baseKey]) {
+                        grouped[baseKey] = { standalone: [], seasons: [] };
+                    }
+                    const entry = { showName, file: latestFile, seasonNumber: parsed.seasonNumber, seasonLabel: parsed.seasonLabel };
+                    if (parsed.seasonNumber == null) grouped[baseKey].standalone.push(entry);
+                    else grouped[baseKey].seasons.push(entry);
+                });
+                const baseTitles = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
                 
                 html += `
                     <div class="profile-cat-item master-cat ${isExpanded ? 'open' : ''}" onclick="toggleSubscriberCategory('${catId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
@@ -26863,12 +27042,58 @@
                         <span class="profile-cat-count">(${catCount})</span>
                     </div>
                     <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}" style="padding-left: 0.5rem;">
-                        ${showNames.map(showName => {
-                            const files = shows[showName];
-                            const latestFile = files[0];
-                            const idEsc = escKey(latestFile.s3_key);
-                            const isActive = activeSubscriberTabId === latestFile.s3_key;
-                            const name = escAttr(showName);
+                        ${baseTitles.map(baseTitle => {
+                            const group = grouped[baseTitle];
+                            const hasSeasons = (group.seasons || []).length > 0;
+                            const onlyOneSeasonNoStandalone = hasSeasons && group.seasons.length === 1 && (group.standalone || []).length === 0;
+                            const baseSafe = baseTitle.replace(/[^a-zA-Z0-9]/g, '_');
+                            const showGroupId = `subscriber_show_${catId}_${baseSafe}`;
+                            const showExpanded = expandedSubscriberShows.has(showGroupId);
+
+                            if (hasSeasons && !onlyOneSeasonNoStandalone) {
+                                const seasonByNumber = {};
+                                group.seasons.forEach(s => {
+                                    const k = String(s.seasonNumber);
+                                    if (!(k in seasonByNumber)) seasonByNumber[k] = s; // Keep latest only.
+                                });
+                                const seasonRows = Object.values(seasonByNumber).sort((a, b) => (a.seasonNumber || 999) - (b.seasonNumber || 999));
+                                const standalones = (group.standalone || []).slice();
+                                return `
+                                    <div class="profile-cat-item ${showExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleSubscriberShowGroup('${showGroupId}')" style="margin: 0.2rem 0 0.1rem 0; background: rgba(90, 154, 217, 0.06); font-size: 0.82rem;">
+                                        <span class="cat-arrow">▸</span>
+                                        <span class="profile-cat-label">${escAttr(baseTitle)}</span>
+                                        <span class="profile-cat-count">(${seasonRows.length + standalones.length})</span>
+                                    </div>
+                                    <div class="profile-cat-children ${showExpanded ? 'open' : ''}" style="padding-left: 0.7rem;">
+                                        ${seasonRows.map(seasonEntry => {
+                                            const idEsc = escKey(seasonEntry.file.s3_key);
+                                            const isActive = activeSubscriberTabId === seasonEntry.file.s3_key;
+                                            const title = escAttr(seasonEntry.showName);
+                                            const label = escAttr(seasonEntry.seasonLabel || seasonEntry.showName);
+                                            return `
+                                                <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${title}">
+                                                    ${label}
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                        ${standalones.map(item => {
+                                            const idEsc = escKey(item.file.s3_key);
+                                            const isActive = activeSubscriberTabId === item.file.s3_key;
+                                            const label = escAttr(item.showName);
+                                            return `
+                                                <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${label}">
+                                                    ${label}
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                `;
+                            }
+
+                            const single = hasSeasons ? group.seasons[0] : group.standalone[0];
+                            const idEsc = escKey(single.file.s3_key);
+                            const isActive = activeSubscriberTabId === single.file.s3_key;
+                            const name = escAttr(single.showName);
                             return `
                                 <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${name}">
                                     ${name}
@@ -26891,6 +27116,15 @@
                 expandedSubscriberCategories.delete(catId);
             } else {
                 expandedSubscriberCategories.add(catId);
+            }
+            renderSubscriberProfileTree();
+        }
+
+        function toggleSubscriberShowGroup(groupId) {
+            if (expandedSubscriberShows.has(groupId)) {
+                expandedSubscriberShows.delete(groupId);
+            } else {
+                expandedSubscriberShows.add(groupId);
             }
             renderSubscriberProfileTree();
         }
@@ -27421,6 +27655,26 @@
                 switchToSubscriberTab(newActiveTab.id);
             }
         }
+
+        function closeAllSubscriberTabs() {
+            if (!Array.isArray(openSubscriberTabs) || openSubscriberTabs.length === 0) {
+                return;
+            }
+            if (!confirm('Close all open Subscriber IQ tabs?')) {
+                return;
+            }
+            openSubscriberTabs = [];
+            activeSubscriberTabId = null;
+            currentSubscriberData = null;
+            saveSubscriberTabs();
+            renderSubscriberTabsBar();
+
+            const fixedHeader = document.querySelector('.subscriber-fixed-header');
+            const emptyState = document.getElementById('subscriberEmptyState');
+            if (fixedHeader) fixedHeader.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'flex';
+            renderSubscriberProfileTree();
+        }
         
         function showSubscriberTab(tabName) {
             // Hide all tab contents
@@ -27844,56 +28098,9 @@
         }
         
         function renderSubscriberEpisodes(data) {
-            // Render Insights
             const insightsContainer = document.getElementById('subscriberEpisodesInsights');
             if (insightsContainer) {
-                const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
-                    const aSignups = a.signups || 0;
-                    const bSignups = b.signups || 0;
-                    return bSignups - aSignups;
-                });
-                
-                const _insightProject = (raw) => {
-                    const n = parseNumber(raw);
-                    return (n && n > 0) ? Math.round((n / 10000000) * 329900000) : 0;
-                };
-                const _insightDisplay = (ep) => {
-                    const gp = parseNumber(ep.gen_pop);
-                    if (gp && gp > 0) return gp;
-                    return _insightProject(ep.signups);
-                };
-                const insights = [];
-                if (episodes.length > 0) {
-                    const topEpisode = episodes[0];
-                    const topProjected = _insightDisplay(topEpisode);
-                    const top3Total = episodes.slice(0, 3).reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
-                    const allTotal = episodes.reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
-                    const top3Pct = allTotal > 0 ? ((top3Total / allTotal) * 100).toFixed(2) : 0;
-                    
-                    insights.push({
-                        icon: '🎬',
-                        text: `<strong>Episode ${topEpisode.episode} drove the most signups</strong> with ${formatNumber(topProjected)} projected US subscribers (${topEpisode.percentage || 'N/A'} of total).`
-                    });
-                    
-                    if (episodes.length >= 3) {
-                        insights.push({
-                            icon: '📊',
-                            text: `<strong>Top 3 episodes accounted for ${top3Pct}%</strong> of all signups, indicating concentrated performance in key episodes.`
-                        });
-                    }
-                }
-                
-                insightsContainer.innerHTML = insights.length > 0 ? `
-                    <h4>💡 Key Episode Insights</h4>
-                    <div class="tab-insights-list">
-                        ${insights.map(i => `
-                            <div class="tab-insight-item">
-                                <span class="tab-insight-icon">${i.icon}</span>
-                                <div class="tab-insight-text">${i.text}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '';
+                insightsContainer.innerHTML = '';
             }
             
             const container = document.getElementById('subscriberEpisodeAttribution');
@@ -27914,7 +28121,12 @@
                 container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode data available</p>';
             } else {
                 const totalSignups = episodes.reduce((s, e) => s + (Number(e.signups) || 0), 0);
-                const pct = (ep) => (ep.percentage && ep.percentage !== 'N/A' ? ep.percentage : (totalSignups ? ((Number(ep.signups) || 0) / totalSignups * 100).toFixed(1) + '%' : 'N/A'));
+                const pct = (ep) => {
+                    if (ep.percentage && ep.percentage !== 'N/A') {
+                        return String(ep.percentage).replace(/watchers/gi, 'new signups');
+                    }
+                    return totalSignups ? ((Number(ep.signups) || 0) / totalSignups * 100).toFixed(1) + '%' : 'N/A';
+                };
                 const getEpLabel = (ep) => {
                     const epStr = String(ep.episode || '');
                     const isDateEpisode = epStr.includes('/');
@@ -28085,6 +28297,27 @@
                 const parse = (lbl) => { const m = lbl.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (m) { let y = parseInt(m[3]); if (y < 100) y += 2000; return new Date(y, parseInt(m[1]) - 1, parseInt(m[2])); } return new Date(0); };
                 return parse(a) - parse(b);
             };
+            const parseDateLabel = (lbl) => {
+                const m = String(lbl || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                if (!m) return null;
+                let y = parseInt(m[3], 10);
+                if (y < 100) y += 2000;
+                const d = new Date(y, parseInt(m[1], 10) - 1, parseInt(m[2], 10));
+                return isNaN(d.getTime()) ? null : d;
+            };
+            const parseDateRangeBounds = (s) => {
+                const text = String(s || '');
+                const m = text.match(/(\d{4}-\d{1,2}-\d{1,2})\s*(?:to|-)\s*(\d{4}-\d{1,2}-\d{1,2})/i);
+                if (!m) return { start: null, end: null };
+                const a = m[1].split('-').map(n => parseInt(n, 10));
+                const b = m[2].split('-').map(n => parseInt(n, 10));
+                const start = new Date(a[0], a[1] - 1, a[2]);
+                const end = new Date(b[0], b[1] - 1, b[2]);
+                return {
+                    start: isNaN(start.getTime()) ? null : start,
+                    end: isNaN(end.getTime()) ? null : end
+                };
+            };
             
             // If we have actual dates, use them; otherwise fall back to relative labels
             if (hasActualDates && Object.keys(timingByDate).length > 0) {
@@ -28118,6 +28351,51 @@
                 if (dateMap) {
                     const sortedDates = Object.keys(dateMap).sort(sortByDateLabel);
                     timingData = sortedDates.map(dl => ({ timing: dl, signups: String(dateMap[dl]) }));
+                }
+            }
+
+            // Extend timeline to the final day of the attribution window and fill missing days with 0.
+            const bounds = parseDateRangeBounds(dateRangeStr);
+            const attrWindowDays = parseInt((data.metadata && data.metadata.attribution_window) || '', 10);
+            let latestEpisodeDate = null;
+            for (const d of Object.values(episodeDateMap)) {
+                if (d instanceof Date && !isNaN(d.getTime()) && (!latestEpisodeDate || d > latestEpisodeDate)) {
+                    latestEpisodeDate = d;
+                }
+            }
+            let expectedEndDate = null;
+            if (latestEpisodeDate && Number.isFinite(attrWindowDays) && attrWindowDays >= 0) {
+                expectedEndDate = addDays(latestEpisodeDate, attrWindowDays);
+            } else if (bounds.end) {
+                expectedEndDate = bounds.end;
+            }
+            const hasDateLabels = timingData.length > 0 && timingData.every(t => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(t.timing || '').trim()));
+            if (hasDateLabels && expectedEndDate) {
+                const byDay = {};
+                let latestObserved = null;
+                for (const t of timingData) {
+                    const d = parseDateLabel(t.timing);
+                    if (!d) continue;
+                    const key = formatDateLabel(d);
+                    byDay[key] = (byDay[key] || 0) + (parseNumber(t.signups) || 0);
+                    if (!latestObserved || d > latestObserved) latestObserved = d;
+                }
+                let fillStart = bounds.start;
+                if (!fillStart) {
+                    const ordered = Object.keys(byDay).sort(sortByDateLabel);
+                    fillStart = ordered.length ? parseDateLabel(ordered[0]) : null;
+                }
+                let fillEnd = expectedEndDate;
+                if (latestObserved && latestObserved > fillEnd) fillEnd = latestObserved;
+                if (fillStart && fillEnd && fillStart <= fillEnd) {
+                    const dense = [];
+                    const cursor = new Date(fillStart);
+                    while (cursor <= fillEnd) {
+                        const key = formatDateLabel(cursor);
+                        dense.push({ timing: key, signups: String(byDay[key] || 0) });
+                        cursor.setDate(cursor.getDate() + 1);
+                    }
+                    timingData = dense;
                 }
             }
             let avgDaysToSignup = metrics.avg_days_to_signup;
@@ -30590,7 +30868,14 @@
                 // For locations
                 if (catLower === 'location' && genPopBaselineData.locations) {
                     const dmaKey = valStr.toUpperCase();
-                    const loc = genPopBaselineData.locations.find(l => (l.name || '').toUpperCase().trim() === dmaKey);
+                    const canonInput = matchCanonicalDMA(valStr);
+                    const loc = genPopBaselineData.locations.find(l => {
+                        const ln = (l.name || '').trim();
+                        if (!ln) return false;
+                        if (ln.toUpperCase() === dmaKey) return true;
+                        const canonLoc = matchCanonicalDMA(ln);
+                        return canonInput && canonLoc && canonInput === canonLoc;
+                    });
                     if (loc && (loc.pct != null || loc.genPopPct != null)) {
                         return parseFloat(loc.pct ?? loc.genPopPct) || 0;
                     }
@@ -30923,8 +31208,8 @@
                     }
                 }
 
-                // Location/DMA - only include DMAs that have a DMA number (exclude unknown/unnamed markets)
-                if (category === 'LOCATION' && value && getDMARank(value) != null) {
+                // Location/DMA - include DMAs that have a DMA rank or map to a known canonical DMA
+                if (category === 'LOCATION' && value && (getDMARank(value) != null || getDMARank(matchCanonicalDMA(value) || '') != null)) {
                     result.locations.push({ name: value, pct: pct, index: index, genPopPct: genPopPct, projection: usProjection });
                 }
 
@@ -38530,12 +38815,15 @@
             CANONICAL_DMAS.forEach(c => {
                 const cn = _dmaNorm(c);
                 if (normGp[cn]) { _canonicalGpActual[c] = normGp[cn]; return; }
+                let bestVal = null, bestDiff = Infinity;
                 const primary = cn.substring(0, Math.min(cn.length, 10));
                 for (const [k, v] of Object.entries(normGp)) {
-                    if (k.startsWith(primary) || primary.startsWith(k.substring(0, 8))) {
-                        _canonicalGpActual[c] = v; return;
+                    if (k.startsWith(primary) || (cn.length >= 8 && primary.startsWith(k.substring(0, 8)))) {
+                        const diff = Math.abs(k.length - cn.length);
+                        if (diff < bestDiff) { bestDiff = diff; bestVal = v; }
                     }
                 }
+                if (bestVal !== null) { _canonicalGpActual[c] = bestVal; }
             });
         })();
         function matchCanonicalDMA(rawName) {
@@ -38547,10 +38835,12 @@
                 .replace(/\bft\.?$/g,'fort').replace(/\bst\.?$/g,'saint')
                 .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ');
             const primary = words.slice(0, 2).filter(w => w.length > 1).join('');
-            let best = null, bestLen = 0;
+            let best = null, bestDiff = Infinity;
             for (const [k, v] of Object.entries(_canonNorm)) {
-                if (k.startsWith(primary) && k.length > bestLen) { best = v; bestLen = k.length; }
-                if (!best && norm.startsWith(k.substring(0, Math.min(k.length, 8)))) { best = v; bestLen = k.length; }
+                if (k.startsWith(primary) || norm.startsWith(k.substring(0, Math.min(k.length, 8)))) {
+                    const diff = Math.abs(k.length - norm.length);
+                    if (diff < bestDiff) { bestDiff = diff; best = v; }
+                }
             }
             return best;
         }
@@ -38596,12 +38886,15 @@
             CANONICAL_DMAS.forEach(c => {
                 const cn = _dmaNorm(c);
                 if (normRanks[cn]) { _canonicalDmaRank[c] = normRanks[cn]; return; }
+                let bestRank = null, bestDiff = Infinity;
                 const primary = cn.substring(0, Math.min(cn.length, 12));
                 for (const [k, v] of Object.entries(normRanks)) {
-                    if (k.startsWith(primary) || primary.startsWith(k.substring(0, 8))) {
-                        _canonicalDmaRank[c] = v; return;
+                    if (k.startsWith(primary) || (cn.length >= 8 && primary.startsWith(k.substring(0, 8)))) {
+                        const diff = Math.abs(k.length - cn.length);
+                        if (diff < bestDiff) { bestDiff = diff; bestRank = v; }
                     }
                 }
+                if (bestRank !== null) { _canonicalDmaRank[c] = bestRank; }
             });
         })();
 
@@ -38680,6 +38973,43 @@
         function renderLocationTable(locations) {
             locations = condenseDMALocations(locations);
             const isProjection = dashDisplayMode === 'projection';
+
+            // Recalculate index and genPopPct from fresh Gen Pop baseline.
+            // IMPORTANT: canonicalize baseline DMAs the same way as profile DMAs
+            // so rows like "Phoenix" and "Phoenix (Prescott), AZ" match correctly.
+            if (genPopBaselineData && Array.isArray(genPopBaselineData.locations)) {
+                const gpMap = {};
+                genPopBaselineData.locations.forEach(function(gl) {
+                    const canon = matchCanonicalDMA(gl.name || '');
+                    const key = canon || (gl.name || '').trim();
+                    if (!key) return;
+                    gpMap[key] = (gpMap[key] || 0) + (gl.pct || gl.genPopPct || 0);
+                });
+                locations.forEach(function(loc) {
+                    const canon = matchCanonicalDMA(loc.name || '');
+                    const key = canon || (loc.name || '').trim();
+                    const gpPct = gpMap[key] || 0;
+                    if (gpPct > 0) {
+                        loc.genPopPct = gpPct;
+                        loc.index = Math.round((loc.pct / gpPct) * 100);
+                    }
+                });
+                // Debug visibility: report canonical DMA key mismatches between profile and CW baseline.
+                const profileKeys = new Set(locations.map(l => matchCanonicalDMA(l.name || '') || (l.name || '').trim()).filter(Boolean));
+                const baselineKeys = new Set(Object.keys(gpMap));
+                const missingInBaseline = [...profileKeys].filter(k => !baselineKeys.has(k));
+                const unusedBaseline = [...baselineKeys].filter(k => !profileKeys.has(k));
+                if (missingInBaseline.length || unusedBaseline.length) {
+                    console.warn('[DMA Debug] Canonical key mismatch', {
+                        missingInBaseline,
+                        unusedBaselineCount: unusedBaseline.length,
+                        unusedBaselineSample: unusedBaseline.slice(0, 15)
+                    });
+                } else {
+                    console.debug('[DMA Debug] Canonical profile and CW baseline DMA keys aligned:', profileKeys.size);
+                }
+            }
+
             // Sort by index for ranking (higher index = over-indexes more)
             const sorted = [...locations].sort((a, b) => b.index - a.index);
             
@@ -39867,18 +40197,29 @@
             }
             
             // Render filtered results
+            const _locIsGenPop2 = isSelectedProfileGenPop();
+            const _locShowCwGp2 = !_locIsGenPop2;
+            const locContainer2 = document.getElementById('allLocationsContainer');
+            if (locContainer2) locContainer2.classList.toggle('hide-cw-gp', !_locShowCwGp2);
             listEl.innerHTML = sorted.map((loc, i) => {
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
+                const genPopDisplay = isProjection
+                    ? formatNumber(Math.round((loc.genPopPct || 0) / 100 * 329900000))
+                    : (loc.genPopPct || 0).toFixed(3) + '%';
                 const dmaRank = getDMARank(loc.name);
+                const gpActual = getGPActualDMA(loc.name);
+                const gpStr = gpActual != null ? gpActual.toFixed(3) + '%' : '—';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
                         <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
+                        <span class="cw-gp-col" style="color: var(--text-secondary);">${genPopDisplay}</span>
+                        <span style="color: var(--text-secondary);">${gpStr}</span>
                         <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
                     </div>
                 `;

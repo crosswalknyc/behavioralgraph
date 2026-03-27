@@ -25,8 +25,10 @@ import io
 import gzip
 import hashlib
 import secrets
+from html import escape
 from datetime import datetime, timedelta, date
 from functools import wraps
+from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session
 from flask_cors import CORS
 
@@ -2168,6 +2170,8 @@ def _email_base_styles():
     return """
     body { font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: #0a1929; color: #e6f1ff; padding: 20px; margin: 0; }
     .email-container { max-width: 600px; margin: 0 auto; background: #0d2137; border-radius: 12px; padding: 30px; }
+    .email-logo-wrap { text-align: center; margin-bottom: 14px; }
+    .email-logo { height: 32px; width: auto; display: inline-block; }
     .email-header { color: #66d9ef; font-size: 20px; margin-bottom: 20px; font-weight: 600; }
     .email-body { line-height: 1.7; color: #e6f1ff; }
     .email-body p { margin: 0 0 1rem 0; }
@@ -2182,6 +2186,9 @@ def _email_base_styles():
 def _wrap_email_html(body_content, title=None):
     """Wrap body HTML in dashboard-style layout and Crosswalk IQ Team signature."""
     header = f'<div class="email-header">{title}</div>' if title else ''
+    app_base = (os.environ.get('APP_BASE_URL') or os.environ.get('APP_URL') or 'https://behavioralgraph.onrender.com').rstrip('/')
+    logo_url = f"{app_base}/static/crosswalk-logo-small.png"
+    logo = f'<div class="email-logo-wrap"><img class="email-logo" src="{escape(logo_url)}" alt="Crosswalk IQ"></div>'
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -2190,6 +2197,7 @@ def _wrap_email_html(body_content, title=None):
 </head>
 <body>
     <div class="email-container">
+        {logo}
         {header}
         <div class="email-body">
             {body_content}
@@ -2581,6 +2589,7 @@ def create_user():
             'has_ecommerce_iq_access': req_data.get('has_ecommerce_iq_access', cd.get('has_ecommerce_iq_access', True) if cd else True),
             'has_ticket_sales_iq_access': req_data.get('has_ticket_sales_iq_access', cd.get('has_ticket_sales_iq_access', True) if cd else True),
             'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', cd.get('has_hedge_fund_iq_access', False) if cd else False),
+            'gets_hedge_fund_iq_emails': req_data.get('gets_hedge_fund_iq_emails', cd.get('gets_hedge_fund_iq_emails', False) if cd else False),
             'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
             'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
             'has_analysis_iq_access': req_data.get('has_analysis_iq_access', cd.get('has_analysis_iq_access', False) if cd else False),
@@ -2689,6 +2698,8 @@ def update_user(username):
             user['has_ticket_sales_iq_access'] = req_data['has_ticket_sales_iq_access']
         if 'has_hedge_fund_iq_access' in req_data:
             user['has_hedge_fund_iq_access'] = req_data['has_hedge_fund_iq_access']
+        if 'gets_hedge_fund_iq_emails' in req_data:
+            user['gets_hedge_fund_iq_emails'] = bool(req_data['gets_hedge_fund_iq_emails'])
         if 'hedge_fund_iq_tabs' in req_data:
             user['hedge_fund_iq_tabs'] = req_data['hedge_fund_iq_tabs']
         if 'hedge_fund_iq_tickers' in req_data:
@@ -2833,6 +2844,7 @@ def restore_defaults_all_users():
             user['has_ecommerce_iq_access'] = True
             user['has_ticket_sales_iq_access'] = True
             user['has_hedge_fund_iq_access'] = False
+            user['gets_hedge_fund_iq_emails'] = False
             user['hedge_fund_iq_tabs'] = user.get('hedge_fund_iq_tabs', [])
             user['hedge_fund_iq_tickers'] = user.get('hedge_fund_iq_tickers', [])
             user['has_analysis_iq_access'] = False
@@ -3220,6 +3232,7 @@ def api_set_company_defaults(company_name):
             'has_ecommerce_iq_access': req.get('has_ecommerce_iq_access', True),
             'has_ticket_sales_iq_access': req.get('has_ticket_sales_iq_access', True),
             'has_hedge_fund_iq_access': req.get('has_hedge_fund_iq_access', False),
+            'gets_hedge_fund_iq_emails': req.get('gets_hedge_fund_iq_emails', False),
             'has_analysis_iq_access': req.get('has_analysis_iq_access', False),
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
@@ -3273,6 +3286,7 @@ def api_reset_company_users(company_name):
                 user['has_ecommerce_iq_access'] = cd.get('has_ecommerce_iq_access', True)
                 user['has_ticket_sales_iq_access'] = cd.get('has_ticket_sales_iq_access', True)
                 user['has_hedge_fund_iq_access'] = cd.get('has_hedge_fund_iq_access', False)
+                user['gets_hedge_fund_iq_emails'] = cd.get('gets_hedge_fund_iq_emails', False)
                 user['has_analysis_iq_access'] = cd.get('has_analysis_iq_access', False)
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
@@ -3289,6 +3303,7 @@ def api_reset_company_users(company_name):
                 user['has_ecommerce_iq_access'] = True
                 user['has_ticket_sales_iq_access'] = True
                 user['has_hedge_fund_iq_access'] = False
+                user['gets_hedge_fund_iq_emails'] = False
                 user['has_analysis_iq_access'] = False
                 user['has_rankers_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
@@ -8437,7 +8452,7 @@ def llmo_iq_demographics():
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        cur.execute("USE WAREHOUSE LLMIQ")
 
         if agent:
             cur.execute("""
@@ -10637,8 +10652,7 @@ def get_subscriber_iq_data(s3_key):
                     t['gen_pop'] = str(int(gen_pop_sum))
                     break
 
-        # Episode-Level Signup Timing section removed from dashboard (but data still available)
-        parsed.pop('episode_signup_timing', None)
+        # Keep episode_signup_timing in payload so timing charts can build full daily series.
         
         # Uppercase platform name in metadata for display
         if parsed.get('metadata') and parsed['metadata'].get('platform'):
@@ -11181,6 +11195,12 @@ def get_ticket_sales_tracker_data(s3_key):
 # ============================================================================
 
 HEDGE_FUND_CACHE_PREFIX = 'system/hedge_fund_daily_cache/'
+HF_ALPHA_IDEAS_PREFIX = 'system/hedge_fund_alpha_ideas/'
+HF_ALPHA_MIN_IDEAS = 3
+HF_ALPHA_DEFAULT_IDEAS = 4
+HF_ALPHA_TZ = ZoneInfo('America/New_York')
+HF_ALPHA_RESEARCH_MODEL = os.environ.get('HF_ALPHA_RESEARCH_MODEL', 'gpt-4o-search-preview')
+HF_ALPHA_SYNTH_MODEL = os.environ.get('HF_ALPHA_SYNTH_MODEL', 'gpt-4o')
 
 def _hedge_fund_cache_key(s3_key_or_slug):
     """Create a safe S3 key from s3_key or slug (no slashes)."""
@@ -11235,6 +11255,850 @@ def _save_hedge_fund_daily_cache(cache_slug, data):
         print(f"💾 Hedge Fund daily cache SAVED: {cache_slug}")
     except Exception as e:
         print(f"⚠️ Hedge Fund cache write error: {e}")
+
+
+def _hf_alpha_today_str():
+    return datetime.now(HF_ALPHA_TZ).strftime('%Y-%m-%d')
+
+
+def _hf_alpha_slug(value):
+    return str(value or '').strip().replace('/', '__').replace(' ', '_')
+
+
+def _hf_alpha_s3_key(day_str, ticker_slug):
+    return f"{HF_ALPHA_IDEAS_PREFIX}{day_str}/{_hf_alpha_slug(ticker_slug)}.json"
+
+
+def _load_hf_alpha_cache(day_str, ticker_slug):
+    try:
+        key = _hf_alpha_s3_key(day_str, ticker_slug)
+        resp = s3_client.get_object(Bucket=METADATA_BUCKET, Key=key)
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+        return payload.get('data')
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"⚠️ HF Alpha cache read error for {ticker_slug}: {e}")
+        return None
+
+
+def _save_hf_alpha_cache(day_str, ticker_slug, payload):
+    try:
+        key = _hf_alpha_s3_key(day_str, ticker_slug)
+        wrapper = {
+            'cached_date': day_str,
+            'cached_at': datetime.now(HF_ALPHA_TZ).isoformat(),
+            'data': payload
+        }
+        s3_client.put_object(
+            Bucket=METADATA_BUCKET,
+            Key=key,
+            Body=json.dumps(wrapper, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except Exception as e:
+        print(f"⚠️ HF Alpha cache write error for {ticker_slug}: {e}")
+        return False
+
+
+def _load_latest_hf_alpha_cache(ticker_slug, max_lookback_days=7):
+    today = datetime.now(HF_ALPHA_TZ).date()
+    for i in range(max_lookback_days + 1):
+        day_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
+        cached = _load_hf_alpha_cache(day_str, ticker_slug)
+        if cached:
+            return cached, day_str
+    return None, None
+
+
+def _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=None):
+    """Load past N weeks of Alpha Ideas for a ticker to enable novelty constraints.
+
+    Returns a dict with:
+      - 'past_theses': list of thesis strings from past weeks
+      - 'past_themes': list of summarized themes/patterns
+      - 'weeks_available': how many weeks of history found
+    """
+    current_day = datetime.now(HF_ALPHA_TZ).date()
+    if current_day_str:
+        try:
+            current_day = datetime.strptime(current_day_str, '%Y-%m-%d').date()
+        except Exception:
+            pass
+    past_theses = []
+    past_themes = []
+    weeks_found = 0
+    for w in range(1, weeks_back + 1):
+        target_day = current_day - timedelta(weeks=w)
+        for d in range(-2, 3):
+            check_day = target_day + timedelta(days=d)
+            day_str = check_day.strftime('%Y-%m-%d')
+            cached = _load_hf_alpha_cache(day_str, ticker_slug)
+            if cached:
+                ideas = cached.get('alpha_ideas') or []
+                for idea in ideas:
+                    thesis = str(idea.get('thesis') or '').strip()
+                    if thesis and thesis not in past_theses:
+                        past_theses.append(thesis)
+                street = str(cached.get('street_context') or '').strip()
+                if street and street not in past_themes:
+                    past_themes.append(street[:300])
+                weeks_found += 1
+                break
+    return {
+        'past_theses': past_theses[-20:],
+        'past_themes': past_themes[-8:],
+        'weeks_available': weeks_found
+    }
+
+
+def _extract_json_object(text):
+    text = (text or '').strip()
+    if not text:
+        return None
+    # Strip markdown fences if present
+    if '```json' in text:
+        try:
+            text = text.split('```json', 1)[1].split('```', 1)[0].strip()
+        except Exception:
+            pass
+    elif '```' in text:
+        try:
+            text = text.split('```', 1)[1].split('```', 1)[0].strip()
+        except Exception:
+            pass
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    start = text.find('{')
+    end = text.rfind('}')
+    if start >= 0 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except Exception:
+            return None
+    return None
+
+
+def _normalize_hf_alpha_ideas(raw_ideas):
+    ideas = raw_ideas if isinstance(raw_ideas, list) else []
+    normalized = []
+    for idx, item in enumerate(ideas):
+        if not isinstance(item, dict):
+            continue
+        thesis = str(item.get('thesis') or '').strip()
+        if not thesis:
+            continue
+        crosswalk_edge = str(item.get('crosswalk_edge') or '').strip()
+        fundamental_strategy = str(item.get('fundamental_strategy') or '').strip()
+        what_consensus_misses = str(item.get('what_consensus_misses') or '').strip()
+        if not crosswalk_edge and what_consensus_misses:
+            crosswalk_edge = what_consensus_misses
+        normalized.append({
+            'rank': idx + 1,
+            'thesis': thesis,
+            'crosswalk_edge': crosswalk_edge,
+            'fundamental_strategy': fundamental_strategy,
+            'what_consensus_misses': what_consensus_misses,
+            'signal_interpretation': str(item.get('signal_interpretation') or '').strip(),
+            'horizon': str(item.get('horizon') or 'short').strip() or 'short',
+            'catalyst_window': str(item.get('catalyst_window') or '').strip(),
+            'falsification_criteria': str(item.get('falsification_criteria') or '').strip(),
+            'position_risk': str(item.get('position_risk') or '').strip(),
+            'confidence': max(1, min(100, int(float(item.get('confidence') or 50)))),
+            'evidence_refs': [str(x).strip() for x in (item.get('evidence_refs') or []) if str(x).strip()][:4],
+        })
+    return normalized
+
+
+def _validate_hf_alpha_packet(packet):
+    if not isinstance(packet, dict):
+        return False, 'Crosswalk IQ payload is not an object.'
+    required = ['ticker', 'kpi_name', 'accuracy_rating', 'relevance_percentage', 'street_context', 'world_events', 'alpha_ideas', 'risk_flags', 'confidence', 'generated_at']
+    missing = [k for k in required if k not in packet]
+    if missing:
+        return False, f"Missing fields: {', '.join(missing)}"
+    ideas = _normalize_hf_alpha_ideas(packet.get('alpha_ideas'))
+    if len(ideas) < HF_ALPHA_MIN_IDEAS:
+        return False, f'Need at least {HF_ALPHA_MIN_IDEAS} ideas.'
+    packet['alpha_ideas'] = ideas
+    packet['risk_flags'] = [str(x).strip() for x in (packet.get('risk_flags') or []) if str(x).strip()][:8]
+    packet['confidence'] = max(1, min(100, int(float(packet.get('confidence') or 50))))
+    return True, ''
+
+
+def _default_hf_alpha_packet(ticker_payload, generated_at, note):
+    ticker = ticker_payload.get('ticker') or ticker_payload.get('original_ticker') or 'UNKNOWN'
+    kpi = ticker_payload.get('kpi') or 'Customers'
+    impact = ticker_payload.get('relevance_percentage')
+    stats = ticker_payload.get('calculated_stats') or {}
+    trend = stats.get('projected_growth_pct')
+    context = f"{ticker} {kpi} trend currently tracks at {trend if trend is not None else 'N/A'}% projected growth."
+    fallback_ideas = [
+        {
+            'rank': 1,
+            'thesis': f'Trade the second-derivative inflection in {kpi} for {ticker}.',
+            'what_consensus_misses': 'Consensus often reacts to level changes, not slope changes, in alternative KPI trajectories.',
+            'signal_interpretation': context,
+            'horizon': 'short',
+            'catalyst_window': 'next earnings update / management commentary',
+            'falsification_criteria': 'If weekly KPI delta reverts and guidance tone improves against signal direction.',
+            'position_risk': 'Use tight event-driven sizing; trim before macro headline risk.',
+            'confidence': 56,
+            'evidence_refs': ['Internal KPI trajectory'],
+        },
+        {
+            'rank': 2,
+            'thesis': f'Use {kpi} surprise direction as a cross-sectional relative value signal.',
+            'what_consensus_misses': 'Street focus remains headline EPS while KPI drift pre-signals revisions.',
+            'signal_interpretation': f'Stock impact weighting is {impact if impact is not None else "N/A"}%.',
+            'horizon': 'medium',
+            'catalyst_window': 'pre-earnings estimate revision window',
+            'falsification_criteria': 'No analyst revision activity despite sustained KPI trend.',
+            'position_risk': 'Pair against closest peer to isolate idiosyncratic alpha.',
+            'confidence': 52,
+            'evidence_refs': ['Internal KPI + stock-impact mapping'],
+        },
+        {
+            'rank': 3,
+            'thesis': 'Treat this output as limited-context and confirm with fresh external catalysts.',
+            'what_consensus_misses': 'Internal data can still flag directionality before public narratives form.',
+            'signal_interpretation': note,
+            'horizon': 'short',
+            'catalyst_window': 'next 1-2 weeks',
+            'falsification_criteria': 'External newsflow directly invalidates KPI narrative.',
+            'position_risk': 'Reduce gross until external confirmation is available.',
+            'confidence': 45,
+            'evidence_refs': ['Internal-only fallback'],
+        }
+    ]
+    return {
+        'ticker': ticker,
+        's3_key': ticker_payload.get('s3_key'),
+        'kpi_name': kpi,
+        'accuracy_rating': (stats.get('accuracy_rating') if isinstance(stats, dict) else None) or 'Unknown',
+        'relevance_percentage': impact,
+        'street_context': 'Limited context available from external sources in this run.',
+        'world_events': note,
+        'alpha_ideas': fallback_ideas,
+        'risk_flags': ['Limited external context'],
+        'confidence': 48,
+        'generated_at': generated_at,
+    }
+
+
+def _fetch_hf_ticker_payload_from_s3(s3_key):
+    if not hedge_fund_s3_client:
+        raise RuntimeError('Hedge Fund S3 not configured')
+    response = hedge_fund_s3_client.get_object(Bucket=HEDGE_FUND_S3_BUCKET, Key=s3_key)
+    csv_content = response['Body'].read().decode('utf-8')
+    df = pd.read_csv(io.StringIO(csv_content)).fillna(0)
+    col_mapping = {}
+    for col in df.columns:
+        c = col.lower().strip()
+        if 'consumer' in c or ('total' in c and 'sub' not in c and 'cancel' not in c):
+            col_mapping['consumers'] = col
+        elif 'sub' in c and 'cancel' not in c:
+            col_mapping['subs'] = col
+        elif 'cancel' in c or 'churn' in c:
+            col_mapping['cancels'] = col
+        elif 'date' in c:
+            col_mapping['date'] = col
+        elif 'quarter' in c:
+            col_mapping['quarter'] = col
+    if 'consumers' in col_mapping:
+        df.rename(columns={col_mapping['consumers']: 'Total Consumers'}, inplace=True)
+    if 'subs' in col_mapping:
+        df.rename(columns={col_mapping['subs']: 'Total Subs'}, inplace=True)
+    if 'cancels' in col_mapping:
+        df.rename(columns={col_mapping['cancels']: 'Total Cancels'}, inplace=True)
+    if 'date' in col_mapping:
+        df.rename(columns={col_mapping['date']: 'Date'}, inplace=True)
+    if 'quarter' in col_mapping:
+        df.rename(columns={col_mapping['quarter']: 'Quarter'}, inplace=True)
+    filename = s3_key.replace('.csv', '').replace('_Daily', '')
+    parts = filename.split('_')
+    ticker_symbol = parts[0].upper() if parts else filename.upper()
+    if len(parts) >= 2 and parts[1].lower() in ['phone', 'broadband']:
+        ticker_symbol = (parts[0] + parts[1]).upper()
+        kpi_parts = parts[2:] if len(parts) > 2 else []
+    else:
+        kpi_parts = parts[1:] if len(parts) > 1 else []
+    default_kpi = DEFAULT_TICKER_KPIS.get(ticker_symbol) or (' '.join(kpi_parts).title() if kpi_parts else 'Customers')
+    metadata = load_ticker_metadata().get(s3_key, {})
+    kpi = metadata.get('kpi', default_kpi)
+    display_name = metadata.get('display_name', ticker_symbol)
+    relevance_percentage = metadata.get('relevance_percentage')
+    data_rows = df.to_dict('records')
+    latest = data_rows[-1] if data_rows else {}
+    calculated_stats = {
+        'current_consumers': latest.get('Total Consumers', 0) or 0,
+        'total_subs': int(sum((r.get('Total Subs', 0) or 0) for r in data_rows)),
+        'total_cancels': int(sum((r.get('Total Cancels', 0) or 0) for r in data_rows)),
+        'projected_growth_pct': 0,
+        'accuracy_rating': None,
+        'latest_date': latest.get('Date', 'N/A'),
+        'latest_quarter': latest.get('Quarter', 'N/A'),
+    }
+    return {
+        'success': True,
+        'data': data_rows,
+        'ticker': ticker_symbol,
+        'display_name': display_name,
+        'kpi': kpi,
+        'relevance_percentage': relevance_percentage,
+        's3_key': s3_key,
+        'calculated_stats': calculated_stats,
+    }
+
+
+def _list_hf_ticker_rows():
+    if not hedge_fund_s3_client:
+        return []
+    metadata = load_ticker_metadata()
+    rows = []
+    paginator = hedge_fund_s3_client.get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=HEDGE_FUND_S3_BUCKET):
+        for obj in page.get('Contents', []):
+            key = obj.get('Key', '')
+            if not key.endswith('.csv'):
+                continue
+            base = key.replace('.csv', '').replace('_Daily', '')
+            parts = base.split('_')
+            ticker_symbol = parts[0].upper() if parts else base.upper()
+            if len(parts) >= 2 and parts[1].lower() in ['phone', 'broadband']:
+                ticker_symbol = (parts[0] + parts[1]).upper()
+                kpi_parts = parts[2:] if len(parts) > 2 else []
+            else:
+                kpi_parts = parts[1:] if len(parts) > 1 else []
+            default_kpi = DEFAULT_TICKER_KPIS.get(ticker_symbol) or (' '.join(kpi_parts).title() if kpi_parts else 'Customers')
+            meta = metadata.get(key, {})
+            rows.append({
+                'ticker': (meta.get('ticker_symbol') or ticker_symbol).strip() or ticker_symbol,
+                'original_ticker': ticker_symbol,
+                'display_name': meta.get('display_name', ticker_symbol),
+                'kpi': meta.get('kpi', default_kpi),
+                'relevance_percentage': meta.get('relevance_percentage'),
+                's3_key': key,
+            })
+    return rows
+
+
+def _resolve_hf_ticker_row(identifier):
+    ident = (identifier or '').strip()
+    if not ident:
+        return None
+    rows = _list_hf_ticker_rows()
+    if ident.endswith('.csv'):
+        for row in rows:
+            if row.get('s3_key') == ident:
+                return row
+    key = ident.upper()
+    for row in rows:
+        candidates = {
+            str(row.get('ticker') or '').upper(),
+            str(row.get('original_ticker') or '').upper(),
+            str(row.get('s3_key') or '').upper(),
+            str((row.get('s3_key') or '').split('/')[-1] or '').upper(),
+        }
+        if key in candidates:
+            return row
+    return None
+
+
+def _resolve_hf_access_ticker_set(user_access):
+    tokens = user_access.get('hedge_fund_iq_tickers', ['*']) or ['*']
+    normalized = {str(t).strip().upper() for t in tokens if str(t).strip()}
+    if '*' in normalized:
+        return None
+    return normalized
+
+
+def _user_can_access_hf_ticker(ticker_row, ticker_allow_set):
+    if ticker_allow_set is None:
+        return True
+    candidates = {
+        str(ticker_row.get('ticker') or '').upper(),
+        str(ticker_row.get('original_ticker') or '').upper(),
+        str(ticker_row.get('s3_key') or '').upper(),
+        str((ticker_row.get('s3_key') or '').split('/')[-1] or '').upper(),
+    }
+    return any(c in ticker_allow_set for c in candidates if c)
+
+
+def _compute_hf_quarter_context(ticker_payload, generation_day):
+    """Derive QTD + quarter-end urgency context from ticker payload."""
+    ctx = {
+        'quarter': 'Unknown',
+        'quarter_start': None,
+        'quarter_end': None,
+        'qtd_days_observed': 0,
+        'days_into_quarter': None,
+        'days_left_in_quarter': None,
+        'days_to_next_report_window': None,
+        'quarter_urgency': 'normal',
+    }
+    stats = ticker_payload.get('calculated_stats') or {}
+    q = str(stats.get('latest_quarter') or '').strip()
+    if not q:
+        rows = ticker_payload.get('data') or []
+        for row in reversed(rows):
+            q = str(row.get('Quarter') or '').strip()
+            if q:
+                break
+    if not q:
+        return ctx
+    ctx['quarter'] = q
+
+    m = re.match(r'^\s*Q([1-4])\s+(\d{4})\s*$', q, re.IGNORECASE)
+    if not m:
+        return ctx
+    qn = int(m.group(1))
+    yr = int(m.group(2))
+    q_starts = {1: date(yr, 1, 1), 2: date(yr, 4, 1), 3: date(yr, 7, 1), 4: date(yr, 10, 1)}
+    q_ends = {1: date(yr, 3, 31), 2: date(yr, 6, 30), 3: date(yr, 9, 30), 4: date(yr, 12, 31)}
+    q_start = q_starts[qn]
+    q_end = q_ends[qn]
+    ctx['quarter_start'] = q_start.isoformat()
+    ctx['quarter_end'] = q_end.isoformat()
+
+    try:
+        run_dt = datetime.strptime(generation_day, '%Y-%m-%d').date()
+    except Exception:
+        run_dt = datetime.now(HF_ALPHA_TZ).date()
+    days_into = (min(run_dt, q_end) - q_start).days + 1
+    total_days = (q_end - q_start).days + 1
+    days_left = max(0, (q_end - run_dt).days)
+    ctx['days_into_quarter'] = max(0, min(total_days, days_into))
+    ctx['days_left_in_quarter'] = days_left
+    # Simple earnings window heuristic: ~30 days after quarter end
+    report_window = q_end + timedelta(days=30)
+    ctx['days_to_next_report_window'] = (report_window - run_dt).days
+
+    rows = ticker_payload.get('data') or []
+    observed_dates = set()
+    for row in rows:
+        if str(row.get('Quarter') or '').strip() != q:
+            continue
+        d = str(row.get('Date') or '').strip()
+        if d:
+            observed_dates.add(d)
+    ctx['qtd_days_observed'] = len(observed_dates)
+
+    if days_left <= 14 or (ctx['days_to_next_report_window'] is not None and ctx['days_to_next_report_window'] <= 45):
+        ctx['quarter_urgency'] = 'high'
+    elif days_left <= 30:
+        ctx['quarter_urgency'] = 'elevated'
+    return ctx
+
+
+def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
+    """Generate weekly Hedge Fund IQ alpha ideas for one ticker.
+
+    This is the brain of the Alpha Ideas system. It:
+    1. Loads novelty memory from past 4 weeks to avoid repetition
+    2. Researches Street/macro context AND company guidance/consensus
+    3. Synthesizes creative, data-led ideas that leverage Crosswalk's unique KPI signal
+    """
+    generation_day = generation_day or _hf_alpha_today_str()
+    generated_at = datetime.now(HF_ALPHA_TZ).isoformat()
+    ticker = ticker_payload.get('ticker') or ticker_payload.get('original_ticker') or 'UNKNOWN'
+    kpi_name = ticker_payload.get('kpi') or 'Customers'
+    stats = ticker_payload.get('calculated_stats') or {}
+    relevance = ticker_payload.get('relevance_percentage')
+    accuracy_rating = stats.get('accuracy_rating') or 'Unknown'
+    quarter_ctx = _compute_hf_quarter_context(ticker_payload, generation_day)
+    ticker_slug = ticker_payload.get('s3_key') or ticker
+    novelty = _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=generation_day)
+    client = get_openai_client()
+    if not client:
+        fallback = _default_hf_alpha_packet(ticker_payload, generated_at, 'OpenAI unavailable in environment.')
+        return fallback, ['OpenAI not configured; used internal fallback ideas.']
+
+    kpi_direction = 'unknown'
+    kpi_magnitude = 'unknown'
+    trend_pct = stats.get('projected_growth_pct')
+    week_delta = stats.get('weekly_delta')
+    if trend_pct is not None:
+        if trend_pct > 5:
+            kpi_direction = 'accelerating'
+            kpi_magnitude = 'strong positive'
+        elif trend_pct > 0:
+            kpi_direction = 'positive'
+            kpi_magnitude = 'moderate positive'
+        elif trend_pct < -5:
+            kpi_direction = 'decelerating'
+            kpi_magnitude = 'strong negative'
+        elif trend_pct < 0:
+            kpi_direction = 'weakening'
+            kpi_magnitude = 'moderate negative'
+        else:
+            kpi_direction = 'flat'
+            kpi_magnitude = 'neutral'
+
+    research = ''
+    guidance_research = ''
+    research_warning = ''
+    try:
+        research_prompt = (
+            f'Provide concise institutional buy-side context for {ticker} around KPI "{kpi_name}". '
+            f'Include: (1) current Street narrative and key debates, (2) recent analyst rating changes, '
+            f'(3) sector-level themes affecting this name, (4) any upcoming catalysts in next 4-8 weeks. '
+            f'Use concrete source-backed statements. Focus on information a PM at Citadel would care about.'
+        )
+        rr = client.chat.completions.create(
+            model=HF_ALPHA_RESEARCH_MODEL,
+            messages=[{"role": "user", "content": research_prompt}],
+            web_search_options={"search_context_size": "medium"},
+        )
+        research = (rr.choices[0].message.content or '').strip() if rr.choices else ''
+    except Exception as e:
+        research_warning = f'Street research unavailable ({e}). '
+
+    try:
+        guidance_prompt = (
+            f'For {ticker}, provide: (1) management guidance for current and next quarter if available, '
+            f'(2) Street consensus estimates (revenue, EPS) vs. guidance, (3) any recent guidance changes, '
+            f'(4) key metrics management emphasizes on earnings calls. Be specific with numbers.'
+        )
+        gr = client.chat.completions.create(
+            model=HF_ALPHA_RESEARCH_MODEL,
+            messages=[{"role": "user", "content": guidance_prompt}],
+            web_search_options={"search_context_size": "medium"},
+        )
+        guidance_research = (gr.choices[0].message.content or '').strip() if gr.choices else ''
+    except Exception as e:
+        research_warning += f'Guidance research unavailable ({e}).'
+
+    novelty_constraint = ""
+    if novelty.get('past_theses'):
+        past_ideas_str = '\n'.join([f"  - {t}" for t in novelty['past_theses'][:12]])
+        novelty_constraint = f"""
+CRITICAL NOVELTY CONSTRAINT (past {novelty['weeks_available']} weeks of ideas - DO NOT repeat):
+{past_ideas_str}
+
+Your ideas must be FRESH and DIFFERENT from the above. Find new angles, new catalysts, new ways to interpret the signal."""
+
+    synthesis_base_prompt = f"""
+You are a senior quantitative PM at a top multi-manager hedge fund (Citadel, Millennium, Balyasny, Two Sigma).
+Your edge: Crosswalk IQ provides you PROPRIETARY, REAL-TIME KPI data that Street analysts don't have.
+
+═══════════════════════════════════════════════════════════════════════════════
+YOUR UNIQUE DATA EDGE (this is what makes alpha possible):
+═══════════════════════════════════════════════════════════════════════════════
+
+Ticker: {ticker}
+Proprietary KPI tracked: "{kpi_name}"
+Stock-impact weight: {relevance if relevance is not None else "TBD"}% (how much this KPI moves the stock)
+Crosswalk accuracy rating: {accuracy_rating}
+KPI signal direction: {kpi_direction} ({kpi_magnitude})
+
+DETAILED KPI STATISTICS (your informational edge):
+{json.dumps(stats, indent=2, default=str)}
+
+QUARTER TIMING (critical for trade structure):
+{json.dumps(quarter_ctx, indent=2, default=str)}
+
+═══════════════════════════════════════════════════════════════════════════════
+EXTERNAL CONTEXT (align your data-driven thesis with reality):
+═══════════════════════════════════════════════════════════════════════════════
+
+STREET NARRATIVE & CATALYSTS:
+{research or "Limited external context available - weight internal signal more heavily."}
+
+COMPANY GUIDANCE & CONSENSUS:
+{guidance_research or "Guidance data not available - focus on KPI signal vs. historical patterns."}
+
+═══════════════════════════════════════════════════════════════════════════════
+{novelty_constraint}
+
+YOUR TASK: Generate 4-5 CREATIVE, ACTIONABLE alpha ideas that a sophisticated fundamental/quant PM would actually trade.
+
+KEY REQUIREMENTS:
+1. **DATA-LED**: Every idea must START from the Crosswalk KPI signal. The thesis should flow: "Our {kpi_name} data shows X → this implies Y for earnings/revenue → the Street expects Z → therefore trade..."
+2. **CREATIVE ANGLES**: Don't just say "KPI is up so go long". Think second/third-order effects:
+   - Cross-asset implications (options vol, credit spreads, sector rotation)
+   - Supply chain read-throughs (if our data shows X for {ticker}, what does it mean for suppliers/competitors?)
+   - Timing arbitrage (can we trade ahead of lagged data releases?)
+   - Event-driven overlays (how does our signal interact with upcoming catalysts?)
+3. **FUNDAMENTAL FUND FOCUS**: Include ideas that work for long-only fundamental PMs, not just quant:
+   - How does guidance compare to what our data implies?
+   - Where might management under/over-promise based on our signal?
+   - What questions should fundamental analysts ask management?
+4. **SPECIFIC & FALSIFIABLE**: Every idea needs concrete entry/exit criteria based on the data
+
+Return ONLY valid JSON with this schema:
+{{
+  "crosswalk_data_summary": "<2-3 sentence summary of what the Crosswalk KPI signal is telling us>",
+  "street_context": "<2-3 sentences on where Street expectations sit vs our signal>",
+  "guidance_vs_signal": "<2-3 sentences on company guidance vs what our data implies>",
+  "risk_flags": ["<specific risk to the data signal>", "<macro/event risk>"],
+  "confidence": <1-100 based on data quality + alignment with external context>,
+  "alpha_ideas": [
+    {{
+      "thesis": "<specific trade hypothesis anchored in Crosswalk data>",
+      "crosswalk_edge": "<explicitly state: 'Our {kpi_name} data shows [X] which the Street hasn't priced because [Y]'>",
+      "what_consensus_misses": "<specific blind spot this data reveals>",
+      "fundamental_strategy": "<for fundamental PMs: how to use this in stock analysis/management meetings>",
+      "signal_interpretation": "<exactly how this KPI maps to P&L impact>",
+      "horizon": "short|medium",
+      "catalyst_window": "<specific timing tied to data or events>",
+      "falsification_criteria": "<what data change would invalidate this - be specific with thresholds>",
+      "position_risk": "<sizing, hedges, and risk management>",
+      "confidence": <1-100>,
+      "evidence_refs": ["Crosswalk {kpi_name} QTD: [value]", "<external source>"]
+    }}
+  ]
+}}
+
+QUALITY GATES:
+- If an idea doesn't explicitly reference the Crosswalk data, it's rejected
+- If an idea could be generated without our proprietary KPI, it's not alpha
+- Ideas must be different from previous weeks (see novelty constraint above)
+- At least one idea should be creative/non-obvious (cross-asset, supply-chain, or timing angle)
+- At least one idea should be actionable for fundamental long-only PMs
+"""
+    parsed = None
+    changes = []
+    for attempt in range(2):
+        try:
+            retry_suffix = ""
+            if attempt == 1:
+                retry_suffix = """
+
+STRICT RETRY - YOUR PREVIOUS OUTPUT FAILED QUALITY CHECKS:
+1. Make EVERY idea explicitly reference the Crosswalk KPI data with specific values
+2. Include the 'crosswalk_edge' and 'fundamental_strategy' fields for each idea
+3. Be MORE creative - think like a PM hunting for edge, not a generic analyst
+4. Provide at least 4 distinct ideas with different angles/time horizons"""
+            resp = client.chat.completions.create(
+                model=HF_ALPHA_SYNTH_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are an elite quantitative PM. Your alpha comes from proprietary alternative data. Respond with strict JSON only. Think like you're managing $500M and need to justify every position to your risk committee."},
+                    {"role": "user", "content": synthesis_base_prompt + retry_suffix},
+                ],
+                temperature=0.4 if attempt == 0 else 0.25,
+                max_tokens=3000,
+            )
+            parsed = _extract_json_object(resp.choices[0].message.content if resp.choices else '')
+            packet = {
+                'ticker': ticker,
+                's3_key': ticker_payload.get('s3_key'),
+                'kpi_name': kpi_name,
+                'accuracy_rating': accuracy_rating,
+                'relevance_percentage': relevance,
+                'crosswalk_data_summary': str((parsed or {}).get('crosswalk_data_summary') or '').strip(),
+                'street_context': str((parsed or {}).get('street_context') or '').strip(),
+                'guidance_vs_signal': str((parsed or {}).get('guidance_vs_signal') or '').strip(),
+                'world_events': str((parsed or {}).get('world_events') or (parsed or {}).get('guidance_vs_signal') or '').strip(),
+                'alpha_ideas': (parsed or {}).get('alpha_ideas') or [],
+                'risk_flags': (parsed or {}).get('risk_flags') or [],
+                'confidence': (parsed or {}).get('confidence') or 55,
+                'generated_at': generated_at,
+                'novelty_weeks_checked': novelty.get('weeks_available', 0),
+            }
+            ok, reason = _validate_hf_alpha_packet(packet)
+            if ok:
+                if research_warning:
+                    packet['risk_flags'] = list(packet.get('risk_flags') or []) + ['Limited external context']
+                    changes.append(research_warning)
+                return packet, changes
+            changes.append(f'Quality guardrail triggered: {reason}')
+        except Exception as e:
+            changes.append(f'Alpha synthesis attempt {attempt + 1} failed: {e}')
+
+    fallback_note = research_warning or 'Model output failed quality checks.'
+    fallback = _default_hf_alpha_packet(ticker_payload, generated_at, fallback_note)
+    return fallback, changes + [f'Fallback applied: {fallback_note}']
+
+
+def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url):
+    sections = []
+    for pkt in alpha_packets:
+        ticker = escape(str(pkt.get('ticker') or 'UNKNOWN'))
+        kpi = escape(str(pkt.get('kpi_name') or 'KPI'))
+        ideas = pkt.get('alpha_ideas') or []
+        crosswalk_summary = escape(str(pkt.get('crosswalk_data_summary') or ''))
+        guidance_signal = escape(str(pkt.get('guidance_vs_signal') or ''))
+        street = escape(str(pkt.get('street_context') or ''))
+        conf = int(pkt.get('confidence') or 50)
+        risk_flags = pkt.get('risk_flags') or []
+        idea_html = ""
+        for i, idea in enumerate(ideas[:4], start=1):
+            thesis = escape(str(idea.get('thesis') or ''))
+            crosswalk_edge = escape(str(idea.get('crosswalk_edge') or idea.get('what_consensus_misses') or ''))
+            fundamental = escape(str(idea.get('fundamental_strategy') or ''))
+            catalyst = escape(str(idea.get('catalyst_window') or ''))
+            falsification = escape(str(idea.get('falsification_criteria') or ''))
+            risk = escape(str(idea.get('position_risk') or ''))
+            idea_conf = int(idea.get('confidence') or 50)
+            idea_html += f"""
+                <div class="email-card" style="margin: 12px 0; padding: 12px; background: rgba(102,217,239,0.05); border-left: 3px solid #66d9ef; border-radius: 4px;">
+                    <div style="font-weight: 600; color: #f8f8f2; margin-bottom: 8px;">{i}. {thesis}</div>
+                    <p style="margin: 6px 0; font-size: 0.9em;"><strong style="color:#66d9ef;">📊 Crosswalk Edge:</strong> {crosswalk_edge}</p>
+                    {f'<p style="margin: 6px 0; font-size: 0.9em;"><strong style="color:#a6e22e;">📈 Fundamental Strategy:</strong> {fundamental}</p>' if fundamental else ''}
+                    <p style="margin: 6px 0; font-size: 0.9em;"><strong>⏱️ Catalyst:</strong> {catalyst}</p>
+                    <p style="margin: 6px 0; font-size: 0.9em;"><strong>❌ Falsification:</strong> {falsification}</p>
+                    <p style="margin: 6px 0; font-size: 0.9em;"><strong>⚖️ Risk:</strong> {risk} <span style="color:#888;">(Conf: {idea_conf}%)</span></p>
+                </div>
+            """
+        risk_html = ""
+        if risk_flags:
+            flags_str = ', '.join([escape(str(f)) for f in risk_flags[:3]])
+            risk_html = f'<p style="color:#f92672; font-size: 0.85em;"><strong>⚠️ Risk Flags:</strong> {flags_str}</p>'
+        sections.append(f"""
+            <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <h3 style="color:#66d9ef; margin: 0 0 8px 0;">{ticker} — {kpi}</h3>
+                <p style="margin: 8px 0; background: rgba(166,226,46,0.1); padding: 10px; border-radius: 4px;"><strong style="color:#a6e22e;">📊 Crosswalk Data Signal:</strong> {crosswalk_summary}</p>
+                {f'<p style="margin: 8px 0;"><strong>📋 Guidance vs. Signal:</strong> {guidance_signal}</p>' if guidance_signal else ''}
+                <p style="margin: 8px 0;"><strong>🏛️ Street Context:</strong> {street}</p>
+                <p style="margin: 8px 0;"><strong>Crosswalk IQ Confidence:</strong> <span style="color:#66d9ef; font-weight:600;">{conf}%</span></p>
+                {risk_html}
+                <h4 style="color:#f8f8f2; margin: 16px 0 8px 0;">Alpha Ideas:</h4>
+                {idea_html}
+            </div>
+        """)
+    cta = f'<p style="margin-top: 20px;"><a class="email-btn" href="{escape(app_base_url)}">Open Hedge Fund IQ Dashboard</a></p>'
+    body = f"""
+        <p style="font-size: 1.1em;">Weekly Alpha Ideas for <strong>{escape(username)}</strong> — Week of {escape(as_of_date)} (ET)</p>
+        <p style="color:#888; font-size: 0.9em; margin-bottom: 20px;">Ideas generated from proprietary Crosswalk IQ KPI data combined with real-time market research.</p>
+        {''.join(sections)}
+        {cta}
+    """
+    return _wrap_email_html(body, title="Hedge Fund IQ — Weekly Alpha Ideas")
+
+
+def _get_hf_digest_recipients():
+    users_data = load_users().get('users', {})
+    all_tickers = _list_hf_ticker_rows()
+    recipients = []
+    for username, user in users_data.items():
+        role = _normalize_role(user.get('role', 'user'))
+        access = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+        if not access.get('has_hedge_fund_iq_access'):
+            continue
+        if not bool(user.get('gets_hedge_fund_iq_emails', False)):
+            continue
+        email = (user.get('email') or '').strip()
+        if not email:
+            continue
+        allow_set = _resolve_hf_access_ticker_set(access)
+        ticker_rows = [row for row in all_tickers if _user_can_access_hf_ticker(row, allow_set)]
+        if not ticker_rows:
+            continue
+        recipients.append({
+            'username': username,
+            'email': email,
+            'tickers': ticker_rows
+        })
+    return recipients
+
+
+def send_hf_alpha_ideas_digest(
+    dry_run=False,
+    requested_date=None,
+    only_username=None,
+    test_email=None,
+    test_ticker_or_s3_key=None,
+    limit_tickers_per_recipient=None,
+    force_regenerate=False,
+):
+    run_day = requested_date or _hf_alpha_today_str()
+    recipients = _get_hf_digest_recipients()
+    generated = {}
+    per_ticker_logs = {}
+    sent = []
+    skipped = []
+    if only_username:
+        recipients = [r for r in recipients if r['username'] == only_username]
+    if test_email:
+        # Single-recipient QA mode: route all sends to one email and cap payload size.
+        if recipients:
+            base = recipients[0]
+            recipients = [{
+                'username': base.get('username') or 'test-user',
+                'email': test_email.strip(),
+                'tickers': list(base.get('tickers') or []),
+            }]
+        else:
+            recipients = [{'username': 'test:user', 'email': test_email.strip(), 'tickers': _list_hf_ticker_rows()}]
+        if limit_tickers_per_recipient is None:
+            limit_tickers_per_recipient = 1
+        if test_ticker_or_s3_key:
+            specific = _resolve_hf_ticker_row(test_ticker_or_s3_key)
+            if specific:
+                recipients[0]['tickers'] = [specific]
+            else:
+                skipped.append({
+                    'username': recipients[0].get('username', 'test-user'),
+                    'email': recipients[0].get('email'),
+                    'reason': f"Requested test ticker not found: {test_ticker_or_s3_key}"
+                })
+                recipients = []
+    app_url = (os.environ.get('APP_BASE_URL') or os.environ.get('PUBLIC_APP_URL') or '').strip() or request.host_url.rstrip('/')
+
+    for rec in recipients:
+        packets = []
+        ticker_rows = list(rec['tickers'] or [])
+        if isinstance(limit_tickers_per_recipient, int) and limit_tickers_per_recipient > 0:
+            ticker_rows = ticker_rows[:limit_tickers_per_recipient]
+        for row in ticker_rows:
+            ticker_slug = row.get('s3_key') or row.get('ticker')
+            cached = None if force_regenerate else _load_hf_alpha_cache(run_day, ticker_slug)
+            if cached is None:
+                key = row.get('s3_key')
+                base_payload = _load_hedge_fund_daily_cache(key) if key else None
+                if not base_payload:
+                    try:
+                        base_payload = _fetch_hf_ticker_payload_from_s3(key)
+                        _save_hedge_fund_daily_cache(key, base_payload)
+                    except Exception as e:
+                        fallback = _default_hf_alpha_packet(row, datetime.now(HF_ALPHA_TZ).isoformat(), f'Failed loading ticker source data: {e}')
+                        _save_hf_alpha_cache(run_day, ticker_slug, fallback)
+                        cached = fallback
+                if cached is None:
+                    payload_for_ai = dict(base_payload or {})
+                    payload_for_ai.setdefault('ticker', row.get('ticker'))
+                    payload_for_ai.setdefault('original_ticker', row.get('original_ticker'))
+                    payload_for_ai.setdefault('kpi', row.get('kpi'))
+                    payload_for_ai.setdefault('s3_key', row.get('s3_key'))
+                    payload_for_ai.setdefault('relevance_percentage', row.get('relevance_percentage'))
+                    packet, logs = generate_hf_alpha_ideas_for_ticker(payload_for_ai, generation_day=run_day)
+                    _save_hf_alpha_cache(run_day, ticker_slug, packet)
+                    generated[str(ticker_slug)] = packet
+                    per_ticker_logs[str(ticker_slug)] = logs
+                    cached = packet
+            packets.append(cached)
+
+        if not packets:
+            skipped.append({'username': rec['username'], 'reason': 'No entitled ticker ideas'})
+            continue
+        html_content = _build_hf_alpha_email_html(rec['username'], packets, run_day, app_url)
+        subject = f"Hedge Fund IQ — Weekly Alpha Ideas ({run_day})"
+        text = f"Hedge Fund IQ Weekly Alpha Ideas (week of {run_day}) for {rec['username']}. Open dashboard: {app_url}"
+        if dry_run:
+            sent.append({'username': rec['username'], 'email': rec['email'], 'dry_run': True, 'ticker_count': len(packets)})
+            continue
+        ok, msg = send_email_via_gmail(rec['email'], subject, html_content, text)
+        if ok:
+            sent.append({'username': rec['username'], 'email': rec['email'], 'ticker_count': len(packets)})
+        else:
+            skipped.append({'username': rec['username'], 'email': rec['email'], 'reason': msg})
+
+    return {
+        'success': True,
+        'date': run_day,
+        'recipients_considered': len(recipients),
+        'emails_sent': sent,
+        'emails_skipped': skipped,
+        'generated_tickers': list(generated.keys()),
+        'generation_logs': per_ticker_logs,
+        'test_email': test_email or None,
+        'test_ticker_or_s3_key': test_ticker_or_s3_key or None,
+        'force_regenerate': bool(force_regenerate),
+    }
 
 
 # ============================================================================
@@ -11750,6 +12614,125 @@ def get_hedge_fund_ticker_data(s3_key):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
+
+
+@app.route('/api/hedge-fund-iq/alpha-ideas/<path:ticker_or_s3_key>', methods=['GET'])
+@requires_auth
+def get_hedge_fund_alpha_ideas(ticker_or_s3_key):
+    """Return latest daily alpha ideas packet for a ticker; generate on-demand if cache missing."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+        role = _normalize_role(user.get('role', 'user'))
+        access = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+        if not access.get('has_hedge_fund_iq_access'):
+            return jsonify({'success': False, 'error': 'Hedge Fund IQ access denied'}), 403
+
+        ticker_row = _resolve_hf_ticker_row(ticker_or_s3_key)
+        if not ticker_row:
+            return jsonify({'success': False, 'error': 'Ticker not found'}), 404
+
+        allow_set = _resolve_hf_access_ticker_set(access)
+        if not _user_can_access_hf_ticker(ticker_row, allow_set):
+            return jsonify({'success': False, 'error': 'Ticker access denied'}), 403
+
+        refresh = request.args.get('refresh', '').strip().lower() in ('1', 'true', 'yes')
+        day = _hf_alpha_today_str()
+        ticker_slug = ticker_row.get('s3_key') or ticker_row.get('ticker')
+        packet = None if refresh else _load_hf_alpha_cache(day, ticker_slug)
+        source = 'cache'
+        if packet is None:
+            base_payload = _load_hedge_fund_daily_cache(ticker_row.get('s3_key'))
+            if not base_payload:
+                base_payload = _fetch_hf_ticker_payload_from_s3(ticker_row.get('s3_key'))
+            base_payload.setdefault('ticker', ticker_row.get('ticker'))
+            base_payload.setdefault('original_ticker', ticker_row.get('original_ticker'))
+            base_payload.setdefault('kpi', ticker_row.get('kpi'))
+            base_payload.setdefault('s3_key', ticker_row.get('s3_key'))
+            base_payload.setdefault('relevance_percentage', ticker_row.get('relevance_percentage'))
+            packet, logs = generate_hf_alpha_ideas_for_ticker(base_payload, generation_day=day)
+            _save_hf_alpha_cache(day, ticker_slug, packet)
+            source = 'generated'
+        else:
+            logs = []
+
+        return jsonify({'success': True, 'date': day, 'source': source, 'alpha': packet, 'logs': logs})
+    except Exception as e:
+        print(f"❌ Error loading Hedge Fund alpha ideas: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/hf-alpha-ideas/run', methods=['POST'])
+@requires_admin
+def admin_run_hf_alpha_ideas():
+    """Manual admin trigger for HF Alpha ideas generation/digest (QA + backfill)."""
+    try:
+        body = request.get_json() or {}
+        dry_run = bool(body.get('dry_run', True))
+        send_email = bool(body.get('send_email', False))
+        only_username = (body.get('username') or '').strip() or None
+        run_date = (body.get('date') or '').strip() or None
+        test_email = (body.get('test_email') or '').strip() or None
+        test_ticker_or_s3_key = (body.get('test_ticker_or_s3_key') or '').strip() or None
+        limit_tickers = body.get('limit_tickers_per_recipient')
+        force_regenerate = bool(body.get('force_regenerate', False))
+        try:
+            limit_tickers = int(limit_tickers) if limit_tickers is not None else None
+        except Exception:
+            limit_tickers = None
+        result = send_hf_alpha_ideas_digest(
+            dry_run=(dry_run or not send_email),
+            requested_date=run_date,
+            only_username=only_username,
+            test_email=test_email,
+            test_ticker_or_s3_key=test_ticker_or_s3_key,
+            limit_tickers_per_recipient=limit_tickers,
+            force_regenerate=force_regenerate,
+        )
+        return jsonify(result)
+    except Exception as e:
+        print(f"❌ Error in admin HF alpha trigger: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cron/hf-alpha-ideas', methods=['GET', 'POST'])
+def cron_hf_alpha_ideas():
+    """Weekly Monday cron endpoint for Hedge Fund IQ alpha generation + digest send."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    expected = os.environ.get('CRON_SECRET', '')
+    if not expected or secret != expected:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    try:
+        force = request.args.get('force', '').strip().lower() in ('1', 'true', 'yes')
+        dry_run = request.args.get('dry_run', '').strip().lower() in ('1', 'true', 'yes')
+        test_email = (request.args.get('test_email') or '').strip() or None
+        test_ticker_or_s3_key = (request.args.get('test_ticker_or_s3_key') or '').strip() or None
+        limit_tickers_raw = request.args.get('limit_tickers', '').strip()
+        force_regenerate = request.args.get('force_regenerate', '').strip().lower() in ('1', 'true', 'yes')
+        try:
+            limit_tickers = int(limit_tickers_raw) if limit_tickers_raw else None
+        except Exception:
+            limit_tickers = None
+        now_et = datetime.now(HF_ALPHA_TZ)
+        if now_et.weekday() >= 5 and not force:
+            return jsonify({'success': True, 'skipped': True, 'reason': 'Weekend (ET)', 'timestamp_et': now_et.isoformat()})
+        if now_et.weekday() != 0 and not force:
+            return jsonify({'success': True, 'skipped': True, 'reason': 'Weekly send is Monday-only (ET)', 'weekday': now_et.strftime('%A'), 'timestamp_et': now_et.isoformat()})
+        result = send_hf_alpha_ideas_digest(
+            dry_run=dry_run,
+            test_email=test_email,
+            test_ticker_or_s3_key=test_ticker_or_s3_key,
+            limit_tickers_per_recipient=limit_tickers,
+            force_regenerate=force_regenerate,
+        )
+        result['timestamp_et'] = now_et.isoformat()
+        return jsonify(result)
+    except Exception as e:
+        print(f"❌ Error in HF alpha cron: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/hedge-fund-iq/metadata', methods=['GET', 'POST'])
@@ -19988,7 +20971,7 @@ def _run_roas_iq(job_id):
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        cur.execute("USE WAREHOUSE ROASIQ")
 
         ROAS_MAX_UIDS = 50000
         ROAS_MAX_URL_ROWS = 500000
@@ -20214,6 +21197,8 @@ def _run_roas_iq(job_id):
         uid_touch_counts = {}
         source_domains = {}
         uid_source_domains = {}
+        ad_domain_uids = {}
+        ad_domain_clicks = {}
         for url, uid in rows:
             try:
                 p = urlparse(url if '://' in url else 'https://' + url)
@@ -20246,28 +21231,55 @@ def _run_roas_iq(job_id):
                         uid_source_domains[usd_key] = set()
                     uid_source_domains[usd_key].add(domain)
 
+                    ad_domain_clicks[domain] = ad_domain_clicks.get(domain, 0) + 1
+                    if domain not in ad_domain_uids:
+                        ad_domain_uids[domain] = set()
+                    ad_domain_uids[domain].add(uid)
+
                 uid_touch_counts[uid] = uid_touch_counts.get(uid, 0) + 1
             except Exception:
                 continue
 
-        uid_confirmation_count = {}
-        for cd in conversion_details:
-            uid = cd['uid']
-            uid_confirmation_count[uid] = uid_confirmation_count.get(uid, 0) + 1
+        # Build per-UID set of all ad-attributed landing domains
+        uid_all_ad_domains = {}
+        for (key, uid), doms in uid_source_domains.items():
+            if uid not in uid_all_ad_domains:
+                uid_all_ad_domains[uid] = set()
+            uid_all_ad_domains[uid] |= doms
+
+        # Only count a UID as a converter if their confirmation page domain
+        # overlaps with a domain from their ad-attributed URLs.
+        # This prevents counting unrelated purchases (e.g. Amazon grocery order)
+        # as conversions for a Nike ad.
+        uid_confirmed_on_ad_domain = set()
+        for uid, conf_domains in uid_conv_domains.items():
+            ad_doms = uid_all_ad_domains.get(uid, set())
+            if conf_domains & ad_doms:
+                uid_confirmed_on_ad_domain.add(uid)
+        print(f"✅ Domain-matched converters: {len(uid_confirmed_on_ad_domain)} of {len(uid_conv_domains)} UIDs with confirmations")
 
         update_job_status(job_id, progress=75, message='Building results...')
         ranked = sorted(channel_source_uids.items(), key=lambda x: -len(x[1]))[:300]
         results = []
         total_ad_uids = set()
-        total_confirmations_all = 0
         for (channel, source), uid_set in ranked:
             cnt = len(uid_set)
-            confirmations = sum(uid_confirmation_count.get(uid, 0) for uid in uid_set)
-            total_confirmations_all += confirmations
+            # Count converters: UID must have a confirmation on a domain that
+            # also appears in their ad-attributed URLs for this source
+            source_converters = 0
+            for uid in uid_set:
+                if uid not in uid_confirmed_on_ad_domain:
+                    continue
+                src_doms = uid_source_domains.get(((channel, source), uid), set())
+                if uid_conv_domains.get(uid, set()) & src_doms:
+                    source_converters += 1
+            unique_converters = source_converters
             total_ad_uids |= uid_set
             click_count = channel_source_clicks.get((channel, source), cnt)
+            projected_clicks = _proj(click_count)
+            projected_converters = _proj(unique_converters)
             pct = round(100.0 * cnt / max(sampled_uid_count, 1), 4)
-            conv_rate = round(100.0 * confirmations / max(click_count, 1), 2)
+            conv_rate = round(100.0 * projected_converters / max(projected_clicks, 1), 2)
             family = _get_source_family(source.lower().replace(' ', '_')) or source
             top_dom = ''
             sd = source_domains.get((channel, source), {})
@@ -20277,16 +21289,18 @@ def _run_roas_iq(job_id):
                 'channel': channel, 'source': source, 'family': family.title(),
                 'pct': pct, 'raw': cnt,
                 'click_count': click_count,
+                'projected_click_count': projected_clicks,
                 'projected': _proj(cnt),
-                'conversions': confirmations,
-                'projected_conversions': _proj(confirmations),
+                'conversions': unique_converters,
+                'projected_conversions': projected_converters,
                 'conv_rate': conv_rate,
                 'top_domain': top_dom,
             })
 
         overall_ad_uid_count = len(total_ad_uids)
         total_classified_clicks = sum(channel_source_clicks.values())
-        overall_conv_rate = round(100.0 * total_confirmations_all / max(total_classified_clicks, 1), 2)
+        total_unique_converters = sum(1 for uid in total_ad_uids if uid in uid_confirmed_on_ad_domain)
+        overall_conv_rate = round(100.0 * _proj(total_unique_converters) / max(_proj(total_classified_clicks), 1), 2)
 
         top_domains = {}
         for ch, doms in channel_domains.items():
@@ -20304,23 +21318,54 @@ def _run_roas_iq(job_id):
                     verified_retailer_uids[dom] = set()
                 verified_retailer_uids[dom].add(cd['uid'])
 
-        brand_uids = {}
-        brand_clicks = {}
+        # Build brand display name lookup from HOST_MAPPING results
+        brand_display_names = {}
         for brand, uid in brand_click_rows:
-            brand_clicks[brand] = brand_clicks.get(brand, 0) + 1
-            if brand not in brand_uids:
-                brand_uids[brand] = set()
-            brand_uids[brand].add(uid)
+            bl = brand.lower().strip()
+            if bl and bl not in brand_display_names:
+                brand_display_names[bl] = brand
+
+        # Ad platforms / trackers / generic domains to exclude from brand list
+        _AD_PLATFORM_DOMAINS = {
+            'google.com', 'googleapis.com', 'gstatic.com', 'googlesyndication.com',
+            'googleadservices.com', 'googletagmanager.com', 'google-analytics.com',
+            'doubleclick.net', 'facebook.com', 'facebook.net', 'fbcdn.net', 'fb.com',
+            'instagram.com', 'twitter.com', 'x.com', 't.co', 'tiktok.com',
+            'snapchat.com', 'pinterest.com', 'linkedin.com', 'reddit.com',
+            'youtube.com', 'youtu.be', 'bing.com', 'yahoo.com', 'duckduckgo.com',
+            'amazon-adsystem.com', 'criteo.com', 'taboola.com', 'outbrain.com',
+            'adroll.com', 'demdex.net', 'adsrvr.org', 'rubiconproject.com',
+            'pubmatic.com', 'openx.net', 'casalemedia.com', 'bidswitch.net',
+            'cloudfront.net', 'akamaihd.net', 'cloudflare.com', 'jsdelivr.net',
+            'unpkg.com', 'cdnjs.cloudflare.com', 'bootstrapcdn.com',
+            'apple.com', 'icloud.com', 'microsoft.com', 'live.com', 'outlook.com',
+            'office.com', 'windows.net', 'msn.com',
+            'bit.ly', 'ow.ly', 'tinyurl.com', 'lnkd.in', 'goo.gl',
+            'mailchimp.com', 'sendgrid.net', 'constantcontact.com',
+            'hubspot.com', 'marketo.com', 'pardot.com', 'salesforce.com',
+            'segment.io', 'segment.com', 'mixpanel.com', 'amplitude.com',
+            'hotjar.com', 'optimizely.com', 'crazyegg.com',
+        }
 
         sales_conversions = []
-        for brand in sorted(brand_clicks, key=lambda b: -brand_clicks[b]):
-            uids = brand_uids[brand]
-            click_count = brand_clicks[brand]
+        for domain in sorted(ad_domain_clicks, key=lambda d: -ad_domain_clicks[d]):
+            if domain in _AD_PLATFORM_DOMAINS:
+                continue
+            # Skip very short or IP-like domains
+            if len(domain) < 4 or domain.replace('.', '').isdigit():
+                continue
+            uids = ad_domain_uids.get(domain, set())
+            click_count = ad_domain_clicks[domain]
             proj_clicks = _proj(click_count)
             verified_cnt = sum(1 for uid in uids if uid in uid_conv_domains)
             proj_verified = _proj(verified_cnt)
+            display_name = brand_display_names.get(domain.replace('.com', '').replace('.net', '').replace('.org', ''), domain)
+            if display_name == domain:
+                # Try matching the domain root against HOST_MAPPING brand names
+                domain_root = domain.split('.')[0] if '.' in domain else domain
+                display_name = brand_display_names.get(domain_root, domain)
             sales_conversions.append({
-                'retailer': brand,
+                'retailer': display_name,
                 'audience_uids': len(uids),
                 'duplicated_clicks': proj_clicks,
                 'pct_of_audience': round(100.0 * len(uids) / max(sampled_uid_count, 1), 4),
@@ -20328,6 +21373,8 @@ def _run_roas_iq(job_id):
                 'projected_buyers': proj_verified,
                 'conv_rate': round(100.0 * proj_verified / max(proj_clicks, 1), 2),
             })
+            if len(sales_conversions) >= 100:
+                break
 
         result_data = {
             'project_name': project_name,
@@ -20340,8 +21387,8 @@ def _run_roas_iq(job_id):
             'url_rows': len(rows),
             'total_classified_clicks': total_classified_clicks,
             'projected_classified_clicks': _proj(total_classified_clicks),
-            'total_converted': total_confirmations_all,
-            'projected_converted': _proj(total_confirmations_all),
+            'total_converted': total_unique_converters,
+            'projected_converted': _proj(total_unique_converters),
             'overall_conv_rate': overall_conv_rate,
             'results': results,
             'demographics': demo_data,
@@ -20498,7 +21545,7 @@ def _run_ecommerce_iq(job_id):
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        cur.execute("USE WAREHOUSE ECOMIQ")
 
         update_job_status(job_id, progress=20, message='Finding audience from search terms...')
         uid_count = _build_temp_uids_from_terms(cur, search_terms, start_date, end_date)
