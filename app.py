@@ -11638,9 +11638,11 @@ def _compute_hf_quarter_context(ticker_payload, generation_day):
 def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
     """Generate weekly Hedge Fund IQ alpha ideas for one ticker.
 
-    Philosophy: Crosswalk's edge is the SYNTHESIS of our signal with deep external research.
-    The KPI data is a loose directional signal; the real alpha comes from understanding
-    WHY the numbers look the way they do and finding creative trading angles.
+    Philosophy: Crosswalk IQ's edge is RESEARCH SYNTHESIS. We combine:
+    - Deep external research (Street, company, industry)
+    - Company guidance and consensus
+    - Our proprietary data as a confirming SIGNAL
+    The narrative: Crosswalk IQ researched this and here's what we found.
     """
     generation_day = generation_day or _hf_alpha_today_str()
     generated_at = datetime.now(HF_ALPHA_TZ).isoformat()
@@ -11648,7 +11650,6 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
     kpi_name = ticker_payload.get('kpi') or 'Customers'
     stats = ticker_payload.get('calculated_stats') or {}
     relevance = ticker_payload.get('relevance_percentage')
-    accuracy_rating = stats.get('accuracy_rating') or 'Unknown'
     quarter_ctx = _compute_hf_quarter_context(ticker_payload, generation_day)
     ticker_slug = ticker_payload.get('s3_key') or ticker
     novelty = _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=generation_day)
@@ -11657,107 +11658,81 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
         fallback = _default_hf_alpha_packet(ticker_payload, generated_at, 'OpenAI unavailable in environment.')
         return fallback, ['OpenAI not configured; used internal fallback ideas.']
 
+    sec_actuals = {}
+    try:
+        resp = s3_client.get_object(Bucket=METADATA_BUCKET, Key='metadata/hedge_fund_sec_actuals.json')
+        all_actuals = json.loads(resp['Body'].read().decode('utf-8'))
+        sec_actuals = all_actuals.get(ticker, {})
+    except Exception:
+        pass
+    prior_actuals_str = ""
+    if sec_actuals:
+        sorted_qs = sorted(sec_actuals.items(), key=lambda x: x[0], reverse=True)[:6]
+        prior_actuals_str = "Prior reported actuals: " + ", ".join([f"{q}: {v:+.2f}%" for q, v in sorted_qs])
+
     raw_data = ticker_payload.get('data') or []
-    current_consumers = None
-    historical_consumers = None
-    daily_subs = None
-    daily_cancels = None
-    yoy_consumers = None
+    current_val = None
     for row in reversed(raw_data):
-        if current_consumers is None:
-            current_consumers = row.get('Total Consumers') or row.get('Current Consumers')
-            daily_subs = row.get('Total Subs') or row.get('Subscriptions')
-            daily_cancels = row.get('Total Cancels') or row.get('Cancellations')
-        break
-    if raw_data:
-        one_year_ago_idx = max(0, len(raw_data) - 365)
-        historical_consumers = raw_data[one_year_ago_idx].get('Total Consumers') or raw_data[one_year_ago_idx].get('Current Consumers')
-        if len(raw_data) > 90:
-            q_ago = raw_data[-91] if len(raw_data) > 90 else raw_data[0]
-            yoy_consumers = q_ago.get('Total Consumers') or q_ago.get('Current Consumers')
-
-    actual_yoy_change = None
-    if current_consumers and historical_consumers and historical_consumers > 0:
-        actual_yoy_change = ((current_consumers - historical_consumers) / historical_consumers) * 100
-    
-    daily_net = None
-    if daily_subs is not None and daily_cancels is not None:
-        daily_net = (daily_subs or 0) - (daily_cancels or 0)
-
-    net_growth_desc = "unknown trajectory"
-    if actual_yoy_change is not None:
-        if actual_yoy_change < -30:
-            net_growth_desc = f"SEVERE decline ({actual_yoy_change:+.1f}% YoY, losing ~{abs(daily_net):,.0f}/day)" if daily_net else f"SEVERE decline ({actual_yoy_change:+.1f}% YoY)"
-        elif actual_yoy_change < -10:
-            net_growth_desc = f"significant decline ({actual_yoy_change:+.1f}% YoY)"
-        elif actual_yoy_change < -2:
-            net_growth_desc = f"moderate decline ({actual_yoy_change:+.1f}% YoY)"
-        elif actual_yoy_change < 2:
-            net_growth_desc = f"roughly flat ({actual_yoy_change:+.1f}% YoY)"
-        elif actual_yoy_change < 10:
-            net_growth_desc = f"moderate growth ({actual_yoy_change:+.1f}% YoY)"
+        current_val = row.get('Total Consumers') or row.get('Current Consumers')
+        if current_val:
+            break
+    signal_direction = "unclear"
+    if sec_actuals:
+        recent = list(sec_actuals.values())[-3:] if len(sec_actuals) >= 3 else list(sec_actuals.values())
+        avg_recent = sum(recent) / len(recent) if recent else 0
+        if avg_recent < -2:
+            signal_direction = "declining"
+        elif avg_recent > 2:
+            signal_direction = "growing"
         else:
-            net_growth_desc = f"strong growth ({actual_yoy_change:+.1f}% YoY)"
-    
-    data_context = f"""
-ACTUAL DATA (from Crosswalk panel):
-- Current {kpi_name}: {current_consumers:,.0f if current_consumers else 'N/A'}
-- One year ago: {historical_consumers:,.0f if historical_consumers else 'N/A'}
-- YoY change: {actual_yoy_change:+.1f}% if actual_yoy_change else 'N/A'
-- Daily subs: {daily_subs:,.0f if daily_subs else 'N/A'}
-- Daily cancels: {daily_cancels:,.0f if daily_cancels else 'N/A'}  
-- Daily net: {daily_net:+,.0f if daily_net else 'N/A'}
-"""
+            signal_direction = "stable"
 
     research = ''
     deep_context = ''
     guidance_research = ''
     research_warning = ''
+    
     try:
-        deep_research_prompt = (
-            f'I need DEEP institutional research on {ticker} for a hedge fund PM. '
-            f'Our alternative data shows {kpi_name} is {net_growth_desc}. '
-            f'Current level: {current_consumers:,.0f if current_consumers else "unknown"}. '
-            f'CRITICAL QUESTION: WHY? What explains these numbers? Research SPECIFICALLY: '
-            f'(1) Has {ticker} done ANY divestitures, asset sales, or sold business units recently? To whom? Which states/regions? '
-            f'(2) Any M&A activity - acquisitions or spin-offs? '
-            f'(3) Major strategic pivots or business model changes? '
-            f'(4) What has management said about {kpi_name} on recent earnings calls? '
-            f'Be VERY specific with dates, deal values, counterparties, and states/regions affected. '
-            f'I need to understand if the YoY decline is organic or due to divestitures/restructuring.'
+        comprehensive_prompt = (
+            f'I am a hedge fund PM researching {ticker}. Give me a comprehensive briefing:\n\n'
+            f'1. COMPANY OVERVIEW: What does {ticker} do? Key business segments?\n'
+            f'2. RECENT DEVELOPMENTS: Any major news in the last 6 months? M&A, divestitures, restructuring, asset sales?\n'
+            f'3. THE KEY METRIC "{kpi_name}": What is the trend? Why? Any one-time items affecting comparisons?\n'
+            f'4. STREET VIEW: What do analysts think? Bull vs bear case? Consensus rating?\n'
+            f'5. MANAGEMENT GUIDANCE: What has the company guided for this KPI and related revenue?\n'
+            f'6. UPCOMING CATALYSTS: Earnings dates, investor days, regulatory events in next 2 months?\n'
+            f'7. KEY RISKS: What could go wrong?\n\n'
+            f'Be specific with numbers, dates, deal values, counterparties. I need actionable intelligence.'
         )
-        dr = client.chat.completions.create(
+        cr = client.chat.completions.create(
             model=HF_ALPHA_RESEARCH_MODEL,
-            messages=[{"role": "user", "content": deep_research_prompt}],
+            messages=[{"role": "user", "content": comprehensive_prompt}],
             web_search_options={"search_context_size": "high"},
         )
-        deep_context = (dr.choices[0].message.content or '').strip() if dr.choices else ''
+        deep_context = (cr.choices[0].message.content or '').strip() if cr.choices else ''
     except Exception as e:
-        research_warning = f'Deep research unavailable ({e}). '
+        research_warning = f'Comprehensive research unavailable ({e}). '
 
     try:
-        research_prompt = (
-            f'Provide concise buy-side context for {ticker}: '
-            f'(1) Current Street consensus and ratings distribution, '
-            f'(2) Key debates among analysts, '
-            f'(3) Upcoming catalysts in next 8 weeks, '
-            f'(4) How does the Street view {kpi_name} trends? '
-            f'Focus on what a PM at Citadel would need to know.'
+        street_prompt = (
+            f'For {ticker}, what is the current: (1) Analyst consensus rating (buy/hold/sell breakdown), '
+            f'(2) Average price target vs current price, (3) Top 3 debates/concerns among analysts, '
+            f'(4) Most recent rating changes. Be specific.'
         )
-        rr = client.chat.completions.create(
+        sr = client.chat.completions.create(
             model=HF_ALPHA_RESEARCH_MODEL,
-            messages=[{"role": "user", "content": research_prompt}],
+            messages=[{"role": "user", "content": street_prompt}],
             web_search_options={"search_context_size": "medium"},
         )
-        research = (rr.choices[0].message.content or '').strip() if rr.choices else ''
+        research = (sr.choices[0].message.content or '').strip() if sr.choices else ''
     except Exception as e:
         research_warning += f'Street research unavailable ({e}). '
 
     try:
         guidance_prompt = (
-            f'For {ticker}: (1) What is management guidance for {kpi_name} and related revenue? '
-            f'(2) Street consensus estimates vs guidance, (3) Recent guidance changes or updates, '
-            f'(4) Key metrics management emphasizes. Include specific numbers.'
+            f'For {ticker}: What specific guidance has management given for {kpi_name} and revenue? '
+            f'Include: (1) Current quarter/year guidance ranges, (2) How this compares to consensus, '
+            f'(3) Any recent guidance changes, (4) Management tone on last earnings call. Numbers please.'
         )
         gr = client.chat.completions.create(
             model=HF_ALPHA_RESEARCH_MODEL,
@@ -11770,50 +11745,79 @@ ACTUAL DATA (from Crosswalk panel):
 
     novelty_constraint = ""
     if novelty.get('past_theses'):
-        past_ideas_str = '\n'.join([f"  - {t}" for t in novelty['past_theses'][:10]])
-        novelty_constraint = f"""
-NOVELTY: Don't repeat these ideas from past weeks:
-{past_ideas_str}
-"""
+        past_ideas_str = '\n'.join([f"  - {t}" for t in novelty['past_theses'][:8]])
+        novelty_constraint = f"(Don't repeat: {past_ideas_str})"
 
     synthesis_base_prompt = f"""
-You are a senior PM at a top hedge fund. Crosswalk IQ gives you a UNIQUE EDGE through:
-1. Proprietary alternative data on {kpi_name}
-2. Deep research synthesis explaining WHY the numbers look the way they do
-3. Creative idea generation that connects the dots
+You are writing the weekly "Alpha Ideas" brief for Crosswalk IQ, a research platform for hedge funds.
+
+Crosswalk IQ's VALUE PROPOSITION: We do the hard work of synthesizing all available information - 
+Street research, company guidance, industry trends, AND our proprietary data signal - into 
+actionable trading ideas. The edge is the SYNTHESIS, not any single data point.
 
 ═══════════════════════════════════════════════════════════════════════════════
-CROSSWALK IQ DATA SIGNAL:
+CROSSWALK IQ RESEARCH ON {ticker}
 ═══════════════════════════════════════════════════════════════════════════════
 
-Ticker: {ticker}
-KPI: "{kpi_name}"
-Signal: {net_growth_desc}
-{data_context}
-Quarter: {quarter_ctx.get('quarter', 'N/A')} ({quarter_ctx.get('days_left_in_quarter', 'N/A')} days left, urgency: {quarter_ctx.get('quarter_urgency', 'normal')})
+COMPREHENSIVE INTELLIGENCE:
+{deep_context or "Research pending."}
 
-═══════════════════════════════════════════════════════════════════════════════
-CRITICAL RESEARCH (THE KEY TO UNDERSTANDING THE DATA):
-═══════════════════════════════════════════════════════════════════════════════
+STREET CONSENSUS:
+{research or "Street view pending."}
 
-{deep_context or "Research not available - be cautious with interpretations."}
+MANAGEMENT GUIDANCE:
+{guidance_research or "Guidance pending."}
 
-═══════════════════════════════════════════════════════════════════════════════
-STREET VIEW:
-═══════════════════════════════════════════════════════════════════════════════
+CROSSWALK PROPRIETARY SIGNAL (confirming indicator):
+- KPI tracked: {kpi_name}
+- Current signal direction: {signal_direction}
+- {prior_actuals_str or "No prior actuals available"}
+- Current panel reading: {current_val:,.0f if current_val else "N/A"}
+- Quarter: {quarter_ctx.get('quarter', 'N/A')} ({quarter_ctx.get('days_left_in_quarter', 'N/A')} days remaining)
 
-{research or "Limited Street context."}
-
-═══════════════════════════════════════════════════════════════════════════════
-COMPANY GUIDANCE:
-═══════════════════════════════════════════════════════════════════════════════
-
-{guidance_research or "Guidance not available."}
-
-═══════════════════════════════════════════════════════════════════════════════
 {novelty_constraint}
 
-YOUR TASK: Generate 4-5 GENUINELY CREATIVE alpha ideas that synthesize our data with the research.
+═══════════════════════════════════════════════════════════════════════════════
+
+YOUR TASK: Based on Crosswalk IQ's research above, generate 4-5 CREATIVE alpha ideas.
+
+IMPORTANT FRAMING:
+- Lead with the RESEARCH insights (Street view, company developments, industry trends)
+- Our proprietary data is a CONFIRMING SIGNAL, not the main thesis driver
+- Frame everything as "Crosswalk IQ's research reveals..." or "Our analysis shows..."
+- The edge is our SYNTHESIS of all sources, not just the raw data
+- Be creative: think about second-order effects, relative value, event-driven angles
+- Be specific: name counterparties, deal values, dates, price levels
+
+WHAT MAKES A GREAT IDEA:
+"Crosswalk IQ's research reveals that LUMN's subscriber decline is largely due to the 2022 
+Brightspeed divestiture, not organic churn. Our proprietary signal confirms the remaining 
+footprint is stabilizing. Street models haven't fully adjusted for the new perimeter. 
+Trade: Long LUMN calls ahead of Q1 earnings."
+
+Return JSON:
+{{
+  "crosswalk_research_summary": "<2-3 sentences: What did Crosswalk IQ's research uncover?>",
+  "street_vs_reality": "<What does Street think vs what's actually happening?>",
+  "guidance_check": "<Does management guidance support or contradict the thesis?>",
+  "risk_flags": ["<risk 1>", "<risk 2>"],
+  "confidence": <1-100>,
+  "alpha_ideas": [
+    {{
+      "thesis": "<The trade idea - lead with the research insight>",
+      "crosswalk_edge": "<What did Crosswalk IQ's research + signal reveal?>",
+      "the_real_story": "<What's actually happening that market misses?>",
+      "fundamental_angle": "<For fundamental PMs>",
+      "trade_structure": "<Specific implementation>",
+      "catalyst": "<What event proves the thesis?>",
+      "kill_switch": "<When are you wrong?>",
+      "risk_management": "<Position sizing>",
+      "confidence": <1-100>
+    }}
+  ]
+}}
+
+Write as if you're a senior analyst at Crosswalk IQ briefing hedge fund clients.
 
 THE KEY INSIGHT FRAMEWORK:
 1. Look at our data signal ({net_growth_desc})
@@ -11892,11 +11896,11 @@ RETRY: Be MORE creative and specific. Don't give generic ideas. Think about:
                 'ticker': ticker,
                 's3_key': ticker_payload.get('s3_key'),
                 'kpi_name': kpi_name,
-                'accuracy_rating': accuracy_rating,
+                'accuracy_rating': 'Crosswalk IQ Research',
                 'relevance_percentage': relevance,
-                'crosswalk_data_summary': str((parsed or {}).get('crosswalk_insight') or '').strip(),
+                'crosswalk_data_summary': str((parsed or {}).get('crosswalk_research_summary') or (parsed or {}).get('crosswalk_insight') or '').strip(),
                 'street_context': str((parsed or {}).get('street_vs_reality') or '').strip(),
-                'guidance_vs_signal': str((parsed or {}).get('guidance_alignment') or '').strip(),
+                'guidance_vs_signal': str((parsed or {}).get('guidance_check') or (parsed or {}).get('guidance_alignment') or '').strip(),
                 'world_events': str((parsed or {}).get('guidance_alignment') or '').strip(),
                 'alpha_ideas': (parsed or {}).get('alpha_ideas') or [],
                 'risk_flags': (parsed or {}).get('risk_flags') or [],
@@ -11962,7 +11966,7 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
             <div style="margin-bottom: 32px; padding: 20px; background: rgba(39,40,34,0.6); border-radius: 8px; border: 1px solid rgba(102,217,239,0.2);">
                 <h3 style="color:#66d9ef; margin: 0 0 16px 0; font-size: 1.3em; border-bottom: 1px solid rgba(102,217,239,0.3); padding-bottom: 8px;">{ticker} — {kpi}</h3>
                 <div style="margin: 12px 0; padding: 12px; background: rgba(166,226,46,0.1); border-radius: 6px; border-left: 3px solid #a6e22e;">
-                    <strong style="color:#a6e22e;">🔍 Crosswalk IQ Insight:</strong>
+                    <strong style="color:#a6e22e;">📊 Crosswalk IQ Research Summary:</strong>
                     <p style="margin: 8px 0 0 0; color: #f8f8f2;">{crosswalk_insight}</p>
                 </div>
                 <div style="margin: 12px 0;">
@@ -11983,7 +11987,7 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
             <p style="color: #888; margin: 8px 0 0 0;">For <strong style="color:#66d9ef;">{escape(username)}</strong> — Week of {escape(as_of_date)} (ET)</p>
         </div>
         <p style="color:#a6e22e; font-size: 0.95em; margin-bottom: 24px; padding: 12px; background: rgba(166,226,46,0.1); border-radius: 6px; text-align: center;">
-            <strong>Crosswalk IQ Advantage:</strong> Proprietary KPI signals + deep market research + creative synthesis = your edge.
+            <strong>Crosswalk IQ Research:</strong> Comprehensive analysis combining Street views, company guidance, industry trends, and proprietary signals — synthesized into actionable ideas.
         </p>
         {''.join(sections)}
         {cta}
