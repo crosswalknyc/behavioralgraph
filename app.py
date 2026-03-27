@@ -11730,15 +11730,20 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
     
     try:
         comprehensive_prompt = (
-            f'I am a hedge fund PM researching {ticker}. Give me a comprehensive briefing:\n\n'
+            f'I am a hedge fund PM researching {ticker}. Give me a comprehensive briefing.\n\n'
+            f'CRITICAL: Search for and cite official sources - press releases from {ticker} investor relations, '
+            f'SEC filings, and official company announcements. Check ir.lumen.com or the company IR site.\n\n'
             f'1. COMPANY OVERVIEW: What does {ticker} do? Key business segments?\n'
-            f'2. RECENT DEVELOPMENTS: Any major news in the last 6 months? M&A, divestitures, restructuring, asset sales?\n'
-            f'3. THE KEY METRIC "{kpi_name}": What is the trend? Why? Any one-time items affecting comparisons?\n'
-            f'4. STREET VIEW: What do analysts think? Bull vs bear case? Consensus rating?\n'
-            f'5. MANAGEMENT GUIDANCE: What has the company guided for this KPI and related revenue?\n'
-            f'6. UPCOMING CATALYSTS: Earnings dates, investor days, regulatory events in next 2 months?\n'
-            f'7. KEY RISKS: What could go wrong?\n\n'
-            f'Be specific with numbers, dates, deal values, counterparties. I need actionable intelligence.'
+            f'2. RECENT DIVESTITURES/M&A (VERY IMPORTANT): Has {ticker} sold any business units, divisions, '
+            f'or assets in the last 12 months? To whom? For how much? Which states/regions? When did it close? '
+            f'Look for press releases announcing completed transactions.\n'
+            f'3. THE KEY METRIC "{kpi_name}": What is the current trend? What explains any recent changes?\n'
+            f'4. STREET VIEW: Analyst consensus, price targets, key debates?\n'
+            f'5. MANAGEMENT GUIDANCE: What has company guided for this metric and revenue?\n'
+            f'6. UPCOMING CATALYSTS: Earnings dates, investor days in next 2 months?\n'
+            f'7. KEY RISKS?\n\n'
+            f'Be VERY specific with deal values, counterparties, dates, and states/regions. '
+            f'Cite the source (e.g., "per company press release dated X").'
         )
         cr = client.chat.completions.create(
             model=HF_ALPHA_RESEARCH_MODEL,
