@@ -11686,6 +11686,7 @@ def send_hf_alpha_ideas_digest(
     only_username=None,
     test_email=None,
     limit_tickers_per_recipient=None,
+    force_regenerate=False,
 ):
     run_day = requested_date or _hf_alpha_today_str()
     recipients = _get_hf_digest_recipients()
@@ -11696,7 +11697,7 @@ def send_hf_alpha_ideas_digest(
         if recipients:
             base = recipients[0]
             recipients = [{
-                'username': f"test:{base.get('username')}",
+                'username': base.get('username') or 'test-user',
                 'email': test_email.strip(),
                 'tickers': list(base.get('tickers') or []),
             }]
@@ -11717,7 +11718,7 @@ def send_hf_alpha_ideas_digest(
             ticker_rows = ticker_rows[:limit_tickers_per_recipient]
         for row in ticker_rows:
             ticker_slug = row.get('s3_key') or row.get('ticker')
-            cached = _load_hf_alpha_cache(run_day, ticker_slug)
+            cached = None if force_regenerate else _load_hf_alpha_cache(run_day, ticker_slug)
             if cached is None:
                 key = row.get('s3_key')
                 base_payload = _load_hedge_fund_daily_cache(key) if key else None
@@ -11767,6 +11768,7 @@ def send_hf_alpha_ideas_digest(
         'generated_tickers': list(generated.keys()),
         'generation_logs': per_ticker_logs,
         'test_email': test_email or None,
+        'force_regenerate': bool(force_regenerate),
     }
 
 
@@ -12346,6 +12348,7 @@ def admin_run_hf_alpha_ideas():
         run_date = (body.get('date') or '').strip() or None
         test_email = (body.get('test_email') or '').strip() or None
         limit_tickers = body.get('limit_tickers_per_recipient')
+        force_regenerate = bool(body.get('force_regenerate', False))
         try:
             limit_tickers = int(limit_tickers) if limit_tickers is not None else None
         except Exception:
@@ -12356,6 +12359,7 @@ def admin_run_hf_alpha_ideas():
             only_username=only_username,
             test_email=test_email,
             limit_tickers_per_recipient=limit_tickers,
+            force_regenerate=force_regenerate,
         )
         return jsonify(result)
     except Exception as e:
@@ -12375,6 +12379,7 @@ def cron_hf_alpha_ideas():
         dry_run = request.args.get('dry_run', '').strip().lower() in ('1', 'true', 'yes')
         test_email = (request.args.get('test_email') or '').strip() or None
         limit_tickers_raw = request.args.get('limit_tickers', '').strip()
+        force_regenerate = request.args.get('force_regenerate', '').strip().lower() in ('1', 'true', 'yes')
         try:
             limit_tickers = int(limit_tickers_raw) if limit_tickers_raw else None
         except Exception:
@@ -12386,6 +12391,7 @@ def cron_hf_alpha_ideas():
             dry_run=dry_run,
             test_email=test_email,
             limit_tickers_per_recipient=limit_tickers,
+            force_regenerate=force_regenerate,
         )
         result['timestamp_et'] = now_et.isoformat()
         return jsonify(result)
