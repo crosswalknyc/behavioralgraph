@@ -2583,6 +2583,7 @@ def create_user():
             'has_ecommerce_iq_access': req_data.get('has_ecommerce_iq_access', cd.get('has_ecommerce_iq_access', True) if cd else True),
             'has_ticket_sales_iq_access': req_data.get('has_ticket_sales_iq_access', cd.get('has_ticket_sales_iq_access', True) if cd else True),
             'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', cd.get('has_hedge_fund_iq_access', False) if cd else False),
+            'gets_hedge_fund_iq_emails': req_data.get('gets_hedge_fund_iq_emails', cd.get('gets_hedge_fund_iq_emails', False) if cd else False),
             'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
             'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
             'has_analysis_iq_access': req_data.get('has_analysis_iq_access', cd.get('has_analysis_iq_access', False) if cd else False),
@@ -2691,6 +2692,8 @@ def update_user(username):
             user['has_ticket_sales_iq_access'] = req_data['has_ticket_sales_iq_access']
         if 'has_hedge_fund_iq_access' in req_data:
             user['has_hedge_fund_iq_access'] = req_data['has_hedge_fund_iq_access']
+        if 'gets_hedge_fund_iq_emails' in req_data:
+            user['gets_hedge_fund_iq_emails'] = bool(req_data['gets_hedge_fund_iq_emails'])
         if 'hedge_fund_iq_tabs' in req_data:
             user['hedge_fund_iq_tabs'] = req_data['hedge_fund_iq_tabs']
         if 'hedge_fund_iq_tickers' in req_data:
@@ -2835,6 +2838,7 @@ def restore_defaults_all_users():
             user['has_ecommerce_iq_access'] = True
             user['has_ticket_sales_iq_access'] = True
             user['has_hedge_fund_iq_access'] = False
+            user['gets_hedge_fund_iq_emails'] = False
             user['hedge_fund_iq_tabs'] = user.get('hedge_fund_iq_tabs', [])
             user['hedge_fund_iq_tickers'] = user.get('hedge_fund_iq_tickers', [])
             user['has_analysis_iq_access'] = False
@@ -3222,6 +3226,7 @@ def api_set_company_defaults(company_name):
             'has_ecommerce_iq_access': req.get('has_ecommerce_iq_access', True),
             'has_ticket_sales_iq_access': req.get('has_ticket_sales_iq_access', True),
             'has_hedge_fund_iq_access': req.get('has_hedge_fund_iq_access', False),
+            'gets_hedge_fund_iq_emails': req.get('gets_hedge_fund_iq_emails', False),
             'has_analysis_iq_access': req.get('has_analysis_iq_access', False),
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
@@ -3275,6 +3280,7 @@ def api_reset_company_users(company_name):
                 user['has_ecommerce_iq_access'] = cd.get('has_ecommerce_iq_access', True)
                 user['has_ticket_sales_iq_access'] = cd.get('has_ticket_sales_iq_access', True)
                 user['has_hedge_fund_iq_access'] = cd.get('has_hedge_fund_iq_access', False)
+                user['gets_hedge_fund_iq_emails'] = cd.get('gets_hedge_fund_iq_emails', False)
                 user['has_analysis_iq_access'] = cd.get('has_analysis_iq_access', False)
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
@@ -3291,6 +3297,7 @@ def api_reset_company_users(company_name):
                 user['has_ecommerce_iq_access'] = True
                 user['has_ticket_sales_iq_access'] = True
                 user['has_hedge_fund_iq_access'] = False
+                user['gets_hedge_fund_iq_emails'] = False
                 user['has_analysis_iq_access'] = False
                 user['has_rankers_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
@@ -11291,7 +11298,7 @@ def _normalize_hf_alpha_ideas(raw_ideas):
 
 def _validate_hf_alpha_packet(packet):
     if not isinstance(packet, dict):
-        return False, 'Packet is not an object.'
+        return False, 'Crosswalk IQ payload is not an object.'
     required = ['ticker', 'kpi_name', 'accuracy_rating', 'relevance_percentage', 'street_context', 'world_events', 'alpha_ideas', 'risk_flags', 'confidence', 'generated_at']
     missing = [k for k in required if k not in packet]
     if missing:
@@ -11713,9 +11720,9 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
         conf = int(pkt.get('confidence') or 50)
         sections.append(f"""
             <h3 style="color:#66d9ef; margin: 20px 0 8px 0;">{ticker} — {kpi}</h3>
-            <p><strong>Street Context:</strong> {street}</p>
+            <p><strong>Crosswalk Context:</strong> {street}</p>
             <p><strong>World/Event Context:</strong> {world}</p>
-            <p><strong>Packet Confidence:</strong> {conf}%</p>
+            <p><strong>Crosswalk IQ Confidence:</strong> {conf}%</p>
             {idea_html}
         """)
     cta = f'<p><a class="email-btn" href="{escape(app_base_url)}">Open Hedge Fund IQ</a></p>'
@@ -11735,6 +11742,8 @@ def _get_hf_digest_recipients():
         role = _normalize_role(user.get('role', 'user'))
         access = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
         if not access.get('has_hedge_fund_iq_access'):
+            continue
+        if not bool(user.get('gets_hedge_fund_iq_emails', False)):
             continue
         email = (user.get('email') or '').strip()
         if not email:
