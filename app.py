@@ -11504,6 +11504,72 @@ def _user_can_access_hf_ticker(ticker_row, ticker_allow_set):
     return any(c in ticker_allow_set for c in candidates if c)
 
 
+def _compute_hf_quarter_context(ticker_payload, generation_day):
+    """Derive QTD + quarter-end urgency context from ticker payload."""
+    ctx = {
+        'quarter': 'Unknown',
+        'quarter_start': None,
+        'quarter_end': None,
+        'qtd_days_observed': 0,
+        'days_into_quarter': None,
+        'days_left_in_quarter': None,
+        'days_to_next_report_window': None,
+        'quarter_urgency': 'normal',
+    }
+    stats = ticker_payload.get('calculated_stats') or {}
+    q = str(stats.get('latest_quarter') or '').strip()
+    if not q:
+        rows = ticker_payload.get('data') or []
+        for row in reversed(rows):
+            q = str(row.get('Quarter') or '').strip()
+            if q:
+                break
+    if not q:
+        return ctx
+    ctx['quarter'] = q
+
+    m = re.match(r'^\s*Q([1-4])\s+(\d{4})\s*$', q, re.IGNORECASE)
+    if not m:
+        return ctx
+    qn = int(m.group(1))
+    yr = int(m.group(2))
+    q_starts = {1: date(yr, 1, 1), 2: date(yr, 4, 1), 3: date(yr, 7, 1), 4: date(yr, 10, 1)}
+    q_ends = {1: date(yr, 3, 31), 2: date(yr, 6, 30), 3: date(yr, 9, 30), 4: date(yr, 12, 31)}
+    q_start = q_starts[qn]
+    q_end = q_ends[qn]
+    ctx['quarter_start'] = q_start.isoformat()
+    ctx['quarter_end'] = q_end.isoformat()
+
+    try:
+        run_dt = datetime.strptime(generation_day, '%Y-%m-%d').date()
+    except Exception:
+        run_dt = datetime.now(HF_ALPHA_TZ).date()
+    days_into = (min(run_dt, q_end) - q_start).days + 1
+    total_days = (q_end - q_start).days + 1
+    days_left = max(0, (q_end - run_dt).days)
+    ctx['days_into_quarter'] = max(0, min(total_days, days_into))
+    ctx['days_left_in_quarter'] = days_left
+    # Simple earnings window heuristic: ~30 days after quarter end
+    report_window = q_end + timedelta(days=30)
+    ctx['days_to_next_report_window'] = (report_window - run_dt).days
+
+    rows = ticker_payload.get('data') or []
+    observed_dates = set()
+    for row in rows:
+        if str(row.get('Quarter') or '').strip() != q:
+            continue
+        d = str(row.get('Date') or '').strip()
+        if d:
+            observed_dates.add(d)
+    ctx['qtd_days_observed'] = len(observed_dates)
+
+    if days_left <= 14 or (ctx['days_to_next_report_window'] is not None and ctx['days_to_next_report_window'] <= 45):
+        ctx['quarter_urgency'] = 'high'
+    elif days_left <= 30:
+        ctx['quarter_urgency'] = 'elevated'
+    return ctx
+
+
 def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
     """Generate daily Hedge Fund IQ alpha ideas for one ticker."""
     generation_day = generation_day or _hf_alpha_today_str()
@@ -11513,6 +11579,7 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
     stats = ticker_payload.get('calculated_stats') or {}
     relevance = ticker_payload.get('relevance_percentage')
     accuracy_rating = stats.get('accuracy_rating') or 'Unknown'
+    quarter_ctx = _compute_hf_quarter_context(ticker_payload, generation_day)
     client = get_openai_client()
     if not client:
         fallback = _default_hf_alpha_packet(ticker_payload, generated_at, 'OpenAI unavailable in environment.')
@@ -11543,6 +11610,7 @@ KPI tracked: {kpi_name}
 Stock impact (relevance): {relevance if relevance is not None else "Unknown"}%
 Accuracy rating: {accuracy_rating}
 Recent internal KPI stats: {json.dumps(stats, default=str)}
+Quarter timing context: {json.dumps(quarter_ctx, default=str)}
 Research context:
 {research or "No external context available. Use internal KPI-only ideas and explicitly flag limited context."}
 
@@ -11571,6 +11639,9 @@ Constraints:
 - Produce 4-5 high-specificity ideas.
 - Every idea must include catalyst_window + falsification_criteria + position_risk.
 - Avoid generic language.
+- You MUST account for quarter timing:
+  - If `quarter_urgency` is `high` or `elevated`, explicitly frame ideas through quarter-to-date signal vs. imminent reporting risk.
+  - Use QTD signal persistence and days_left_in_quarter when setting catalyst_window and risk framing.
 """
     parsed = None
     changes = []
@@ -11685,11 +11756,16 @@ def send_hf_alpha_ideas_digest(
     requested_date=None,
     only_username=None,
     test_email=None,
+    test_ticker_or_s3_key=None,
     limit_tickers_per_recipient=None,
     force_regenerate=False,
 ):
     run_day = requested_date or _hf_alpha_today_str()
     recipients = _get_hf_digest_recipients()
+    generated = {}
+    per_ticker_logs = {}
+    sent = []
+    skipped = []
     if only_username:
         recipients = [r for r in recipients if r['username'] == only_username]
     if test_email:
@@ -11705,10 +11781,17 @@ def send_hf_alpha_ideas_digest(
             recipients = [{'username': 'test:user', 'email': test_email.strip(), 'tickers': _list_hf_ticker_rows()}]
         if limit_tickers_per_recipient is None:
             limit_tickers_per_recipient = 1
-    generated = {}
-    per_ticker_logs = {}
-    sent = []
-    skipped = []
+        if test_ticker_or_s3_key:
+            specific = _resolve_hf_ticker_row(test_ticker_or_s3_key)
+            if specific:
+                recipients[0]['tickers'] = [specific]
+            else:
+                skipped.append({
+                    'username': recipients[0].get('username', 'test-user'),
+                    'email': recipients[0].get('email'),
+                    'reason': f"Requested test ticker not found: {test_ticker_or_s3_key}"
+                })
+                recipients = []
     app_url = (os.environ.get('APP_BASE_URL') or os.environ.get('PUBLIC_APP_URL') or '').strip() or request.host_url.rstrip('/')
 
     for rec in recipients:
@@ -11768,6 +11851,7 @@ def send_hf_alpha_ideas_digest(
         'generated_tickers': list(generated.keys()),
         'generation_logs': per_ticker_logs,
         'test_email': test_email or None,
+        'test_ticker_or_s3_key': test_ticker_or_s3_key or None,
         'force_regenerate': bool(force_regenerate),
     }
 
@@ -12347,6 +12431,7 @@ def admin_run_hf_alpha_ideas():
         only_username = (body.get('username') or '').strip() or None
         run_date = (body.get('date') or '').strip() or None
         test_email = (body.get('test_email') or '').strip() or None
+        test_ticker_or_s3_key = (body.get('test_ticker_or_s3_key') or '').strip() or None
         limit_tickers = body.get('limit_tickers_per_recipient')
         force_regenerate = bool(body.get('force_regenerate', False))
         try:
@@ -12358,6 +12443,7 @@ def admin_run_hf_alpha_ideas():
             requested_date=run_date,
             only_username=only_username,
             test_email=test_email,
+            test_ticker_or_s3_key=test_ticker_or_s3_key,
             limit_tickers_per_recipient=limit_tickers,
             force_regenerate=force_regenerate,
         )
@@ -12378,6 +12464,7 @@ def cron_hf_alpha_ideas():
         force = request.args.get('force', '').strip().lower() in ('1', 'true', 'yes')
         dry_run = request.args.get('dry_run', '').strip().lower() in ('1', 'true', 'yes')
         test_email = (request.args.get('test_email') or '').strip() or None
+        test_ticker_or_s3_key = (request.args.get('test_ticker_or_s3_key') or '').strip() or None
         limit_tickers_raw = request.args.get('limit_tickers', '').strip()
         force_regenerate = request.args.get('force_regenerate', '').strip().lower() in ('1', 'true', 'yes')
         try:
@@ -12390,6 +12477,7 @@ def cron_hf_alpha_ideas():
         result = send_hf_alpha_ideas_digest(
             dry_run=dry_run,
             test_email=test_email,
+            test_ticker_or_s3_key=test_ticker_or_s3_key,
             limit_tickers_per_recipient=limit_tickers,
             force_regenerate=force_regenerate,
         )
