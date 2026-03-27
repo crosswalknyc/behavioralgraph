@@ -11821,7 +11821,7 @@ Return JSON:
 Write as if you're a senior analyst at Crosswalk IQ briefing hedge fund clients.
 
 THE KEY INSIGHT FRAMEWORK:
-1. Look at our data signal ({net_growth_desc})
+1. Look at our data signal ({signal_direction})
 2. Understand WHY from the research (is it organic decline? divestiture? strategic shift?)
 3. Ask: "What does this REALLY mean for the stock that the Street hasn't figured out?"
 4. Generate a CREATIVE trade based on that insight
