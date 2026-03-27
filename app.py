@@ -11328,10 +11328,17 @@ def _normalize_hf_alpha_ideas(raw_ideas):
         thesis = str(item.get('thesis') or '').strip()
         if not thesis:
             continue
+        crosswalk_edge = str(item.get('crosswalk_edge') or '').strip()
+        fundamental_strategy = str(item.get('fundamental_strategy') or '').strip()
+        what_consensus_misses = str(item.get('what_consensus_misses') or '').strip()
+        if not crosswalk_edge and what_consensus_misses:
+            crosswalk_edge = what_consensus_misses
         normalized.append({
             'rank': idx + 1,
             'thesis': thesis,
-            'what_consensus_misses': str(item.get('what_consensus_misses') or '').strip(),
+            'crosswalk_edge': crosswalk_edge,
+            'fundamental_strategy': fundamental_strategy,
+            'what_consensus_misses': what_consensus_misses,
             'signal_interpretation': str(item.get('signal_interpretation') or '').strip(),
             'horizon': str(item.get('horizon') or 'short').strip() or 'short',
             'catalyst_window': str(item.get('catalyst_window') or '').strip(),
