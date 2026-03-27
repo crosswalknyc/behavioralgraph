@@ -11739,6 +11739,7 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
         current_val = row.get('Total Consumers') or row.get('Current Consumers')
         if current_val:
             break
+    current_val_str = f"{current_val:,.0f}" if current_val else "N/A"
     signal_direction = "unclear"
     if sec_actuals:
         recent = list(sec_actuals.values())[-3:] if len(sec_actuals) >= 3 else list(sec_actuals.values())
@@ -11835,7 +11836,7 @@ CROSSWALK PROPRIETARY SIGNAL (confirming indicator):
 - KPI tracked: {kpi_name}
 - Current signal direction: {signal_direction}
 - {prior_actuals_str or "No prior actuals available"}
-- Current panel reading: {f"{current_val:,.0f}" if current_val else "N/A"}
+- Current panel reading: {current_val_str}
 - Quarter: {quarter_ctx.get('quarter', 'N/A')} ({quarter_ctx.get('days_left_in_quarter', 'N/A')} days remaining)
 
 {novelty_constraint}
