@@ -25,8 +25,10 @@ import io
 import gzip
 import hashlib
 import secrets
+from html import escape
 from datetime import datetime, timedelta, date
 from functools import wraps
+from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session
 from flask_cors import CORS
 
@@ -11117,6 +11119,12 @@ def get_ticket_sales_tracker_data(s3_key):
 # ============================================================================
 
 HEDGE_FUND_CACHE_PREFIX = 'system/hedge_fund_daily_cache/'
+HF_ALPHA_IDEAS_PREFIX = 'system/hedge_fund_alpha_ideas/'
+HF_ALPHA_MIN_IDEAS = 3
+HF_ALPHA_DEFAULT_IDEAS = 4
+HF_ALPHA_TZ = ZoneInfo('America/New_York')
+HF_ALPHA_RESEARCH_MODEL = os.environ.get('HF_ALPHA_RESEARCH_MODEL', 'gpt-4o-search-preview')
+HF_ALPHA_SYNTH_MODEL = os.environ.get('HF_ALPHA_SYNTH_MODEL', 'gpt-4o')
 
 def _hedge_fund_cache_key(s3_key_or_slug):
     """Create a safe S3 key from s3_key or slug (no slashes)."""
@@ -11171,6 +11179,595 @@ def _save_hedge_fund_daily_cache(cache_slug, data):
         print(f"💾 Hedge Fund daily cache SAVED: {cache_slug}")
     except Exception as e:
         print(f"⚠️ Hedge Fund cache write error: {e}")
+
+
+def _hf_alpha_today_str():
+    return datetime.now(HF_ALPHA_TZ).strftime('%Y-%m-%d')
+
+
+def _hf_alpha_slug(value):
+    return str(value or '').strip().replace('/', '__').replace(' ', '_')
+
+
+def _hf_alpha_s3_key(day_str, ticker_slug):
+    return f"{HF_ALPHA_IDEAS_PREFIX}{day_str}/{_hf_alpha_slug(ticker_slug)}.json"
+
+
+def _load_hf_alpha_cache(day_str, ticker_slug):
+    try:
+        key = _hf_alpha_s3_key(day_str, ticker_slug)
+        resp = s3_client.get_object(Bucket=METADATA_BUCKET, Key=key)
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+        return payload.get('data')
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"⚠️ HF Alpha cache read error for {ticker_slug}: {e}")
+        return None
+
+
+def _save_hf_alpha_cache(day_str, ticker_slug, payload):
+    try:
+        key = _hf_alpha_s3_key(day_str, ticker_slug)
+        wrapper = {
+            'cached_date': day_str,
+            'cached_at': datetime.now(HF_ALPHA_TZ).isoformat(),
+            'data': payload
+        }
+        s3_client.put_object(
+            Bucket=METADATA_BUCKET,
+            Key=key,
+            Body=json.dumps(wrapper, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except Exception as e:
+        print(f"⚠️ HF Alpha cache write error for {ticker_slug}: {e}")
+        return False
+
+
+def _load_latest_hf_alpha_cache(ticker_slug, max_lookback_days=7):
+    today = datetime.now(HF_ALPHA_TZ).date()
+    for i in range(max_lookback_days + 1):
+        day_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
+        cached = _load_hf_alpha_cache(day_str, ticker_slug)
+        if cached:
+            return cached, day_str
+    return None, None
+
+
+def _extract_json_object(text):
+    text = (text or '').strip()
+    if not text:
+        return None
+    # Strip markdown fences if present
+    if '```json' in text:
+        try:
+            text = text.split('```json', 1)[1].split('```', 1)[0].strip()
+        except Exception:
+            pass
+    elif '```' in text:
+        try:
+            text = text.split('```', 1)[1].split('```', 1)[0].strip()
+        except Exception:
+            pass
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    start = text.find('{')
+    end = text.rfind('}')
+    if start >= 0 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except Exception:
+            return None
+    return None
+
+
+def _normalize_hf_alpha_ideas(raw_ideas):
+    ideas = raw_ideas if isinstance(raw_ideas, list) else []
+    normalized = []
+    for idx, item in enumerate(ideas):
+        if not isinstance(item, dict):
+            continue
+        thesis = str(item.get('thesis') or '').strip()
+        if not thesis:
+            continue
+        normalized.append({
+            'rank': idx + 1,
+            'thesis': thesis,
+            'what_consensus_misses': str(item.get('what_consensus_misses') or '').strip(),
+            'signal_interpretation': str(item.get('signal_interpretation') or '').strip(),
+            'horizon': str(item.get('horizon') or 'short').strip() or 'short',
+            'catalyst_window': str(item.get('catalyst_window') or '').strip(),
+            'falsification_criteria': str(item.get('falsification_criteria') or '').strip(),
+            'position_risk': str(item.get('position_risk') or '').strip(),
+            'confidence': max(1, min(100, int(float(item.get('confidence') or 50)))),
+            'evidence_refs': [str(x).strip() for x in (item.get('evidence_refs') or []) if str(x).strip()][:4],
+        })
+    return normalized
+
+
+def _validate_hf_alpha_packet(packet):
+    if not isinstance(packet, dict):
+        return False, 'Packet is not an object.'
+    required = ['ticker', 'kpi_name', 'accuracy_rating', 'relevance_percentage', 'street_context', 'world_events', 'alpha_ideas', 'risk_flags', 'confidence', 'generated_at']
+    missing = [k for k in required if k not in packet]
+    if missing:
+        return False, f"Missing fields: {', '.join(missing)}"
+    ideas = _normalize_hf_alpha_ideas(packet.get('alpha_ideas'))
+    if len(ideas) < HF_ALPHA_MIN_IDEAS:
+        return False, f'Need at least {HF_ALPHA_MIN_IDEAS} ideas.'
+    packet['alpha_ideas'] = ideas
+    packet['risk_flags'] = [str(x).strip() for x in (packet.get('risk_flags') or []) if str(x).strip()][:8]
+    packet['confidence'] = max(1, min(100, int(float(packet.get('confidence') or 50))))
+    return True, ''
+
+
+def _default_hf_alpha_packet(ticker_payload, generated_at, note):
+    ticker = ticker_payload.get('ticker') or ticker_payload.get('original_ticker') or 'UNKNOWN'
+    kpi = ticker_payload.get('kpi') or 'Customers'
+    impact = ticker_payload.get('relevance_percentage')
+    stats = ticker_payload.get('calculated_stats') or {}
+    trend = stats.get('projected_growth_pct')
+    context = f"{ticker} {kpi} trend currently tracks at {trend if trend is not None else 'N/A'}% projected growth."
+    fallback_ideas = [
+        {
+            'rank': 1,
+            'thesis': f'Trade the second-derivative inflection in {kpi} for {ticker}.',
+            'what_consensus_misses': 'Consensus often reacts to level changes, not slope changes, in alternative KPI trajectories.',
+            'signal_interpretation': context,
+            'horizon': 'short',
+            'catalyst_window': 'next earnings update / management commentary',
+            'falsification_criteria': 'If weekly KPI delta reverts and guidance tone improves against signal direction.',
+            'position_risk': 'Use tight event-driven sizing; trim before macro headline risk.',
+            'confidence': 56,
+            'evidence_refs': ['Internal KPI trajectory'],
+        },
+        {
+            'rank': 2,
+            'thesis': f'Use {kpi} surprise direction as a cross-sectional relative value signal.',
+            'what_consensus_misses': 'Street focus remains headline EPS while KPI drift pre-signals revisions.',
+            'signal_interpretation': f'Stock impact weighting is {impact if impact is not None else "N/A"}%.',
+            'horizon': 'medium',
+            'catalyst_window': 'pre-earnings estimate revision window',
+            'falsification_criteria': 'No analyst revision activity despite sustained KPI trend.',
+            'position_risk': 'Pair against closest peer to isolate idiosyncratic alpha.',
+            'confidence': 52,
+            'evidence_refs': ['Internal KPI + stock-impact mapping'],
+        },
+        {
+            'rank': 3,
+            'thesis': 'Treat this output as limited-context and confirm with fresh external catalysts.',
+            'what_consensus_misses': 'Internal data can still flag directionality before public narratives form.',
+            'signal_interpretation': note,
+            'horizon': 'short',
+            'catalyst_window': 'next 1-2 weeks',
+            'falsification_criteria': 'External newsflow directly invalidates KPI narrative.',
+            'position_risk': 'Reduce gross until external confirmation is available.',
+            'confidence': 45,
+            'evidence_refs': ['Internal-only fallback'],
+        }
+    ]
+    return {
+        'ticker': ticker,
+        's3_key': ticker_payload.get('s3_key'),
+        'kpi_name': kpi,
+        'accuracy_rating': (stats.get('accuracy_rating') if isinstance(stats, dict) else None) or 'Unknown',
+        'relevance_percentage': impact,
+        'street_context': 'Limited context available from external sources in this run.',
+        'world_events': note,
+        'alpha_ideas': fallback_ideas,
+        'risk_flags': ['Limited external context'],
+        'confidence': 48,
+        'generated_at': generated_at,
+    }
+
+
+def _fetch_hf_ticker_payload_from_s3(s3_key):
+    if not hedge_fund_s3_client:
+        raise RuntimeError('Hedge Fund S3 not configured')
+    response = hedge_fund_s3_client.get_object(Bucket=HEDGE_FUND_S3_BUCKET, Key=s3_key)
+    csv_content = response['Body'].read().decode('utf-8')
+    df = pd.read_csv(io.StringIO(csv_content)).fillna(0)
+    col_mapping = {}
+    for col in df.columns:
+        c = col.lower().strip()
+        if 'consumer' in c or ('total' in c and 'sub' not in c and 'cancel' not in c):
+            col_mapping['consumers'] = col
+        elif 'sub' in c and 'cancel' not in c:
+            col_mapping['subs'] = col
+        elif 'cancel' in c or 'churn' in c:
+            col_mapping['cancels'] = col
+        elif 'date' in c:
+            col_mapping['date'] = col
+        elif 'quarter' in c:
+            col_mapping['quarter'] = col
+    if 'consumers' in col_mapping:
+        df.rename(columns={col_mapping['consumers']: 'Total Consumers'}, inplace=True)
+    if 'subs' in col_mapping:
+        df.rename(columns={col_mapping['subs']: 'Total Subs'}, inplace=True)
+    if 'cancels' in col_mapping:
+        df.rename(columns={col_mapping['cancels']: 'Total Cancels'}, inplace=True)
+    if 'date' in col_mapping:
+        df.rename(columns={col_mapping['date']: 'Date'}, inplace=True)
+    if 'quarter' in col_mapping:
+        df.rename(columns={col_mapping['quarter']: 'Quarter'}, inplace=True)
+    filename = s3_key.replace('.csv', '').replace('_Daily', '')
+    parts = filename.split('_')
+    ticker_symbol = parts[0].upper() if parts else filename.upper()
+    if len(parts) >= 2 and parts[1].lower() in ['phone', 'broadband']:
+        ticker_symbol = (parts[0] + parts[1]).upper()
+        kpi_parts = parts[2:] if len(parts) > 2 else []
+    else:
+        kpi_parts = parts[1:] if len(parts) > 1 else []
+    default_kpi = DEFAULT_TICKER_KPIS.get(ticker_symbol) or (' '.join(kpi_parts).title() if kpi_parts else 'Customers')
+    metadata = load_ticker_metadata().get(s3_key, {})
+    kpi = metadata.get('kpi', default_kpi)
+    display_name = metadata.get('display_name', ticker_symbol)
+    relevance_percentage = metadata.get('relevance_percentage')
+    data_rows = df.to_dict('records')
+    latest = data_rows[-1] if data_rows else {}
+    calculated_stats = {
+        'current_consumers': latest.get('Total Consumers', 0) or 0,
+        'total_subs': int(sum((r.get('Total Subs', 0) or 0) for r in data_rows)),
+        'total_cancels': int(sum((r.get('Total Cancels', 0) or 0) for r in data_rows)),
+        'projected_growth_pct': 0,
+        'accuracy_rating': None,
+        'latest_date': latest.get('Date', 'N/A'),
+        'latest_quarter': latest.get('Quarter', 'N/A'),
+    }
+    return {
+        'success': True,
+        'data': data_rows,
+        'ticker': ticker_symbol,
+        'display_name': display_name,
+        'kpi': kpi,
+        'relevance_percentage': relevance_percentage,
+        's3_key': s3_key,
+        'calculated_stats': calculated_stats,
+    }
+
+
+def _list_hf_ticker_rows():
+    if not hedge_fund_s3_client:
+        return []
+    metadata = load_ticker_metadata()
+    rows = []
+    paginator = hedge_fund_s3_client.get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=HEDGE_FUND_S3_BUCKET):
+        for obj in page.get('Contents', []):
+            key = obj.get('Key', '')
+            if not key.endswith('.csv'):
+                continue
+            base = key.replace('.csv', '').replace('_Daily', '')
+            parts = base.split('_')
+            ticker_symbol = parts[0].upper() if parts else base.upper()
+            if len(parts) >= 2 and parts[1].lower() in ['phone', 'broadband']:
+                ticker_symbol = (parts[0] + parts[1]).upper()
+                kpi_parts = parts[2:] if len(parts) > 2 else []
+            else:
+                kpi_parts = parts[1:] if len(parts) > 1 else []
+            default_kpi = DEFAULT_TICKER_KPIS.get(ticker_symbol) or (' '.join(kpi_parts).title() if kpi_parts else 'Customers')
+            meta = metadata.get(key, {})
+            rows.append({
+                'ticker': (meta.get('ticker_symbol') or ticker_symbol).strip() or ticker_symbol,
+                'original_ticker': ticker_symbol,
+                'display_name': meta.get('display_name', ticker_symbol),
+                'kpi': meta.get('kpi', default_kpi),
+                'relevance_percentage': meta.get('relevance_percentage'),
+                's3_key': key,
+            })
+    return rows
+
+
+def _resolve_hf_ticker_row(identifier):
+    ident = (identifier or '').strip()
+    if not ident:
+        return None
+    rows = _list_hf_ticker_rows()
+    if ident.endswith('.csv'):
+        for row in rows:
+            if row.get('s3_key') == ident:
+                return row
+    key = ident.upper()
+    for row in rows:
+        candidates = {
+            str(row.get('ticker') or '').upper(),
+            str(row.get('original_ticker') or '').upper(),
+            str(row.get('s3_key') or '').upper(),
+            str((row.get('s3_key') or '').split('/')[-1] or '').upper(),
+        }
+        if key in candidates:
+            return row
+    return None
+
+
+def _resolve_hf_access_ticker_set(user_access):
+    tokens = user_access.get('hedge_fund_iq_tickers', ['*']) or ['*']
+    normalized = {str(t).strip().upper() for t in tokens if str(t).strip()}
+    if '*' in normalized:
+        return None
+    return normalized
+
+
+def _user_can_access_hf_ticker(ticker_row, ticker_allow_set):
+    if ticker_allow_set is None:
+        return True
+    candidates = {
+        str(ticker_row.get('ticker') or '').upper(),
+        str(ticker_row.get('original_ticker') or '').upper(),
+        str(ticker_row.get('s3_key') or '').upper(),
+        str((ticker_row.get('s3_key') or '').split('/')[-1] or '').upper(),
+    }
+    return any(c in ticker_allow_set for c in candidates if c)
+
+
+def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
+    """Generate daily Hedge Fund IQ alpha ideas for one ticker."""
+    generation_day = generation_day or _hf_alpha_today_str()
+    generated_at = datetime.now(HF_ALPHA_TZ).isoformat()
+    ticker = ticker_payload.get('ticker') or ticker_payload.get('original_ticker') or 'UNKNOWN'
+    kpi_name = ticker_payload.get('kpi') or 'Customers'
+    stats = ticker_payload.get('calculated_stats') or {}
+    relevance = ticker_payload.get('relevance_percentage')
+    accuracy_rating = stats.get('accuracy_rating') or 'Unknown'
+    client = get_openai_client()
+    if not client:
+        fallback = _default_hf_alpha_packet(ticker_payload, generated_at, 'OpenAI unavailable in environment.')
+        return fallback, ['OpenAI not configured; used internal fallback ideas.']
+
+    research = ''
+    research_warning = ''
+    try:
+        research_prompt = (
+            f'Provide concise buy-side context for {ticker} around KPI "{kpi_name}". '
+            f'Include: current Street narrative, top debates, and relevant macro/company events that may shift expectations over the next 1-8 weeks. '
+            f'Use concrete source-backed statements.'
+        )
+        rr = client.chat.completions.create(
+            model=HF_ALPHA_RESEARCH_MODEL,
+            messages=[{"role": "user", "content": research_prompt}],
+            web_search_options={"search_context_size": "medium"},
+        )
+        research = (rr.choices[0].message.content or '').strip() if rr.choices else ''
+    except Exception as e:
+        research_warning = f'External research unavailable ({e}).'
+
+    synthesis_base_prompt = f"""
+You are producing elite hedge-fund alpha ideas for sophisticated PMs.
+
+Ticker: {ticker}
+KPI tracked: {kpi_name}
+Stock impact (relevance): {relevance if relevance is not None else "Unknown"}%
+Accuracy rating: {accuracy_rating}
+Recent internal KPI stats: {json.dumps(stats, default=str)}
+Research context:
+{research or "No external context available. Use internal KPI-only ideas and explicitly flag limited context."}
+
+Return ONLY JSON with this exact schema:
+{{
+  "street_context": "<2-4 sentence setup>",
+  "world_events": "<2-4 sentence macro/company event setup>",
+  "risk_flags": ["<risk 1>", "<risk 2>"],
+  "confidence": <1-100>,
+  "alpha_ideas": [
+    {{
+      "thesis": "<concrete trade hypothesis>",
+      "what_consensus_misses": "<what street likely misses>",
+      "signal_interpretation": "<how this KPI signal maps to earnings/revisions/positioning>",
+      "horizon": "short|medium",
+      "catalyst_window": "<timing>",
+      "falsification_criteria": "<what invalidates idea>",
+      "position_risk": "<position sizing and risk framing>",
+      "confidence": <1-100>,
+      "evidence_refs": ["<source or evidence note>", "<source or evidence note>"]
+    }}
+  ]
+}}
+
+Constraints:
+- Produce 4-5 high-specificity ideas.
+- Every idea must include catalyst_window + falsification_criteria + position_risk.
+- Avoid generic language.
+"""
+    parsed = None
+    changes = []
+    for attempt in range(2):
+        try:
+            retry_suffix = ""
+            if attempt == 1:
+                retry_suffix = "\nSTRICT RETRY: previous output failed quality checks; increase specificity, include explicit evidence refs, and provide at least 4 ideas."
+            resp = client.chat.completions.create(
+                model=HF_ALPHA_SYNTH_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a top-tier cross-asset PM + data scientist. Respond with strict JSON only."},
+                    {"role": "user", "content": synthesis_base_prompt + retry_suffix},
+                ],
+                temperature=0.35 if attempt == 0 else 0.2,
+                max_tokens=2200,
+            )
+            parsed = _extract_json_object(resp.choices[0].message.content if resp.choices else '')
+            packet = {
+                'ticker': ticker,
+                's3_key': ticker_payload.get('s3_key'),
+                'kpi_name': kpi_name,
+                'accuracy_rating': accuracy_rating,
+                'relevance_percentage': relevance,
+                'street_context': str((parsed or {}).get('street_context') or '').strip(),
+                'world_events': str((parsed or {}).get('world_events') or '').strip(),
+                'alpha_ideas': (parsed or {}).get('alpha_ideas') or [],
+                'risk_flags': (parsed or {}).get('risk_flags') or [],
+                'confidence': (parsed or {}).get('confidence') or 55,
+                'generated_at': generated_at,
+            }
+            ok, reason = _validate_hf_alpha_packet(packet)
+            if ok:
+                if research_warning:
+                    packet['risk_flags'] = list(packet.get('risk_flags') or []) + ['Limited external context']
+                    changes.append(research_warning)
+                return packet, changes
+            changes.append(f'Quality guardrail triggered: {reason}')
+        except Exception as e:
+            changes.append(f'Alpha synthesis attempt {attempt + 1} failed: {e}')
+
+    fallback_note = research_warning or 'Model output failed quality checks.'
+    fallback = _default_hf_alpha_packet(ticker_payload, generated_at, fallback_note)
+    return fallback, changes + [f'Fallback applied: {fallback_note}']
+
+
+def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url):
+    sections = []
+    for pkt in alpha_packets:
+        ticker = escape(str(pkt.get('ticker') or 'UNKNOWN'))
+        kpi = escape(str(pkt.get('kpi_name') or 'KPI'))
+        ideas = pkt.get('alpha_ideas') or []
+        idea_html = ""
+        for i, idea in enumerate(ideas[:3], start=1):
+            thesis = escape(str(idea.get('thesis') or ''))
+            catalyst = escape(str(idea.get('catalyst_window') or ''))
+            falsification = escape(str(idea.get('falsification_criteria') or ''))
+            risk = escape(str(idea.get('position_risk') or ''))
+            idea_html += f"""
+                <div class="email-card" style="margin: 10px 0;">
+                    <div class="email-card-title">{i}. {thesis}</div>
+                    <p><strong>Catalyst:</strong> {catalyst}</p>
+                    <p><strong>Falsification:</strong> {falsification}</p>
+                    <p><strong>Risk Framing:</strong> {risk}</p>
+                </div>
+            """
+        street = escape(str(pkt.get('street_context') or ''))
+        world = escape(str(pkt.get('world_events') or ''))
+        conf = int(pkt.get('confidence') or 50)
+        sections.append(f"""
+            <h3 style="color:#66d9ef; margin: 20px 0 8px 0;">{ticker} — {kpi}</h3>
+            <p><strong>Street Context:</strong> {street}</p>
+            <p><strong>World/Event Context:</strong> {world}</p>
+            <p><strong>Packet Confidence:</strong> {conf}%</p>
+            {idea_html}
+        """)
+    cta = f'<p><a class="email-btn" href="{escape(app_base_url)}">Open Hedge Fund IQ</a></p>'
+    body = f"""
+        <p>Daily Alpha Ideas for <strong>{escape(username)}</strong> — {escape(as_of_date)} (ET).</p>
+        {''.join(sections)}
+        {cta}
+    """
+    return _wrap_email_html(body, title="Hedge Fund IQ — Alpha Ideas")
+
+
+def _get_hf_digest_recipients():
+    users_data = load_users().get('users', {})
+    all_tickers = _list_hf_ticker_rows()
+    recipients = []
+    for username, user in users_data.items():
+        role = _normalize_role(user.get('role', 'user'))
+        access = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+        if not access.get('has_hedge_fund_iq_access'):
+            continue
+        email = (user.get('email') or '').strip()
+        if not email:
+            continue
+        allow_set = _resolve_hf_access_ticker_set(access)
+        ticker_rows = [row for row in all_tickers if _user_can_access_hf_ticker(row, allow_set)]
+        if not ticker_rows:
+            continue
+        recipients.append({
+            'username': username,
+            'email': email,
+            'tickers': ticker_rows
+        })
+    return recipients
+
+
+def send_hf_alpha_ideas_digest(
+    dry_run=False,
+    requested_date=None,
+    only_username=None,
+    test_email=None,
+    limit_tickers_per_recipient=None,
+):
+    run_day = requested_date or _hf_alpha_today_str()
+    recipients = _get_hf_digest_recipients()
+    if only_username:
+        recipients = [r for r in recipients if r['username'] == only_username]
+    if test_email:
+        # Single-recipient QA mode: route all sends to one email and cap payload size.
+        if recipients:
+            base = recipients[0]
+            recipients = [{
+                'username': f"test:{base.get('username')}",
+                'email': test_email.strip(),
+                'tickers': list(base.get('tickers') or []),
+            }]
+        else:
+            recipients = [{'username': 'test:user', 'email': test_email.strip(), 'tickers': _list_hf_ticker_rows()}]
+        if limit_tickers_per_recipient is None:
+            limit_tickers_per_recipient = 1
+    generated = {}
+    per_ticker_logs = {}
+    sent = []
+    skipped = []
+    app_url = (os.environ.get('APP_BASE_URL') or os.environ.get('PUBLIC_APP_URL') or '').strip() or request.host_url.rstrip('/')
+
+    for rec in recipients:
+        packets = []
+        ticker_rows = list(rec['tickers'] or [])
+        if isinstance(limit_tickers_per_recipient, int) and limit_tickers_per_recipient > 0:
+            ticker_rows = ticker_rows[:limit_tickers_per_recipient]
+        for row in ticker_rows:
+            ticker_slug = row.get('s3_key') or row.get('ticker')
+            cached = _load_hf_alpha_cache(run_day, ticker_slug)
+            if cached is None:
+                key = row.get('s3_key')
+                base_payload = _load_hedge_fund_daily_cache(key) if key else None
+                if not base_payload:
+                    try:
+                        base_payload = _fetch_hf_ticker_payload_from_s3(key)
+                        _save_hedge_fund_daily_cache(key, base_payload)
+                    except Exception as e:
+                        fallback = _default_hf_alpha_packet(row, datetime.now(HF_ALPHA_TZ).isoformat(), f'Failed loading ticker source data: {e}')
+                        _save_hf_alpha_cache(run_day, ticker_slug, fallback)
+                        cached = fallback
+                if cached is None:
+                    payload_for_ai = dict(base_payload or {})
+                    payload_for_ai.setdefault('ticker', row.get('ticker'))
+                    payload_for_ai.setdefault('original_ticker', row.get('original_ticker'))
+                    payload_for_ai.setdefault('kpi', row.get('kpi'))
+                    payload_for_ai.setdefault('s3_key', row.get('s3_key'))
+                    payload_for_ai.setdefault('relevance_percentage', row.get('relevance_percentage'))
+                    packet, logs = generate_hf_alpha_ideas_for_ticker(payload_for_ai, generation_day=run_day)
+                    _save_hf_alpha_cache(run_day, ticker_slug, packet)
+                    generated[str(ticker_slug)] = packet
+                    per_ticker_logs[str(ticker_slug)] = logs
+                    cached = packet
+            packets.append(cached)
+
+        if not packets:
+            skipped.append({'username': rec['username'], 'reason': 'No entitled ticker ideas'})
+            continue
+        html_content = _build_hf_alpha_email_html(rec['username'], packets, run_day, app_url)
+        subject = f"Hedge Fund IQ Alpha Ideas — {run_day}"
+        text = f"Hedge Fund IQ Alpha Ideas ({run_day}) for {rec['username']}. Open dashboard: {app_url}"
+        if dry_run:
+            sent.append({'username': rec['username'], 'email': rec['email'], 'dry_run': True, 'ticker_count': len(packets)})
+            continue
+        ok, msg = send_email_via_gmail(rec['email'], subject, html_content, text)
+        if ok:
+            sent.append({'username': rec['username'], 'email': rec['email'], 'ticker_count': len(packets)})
+        else:
+            skipped.append({'username': rec['username'], 'email': rec['email'], 'reason': msg})
+
+    return {
+        'success': True,
+        'date': run_day,
+        'recipients_considered': len(recipients),
+        'emails_sent': sent,
+        'emails_skipped': skipped,
+        'generated_tickers': list(generated.keys()),
+        'generation_logs': per_ticker_logs,
+        'test_email': test_email or None,
+    }
 
 
 # ============================================================================
@@ -11686,6 +12283,115 @@ def get_hedge_fund_ticker_data(s3_key):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
+
+
+@app.route('/api/hedge-fund-iq/alpha-ideas/<path:ticker_or_s3_key>', methods=['GET'])
+@requires_auth
+def get_hedge_fund_alpha_ideas(ticker_or_s3_key):
+    """Return latest daily alpha ideas packet for a ticker; generate on-demand if cache missing."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+        role = _normalize_role(user.get('role', 'user'))
+        access = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+        if not access.get('has_hedge_fund_iq_access'):
+            return jsonify({'success': False, 'error': 'Hedge Fund IQ access denied'}), 403
+
+        ticker_row = _resolve_hf_ticker_row(ticker_or_s3_key)
+        if not ticker_row:
+            return jsonify({'success': False, 'error': 'Ticker not found'}), 404
+
+        allow_set = _resolve_hf_access_ticker_set(access)
+        if not _user_can_access_hf_ticker(ticker_row, allow_set):
+            return jsonify({'success': False, 'error': 'Ticker access denied'}), 403
+
+        refresh = request.args.get('refresh', '').strip().lower() in ('1', 'true', 'yes')
+        day = _hf_alpha_today_str()
+        ticker_slug = ticker_row.get('s3_key') or ticker_row.get('ticker')
+        packet = None if refresh else _load_hf_alpha_cache(day, ticker_slug)
+        source = 'cache'
+        if packet is None:
+            base_payload = _load_hedge_fund_daily_cache(ticker_row.get('s3_key'))
+            if not base_payload:
+                base_payload = _fetch_hf_ticker_payload_from_s3(ticker_row.get('s3_key'))
+            base_payload.setdefault('ticker', ticker_row.get('ticker'))
+            base_payload.setdefault('original_ticker', ticker_row.get('original_ticker'))
+            base_payload.setdefault('kpi', ticker_row.get('kpi'))
+            base_payload.setdefault('s3_key', ticker_row.get('s3_key'))
+            base_payload.setdefault('relevance_percentage', ticker_row.get('relevance_percentage'))
+            packet, logs = generate_hf_alpha_ideas_for_ticker(base_payload, generation_day=day)
+            _save_hf_alpha_cache(day, ticker_slug, packet)
+            source = 'generated'
+        else:
+            logs = []
+
+        return jsonify({'success': True, 'date': day, 'source': source, 'alpha': packet, 'logs': logs})
+    except Exception as e:
+        print(f"❌ Error loading Hedge Fund alpha ideas: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/hf-alpha-ideas/run', methods=['POST'])
+@requires_admin
+def admin_run_hf_alpha_ideas():
+    """Manual admin trigger for HF Alpha ideas generation/digest (QA + backfill)."""
+    try:
+        body = request.get_json() or {}
+        dry_run = bool(body.get('dry_run', True))
+        send_email = bool(body.get('send_email', False))
+        only_username = (body.get('username') or '').strip() or None
+        run_date = (body.get('date') or '').strip() or None
+        test_email = (body.get('test_email') or '').strip() or None
+        limit_tickers = body.get('limit_tickers_per_recipient')
+        try:
+            limit_tickers = int(limit_tickers) if limit_tickers is not None else None
+        except Exception:
+            limit_tickers = None
+        result = send_hf_alpha_ideas_digest(
+            dry_run=(dry_run or not send_email),
+            requested_date=run_date,
+            only_username=only_username,
+            test_email=test_email,
+            limit_tickers_per_recipient=limit_tickers,
+        )
+        return jsonify(result)
+    except Exception as e:
+        print(f"❌ Error in admin HF alpha trigger: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cron/hf-alpha-ideas', methods=['GET', 'POST'])
+def cron_hf_alpha_ideas():
+    """Weekday cron endpoint for Hedge Fund IQ alpha generation + digest send."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    expected = os.environ.get('CRON_SECRET', '')
+    if not expected or secret != expected:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    try:
+        force = request.args.get('force', '').strip().lower() in ('1', 'true', 'yes')
+        dry_run = request.args.get('dry_run', '').strip().lower() in ('1', 'true', 'yes')
+        test_email = (request.args.get('test_email') or '').strip() or None
+        limit_tickers_raw = request.args.get('limit_tickers', '').strip()
+        try:
+            limit_tickers = int(limit_tickers_raw) if limit_tickers_raw else None
+        except Exception:
+            limit_tickers = None
+        now_et = datetime.now(HF_ALPHA_TZ)
+        if now_et.weekday() >= 5 and not force:
+            return jsonify({'success': True, 'skipped': True, 'reason': 'Weekend (ET)', 'timestamp_et': now_et.isoformat()})
+        result = send_hf_alpha_ideas_digest(
+            dry_run=dry_run,
+            test_email=test_email,
+            limit_tickers_per_recipient=limit_tickers,
+        )
+        result['timestamp_et'] = now_et.isoformat()
+        return jsonify(result)
+    except Exception as e:
+        print(f"❌ Error in HF alpha cron: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/hedge-fund-iq/metadata', methods=['GET', 'POST'])

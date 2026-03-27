@@ -16098,6 +16098,7 @@
                                     <button class="tab-btn" onclick="showTickerTab('daily')">📋 Daily Metrics</button>
                                     <button class="tab-btn" onclick="showTickerTab('historic')">📅 Historic Performance</button>
                                     <button class="tab-btn" onclick="showTickerTab('profile')">👥 Customer Profile</button>
+                                    <button class="tab-btn" onclick="showTickerTab('alphaideas')">🧠 Alpha Ideas</button>
                                     <button class="tab-btn" id="tickerCompareTabBtn" onclick="showTickerTab('compare')" style="display: none;">⚖️ Compare</button>
                                 </div>
                                 
@@ -16414,6 +16415,22 @@
                             <!-- Profile Content Container -->
                             <div id="tickerProfileContent">
                                 <div class="loading-placeholder">Loading customer profile...</div>
+                            </div>
+                        </div>
+
+                        <!-- Alpha Ideas Tab -->
+                        <div id="alphaideasTab" class="ticker-tab-content" style="display: none;">
+                            <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                    <h3 style="margin: 0; color: var(--accent-cyan);">🧠 Alpha Ideas</h3>
+                                    <button class="dash-action-btn" onclick="loadTickerAlphaIdeas(true)">🔄 Refresh Ideas</button>
+                                </div>
+                                <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.85rem;">
+                                    Daily AI-generated trade hypotheses using internal KPI signal, stock-impact weighting, and external market context.
+                                </p>
+                            </div>
+                            <div id="tickerAlphaIdeasContent">
+                                <div class="loading-placeholder">Open a ticker to load alpha ideas.</div>
                             </div>
                         </div>
                         
@@ -21086,6 +21103,7 @@
         
         let hedgeFundTickers = [];
         let currentTickerData = null;
+        let currentTickerAlphaIdeas = null;
         let dailyChurnChart = null;
         let liveChartAnimation = null;
         let tickerSortMode = 'master'; // 'master', 'alpha', 'alpha-desc', 'industry', 'kpi'
@@ -21380,7 +21398,12 @@
             if (mainTabs) {
                 const buttons = mainTabs.querySelectorAll('.tab-btn');
                 buttons.forEach(btn => {
-                    if (btn.textContent.toLowerCase().includes(tabName === 'livedata' ? 'live' : tabName)) {
+                    const txt = (btn.textContent || '').toLowerCase();
+                    if (
+                        (tabName === 'livedata' && txt.includes('live')) ||
+                        (tabName === 'alphaideas' && txt.includes('alpha ideas')) ||
+                        txt.includes(tabName)
+                    ) {
                         btn.classList.add('active');
                     }
                 });
@@ -21501,12 +21524,112 @@
                 if (event && event.target) event.target.classList.add('active');
                 // Load profile data if not already loaded
                 loadTickerProfile();
+            } else if (tabName === 'alphaideas') {
+                document.getElementById('alphaideasTab').style.display = 'block';
+                if (event && event.target) event.target.classList.add('active');
+                loadTickerAlphaIdeas(false);
             } else if (tabName === 'compare') {
                 document.getElementById('tickerCompareTab').style.display = 'block';
                 if (event && event.target) event.target.classList.add('active');
                 // Render ticker selection chips
                 renderTickerCompareSelection();
             }
+        }
+
+        async function loadTickerAlphaIdeas(forceRefresh = false) {
+            const container = document.getElementById('tickerAlphaIdeasContent');
+            if (!container) return;
+            if (!currentTickerData) {
+                container.innerHTML = '<div class="loading-placeholder">No ticker selected.</div>';
+                return;
+            }
+            container.innerHTML = '<div class="loading-placeholder">Generating alpha ideas...</div>';
+            try {
+                const tickerKey = currentTickerData.s3_key || currentTickerData.ticker;
+                const qs = forceRefresh ? '?refresh=1' : '';
+                const response = await fetch(`/api/hedge-fund-iq/alpha-ideas/${encodeURIComponent(tickerKey)}${qs}`, { credentials: 'same-origin' });
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await response.json();
+                if (!data.success) {
+                    container.innerHTML = `<div class="loading-placeholder" style="color: var(--accent-red);">Failed to load alpha ideas: ${data.error || 'Unknown error'}</div>`;
+                    return;
+                }
+                currentTickerAlphaIdeas = data.alpha || null;
+                renderTickerAlphaIdeas(data);
+            } catch (err) {
+                container.innerHTML = `<div class="loading-placeholder" style="color: var(--accent-red);">Error loading alpha ideas: ${err.message}</div>`;
+            }
+        }
+
+        function renderTickerAlphaIdeas(apiPayload) {
+            const container = document.getElementById('tickerAlphaIdeasContent');
+            if (!container) return;
+            const alpha = (apiPayload && apiPayload.alpha) || currentTickerAlphaIdeas || {};
+            const ideas = Array.isArray(alpha.alpha_ideas) ? alpha.alpha_ideas : [];
+            if (ideas.length === 0) {
+                container.innerHTML = '<div class="loading-placeholder">No alpha ideas available yet for this ticker.</div>';
+                return;
+            }
+
+            const riskFlags = Array.isArray(alpha.risk_flags) ? alpha.risk_flags : [];
+            const sourceTag = (apiPayload && apiPayload.source) ? String(apiPayload.source).toUpperCase() : 'CACHE';
+            const generatedAt = alpha.generated_at || '';
+            const metaHtml = `
+                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Ticker / KPI</div>
+                            <div style="font-weight: 700; color: var(--text-primary);">${alpha.ticker || 'N/A'} - ${alpha.kpi_name || 'N/A'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Confidence</div>
+                            <div style="font-weight: 700; color: var(--accent-cyan);">${alpha.confidence || 0}%</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Stock Impact</div>
+                            <div style="font-weight: 700; color: var(--text-primary);">${alpha.relevance_percentage != null ? alpha.relevance_percentage + '%' : 'N/A'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Source</div>
+                            <div style="font-weight: 700; color: var(--text-primary);">${sourceTag}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">Market Setup</h4>
+                    <p style="margin: 0 0 0.75rem 0; color: var(--text-primary);">${alpha.street_context || 'N/A'}</p>
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">World / Event Context</h4>
+                    <p style="margin: 0; color: var(--text-primary);">${alpha.world_events || 'N/A'}</p>
+                </div>
+            `;
+
+            const ideasHtml = ideas.map((idea, idx) => `
+                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: baseline;">
+                        <h4 style="margin: 0; color: var(--text-primary);">#${idx + 1} ${idea.thesis || 'Untitled idea'}</h4>
+                        <span style="font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600;">Confidence: ${idea.confidence || 0}%</span>
+                    </div>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Consensus Miss:</strong> ${idea.what_consensus_misses || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Signal:</strong> ${idea.signal_interpretation || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Catalyst:</strong> ${idea.catalyst_window || 'N/A'} (${idea.horizon || 'short'})</p>
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Falsification:</strong> ${idea.falsification_criteria || 'N/A'}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Risk Framing:</strong> ${idea.position_risk || 'N/A'}</p>
+                </div>
+            `).join('');
+
+            const riskHtml = `
+                <div class="insight-card-v2">
+                    <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">Risk Flags & Metadata</h4>
+                    <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Accuracy:</strong> ${alpha.accuracy_rating || 'Unknown'}</p>
+                    <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Generated:</strong> ${generatedAt || 'N/A'}</p>
+                    <p style="margin: 0; color: var(--text-secondary);"><strong style="color: var(--text-primary);">Risk Flags:</strong> ${riskFlags.length ? riskFlags.join(' | ') : 'None'}</p>
+                </div>
+            `;
+
+            container.innerHTML = metaHtml + ideasHtml + riskHtml;
         }
         
         // ============ TICKER COMPARISON ============
