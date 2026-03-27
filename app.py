@@ -11835,7 +11835,7 @@ CROSSWALK PROPRIETARY SIGNAL (confirming indicator):
 - KPI tracked: {kpi_name}
 - Current signal direction: {signal_direction}
 - {prior_actuals_str or "No prior actuals available"}
-- Current panel reading: {current_val:,.0f if current_val else "N/A"}
+- Current panel reading: {f"{current_val:,.0f}" if current_val else "N/A"}
 - Quarter: {quarter_ctx.get('quarter', 'N/A')} ({quarter_ctx.get('days_left_in_quarter', 'N/A')} days remaining)
 
 {novelty_constraint}
