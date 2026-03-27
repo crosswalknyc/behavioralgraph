@@ -11677,6 +11677,41 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
         if current_val:
             break
     current_val_str = f"{current_val:,.0f}" if current_val else "N/A"
+    
+    from collections import defaultdict
+    monthly = defaultdict(lambda: {'start': None, 'end': None})
+    for row in raw_data:
+        date_str = row.get('Date', '')
+        if not date_str:
+            continue
+        month = date_str[:7]
+        cons = row.get('Total Consumers') or row.get('Current Consumers')
+        if cons:
+            if monthly[month]['start'] is None:
+                monthly[month]['start'] = cons
+            monthly[month]['end'] = cons
+    monthly_trends = []
+    for month in sorted(monthly.keys())[-4:]:
+        m = monthly[month]
+        if m['start'] and m['end']:
+            change = m['end'] - m['start']
+            pct = (change / m['start'] * 100) if m['start'] > 0 else 0
+            monthly_trends.append(f"{month}: {change:+,.0f} ({pct:+.1f}%)")
+    monthly_trend_str = " | ".join(monthly_trends) if monthly_trends else "N/A"
+    
+    qtd_start = None
+    qtd_end = current_val
+    current_q = quarter_ctx.get('quarter', '')
+    for row in raw_data:
+        q = row.get('Quarter', '')
+        if q == current_q:
+            cons = row.get('Total Consumers') or row.get('Current Consumers')
+            if cons and qtd_start is None:
+                qtd_start = cons
+    qtd_change = (qtd_end - qtd_start) if qtd_start and qtd_end else None
+    qtd_pct = ((qtd_change / qtd_start) * 100) if qtd_start and qtd_start > 0 and qtd_change else None
+    qtd_projection_str = f"{qtd_change:+,.0f} ({qtd_pct:+.1f}%)" if qtd_change and qtd_pct else "N/A"
+    
     signal_direction = "unclear"
     if sec_actuals:
         recent = list(sec_actuals.values())[-3:] if len(sec_actuals) >= 3 else list(sec_actuals.values())
@@ -11752,12 +11787,22 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
     synthesis_base_prompt = f"""
 You are writing the weekly "Alpha Ideas" brief for Crosswalk IQ, a research platform for hedge funds.
 
-Crosswalk IQ's VALUE PROPOSITION: We do the hard work of synthesizing all available information - 
-Street research, company guidance, industry trends, AND our proprietary data signal - into 
-actionable trading ideas. The edge is the SYNTHESIS, not any single data point.
+═══════════════════════════════════════════════════════════════════════════════
+CROSSWALK IQ PROPRIETARY KPI TRACKING: {ticker}
+═══════════════════════════════════════════════════════════════════════════════
+
+KPI: {kpi_name}
+Current Reading: {current_val_str}
+QTD Change ({quarter_ctx.get('quarter', 'N/A')}): {qtd_projection_str}
+Monthly Trend: {monthly_trend_str}
+{prior_actuals_str or ""}
+Quarter ends in {quarter_ctx.get('days_left_in_quarter', 'N/A')} days
+
+⚠️ KEY OBSERVATION: Our data shows significant movement in this KPI. The monthly trends above
+show whether this is a sudden change or gradual. Use this as context for the research below.
 
 ═══════════════════════════════════════════════════════════════════════════════
-CROSSWALK IQ RESEARCH ON {ticker}
+EXTERNAL RESEARCH (what we found):
 ═══════════════════════════════════════════════════════════════════════════════
 
 COMPREHENSIVE INTELLIGENCE:
@@ -11769,32 +11814,21 @@ STREET CONSENSUS:
 MANAGEMENT GUIDANCE:
 {guidance_research or "Guidance pending."}
 
-CROSSWALK PROPRIETARY SIGNAL (confirming indicator):
-- KPI tracked: {kpi_name}
-- Current signal direction: {signal_direction}
-- {prior_actuals_str or "No prior actuals available"}
-- Current panel reading: {current_val_str}
-- Quarter: {quarter_ctx.get('quarter', 'N/A')} ({quarter_ctx.get('days_left_in_quarter', 'N/A')} days remaining)
+═══════════════════════════════════════════════════════════════════════════════
 
 {novelty_constraint}
 
-═══════════════════════════════════════════════════════════════════════════════
+YOUR TASK: Generate 4-5 CREATIVE alpha ideas that synthesize the research with our KPI signal.
 
-YOUR TASK: Based on Crosswalk IQ's research above, generate 4-5 CREATIVE alpha ideas.
-
-IMPORTANT FRAMING:
-- Lead with the RESEARCH insights (Street view, company developments, industry trends)
-- Our proprietary data is a CONFIRMING SIGNAL, not the main thesis driver
-- Frame everything as "Crosswalk IQ's research reveals..." or "Our analysis shows..."
-- The edge is our SYNTHESIS of all sources, not just the raw data
-- Be creative: think about second-order effects, relative value, event-driven angles
-- Be specific: name counterparties, deal values, dates, price levels
-
-WHAT MAKES A GREAT IDEA:
-"Crosswalk IQ's research reveals that LUMN's subscriber decline is largely due to the 2022 
-Brightspeed divestiture, not organic churn. Our proprietary signal confirms the remaining 
-footprint is stabilizing. Street models haven't fully adjusted for the new perimeter. 
-Trade: Long LUMN calls ahead of Q1 earnings."
+CRITICAL RULES:
+1. **ACCURACY**: Only reference specific deals, divestitures, or corporate actions that were 
+   ACTUALLY mentioned in the research above. Do NOT make up deal details, counterparties, or 
+   dates that weren't found. If the research doesn't specify details, say "according to our research" 
+   rather than inventing specifics.
+2. **KPI CONTEXT**: Reference our QTD and monthly KPI trends when relevant. Note any significant 
+   changes (like a large February decline) and what might explain them.
+3. **SYNTHESIS**: The value is in combining the research with our signal to find angles others miss.
+4. **FRAMING**: Everything should be framed as "Crosswalk IQ's research reveals..." or "Our analysis shows..."
 
 Return JSON:
 {{
@@ -11899,6 +11933,11 @@ RETRY: Be MORE creative and specific. Don't give generic ideas. Think about:
                 'kpi_name': kpi_name,
                 'accuracy_rating': 'Crosswalk IQ Research',
                 'relevance_percentage': relevance,
+                'current_value': current_val_str,
+                'qtd_change': qtd_projection_str,
+                'monthly_trend': monthly_trend_str,
+                'quarter': quarter_ctx.get('quarter', 'N/A'),
+                'days_remaining': quarter_ctx.get('days_left_in_quarter', 'N/A'),
                 'crosswalk_data_summary': str((parsed or {}).get('crosswalk_research_summary') or (parsed or {}).get('crosswalk_insight') or '').strip(),
                 'street_context': str((parsed or {}).get('street_vs_reality') or '').strip(),
                 'guidance_vs_signal': str((parsed or {}).get('guidance_check') or (parsed or {}).get('guidance_alignment') or '').strip(),
@@ -11930,6 +11969,11 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
         ticker = escape(str(pkt.get('ticker') or 'UNKNOWN'))
         kpi = escape(str(pkt.get('kpi_name') or 'KPI'))
         ideas = pkt.get('alpha_ideas') or []
+        current_value = escape(str(pkt.get('current_value') or 'N/A'))
+        qtd_change = escape(str(pkt.get('qtd_change') or 'N/A'))
+        monthly_trend = escape(str(pkt.get('monthly_trend') or 'N/A'))
+        quarter = escape(str(pkt.get('quarter') or 'N/A'))
+        days_remaining = pkt.get('days_remaining') or 'N/A'
         crosswalk_insight = escape(str(pkt.get('crosswalk_data_summary') or ''))
         street_reality = escape(str(pkt.get('street_context') or ''))
         guidance = escape(str(pkt.get('guidance_vs_signal') or ''))
@@ -11965,9 +12009,32 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
             risk_html = f'<p style="color:#f92672; font-size: 0.85em; margin-top: 12px;"><strong>⚠️ Key Risks:</strong> {flags_str}</p>'
         sections.append(f"""
             <div style="margin-bottom: 32px; padding: 20px; background: rgba(39,40,34,0.6); border-radius: 8px; border: 1px solid rgba(102,217,239,0.2);">
-                <h3 style="color:#66d9ef; margin: 0 0 16px 0; font-size: 1.3em; border-bottom: 1px solid rgba(102,217,239,0.3); padding-bottom: 8px;">{ticker} — {kpi}</h3>
+                <h3 style="color:#66d9ef; margin: 0 0 16px 0; font-size: 1.3em; border-bottom: 1px solid rgba(102,217,239,0.3); padding-bottom: 8px;">{ticker}</h3>
+                
+                <div style="margin: 12px 0; padding: 16px; background: linear-gradient(135deg, rgba(102,217,239,0.15) 0%, rgba(166,226,46,0.1) 100%); border-radius: 8px; border: 1px solid rgba(102,217,239,0.3);">
+                    <div style="font-weight: 700; color: #66d9ef; font-size: 1.1em; margin-bottom: 12px;">📊 Crosswalk IQ KPI Tracking: {kpi}</div>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 6px 0; color: #888; width: 40%;">Current Reading:</td>
+                            <td style="padding: 6px 0; color: #f8f8f2; font-weight: 600;">{current_value}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px 0; color: #888;">QTD Change ({quarter}):</td>
+                            <td style="padding: 6px 0; color: #f92672; font-weight: 700;">{qtd_change}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px 0; color: #888;">Monthly Trend:</td>
+                            <td style="padding: 6px 0; color: #fd971f; font-size: 0.9em;">{monthly_trend}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px 0; color: #888;">Quarter Ends:</td>
+                            <td style="padding: 6px 0; color: #f8f8f2;">{days_remaining} days</td>
+                        </tr>
+                    </table>
+                </div>
+                
                 <div style="margin: 12px 0; padding: 12px; background: rgba(166,226,46,0.1); border-radius: 6px; border-left: 3px solid #a6e22e;">
-                    <strong style="color:#a6e22e;">📊 Crosswalk IQ Research Summary:</strong>
+                    <strong style="color:#a6e22e;">🔍 Crosswalk IQ Research Summary:</strong>
                     <p style="margin: 8px 0 0 0; color: #f8f8f2;">{crosswalk_insight}</p>
                 </div>
                 <div style="margin: 12px 0;">
