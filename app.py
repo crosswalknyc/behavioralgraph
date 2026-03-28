@@ -5142,6 +5142,7 @@ def compute_product_access_flags(user, role):
         return {
             'has_profile_iq_access': True,
             'has_subscriber_iq_access': True,
+            'has_sf_conversion_access': True,
             'has_roas_iq_access': True,
             'has_ecommerce_iq_access': True,
             'has_hedge_fund_iq_access': True,
@@ -5161,6 +5162,7 @@ def compute_product_access_flags(user, role):
     return {
         'has_profile_iq_access': u.get('has_profile_iq_access', True),
         'has_subscriber_iq_access': bool(u.get('has_subscriber_iq_access', False)),
+        'has_sf_conversion_access': bool(u.get('has_sf_conversion_access', False)),
         'has_roas_iq_access': bool(u.get('has_roas_iq_access', True)),
         'has_ecommerce_iq_access': bool(u.get('has_ecommerce_iq_access', True)),
         'has_hedge_fund_iq_access': bool(u.get('has_hedge_fund_iq_access', False)),
@@ -5233,6 +5235,7 @@ def index():
     _acc = apply_cloak_product_access_overrides(_acc)
     has_profile_iq = _acc['has_profile_iq_access']
     has_subscriber_iq = _acc['has_subscriber_iq_access']
+    has_sf_conversion = _acc['has_sf_conversion_access']
     has_roas_iq = _acc['has_roas_iq_access']
     has_ecommerce_iq = _acc['has_ecommerce_iq_access']
     has_hedge_fund_iq = _acc['has_hedge_fund_iq_access']
@@ -5280,6 +5283,7 @@ def index():
                            company_logo=company_logo,
                            has_profile_iq_access=has_profile_iq,
                            has_subscriber_iq_access=has_subscriber_iq,
+                           has_sf_conversion_access=has_sf_conversion,
                            has_roas_iq_access=has_roas_iq,
                            has_ecommerce_iq_access=has_ecommerce_iq,
                            has_hedge_fund_iq_access=has_hedge_fund_iq,
@@ -20342,7 +20346,7 @@ def run_ticket_sales_tracker(job_id):
 # ============================================================================
 # SF-LF CONVERSION ROUTES
 # ============================================================================
-CREDITS_SF_LF_CONVERSION = 5
+CREDITS_SF_LF_CONVERSION = 10
 
 @app.route('/api/attribution/sf-lf-conversion', methods=['POST'], strict_slashes=False)
 @requires_auth
@@ -20445,8 +20449,10 @@ def run_sf_lf_conversion(job_id):
         attribution_window = params.get('attribution_window', 30)
         project_name = params.get('project_name', 'SF-LF Analysis')
         
-        # Parse comma-separated inputs
-        sf_urls = [u.strip() for u in sf_urls_raw.split(',') if u.strip()]
+        # Parse comma-separated or newline-separated inputs (supports pasting from Excel)
+        import re
+        sf_urls_split = re.split(r'[,\n\r]+', sf_urls_raw)
+        sf_urls = [u.strip() for u in sf_urls_split if u.strip()]
         sf_platforms = [p.strip() for p in sf_platforms_raw.split(',') if p.strip()] if sf_platforms_raw else []
         
         update_job_status(job_id, progress=10, message='Connecting to Snowflake...')

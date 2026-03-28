@@ -12031,7 +12031,7 @@
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
-                            <option value="sfConversion" {% if 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
+                            <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
@@ -12440,7 +12440,7 @@
                     {% endif %}
                     {% if 'sf_lf_conversion' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('sf-lf-conversion')" id="customAnalysisTabSFLFConversion">
-                        🔄 SF-LF Conversion <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
+                        🔄 SF-LF Conversion <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
                     </button>
                     {% endif %}
                     {% if role == 'super_admin' or role == 'admin' %}
@@ -13575,16 +13575,16 @@
                     <div class="main-grid">
                         <div class="card">
                             <h2>🔄 Short Form to Long Form Conversion</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Analysis</div>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
                             <p class="section-description">Analyze how short-form content (clips, trailers, social videos) drives viewership of long-form content. Track conversion rates, timing, and audience demographics.</p>
                             <form id="sflfConversionForm" onsubmit="event.preventDefault(); submitSFLFConversion();">
                                 <div class="form-section">
                                     <div class="form-section-title">Short Form Content</div>
                                     <div class="form-row">
                                         <div class="form-group" style="grid-column: 1 / -1;">
-                                            <label>Short Form URLs <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated)</span></label>
-                                            <textarea id="sflfShortFormUrls" rows="3" placeholder="e.g., youtube.com/watch?v=abc123, tiktok.com/@user/video/123" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
-                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Enter full or partial URLs of short-form clips, trailers, or social videos</small>
+                                            <label>Short Form URLs <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated or one per line)</span></label>
+                                            <textarea id="sflfShortFormUrls" rows="5" placeholder="youtube.com/watch?v=abc123&#10;tiktok.com/@user/video/123&#10;instagram.com/reel/xyz&#10;&#10;Or comma-separated: url1, url2, url3" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Paste URLs from Excel (one per row) or enter comma-separated</small>
                                         </div>
                                     </div>
                                     <div class="form-row">
