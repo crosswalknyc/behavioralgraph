@@ -155,6 +155,7 @@ JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persis
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
 TICKET_SALES_S3_BUCKET = 'ticket-sales-iq'  # Bucket for Ticket Sales IQ (talent-to-theater attribution)
 TICKET_SALES_TRACKER_S3_BUCKET = 'ticket-sales-tracker'  # Bucket for Ticket Sales Tracker (movie viewers → theater)
+SF_LF_CONV_S3_BUCKET = 'sf-2-lf-conv'  # Bucket for Short Form to Long Form Conversion analysis
 # LLMO IQ — /api/llmo-iq/* + _llmo_* (rollup from build_llmo_summary.py on S3)
 LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000
 LLMO_S3_BUCKET = os.environ.get('LLMO_S3_BUCKET', 'llmo')
@@ -5131,7 +5132,7 @@ def set_chat_status():
 
 _ANALYSIS_IQ_MODULES_FULL = [
     'profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign',
-    'cross_show', 'watch_time', 'ticket_sales_tracker',
+    'cross_show', 'watch_time', 'ticket_sales_tracker', 'sf_lf_conversion',
 ]
 
 
@@ -20336,6 +20337,580 @@ def run_ticket_sales_tracker(job_id):
         error_msg = f"Error running Ticket Sales Tracker: {str(e)}\n{traceback.format_exc()}"
         print(error_msg)
         update_job_status(job_id, status='failed', error=error_msg)
+
+
+# ============================================================================
+# SF-LF CONVERSION ROUTES
+# ============================================================================
+CREDITS_SF_LF_CONVERSION = 5
+
+@app.route('/api/attribution/sf-lf-conversion', methods=['POST'], strict_slashes=False)
+@requires_auth
+def submit_sf_lf_conversion():
+    """Submit a Short Form to Long Form Conversion analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        if not user_can_run_analysis_module(user, 'sf_lf_conversion'):
+            return jsonify({'error': 'Analysis IQ access with SF-LF Conversion module required'}), 403
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        sf_urls = data.get('sf_urls', '').strip()
+        sf_platforms = data.get('sf_platforms', '').strip()
+        lf_title = data.get('lf_title', '').strip()
+        lf_platform = data.get('lf_platform', '').strip()
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        attribution_window = int(data.get('attribution_window', 30))
+        project_name = data.get('project_name', '').strip()
+        
+        if not sf_urls:
+            return jsonify({'error': 'Short form URLs are required'}), 400
+        if not lf_title:
+            return jsonify({'error': 'Long form title is required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        if not project_name:
+            return jsonify({'error': 'Project name is required'}), 400
+        
+        username = session.get('username', 'unknown')
+        if not has_credits_for(username, CREDITS_SF_LF_CONVERSION):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'SF-LF Conversion requires {CREDITS_SF_LF_CONVERSION} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1
+            }), 403
+        
+        job_id = str(uuid.uuid4())
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'sf_lf_conversion',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'sf_urls': sf_urls,
+                'sf_platforms': sf_platforms,
+                'lf_title': lf_title,
+                'lf_platform': lf_platform,
+                'start_date': start_date,
+                'end_date': end_date,
+                'attribution_window': attribution_window,
+                'project_name': project_name
+            }
+        }
+        
+        desc = f"{project_name} ({start_date}–{end_date})"
+        if not consume_credit(username, description=desc, job_id=job_id, pull_type='SF-LF Conversion', credits_used=CREDITS_SF_LF_CONVERSION):
+            return jsonify({'error': 'Insufficient credits.'}), 403
+        
+        thread = threading.Thread(target=run_sf_lf_conversion, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'job_id': job_id, 'message': 'SF-LF Conversion job submitted successfully', 'status': 'queued'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def _escape_for_sf_lf_sql(term):
+    """Escape a term for use in SQL LIKE and exact match queries."""
+    eq_esc = term.replace("'", "''")
+    like_esc = eq_esc.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return like_esc, eq_esc
+
+
+def run_sf_lf_conversion(job_id):
+    """Run the SF-LF Conversion analysis using Snowflake queries."""
+    conn = None
+    try:
+        update_job_status(job_id, progress=5, message='Initializing...')
+        job = jobs[job_id]
+        params = job['params']
+        
+        sf_urls_raw = params.get('sf_urls', '')
+        sf_platforms_raw = params.get('sf_platforms', '')
+        lf_title = params.get('lf_title', '')
+        lf_platform = params.get('lf_platform', '')
+        start_date = params.get('start_date')
+        end_date = params.get('end_date')
+        attribution_window = params.get('attribution_window', 30)
+        project_name = params.get('project_name', 'SF-LF Analysis')
+        
+        # Parse comma-separated inputs
+        sf_urls = [u.strip() for u in sf_urls_raw.split(',') if u.strip()]
+        sf_platforms = [p.strip() for p in sf_platforms_raw.split(',') if p.strip()] if sf_platforms_raw else []
+        
+        update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
+
+        import snowflake.connector
+        
+        # Use dedicated 6XL warehouse for SF-LF Conversion analysis
+        SF_LF_WAREHOUSE = 'SHORT2LONGCONV'
+        
+        conn = snowflake.connector.connect(
+            user=os.environ.get('SNOWFLAKE_USER'),
+            password=os.environ.get('SNOWFLAKE_PASSWORD'),
+            account=os.environ.get('SNOWFLAKE_ACCOUNT'),
+            warehouse=os.environ.get('SNOWFLAKE_WAREHOUSE', 'BEHAVIORALGRAPH_WH'),
+            database='PROCESSEDCLICKSTREAM',
+            schema='PUBLIC'
+        )
+        cur = conn.cursor()
+        
+        # Create/use dedicated 6XL warehouse for this analysis
+        try:
+            cur.execute(f"""
+                CREATE WAREHOUSE IF NOT EXISTS {SF_LF_WAREHOUSE}
+                WITH WAREHOUSE_SIZE = '6X-LARGE'
+                AUTO_SUSPEND = 60
+                AUTO_RESUME = TRUE
+                INITIALLY_SUSPENDED = FALSE
+            """)
+            cur.execute(f"USE WAREHOUSE {SF_LF_WAREHOUSE}")
+            update_job_status(job_id, progress=12, message=f'Using warehouse {SF_LF_WAREHOUSE}...')
+        except Exception as wh_err:
+            print(f"[SF-LF] Warning: Could not create/use {SF_LF_WAREHOUSE}, using default: {wh_err}")
+        
+        cur.close()
+        cur = conn.cursor()
+        
+        results = {
+            'project_name': project_name,
+            'sf_urls': sf_urls,
+            'sf_platforms': sf_platforms,
+            'lf_title': lf_title,
+            'lf_platform': lf_platform,
+            'start_date': start_date,
+            'end_date': end_date,
+            'attribution_window': attribution_window,
+            'url_metrics': [],
+            'platform_metrics': [],
+            'conversions': {},
+            'demographics': {},
+            'time_to_conversion': {}
+        }
+        
+        # Build URL filter clauses
+        url_clauses = []
+        for url in sf_urls:
+            like_esc, _ = _escape_for_sf_lf_sql(url)
+            url_clauses.append(f"LOWER(URL) LIKE '%{like_esc}%' ESCAPE '\\\\'")
+        sf_url_filter = ' OR '.join(url_clauses) if url_clauses else '1=0'
+        
+        # Build platform filter clauses
+        platform_clauses = []
+        for plat in sf_platforms:
+            _, eq_esc = _escape_for_sf_lf_sql(plat)
+            platform_clauses.append(f"LOWER(COMMON_NAME) = '{eq_esc.lower()}'")
+        sf_platform_filter = ' OR '.join(platform_clauses) if platform_clauses else None
+        
+        # Build LF title filter
+        lf_like_esc, _ = _escape_for_sf_lf_sql(lf_title)
+        lf_title_filter = f"LOWER(URL) LIKE '%{lf_like_esc.lower()}%' ESCAPE '\\\\'"
+        
+        # Build LF platform filter
+        lf_platform_filter = None
+        if lf_platform:
+            _, lf_plat_esc = _escape_for_sf_lf_sql(lf_platform)
+            lf_platform_filter = f"LOWER(COMMON_NAME) = '{lf_plat_esc.lower()}'"
+        
+        update_job_status(job_id, progress=20, message='Querying short form views by URL...')
+        
+        # ===== 1. Short Form Views per URL =====
+        for i, url in enumerate(sf_urls):
+            like_esc, _ = _escape_for_sf_lf_sql(url)
+            query = f"""
+                SELECT COUNT(DISTINCT UID) as unique_views,
+                       COUNT(*) as total_views
+                FROM CLICKSTREAM_FINAL
+                WHERE LOWER(URL) LIKE '%{like_esc}%' ESCAPE '\\\\'
+                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+            """
+            cur.execute(query)
+            row = cur.fetchone()
+            results['url_metrics'].append({
+                'url': url,
+                'unique_views': row[0] if row else 0,
+                'duplicated_views': row[1] if row else 0
+            })
+        
+        update_job_status(job_id, progress=30, message='Querying platform views...')
+        
+        # ===== 2. Platform Views =====
+        for plat in sf_platforms:
+            _, eq_esc = _escape_for_sf_lf_sql(plat)
+            query = f"""
+                SELECT COUNT(DISTINCT UID) as unique_views,
+                       COUNT(*) as total_views
+                FROM CLICKSTREAM_FINAL
+                WHERE LOWER(COMMON_NAME) = '{eq_esc.lower()}'
+                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+            """
+            cur.execute(query)
+            row = cur.fetchone()
+            results['platform_metrics'].append({
+                'platform': plat,
+                'unique_views': row[0] if row else 0,
+                'duplicated_views': row[1] if row else 0
+            })
+        
+        update_job_status(job_id, progress=40, message='Calculating SF to LF conversions...')
+        
+        # ===== 3. SF URL to LF Title Conversion =====
+        # Users who viewed any SF URL and then viewed LF title
+        lf_combined_filter = lf_title_filter
+        if lf_platform_filter:
+            lf_combined_filter = f"({lf_title_filter}) AND ({lf_platform_filter})"
+        
+        conversion_query = f"""
+            WITH sf_users AS (
+                SELECT UID, MIN(VISIT_TS) as first_sf_ts
+                FROM CLICKSTREAM_FINAL
+                WHERE ({sf_url_filter})
+                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                GROUP BY UID
+            ),
+            lf_users AS (
+                SELECT UID, MIN(VISIT_TS) as first_lf_ts
+                FROM CLICKSTREAM_FINAL
+                WHERE {lf_combined_filter}
+                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                GROUP BY UID
+            )
+            SELECT 
+                COUNT(DISTINCT sf.UID) as total_sf_users,
+                COUNT(DISTINCT CASE WHEN lf.UID IS NOT NULL AND lf.first_lf_ts > sf.first_sf_ts 
+                                    AND DATEDIFF('day', sf.first_sf_ts, lf.first_lf_ts) <= {attribution_window}
+                               THEN sf.UID END) as converted_users,
+                AVG(CASE WHEN lf.UID IS NOT NULL AND lf.first_lf_ts > sf.first_sf_ts 
+                              AND DATEDIFF('day', sf.first_sf_ts, lf.first_lf_ts) <= {attribution_window}
+                         THEN DATEDIFF('hour', sf.first_sf_ts, lf.first_lf_ts) END) as avg_hours_to_conversion
+            FROM sf_users sf
+            LEFT JOIN lf_users lf ON sf.UID = lf.UID
+        """
+        cur.execute(conversion_query)
+        row = cur.fetchone()
+        total_sf = row[0] if row else 0
+        converted = row[1] if row else 0
+        avg_hours = row[2] if row else 0
+        
+        results['conversions']['sf_url_to_lf_title'] = {
+            'total_sf_viewers': total_sf,
+            'converted_users': converted,
+            'conversion_rate': round((converted / total_sf * 100), 2) if total_sf > 0 else 0,
+            'avg_hours_to_conversion': round(avg_hours, 1) if avg_hours else 0
+        }
+        
+        update_job_status(job_id, progress=50, message='Calculating per-URL conversions...')
+        
+        # ===== 4. Per-URL Conversion Rates =====
+        for url_metric in results['url_metrics']:
+            url = url_metric['url']
+            like_esc, _ = _escape_for_sf_lf_sql(url)
+            url_conv_query = f"""
+                WITH sf_users AS (
+                    SELECT UID, MIN(VISIT_TS) as first_sf_ts
+                    FROM CLICKSTREAM_FINAL
+                    WHERE LOWER(URL) LIKE '%{like_esc}%' ESCAPE '\\\\'
+                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                    GROUP BY UID
+                ),
+                lf_users AS (
+                    SELECT UID, MIN(VISIT_TS) as first_lf_ts
+                    FROM CLICKSTREAM_FINAL
+                    WHERE {lf_combined_filter}
+                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                    GROUP BY UID
+                )
+                SELECT 
+                    COUNT(DISTINCT CASE WHEN lf.UID IS NOT NULL AND lf.first_lf_ts > sf.first_sf_ts 
+                                        AND DATEDIFF('day', sf.first_sf_ts, lf.first_lf_ts) <= {attribution_window}
+                                   THEN sf.UID END) as converted
+                FROM sf_users sf
+                LEFT JOIN lf_users lf ON sf.UID = lf.UID
+            """
+            cur.execute(url_conv_query)
+            row = cur.fetchone()
+            url_converted = row[0] if row else 0
+            url_metric['converted'] = url_converted
+            url_metric['conversion_rate'] = round((url_converted / url_metric['unique_views'] * 100), 2) if url_metric['unique_views'] > 0 else 0
+        
+        update_job_status(job_id, progress=60, message='Calculating platform-to-title conversions...')
+        
+        # ===== 5. Platform to Title Conversion =====
+        if sf_platforms:
+            for plat_metric in results['platform_metrics']:
+                plat = plat_metric['platform']
+                _, eq_esc = _escape_for_sf_lf_sql(plat)
+                plat_conv_query = f"""
+                    WITH sf_users AS (
+                        SELECT UID, MIN(VISIT_TS) as first_sf_ts
+                        FROM CLICKSTREAM_FINAL
+                        WHERE LOWER(COMMON_NAME) = '{eq_esc.lower()}'
+                          AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                        GROUP BY UID
+                    ),
+                    lf_users AS (
+                        SELECT UID, MIN(VISIT_TS) as first_lf_ts
+                        FROM CLICKSTREAM_FINAL
+                        WHERE {lf_combined_filter}
+                          AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                        GROUP BY UID
+                    )
+                    SELECT 
+                        COUNT(DISTINCT CASE WHEN lf.UID IS NOT NULL AND lf.first_lf_ts > sf.first_sf_ts 
+                                            AND DATEDIFF('day', sf.first_sf_ts, lf.first_lf_ts) <= {attribution_window}
+                                       THEN sf.UID END) as converted
+                    FROM sf_users sf
+                    LEFT JOIN lf_users lf ON sf.UID = lf.UID
+                """
+                cur.execute(plat_conv_query)
+                row = cur.fetchone()
+                plat_converted = row[0] if row else 0
+                plat_metric['converted_to_title'] = plat_converted
+                plat_metric['conversion_rate_to_title'] = round((plat_converted / plat_metric['unique_views'] * 100), 2) if plat_metric['unique_views'] > 0 else 0
+        
+        update_job_status(job_id, progress=70, message='Calculating SF URL to LF platform conversions...')
+        
+        # ===== 6. SF URL to LF Platform Conversion (if LF platform specified) =====
+        if lf_platform:
+            sf_to_lf_plat_query = f"""
+                WITH sf_users AS (
+                    SELECT UID, MIN(VISIT_TS) as first_sf_ts
+                    FROM CLICKSTREAM_FINAL
+                    WHERE ({sf_url_filter})
+                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                    GROUP BY UID
+                ),
+                lf_plat_users AS (
+                    SELECT UID, MIN(VISIT_TS) as first_lf_ts
+                    FROM CLICKSTREAM_FINAL
+                    WHERE {lf_platform_filter}
+                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                    GROUP BY UID
+                )
+                SELECT 
+                    COUNT(DISTINCT CASE WHEN lp.UID IS NOT NULL AND lp.first_lf_ts > sf.first_sf_ts 
+                                        AND DATEDIFF('day', sf.first_sf_ts, lp.first_lf_ts) <= {attribution_window}
+                                   THEN sf.UID END) as converted
+                FROM sf_users sf
+                LEFT JOIN lf_plat_users lp ON sf.UID = lp.UID
+            """
+            cur.execute(sf_to_lf_plat_query)
+            row = cur.fetchone()
+            sf_to_plat_converted = row[0] if row else 0
+            results['conversions']['sf_url_to_lf_platform'] = {
+                'converted_users': sf_to_plat_converted,
+                'conversion_rate': round((sf_to_plat_converted / total_sf * 100), 2) if total_sf > 0 else 0
+            }
+        
+        update_job_status(job_id, progress=80, message='Querying demographics of converted users...')
+        
+        # ===== 7. Demographics of Converted Users =====
+        demo_query = f"""
+            WITH sf_users AS (
+                SELECT UID, MIN(VISIT_TS) as first_sf_ts
+                FROM CLICKSTREAM_FINAL
+                WHERE ({sf_url_filter})
+                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                GROUP BY UID
+            ),
+            lf_users AS (
+                SELECT UID, MIN(VISIT_TS) as first_lf_ts
+                FROM CLICKSTREAM_FINAL
+                WHERE {lf_combined_filter}
+                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                GROUP BY UID
+            ),
+            converted_uids AS (
+                SELECT sf.UID
+                FROM sf_users sf
+                INNER JOIN lf_users lf ON sf.UID = lf.UID
+                WHERE lf.first_lf_ts > sf.first_sf_ts 
+                  AND DATEDIFF('day', sf.first_sf_ts, lf.first_lf_ts) <= {attribution_window}
+            )
+            SELECT 
+                d.GENDER, d.AGE, d.ETHNICITY, d.INCOME, COUNT(DISTINCT d.UID) as cnt
+            FROM BEHAVIORALGRAPH.PUBLIC.DEMOGRAPHICS d
+            INNER JOIN converted_uids cu ON d.UID = cu.UID
+            WHERE d.GENDER IS NOT NULL AND UPPER(TRIM(d.GENDER)) NOT IN ('OTHER', 'PREFER NOT TO SAY')
+              AND d.AGE IS NOT NULL AND UPPER(TRIM(d.AGE)) NOT IN ('OTHER', 'PREFER NOT TO SAY')
+            GROUP BY d.GENDER, d.AGE, d.ETHNICITY, d.INCOME
+        """
+        cur.execute(demo_query)
+        demo_rows = cur.fetchall()
+        
+        # Aggregate demographics
+        demo_counts = {'gender': {}, 'age': {}, 'ethnicity': {}, 'income': {}}
+        for row in demo_rows:
+            gender, age, ethnicity, income, cnt = row
+            if gender and gender.strip():
+                demo_counts['gender'][gender.strip()] = demo_counts['gender'].get(gender.strip(), 0) + cnt
+            if age and age.strip():
+                demo_counts['age'][age.strip()] = demo_counts['age'].get(age.strip(), 0) + cnt
+            if ethnicity and ethnicity.strip():
+                demo_counts['ethnicity'][ethnicity.strip()] = demo_counts['ethnicity'].get(ethnicity.strip(), 0) + cnt
+            if income and income.strip():
+                demo_counts['income'][income.strip()] = demo_counts['income'].get(income.strip(), 0) + cnt
+        
+        # Rebase to 100%
+        for demo_type in demo_counts:
+            total = sum(demo_counts[demo_type].values())
+            results['demographics'][demo_type] = {}
+            if total > 0:
+                for k, v in demo_counts[demo_type].items():
+                    results['demographics'][demo_type][k] = {
+                        'count': v,
+                        'percentage': round((v / total * 100), 2)
+                    }
+        
+        update_job_status(job_id, progress=90, message='Writing output...')
+        
+        # ===== 8. Write CSV Output =====
+        from pathlib import Path
+        output_folder = Path(OUTPUT_DIR) / "sf_lf_conversion"
+        output_folder.mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%m_%d_%Y_%H_%M')
+        safe_name = ''.join(c if c.isalnum() or c in ' _-' else '_' for c in project_name).strip()
+        output_filename = f"SF_LF_{safe_name}_{timestamp}.csv"
+        output_path = output_folder / output_filename
+        
+        # Build CSV rows
+        csv_rows = []
+        
+        # Header section
+        csv_rows.append({'Column': 'PROJECT_INFO', 'Value': project_name, 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'DATE_RANGE', 'Value': f'{start_date} to {end_date}', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'ATTRIBUTION_WINDOW', 'Value': f'{attribution_window} days', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'SHORT_FORM_URLS', 'Value': '; '.join(sf_urls), 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'SHORT_FORM_PLATFORMS', 'Value': '; '.join(sf_platforms) if sf_platforms else 'N/A', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'LONG_FORM_TITLE', 'Value': lf_title, 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'LONG_FORM_PLATFORM', 'Value': lf_platform if lf_platform else 'N/A', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        
+        # URL Metrics Section
+        csv_rows.append({'Column': 'URL_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        for um in results['url_metrics']:
+            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Unique Views', 'Count': um['unique_views'], 'Percentage': ''})
+            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Duplicated Views', 'Count': um['duplicated_views'], 'Percentage': ''})
+            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Converted to LF', 'Count': um.get('converted', 0), 'Percentage': f"{um.get('conversion_rate', 0)}%"})
+        
+        # Platform Metrics Section
+        if results['platform_metrics']:
+            csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+            csv_rows.append({'Column': 'PLATFORM_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+            for pm in results['platform_metrics']:
+                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Unique Views', 'Count': pm['unique_views'], 'Percentage': ''})
+                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Duplicated Views', 'Count': pm['duplicated_views'], 'Percentage': ''})
+                if 'converted_to_title' in pm:
+                    csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Converted to Title', 'Count': pm['converted_to_title'], 'Percentage': f"{pm.get('conversion_rate_to_title', 0)}%"})
+        
+        # Conversion Summary Section
+        csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'CONVERSION_SUMMARY', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        sf_conv = results['conversions'].get('sf_url_to_lf_title', {})
+        csv_rows.append({'Column': 'SF_URL_TO_LF_TITLE', 'Value': 'Total SF Viewers', 'Metric': '', 'Count': sf_conv.get('total_sf_viewers', 0), 'Percentage': ''})
+        csv_rows.append({'Column': 'SF_URL_TO_LF_TITLE', 'Value': 'Converted Users', 'Metric': '', 'Count': sf_conv.get('converted_users', 0), 'Percentage': f"{sf_conv.get('conversion_rate', 0)}%"})
+        csv_rows.append({'Column': 'SF_URL_TO_LF_TITLE', 'Value': 'Avg Hours to Conversion', 'Metric': '', 'Count': sf_conv.get('avg_hours_to_conversion', 0), 'Percentage': ''})
+        
+        if 'sf_url_to_lf_platform' in results['conversions']:
+            sf_plat_conv = results['conversions']['sf_url_to_lf_platform']
+            csv_rows.append({'Column': 'SF_URL_TO_LF_PLATFORM', 'Value': 'Converted Users', 'Metric': '', 'Count': sf_plat_conv.get('converted_users', 0), 'Percentage': f"{sf_plat_conv.get('conversion_rate', 0)}%"})
+        
+        # Demographics Section
+        csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'DEMOGRAPHICS - Converted Users', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        for demo_type, demo_data in results['demographics'].items():
+            for value, data in demo_data.items():
+                csv_rows.append({'Column': demo_type.upper(), 'Value': value, 'Metric': '', 'Count': data['count'], 'Percentage': f"{data['percentage']}%"})
+        
+        # Write CSV
+        import pandas as pd
+        df = pd.DataFrame(csv_rows)
+        df.to_csv(str(output_path), index=False)
+        
+        jobs[job_id]['result_file'] = str(output_path)
+        
+        # Upload to S3 purgatory
+        s3_key = upload_to_s3(
+            str(output_path),
+            project_name,
+            start_date,
+            end_date,
+            created_by=jobs[job_id].get('username', ''),
+            use_purgatory=True,
+            bucket=SF_LF_CONV_S3_BUCKET,
+            category='SF-LF Conversion',
+            source_type='sf_lf_conversion'
+        )
+        
+        if s3_key:
+            jobs[job_id]['s3_key'] = s3_key
+        
+        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+        
+        cur.close()
+        
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running SF-LF Conversion: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@app.route('/api/sf-lf-conversion/download/<path:s3_key>')
+@requires_auth
+def download_sf_lf_conversion(s3_key):
+    """Download a released SF-LF Conversion CSV from S3."""
+    try:
+        if not s3_client:
+            return jsonify({'error': 'S3 not configured'}), 500
+        response = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=s3_key)
+        content = response['Body'].read()
+        filename = os.path.basename(s3_key)
+        return Response(
+            content,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sf-lf-conversion/data/<path:s3_key>')
+@requires_auth
+def get_sf_lf_conversion_data(s3_key):
+    """Get SF-LF Conversion CSV data as JSON for dashboard rendering."""
+    try:
+        if not s3_client:
+            return jsonify({'error': 'S3 not configured'}), 500
+        response = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=s3_key)
+        content = response['Body'].read().decode('utf-8')
+        
+        import csv
+        import io
+        reader = csv.DictReader(io.StringIO(content))
+        rows = list(reader)
+        
+        return jsonify({'success': True, 's3_key': s3_key, 'rows': rows})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/attribution/svod-acquisition', methods=['POST'])

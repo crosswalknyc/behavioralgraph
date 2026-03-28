@@ -12031,6 +12031,7 @@
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
+                            <option value="sfConversion" {% if 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
@@ -12435,6 +12436,11 @@
                     {% if 'ticket_sales_tracker' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('ticket-sales-tracker')" id="customAnalysisTabTicketSalesTracker">
                         🎬 Ticket Sales Tracker <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                    </button>
+                    {% endif %}
+                    {% if 'sf_lf_conversion' in analysis_iq_modules or role == 'super_admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('sf-lf-conversion')" id="customAnalysisTabSFLFConversion">
+                        🔄 SF-LF Conversion <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
                     </button>
                     {% endif %}
                     {% if role == 'super_admin' or role == 'admin' %}
@@ -13561,6 +13567,107 @@
                                 </select>
                             </div>
                             <div id="ticketSalesTrackerResultsList" style="max-height: 320px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">Loading...</div></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- SF-LF Conversion Tab Content -->
+                <div id="customAnalysisTabContentSFLFConversion" class="custom-analysis-tab-content">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>🔄 Short Form to Long Form Conversion</h2>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Analysis</div>
+                            <p class="section-description">Analyze how short-form content (clips, trailers, social videos) drives viewership of long-form content. Track conversion rates, timing, and audience demographics.</p>
+                            <form id="sflfConversionForm" onsubmit="event.preventDefault(); submitSFLFConversion();">
+                                <div class="form-section">
+                                    <div class="form-section-title">Short Form Content</div>
+                                    <div class="form-row">
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label>Short Form URLs <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated)</span></label>
+                                            <textarea id="sflfShortFormUrls" rows="3" placeholder="e.g., youtube.com/watch?v=abc123, tiktok.com/@user/video/123" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Enter full or partial URLs of short-form clips, trailers, or social videos</small>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label>Short Form Platform(s) <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated)</span></label>
+                                            <input type="text" id="sflfShortFormPlatforms" placeholder="e.g., YouTube, TikTok, Instagram" style="width: 100%;">
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Platform names as they appear in COMMON_NAME (optional - for platform-level metrics)</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-section">
+                                    <div class="form-section-title">Long Form Content</div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Long Form Title <span style="font-weight: 400; color: var(--text-secondary);">(search term)</span></label>
+                                            <input type="text" id="sflfLongFormTitle" placeholder="e.g., Stranger Things, The Bear" required>
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Title to search for in URLs (uses partial matching)</small>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Long Form Platform</label>
+                                            <input type="text" id="sflfLongFormPlatform" placeholder="e.g., Netflix, Hulu, Max">
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Platform name as it appears in COMMON_NAME</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-section">
+                                    <div class="form-section-title">Analysis Parameters</div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Start Date</label>
+                                            <input type="date" id="sflfStartDate" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>End Date</label>
+                                            <input type="date" id="sflfEndDate" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Attribution Window (days)</label>
+                                            <input type="number" id="sflfAttributionWindow" value="30" min="1" max="90" style="width: 100%;">
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Max days after SF view to count as conversion</small>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Project Name</label>
+                                            <input type="text" id="sflfProjectName" placeholder="e.g., Stranger Things S5 Clip Campaign" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Run Conversion Analysis</button>
+                                </div>
+                            </form>
+                            <div id="sflfConversionJobStatus" style="display: none; margin-top: 2rem;">
+                                <div class="status-panel">
+                                    <div id="sflfStatusRunning">
+                                        <div class="spinner"></div>
+                                        <div class="pulse" id="sflfStatusText">Processing...</div>
+                                        <div class="progress-bar"><div class="progress-fill" id="sflfProgressFill" style="width: 0%"></div></div>
+                                    </div>
+                                    <div id="sflfStatusComplete" style="display: none;">
+                                        <div style="font-size: 2.5rem;">✅</div>
+                                        <div style="margin: 0.5rem 0;">Complete! Your report is in purgatory and will appear in the Short Form Conversion dashboard after admin approval.</div>
+                                    </div>
+                                    <div id="sflfStatusError" style="display: none;">
+                                        <div style="font-size: 2.5rem;">❌</div>
+                                        <div style="color: var(--accent-red);" id="sflfErrorMessage"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                            <div id="sflfConversionResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
+                            <div style="margin: 0.5rem 0;">
+                                <input type="text" id="sflfResultsSearchInput" placeholder="🔍 Search..." oninput="filterSFLFConversionResults()" style="margin-bottom: 0.35rem;">
+                                <select id="sflfResultsStatusFilter" onchange="filterSFLFConversionResults()" style="font-size: 0.8rem;">
+                                    <option value="">All Status</option>
+                                    <option value="pending">⏳ Pending</option>
+                                    <option value="released">📊 In Dashboard</option>
+                                </select>
+                            </div>
+                            <div id="sflfConversionResultsList" style="max-height: 320px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">Loading...</div></div>
                         </div>
                     </div>
                 </div>
@@ -15346,6 +15453,134 @@
             </div>
         </div>
 
+        <!-- SF CONVERSION VIEW -->
+        <div id="sfConversionView" style="display: none;">
+            <div class="dashboard-layout">
+                <!-- Persistent Sidebar - Left Side -->
+                <div class="persistent-sidebar">
+                    <div class="sidebar-header-section">
+                        <h3>Select Analysis</h3>
+                        <input type="text" id="sfConvSearchInput" class="sidebar-search-input" placeholder="🔍 Search analyses..." oninput="filterSFConvProfiles()">
+                    </div>
+                    <div class="profile-list scrollable-list" id="sfConvProfileList">
+                        <div class="loading-state" style="padding: 1rem; text-align: center; color: var(--text-secondary);">
+                            <div class="spinner"></div>
+                            <div style="margin-top: 0.5rem;">Loading analyses...</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Main Dashboard Area -->
+                <div class="dashboard-main-area">
+                    <!-- Tabs Bar -->
+                    <div class="tabs-bar" id="sfConvTabsBar"></div>
+                    <!-- Empty State -->
+                    <div id="sfConvEmptyState" class="dashboard-empty-state" style="display: flex;">
+                        <div class="empty-state-icon">🔄</div>
+                        <h2>Short Form Conversion</h2>
+                        <p>Select an analysis from the sidebar to view conversion metrics.</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Run new analyses from <strong>Analysis IQ → SF-LF Conversion</strong></p>
+                    </div>
+                    <!-- Dashboard Content -->
+                    <div id="sfConvDashboardContent" style="display: none; flex: 1; overflow-y: auto; padding: 1.5rem;">
+                        <!-- KPI Summary Cards -->
+                        <div class="sf-conv-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total SF Viewers</div>
+                                <div class="kpi-value" id="sfConvKpiTotalViewers" style="font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-top: 0.25rem;">-</div>
+                            </div>
+                            <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Converted Users</div>
+                                <div class="kpi-value" id="sfConvKpiConverted" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-lime); margin-top: 0.25rem;">-</div>
+                            </div>
+                            <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Conversion Rate</div>
+                                <div class="kpi-value" id="sfConvKpiRate" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-primary); margin-top: 0.25rem;">-</div>
+                            </div>
+                            <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Avg Time to Convert</div>
+                                <div class="kpi-value" id="sfConvKpiAvgTime" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange); margin-top: 0.25rem;">-</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Analysis Info -->
+                        <div class="sf-conv-info-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
+                            <h3 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: var(--text-primary);">Analysis Parameters</h3>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0.75rem; font-size: 0.85rem;">
+                                <div><span style="color: var(--text-secondary);">Long Form Title:</span> <span id="sfConvInfoLFTitle" style="font-weight: 600;">-</span></div>
+                                <div><span style="color: var(--text-secondary);">Long Form Platform:</span> <span id="sfConvInfoLFPlatform" style="font-weight: 600;">-</span></div>
+                                <div><span style="color: var(--text-secondary);">Date Range:</span> <span id="sfConvInfoDateRange" style="font-weight: 600;">-</span></div>
+                                <div><span style="color: var(--text-secondary);">Attribution Window:</span> <span id="sfConvInfoWindow" style="font-weight: 600;">-</span></div>
+                            </div>
+                        </div>
+                        
+                        <!-- URL Metrics Table -->
+                        <div class="sf-conv-section" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
+                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📎 URL Performance</h3>
+                            <div style="overflow-x: auto;">
+                                <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                    <thead>
+                                        <tr style="background: var(--bg-dark);">
+                                            <th style="text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Short Form URL</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Unique Views</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Total Views</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sfConvUrlTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Platform Metrics Table -->
+                        <div class="sf-conv-section" id="sfConvPlatformSection" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color); display: none;">
+                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📱 Platform Performance</h3>
+                            <div style="overflow-x: auto;">
+                                <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                    <thead>
+                                        <tr style="background: var(--bg-dark);">
+                                            <th style="text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Platform</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Unique Views</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Total Views</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted to Title</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sfConvPlatformTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Demographics Section -->
+                        <div class="sf-conv-demographics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                            <div class="demo-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                                <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">👤 Gender</h3>
+                                <div id="sfConvDemoGender" style="min-height: 150px;"></div>
+                            </div>
+                            <div class="demo-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                                <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📅 Age</h3>
+                                <div id="sfConvDemoAge" style="min-height: 150px;"></div>
+                            </div>
+                            <div class="demo-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                                <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">🌍 Ethnicity</h3>
+                                <div id="sfConvDemoEthnicity" style="min-height: 150px;"></div>
+                            </div>
+                            <div class="demo-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                                <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">💰 Income</h3>
+                                <div id="sfConvDemoIncome" style="min-height: 150px;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Conversion Funnel -->
+                        <div class="sf-conv-funnel" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📊 Conversion Funnel</h3>
+                            <div id="sfConvFunnelChart" style="min-height: 200px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- RANKER IQ VIEW -->
         <div id="rankerIQView">
             <h2 style="margin: 0 0 1rem 0; font-size: 1.5rem;">📊 Ranker</h2>
@@ -16985,7 +17220,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -17014,6 +17249,7 @@
             const navHandlers = {
                 profileIQ: showProfileIQ,
                 subscriberIQ: showSubscriberIQ,
+                sfConversion: showSFConversion,
                 llmoIQ: showLLMOIQ,
                 rankerIQ: showRankerIQ,
                 ticketSalesIQ: showTicketSalesIQ,
@@ -17764,6 +18000,8 @@
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'flex';
             document.getElementById('subscriberIQView').style.display = 'none';
+            const sfConvView = document.getElementById('sfConversionView');
+            if (sfConvView) sfConvView.style.display = 'none';
             const rankerIQView = document.getElementById('rankerIQView');
             if (rankerIQView) rankerIQView.style.display = 'none';
             const ticketSalesView = document.getElementById('ticketSalesIQView');
@@ -17805,6 +18043,8 @@
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'flex';
+            const sfConvView = document.getElementById('sfConversionView');
+            if (sfConvView) sfConvView.style.display = 'none';
             const rankerIQView = document.getElementById('rankerIQView');
             if (rankerIQView) rankerIQView.style.display = 'none';
             const ticketSalesView = document.getElementById('ticketSalesIQView');
@@ -17836,6 +18076,339 @@
             }
         }
         
+        // ===================== SF CONVERSION VIEW =====================
+        let sfConvProfiles = [];
+        let openSFConvTabs = [];
+        let activeSFConvTabId = null;
+        let currentSFConvData = null;
+        
+        // Alias for compatibility
+        window.showShortFormConversion = function() { showSFConversion(); };
+        
+        window.showSFConversion = function() {
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="sfConversion"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('sfConversion');
+            
+            // Hide all views
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            const rankerIQView = document.getElementById('rankerIQView');
+            if (rankerIQView) rankerIQView.style.display = 'none';
+            const ticketSalesView = document.getElementById('ticketSalesIQView');
+            if (ticketSalesView) ticketSalesView.style.display = 'none';
+            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
+            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
+            const hedgeFundView = document.getElementById('hedgeFundIQView');
+            if (hedgeFundView) hedgeFundView.style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
+            const customAnalysisView = document.getElementById('customAnalysisView');
+            if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const roasIQViewEl = document.getElementById('roasIQView');
+            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
+            const ecomIQViewEl = document.getElementById('ecommerceIQView');
+            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
+            hideLLMOIQView();
+            
+            // Show SF Conversion view
+            document.getElementById('sfConversionView').style.display = 'flex';
+            
+            // Load profiles
+            loadSFConvProfiles();
+        }
+        
+        async function loadSFConvProfiles() {
+            const container = document.getElementById('sfConvProfileList');
+            if (container) container.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);"><div class="spinner"></div><div style="margin-top: 0.5rem;">Loading...</div></div>';
+            
+            try {
+                const response = await fetch('/api/my-results', { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Failed to load');
+                
+                sfConvProfiles = (data.results || []).filter(r => (r.source_type || '') === 'sf_lf_conversion' && r.status === 'released');
+                filterSFConvProfiles();
+            } catch (err) {
+                if (container) container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">Unable to load analyses.</div>';
+            }
+        }
+        
+        function filterSFConvProfiles() {
+            const search = (document.getElementById('sfConvSearchInput')?.value || '').toLowerCase().trim();
+            let list = sfConvProfiles;
+            if (search) list = list.filter(p => (p.project_name || '').toLowerCase().includes(search));
+            renderSFConvProfileList(list);
+        }
+        
+        function renderSFConvProfileList(profiles) {
+            const container = document.getElementById('sfConvProfileList');
+            if (!container) return;
+            if (!profiles || profiles.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No released SF-LF Conversion analyses found.<br><br>Run new analyses from <strong>Analysis IQ → SF-LF Conversion</strong></div>';
+                return;
+            }
+            const html = profiles.map(p => {
+                const s3KeyEsc = (p.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const name = (p.display_name && p.display_name.trim()) ? p.display_name.trim() : (p.project_name || 'Unknown').replace(/_/g, ' ').trim();
+                const dateStr = p.created_at ? formatDatePST(p.created_at) : '';
+                return `<div class="profile-item" onclick="selectSFConvProfile('${s3KeyEsc}')" style="padding: 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-color);">
+                    <div style="font-weight: 600; font-size: 0.85rem;">${name}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary);">${dateStr}</div>
+                </div>`;
+            }).join('');
+            container.innerHTML = html;
+        }
+        
+        async function selectSFConvProfile(s3Key) {
+            // Show dashboard content, hide empty state
+            document.getElementById('sfConvEmptyState').style.display = 'none';
+            document.getElementById('sfConvDashboardContent').style.display = 'block';
+            
+            // Add to tabs if not already there
+            if (!openSFConvTabs.find(t => t.s3Key === s3Key)) {
+                const profile = sfConvProfiles.find(p => p.s3_key === s3Key);
+                openSFConvTabs.push({
+                    s3Key: s3Key,
+                    name: profile?.project_name || 'Analysis'
+                });
+                renderSFConvTabsBar();
+            }
+            activeSFConvTabId = s3Key;
+            renderSFConvTabsBar();
+            
+            // Load the data
+            await loadSFConvData(s3Key);
+        }
+        
+        function renderSFConvTabsBar() {
+            const container = document.getElementById('sfConvTabsBar');
+            if (!container) return;
+            if (openSFConvTabs.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            let html = openSFConvTabs.map(t => {
+                const isActive = t.s3Key === activeSFConvTabId;
+                const s3KeyEsc = t.s3Key.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                return `<div class="tab-item ${isActive ? 'active' : ''}" onclick="selectSFConvProfile('${s3KeyEsc}')" style="display: inline-flex; align-items: center; padding: 0.5rem 0.75rem; background: ${isActive ? 'var(--accent-primary)' : 'var(--bg-card)'}; border-radius: 6px; margin-right: 0.5rem; cursor: pointer;">
+                    <span style="font-size: 0.8rem; font-weight: 500;">${t.name}</span>
+                    <span onclick="event.stopPropagation(); closeSFConvTab('${s3KeyEsc}')" style="margin-left: 0.5rem; cursor: pointer; opacity: 0.7;">×</span>
+                </div>`;
+            }).join('');
+            
+            if (openSFConvTabs.length > 1) {
+                html += `<div class="profile-tab-close-all" onclick="closeAllSFConvTabs()" title="Close all open tabs" style="display: inline-flex; align-items: center; padding: 0.4rem 0.75rem; background: rgba(255,100,100,0.1); border: 1px solid rgba(255,100,100,0.3); border-radius: 6px; color: #ff6b6b; font-size: 0.7rem; font-weight: 600; cursor: pointer; margin-left: auto;"><span>CLOSE ALL</span></div>`;
+            }
+            container.innerHTML = html;
+        }
+        
+        function closeSFConvTab(s3Key) {
+            openSFConvTabs = openSFConvTabs.filter(t => t.s3Key !== s3Key);
+            if (activeSFConvTabId === s3Key) {
+                if (openSFConvTabs.length > 0) {
+                    selectSFConvProfile(openSFConvTabs[0].s3Key);
+                } else {
+                    activeSFConvTabId = null;
+                    document.getElementById('sfConvEmptyState').style.display = 'flex';
+                    document.getElementById('sfConvDashboardContent').style.display = 'none';
+                }
+            }
+            renderSFConvTabsBar();
+        }
+        
+        function closeAllSFConvTabs() {
+            if (!confirm('Close all open SF Conversion tabs?')) return;
+            openSFConvTabs = [];
+            activeSFConvTabId = null;
+            document.getElementById('sfConvEmptyState').style.display = 'flex';
+            document.getElementById('sfConvDashboardContent').style.display = 'none';
+            renderSFConvTabsBar();
+        }
+        
+        async function loadSFConvData(s3Key) {
+            try {
+                const response = await fetch(`/api/sf-lf-conversion/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
+                if (!response.ok) throw new Error('Failed to load data');
+                const data = await response.json();
+                currentSFConvData = data;
+                renderSFConvDashboard(data);
+            } catch (err) {
+                console.error('Error loading SF Conversion data:', err);
+                document.getElementById('sfConvDashboardContent').innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">Error loading data: ${err.message}</div>`;
+            }
+        }
+        
+        function renderSFConvDashboard(data) {
+            // Parse the CSV data
+            const rows = data.rows || [];
+            const urlMetrics = [];
+            const platformMetrics = [];
+            const demographics = { gender: [], age: [], ethnicity: [], income: [] };
+            let conversionSummary = {};
+            let projectInfo = {};
+            
+            let currentSection = '';
+            rows.forEach(row => {
+                const col = (row.Column || '').trim();
+                const val = (row.Value || '').trim();
+                const metric = (row.Metric || '').trim();
+                const count = row.Count;
+                const pct = (row.Percentage || '').replace('%', '');
+                
+                if (col === 'PROJECT_INFO') projectInfo.name = val;
+                else if (col === 'DATE_RANGE') projectInfo.dateRange = val;
+                else if (col === 'ATTRIBUTION_WINDOW') projectInfo.window = val;
+                else if (col === 'LONG_FORM_TITLE') projectInfo.lfTitle = val;
+                else if (col === 'LONG_FORM_PLATFORM') projectInfo.lfPlatform = val;
+                else if (col === 'URL_METRICS') currentSection = 'url';
+                else if (col === 'PLATFORM_METRICS') currentSection = 'platform';
+                else if (col === 'CONVERSION_SUMMARY') currentSection = 'conversion';
+                else if (col.includes('DEMOGRAPHICS')) currentSection = 'demographics';
+                else if (col === 'URL' && currentSection === 'url') {
+                    let existing = urlMetrics.find(u => u.url === val);
+                    if (!existing) { existing = { url: val }; urlMetrics.push(existing); }
+                    if (metric === 'Unique Views') existing.uniqueViews = count;
+                    else if (metric === 'Duplicated Views') existing.totalViews = count;
+                    else if (metric === 'Converted to LF') { existing.converted = count; existing.convRate = pct; }
+                }
+                else if (col === 'PLATFORM' && currentSection === 'platform') {
+                    let existing = platformMetrics.find(p => p.platform === val);
+                    if (!existing) { existing = { platform: val }; platformMetrics.push(existing); }
+                    if (metric === 'Unique Views') existing.uniqueViews = count;
+                    else if (metric === 'Duplicated Views') existing.totalViews = count;
+                    else if (metric === 'Converted to Title') { existing.converted = count; existing.convRate = pct; }
+                }
+                else if (col === 'SF_URL_TO_LF_TITLE' && currentSection === 'conversion') {
+                    if (val === 'Total SF Viewers') conversionSummary.totalViewers = count;
+                    else if (val === 'Converted Users') { conversionSummary.converted = count; conversionSummary.convRate = pct; }
+                    else if (val === 'Avg Hours to Conversion') conversionSummary.avgHours = count;
+                }
+                else if (currentSection === 'demographics') {
+                    const demoType = col.toLowerCase();
+                    if (demographics[demoType]) {
+                        demographics[demoType].push({ value: val, count: count, percentage: parseFloat(pct) || 0 });
+                    }
+                }
+            });
+            
+            // Update KPIs
+            document.getElementById('sfConvKpiTotalViewers').textContent = (conversionSummary.totalViewers || 0).toLocaleString();
+            document.getElementById('sfConvKpiConverted').textContent = (conversionSummary.converted || 0).toLocaleString();
+            document.getElementById('sfConvKpiRate').textContent = (conversionSummary.convRate || '0') + '%';
+            const avgHrs = parseFloat(conversionSummary.avgHours) || 0;
+            document.getElementById('sfConvKpiAvgTime').textContent = avgHrs > 24 ? `${Math.round(avgHrs / 24)}d` : `${Math.round(avgHrs)}h`;
+            
+            // Update info
+            document.getElementById('sfConvInfoLFTitle').textContent = projectInfo.lfTitle || '-';
+            document.getElementById('sfConvInfoLFPlatform').textContent = projectInfo.lfPlatform || '-';
+            document.getElementById('sfConvInfoDateRange').textContent = projectInfo.dateRange || '-';
+            document.getElementById('sfConvInfoWindow').textContent = projectInfo.window || '-';
+            
+            // URL Table
+            const urlTbody = document.getElementById('sfConvUrlTableBody');
+            if (urlTbody) {
+                urlTbody.innerHTML = urlMetrics.map(u => `
+                    <tr>
+                        <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${u.url}">${u.url}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(u.uniqueViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(u.totalViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(u.converted || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${u.convRate || '0'}%</td>
+                    </tr>
+                `).join('');
+            }
+            
+            // Platform Table
+            const platSection = document.getElementById('sfConvPlatformSection');
+            const platTbody = document.getElementById('sfConvPlatformTableBody');
+            if (platformMetrics.length > 0 && platSection && platTbody) {
+                platSection.style.display = 'block';
+                platTbody.innerHTML = platformMetrics.map(p => `
+                    <tr>
+                        <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${p.platform}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(p.uniqueViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(p.totalViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(p.converted || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${p.convRate || '0'}%</td>
+                    </tr>
+                `).join('');
+            } else if (platSection) {
+                platSection.style.display = 'none';
+            }
+            
+            // Demographics
+            renderSFConvDemographics('sfConvDemoGender', demographics.gender);
+            renderSFConvDemographics('sfConvDemoAge', demographics.age);
+            renderSFConvDemographics('sfConvDemoEthnicity', demographics.ethnicity);
+            renderSFConvDemographics('sfConvDemoIncome', demographics.income);
+            
+            // Funnel Chart
+            renderSFConvFunnel(conversionSummary);
+        }
+        
+        function renderSFConvDemographics(containerId, data) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No data available</div>';
+                return;
+            }
+            // Sort by percentage descending
+            data.sort((a, b) => b.percentage - a.percentage);
+            const colors = ['var(--accent-primary)', 'var(--accent-lime)', 'var(--accent-orange)', 'var(--accent-pink)', 'var(--accent-cyan)', 'var(--accent-yellow)'];
+            container.innerHTML = data.map((d, i) => `
+                <div style="margin-bottom: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.25rem;">
+                        <span>${d.value}</span>
+                        <span style="font-weight: 600;">${d.percentage.toFixed(1)}%</span>
+                    </div>
+                    <div style="background: var(--bg-dark); border-radius: 4px; height: 8px; overflow: hidden;">
+                        <div style="background: ${colors[i % colors.length]}; height: 100%; width: ${d.percentage}%; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function renderSFConvFunnel(summary) {
+            const container = document.getElementById('sfConvFunnelChart');
+            if (!container) return;
+            const total = parseInt(summary.totalViewers) || 0;
+            const converted = parseInt(summary.converted) || 0;
+            if (total === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">No conversion data available</div>';
+                return;
+            }
+            const convPct = ((converted / total) * 100).toFixed(1);
+            container.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; padding: 1rem;">
+                    <div style="text-align: center;">
+                        <div style="width: 120px; height: 120px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: white;">${total.toLocaleString()}</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.8);">SF Viewers</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 2rem; color: var(--text-secondary);">→</div>
+                    <div style="text-align: center;">
+                        <div style="width: 120px; height: 120px; background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: white;">${converted.toLocaleString()}</div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.8);">Converted</div>
+                        </div>
+                    </div>
+                    <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 12px;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--accent-lime);">${convPct}%</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Conversion Rate</div>
+                    </div>
+                </div>
+            `;
+        }
+
         window.showRankerIQ = function() {
             const dd = document.getElementById('viewNavDropdown');
             const opt = dd?.querySelector('option[value="rankerIQ"]');
@@ -17845,6 +18418,8 @@
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
+            const sfConvView = document.getElementById('sfConversionView');
+            if (sfConvView) sfConvView.style.display = 'none';
             const rankerIQView = document.getElementById('rankerIQView');
             if (rankerIQView) rankerIQView.style.display = 'flex';
             const ticketSalesView = document.getElementById('ticketSalesIQView');
@@ -20032,9 +20607,9 @@
         
         function switchCustomAnalysisTab(tabName) {
             // Update tab buttons - use optional chaining for tabs that may not exist
-            const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater', 
-                           'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow', 
-                           'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker',
+            const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater',
+                           'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow',
+                           'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker', 'customAnalysisTabSFLFConversion',
                            'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
@@ -20042,11 +20617,11 @@
             });
             
             // Hide all tab contents
-            const contentIds = ['customAnalysisTabContentProfileIQ', 'customAnalysisTabContentTalentSearch', 
+            const contentIds = ['customAnalysisTabContentProfileIQ', 'customAnalysisTabContentTalentSearch',
                                'customAnalysisTabContentTalentTheater', 'customAnalysisTabContentSVODAcquisition',
                                'customAnalysisTabContentCampaignROI', 'customAnalysisTabContentCrossShow',
                                'customAnalysisTabContentWatchTime', 'customAnalysisTabContentTicketSalesTracker',
-                               'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ'];
+                               'customAnalysisTabContentSFLFConversion', 'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ'];
             contentIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -20095,6 +20670,12 @@
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
                 if (typeof loadTicketSalesTrackerResults === 'function') loadTicketSalesTrackerResults();
+            } else if (tabName === 'sf-lf-conversion') {
+                const tab = document.getElementById('customAnalysisTabSFLFConversion');
+                const content = document.getElementById('customAnalysisTabContentSFLFConversion');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                if (typeof loadSFLFConversionResults === 'function') loadSFLFConversionResults();
             } else if (tabName === 'roas-iq') {
                 const tab = document.getElementById('customAnalysisTabRoasIQ');
                 const content = document.getElementById('customAnalysisTabContentRoasIQ');
@@ -21111,7 +21692,164 @@
                 }
             }, 2000);
         }
+
+        // ===================== SF-LF CONVERSION =====================
+        let sflfConversionResults = [];
         
+        async function submitSFLFConversion() {
+            const sfUrls = document.getElementById('sflfShortFormUrls')?.value?.trim();
+            const sfPlatforms = document.getElementById('sflfShortFormPlatforms')?.value?.trim();
+            const lfTitle = document.getElementById('sflfLongFormTitle')?.value?.trim();
+            const lfPlatform = document.getElementById('sflfLongFormPlatform')?.value?.trim();
+            const startDate = document.getElementById('sflfStartDate')?.value;
+            const endDate = document.getElementById('sflfEndDate')?.value;
+            const attributionWindow = parseInt(document.getElementById('sflfAttributionWindow')?.value) || 30;
+            const projectName = document.getElementById('sflfProjectName')?.value?.trim();
+            
+            if (!sfUrls || !lfTitle || !startDate || !endDate || !projectName) {
+                alert('Please fill in all required fields (Short Form URLs, Long Form Title, Dates, Project Name)');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/attribution/sf-lf-conversion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        sf_urls: sfUrls,
+                        sf_platforms: sfPlatforms,
+                        lf_title: lfTitle,
+                        lf_platform: lfPlatform,
+                        start_date: startDate,
+                        end_date: endDate,
+                        attribution_window: attributionWindow,
+                        project_name: projectName
+                    })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('sflfConversionJobStatus').style.display = 'block';
+                    document.getElementById('sflfStatusRunning').style.display = 'flex';
+                    document.getElementById('sflfStatusComplete').style.display = 'none';
+                    document.getElementById('sflfStatusError').style.display = 'none';
+                    pollSFLFConversionJobStatus(data.job_id);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to submit job'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function pollSFLFConversionJobStatus(jobId) {
+            const maxAttempts = 180; // 6 minutes max for this analysis
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        clearInterval(pollInterval);
+                        document.getElementById('sflfStatusRunning').style.display = 'none';
+                        document.getElementById('sflfStatusError').style.display = 'block';
+                        if (document.getElementById('sflfErrorMessage')) document.getElementById('sflfErrorMessage').textContent = 'Session expired. Please log in again.';
+                        setTimeout(function() { window.location.href = '/login'; }, 1500);
+                        return;
+                    }
+                    const data = await response.json();
+                    const fill = document.getElementById('sflfProgressFill');
+                    if (fill) fill.style.width = (data.progress || 0) + '%';
+                    const txt = document.getElementById('sflfStatusText');
+                    if (txt) txt.textContent = data.message || 'Processing...';
+                    if (data.status === 'completed') {
+                        clearInterval(pollInterval);
+                        document.getElementById('sflfStatusRunning').style.display = 'none';
+                        document.getElementById('sflfStatusComplete').style.display = 'block';
+                        if (typeof loadSFLFConversionResults === 'function') loadSFLFConversionResults();
+                        showAnalysisCompletePopup(jobId, data.s3_key || null, 'sf_lf_conversion');
+                    } else if (data.status === 'failed') {
+                        clearInterval(pollInterval);
+                        document.getElementById('sflfStatusRunning').style.display = 'none';
+                        document.getElementById('sflfStatusError').style.display = 'block';
+                        document.getElementById('sflfErrorMessage').textContent = data.error || 'Analysis failed';
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        document.getElementById('sflfStatusRunning').style.display = 'none';
+                        document.getElementById('sflfStatusError').style.display = 'block';
+                        document.getElementById('sflfErrorMessage').textContent = 'Analysis timed out.';
+                    }
+                } catch (error) {
+                    if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        document.getElementById('sflfStatusRunning').style.display = 'none';
+                        document.getElementById('sflfStatusError').style.display = 'block';
+                        document.getElementById('sflfErrorMessage').textContent = error.message || 'Polling failed';
+                    }
+                }
+            }, 2000);
+        }
+        
+        async function loadSFLFConversionResults() {
+            const container = document.getElementById('sflfConversionResultsList');
+            const statusEl = document.getElementById('sflfConversionResultsStatus');
+            if (container) container.innerHTML = '<div style="padding: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);"><span class="spinner"></span> Loading...</div>';
+            try {
+                const response = await fetch('/api/my-results', { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Failed to load');
+                sflfConversionResults = (data.results || []).filter(r => (r.source_type || '') === 'sf_lf_conversion');
+                const pending = sflfConversionResults.filter(r => r.status === 'pending' || r.in_purgatory).length;
+                const released = sflfConversionResults.filter(r => r.status === 'released').length;
+                if (statusEl) statusEl.textContent = `${pending} pending • ${released} in dashboard`;
+                filterSFLFConversionResults();
+            } catch (err) {
+                if (container) container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">Unable to load results.</div>';
+            }
+        }
+        
+        function filterSFLFConversionResults() {
+            const search = (document.getElementById('sflfResultsSearchInput')?.value || '').toLowerCase().trim();
+            const status = document.getElementById('sflfResultsStatusFilter')?.value || '';
+            let list = sflfConversionResults;
+            if (search) list = list.filter(r => (r.project_name || '').toLowerCase().includes(search));
+            if (status) list = list.filter(r => r.status === status);
+            renderSFLFConversionResults(list);
+        }
+        
+        function renderSFLFConversionResults(results) {
+            const container = document.getElementById('sflfConversionResultsList');
+            if (!container) return;
+            if (!results || results.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No SF-LF Conversion results yet. Run an analysis to get started.</div>';
+                return;
+            }
+            const html = results.map(r => {
+                const isPending = r.status === 'pending' || r.in_purgatory;
+                const badge = isPending ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>' : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
+                const s3KeyEsc = (r.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const bucketEsc = (r.bucket || 'sf-2-lf-conv').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+                const name = (r.display_name && r.display_name.trim()) ? r.display_name.trim() : (r.project_name || 'Unknown').replace(/_/g, ' ').trim();
+                const dateStr = r.created_at ? formatDatePST(r.created_at) : '';
+                const rowClick = isPending ? '' : `onclick="openSFLFConversionResult('${s3KeyEsc}', '${bucketEsc}')"`;
+                const rowStyle = 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' + (isPending ? '' : ' cursor: pointer;');
+                let buttons = isPending ? `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${(r.purgatory_id||'').replace(/'/g,"\\'")}')">📥</button>` : `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); window.location.href='/api/sf-lf-conversion/download/'+encodeURIComponent('${s3KeyEsc}')">📥</button>`;
+                return `<div class="job-item" style="${rowStyle}" ${rowClick} ${rowClick ? 'title="Click to open in SF Conversion dashboard"' : ''}><div style="flex: 1; min-width: 0;"><div style="font-weight: 600; font-size: 0.8rem;">${name}</div><div style="font-size: 0.7rem; color: var(--text-secondary);">${dateStr}</div></div><div style="display: flex; align-items: center; gap: 0.35rem;">${badge} ${buttons}</div></div>`;
+            }).join('');
+            container.innerHTML = html;
+        }
+        
+        function openSFLFConversionResult(s3Key, bucket) {
+            // Switch to Short Form Conversion dashboard and load this result
+            if (typeof showShortFormConversion === 'function') {
+                showShortFormConversion();
+                setTimeout(() => {
+                    if (typeof loadSFLFConversionData === 'function') loadSFLFConversionData(s3Key);
+                }, 100);
+            }
+        }
+
         // Handle before/after checkbox for custom talent search
         document.getElementById('customTalentSearchBeforeAfter')?.addEventListener('change', function() {
             const row = document.getElementById('customTalentSearchBeforeAfterRow');

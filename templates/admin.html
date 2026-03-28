@@ -2659,6 +2659,10 @@
                                         <input type="checkbox" id="moduleTicketSalesTracker" class="analysis-module-checkbox" onchange="syncTSTRunWithModule(); updateAllAnalysisModulesCheckbox()">
                                         <span>🎬 Ticket Sales Tracker</span>
                                     </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleSFLFConversion" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
+                                        <span>🔄 SF-LF Conversion</span>
+                                    </label>
                                 </div>
                                 <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
                             </div>
@@ -7847,6 +7851,7 @@
             if (document.getElementById('moduleCrossShow').checked) modules.push('cross_show');
             if (document.getElementById('moduleWatchTime').checked) modules.push('watch_time');
             if (document.getElementById('moduleTicketSalesTracker')?.checked || document.getElementById('hasTicketSalesTrackerRun')?.checked) modules.push('ticket_sales_tracker');
+            if (document.getElementById('moduleSFLFConversion')?.checked) modules.push('sf_lf_conversion');
             return modules;
         }
 
@@ -7883,6 +7888,10 @@
                         const r = document.getElementById('hasTicketSalesTrackerRun');
                         if (m) m.checked = true;
                         if (r) r.checked = true;
+                        break;
+                    case 'sf_lf_conversion':
+                        const sflf = document.getElementById('moduleSFLFConversion');
+                        if (sflf) sflf.checked = true;
                         break;
                 }
             });
