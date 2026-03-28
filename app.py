@@ -20478,7 +20478,7 @@ def run_sf_lf_conversion(job_id):
         try:
             cur.execute(f"""
                 CREATE WAREHOUSE IF NOT EXISTS {SF_LF_WAREHOUSE}
-                WITH WAREHOUSE_SIZE = '6X-LARGE'
+                WITH WAREHOUSE_SIZE = 'X6LARGE'
                 AUTO_SUSPEND = 60
                 AUTO_RESUME = TRUE
                 INITIALLY_SUSPENDED = FALSE

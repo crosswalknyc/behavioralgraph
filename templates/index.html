@@ -21738,7 +21738,7 @@
         }
         
         async function pollSFLFConversionJobStatus(jobId) {
-            const maxAttempts = 600; // 20 minutes max for this analysis (large date ranges need time)
+            const maxAttempts = 120; // 4 minutes (same as other analysis tools)
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
