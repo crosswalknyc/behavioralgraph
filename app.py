@@ -12185,19 +12185,28 @@ def send_hf_alpha_ideas_digest(
             }]
         else:
             recipients = [{'username': 'test:user', 'email': test_email.strip(), 'tickers': _list_hf_ticker_rows()}]
-        if limit_tickers_per_recipient is None:
-            limit_tickers_per_recipient = 1
         if test_ticker_or_s3_key:
-            specific = _resolve_hf_ticker_row(test_ticker_or_s3_key)
-            if specific:
-                recipients[0]['tickers'] = [specific]
+            ticker_keys = [t.strip() for t in test_ticker_or_s3_key.split(',') if t.strip()]
+            resolved_tickers = []
+            not_found = []
+            for tk in ticker_keys:
+                specific = _resolve_hf_ticker_row(tk)
+                if specific:
+                    resolved_tickers.append(specific)
+                else:
+                    not_found.append(tk)
+            if resolved_tickers:
+                recipients[0]['tickers'] = resolved_tickers
+                limit_tickers_per_recipient = len(resolved_tickers)
             else:
                 skipped.append({
                     'username': recipients[0].get('username', 'test-user'),
                     'email': recipients[0].get('email'),
-                    'reason': f"Requested test ticker not found: {test_ticker_or_s3_key}"
+                    'reason': f"No test tickers found: {not_found}"
                 })
                 recipients = []
+        elif limit_tickers_per_recipient is None:
+            limit_tickers_per_recipient = 1
     app_url = (os.environ.get('APP_BASE_URL') or os.environ.get('PUBLIC_APP_URL') or '').strip() or request.host_url.rstrip('/')
 
     for rec in recipients:
