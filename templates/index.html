@@ -1867,6 +1867,29 @@
             padding: 0.5rem;
         }
 
+        .profile-tab-close-all {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: auto;
+            padding: 0.4rem 0.75rem;
+            background: rgba(255, 100, 100, 0.1);
+            border: 1px solid rgba(255, 100, 100, 0.3);
+            border-radius: 6px;
+            color: #ff6b6b;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .profile-tab-close-all:hover {
+            background: rgba(255, 100, 100, 0.2);
+            border-color: rgba(255, 100, 100, 0.5);
+        }
+
         /* Action Buttons - already defined above with margin-left: auto */
 
         .dash-action-btn {
@@ -32030,6 +32053,13 @@
                 `;
             });
             
+            // Add Close All Tabs button at the end
+            html += `
+                <div class="profile-tab-close-all" onclick="closeAllProfileTabs()" title="Close all open tabs">
+                    <span>CLOSE ALL</span>
+                </div>
+            `;
+            
             container.innerHTML = html;
             
             // Delegated click for tab switch and close (handles apostrophes in tab id/name)
@@ -32202,6 +32232,43 @@
                 const newActiveTab = openProfileTabs[Math.max(0, tabIndex - 1)];
                 switchToProfileTab(newActiveTab.id);
             }
+        }
+        
+        function closeAllProfileTabs() {
+            if (!Array.isArray(openProfileTabs) || openProfileTabs.length === 0) {
+                return;
+            }
+            if (!confirm('Close all open Profile IQ tabs?')) {
+                return;
+            }
+            
+            openProfileTabs = [];
+            activeProfileTabId = null;
+            selectedDashProfile = null;
+            currentDashboardData = null;
+            currentS3Key = null;
+            currentProfileForImage = null;
+            applyGenPopMode();
+            
+            saveOpenTabs();
+            renderProfileTabsBar();
+            renderDashboardProfileTree(dashboardProfiles);
+            
+            // Clear the profile image
+            const imageContainer = document.getElementById('dashProfileImage');
+            const img = imageContainer?.querySelector('img');
+            if (img) {
+                img.src = '';
+                imageContainer.classList.remove('loaded', 'loading');
+            }
+            
+            // Show empty state
+            const emptyState = document.getElementById('dashboardEmptyState');
+            const dashContent = document.getElementById('dashboardContent');
+            const profileInfo = document.getElementById('dashProfileInfo');
+            if (emptyState) emptyState.style.display = 'flex';
+            if (dashContent) dashContent.style.display = 'none';
+            if (profileInfo) profileInfo.style.display = 'none';
         }
         
         function displayProfileTabData(tab) {
