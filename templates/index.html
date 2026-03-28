@@ -13589,9 +13589,8 @@
                                     </div>
                                     <div class="form-row">
                                         <div class="form-group" style="grid-column: 1 / -1;">
-                                            <label>Short Form Platform(s) <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated)</span></label>
+                                            <label>Short Form Platform(s) <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated, optional)</span></label>
                                             <input type="text" id="sflfShortFormPlatforms" placeholder="e.g., YouTube, TikTok, Instagram" style="width: 100%;">
-                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Platform names as they appear in COMMON_NAME (optional - for platform-level metrics)</small>
                                         </div>
                                     </div>
                                 </div>
@@ -13599,14 +13598,12 @@
                                     <div class="form-section-title">Long Form Content</div>
                                     <div class="form-row">
                                         <div class="form-group">
-                                            <label>Long Form Title <span style="font-weight: 400; color: var(--text-secondary);">(search term)</span></label>
+                                            <label>Long Form Title</label>
                                             <input type="text" id="sflfLongFormTitle" placeholder="e.g., Stranger Things, The Bear" required>
-                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Title to search for in URLs (uses partial matching)</small>
                                         </div>
                                         <div class="form-group">
                                             <label>Long Form Platform</label>
                                             <input type="text" id="sflfLongFormPlatform" placeholder="e.g., Netflix, Hulu, Max">
-                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Platform name as it appears in COMMON_NAME</small>
                                         </div>
                                     </div>
                                 </div>
@@ -13634,9 +13631,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="form-actions">
-                                    <button type="submit" class="btn-primary">Run Conversion Analysis</button>
-                                </div>
+                                <button type="submit" class="btn btn-primary" id="sflfSubmitBtn">🚀 Run Analysis</button>
                             </form>
                             <div id="sflfConversionJobStatus" style="display: none; margin-top: 2rem;">
                                 <div class="status-panel">
