@@ -38942,6 +38942,11 @@
             });
             const arr = Object.values(buckets)
                 .filter(b => !EXCLUDED_DMAS.has(b.name)) // Filter out excluded DMAs
+                .filter(b => {
+                    // Only include DMAs that have a corresponding Gen Pop census value
+                    const gpActual = getGPActualDMA(b.name);
+                    return gpActual != null && gpActual > 0;
+                })
                 .map(b => {
                     b.index = b._count > 0 ? Math.round(b.index / b._count) : 100;
                     delete b._count;
