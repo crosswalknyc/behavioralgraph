@@ -38934,17 +38934,26 @@
                 delete b._count;
                 return b;
             });
-            const totalPct = arr.reduce((s, l) => s + l.pct, 0);
-            if (totalPct > 0 && Math.abs(totalPct - 100) > 0.01) {
-                const scale = 100 / totalPct;
-                arr.forEach(l => {
-                    l.pct *= scale;
-                    l.projection = Math.round(l.projection * scale);
-                });
-                const gpTotal = arr.reduce((s, l) => s + l.genPopPct, 0);
-                if (gpTotal > 0) {
-                    const gpScale = 100 / gpTotal;
-                    arr.forEach(l => { l.genPopPct *= gpScale; });
+            
+            // Check if this is the Gen Pop profile - if so, skip rebasing and show raw values
+            const isGenPopProfile = (currentS3Key || '').toUpperCase().includes('GEN_POP') || 
+                                   (currentS3Key || '').toUpperCase().includes('GENPOP') ||
+                                   (currentProfileData?.name || '').toUpperCase().includes('GEN POP');
+            
+            // Only rebase non-Gen Pop profiles
+            if (!isGenPopProfile) {
+                const totalPct = arr.reduce((s, l) => s + l.pct, 0);
+                if (totalPct > 0 && Math.abs(totalPct - 100) > 0.01) {
+                    const scale = 100 / totalPct;
+                    arr.forEach(l => {
+                        l.pct *= scale;
+                        l.projection = Math.round(l.projection * scale);
+                    });
+                    const gpTotal = arr.reduce((s, l) => s + l.genPopPct, 0);
+                    if (gpTotal > 0) {
+                        const gpScale = 100 / gpTotal;
+                        arr.forEach(l => { l.genPopPct *= gpScale; });
+                    }
                 }
             }
             return arr;
@@ -39045,11 +39054,23 @@
         function renderLocationTable(locations) {
             locations = condenseDMALocations(locations);
             const isProjection = dashDisplayMode === 'projection';
+            
+            // Check if this is the Gen Pop profile
+            const isGenPopProfile = (currentS3Key || '').toUpperCase().includes('GEN_POP') || 
+                                   (currentS3Key || '').toUpperCase().includes('GENPOP') ||
+                                   (currentProfileData?.name || '').toUpperCase().includes('GEN POP');
 
-            // Recalculate index and genPopPct from fresh Gen Pop baseline.
+            // For Gen Pop profiles: set genPopPct = pct and index = 100 (it IS the baseline)
+            if (isGenPopProfile) {
+                locations.forEach(function(loc) {
+                    loc.genPopPct = loc.pct;
+                    loc.index = 100;
+                });
+            }
+            // For regular profiles: Recalculate index and genPopPct from fresh Gen Pop baseline.
             // IMPORTANT: canonicalize baseline DMAs the same way as profile DMAs
             // so rows like "Phoenix" and "Phoenix (Prescott), AZ" match correctly.
-            if (genPopBaselineData && Array.isArray(genPopBaselineData.locations)) {
+            else if (genPopBaselineData && Array.isArray(genPopBaselineData.locations)) {
                 const gpMap = {};
                 genPopBaselineData.locations.forEach(function(gl) {
                     const canon = matchCanonicalDMA(gl.name || '');
