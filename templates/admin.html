@@ -7811,22 +7811,24 @@
                 loadHedgeFundTickersForAccess().then(() => {
                     // Set tabs
                     const tabs = user.hedge_fund_iq_tabs || [];
+                    const hasAllTabs = tabs.includes('*');
                     document.querySelectorAll('.hedge-fund-tab-checkbox').forEach(cb => {
-                        cb.checked = tabs.includes(cb.value);
+                        cb.checked = hasAllTabs || tabs.includes(cb.value);
                     });
                     
-                    // Set tickers
+                    // Set tickers - handle ['*'] case for "all tickers"
                     const tickers = user.hedge_fund_iq_tickers || [];
+                    const hasAllTickers = tickers.includes('*');
                     document.querySelectorAll('.hedge-fund-ticker-checkbox').forEach(cb => {
-                        cb.checked = tickers.includes(cb.value);
+                        cb.checked = hasAllTickers || tickers.includes(cb.value);
                     });
                     
                     // Update "All" checkboxes
-                    const allTabsChecked = document.querySelectorAll('.hedge-fund-tab-checkbox:checked').length === 
+                    const allTabsChecked = hasAllTabs || document.querySelectorAll('.hedge-fund-tab-checkbox:checked').length === 
                                           document.querySelectorAll('.hedge-fund-tab-checkbox').length;
                     document.getElementById('allHedgeFundTabs').checked = allTabsChecked;
                     
-                    const allTickersChecked = document.querySelectorAll('.hedge-fund-ticker-checkbox:checked').length === 
+                    const allTickersChecked = hasAllTickers || document.querySelectorAll('.hedge-fund-ticker-checkbox:checked').length === 
                                              document.querySelectorAll('.hedge-fund-ticker-checkbox').length;
                     document.getElementById('allHedgeFundTickers').checked = allTickersChecked;
                 });
