@@ -20461,18 +20461,20 @@ def run_sf_lf_conversion(job_id):
         
         # Use dedicated 6XL warehouse for SF-LF Conversion analysis
         SF_LF_WAREHOUSE = 'SHORT2LONGCONV'
+        default_wh = os.environ.get('SNOWFLAKE_WAREHOUSE', 'BEHAVIORALGRAPH_WH')
         
         conn = snowflake.connector.connect(
             user=os.environ.get('SNOWFLAKE_USER'),
             password=os.environ.get('SNOWFLAKE_PASSWORD'),
             account=os.environ.get('SNOWFLAKE_ACCOUNT'),
-            warehouse=os.environ.get('SNOWFLAKE_WAREHOUSE', 'BEHAVIORALGRAPH_WH'),
+            warehouse=default_wh,
             database='PROCESSEDCLICKSTREAM',
             schema='PUBLIC'
         )
         cur = conn.cursor()
         
-        # Create/use dedicated 6XL warehouse for this analysis
+        # Try to create/use dedicated 6XL warehouse for this analysis
+        active_warehouse = default_wh
         try:
             cur.execute(f"""
                 CREATE WAREHOUSE IF NOT EXISTS {SF_LF_WAREHOUSE}
@@ -20482,9 +20484,11 @@ def run_sf_lf_conversion(job_id):
                 INITIALLY_SUSPENDED = FALSE
             """)
             cur.execute(f"USE WAREHOUSE {SF_LF_WAREHOUSE}")
-            update_job_status(job_id, progress=12, message=f'Using warehouse {SF_LF_WAREHOUSE}...')
+            active_warehouse = SF_LF_WAREHOUSE
+            update_job_status(job_id, progress=12, message=f'Using 6XL warehouse...')
         except Exception as wh_err:
-            print(f"[SF-LF] Warning: Could not create/use {SF_LF_WAREHOUSE}, using default: {wh_err}")
+            print(f"[SF-LF] Warning: Could not create/use {SF_LF_WAREHOUSE}, using default {default_wh}: {wh_err}")
+            update_job_status(job_id, progress=12, message=f'Using default warehouse...')
         
         cur.close()
         cur = conn.cursor()
