@@ -20531,58 +20531,59 @@ def run_sf_lf_conversion(job_id):
             _, lf_plat_esc = _escape_for_sf_lf_sql(lf_platform)
             lf_platform_filter = f"LOWER(COMMON_NAME) = '{lf_plat_esc.lower()}'"
         
-        update_job_status(job_id, progress=20, message='Querying short form views by URL...')
-        print(f"[SF-LF] Starting URL queries for {len(sf_urls)} URLs")
+        update_job_status(job_id, progress=20, message=f'Querying {len(sf_urls)} short form URLs (batched)...')
+        print(f"[SF-LF] Running BATCHED query for {len(sf_urls)} URLs")
 
-        # ===== 1. Short Form Views per URL =====
-        for i, url in enumerate(sf_urls):
-            print(f"[SF-LF] Querying URL {i+1}/{len(sf_urls)}: {url[:50]}...")
-            like_esc, _ = _escape_for_sf_lf_sql(url)
-            query = f"""
+        # ===== 1. BATCHED: All Short Form Views in ONE query =====
+        # Get aggregate metrics for ALL URLs combined (not per-URL to avoid N queries)
+        sf_aggregate_query = f"""
+            SELECT COUNT(DISTINCT UID) as unique_views,
+                   COUNT(*) as total_views
+            FROM CLICKSTREAM_FINAL
+            WHERE ({sf_url_filter})
+              AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+        """
+        try:
+            cur.execute(sf_aggregate_query)
+            row = cur.fetchone()
+            sf_total_unique = row[0] if row else 0
+            sf_total_duplicated = row[1] if row else 0
+            print(f"[SF-LF] SF Aggregate: unique={sf_total_unique}, total={sf_total_duplicated}")
+            # Store as aggregate (not per-URL to avoid timeout)
+            results['url_metrics'].append({
+                'url': f'ALL {len(sf_urls)} SHORT FORM URLs (COMBINED)',
+                'unique_views': sf_total_unique,
+                'duplicated_views': sf_total_duplicated
+            })
+        except Exception as query_err:
+            print(f"[SF-LF] ERROR in batched URL query: {query_err}")
+            raise
+        
+        update_job_status(job_id, progress=30, message='Querying platform views (batched)...')
+        print(f"[SF-LF] Running batched platform query for {len(sf_platforms)} platforms")
+        
+        # ===== 2. BATCHED: Platform Views in ONE query =====
+        if sf_platforms and sf_platform_filter:
+            plat_aggregate_query = f"""
                 SELECT COUNT(DISTINCT UID) as unique_views,
                        COUNT(*) as total_views
                 FROM CLICKSTREAM_FINAL
-                WHERE LOWER(URL) LIKE '%{like_esc}%' ESCAPE '\\\\'
+                WHERE ({sf_platform_filter})
                   AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
             """
             try:
-                cur.execute(query)
+                cur.execute(plat_aggregate_query)
                 row = cur.fetchone()
-                print(f"[SF-LF] URL {i+1} result: unique={row[0] if row else 0}, total={row[1] if row else 0}")
-                results['url_metrics'].append({
-                    'url': url,
-                    'unique_views': row[0] if row else 0,
-                    'duplicated_views': row[1] if row else 0
-                })
-            except Exception as query_err:
-                print(f"[SF-LF] ERROR querying URL {i+1}: {query_err}")
-                raise
-        
-        update_job_status(job_id, progress=30, message='Querying platform views...')
-        print(f"[SF-LF] Starting platform queries for {len(sf_platforms)} platforms")
-        
-        # ===== 2. Platform Views =====
-        for plat in sf_platforms:
-            print(f"[SF-LF] Querying platform: {plat}")
-            _, eq_esc = _escape_for_sf_lf_sql(plat)
-            query = f"""
-                SELECT COUNT(DISTINCT UID) as unique_views,
-                       COUNT(*) as total_views
-                FROM CLICKSTREAM_FINAL
-                WHERE LOWER(COMMON_NAME) = '{eq_esc.lower()}'
-                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-            """
-            try:
-                cur.execute(query)
-                row = cur.fetchone()
-                print(f"[SF-LF] Platform {plat} result: unique={row[0] if row else 0}")
+                plat_unique = row[0] if row else 0
+                plat_total = row[1] if row else 0
+                print(f"[SF-LF] Platform Aggregate: unique={plat_unique}, total={plat_total}")
                 results['platform_metrics'].append({
-                    'platform': plat,
-                    'unique_views': row[0] if row else 0,
-                    'duplicated_views': row[1] if row else 0
+                    'platform': ', '.join(sf_platforms),
+                    'unique_views': plat_unique,
+                    'duplicated_views': plat_total
                 })
             except Exception as query_err:
-                print(f"[SF-LF] ERROR querying platform {plat}: {query_err}")
+                print(f"[SF-LF] ERROR in batched platform query: {query_err}")
                 raise
         
         update_job_status(job_id, progress=40, message='Calculating SF to LF conversions...')
@@ -20632,17 +20633,24 @@ def run_sf_lf_conversion(job_id):
             'avg_hours_to_conversion': round(avg_hours, 1) if avg_hours else 0
         }
         
-        update_job_status(job_id, progress=50, message='Calculating per-URL conversions...')
+        update_job_status(job_id, progress=50, message='Calculating aggregate conversions...')
         
-        # ===== 4. Per-URL Conversion Rates =====
+        # ===== 4. Aggregate Conversion (already calculated above, add to url_metrics) =====
+        # The main conversion is sf_url_to_lf_title which we already have
+        # Add conversion data to the aggregate URL metric
         for url_metric in results['url_metrics']:
-            url = url_metric['url']
-            like_esc, _ = _escape_for_sf_lf_sql(url)
-            url_conv_query = f"""
+            url_metric['converted'] = converted  # From the main conversion query
+            url_metric['conversion_rate'] = round((converted / url_metric['unique_views'] * 100), 2) if url_metric['unique_views'] > 0 else 0
+        
+        update_job_status(job_id, progress=60, message='Calculating platform conversions...')
+        
+        # ===== 5. Platform to Title Conversion (batched) =====
+        if sf_platforms and sf_platform_filter:
+            plat_conv_query = f"""
                 WITH sf_users AS (
                     SELECT UID, MIN(VISIT_TS) as first_sf_ts
                     FROM CLICKSTREAM_FINAL
-                    WHERE LOWER(URL) LIKE '%{like_esc}%' ESCAPE '\\\\'
+                    WHERE ({sf_platform_filter})
                       AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
                     GROUP BY UID
                 ),
@@ -20660,46 +20668,16 @@ def run_sf_lf_conversion(job_id):
                 FROM sf_users sf
                 LEFT JOIN lf_users lf ON sf.UID = lf.UID
             """
-            cur.execute(url_conv_query)
-            row = cur.fetchone()
-            url_converted = row[0] if row else 0
-            url_metric['converted'] = url_converted
-            url_metric['conversion_rate'] = round((url_converted / url_metric['unique_views'] * 100), 2) if url_metric['unique_views'] > 0 else 0
-        
-        update_job_status(job_id, progress=60, message='Calculating platform-to-title conversions...')
-        
-        # ===== 5. Platform to Title Conversion =====
-        if sf_platforms:
-            for plat_metric in results['platform_metrics']:
-                plat = plat_metric['platform']
-                _, eq_esc = _escape_for_sf_lf_sql(plat)
-                plat_conv_query = f"""
-                    WITH sf_users AS (
-                        SELECT UID, MIN(VISIT_TS) as first_sf_ts
-                        FROM CLICKSTREAM_FINAL
-                        WHERE LOWER(COMMON_NAME) = '{eq_esc.lower()}'
-                          AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                        GROUP BY UID
-                    ),
-                    lf_users AS (
-                        SELECT UID, MIN(VISIT_TS) as first_lf_ts
-                        FROM CLICKSTREAM_FINAL
-                        WHERE {lf_combined_filter}
-                          AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                        GROUP BY UID
-                    )
-                    SELECT 
-                        COUNT(DISTINCT CASE WHEN lf.UID IS NOT NULL AND lf.first_lf_ts > sf.first_sf_ts 
-                                            AND DATEDIFF('day', sf.first_sf_ts, lf.first_lf_ts) <= {attribution_window}
-                                       THEN sf.UID END) as converted
-                    FROM sf_users sf
-                    LEFT JOIN lf_users lf ON sf.UID = lf.UID
-                """
+            try:
                 cur.execute(plat_conv_query)
                 row = cur.fetchone()
                 plat_converted = row[0] if row else 0
-                plat_metric['converted_to_title'] = plat_converted
-                plat_metric['conversion_rate_to_title'] = round((plat_converted / plat_metric['unique_views'] * 100), 2) if plat_metric['unique_views'] > 0 else 0
+                for plat_metric in results['platform_metrics']:
+                    plat_metric['converted_to_title'] = plat_converted
+                    plat_metric['conversion_rate_to_title'] = round((plat_converted / plat_metric['unique_views'] * 100), 2) if plat_metric['unique_views'] > 0 else 0
+            except Exception as query_err:
+                print(f"[SF-LF] ERROR in platform conversion query: {query_err}")
+                raise
         
         update_job_status(job_id, progress=70, message='Calculating SF URL to LF platform conversions...')
         
