@@ -20400,6 +20400,7 @@ def submit_sf_lf_conversion():
             'error': None,
             'result_file': None,
             'logs': [],
+            'project_name': project_name,
             'params': {
                 'sf_urls': sf_urls,
                 'sf_platforms': sf_platforms,
@@ -20411,7 +20412,10 @@ def submit_sf_lf_conversion():
                 'project_name': project_name
             }
         }
-        
+        # Save to S3 for cross-worker persistence (Render uses multiple workers)
+        if s3_client:
+            _save_job_status_to_s3(job_id, jobs[job_id])
+
         desc = f"{project_name} ({start_date}–{end_date})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='SF-LF Conversion', credits_used=CREDITS_SF_LF_CONVERSION):
             return jsonify({'error': 'Insufficient credits.'}), 403
