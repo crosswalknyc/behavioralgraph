@@ -8367,17 +8367,28 @@ def boost_clamp_renorm(
 def connect_snowflake():
     if not SILENCE_VERBOSE_OUTPUT:
         print("🔌 Connecting to Snowflake...")
-    
-    # Credentials from environment (required for webapp; set in .env or deploy config)
+
+    # Load credentials from config.py (has secure defaults) with env var overrides
     import os
-    _user = os.environ.get("SNOWFLAKE_USER", "")
-    _token = os.environ.get("SNOWFLAKE_TOKEN", "")
-    _password = os.environ.get("SNOWFLAKE_PASSWORD", "")
-    _account = os.environ.get("SNOWFLAKE_ACCOUNT", "qsodrkt-hgb46445")
-    _warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE", "BEHAVIORGRAPH6X")
-    _database = os.environ.get("SNOWFLAKE_DATABASE", "BEHAVIORALGRAPH")
-    _schema = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
-    _role = os.environ.get("SNOWFLAKE_ROLE", "ACCOUNTADMIN")
+    try:
+        from config import SNOWFLAKE_CONFIG
+        _user = os.environ.get("SNOWFLAKE_USER") or SNOWFLAKE_CONFIG.get('user', '')
+        _token = os.environ.get("SNOWFLAKE_TOKEN") or SNOWFLAKE_CONFIG.get('token', '')
+        _password = os.environ.get("SNOWFLAKE_PASSWORD") or SNOWFLAKE_CONFIG.get('password', '')
+        _account = os.environ.get("SNOWFLAKE_ACCOUNT") or SNOWFLAKE_CONFIG.get('account', 'qsodrkt-hgb46445')
+        _warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE") or SNOWFLAKE_CONFIG.get('warehouse', 'BEHAVIORGRAPH6X')
+        _database = os.environ.get("SNOWFLAKE_DATABASE") or SNOWFLAKE_CONFIG.get('database', 'BEHAVIORALGRAPH')
+        _schema = os.environ.get("SNOWFLAKE_SCHEMA") or SNOWFLAKE_CONFIG.get('schema', 'PUBLIC')
+        _role = os.environ.get("SNOWFLAKE_ROLE") or SNOWFLAKE_CONFIG.get('role', 'ACCOUNTADMIN')
+    except ImportError:
+        _user = os.environ.get("SNOWFLAKE_USER", "")
+        _token = os.environ.get("SNOWFLAKE_TOKEN", "")
+        _password = os.environ.get("SNOWFLAKE_PASSWORD", "")
+        _account = os.environ.get("SNOWFLAKE_ACCOUNT", "qsodrkt-hgb46445")
+        _warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE", "BEHAVIORGRAPH6X")
+        _database = os.environ.get("SNOWFLAKE_DATABASE", "BEHAVIORALGRAPH")
+        _schema = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
+        _role = os.environ.get("SNOWFLAKE_ROLE", "ACCOUNTADMIN")
 
     # insecure_mode=True skips OCSP cert validation; avoids 254007 when Snowflake uses
     # internal/customer-stage S3 URLs (e.g. sfc-va3-*-customer-stage.s3.amazonaws.com) with revoked certs
