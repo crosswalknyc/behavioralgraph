@@ -8367,48 +8367,40 @@ def boost_clamp_renorm(
 def connect_snowflake():
     if not SILENCE_VERBOSE_OUTPUT:
         print("🔌 Connecting to Snowflake...")
-
-    # Load credentials from config.py (has secure defaults) with env var overrides
+    
+    # Credentials from environment (required for webapp; set in .env or deploy config)
     import os
-    
-    # Debug: show which env vars are set (without revealing values)
-    print(f"[DEBUG] SNOWFLAKE_USER env set: {bool(os.environ.get('SNOWFLAKE_USER'))}")
-    print(f"[DEBUG] SNOWFLAKE_PASSWORD env set: {bool(os.environ.get('SNOWFLAKE_PASSWORD'))}")
-    print(f"[DEBUG] SNOWFLAKE_TOKEN env set: {bool(os.environ.get('SNOWFLAKE_TOKEN'))}")
-    print(f"[DEBUG] SNOWFLAKE_ACCOUNT env set: {bool(os.environ.get('SNOWFLAKE_ACCOUNT'))}")
-    
-    try:
-        from config import SNOWFLAKE_CONFIG
-        print("[DEBUG] config.py loaded successfully")
-        _user = os.environ.get("SNOWFLAKE_USER") or SNOWFLAKE_CONFIG.get('user', '')
-        _token = os.environ.get("SNOWFLAKE_TOKEN") or SNOWFLAKE_CONFIG.get('token', '')
-        _password = os.environ.get("SNOWFLAKE_PASSWORD") or SNOWFLAKE_CONFIG.get('password', '')
-        _account = os.environ.get("SNOWFLAKE_ACCOUNT") or SNOWFLAKE_CONFIG.get('account', 'qsodrkt-hgb46445')
-        _warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE") or SNOWFLAKE_CONFIG.get('warehouse', 'BEHAVIORGRAPH6X')
-        _database = os.environ.get("SNOWFLAKE_DATABASE") or SNOWFLAKE_CONFIG.get('database', 'BEHAVIORALGRAPH')
-        _schema = os.environ.get("SNOWFLAKE_SCHEMA") or SNOWFLAKE_CONFIG.get('schema', 'PUBLIC')
-        _role = os.environ.get("SNOWFLAKE_ROLE") or SNOWFLAKE_CONFIG.get('role', 'ACCOUNTADMIN')
-    except ImportError:
-        print("[DEBUG] config.py NOT found, using env vars only")
-        _user = os.environ.get("SNOWFLAKE_USER", "")
-        _token = os.environ.get("SNOWFLAKE_TOKEN", "")
-        _password = os.environ.get("SNOWFLAKE_PASSWORD", "")
-        _account = os.environ.get("SNOWFLAKE_ACCOUNT", "qsodrkt-hgb46445")
-        _warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE", "BEHAVIORGRAPH6X")
-        _database = os.environ.get("SNOWFLAKE_DATABASE", "BEHAVIORALGRAPH")
-        _schema = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
-        _role = os.environ.get("SNOWFLAKE_ROLE", "ACCOUNTADMIN")
-    
-    # Debug: show final credential status
-    print(f"[DEBUG] Final _user set: {bool(_user)} (len={len(_user) if _user else 0})")
-    print(f"[DEBUG] Final _password set: {bool(_password)} (len={len(_password) if _password else 0})")
-    print(f"[DEBUG] Final _account: {_account}")
+    _user = os.environ.get("SNOWFLAKE_USER", "")
+    _token = os.environ.get("SNOWFLAKE_TOKEN", "")
+    _password = os.environ.get("SNOWFLAKE_PASSWORD", "")
+    _account = os.environ.get("SNOWFLAKE_ACCOUNT", "qsodrkt-hgb46445")
+    _warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE", "BEHAVIORGRAPH6X")
+    _database = os.environ.get("SNOWFLAKE_DATABASE", "BEHAVIORALGRAPH")
+    _schema = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
+    _role = os.environ.get("SNOWFLAKE_ROLE", "ACCOUNTADMIN")
 
     # insecure_mode=True skips OCSP cert validation; avoids 254007 when Snowflake uses
     # internal/customer-stage S3 URLs (e.g. sfc-va3-*-customer-stage.s3.amazonaws.com) with revoked certs
     _json_session = {'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT': 'JSON'}
-    # Try password auth first (more reliable), then fall back to token if needed
     try:
+        conn = snowflake.connector.connect(
+            user=_user,
+            token=_token,
+            authenticator='PROGRAMMATIC_ACCESS_TOKEN',
+            account=_account,
+            warehouse=_warehouse,
+            database=_database,
+            schema=_schema,
+            role=_role,
+            insecure_mode=True,
+            session_parameters=_json_session,
+        )
+        if not SILENCE_VERBOSE_OUTPUT:
+            print("✅ Connected using programmatic access token")
+    except Exception as token_error:
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"⚠️ Token authentication failed: {token_error}")
+            print("🔄 Falling back to password authentication...")
         conn = snowflake.connector.connect(
             user=_user,
             password=_password,
@@ -8422,25 +8414,6 @@ def connect_snowflake():
         )
         if not SILENCE_VERBOSE_OUTPUT:
             print("✅ Connected using password authentication")
-    except Exception as pwd_error:
-        if not SILENCE_VERBOSE_OUTPUT:
-            print(f"⚠️ Password authentication failed: {pwd_error}")
-            print("🔄 Falling back to token authentication...")
-        conn = snowflake.connector.connect(
-            user=_user,
-            token=_token,
-            password='placeholder',  # Some connector versions require this even for token auth
-            authenticator='PROGRAMMATIC_ACCESS_TOKEN',
-            account=_account,
-            warehouse=_warehouse,
-            database=_database,
-            schema=_schema,
-            role=_role,
-            insecure_mode=True,
-            session_parameters=_json_session,
-        )
-        if not SILENCE_VERBOSE_OUTPUT:
-            print("✅ Connected using programmatic access token")
     with conn.cursor() as cur:
         cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         # INTELLIGENT WAREHOUSE SCALING: Match warehouse size to data volume
