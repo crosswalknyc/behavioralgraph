@@ -20435,10 +20435,18 @@ def _escape_for_sf_lf_sql(term):
 def run_sf_lf_conversion(job_id):
     """Run the SF-LF Conversion analysis using Snowflake queries."""
     conn = None
+    print(f"[SF-LF] Starting job {job_id}")
     try:
         update_job_status(job_id, progress=5, message='Initializing...')
+        
+        if job_id not in jobs:
+            print(f"[SF-LF] ERROR: Job {job_id} not found in jobs dict!")
+            update_job_status(job_id, status='failed', error='Job not found in tracker')
+            return
+        
         job = jobs[job_id]
         params = job['params']
+        print(f"[SF-LF] Params: {params}")
         
         sf_urls_raw = params.get('sf_urls', '')
         sf_platforms_raw = params.get('sf_platforms', '')
@@ -20455,13 +20463,14 @@ def run_sf_lf_conversion(job_id):
         sf_urls = [u.strip() for u in sf_urls_split if u.strip()]
         sf_platforms = [p.strip() for p in sf_platforms_raw.split(',') if p.strip()] if sf_platforms_raw else []
         
+        print(f"[SF-LF] Parsed {len(sf_urls)} URLs, {len(sf_platforms)} platforms")
         update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
 
         import snowflake.connector
         
-        # Use dedicated 6XL warehouse for SF-LF Conversion analysis
-        SF_LF_WAREHOUSE = 'SHORT2LONGCONV'
+        # Use default warehouse - skip 6XL creation to avoid permission issues
         default_wh = os.environ.get('SNOWFLAKE_WAREHOUSE', 'BEHAVIORALGRAPH_WH')
+        print(f"[SF-LF] Using warehouse: {default_wh}")
         
         conn = snowflake.connector.connect(
             user=os.environ.get('SNOWFLAKE_USER'),
@@ -20471,24 +20480,9 @@ def run_sf_lf_conversion(job_id):
             database='PROCESSEDCLICKSTREAM',
             schema='PUBLIC'
         )
+        print(f"[SF-LF] Connected to Snowflake")
         cur = conn.cursor()
-        
-        # Try to create/use dedicated 6XL warehouse for this analysis
-        active_warehouse = default_wh
-        try:
-            cur.execute(f"""
-                CREATE WAREHOUSE IF NOT EXISTS {SF_LF_WAREHOUSE}
-                WITH WAREHOUSE_SIZE = 'X6LARGE'
-                AUTO_SUSPEND = 60
-                AUTO_RESUME = TRUE
-                INITIALLY_SUSPENDED = FALSE
-            """)
-            cur.execute(f"USE WAREHOUSE {SF_LF_WAREHOUSE}")
-            active_warehouse = SF_LF_WAREHOUSE
-            update_job_status(job_id, progress=12, message=f'Using 6XL warehouse...')
-        except Exception as wh_err:
-            print(f"[SF-LF] Warning: Could not create/use {SF_LF_WAREHOUSE}, using default {default_wh}: {wh_err}")
-            update_job_status(job_id, progress=12, message=f'Using default warehouse...')
+        update_job_status(job_id, progress=15, message='Connected to Snowflake...')
         
         cur.close()
         cur = conn.cursor()
@@ -20534,9 +20528,11 @@ def run_sf_lf_conversion(job_id):
             lf_platform_filter = f"LOWER(COMMON_NAME) = '{lf_plat_esc.lower()}'"
         
         update_job_status(job_id, progress=20, message='Querying short form views by URL...')
-        
+        print(f"[SF-LF] Starting URL queries for {len(sf_urls)} URLs")
+
         # ===== 1. Short Form Views per URL =====
         for i, url in enumerate(sf_urls):
+            print(f"[SF-LF] Querying URL {i+1}/{len(sf_urls)}: {url[:50]}...")
             like_esc, _ = _escape_for_sf_lf_sql(url)
             query = f"""
                 SELECT COUNT(DISTINCT UID) as unique_views,
@@ -20545,18 +20541,25 @@ def run_sf_lf_conversion(job_id):
                 WHERE LOWER(URL) LIKE '%{like_esc}%' ESCAPE '\\\\'
                   AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
             """
-            cur.execute(query)
-            row = cur.fetchone()
-            results['url_metrics'].append({
-                'url': url,
-                'unique_views': row[0] if row else 0,
-                'duplicated_views': row[1] if row else 0
-            })
+            try:
+                cur.execute(query)
+                row = cur.fetchone()
+                print(f"[SF-LF] URL {i+1} result: unique={row[0] if row else 0}, total={row[1] if row else 0}")
+                results['url_metrics'].append({
+                    'url': url,
+                    'unique_views': row[0] if row else 0,
+                    'duplicated_views': row[1] if row else 0
+                })
+            except Exception as query_err:
+                print(f"[SF-LF] ERROR querying URL {i+1}: {query_err}")
+                raise
         
         update_job_status(job_id, progress=30, message='Querying platform views...')
+        print(f"[SF-LF] Starting platform queries for {len(sf_platforms)} platforms")
         
         # ===== 2. Platform Views =====
         for plat in sf_platforms:
+            print(f"[SF-LF] Querying platform: {plat}")
             _, eq_esc = _escape_for_sf_lf_sql(plat)
             query = f"""
                 SELECT COUNT(DISTINCT UID) as unique_views,
@@ -20565,12 +20568,14 @@ def run_sf_lf_conversion(job_id):
                 WHERE LOWER(COMMON_NAME) = '{eq_esc.lower()}'
                   AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
             """
-            cur.execute(query)
-            row = cur.fetchone()
-            results['platform_metrics'].append({
-                'platform': plat,
-                'unique_views': row[0] if row else 0,
-                'duplicated_views': row[1] if row else 0
+            try:
+                cur.execute(query)
+                row = cur.fetchone()
+                print(f"[SF-LF] Platform {plat} result: unique={row[0] if row else 0}")
+                results['platform_metrics'].append({
+                    'platform': plat,
+                    'unique_views': row[0] if row else 0,
+                    'duplicated_views': row[1] if row else 0
             })
         
         update_job_status(job_id, progress=40, message='Calculating SF to LF conversions...')
