@@ -11,31 +11,17 @@ THREADS="${GUNICORN_THREADS:-1}"
 TIMEOUT="${GUNICORN_TIMEOUT:-300}"
 echo "Gunicorn: workers=${WORKERS} threads=${THREADS} timeout=${TIMEOUT}"
 
-# Eventlet path (1 worker only to stay under 512MB)
-if python -c "import flask_socketio" 2>/dev/null; then
-    exec gunicorn app:app \
-        --worker-class eventlet \
-        -w "${WORKERS}" \
-        --bind 0.0.0.0:${PORT:-10000} \
-        --timeout "${TIMEOUT}" \
-        --graceful-timeout 30 \
-        --access-logfile - \
-        --error-logfile - \
-        --keep-alive 5 \
-        --max-requests 1000 \
-        --max-requests-jitter 50 \
-        --log-level warning
-else
-    exec gunicorn app:app \
-        --bind 0.0.0.0:${PORT:-10000} \
-        --workers "${WORKERS}" \
-        --threads "${THREADS}" \
-        --timeout "${TIMEOUT}" \
-        --graceful-timeout 30 \
-        --access-logfile - \
-        --error-logfile - \
-        --keep-alive 5 \
-        --max-requests 1000 \
-        --max-requests-jitter 50 \
-        --log-level warning
-fi
+# Use sync workers (NOT eventlet) to avoid DNS resolution issues with snowflake-connector
+# Eventlet's greendns has incompatibilities with newer dnspython versions
+exec gunicorn app:app \
+    --bind 0.0.0.0:${PORT:-10000} \
+    --workers "${WORKERS}" \
+    --threads "${THREADS}" \
+    --timeout "${TIMEOUT}" \
+    --graceful-timeout 30 \
+    --access-logfile - \
+    --error-logfile - \
+    --keep-alive 5 \
+    --max-requests 1000 \
+    --max-requests-jitter 50 \
+    --log-level warning
