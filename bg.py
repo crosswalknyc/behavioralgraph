@@ -8393,25 +8393,8 @@ def connect_snowflake():
     # insecure_mode=True skips OCSP cert validation; avoids 254007 when Snowflake uses
     # internal/customer-stage S3 URLs (e.g. sfc-va3-*-customer-stage.s3.amazonaws.com) with revoked certs
     _json_session = {'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT': 'JSON'}
+    # Try password auth first (more reliable), then fall back to token if needed
     try:
-        conn = snowflake.connector.connect(
-            user=_user,
-            token=_token,
-            authenticator='PROGRAMMATIC_ACCESS_TOKEN',
-            account=_account,
-            warehouse=_warehouse,
-            database=_database,
-            schema=_schema,
-            role=_role,
-            insecure_mode=True,
-            session_parameters=_json_session,
-        )
-        if not SILENCE_VERBOSE_OUTPUT:
-            print("✅ Connected using programmatic access token")
-    except Exception as token_error:
-        if not SILENCE_VERBOSE_OUTPUT:
-            print(f"⚠️ Token authentication failed: {token_error}")
-            print("🔄 Falling back to password authentication...")
         conn = snowflake.connector.connect(
             user=_user,
             password=_password,
@@ -8425,6 +8408,25 @@ def connect_snowflake():
         )
         if not SILENCE_VERBOSE_OUTPUT:
             print("✅ Connected using password authentication")
+    except Exception as pwd_error:
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"⚠️ Password authentication failed: {pwd_error}")
+            print("🔄 Falling back to token authentication...")
+        conn = snowflake.connector.connect(
+            user=_user,
+            token=_token,
+            password='placeholder',  # Some connector versions require this even for token auth
+            authenticator='PROGRAMMATIC_ACCESS_TOKEN',
+            account=_account,
+            warehouse=_warehouse,
+            database=_database,
+            schema=_schema,
+            role=_role,
+            insecure_mode=True,
+            session_parameters=_json_session,
+        )
+        if not SILENCE_VERBOSE_OUTPUT:
+            print("✅ Connected using programmatic access token")
     with conn.cursor() as cur:
         cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         # INTELLIGENT WAREHOUSE SCALING: Match warehouse size to data volume
