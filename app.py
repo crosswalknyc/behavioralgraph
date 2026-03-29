@@ -20470,22 +20470,16 @@ def run_sf_lf_conversion(job_id):
         print(f"[SF-LF] Parsed {len(sf_urls)} URLs, {len(sf_platforms)} platforms")
         update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
 
-        import snowflake.connector
-        
-        # Use dedicated 6XL warehouse SHORT2LONGCONV (pre-created)
-        SF_LF_WAREHOUSE = 'SHORT2LONGCONV'
-        print(f"[SF-LF] Using 6XL warehouse: {SF_LF_WAREHOUSE}")
-        
-        conn = snowflake.connector.connect(
-            user=os.environ.get('SNOWFLAKE_USER'),
-            password=os.environ.get('SNOWFLAKE_PASSWORD'),
-            account=os.environ.get('SNOWFLAKE_ACCOUNT'),
-            warehouse=SF_LF_WAREHOUSE,
-            database='PROCESSEDCLICKSTREAM',
-            schema='PUBLIC'
-        )
-        print(f"[SF-LF] Connected to Snowflake with {SF_LF_WAREHOUSE}")
+        # Use bg module for Snowflake connection (same as other analysis functions)
+        import bg as _bg
+        conn = _bg.connect_snowflake()
+        print(f"[SF-LF] Connected to Snowflake via bg module")
         cur = conn.cursor()
+        
+        # Switch to dedicated 6XL warehouse for this analysis
+        SF_LF_WAREHOUSE = 'SHORT2LONGCONV'
+        cur.execute(f"USE WAREHOUSE {SF_LF_WAREHOUSE}")
+        print(f"[SF-LF] Using 6XL warehouse: {SF_LF_WAREHOUSE}")
         update_job_status(job_id, progress=15, message='Connected to 6XL warehouse...')
         
         cur.close()
