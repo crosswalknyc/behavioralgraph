@@ -20806,55 +20806,61 @@ def run_sf_lf_conversion(job_id):
         safe_name = ''.join(c if c.isalnum() or c in ' _-' else '_' for c in project_name).strip()
         output_filename = f"SF_LF_{safe_name}_{timestamp}.csv"
         output_path = output_folder / output_filename
-        
+
+        # Gen Pop projection helper: (value * 15 / 10,000,000) * 329,900,000
+        def project_to_gen_pop(value):
+            if value is None or value == 0:
+                return 0
+            return int(round(value * 15 / 10000000 * 329900000))
+
         # Build CSV rows
         csv_rows = []
-        
+
         # Header section
-        csv_rows.append({'Column': 'PROJECT_INFO', 'Value': project_name, 'Metric': '', 'Count': '', 'Percentage': ''})
-        csv_rows.append({'Column': 'DATE_RANGE', 'Value': f'{start_date} to {end_date}', 'Metric': '', 'Count': '', 'Percentage': ''})
-        csv_rows.append({'Column': 'ATTRIBUTION_WINDOW', 'Value': f'{attribution_window} days', 'Metric': '', 'Count': '', 'Percentage': ''})
-        csv_rows.append({'Column': 'SHORT_FORM_URLS', 'Value': '; '.join(sf_urls), 'Metric': '', 'Count': '', 'Percentage': ''})
-        csv_rows.append({'Column': 'SHORT_FORM_PLATFORMS', 'Value': '; '.join(sf_platforms) if sf_platforms else 'N/A', 'Metric': '', 'Count': '', 'Percentage': ''})
-        csv_rows.append({'Column': 'LONG_FORM_TITLE', 'Value': lf_title, 'Metric': '', 'Count': '', 'Percentage': ''})
-        csv_rows.append({'Column': 'LONG_FORM_PLATFORM', 'Value': lf_platform if lf_platform else 'N/A', 'Metric': '', 'Count': '', 'Percentage': ''})
-        csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'PROJECT_INFO', 'Value': project_name, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        csv_rows.append({'Column': 'DATE_RANGE', 'Value': f'{start_date} to {end_date}', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        csv_rows.append({'Column': 'ATTRIBUTION_WINDOW', 'Value': f'{attribution_window} days', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        csv_rows.append({'Column': 'SHORT_FORM_URLS', 'Value': '; '.join(sf_urls), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        csv_rows.append({'Column': 'SHORT_FORM_PLATFORMS', 'Value': '; '.join(sf_platforms) if sf_platforms else 'N/A', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        csv_rows.append({'Column': 'LONG_FORM_TITLE', 'Value': lf_title, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        csv_rows.append({'Column': 'LONG_FORM_PLATFORM', 'Value': lf_platform if lf_platform else 'N/A', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         
         # URL Metrics Section
-        csv_rows.append({'Column': 'URL_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': 'URL_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         for um in results['url_metrics']:
-            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Unique Views', 'Count': um['unique_views'], 'Percentage': ''})
-            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Duplicated Views', 'Count': um['duplicated_views'], 'Percentage': ''})
-            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Converted to LF', 'Count': um.get('converted', 0), 'Percentage': f"{um.get('conversion_rate', 0)}%"})
+            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Unique Views', 'Count': um['unique_views'], 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(um['unique_views'])})
+            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Duplicated Views', 'Count': um['duplicated_views'], 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(um['duplicated_views'])})
+            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Converted to LF', 'Count': um.get('converted', 0), 'Percentage': f"{um.get('conversion_rate', 0)}%", 'Gen_Pop_Projection': project_to_gen_pop(um.get('converted', 0))})
         
         # Platform Metrics Section
         if results['platform_metrics']:
-            csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
-            csv_rows.append({'Column': 'PLATFORM_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+            csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            csv_rows.append({'Column': 'PLATFORM_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
             for pm in results['platform_metrics']:
-                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Unique Views', 'Count': pm['unique_views'], 'Percentage': ''})
-                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Duplicated Views', 'Count': pm['duplicated_views'], 'Percentage': ''})
+                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Unique Views', 'Count': pm['unique_views'], 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(pm['unique_views'])})
+                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Duplicated Views', 'Count': pm['duplicated_views'], 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(pm['duplicated_views'])})
                 if 'converted_to_title' in pm:
-                    csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Converted to Title', 'Count': pm['converted_to_title'], 'Percentage': f"{pm.get('conversion_rate_to_title', 0)}%"})
+                    csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Converted to Title', 'Count': pm['converted_to_title'], 'Percentage': f"{pm.get('conversion_rate_to_title', 0)}%", 'Gen_Pop_Projection': project_to_gen_pop(pm['converted_to_title'])})
         
         # Conversion Summary Section
-        csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
-        csv_rows.append({'Column': 'CONVERSION_SUMMARY', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        csv_rows.append({'Column': 'CONVERSION_SUMMARY', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         sf_conv = results['conversions'].get('sf_url_to_lf_title', {})
-        csv_rows.append({'Column': 'SF_URL_TO_LF_TITLE', 'Value': 'Total SF Viewers', 'Metric': '', 'Count': sf_conv.get('total_sf_viewers', 0), 'Percentage': ''})
-        csv_rows.append({'Column': 'SF_URL_TO_LF_TITLE', 'Value': 'Converted Users', 'Metric': '', 'Count': sf_conv.get('converted_users', 0), 'Percentage': f"{sf_conv.get('conversion_rate', 0)}%"})
-        csv_rows.append({'Column': 'SF_URL_TO_LF_TITLE', 'Value': 'Avg Hours to Conversion', 'Metric': '', 'Count': sf_conv.get('avg_hours_to_conversion', 0), 'Percentage': ''})
+        csv_rows.append({'Column': 'SF_URL_TO_LF_TITLE', 'Value': 'Total SF Viewers', 'Metric': '', 'Count': sf_conv.get('total_sf_viewers', 0), 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(sf_conv.get('total_sf_viewers', 0))})
+        csv_rows.append({'Column': 'SF_URL_TO_LF_TITLE', 'Value': 'Converted Users', 'Metric': '', 'Count': sf_conv.get('converted_users', 0), 'Percentage': f"{sf_conv.get('conversion_rate', 0)}%", 'Gen_Pop_Projection': project_to_gen_pop(sf_conv.get('converted_users', 0))})
+        csv_rows.append({'Column': 'SF_URL_TO_LF_TITLE', 'Value': 'Avg Hours to Conversion', 'Metric': '', 'Count': sf_conv.get('avg_hours_to_conversion', 0), 'Percentage': '', 'Gen_Pop_Projection': ''})
         
         if 'sf_url_to_lf_platform' in results['conversions']:
             sf_plat_conv = results['conversions']['sf_url_to_lf_platform']
-            csv_rows.append({'Column': 'SF_URL_TO_LF_PLATFORM', 'Value': 'Converted Users', 'Metric': '', 'Count': sf_plat_conv.get('converted_users', 0), 'Percentage': f"{sf_plat_conv.get('conversion_rate', 0)}%"})
+            csv_rows.append({'Column': 'SF_URL_TO_LF_PLATFORM', 'Value': 'Converted Users', 'Metric': '', 'Count': sf_plat_conv.get('converted_users', 0), 'Percentage': f"{sf_plat_conv.get('conversion_rate', 0)}%", 'Gen_Pop_Projection': project_to_gen_pop(sf_plat_conv.get('converted_users', 0))})
         
         # Demographics Section
-        csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
-        csv_rows.append({'Column': 'DEMOGRAPHICS - Converted Users', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': ''})
+        csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        csv_rows.append({'Column': 'DEMOGRAPHICS - Converted Users', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         for demo_type, demo_data in results['demographics'].items():
             for value, data in demo_data.items():
-                csv_rows.append({'Column': demo_type.upper(), 'Value': value, 'Metric': '', 'Count': data['count'], 'Percentage': f"{data['percentage']}%"})
+                csv_rows.append({'Column': demo_type.upper(), 'Value': value, 'Metric': '', 'Count': data['count'], 'Percentage': f"{data['percentage']}%", 'Gen_Pop_Projection': project_to_gen_pop(data['count'])})
         
         # Write CSV
         import pandas as pd
