@@ -20472,21 +20472,21 @@ def run_sf_lf_conversion(job_id):
 
         import snowflake.connector
         
-        # Use default warehouse - skip 6XL creation to avoid permission issues
-        default_wh = os.environ.get('SNOWFLAKE_WAREHOUSE', 'BEHAVIORALGRAPH_WH')
-        print(f"[SF-LF] Using warehouse: {default_wh}")
+        # Use dedicated 6XL warehouse SHORT2LONGCONV (pre-created)
+        SF_LF_WAREHOUSE = 'SHORT2LONGCONV'
+        print(f"[SF-LF] Using 6XL warehouse: {SF_LF_WAREHOUSE}")
         
         conn = snowflake.connector.connect(
             user=os.environ.get('SNOWFLAKE_USER'),
             password=os.environ.get('SNOWFLAKE_PASSWORD'),
             account=os.environ.get('SNOWFLAKE_ACCOUNT'),
-            warehouse=default_wh,
+            warehouse=SF_LF_WAREHOUSE,
             database='PROCESSEDCLICKSTREAM',
             schema='PUBLIC'
         )
-        print(f"[SF-LF] Connected to Snowflake")
+        print(f"[SF-LF] Connected to Snowflake with {SF_LF_WAREHOUSE}")
         cur = conn.cursor()
-        update_job_status(job_id, progress=15, message='Connected to Snowflake...')
+        update_job_status(job_id, progress=15, message='Connected to 6XL warehouse...')
         
         cur.close()
         cur = conn.cursor()
