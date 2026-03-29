@@ -20470,20 +20470,36 @@ def run_sf_lf_conversion(job_id):
         print(f"[SF-LF] Parsed {len(sf_urls)} URLs, {len(sf_platforms)} platforms")
         update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
 
-        # Use bg module for Snowflake connection (same as other analysis functions)
-        import bg as _bg
-        conn = _bg.connect_snowflake()
-        print(f"[SF-LF] Connected to Snowflake via bg module")
-        cur = conn.cursor()
+        # Direct Snowflake connection (original working method)
+        import snowflake.connector
         
-        # Switch to dedicated 6XL warehouse for this analysis
         SF_LF_WAREHOUSE = 'SHORT2LONGCONV'
-        cur.execute(f"USE WAREHOUSE {SF_LF_WAREHOUSE}")
-        print(f"[SF-LF] Using 6XL warehouse: {SF_LF_WAREHOUSE}")
-        update_job_status(job_id, progress=15, message='Connected to 6XL warehouse...')
         
-        cur.close()
+        # Debug: log which env vars are available
+        print(f"[SF-LF] SNOWFLAKE_USER set: {bool(os.environ.get('SNOWFLAKE_USER'))}")
+        print(f"[SF-LF] SNOWFLAKE_PASSWORD set: {bool(os.environ.get('SNOWFLAKE_PASSWORD'))}")
+        print(f"[SF-LF] SNOWFLAKE_ACCOUNT set: {bool(os.environ.get('SNOWFLAKE_ACCOUNT'))}")
+        
+        conn = snowflake.connector.connect(
+            user=os.environ.get('SNOWFLAKE_USER'),
+            password=os.environ.get('SNOWFLAKE_PASSWORD'),
+            account=os.environ.get('SNOWFLAKE_ACCOUNT'),
+            warehouse=SF_LF_WAREHOUSE,
+            database='PROCESSEDCLICKSTREAM',
+            schema='PUBLIC'
+        )
+        print(f"[SF-LF] Connected to Snowflake directly")
         cur = conn.cursor()
+        
+        # Ensure warehouse is running
+        try:
+            cur.execute(f"USE WAREHOUSE {SF_LF_WAREHOUSE}")
+            print(f"[SF-LF] Using warehouse: {SF_LF_WAREHOUSE}")
+        except Exception as wh_err:
+            print(f"[SF-LF] Warehouse {SF_LF_WAREHOUSE} not available, using default")
+            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        
+        update_job_status(job_id, progress=15, message='Connected to Snowflake...')
         
         results = {
             'project_name': project_name,
