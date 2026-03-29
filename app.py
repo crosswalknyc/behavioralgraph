@@ -20580,7 +20580,10 @@ def run_sf_lf_conversion(job_id):
                     'platform': plat,
                     'unique_views': row[0] if row else 0,
                     'duplicated_views': row[1] if row else 0
-            })
+                })
+            except Exception as query_err:
+                print(f"[SF-LF] ERROR querying platform {plat}: {query_err}")
+                raise
         
         update_job_status(job_id, progress=40, message='Calculating SF to LF conversions...')
         
