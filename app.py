@@ -20491,13 +20491,17 @@ def run_sf_lf_conversion(job_id):
         print(f"[SF-LF] Connected to Snowflake directly")
         cur = conn.cursor()
         
-        # Ensure warehouse is running
+        # Ensure warehouse is running and set long timeout for complex queries
         try:
             cur.execute(f"USE WAREHOUSE {SF_LF_WAREHOUSE}")
             print(f"[SF-LF] Using warehouse: {SF_LF_WAREHOUSE}")
         except Exception as wh_err:
             print(f"[SF-LF] Warehouse {SF_LF_WAREHOUSE} not available, using default")
             cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        
+        # Set session timeout to 30 minutes for large URL sets
+        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 1800")
+        print(f"[SF-LF] Set query timeout to 30 minutes")
         
         update_job_status(job_id, progress=15, message='Connected to Snowflake...')
         

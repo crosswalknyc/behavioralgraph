@@ -65,7 +65,7 @@ services:
       - key: GUNICORN_THREADS
         value: "1"
       - key: GUNICORN_TIMEOUT
-        value: "300"
+        value: "1800"
       # Cron secret for /api/cron/* endpoints (shared between web + cron services)
       - key: CRON_SECRET
         value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
