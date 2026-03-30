@@ -14091,6 +14091,10 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <select id="ethnicitySortSelect" onchange="sortEthnicityChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
+                                            <option value="value">%↓</option>
+                                            <option value="alpha">A-Z</option>
+                                        </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Ethnicity')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Ethnicity')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Ethnicity')">➕</button></span>
                                     </span>
                                 </h3>
@@ -34831,13 +34835,15 @@
             });
 
             // Ethnicity - with Gen Pop in legend (green/red based on index). All labels in ALL CAPS.
-            const ethLabels = Object.keys(demographics.ethnicity);
+            // Sort ethnicity data based on current sort mode (default: by percentage descending)
+            const sortedEth = getSortedEthnicityData(demographics.ethnicity);
+            const ethLabels = sortedEth.labels;
             const ethDisplayLabels = ethLabels.map(l => {
                 const display = (l && l.toLowerCase()) === 'latino' || (l && l.toLowerCase()) === 'latinx' ? 'Hispanic or Latino' : (l || '');
                 return String(display).toUpperCase();
             });
             const ethGenPop = ethLabels.map(k => demographicsGenPop.ethnicity?.[k] || 0);
-            const ethPcts = Object.values(demographics.ethnicity);
+            const ethPcts = sortedEth.values;
             const ethData = isProjection
                 ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
                 : ethPcts;
@@ -36424,6 +36430,34 @@
         
         function sortIncomeChart(mode) {
             currentIncomeSortMode = mode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+
+        let currentEthnicitySortMode = 'value'; // 'value' (percentage, default) or 'alpha' (alphabetical)
+
+        function getSortedEthnicityData(ethnicityData) {
+            const entries = Object.entries(ethnicityData);
+
+            if (currentEthnicitySortMode === 'alpha') {
+                entries.sort((a, b) => a[0].localeCompare(b[0]));
+            } else {
+                entries.sort((a, b) => b[1] - a[1]);
+            }
+
+            const labels = [];
+            const values = [];
+            entries.forEach(([key, value]) => {
+                labels.push(key);
+                values.push(value);
+            });
+
+            return { labels, values };
+        }
+
+        function sortEthnicityChart(mode) {
+            currentEthnicitySortMode = mode;
             if (currentDashboardData) {
                 renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
             }

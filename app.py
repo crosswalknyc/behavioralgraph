@@ -1751,6 +1751,89 @@ def validate_demographics_consistency(new_demographics, existing_demographics, t
     is_valid = len(discrepancies) == 0
     return is_valid, discrepancies
 
+
+def validate_demographics_raw_totals(df, sample_size, fix_discrepancies=True):
+    """
+    Validate that each demographic category's Original Raw Numbers sum to the sample size.
+    
+    For each demographic category (AGE, GENDER, ETHNICITY, etc.), the sum of all 
+    Original Raw Numbers values should equal the sample size.
+    
+    Args:
+        df: DataFrame with Column, Value, and Original Raw Numbers columns
+        sample_size: Expected total for each demographic category
+        fix_discrepancies: If True, rescale raw numbers to match sample_size
+        
+    Returns:
+        (is_valid, discrepancies, df) - validity status, list of issues, and (possibly fixed) dataframe
+    """
+    DEMOGRAPHIC_CATEGORIES = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 
+                              'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS']
+    discrepancies = []
+    
+    if sample_size is None or sample_size <= 0:
+        return True, [], df
+    
+    raw_col = None
+    for col in df.columns:
+        if 'original raw' in col.lower():
+            raw_col = col
+            break
+    
+    if raw_col is None:
+        return True, [], df
+    
+    for category in DEMOGRAPHIC_CATEGORIES:
+        mask = df['Column'].str.upper() == category
+        if not mask.any():
+            continue
+        
+        cat_df = df[mask].copy()
+        raw_values = pd.to_numeric(cat_df[raw_col], errors='coerce').fillna(0)
+        total = raw_values.sum()
+        
+        if total == 0:
+            continue
+        
+        diff = abs(total - sample_size)
+        diff_pct = (diff / sample_size) * 100 if sample_size > 0 else 0
+        
+        if diff > 1:
+            discrepancies.append({
+                'category': category,
+                'expected': sample_size,
+                'actual': int(total),
+                'difference': int(diff),
+                'difference_pct': round(diff_pct, 2)
+            })
+            
+            if fix_discrepancies and total > 0:
+                scale_factor = sample_size / total
+                indices = df[mask].index
+                for idx in indices:
+                    old_val = pd.to_numeric(df.at[idx, raw_col], errors='coerce') or 0
+                    new_val = round(old_val * scale_factor)
+                    df.at[idx, raw_col] = int(new_val)
+                
+                new_total = df.loc[mask, raw_col].apply(lambda x: pd.to_numeric(x, errors='coerce') or 0).sum()
+                rounding_diff = int(sample_size - new_total)
+                if rounding_diff != 0:
+                    max_idx = df.loc[mask, raw_col].apply(lambda x: pd.to_numeric(x, errors='coerce') or 0).idxmax()
+                    df.at[max_idx, raw_col] = int(pd.to_numeric(df.at[max_idx, raw_col], errors='coerce') or 0) + rounding_diff
+                
+                print(f"   ✅ Fixed {category}: {int(total)} → {sample_size}")
+    
+    is_valid = len(discrepancies) == 0
+    if discrepancies:
+        print(f"⚠️ Demographics raw totals validation: {len(discrepancies)} categories had discrepancies")
+        for d in discrepancies:
+            print(f"   - {d['category']}: expected {d['expected']:,}, got {d['actual']:,} (diff: {d['difference']:,}, {d['difference_pct']}%)")
+    else:
+        print("✅ Demographics raw totals validation: all categories sum to sample size")
+    
+    return is_valid, discrepancies, df
+
+
 def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, use_purgatory=True, bucket=None, category=None, source_type='profile_analysis'):
     """Upload a result file to S3. By default uploads to purgatory/ for admin review before release."""
     if not s3_client:
@@ -18091,6 +18174,28 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                                 df = bg.set_brand_input_to_csv(df)
                             if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
                                 df = bg.adjust_platform_to_100_percent(df, platform_name)
+                        
+                        # 9. Final check: validate demographics raw numbers sum to sample size
+                        print("🔍 Final check: validating demographics raw totals...")
+                        sample_size_row = df[df['Column'].str.upper() == 'SAMPLE SIZE']
+                        csv_sample_size = None
+                        if len(sample_size_row) > 0:
+                            for col in ['Category Share', 'Original Raw Numbers', 'Percentage']:
+                                if col in df.columns:
+                                    try:
+                                        val = sample_size_row.iloc[0][col]
+                                        csv_sample_size = int(float(str(val).replace(',', ''))) if val else None
+                                        if csv_sample_size and csv_sample_size > 0:
+                                            break
+                                    except (ValueError, TypeError):
+                                        pass
+                        
+                        if csv_sample_size and csv_sample_size > 0:
+                            _, raw_discrepancies, df = validate_demographics_raw_totals(df, csv_sample_size, fix_discrepancies=True)
+                            if raw_discrepancies:
+                                print(f"   ⚠️ Fixed {len(raw_discrepancies)} demographic categories to match sample size {csv_sample_size:,}")
+                        else:
+                            print("   ⚠️ Could not determine sample size for raw totals validation")
                         
                         # Save the fully processed file
                         df.to_csv(result_file, index=False)
