@@ -20778,101 +20778,23 @@ def run_sf_lf_conversion(job_id):
             url_metric['converted'] = converted  # From the main conversion query
             url_metric['conversion_rate'] = round((converted / url_metric['unique_views'] * 100), 2) if url_metric['unique_views'] > 0 else 0
         
-        update_job_status(job_id, progress=60, message='Calculating platform conversions...')
+        # Add conversion data to platform metrics
+        for plat_metric in results['platform_metrics']:
+            plat_metric['converted_to_title'] = converted
+            plat_metric['conversion_rate_to_title'] = round((converted / plat_metric['unique_views'] * 100), 4) if plat_metric['unique_views'] > 0 else 0
         
-        # ===== 5. Platform to Title Conversion (batched) =====
-        if sf_platforms and sf_platform_filter:
-            plat_conv_query = f"""
-                WITH sf_users AS (
-                    SELECT UID, MIN(VISIT_TS) as first_sf_ts
-                    FROM CLICKSTREAM_FINAL
-                    WHERE ({sf_platform_filter})
-                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                    GROUP BY UID
-                ),
-                lf_users AS (
-                    SELECT UID, MIN(VISIT_TS) as first_lf_ts
-                    FROM CLICKSTREAM_FINAL
-                    WHERE {lf_combined_filter}
-                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                    GROUP BY UID
-                )
-                SELECT 
-                    COUNT(DISTINCT CASE WHEN lf.UID IS NOT NULL AND lf.first_lf_ts > sf.first_sf_ts 
-                                        AND DATEDIFF('day', sf.first_sf_ts, lf.first_lf_ts) <= {attribution_window}
-                                   THEN sf.UID END) as converted
-                FROM sf_users sf
-                LEFT JOIN lf_users lf ON sf.UID = lf.UID
-            """
-            try:
-                cur.execute(plat_conv_query)
-                row = cur.fetchone()
-                plat_converted = row[0] if row else 0
-                for plat_metric in results['platform_metrics']:
-                    plat_metric['converted_to_title'] = plat_converted
-                    plat_metric['conversion_rate_to_title'] = round((plat_converted / plat_metric['unique_views'] * 100), 2) if plat_metric['unique_views'] > 0 else 0
-            except Exception as query_err:
-                print(f"[SF-LF] ERROR in platform conversion query: {query_err}")
-                raise
+        update_job_status(job_id, progress=70, message='Querying demographics of converted users...')
+        print(f"[SF-LF] Step 3: Get demographics of converted users")
         
-        update_job_status(job_id, progress=70, message='Calculating SF URL to LF platform conversions...')
-        
-        # ===== 6. SF URL to LF Platform Conversion (if LF platform specified) =====
-        if lf_platform:
-            sf_to_lf_plat_query = f"""
-                WITH sf_users AS (
-                    SELECT UID, MIN(VISIT_TS) as first_sf_ts
-                    FROM CLICKSTREAM_FINAL
-                    WHERE ({sf_url_filter})
-                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                    GROUP BY UID
-                ),
-                lf_plat_users AS (
-                    SELECT UID, MIN(VISIT_TS) as first_lf_ts
-                    FROM CLICKSTREAM_FINAL
-                    WHERE {lf_platform_filter}
-                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                    GROUP BY UID
-                )
-                SELECT 
-                    COUNT(DISTINCT CASE WHEN lp.UID IS NOT NULL AND lp.first_lf_ts > sf.first_sf_ts 
-                                        AND DATEDIFF('day', sf.first_sf_ts, lp.first_lf_ts) <= {attribution_window}
-                                   THEN sf.UID END) as converted
-                FROM sf_users sf
-                LEFT JOIN lf_plat_users lp ON sf.UID = lp.UID
-            """
-            cur.execute(sf_to_lf_plat_query)
-            row = cur.fetchone()
-            sf_to_plat_converted = row[0] if row else 0
-            results['conversions']['sf_url_to_lf_platform'] = {
-                'converted_users': sf_to_plat_converted,
-                'conversion_rate': round((sf_to_plat_converted / total_sf * 100), 2) if total_sf > 0 else 0
-            }
-        
-        update_job_status(job_id, progress=80, message='Querying demographics of converted users...')
-        
-        # ===== 7. Demographics of Converted Users =====
+        # ===== 4. Demographics of Converted Users (using temp table) =====
         demo_query = f"""
-            WITH sf_users AS (
-                SELECT UID, MIN(VISIT_TS) as first_sf_ts
-                FROM CLICKSTREAM_FINAL
-                WHERE ({sf_url_filter})
-                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                GROUP BY UID
-            ),
-            lf_users AS (
-                SELECT UID, MIN(VISIT_TS) as first_lf_ts
-                FROM CLICKSTREAM_FINAL
-                WHERE {lf_combined_filter}
-                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                GROUP BY UID
-            ),
-            converted_uids AS (
-                SELECT sf.UID
-                FROM sf_users sf
-                INNER JOIN lf_users lf ON sf.UID = lf.UID
-                WHERE lf.first_lf_ts > sf.first_sf_ts 
-                  AND DATEDIFF('day', sf.first_sf_ts, lf.first_lf_ts) <= {attribution_window}
+            WITH converted_uids AS (
+                SELECT DISTINCT c.UID
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                INNER JOIN {sf_temp_table} sf ON c.UID = sf.UID
+                WHERE LOWER(c.URL) LIKE '%{lf_title_pattern}%'
+                  {lf_platform_clause}
+                  AND c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
             )
             SELECT 
                 d.GENDER, d.AGE, d.ETHNICITY, d.INCOME, COUNT(DISTINCT d.UID) as cnt
@@ -20882,8 +20804,13 @@ def run_sf_lf_conversion(job_id):
               AND d.AGE IS NOT NULL AND UPPER(TRIM(d.AGE)) NOT IN ('OTHER', 'PREFER NOT TO SAY')
             GROUP BY d.GENDER, d.AGE, d.ETHNICITY, d.INCOME
         """
-        cur.execute(demo_query)
-        demo_rows = cur.fetchall()
+        try:
+            cur.execute(demo_query)
+            demo_rows = cur.fetchall()
+            print(f"[SF-LF] Demographics: {len(demo_rows)} rows returned")
+        except Exception as e:
+            print(f"[SF-LF] Demographics query error: {e}")
+            demo_rows = []
         
         # Aggregate demographics
         demo_counts = {'gender': {}, 'age': {}, 'ethnicity': {}, 'income': {}}
