@@ -16486,6 +16486,16 @@
 
                         <!-- Trends Tab -->
                         <div id="trendsTab" class="ticker-tab-content" style="display: none;">
+                            <!-- Inactive Feature Message (shown when data cutoff is set) -->
+                            <div id="trendsInactiveMessage" style="display: none; text-align: center; padding: 4rem 2rem;">
+                                <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">🔒</div>
+                                <h3 style="font-size: 1.5rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Inactive Feature</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 400px; margin: 0 auto;">
+                                    Trends data is not available for your access level. Please use the Daily Metrics or Historic Performance tabs to view historical data.
+                                </p>
+                            </div>
+                            <!-- Trends Content (hidden when data cutoff is set) -->
+                            <div id="trendsContent">
                             <!-- Date Range Selector (Collapsible) -->
                             <div class="insight-card-v2" style="margin-bottom: 1rem; padding: 0.5rem 1rem;">
                                 <!-- Collapsed View (Default) -->
@@ -16539,6 +16549,7 @@
                                     <canvas id="dailyChurnChart"></canvas>
                                 </div>
                             </div>
+                            </div><!-- End trendsContent -->
                         </div>
 
                         <!-- Daily Metrics Tab -->
@@ -17637,6 +17648,7 @@
                 'sales and related': 'sales retail',
                 'sales retail': 'sales retail',
                 'sales or retail': 'sales retail',
+                'sales & retail': 'sales retail',
                 'educational instruction and library': 'education or library services',
                 'education or library services': 'education or library services',
                 'healthcare support': 'healthcare practitioners or support',
@@ -17644,21 +17656,36 @@
                 'healthcare practitioners or support': 'healthcare practitioners or support',
                 'food preparation and serving related': 'service hospitality',
                 'service hospitality': 'service hospitality',
+                'service & hospitality': 'service hospitality',
+                'service and hospitality': 'service hospitality',
                 'personal care and service': 'service hospitality',
                 'building and grounds cleaning and maintenance': 'service hospitality',
                 'farming, fishing, and forestry': 'agriculture outdoor',
                 'agriculture outdoor': 'agriculture outdoor',
+                'agriculture & outdoor': 'agriculture outdoor',
+                'agriculture and outdoor': 'agriculture outdoor',
                 'production': 'manufacturing production',
                 'manufacturing production': 'manufacturing production',
+                'manufacturing & production': 'manufacturing production',
+                'manufacturing and production': 'manufacturing production',
                 'protective service': 'public safety protective services',
                 'public safety protective services': 'public safety protective services',
+                'public safety & protective services': 'public safety protective services',
+                'public safety and protective services': 'public safety protective services',
                 'transportation and material moving': 'transportation logistics',
                 'transportation logistics': 'transportation logistics',
+                'transportation & logistics': 'transportation logistics',
+                'transportation and logistics': 'transportation logistics',
                 'office and administrative support': 'office and administrative support',
+                'skilled trade/construction or maintenance': 'skilled trade construction',
+                'skilled trades/construction or maintenance': 'skilled trade construction',
+                'skilled trade construction': 'skilled trade construction',
                 'life, physical, and social science': 'science, technology technical professions',
                 'computer and mathematical': 'science, technology technical professions',
                 'architecture and engineering': 'science, technology technical professions',
                 'science, technology technical professions': 'science, technology technical professions',
+                'science, technology & technical professions': 'science, technology technical professions',
+                'science, technology and technical professions': 'science, technology technical professions',
             };
             return CANONICAL[v] || v;
         }
@@ -31835,17 +31862,17 @@
                 },
                 'OCCUPATION': {
                     'Management, Business & Professional': 20.0, 'MANAGEMENT, BUSINESS & PROFESSIONAL': 20.0,
-                    'Sales or Retail': 10.0, 'Sales & Retail': 10.0, 'SALES & RETAIL': 10.0,
+                    'Sales or Retail': 10.0, 'SALES OR RETAIL': 10.0, 'Sales & Retail': 10.0, 'SALES & RETAIL': 10.0,
                     'Education or Library Services': 6.0, 'EDUCATION OR LIBRARY SERVICES': 6.0,
                     'Healthcare Practitioners or Support': 8.0, 'HEALTHCARE PRACTITIONERS OR SUPPORT': 8.0,
-                    'Service & Hospitality': 12.0, 'SERVICE & HOSPITALITY': 12.0,
-                    'Agriculture & Outdoor': 2.0, 'AGRICULTURE & OUTDOOR': 2.0,
-                    'Skilled Trade/Construction or Maintenance': 8.0, 'Skilled Trades/Construction or Maintenance': 8.0,
-                    'Manufacturing & Production': 6.0, 'MANUFACTURING & PRODUCTION': 6.0,
-                    'Public Safety & Protective Services': 3.0, 'PUBLIC SAFETY & PROTECTIVE SERVICES': 3.0,
-                    'Transportation & Logistics': 5.0, 'TRANSPORTATION & LOGISTICS': 5.0,
-                    'Science, Technology & Technical Professions': 8.0, 'SCIENCE, TECHNOLOGY & TECHNICAL PROFESSIONS': 8.0,
-                    'Legal': 3.0, 'LEGAL': 3.0, 'Other': 2.0,
+                    'Service & Hospitality': 12.0, 'SERVICE & HOSPITALITY': 12.0, 'Service and Hospitality': 12.0, 'SERVICE AND HOSPITALITY': 12.0,
+                    'Agriculture & Outdoor': 2.0, 'AGRICULTURE & OUTDOOR': 2.0, 'Agriculture and Outdoor': 2.0, 'AGRICULTURE AND OUTDOOR': 2.0,
+                    'Skilled Trade/Construction or Maintenance': 8.0, 'SKILLED TRADE/CONSTRUCTION OR MAINTENANCE': 8.0, 'Skilled Trades/Construction or Maintenance': 8.0, 'SKILLED TRADES/CONSTRUCTION OR MAINTENANCE': 8.0,
+                    'Manufacturing & Production': 6.0, 'MANUFACTURING & PRODUCTION': 6.0, 'Manufacturing and Production': 6.0, 'MANUFACTURING AND PRODUCTION': 6.0,
+                    'Public Safety & Protective Services': 3.0, 'PUBLIC SAFETY & PROTECTIVE SERVICES': 3.0, 'Public Safety and Protective Services': 3.0, 'PUBLIC SAFETY AND PROTECTIVE SERVICES': 3.0,
+                    'Transportation & Logistics': 5.0, 'TRANSPORTATION & LOGISTICS': 5.0, 'Transportation and Logistics': 5.0, 'TRANSPORTATION AND LOGISTICS': 5.0,
+                    'Science, Technology & Technical Professions': 8.0, 'SCIENCE, TECHNOLOGY & TECHNICAL PROFESSIONS': 8.0, 'Science, Technology and Technical Professions': 8.0, 'SCIENCE, TECHNOLOGY AND TECHNICAL PROFESSIONS': 8.0,
+                    'Legal': 3.0, 'LEGAL': 3.0, 'Other': 2.0, 'OTHER': 2.0,
                     'MANAGEMENT': 20.0, 'BUSINESS AND FINANCIAL OPERATIONS': 20.0,
                     'SALES AND RELATED': 10.0,
                     'EDUCATIONAL INSTRUCTION AND LIBRARY': 6.0,
@@ -34720,7 +34747,7 @@
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
             const sortedAgeResult = getSortedAgeData(demographics.age);
-            const ageLabels = Object.keys(sortedAgeResult.display);
+            const ageLabels = Object.keys(sortedAgeResult.display).map(l => l.toUpperCase());
             const ageOriginalKeys = sortedAgeResult.originalKeys;
             const ageGenPop = ageOriginalKeys.map(k => demographicsGenPop.age?.[k] || 0);
             const agePcts = ageLabels.map((k, i) => sortedAgeResult.display[k]);
@@ -34814,7 +34841,7 @@
 
             // Gender - with Gen Pop in legend (green/red based on index)
             const genderSorted = getSortedGenderData(demographics.gender, demographicsIndex.gender);
-            const genderLabels = genderSorted.labels;
+            const genderLabels = genderSorted.labels.map(l => l.toUpperCase());
             const genderOrigKeys = genderSorted.originalKeys;
             const genderGenPop = genderOrigKeys.map(k => demographicsGenPop.gender?.[k] || 0);
             const genderPcts = genderSorted.values;
@@ -35059,7 +35086,7 @@
             // Income - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
             const sortedIncomeResult = getSortedIncomeData(demographics.income);
-            const incomeLabels = Object.keys(sortedIncomeResult.display);
+            const incomeLabels = Object.keys(sortedIncomeResult.display).map(l => l.toUpperCase());
             const incomeOriginalKeys = sortedIncomeResult.originalKeys;
             const incomeGenPop = incomeOriginalKeys.map(k => demographicsGenPop.income?.[k] || 0);
             const incomePcts = incomeLabels.map((k, i) => sortedIncomeResult.display[k]);
@@ -35174,7 +35201,7 @@
             // Education - horizontal bar with Gen Pop
             if (demographics.education && Object.keys(demographics.education).length > 0) {
                 const eduSorted = getSortedEducationData(demographics.education, demographicsIndex.education);
-                const eduLabels = eduSorted.labels;
+                const eduLabels = eduSorted.labels.map(l => l.toUpperCase());
                 const eduOrigKeys = eduSorted.originalKeys;
                 const eduGenPop = eduOrigKeys.map(k => demographicsGenPop.education?.[k] || 0);
                 const eduPcts = eduSorted.values;
@@ -35261,7 +35288,7 @@
             // Relationship - doughnut with Gen Pop
             if (demographics.relationship && Object.keys(demographics.relationship).length > 0) {
                 const relSorted = getSortedRelationshipData(demographics.relationship, demographicsIndex.relationship);
-                const relLabels = relSorted.labels;
+                const relLabels = relSorted.labels.map(l => l.toUpperCase());
                 const relOrigKeys = relSorted.originalKeys;
                 const relGenPop = relOrigKeys.map(k => {
                     // Try exact match first
@@ -35509,7 +35536,7 @@
             // Parental Status - doughnut with Gen Pop
             if (demographics.parental_status && Object.keys(demographics.parental_status).length > 0) {
                 const psSorted = getSortedParentalStatusData(demographics.parental_status, demographicsIndex.parental_status);
-                const psLabels = psSorted.labels;
+                const psLabels = psSorted.labels.map(l => l.toUpperCase());
                 const psOrigKeys = psSorted.originalKeys;
                 const psGenPop = psOrigKeys.map(k => demographicsGenPop.parental_status?.[k] || 0);
                 const psPcts = psSorted.values;
@@ -35623,9 +35650,26 @@
             // Occupation - bar chart with Gen Pop
             if (demographics.occupation && Object.keys(demographics.occupation).length > 0) {
                 const occSorted = getSortedOccupationData(demographics.occupation, demographicsIndex.occupation);
-                const occLabels = occSorted.labels;
+                const occLabels = occSorted.labels.map(l => l.toUpperCase());
                 const occOrigKeys = occSorted.originalKeys;
-                const occGenPop = occOrigKeys.map(k => demographicsGenPop.occupation?.[k] || 0);
+                const occGenPop = occOrigKeys.map(k => {
+                    // Try exact match first
+                    if (demographicsGenPop.occupation?.[k] != null) return demographicsGenPop.occupation[k];
+                    // Try uppercase match
+                    if (demographicsGenPop.occupation?.[k.toUpperCase()] != null) return demographicsGenPop.occupation[k.toUpperCase()];
+                    // Fuzzy match using normalizeDemoForIndex
+                    const normKey = normalizeDemoForIndex(k);
+                    for (const [gpKey, gpVal] of Object.entries(demographicsGenPop.occupation || {})) {
+                        if (normalizeDemoForIndex(gpKey) === normKey) return gpVal;
+                    }
+                    // Fallback to hardcoded baseline with fuzzy match
+                    if (GENPOP_DEMOGRAPHICS?.OCCUPATION?.[k] != null) return GENPOP_DEMOGRAPHICS.OCCUPATION[k];
+                    if (GENPOP_DEMOGRAPHICS?.OCCUPATION?.[k.toUpperCase()] != null) return GENPOP_DEMOGRAPHICS.OCCUPATION[k.toUpperCase()];
+                    for (const [gpKey, gpVal] of Object.entries(GENPOP_DEMOGRAPHICS?.OCCUPATION || {})) {
+                        if (normalizeDemoForIndex(gpKey) === normKey) return gpVal;
+                    }
+                    return 0;
+                });
                 const occPcts = occSorted.values;
                 const occData = isProjection ? occOrigKeys.map(k => demographicsProjection.occupation?.[k] || 0) : occPcts;
                 
