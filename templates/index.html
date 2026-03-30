@@ -14200,6 +14200,11 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <select id="sexualOrientationSortSelect" onchange="sortSexualOrientationChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
+                                            <option value="value">%↓</option>
+                                            <option value="alpha">A-Z</option>
+                                            <option value="index">Idx↓</option>
+                                        </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Sexual Orientation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Sexual Orientation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Sexual Orientation')">➕</button></span>
                                     </span>
                                 </h3>
@@ -14220,6 +14225,11 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <select id="parentalStatusSortSelect" onchange="sortParentalStatusChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
+                                            <option value="value">%↓</option>
+                                            <option value="alpha">A-Z</option>
+                                            <option value="index">Idx↓</option>
+                                        </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Parental Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Parental Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Parental Status')">➕</button></span>
                                     </span>
                                 </h3>
@@ -14239,6 +14249,11 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
+                                        </select>
+                                        <select id="occupationSortSelect" onchange="sortOccupationChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
+                                            <option value="value">%↓</option>
+                                            <option value="alpha">A-Z</option>
+                                            <option value="index">Idx↓</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
                                     </span>
@@ -34798,11 +34813,13 @@
             });
 
             // Gender - with Gen Pop in legend (green/red based on index)
-            const genderLabels = Object.keys(demographics.gender);
-            const genderGenPop = genderLabels.map(k => demographicsGenPop.gender?.[k] || 0);
-            const genderPcts = Object.values(demographics.gender);
+            const genderSorted = getSortedGenderData(demographics.gender, demographicsIndex.gender);
+            const genderLabels = genderSorted.labels;
+            const genderOrigKeys = genderSorted.originalKeys;
+            const genderGenPop = genderOrigKeys.map(k => demographicsGenPop.gender?.[k] || 0);
+            const genderPcts = genderSorted.values;
             const genderData = isProjection
-                ? genderLabels.map(k => demographicsProjection.gender?.[k] || 0)
+                ? genderOrigKeys.map(k => demographicsProjection.gender?.[k] || 0)
                 : genderPcts;
             
             const genderChartType = chartTypePrefs.gender || 'bar';
@@ -35773,6 +35790,14 @@
         // Age sorting variables
         let currentAgeSortMode = 'age'; // 'age' or 'value'
         
+        // Demographic sort mode variables
+        let currentGenderSortMode = 'value'; // 'value', 'alpha', or 'index'
+        let currentEducationSortMode = 'value';
+        let currentRelationshipSortMode = 'value';
+        let currentSexualOrientationSortMode = 'value';
+        let currentParentalStatusSortMode = 'value';
+        let currentOccupationSortMode = 'value';
+        
         // Chart type preferences (stored per chart)
         const chartTypePrefs = {
             age: 'bar',
@@ -35804,6 +35829,48 @@
         
         function sortAgeChart(sortMode) {
             currentAgeSortMode = sortMode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+        
+        function sortGenderChart(sortMode) {
+            currentGenderSortMode = sortMode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+        
+        function sortEducationChart(sortMode) {
+            currentEducationSortMode = sortMode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+        
+        function sortRelationshipChart(sortMode) {
+            currentRelationshipSortMode = sortMode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+        
+        function sortSexualOrientationChart(sortMode) {
+            currentSexualOrientationSortMode = sortMode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+        
+        function sortParentalStatusChart(sortMode) {
+            currentParentalStatusSortMode = sortMode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+        
+        function sortOccupationChart(sortMode) {
+            currentOccupationSortMode = sortMode;
             if (currentDashboardData) {
                 renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
             }
@@ -36557,6 +36624,53 @@
             currentEthnicitySortMode = mode;
             if (currentDashboardData) {
                 renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+
+        // Generic demographic sort helper - returns { labels, values, originalKeys }
+        function getSortedDemoData(demoData, demoIndex, sortMode) {
+            const entries = Object.entries(demoData || {});
+            if (sortMode === 'alpha') {
+                entries.sort((a, b) => a[0].localeCompare(b[0]));
+            } else if (sortMode === 'index') {
+                entries.sort((a, b) => {
+                    const idxA = demoIndex?.[a[0]] || 0;
+                    const idxB = demoIndex?.[b[0]] || 0;
+                    return idxB - idxA;
+                });
+            } else {
+                entries.sort((a, b) => b[1] - a[1]);
+            }
+            return {
+                labels: entries.map(([k]) => k),
+                values: entries.map(([, v]) => v),
+                originalKeys: entries.map(([k]) => k)
+            };
+        }
+
+        function getSortedGenderData(genderData, genderIndex) {
+            return getSortedDemoData(genderData, genderIndex, currentGenderSortMode);
+        }
+
+        function getSortedEducationData(educationData, educationIndex) {
+            return getSortedDemoData(educationData, educationIndex, currentEducationSortMode);
+        }
+
+        function getSortedRelationshipData(relationshipData, relationshipIndex) {
+            return getSortedDemoData(relationshipData, relationshipIndex, currentRelationshipSortMode);
+        }
+
+        function getSortedSexualOrientationData(soData, soIndex) {
+            return getSortedDemoData(soData, soIndex, currentSexualOrientationSortMode);
+        }
+
+        function getSortedParentalStatusData(parentalData, parentalIndex) {
+            return getSortedDemoData(parentalData, parentalIndex, currentParentalStatusSortMode);
+        }
+
+        function getSortedOccupationData(occupationData, occupationIndex) {
+            return getSortedDemoData(occupationData, occupationIndex, currentOccupationSortMode);
+        }
             }
         }
         

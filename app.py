@@ -20782,6 +20782,111 @@ def run_sf_lf_conversion(job_id):
                 'duplicated_views': per_platform_data[platform]['duplicated_views']
             })
         
+        # ===== INDIVIDUAL URL METRICS (Top 20 or all if less) =====
+        results['individual_url_metrics'] = []
+        urls_to_query = sf_urls[:20] if len(sf_urls) > 20 else sf_urls
+        
+        if urls_to_query and urls_to_query[0]:  # Check if we have actual URLs
+            update_job_status(job_id, progress=30, message=f'Querying {len(urls_to_query)} individual URLs...')
+            print(f"[SF-LF] Step 1b: Query individual URL metrics for {len(urls_to_query)} URLs")
+            
+            for idx, url in enumerate(urls_to_query):
+                if not url or not url.strip():
+                    continue
+                    
+                url_clean = url.strip()
+                url_pattern = url_clean.lower().replace("'", "''")
+                
+                # Extract a short display name from URL
+                url_display = url_clean
+                if len(url_display) > 80:
+                    url_display = url_display[:77] + '...'
+                
+                print(f"[SF-LF]   Querying URL {idx+1}/{len(urls_to_query)}: {url_display[:50]}...")
+                
+                try:
+                    # Unique viewers for this specific URL
+                    cur.execute(f"""
+                        SELECT COUNT(DISTINCT UID)
+                        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+                        WHERE LOWER(URL) LIKE '%{url_pattern}%'
+                          AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                    """)
+                    url_unique = cur.fetchone()[0] or 0
+                except Exception as e:
+                    print(f"[SF-LF]     Error getting unique views: {e}")
+                    url_unique = 0
+                
+                try:
+                    # Total views for this specific URL
+                    cur.execute(f"""
+                        SELECT COUNT(*)
+                        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+                        WHERE LOWER(URL) LIKE '%{url_pattern}%'
+                          AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                    """)
+                    url_total = cur.fetchone()[0] or 0
+                except Exception as e:
+                    print(f"[SF-LF]     Error getting total views: {e}")
+                    url_total = 0
+                
+                # Get conversion from this URL to LF title
+                url_converted = 0
+                url_conv_rate = 0.00000001
+                
+                if url_unique > 0:
+                    try:
+                        # Create temp table for this URL's viewers
+                        url_temp = f"URL_{idx}_{job_id.replace('-', '_')[:8]}"
+                        cur.execute(f"DROP TABLE IF EXISTS {url_temp}")
+                        cur.execute(f"""
+                            CREATE TEMPORARY TABLE {url_temp} AS
+                            SELECT DISTINCT UID
+                            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+                            WHERE LOWER(URL) LIKE '%{url_pattern}%'
+                              AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                        """)
+                        
+                        # Check conversion to LF title
+                        lf_title_pattern = lf_title.lower().replace("'", "''")
+                        lf_plat_clause = ""
+                        if lf_platform:
+                            lf_plat_clause = f"AND LOWER(c.COMMON_NAME) = '{lf_platform.lower()}'"
+                        
+                        cur.execute(f"""
+                            SELECT COUNT(DISTINCT c.UID)
+                            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                            INNER JOIN {url_temp} u ON c.UID = u.UID
+                            WHERE LOWER(c.URL) LIKE '%{lf_title_pattern}%'
+                              {lf_plat_clause}
+                              AND c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                        """)
+                        url_converted = cur.fetchone()[0] or 0
+                        
+                        cur.execute(f"DROP TABLE IF EXISTS {url_temp}")
+                    except Exception as e:
+                        print(f"[SF-LF]     Error getting conversion: {e}")
+                        url_converted = 0
+                
+                # Calculate conversion rate
+                url_unique_final = add_noise_if_zero(url_unique)
+                url_converted_final = add_noise_if_zero(url_converted)
+                if url_unique_final > 0:
+                    url_conv_rate = round((url_converted_final / url_unique_final * 100), 8)
+                
+                results['individual_url_metrics'].append({
+                    'url': url_clean,
+                    'url_display': url_display,
+                    'unique_views': url_unique_final,
+                    'duplicated_views': add_noise_if_zero(url_total),
+                    'converted_to_lf': url_converted_final,
+                    'conversion_rate': url_conv_rate
+                })
+                
+                print(f"[SF-LF]     {url_unique_final:,} unique, {add_noise_if_zero(url_total):,} total, {url_converted_final:,} converted ({url_conv_rate:.8f}%)")
+            
+            print(f"[SF-LF] Completed individual URL queries")
+        
         update_job_status(job_id, progress=40, message='Calculating conversions to long-form content...')
         print(f"[SF-LF] Step 2: Check conversion to {lf_title} on {lf_platform or 'any platform'}")
         
@@ -21028,6 +21133,22 @@ def run_sf_lf_conversion(job_id):
                     if p_conv_rate == 0:
                         p_conv_rate = 0.00000001
                     csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Converted to Title', 'Count': p_conv, 'Percentage': f"{p_conv_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(p_conv)})
+        
+        # Individual URL Metrics Section (Top 20 input URLs)
+        if results.get('individual_url_metrics'):
+            csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            csv_rows.append({'Column': 'INDIVIDUAL_URL_METRICS', 'Value': f'Top {len(results["individual_url_metrics"])} Input URLs', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            for url_m in results['individual_url_metrics']:
+                u_unique = url_m['unique_views']
+                u_dup = url_m['duplicated_views']
+                u_conv = url_m['converted_to_lf']
+                u_rate = url_m['conversion_rate']
+                if u_rate == 0:
+                    u_rate = 0.00000001
+                url_val = url_m['url_display']
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Views', 'Count': u_unique, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(u_unique)})
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Duplicated Views', 'Count': u_dup, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(u_dup)})
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted to LF Title', 'Count': u_conv, 'Percentage': f"{u_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(u_conv)})
         
         # Conversion Summary Section - OVERALL
         csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
