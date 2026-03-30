@@ -20868,22 +20868,28 @@ def run_sf_lf_conversion(job_id):
                         print(f"[SF-LF]     Error getting conversion: {e}")
                         url_converted = 0
                 
-                # Calculate conversion rate
+                # Calculate reach rate (what % of total SF viewers saw this URL)
+                # and conversion rate (what % of URL viewers converted to LF)
                 url_unique_final = add_noise_if_zero(url_unique)
                 url_converted_final = add_noise_if_zero(url_converted)
-                if url_unique_final > 0:
-                    url_conv_rate = round((url_converted_final / url_unique_final * 100), 8)
+                
+                # Reach % = This URL's viewers / Total SF platform viewers
+                url_reach_rate = round((url_unique_final / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0.00000001
+                
+                # Conversion % = Converted to LF / This URL's viewers  
+                url_conv_rate = round((url_converted_final / url_unique_final * 100), 8) if url_unique_final > 0 else 0.00000001
                 
                 results['individual_url_metrics'].append({
                     'url': url_clean,
                     'url_display': url_display,
                     'unique_views': url_unique_final,
                     'duplicated_views': add_noise_if_zero(url_total),
+                    'reach_rate': url_reach_rate,  # % of total SF viewers who saw this URL
                     'converted_to_lf': url_converted_final,
-                    'conversion_rate': url_conv_rate
+                    'conversion_rate': url_conv_rate  # % of this URL's viewers who converted
                 })
                 
-                print(f"[SF-LF]     {url_unique_final:,} unique, {add_noise_if_zero(url_total):,} total, {url_converted_final:,} converted ({url_conv_rate:.8f}%)")
+                print(f"[SF-LF]     {url_unique_final:,} unique ({url_reach_rate:.8f}% reach), {url_converted_final:,} converted ({url_conv_rate:.8f}% conv)")
             
             print(f"[SF-LF] Completed individual URL queries")
         
@@ -21105,20 +21111,7 @@ def run_sf_lf_conversion(job_id):
         csv_rows.append({'Column': 'LONG_FORM_PLATFORM', 'Value': lf_platform if lf_platform else 'N/A', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         
-        # URL Metrics Section (per-platform summaries)
-        csv_rows.append({'Column': 'URL_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-        for um in results['url_metrics']:
-            unique_v = add_noise_if_zero(um['unique_views'])
-            dup_v = add_noise_if_zero(um['duplicated_views'])
-            conv_v = add_noise_if_zero(um.get('converted', 0))
-            conv_r = um.get('conversion_rate', 0.00000001)
-            if conv_r == 0:
-                conv_r = 0.00000001
-            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Unique Views', 'Count': unique_v, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(unique_v)})
-            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Duplicated Views', 'Count': dup_v, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(dup_v)})
-            csv_rows.append({'Column': 'URL', 'Value': um['url'], 'Metric': 'Converted to LF', 'Count': conv_v, 'Percentage': f"{conv_r:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(conv_v)})
-        
-        # Platform Metrics Section (individual platforms)
+        # Platform Metrics Section (overall + individual platforms)
         if results['platform_metrics']:
             csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
             csv_rows.append({'Column': 'PLATFORM_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
@@ -21141,14 +21134,19 @@ def run_sf_lf_conversion(job_id):
             for url_m in results['individual_url_metrics']:
                 u_unique = url_m['unique_views']
                 u_dup = url_m['duplicated_views']
+                u_reach = url_m.get('reach_rate', 0.00000001)
                 u_conv = url_m['converted_to_lf']
-                u_rate = url_m['conversion_rate']
-                if u_rate == 0:
-                    u_rate = 0.00000001
+                u_conv_rate = url_m.get('conversion_rate', 0.00000001)
+                if u_reach == 0:
+                    u_reach = 0.00000001
+                if u_conv_rate == 0:
+                    u_conv_rate = 0.00000001
                 url_val = url_m['url_display']
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Views', 'Count': u_unique, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(u_unique)})
+                # Unique Views with Reach % (what % of total SF viewers saw this URL)
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Views', 'Count': u_unique, 'Percentage': f"{u_reach:.8f}% of total SF viewers", 'Gen_Pop_Projection': project_to_gen_pop(u_unique)})
                 csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Duplicated Views', 'Count': u_dup, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(u_dup)})
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted to LF Title', 'Count': u_conv, 'Percentage': f"{u_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(u_conv)})
+                # Converted with Conversion % (what % of THIS URL's viewers converted to LF)
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted to LF Title', 'Count': u_conv, 'Percentage': f"{u_conv_rate:.8f}% of URL viewers", 'Gen_Pop_Projection': project_to_gen_pop(u_conv)})
         
         # Conversion Summary Section - OVERALL
         csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
