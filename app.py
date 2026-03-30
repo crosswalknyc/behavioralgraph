@@ -20545,33 +20545,53 @@ def run_sf_lf_conversion(job_id):
             _, lf_plat_esc = _escape_for_sf_lf_sql(lf_platform)
             lf_platform_filter = f"LOWER(COMMON_NAME) = '{lf_plat_esc.lower()}'"
         
-        update_job_status(job_id, progress=20, message=f'Querying {len(sf_urls)} short form URLs (batched)...')
-        print(f"[SF-LF] Running BATCHED query for {len(sf_urls)} URLs")
+        update_job_status(job_id, progress=20, message=f'Querying {len(sf_urls)} short form URLs (chunked)...')
+        print(f"[SF-LF] Running CHUNKED queries for {len(sf_urls)} URLs")
 
-        # ===== 1. BATCHED: All Short Form Views in ONE query =====
-        # Get aggregate metrics for ALL URLs combined (not per-URL to avoid N queries)
-        sf_aggregate_query = f"""
-            SELECT COUNT(DISTINCT UID) as unique_views,
-                   COUNT(*) as total_views
-            FROM CLICKSTREAM_FINAL
-            WHERE ({sf_url_filter})
-              AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-        """
-        try:
-            cur.execute(sf_aggregate_query)
-            row = cur.fetchone()
-            sf_total_unique = row[0] if row else 0
-            sf_total_duplicated = row[1] if row else 0
-            print(f"[SF-LF] SF Aggregate: unique={sf_total_unique}, total={sf_total_duplicated}")
-            # Store as aggregate (not per-URL to avoid timeout)
-            results['url_metrics'].append({
-                'url': f'ALL {len(sf_urls)} SHORT FORM URLs (COMBINED)',
-                'unique_views': sf_total_unique,
-                'duplicated_views': sf_total_duplicated
-            })
-        except Exception as query_err:
-            print(f"[SF-LF] ERROR in batched URL query: {query_err}")
-            raise
+        # ===== 1. CHUNKED: Split URLs into batches of 100 for faster processing =====
+        # Snowflake handles smaller OR clauses much more efficiently
+        CHUNK_SIZE = 100
+        all_sf_uids = set()
+        sf_total_duplicated = 0
+        
+        url_chunks = [sf_urls[i:i + CHUNK_SIZE] for i in range(0, len(sf_urls), CHUNK_SIZE)]
+        print(f"[SF-LF] Split into {len(url_chunks)} chunks of ~{CHUNK_SIZE} URLs each")
+        
+        for chunk_idx, url_chunk in enumerate(url_chunks):
+            # Build filter for this chunk only
+            chunk_clauses = []
+            for url in url_chunk:
+                like_esc, _ = _escape_for_sf_lf_sql(url)
+                chunk_clauses.append(f"LOWER(URL) LIKE '%{like_esc}%' ESCAPE '\\\\'")
+            chunk_filter = ' OR '.join(chunk_clauses)
+            
+            chunk_query = f"""
+                SELECT UID, COUNT(*) as hits
+                FROM CLICKSTREAM_FINAL
+                WHERE ({chunk_filter})
+                  AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                GROUP BY UID
+            """
+            try:
+                cur.execute(chunk_query)
+                rows = cur.fetchall()
+                for row in rows:
+                    all_sf_uids.add(row[0])
+                    sf_total_duplicated += row[1]
+                print(f"[SF-LF] Chunk {chunk_idx + 1}/{len(url_chunks)}: found {len(rows)} UIDs")
+                update_job_status(job_id, progress=20 + int(8 * (chunk_idx + 1) / len(url_chunks)), 
+                                  message=f'Processing URL chunk {chunk_idx + 1}/{len(url_chunks)}...')
+            except Exception as query_err:
+                print(f"[SF-LF] ERROR in chunk {chunk_idx + 1}: {query_err}")
+                raise
+        
+        sf_total_unique = len(all_sf_uids)
+        print(f"[SF-LF] SF Aggregate: unique={sf_total_unique}, total={sf_total_duplicated}")
+        results['url_metrics'].append({
+            'url': f'ALL {len(sf_urls)} SHORT FORM URLs (COMBINED)',
+            'unique_views': sf_total_unique,
+            'duplicated_views': sf_total_duplicated
+        })
         
         update_job_status(job_id, progress=30, message='Querying platform views (batched)...')
         print(f"[SF-LF] Running batched platform query for {len(sf_platforms)} platforms")
