@@ -20911,6 +20911,10 @@ def run_sf_lf_conversion(job_id):
         jobs[job_id]['result_file'] = str(output_path)
         
         # Upload to S3 purgatory
+        print(f"[SF-LF] Uploading to S3 bucket: {SF_LF_CONV_S3_BUCKET}")
+        print(f"[SF-LF] File path: {output_path}")
+        print(f"[SF-LF] File exists: {output_path.exists()}")
+        
         s3_key = upload_to_s3(
             str(output_path),
             project_name,
@@ -20925,8 +20929,12 @@ def run_sf_lf_conversion(job_id):
         
         if s3_key:
             jobs[job_id]['s3_key'] = s3_key
-        
-        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+            print(f"[SF-LF] ✅ Uploaded to S3: {s3_key}")
+            update_job_status(job_id, progress=100, status='completed', message='Analysis complete!', s3_key=s3_key)
+        else:
+            error_msg = f"Failed to upload to S3 bucket '{SF_LF_CONV_S3_BUCKET}'. Check AWS credentials and bucket permissions."
+            print(f"[SF-LF] ❌ {error_msg}")
+            update_job_status(job_id, status='failed', error=error_msg)
         
         cur.close()
         
