@@ -16486,6 +16486,16 @@
 
                         <!-- Trends Tab -->
                         <div id="trendsTab" class="ticker-tab-content" style="display: none;">
+                            <!-- Inactive Feature Message (shown when data cutoff is set) -->
+                            <div id="trendsInactiveMessage" style="display: none; text-align: center; padding: 4rem 2rem;">
+                                <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">🔒</div>
+                                <h3 style="font-size: 1.5rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Inactive Feature</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 400px; margin: 0 auto;">
+                                    Trends data is not available for your access level. Please use the Daily Metrics or Historic Performance tabs to view historical data.
+                                </p>
+                            </div>
+                            <!-- Trends Content (hidden when data cutoff is set) -->
+                            <div id="trendsContent">
                             <!-- Date Range Selector (Collapsible) -->
                             <div class="insight-card-v2" style="margin-bottom: 1rem; padding: 0.5rem 1rem;">
                                 <!-- Collapsed View (Default) -->
@@ -16539,6 +16549,7 @@
                                     <canvas id="dailyChurnChart"></canvas>
                                 </div>
                             </div>
+                            </div><!-- End trendsContent -->
                         </div>
 
                         <!-- Daily Metrics Tab -->
@@ -24544,15 +24555,19 @@
         }
         
         function renderTickerDashboard(data) {
-            // Handle Live Data tab visibility based on cutoff date
+            // Handle Live Data and Trends tab visibility based on cutoff date
             const liveDataContent = document.getElementById('liveDataContent');
             const liveDataInactiveMessage = document.getElementById('liveDataInactiveMessage');
+            const trendsContent = document.getElementById('trendsContent');
+            const trendsInactiveMessage = document.getElementById('trendsInactiveMessage');
             
             if (window.hedgeFundIQDataCutoff) {
-                // Cutoff date is set: hide live data, show inactive message
+                // Cutoff date is set: hide live data and trends, show inactive messages
                 if (liveDataContent) liveDataContent.style.display = 'none';
                 if (liveDataInactiveMessage) liveDataInactiveMessage.style.display = 'block';
-                console.log(`🔒 Live Data tab disabled (cutoff: ${window.hedgeFundIQDataCutoff})`);
+                if (trendsContent) trendsContent.style.display = 'none';
+                if (trendsInactiveMessage) trendsInactiveMessage.style.display = 'block';
+                console.log(`🔒 Live Data and Trends tabs disabled (cutoff: ${window.hedgeFundIQDataCutoff})`);
                 
                 // Filter data for other tabs
                 if (data.data && Array.isArray(data.data)) {
@@ -24569,9 +24584,11 @@
                     }
                 }
             } else {
-                // No cutoff date: show live data normally
+                // No cutoff date: show live data and trends normally
                 if (liveDataContent) liveDataContent.style.display = 'block';
                 if (liveDataInactiveMessage) liveDataInactiveMessage.style.display = 'none';
+                if (trendsContent) trendsContent.style.display = 'block';
+                if (trendsInactiveMessage) trendsInactiveMessage.style.display = 'none';
             }
             
             // Show dashboard, hide empty state
