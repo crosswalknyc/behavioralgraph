@@ -2567,6 +2567,15 @@
                                         If enabled, this user receives automatic Hedge Fund IQ Alpha Ideas digests on weekdays.
                                     </div>
                                 </div>
+                                <div style="margin-bottom: 1rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(255, 193, 7, 0.08);">
+                                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 0.35rem;">
+                                        📅 Data Access Cutoff Date
+                                    </label>
+                                    <input type="date" id="hedgeFundIQDataCutoff" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;">
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                                        If set, user cannot view data after this date. Leave empty for unlimited access.
+                                    </div>
+                                </div>
                                 <div style="margin-bottom: 1rem;">
                                     <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📑 Tab Access</h5>
                                     <label class="checkbox-group">
@@ -6481,6 +6490,7 @@
             document.getElementById('hasTicketSalesIQAccess').checked = true;
             document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('getsHedgeFundIQEmails').checked = false;
+            document.getElementById('hedgeFundIQDataCutoff').value = '';
             document.getElementById('hasAnalysisIQAccess').checked = false;
             document.getElementById('hasLLMOIQAccess').checked = false;
             document.getElementById('hasTicketSalesTrackerView').checked = false;
@@ -7802,6 +7812,12 @@
             document.getElementById('hasHedgeFundIQAccess').checked = hasAccess;
             document.getElementById('getsHedgeFundIQEmails').checked = user.gets_hedge_fund_iq_emails === true;
             
+            // Set data cutoff date
+            const cutoffInput = document.getElementById('hedgeFundIQDataCutoff');
+            if (cutoffInput) {
+                cutoffInput.value = user.hedge_fund_iq_data_cutoff || '';
+            }
+            
             if (hasAccess) {
                 // Show section
                 document.getElementById('hedgeFundIQSection').style.display = 'block';
@@ -8432,6 +8448,7 @@
                 has_ticket_sales_iq_access: document.getElementById('hasTicketSalesIQAccess').checked,
                 has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
                 gets_hedge_fund_iq_emails: document.getElementById('getsHedgeFundIQEmails').checked,
+                hedge_fund_iq_data_cutoff: document.getElementById('hedgeFundIQDataCutoff').value || null,
                 hedge_fund_iq_tabs: getHedgeFundIQTabs(),
                 hedge_fund_iq_tickers: document.getElementById('allHedgeFundTickers').checked ? ['*'] : getHedgeFundIQTickers(),
                 has_analysis_iq_access: !!document.getElementById('hasAnalysisIQAccess').checked,

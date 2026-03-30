@@ -2675,6 +2675,7 @@ def create_user():
             'gets_hedge_fund_iq_emails': req_data.get('gets_hedge_fund_iq_emails', cd.get('gets_hedge_fund_iq_emails', False) if cd else False),
             'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
             'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
+            'hedge_fund_iq_data_cutoff': req_data.get('hedge_fund_iq_data_cutoff', None),
             'has_analysis_iq_access': req_data.get('has_analysis_iq_access', cd.get('has_analysis_iq_access', False) if cd else False),
             'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
             'has_ticket_sales_tracker_access': req_data.get('has_ticket_sales_tracker_access', cd.get('has_ticket_sales_tracker_access', False) if cd else False),
@@ -2787,6 +2788,8 @@ def update_user(username):
             user['hedge_fund_iq_tabs'] = req_data['hedge_fund_iq_tabs']
         if 'hedge_fund_iq_tickers' in req_data:
             user['hedge_fund_iq_tickers'] = req_data['hedge_fund_iq_tickers']
+        if 'hedge_fund_iq_data_cutoff' in req_data:
+            user['hedge_fund_iq_data_cutoff'] = req_data['hedge_fund_iq_data_cutoff'] or None
         if 'has_analysis_iq_access' in req_data:
             user['has_analysis_iq_access'] = bool(req_data['has_analysis_iq_access'])
         if 'analysis_iq_modules' in req_data:
@@ -5247,6 +5250,7 @@ def compute_product_access_flags(user, role):
         'has_ecommerce_iq_access': bool(u.get('has_ecommerce_iq_access', True)),
         'has_hedge_fund_iq_access': bool(u.get('has_hedge_fund_iq_access', False)),
         'hedge_fund_iq_tickers': u.get('hedge_fund_iq_tickers', ['*']) or ['*'],
+        'hedge_fund_iq_data_cutoff': u.get('hedge_fund_iq_data_cutoff', None),
         'has_analysis_iq_access': bool(u.get('has_analysis_iq_access', False)),
         'analysis_iq_modules': list(u.get('analysis_iq_modules', []) or []),
         'allowed_behavioral_categories': u.get('allowed_behavioral_categories', ['*']) or ['*'],

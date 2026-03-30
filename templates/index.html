@@ -17109,6 +17109,8 @@
                     });
                     var caOpt = viewDropdown.querySelector('option[value="customAnalysis"]');
                     if (caOpt && d.has_analysis_iq_access !== undefined) caOpt.disabled = !d.has_analysis_iq_access;
+                    // Store Hedge Fund IQ data cutoff date for filtering
+                    window.hedgeFundIQDataCutoff = d.hedge_fund_iq_data_cutoff || null;
                 }
                 function rebuildViewNavCustomPanel() {
                     panelEl.innerHTML = '';
@@ -23768,6 +23770,22 @@
         }
         
         function renderTickerDashboard(data) {
+            // Filter data based on user's data cutoff date (if set)
+            if (window.hedgeFundIQDataCutoff && data.data && Array.isArray(data.data)) {
+                const cutoffDate = new Date(window.hedgeFundIQDataCutoff);
+                cutoffDate.setHours(23, 59, 59, 999); // Include the full cutoff day
+                const originalLength = data.data.length;
+                data.data = data.data.filter(d => {
+                    if (!d.Date) return true;
+                    const rowDate = new Date(d.Date);
+                    return rowDate <= cutoffDate;
+                });
+                if (data.data.length < originalLength) {
+                    console.log(`🔒 Hedge Fund IQ data filtered: showing ${data.data.length} of ${originalLength} days (cutoff: ${window.hedgeFundIQDataCutoff})`);
+                    data._dataCutoffApplied = window.hedgeFundIQDataCutoff;
+                }
+            }
+            
             // Show dashboard, hide empty state
             document.getElementById('tickerEmptyState').style.display = 'none';
             document.getElementById('tickerDashboard').style.display = 'block';
@@ -23801,6 +23819,23 @@
                 relevanceHeader.setAttribute('data-tooltip', `This KPI represents approximately ${data.relevance_percentage}% of the stock price movement. This is a force-ranked metric (0-100 scale) based on historical significance of the KPI to the company's share price behavior, determined by examining relative surprise from reporting and subsequent share price behavior over the 5-day period following earnings.`);
             } else {
                 relevanceHeader.style.display = 'none';
+            }
+            
+            // Show data cutoff notice if filtering is applied
+            let cutoffNotice = document.getElementById('tickerCutoffNotice');
+            if (!cutoffNotice) {
+                cutoffNotice = document.createElement('span');
+                cutoffNotice.id = 'tickerCutoffNotice';
+                cutoffNotice.className = 'has-tooltip';
+                cutoffNotice.style.cssText = 'display: none; font-size: 0.75rem; color: #f59e0b; background: rgba(245, 158, 11, 0.1); padding: 0.25rem 0.5rem; border-radius: 4px; margin-left: 0.5rem;';
+                relevanceHeader.parentNode.insertBefore(cutoffNotice, relevanceHeader.nextSibling);
+            }
+            if (data._dataCutoffApplied) {
+                cutoffNotice.textContent = `Data cutoff: ${data._dataCutoffApplied}`;
+                cutoffNotice.setAttribute('data-tooltip', `Your access is limited to data through ${data._dataCutoffApplied}. More recent data is not shown.`);
+                cutoffNotice.style.display = 'inline-block';
+            } else {
+                cutoffNotice.style.display = 'none';
             }
             
             // Use pre-calculated stats from backend (instant display, no waiting)
