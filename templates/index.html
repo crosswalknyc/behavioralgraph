@@ -35173,10 +35173,12 @@
             
             // Education - horizontal bar with Gen Pop
             if (demographics.education && Object.keys(demographics.education).length > 0) {
-                const eduLabels = Object.keys(demographics.education);
-                const eduGenPop = eduLabels.map(k => demographicsGenPop.education?.[k] || 0);
-                const eduPcts = Object.values(demographics.education);
-                const eduData = isProjection ? eduLabels.map(k => demographicsProjection.education?.[k] || 0) : eduPcts;
+                const eduSorted = getSortedEducationData(demographics.education, demographicsIndex.education);
+                const eduLabels = eduSorted.labels;
+                const eduOrigKeys = eduSorted.originalKeys;
+                const eduGenPop = eduOrigKeys.map(k => demographicsGenPop.education?.[k] || 0);
+                const eduPcts = eduSorted.values;
+                const eduData = isProjection ? eduOrigKeys.map(k => demographicsProjection.education?.[k] || 0) : eduPcts;
                 const eduMax = Math.max(...eduData) * 1.5; // 50% padding for labels
                 
                 const educationChartType = chartTypePrefs.education || 'bar';
@@ -35258,8 +35260,10 @@
             
             // Relationship - doughnut with Gen Pop
             if (demographics.relationship && Object.keys(demographics.relationship).length > 0) {
-                const relLabels = Object.keys(demographics.relationship);
-                const relGenPop = relLabels.map(k => {
+                const relSorted = getSortedRelationshipData(demographics.relationship, demographicsIndex.relationship);
+                const relLabels = relSorted.labels;
+                const relOrigKeys = relSorted.originalKeys;
+                const relGenPop = relOrigKeys.map(k => {
                     // Try exact match first
                     if (demographicsGenPop.relationship?.[k] != null) return demographicsGenPop.relationship[k];
                     // Fuzzy match using normalizeDemoForIndex (handles Divorced → Divorced or Separated)
@@ -35274,8 +35278,8 @@
                     }
                     return 0;
                 });
-                const relPcts = Object.values(demographics.relationship);
-                const relData = isProjection ? relLabels.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
+                const relPcts = relSorted.values;
+                const relData = isProjection ? relOrigKeys.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
                 const relationshipChartType = chartTypePrefs.relationship || 'bar';
                 const relationshipIsCircular = ['doughnut', 'pie', 'polarArea'].includes(relationshipChartType);
@@ -35386,12 +35390,14 @@
             
             // Sexual Orientation - doughnut with Gen Pop
             if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
-                const soLabels = Object.keys(demographics.sexual_orientation);
+                const soSorted = getSortedSexualOrientationData(demographics.sexual_orientation, demographicsIndex.sexual_orientation);
+                const soLabels = soSorted.labels;
+                const soOrigKeys = soSorted.originalKeys;
                 const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
-                const soGenPop = soLabels.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
-                const soPcts = Object.values(demographics.sexual_orientation);
-                const soData = isProjection ? soLabels.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
+                const soGenPop = soOrigKeys.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
+                const soPcts = soSorted.values;
+                const soData = isProjection ? soOrigKeys.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
                 
                 const soChartType = chartTypePrefs.sexualOrientation || 'bar';
                 const soIsCircular = ['doughnut', 'pie', 'polarArea'].includes(soChartType);
@@ -35502,10 +35508,12 @@
             
             // Parental Status - doughnut with Gen Pop
             if (demographics.parental_status && Object.keys(demographics.parental_status).length > 0) {
-                const psLabels = Object.keys(demographics.parental_status);
-                const psGenPop = psLabels.map(k => demographicsGenPop.parental_status?.[k] || 0);
-                const psPcts = Object.values(demographics.parental_status);
-                const psData = isProjection ? psLabels.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
+                const psSorted = getSortedParentalStatusData(demographics.parental_status, demographicsIndex.parental_status);
+                const psLabels = psSorted.labels;
+                const psOrigKeys = psSorted.originalKeys;
+                const psGenPop = psOrigKeys.map(k => demographicsGenPop.parental_status?.[k] || 0);
+                const psPcts = psSorted.values;
+                const psData = isProjection ? psOrigKeys.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
                 
                 const psChartType = chartTypePrefs.parentalStatus || 'bar';
                 const psIsCircular = ['doughnut', 'pie', 'polarArea'].includes(psChartType);
@@ -35614,10 +35622,12 @@
             
             // Occupation - bar chart with Gen Pop
             if (demographics.occupation && Object.keys(demographics.occupation).length > 0) {
-                const occLabels = Object.keys(demographics.occupation);
-                const occGenPop = occLabels.map(k => demographicsGenPop.occupation?.[k] || 0);
-                const occPcts = Object.values(demographics.occupation);
-                const occData = isProjection ? occLabels.map(k => demographicsProjection.occupation?.[k] || 0) : occPcts;
+                const occSorted = getSortedOccupationData(demographics.occupation, demographicsIndex.occupation);
+                const occLabels = occSorted.labels;
+                const occOrigKeys = occSorted.originalKeys;
+                const occGenPop = occOrigKeys.map(k => demographicsGenPop.occupation?.[k] || 0);
+                const occPcts = occSorted.values;
+                const occData = isProjection ? occOrigKeys.map(k => demographicsProjection.occupation?.[k] || 0) : occPcts;
                 
                 const occChartType = chartTypePrefs.occupation || 'bar';
                 const occIsCircular = ['doughnut', 'pie', 'polarArea'].includes(occChartType);
