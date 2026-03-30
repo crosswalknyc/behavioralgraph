@@ -14071,6 +14071,11 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <select id="genderSortSelect" onchange="sortGenderChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
+                                            <option value="value">%↓</option>
+                                            <option value="alpha">A-Z</option>
+                                            <option value="index">Idx↓</option>
+                                        </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Gender')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Gender')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Gender')">➕</button></span>
                                     </span>
                                 </h3>
@@ -14145,6 +14150,11 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <select id="educationSortSelect" onchange="sortEducationChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
+                                            <option value="value">%↓</option>
+                                            <option value="alpha">A-Z</option>
+                                            <option value="index">Idx↓</option>
+                                        </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Education')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Education')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Education')">➕</button></span>
                                     </span>
                                 </h3>
@@ -14164,6 +14174,11 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
+                                        </select>
+                                        <select id="relationshipSortSelect" onchange="sortRelationshipChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
+                                            <option value="value">%↓</option>
+                                            <option value="alpha">A-Z</option>
+                                            <option value="index">Idx↓</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Relationship Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Relationship Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Relationship Status')">➕</button></span>
                                     </span>
@@ -31871,11 +31886,19 @@
                     genPopPct = getGenPopValue(demoKey, value);
                     // Fallback to hardcoded values if dynamic lookup returned 0
                     if (genPopPct === 0 && GENPOP_DEMOGRAPHICS[category]) {
-                        genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
+                        const valTrimmed = (value || '').trim();
+                        genPopPct = GENPOP_DEMOGRAPHICS[category][valTrimmed] || GENPOP_DEMOGRAPHICS[category][value] || 0;
                         if (genPopPct === 0) {
-                            const valLower = (value || '').toLowerCase();
+                            const valLower = valTrimmed.toLowerCase();
                             for (const [k, v] of Object.entries(GENPOP_DEMOGRAPHICS[category])) {
                                 if ((k || '').toLowerCase() === valLower) { genPopPct = v; break; }
+                            }
+                        }
+                        // Use normalizeDemoForIndex for fuzzy matching (e.g. "Divorced" → "Divorced or Separated")
+                        if (genPopPct === 0) {
+                            const normVal = normalizeDemoForIndex(valTrimmed);
+                            for (const [k, v] of Object.entries(GENPOP_DEMOGRAPHICS[category])) {
+                                if (normalizeDemoForIndex(k) === normVal) { genPopPct = v; break; }
                             }
                         }
                     }
@@ -35219,7 +35242,21 @@
             // Relationship - doughnut with Gen Pop
             if (demographics.relationship && Object.keys(demographics.relationship).length > 0) {
                 const relLabels = Object.keys(demographics.relationship);
-                const relGenPop = relLabels.map(k => demographicsGenPop.relationship?.[k] || 0);
+                const relGenPop = relLabels.map(k => {
+                    // Try exact match first
+                    if (demographicsGenPop.relationship?.[k] != null) return demographicsGenPop.relationship[k];
+                    // Fuzzy match using normalizeDemoForIndex (handles Divorced → Divorced or Separated)
+                    const normKey = normalizeDemoForIndex(k);
+                    for (const [gpKey, gpVal] of Object.entries(demographicsGenPop.relationship || {})) {
+                        if (normalizeDemoForIndex(gpKey) === normKey) return gpVal;
+                    }
+                    // Fallback to hardcoded baseline
+                    if (GENPOP_DEMOGRAPHICS?.RELATIONSHIP?.[k] != null) return GENPOP_DEMOGRAPHICS.RELATIONSHIP[k];
+                    for (const [gpKey, gpVal] of Object.entries(GENPOP_DEMOGRAPHICS?.RELATIONSHIP || {})) {
+                        if (normalizeDemoForIndex(gpKey) === normKey) return gpVal;
+                    }
+                    return 0;
+                });
                 const relPcts = Object.values(demographics.relationship);
                 const relData = isProjection ? relLabels.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
