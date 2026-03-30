@@ -15511,15 +15511,17 @@
                     </div>
                     <!-- Dashboard Content -->
                     <div id="sfConvDashboardContent" style="display: none; flex: 1; overflow-y: auto; padding: 1.5rem;">
-                        <!-- KPI Summary Cards -->
-                        <div class="sf-conv-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <!-- KPI Summary Cards - Row 1 -->
+                        <div class="sf-conv-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
                             <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
                                 <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total SF Viewers</div>
                                 <div class="kpi-value" id="sfConvKpiTotalViewers" style="font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-top: 0.25rem;">-</div>
+                                <div class="kpi-subvalue" id="sfConvKpiTotalViewersGenPop" style="font-size: 0.7rem; color: var(--accent-cyan); margin-top: 0.25rem;"></div>
                             </div>
                             <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
                                 <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Converted Users</div>
                                 <div class="kpi-value" id="sfConvKpiConverted" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-lime); margin-top: 0.25rem;">-</div>
+                                <div class="kpi-subvalue" id="sfConvKpiConvertedGenPop" style="font-size: 0.7rem; color: var(--accent-cyan); margin-top: 0.25rem;"></div>
                             </div>
                             <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
                                 <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Conversion Rate</div>
@@ -15529,6 +15531,17 @@
                                 <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Avg Time to Convert</div>
                                 <div class="kpi-value" id="sfConvKpiAvgTime" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange); margin-top: 0.25rem;">-</div>
                             </div>
+                            <div class="kpi-card" id="sfConvKpiLFPlatformCard" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color); display: none;">
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Visited LF Platform</div>
+                                <div class="kpi-value" id="sfConvKpiLFPlatformVisitors" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-pink); margin-top: 0.25rem;">-</div>
+                                <div class="kpi-subvalue" id="sfConvKpiLFPlatformRate" style="font-size: 0.7rem; color: var(--accent-cyan); margin-top: 0.25rem;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Per-Platform Conversion Cards -->
+                        <div id="sfConvPerPlatformSection" style="display: none; margin-bottom: 1.5rem;">
+                            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--text-secondary);">📱 Conversion by Platform</h4>
+                            <div class="sf-conv-platform-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;" id="sfConvPerPlatformCards"></div>
                         </div>
                         
                         <!-- Analysis Info -->
@@ -15544,16 +15557,17 @@
                         
                         <!-- URL Metrics Table -->
                         <div class="sf-conv-section" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
-                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📎 URL Performance</h3>
+                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📎 Top Input URLs Performance</h3>
                             <div style="overflow-x: auto;">
                                 <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
                                     <thead>
                                         <tr style="background: var(--bg-dark);">
                                             <th style="text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Short Form URL</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Unique Views</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Total Views</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Duplicated Views</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Gen Pop Proj.</th>
                                         </tr>
                                     </thead>
                                     <tbody id="sfConvUrlTableBody"></tbody>
@@ -15570,9 +15584,10 @@
                                         <tr style="background: var(--bg-dark);">
                                             <th style="text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Platform</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Unique Views</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Total Views</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted to Title</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Duplicated Views</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Gen Pop Proj.</th>
                                         </tr>
                                     </thead>
                                     <tbody id="sfConvPlatformTableBody"></tbody>
@@ -18303,9 +18318,21 @@
             const rows = data.rows || [];
             const urlMetrics = [];
             const platformMetrics = [];
+            const perPlatformConversion = [];
             const demographics = { gender: [], age: [], ethnicity: [], income: [] };
             let conversionSummary = {};
             let projectInfo = {};
+            let lfPlatformVisit = {};
+            
+            // Helper to format large numbers
+            const formatGenPop = (n) => {
+                if (!n || n === 0) return '-';
+                const num = parseInt(n);
+                if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
+                if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+                if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+                return num.toLocaleString();
+            };
             
             let currentSection = '';
             rows.forEach(row => {
@@ -18314,34 +18341,54 @@
                 const metric = (row.Metric || '').trim();
                 const count = row.Count;
                 const pct = (row.Percentage || '').replace('%', '');
+                const genPop = row.Gen_Pop_Projection;
                 
                 if (col === 'PROJECT_INFO') projectInfo.name = val;
                 else if (col === 'DATE_RANGE') projectInfo.dateRange = val;
                 else if (col === 'ATTRIBUTION_WINDOW') projectInfo.window = val;
                 else if (col === 'LONG_FORM_TITLE') projectInfo.lfTitle = val;
                 else if (col === 'LONG_FORM_PLATFORM') projectInfo.lfPlatform = val;
+                else if (col === 'INDIVIDUAL_URL_METRICS') currentSection = 'url';
                 else if (col === 'URL_METRICS') currentSection = 'url';
                 else if (col === 'PLATFORM_METRICS') currentSection = 'platform';
                 else if (col === 'CONVERSION_SUMMARY') currentSection = 'conversion';
+                else if (col === 'PER_PLATFORM_CONVERSION') currentSection = 'per_platform';
                 else if (col.includes('DEMOGRAPHICS')) currentSection = 'demographics';
-                else if (col === 'URL' && currentSection === 'url') {
+                else if ((col === 'URL' || col === 'INPUT_URL') && currentSection === 'url') {
                     let existing = urlMetrics.find(u => u.url === val);
                     if (!existing) { existing = { url: val }; urlMetrics.push(existing); }
-                    if (metric === 'Unique Views') existing.uniqueViews = count;
-                    else if (metric === 'Duplicated Views') existing.totalViews = count;
-                    else if (metric === 'Converted to LF') { existing.converted = count; existing.convRate = pct; }
+                    if (metric === 'Unique Views') { existing.uniqueViews = count; existing.uniqueViewsGenPop = genPop; }
+                    else if (metric === 'Duplicated Views') { existing.duplicatedViews = count; }
+                    else if (metric === 'Converted to LF' || metric === 'Converted to LF Title') { existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop; }
                 }
                 else if (col === 'PLATFORM' && currentSection === 'platform') {
                     let existing = platformMetrics.find(p => p.platform === val);
                     if (!existing) { existing = { platform: val }; platformMetrics.push(existing); }
-                    if (metric === 'Unique Views') existing.uniqueViews = count;
-                    else if (metric === 'Duplicated Views') existing.totalViews = count;
-                    else if (metric === 'Converted to Title') { existing.converted = count; existing.convRate = pct; }
+                    if (metric === 'Unique Views') { existing.uniqueViews = count; existing.uniqueViewsGenPop = genPop; }
+                    else if (metric === 'Duplicated Views') { existing.duplicatedViews = count; }
+                    else if (metric === 'Converted to Title') { existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop; }
+                }
+                else if (col === 'OVERALL_CONVERSION' && currentSection === 'conversion') {
+                    if (val === 'Total SF Viewers (All Platforms)') { conversionSummary.totalViewers = count; conversionSummary.totalViewersGenPop = genPop; }
+                    else if (val === 'Converted Users') { conversionSummary.converted = count; conversionSummary.convRate = pct; conversionSummary.convertedGenPop = genPop; }
+                    else if (val === 'Avg Hours to Conversion') conversionSummary.avgHours = count;
                 }
                 else if (col === 'SF_URL_TO_LF_TITLE' && currentSection === 'conversion') {
-                    if (val === 'Total SF Viewers') conversionSummary.totalViewers = count;
-                    else if (val === 'Converted Users') { conversionSummary.converted = count; conversionSummary.convRate = pct; }
+                    if (val === 'Total SF Viewers') { conversionSummary.totalViewers = count; conversionSummary.totalViewersGenPop = genPop; }
+                    else if (val === 'Converted Users') { conversionSummary.converted = count; conversionSummary.convRate = pct; conversionSummary.convertedGenPop = genPop; }
                     else if (val === 'Avg Hours to Conversion') conversionSummary.avgHours = count;
+                }
+                else if (col === 'SF_TO_LF_PLATFORM') {
+                    lfPlatformVisit.visitors = count;
+                    lfPlatformVisit.rate = pct;
+                    lfPlatformVisit.genPop = genPop;
+                }
+                else if ((col === 'YOUTUBE_CONVERSION' || col === 'TIKTOK_CONVERSION' || col === 'INSTAGRAM_CONVERSION') && currentSection === 'per_platform') {
+                    const platform = col.replace('_CONVERSION', '').charAt(0) + col.replace('_CONVERSION', '').slice(1).toLowerCase();
+                    let existing = perPlatformConversion.find(p => p.platform === platform);
+                    if (!existing) { existing = { platform: platform }; perPlatformConversion.push(existing); }
+                    if (val === 'SF Viewers') { existing.viewers = count; existing.viewersGenPop = genPop; }
+                    else if (val === 'Converted to LF') { existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop; }
                 }
                 else if (currentSection === 'demographics') {
                     const demoType = col.toLowerCase();
@@ -18358,6 +18405,45 @@
             const avgHrs = parseFloat(conversionSummary.avgHours) || 0;
             document.getElementById('sfConvKpiAvgTime').textContent = avgHrs > 24 ? `${Math.round(avgHrs / 24)}d` : `${Math.round(avgHrs)}h`;
             
+            // Gen Pop sub-values
+            const totalGenPopEl = document.getElementById('sfConvKpiTotalViewersGenPop');
+            if (totalGenPopEl && conversionSummary.totalViewersGenPop) {
+                totalGenPopEl.textContent = `Gen Pop: ${formatGenPop(conversionSummary.totalViewersGenPop)}`;
+            }
+            const convGenPopEl = document.getElementById('sfConvKpiConvertedGenPop');
+            if (convGenPopEl && conversionSummary.convertedGenPop) {
+                convGenPopEl.textContent = `Gen Pop: ${formatGenPop(conversionSummary.convertedGenPop)}`;
+            }
+            
+            // LF Platform Visitors KPI
+            const lfPlatformCard = document.getElementById('sfConvKpiLFPlatformCard');
+            if (lfPlatformCard && lfPlatformVisit.visitors) {
+                lfPlatformCard.style.display = 'block';
+                document.getElementById('sfConvKpiLFPlatformVisitors').textContent = parseInt(lfPlatformVisit.visitors || 0).toLocaleString();
+                document.getElementById('sfConvKpiLFPlatformRate').textContent = lfPlatformVisit.rate ? `${parseFloat(lfPlatformVisit.rate).toFixed(2)}% of SF viewers` : '';
+            }
+            
+            // Per-Platform Conversion Cards
+            const perPlatSection = document.getElementById('sfConvPerPlatformSection');
+            const perPlatCards = document.getElementById('sfConvPerPlatformCards');
+            if (perPlatformConversion.length > 0 && perPlatSection && perPlatCards) {
+                perPlatSection.style.display = 'block';
+                const platformIcons = { 'Youtube': '📺', 'Tiktok': '🎵', 'Instagram': '📸' };
+                const platformColors = { 'Youtube': '#ef4444', 'Tiktok': '#10b981', 'Instagram': '#ec4899' };
+                perPlatCards.innerHTML = perPlatformConversion.map(p => `
+                    <div style="background: var(--bg-card); border-radius: 10px; padding: 1rem; border: 1px solid var(--border-color); border-left: 4px solid ${platformColors[p.platform] || 'var(--accent-primary)'};">
+                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">${platformIcons[p.platform] || '📱'} ${p.platform}</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.75rem;">
+                            <div><span style="color: var(--text-secondary);">Viewers:</span> <span style="font-weight: 600;">${parseInt(p.viewers || 0).toLocaleString()}</span></div>
+                            <div><span style="color: var(--text-secondary);">Converted:</span> <span style="font-weight: 600; color: var(--accent-lime);">${parseInt(p.converted || 0).toLocaleString()}</span></div>
+                            <div style="grid-column: span 2;"><span style="color: var(--text-secondary);">Conv. Rate:</span> <span style="font-weight: 600; color: var(--accent-primary);">${p.convRate || '0'}%</span></div>
+                        </div>
+                    </div>
+                `).join('');
+            } else if (perPlatSection) {
+                perPlatSection.style.display = 'none';
+            }
+            
             // Update info
             document.getElementById('sfConvInfoLFTitle').textContent = projectInfo.lfTitle || '-';
             document.getElementById('sfConvInfoLFPlatform').textContent = projectInfo.lfPlatform || '-';
@@ -18367,13 +18453,14 @@
             // URL Table
             const urlTbody = document.getElementById('sfConvUrlTableBody');
             if (urlTbody) {
-                urlTbody.innerHTML = urlMetrics.map(u => `
+                urlTbody.innerHTML = urlMetrics.slice(0, 20).map(u => `
                     <tr>
-                        <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${u.url}">${u.url}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(u.uniqueViews || 0).toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(u.totalViews || 0).toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(u.converted || 0).toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${u.convRate || '0'}%</td>
+                        <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${u.url}"><a href="${u.url}" target="_blank" style="color: var(--accent-cyan); text-decoration: none;">${u.url.substring(0, 50)}${u.url.length > 50 ? '...' : ''}</a></td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(u.uniqueViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(u.duplicatedViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(u.converted || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${parseFloat(u.convRate || 0).toFixed(2)}%</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan);">${formatGenPop(u.convertedGenPop)}</td>
                     </tr>
                 `).join('');
             }
@@ -18384,12 +18471,13 @@
             if (platformMetrics.length > 0 && platSection && platTbody) {
                 platSection.style.display = 'block';
                 platTbody.innerHTML = platformMetrics.map(p => `
-                    <tr>
+                    <tr style="${p.platform.includes('OVERALL') ? 'background: var(--bg-dark); font-weight: 600;' : ''}">
                         <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${p.platform}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(p.uniqueViews || 0).toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(p.totalViews || 0).toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${(p.converted || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(p.uniqueViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(p.duplicatedViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(p.converted || 0).toLocaleString()}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${p.convRate || '0'}%</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan);">${formatGenPop(p.uniqueViewsGenPop)}</td>
                     </tr>
                 `).join('');
             } else if (platSection) {
@@ -18403,7 +18491,7 @@
             renderSFConvDemographics('sfConvDemoIncome', demographics.income);
             
             // Funnel Chart
-            renderSFConvFunnel(conversionSummary);
+            renderSFConvFunnel(conversionSummary, lfPlatformVisit);
         }
         
         function renderSFConvDemographics(containerId, data) {
@@ -18429,25 +18517,43 @@
             `).join('');
         }
         
-        function renderSFConvFunnel(summary) {
+        function renderSFConvFunnel(summary, lfPlatformVisit = {}) {
             const container = document.getElementById('sfConvFunnelChart');
             if (!container) return;
             const total = parseInt(summary.totalViewers) || 0;
             const converted = parseInt(summary.converted) || 0;
+            const lfVisitors = parseInt(lfPlatformVisit.visitors) || 0;
             if (total === 0) {
                 container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">No conversion data available</div>';
                 return;
             }
-            const convPct = ((converted / total) * 100).toFixed(1);
-            container.innerHTML = `
-                <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; padding: 1rem;">
-                    <div style="text-align: center;">
-                        <div style="width: 120px; height: 120px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                            <div style="font-size: 1.5rem; font-weight: 700; color: white;">${total.toLocaleString()}</div>
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.8);">SF Viewers</div>
-                        </div>
+            const convPct = ((converted / total) * 100).toFixed(4);
+            const lfVisitPct = lfVisitors > 0 ? ((lfVisitors / total) * 100).toFixed(2) : null;
+            
+            let funnelSteps = `
+                <div style="text-align: center;">
+                    <div style="width: 120px; height: 120px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="font-size: 1.25rem; font-weight: 700; color: white;">${total.toLocaleString()}</div>
+                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.8);">SF Viewers</div>
                     </div>
-                    <div style="font-size: 2rem; color: var(--text-secondary);">→</div>
+                </div>
+                <div style="font-size: 2rem; color: var(--text-secondary);">→</div>`;
+            
+            if (lfVisitors > 0) {
+                funnelSteps += `
+                <div style="text-align: center;">
+                    <div style="width: 120px; height: 120px; background: linear-gradient(135deg, var(--accent-pink), var(--accent-orange)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="font-size: 1.25rem; font-weight: 700; color: white;">${lfVisitors.toLocaleString()}</div>
+                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.8);">Visited LF Platform</div>
+                    </div>
+                    <div style="font-size: 0.7rem; color: var(--accent-pink); margin-top: 0.35rem;">${lfVisitPct}% of viewers</div>
+                </div>
+                <div style="font-size: 2rem; color: var(--text-secondary);">→</div>`;
+            }
+            
+            container.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; padding: 1rem; flex-wrap: wrap;">
+                    ${funnelSteps}
                     <div style="text-align: center;">
                         <div style="width: 120px; height: 120px; background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                             <div style="font-size: 1.5rem; font-weight: 700; color: white;">${converted.toLocaleString()}</div>
