@@ -16142,6 +16142,16 @@
 
                         <!-- Live Data Tab -->
                         <div id="livedataTab" class="ticker-tab-content" style="display: block;">
+                            <!-- Inactive Feature Message (shown when data cutoff is set) -->
+                            <div id="liveDataInactiveMessage" style="display: none; text-align: center; padding: 4rem 2rem;">
+                                <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">🔒</div>
+                                <h3 style="font-size: 1.5rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Inactive Feature</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 400px; margin: 0 auto;">
+                                    Live data is not available for your access level. Please use the Trends, Daily Metrics, or Historic Performance tabs to view historical data.
+                                </p>
+                            </div>
+                            <!-- Live Data Content (hidden when data cutoff is set) -->
+                            <div id="liveDataContent">
                             <!-- Summary Stats -->
                             <div style="margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
                                 <h3 id="quarterYTDHeader" style="font-size: 1.25rem; color: var(--accent-cyan); font-weight: 600; margin: 0;">
@@ -16210,6 +16220,7 @@
                                     <div class="stat-value" id="totalCancels" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
                             </div>
+                            </div><!-- End liveDataContent -->
                             
                         </div>
 
@@ -23770,20 +23781,34 @@
         }
         
         function renderTickerDashboard(data) {
-            // Filter data based on user's data cutoff date (if set)
-            if (window.hedgeFundIQDataCutoff && data.data && Array.isArray(data.data)) {
-                const cutoffDate = new Date(window.hedgeFundIQDataCutoff);
-                cutoffDate.setHours(23, 59, 59, 999); // Include the full cutoff day
-                const originalLength = data.data.length;
-                data.data = data.data.filter(d => {
-                    if (!d.Date) return true;
-                    const rowDate = new Date(d.Date);
-                    return rowDate <= cutoffDate;
-                });
-                if (data.data.length < originalLength) {
-                    console.log(`🔒 Hedge Fund IQ data filtered: showing ${data.data.length} of ${originalLength} days (cutoff: ${window.hedgeFundIQDataCutoff})`);
-                    data._dataCutoffApplied = window.hedgeFundIQDataCutoff;
+            // Handle Live Data tab visibility based on cutoff date
+            const liveDataContent = document.getElementById('liveDataContent');
+            const liveDataInactiveMessage = document.getElementById('liveDataInactiveMessage');
+            
+            if (window.hedgeFundIQDataCutoff) {
+                // Cutoff date is set: hide live data, show inactive message
+                if (liveDataContent) liveDataContent.style.display = 'none';
+                if (liveDataInactiveMessage) liveDataInactiveMessage.style.display = 'block';
+                console.log(`🔒 Live Data tab disabled (cutoff: ${window.hedgeFundIQDataCutoff})`);
+                
+                // Filter data for other tabs
+                if (data.data && Array.isArray(data.data)) {
+                    const cutoffDate = new Date(window.hedgeFundIQDataCutoff);
+                    cutoffDate.setHours(23, 59, 59, 999);
+                    const originalLength = data.data.length;
+                    data.data = data.data.filter(d => {
+                        if (!d.Date) return true;
+                        const rowDate = new Date(d.Date);
+                        return rowDate <= cutoffDate;
+                    });
+                    if (data.data.length < originalLength) {
+                        console.log(`🔒 Hedge Fund IQ data filtered: showing ${data.data.length} of ${originalLength} days`);
+                    }
                 }
+            } else {
+                // No cutoff date: show live data normally
+                if (liveDataContent) liveDataContent.style.display = 'block';
+                if (liveDataInactiveMessage) liveDataInactiveMessage.style.display = 'none';
             }
             
             // Show dashboard, hide empty state
@@ -23830,9 +23855,9 @@
                 cutoffNotice.style.cssText = 'display: none; font-size: 0.75rem; color: #f59e0b; background: rgba(245, 158, 11, 0.1); padding: 0.25rem 0.5rem; border-radius: 4px; margin-left: 0.5rem;';
                 relevanceHeader.parentNode.insertBefore(cutoffNotice, relevanceHeader.nextSibling);
             }
-            if (data._dataCutoffApplied) {
-                cutoffNotice.textContent = `Data cutoff: ${data._dataCutoffApplied}`;
-                cutoffNotice.setAttribute('data-tooltip', `Your access is limited to data through ${data._dataCutoffApplied}. More recent data is not shown.`);
+            if (window.hedgeFundIQDataCutoff) {
+                cutoffNotice.textContent = `Data cutoff: ${window.hedgeFundIQDataCutoff}`;
+                cutoffNotice.setAttribute('data-tooltip', `Your access is limited to data through ${window.hedgeFundIQDataCutoff}. Live data is disabled and historical data is filtered.`);
                 cutoffNotice.style.display = 'inline-block';
             } else {
                 cutoffNotice.style.display = 'none';
