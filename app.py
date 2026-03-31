@@ -22476,7 +22476,7 @@ def run_flywheel_conversion(job_id):
         entry_point_query = f"""
         SELECT COUNT(DISTINCT UID) as unique_users
         FROM CLICKSTREAM_FINAL
-        WHERE DATE BETWEEN '{start_date}' AND '{end_date}'
+        WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
           AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
                OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
         """
@@ -22506,7 +22506,7 @@ def run_flywheel_conversion(job_id):
         entry_uids_query = f"""
         SELECT DISTINCT UID
         FROM CLICKSTREAM_FINAL
-        WHERE DATE BETWEEN '{start_date}' AND '{end_date}'
+        WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
           AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
                OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
         """
@@ -22542,7 +22542,7 @@ def run_flywheel_conversion(job_id):
             point_query = f"""
             SELECT DISTINCT UID
             FROM CLICKSTREAM_FINAL
-            WHERE DATE BETWEEN '{start_date}' AND '{end_date}'
+            WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
               AND UID IN ({uid_list})
               AND (LOWER(URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
                    OR LOWER(COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
@@ -22603,7 +22603,7 @@ def run_flywheel_conversion(job_id):
             compare_entry_query = f"""
             SELECT COUNT(DISTINCT UID) as unique_users
             FROM CLICKSTREAM_FINAL
-            WHERE DATE BETWEEN '{compare_start_date}' AND '{compare_end_date}'
+            WHERE DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
               AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
                    OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
             """
@@ -22627,7 +22627,7 @@ def run_flywheel_conversion(job_id):
                 compare_uids_query = f"""
                 SELECT DISTINCT UID
                 FROM CLICKSTREAM_FINAL
-                WHERE DATE BETWEEN '{compare_start_date}' AND '{compare_end_date}'
+                WHERE DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
                   AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
                        OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
                 """
@@ -22660,7 +22660,7 @@ def run_flywheel_conversion(job_id):
                     compare_point_query = f"""
                     SELECT DISTINCT UID
                     FROM CLICKSTREAM_FINAL
-                    WHERE DATE BETWEEN '{compare_start_date}' AND '{compare_end_date}'
+                    WHERE DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
                       AND UID IN ({compare_uid_list})
                       AND (LOWER(URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
                            OR LOWER(COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
