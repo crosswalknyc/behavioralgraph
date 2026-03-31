@@ -20494,6 +20494,13 @@ def talent_fit_assess():
         except Exception as e:
             print(f"⚠️ Failed to save to S3: {e}")
         
+        desc = f"Talent Fit: {brand} x {', '.join(talents[:3])} ({start_date}–{end_date})"
+        consume_credit(username, description=desc, pull_type='Talent Fit Assessment', credits_used=total_credits)
+        
+        _, credits_left = check_user_credits(username)
+        result['credits_used'] = total_credits
+        result['credits_remaining'] = credits_left
+        
         return jsonify(result)
         
     except Exception as e:
@@ -20528,6 +20535,17 @@ def talent_fit_find_talent():
         if not start_date or not end_date:
             return jsonify({'error': 'Start and end dates are required'}), 400
         
+        username = session.get('username', 'unknown')
+        credit_cost = get_credit_cost('talent_fit_find')
+        
+        if not has_credits_for(username, credit_cost):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'Find Me Talent requires {credit_cost} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1,
+                'credits_required': credit_cost
+            }), 403
+        
         import bg
         conn = bg.connect_to_snowflake()
         
@@ -20552,6 +20570,11 @@ def talent_fit_find_talent():
                 'projected_overlap': projected_overlap
             })
         
+        desc = f"Find Talent for: {brand} ({start_date}–{end_date})"
+        consume_credit(username, description=desc, pull_type='Find Me Talent', credits_used=credit_cost)
+        
+        _, credits_left = check_user_credits(username)
+        
         return jsonify({
             'success': True,
             'brand': brand,
@@ -20559,7 +20582,9 @@ def talent_fit_find_talent():
             'projected_brand_users': project_to_genpop(brand_users, brand_users),
             'start_date': start_date,
             'end_date': end_date,
-            'talents': enriched_talents
+            'talents': enriched_talents,
+            'credits_used': credit_cost,
+            'credits_remaining': credits_left
         })
         
     except Exception as e:
