@@ -21392,10 +21392,14 @@ SHORT FORM CONTENT URLs:
 
 CONDUCT A DEEP STRUCTURAL ANALYSIS covering these areas:
 
-1. **OFFICIAL vs UNOFFICIAL ACCOUNTS**
+1. **OFFICIAL vs CLICK FARM ACCOUNTS** (CRITICAL)
    - Are ANY of these from official studio/network accounts (Sony, Netflix, official show accounts)?
-   - Categorize accounts into: Official, Clip Farms, Fan Edits, Podcast Clips, Geographic/Regional, Unknown
-   - Look for red flags: @klyro.ae (UAE aggregator), generic names like @cinemaclipss, @scripted.cinematic, _edits accounts
+   - CLICK FARMS include ALL of these - count them ALL in click_farm_count:
+     * Regional aggregators: @klyro.ae (UAE), @pk_cinema (Pakistan), any .ae/.pk/.in accounts
+     * Generic clip farms: @cinemaclipss, @scripted.cinematic, @clipfarm, @viralclips
+     * Fan edit accounts: anything with _edits, editz, or edit in the name
+     * Repost accounts: accounts that clearly just repost content
+   - If an account is NOT the official studio/network account, it's likely a click farm harvesting views
 
 2. **PLATFORM DISTRIBUTION ANALYSIS**
    - Is this a mono-culture campaign (90%+ on one platform)?
@@ -21417,22 +21421,25 @@ CONDUCT A DEEP STRUCTURAL ANALYSIS covering these areas:
    - Are there "Now on Netflix" moments or platform identity signals?
    - Clips without CTAs are entertainment objects, not marketing
 
-6. **GEOGRAPHIC LEAKAGE**
-   - Regional accounts (.ae, .pk, Korean accounts) may drive views from audiences outside the serviceable region
-   - Non-US views for US Netflix content = wasted impressions
+6. **GEOGRAPHIC LEAKAGE** (counts as click farms)
+   - Regional accounts (.ae, .pk, .in, Korean accounts) drive views from audiences OUTSIDE the serviceable region
+   - @klyro.ae = UAE click farm. @pk_cinema = Pakistan click farm. These ARE click farms.
+   - Non-US views for US Netflix content = wasted impressions = click farm behavior
 
 7. **CONTENT ECOSYSTEM MISMATCH**
    - Podcast clip accounts distribute audio-heavy content incompatible with visual content conversion
    - Fan edit accounts may have engaged audiences but zero conversion architecture
 
+IMPORTANT: click_farm_count should include ALL non-official accounts including regional aggregators, fan edits, generic clip accounts, and any account that is not the verified official studio/network account.
+
 FORMAT AS JSON:
 {{
-    "click_farm_count": <number>,
-    "official_count": <number>,
-    "fan_page_count": <number>,
+    "click_farm_count": <TOTAL number of non-official accounts - include regional, fan edits, clip farms, unknown>,
+    "official_count": <number of verified official studio/network accounts>,
+    "fan_page_count": <subset of click farms that are fan pages>,
     "podcast_clip_count": <number>,
-    "geographic_leakage_count": <number>,
-    "estimated_fake_view_percentage": <0-100>,
+    "geographic_leakage_count": <subset of click farms from non-US regions>,
+    "estimated_fake_view_percentage": <0-100, should be HIGH if most accounts are click farms>,
     "risk_level": "HIGH" | "MEDIUM" | "LOW",
     "platform_analysis": {{
         "dominant_platform": "Instagram" | "TikTok" | "YouTube" | "Mixed",
@@ -21441,25 +21448,25 @@ FORMAT AS JSON:
         "tiktok_underutilized": true | false
     }},
     "account_categorization": {{
-        "official": ["list of official accounts if any"],
-        "clip_farms": ["@account1", "@account2"],
-        "fan_edits": ["@account1"],
-        "podcast_clips": ["@account1"],
-        "geographic_regional": ["@account1 (region)"],
-        "unknown": ["@account1"]
+        "official": ["list of official accounts if any - should be empty if none found"],
+        "clip_farms": ["@klyro.ae (UAE)", "@pk_cinema (Pakistan)", "@cinemaclipss", "other clip farms"],
+        "fan_edits": ["@account_edits", "@th3editz"],
+        "podcast_clips": ["@podpeektv"],
+        "geographic_regional": ["@klyro.ae (UAE)", "@pk_cinema (Pakistan)"],
+        "unknown": ["unidentifiable accounts"]
     }},
     "structural_failures": [
         {{
-            "title": "Specific failure title (e.g., 'Zero Official Accounts', 'Instagram Reel Timestamp Clustering')",
+            "title": "Specific failure title (e.g., 'Zero Official Accounts', 'Regional Click Farms Harvesting Views')",
             "severity": "critical" | "warning" | "info",
-            "accounts_mentioned": ["@account1", "@account2"],
-            "explanation": "Detailed explanation with specific evidence from the URLs. Be specific about WHY this kills conversion. Reference the accounts by name.",
+            "accounts_mentioned": ["@klyro.ae", "@pk_cinema", "etc"],
+            "explanation": "Detailed explanation. For regional accounts explain: '@klyro.ae is a UAE-based clip aggregator harvesting views from audiences who cannot convert to US Netflix. @pk_cinema targets Pakistan where Netflix has limited penetration. These accounts capture views with ZERO conversion potential.'",
             "recommendation": "Actionable fix"
         }}
     ],
     "has_utm_tracking": false,
     "has_platform_cta": false,
-    "summary": "Hard-hitting 2-3 sentence executive summary. Lead with the core structural problem. Example: 'This is a near-monoculture Instagram campaign masquerading as a multi-platform strategy. Zero official accounts across {total_urls} URLs means Sony effectively donated their IP to third-party accounts with zero conversion architecture.'"
+    "summary": "Hard-hitting 2-3 sentence executive summary. If regional click farms found, call them out by name: '@klyro.ae and @pk_cinema are regional click farms harvesting views from non-serviceable markets.'"
 }}
 
 Be brutally honest. Think like a CMO who needs to explain to the board why a campaign underperformed. Name specific accounts and explain exactly why they're problematic."""
