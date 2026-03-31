@@ -13918,6 +13918,30 @@
                                     </div>
                                 </div>
                                 <div class="form-section">
+                                    <div class="form-section-title">Compare to Prior Period</div>
+                                    <div class="form-row">
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                                <input type="checkbox" id="flywheelCompareToggle" onchange="toggleFlywheelCompare()" style="width: 18px; height: 18px; cursor: pointer;">
+                                                <span>Compare to a prior date range</span>
+                                            </label>
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Enable to see how your flywheel performance has changed over time</small>
+                                        </div>
+                                    </div>
+                                    <div id="flywheelCompareFields" style="display: none;">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Prior Period Start Date</label>
+                                                <input type="date" id="flywheelCompareStartDate">
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Prior Period End Date</label>
+                                                <input type="date" id="flywheelCompareEndDate">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-section">
                                     <div class="form-section-title">Subsequent Flywheel Points</div>
                                     <div class="form-row">
                                         <div class="form-group" style="grid-column: 1 / -1;">
@@ -14136,21 +14160,7 @@
                     
                     <div id="ai-tab-insights" class="ai-tab-content">
                         <p class="ai-description">Get AI-powered insights about this audience.</p>
-                        <div style="display: flex; gap: 0.75rem; align-items: flex-end; margin-bottom: 1rem; flex-wrap: wrap;">
-                            <div style="flex: 1; min-width: 200px;">
-                                <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">Analysis Type</label>
-                                <select id="insightTypeSelect" style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 8px; background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.85rem;">
-                                    <option value="core_snapshot">📊 Core Audience Snapshot</option>
-                                    <option value="standout_signals">🎯 Standout Signals (Index Anomalies)</option>
-                                    <option value="brand_fit">🤝 Brand Fit Analysis</option>
-                                    <option value="narrative_bio">👤 Narrative Bio (Human Description)</option>
-                                </select>
-                            </div>
-                            <button class="btn btn-primary" onclick="generateInsights()" id="insightsBtn" style="white-space: nowrap;">✨ Generate Insights</button>
-                        </div>
-                        <div id="insightTypeDescription" style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 1rem; padding: 0.5rem 0.75rem; background: var(--bg-dark); border-radius: 6px;">
-                            Identifies the 3-5 most strategically significant audience characteristics, prioritizing index anomalies (>150 or <60).
-                        </div>
+                        <button class="btn btn-primary" onclick="generateInsights()" id="insightsBtn">Generate Insights</button>
                         <div id="insightsResult" class="ai-result"></div>
                     </div>
                     <div id="ai-tab-persona" class="ai-tab-content">
@@ -22459,16 +22469,41 @@
         let _flywheelAllResults = [];
         let _flywheelFunnelChart = null;
 
+        function toggleFlywheelCompare() {
+            const toggle = document.getElementById('flywheelCompareToggle');
+            const fields = document.getElementById('flywheelCompareFields');
+            const compareStart = document.getElementById('flywheelCompareStartDate');
+            const compareEnd = document.getElementById('flywheelCompareEndDate');
+            if (toggle && fields) {
+                fields.style.display = toggle.checked ? '' : 'none';
+                if (toggle.checked) {
+                    compareStart.required = true;
+                    compareEnd.required = true;
+                } else {
+                    compareStart.required = false;
+                    compareEnd.required = false;
+                    compareStart.value = '';
+                    compareEnd.value = '';
+                }
+            }
+        }
+
         function submitFlywheelConversion() {
             const entryPoint = document.getElementById('flywheelEntryPoint').value.trim();
             const points = document.getElementById('flywheelPoints').value.trim();
             const startDate = document.getElementById('flywheelStartDate').value;
             const endDate = document.getElementById('flywheelEndDate').value;
             const projectName = document.getElementById('flywheelProjectName').value.trim();
+            const compareToggle = document.getElementById('flywheelCompareToggle');
+            const compareStart = document.getElementById('flywheelCompareStartDate').value;
+            const compareEnd = document.getElementById('flywheelCompareEndDate').value;
             
             if (!entryPoint) { alert('Please enter a flywheel entry point.'); return; }
             if (!points) { alert('Please enter at least one flywheel point.'); return; }
             if (!startDate || !endDate) { alert('Please select both start and end dates.'); return; }
+            if (compareToggle && compareToggle.checked) {
+                if (!compareStart || !compareEnd) { alert('Please select both prior period start and end dates for comparison.'); return; }
+            }
             
             const btn = document.getElementById('flywheelSubmitBtn');
             if (btn) btn.disabled = true;
@@ -22479,17 +22514,23 @@
             document.getElementById('flywheelStatusText').textContent = 'Submitting...';
             document.getElementById('flywheelProgressFill').style.width = '0%';
             
+            const payload = {
+                entry_point: entryPoint,
+                flywheel_points: points,
+                start_date: startDate,
+                end_date: endDate,
+                project_name: projectName || 'Flywheel_' + entryPoint.substring(0, 30)
+            };
+            if (compareToggle && compareToggle.checked && compareStart && compareEnd) {
+                payload.compare_start_date = compareStart;
+                payload.compare_end_date = compareEnd;
+            }
+            
             fetch('/api/attribution/flywheel-conversion', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({
-                    entry_point: entryPoint,
-                    flywheel_points: points,
-                    start_date: startDate,
-                    end_date: endDate,
-                    project_name: projectName || 'Flywheel_' + entryPoint.substring(0, 30)
-                })
+                body: JSON.stringify(payload)
             }).then(r => r.json()).then(data => {
                 if (data.error) {
                     document.getElementById('flywheelStatusRunning').style.display = 'none';
@@ -33687,7 +33728,9 @@
                     row.Column = _itemCategoryOverrides[valUpper];
                     category = _itemCategoryOverrides[valUpper];
                 }
-                const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || row['Percentage'] || 0) || 0;
+                // ALWAYS use Brand Penetration (Row) = Column C, NEVER fall back to Category Share (Column D)
+                const brandPenVal = row['Brand Penetration (Row)'];
+                const pct = (brandPenVal !== undefined && brandPenVal !== null && brandPenVal !== '') ? parseFloat(brandPenVal) || 0 : 0;
                 const catShare = parseFloat(row['Category Share'] || 0);
                 const rawNumbers = parseInt(String(row['Original Raw Numbers'] || '0').replace(/,/g, '')) || 0;
                 // US Gen Pop Projection should be (rawNumbers / 10,000,000) * 329,900,000
@@ -45969,45 +46012,20 @@
             document.getElementById('ai-tab-' + tabName).classList.add('active');
         }
         
-        // Insight type descriptions
-        const insightTypeDescriptions = {
-            'core_snapshot': 'Identifies the 3-5 most strategically significant audience characteristics, prioritizing index anomalies (>150 or <60).',
-            'standout_signals': 'Finds index anomalies where audience index is above 150 or below 60, explaining strategic implications for brand partnerships and content.',
-            'brand_fit': 'Recommends 3 brand category fits and 3 mismatches based on index values across age, income, ethnicity, and lifestyle segments.',
-            'narrative_bio': 'Creates a vivid, human 2-sentence description of who this viewer is — no jargon or index numbers, just plain language.'
-        };
-        
-        function updateInsightTypeDescription() {
-            const select = document.getElementById('insightTypeSelect');
-            const desc = document.getElementById('insightTypeDescription');
-            if (select && desc) {
-                desc.textContent = insightTypeDescriptions[select.value] || '';
-            }
-        }
-        
-        // Add change listener when DOM loads
-        document.addEventListener('DOMContentLoaded', function() {
-            const select = document.getElementById('insightTypeSelect');
-            if (select) {
-                select.addEventListener('change', updateInsightTypeDescription);
-            }
-        });
-        
         async function generateInsights() {
             if (!currentProfileData) {
                 alert('Please select a profile first');
                 return;
             }
             
-            const insightType = document.getElementById('insightTypeSelect')?.value || 'core_snapshot';
-            trackActivity('ai_insights', currentProfileData.name + ' - ' + insightType);
+            trackActivity('ai_insights', currentProfileData.name);
             
             const btn = document.getElementById('insightsBtn');
             const result = document.getElementById('insightsResult');
             
             btn.disabled = true;
-            btn.innerHTML = '⏳ Generating...';
-            result.innerHTML = '<div class="loading">Analyzing audience data with AI...</div>';
+            btn.textContent = 'Generating...';
+            result.innerHTML = '<div class="loading">Analyzing audience data...</div>';
             result.classList.add('loading');
             
             try {
@@ -46015,10 +46033,7 @@
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        profile: currentProfileData,
-                        insight_type: insightType
-                    })
+                    body: JSON.stringify({ profile: currentProfileData })
                 });
                 
                 const data = await response.json();
@@ -46035,7 +46050,7 @@
             }
             
             btn.disabled = false;
-            btn.innerHTML = '✨ Generate Insights';
+            btn.textContent = 'Generate Insights';
         }
         
         async function generatePersona() {

@@ -439,166 +439,74 @@ def _filter_top_items_for_insights(items, min_pct=MIN_PCT_FOR_INSIGHTS):
         return items
     return [i for i in items if i.get('pct', 0) >= min_pct]
 
-def generate_ai_insights(profile_data, insight_type='core_snapshot', comparison_profile=None, target_demo=None):
-    """Generate AI-powered insights from profile data.
-    
-    insight_type options:
-    - 'core_snapshot': Core audience snapshot (default)
-    - 'standout_signals': Standout index anomalies
-    - 'comparative': Compare two profiles (requires comparison_profile)
-    - 'brand_fit': Brand category fits and mismatches
-    - 'narrative_bio': Human narrative bio
-    """
+def generate_ai_insights(profile_data):
+    """Generate AI-powered insights from profile data."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        # Prepare data summary for GPT
-        demographics = profile_data.get('demographics', {})
-        demographics_index = profile_data.get('demographicsIndex', {})
-        behavioral = profile_data.get('behavioral', {})
-        behavioral_index = profile_data.get('behavioralIndex', {})
+        # Prepare data summary for GPT - filter to only include items >= 25%
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
         
-        # Build demographic data with index values
-        demo_data = []
+        # Build context - only items with 25%+ profile percentage
+        demo_summary = []
         for cat, values in demographics.items():
             if isinstance(values, dict):
-                cat_index = demographics_index.get(cat, {})
-                for segment, pct in sorted(values.items(), key=lambda x: x[1], reverse=True)[:5]:
-                    idx = cat_index.get(segment, 100) if isinstance(cat_index, dict) else 100
-                    demo_data.append(f"{cat} - {segment}: {pct:.1f}% (Index: {idx:.0f})")
+                top_items = sorted(values.items(), key=lambda x: x[1], reverse=True)[:3]
+                if top_items:
+                    demo_summary.append(f"{cat}: {', '.join([f'{k} ({v:.1f}%)' for k, v in top_items])}")
         
-        # Build behavioral data with index values
-        behavior_data = []
+        behavior_summary = []
         for cat, items in behavioral.items():
-            if isinstance(items, list):
-                cat_index = behavioral_index.get(cat, {})
-                for item in items[:5]:
-                    name = item.get('name', item.get('value', ''))
-                    pct = item.get('pct', 0)
-                    idx = item.get('index', cat_index.get(name, 100) if isinstance(cat_index, dict) else 100)
-                    behavior_data.append(f"{cat} - {name}: {pct:.1f}% (Index: {idx:.0f})")
+            if isinstance(items, list) and items:
+                top_items = items[:5]
+                item_strs = []
+                for i in top_items:
+                    name = i.get('name', i.get('value', ''))
+                    pct = i.get('pct', 0)
+                    item_strs.append(f"{name} ({pct:.1f}%)")
+                if item_strs:
+                    behavior_summary.append(f"{cat}: {', '.join(item_strs)}")
         
-        # Find index anomalies (>150 or <60)
-        anomalies_high = []
-        anomalies_low = []
-        for cat, values in demographics.items():
-            if isinstance(values, dict):
-                cat_index = demographics_index.get(cat, {})
-                for segment, pct in values.items():
-                    idx = cat_index.get(segment, 100) if isinstance(cat_index, dict) else 100
-                    if idx > 150:
-                        anomalies_high.append(f"{cat} - {segment}: {pct:.1f}% (Index: {idx:.0f})")
-                    elif idx < 60:
-                        anomalies_low.append(f"{cat} - {segment}: {pct:.1f}% (Index: {idx:.0f})")
-        
-        data_context = f"""Profile: {profile_name}
+        prompt = f"""Analyze this audience profile and provide 5 key insights in bullet points. Be specific and actionable.
+
+Profile: {profile_name}
 Sample Size: {sample_size:,}
 
-DEMOGRAPHIC DATA (with Index values - 100 = average):
-{chr(10).join(demo_data[:15]) if demo_data else 'No demographic data available'}
+Demographics (only showing values with 25%+ of the audience):
+{chr(10).join(demo_summary[:8]) if demo_summary else 'No demographics meet the 25% threshold'}
 
-BEHAVIORAL DATA (with Index values):
-{chr(10).join(behavior_data[:15]) if behavior_data else 'No behavioral data available'}
+Top Behaviors (only showing values with 25%+ of the audience):
+{chr(10).join(behavior_summary[:10]) if behavior_summary else 'No behaviors meet the 25% threshold'}
 
-HIGH INDEX ANOMALIES (Index > 150 - over-indexing):
-{chr(10).join(anomalies_high[:10]) if anomalies_high else 'None found'}
+IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided above.
 
-LOW INDEX ANOMALIES (Index < 60 - under-indexing):
-{chr(10).join(anomalies_low[:10]) if anomalies_low else 'None found'}"""
-        
-        # Select prompt based on insight_type
-        if insight_type == 'standout_signals':
-            prompt = f"""Review the demographic data for {profile_name}. Identify the top 3–5 index anomalies — segments where the audience index is above 150 or below 60 — and explain what each one means strategically for brand partnerships, content strategy, or audience development.
+Provide insights about:
+1. Who this audience is (demographics)
+2. What makes them unique vs general population
+3. Their media consumption habits
+4. Potential marketing opportunities
+5. Key differentiators
 
-{data_context}
+Keep each insight to 1-2 sentences. Be specific with numbers from the data provided."""
 
-Format each finding as:
-[Signal] → [What it means] → [Strategic implication]
-
-Be specific with index values and percentages."""
-
-        elif insight_type == 'brand_fit':
-            prompt = f"""Given the demographic profile of {profile_name}, recommend 3 brand category fits and 3 brand category mismatches.
-
-{data_context}
-
-Base your reasoning on the index values across age, income, ethnicity, and lifestyle segments. For each fit, name the specific data signal that supports it.
-
-Format:
-BRAND FITS:
-1. [Category]: [Reasoning with specific index/percentage]
-2. ...
-3. ...
-
-BRAND MISMATCHES:
-1. [Category]: [Reasoning with specific index/percentage]
-2. ...
-3. ..."""
-
-        elif insight_type == 'narrative_bio':
-            prompt = f"""Using the demographic data for {profile_name}, write a 2-sentence 'audience bio' — a vivid, human description of who this viewer is, written as if you're describing a real person.
-
-{data_context}
-
-Lead with the most distinctive demographic trait. Do not use jargon or index numbers in this version — translate the data into plain language. Make it feel like you're describing someone you might meet."""
-
-        elif insight_type == 'comparative' and comparison_profile:
-            # Build comparison profile data
-            comp_demographics = comparison_profile.get('demographics', {})
-            comp_demo_index = comparison_profile.get('demographicsIndex', {})
-            comp_name = comparison_profile.get('name', 'Comparison Profile')
-            comp_sample = comparison_profile.get('sampleSize', 0)
-            
-            comp_demo_data = []
-            for cat, values in comp_demographics.items():
-                if isinstance(values, dict):
-                    cat_index = comp_demo_index.get(cat, {})
-                    for segment, pct in sorted(values.items(), key=lambda x: x[1], reverse=True)[:5]:
-                        idx = cat_index.get(segment, 100) if isinstance(cat_index, dict) else 100
-                        comp_demo_data.append(f"{cat} - {segment}: {pct:.1f}% (Index: {idx:.0f})")
-            
-            target_info = f" targeting {target_demo}" if target_demo else ""
-            
-            prompt = f"""Compare the demographic profiles of {profile_name} and {comp_name}.
-
-PROFILE A - {profile_name} (Sample: {sample_size:,}):
-{chr(10).join(demo_data[:12])}
-
-PROFILE B - {comp_name} (Sample: {comp_sample:,}):
-{chr(10).join(comp_demo_data[:12])}
-
-Highlight where their audiences overlap and where they diverge most sharply. Identify which talent would be the stronger fit for a brand{target_info}, and explain why using specific index values."""
-
-        else:  # Default: core_snapshot
-            prompt = f"""Based on the following demographic data for {profile_name}, identify the 3–5 most strategically significant characteristics of this audience.
-
-{data_context}
-
-For each, write one concise bullet that:
-- Names the signal
-- Cites the relevant index or percentage
-- States what it means
-
-Prioritize index anomalies (above 150 or below 60) over profile size alone. Output should be scannable and ready to drop into a client-facing report — no preamble, no summary paragraph."""
-        
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a world-class audience insights analyst. Provide clear, strategic insights about consumer audiences based on behavioral and demographic data. Focus on index anomalies and actionable implications for brands and content strategy. Be concise and data-driven."},
+                {"role": "system", "content": "You are an expert audience analyst. Provide clear, actionable insights about consumer audiences based on behavioral and demographic data. Focus on what makes this audience unique and how marketers can reach them."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=800,
+            max_tokens=500,
             temperature=0.7
         )
         
         return {
             "insights": response.choices[0].message.content,
-            "tokens_used": response.usage.total_tokens,
-            "insight_type": insight_type
+            "tokens_used": response.usage.total_tokens
         }
     except Exception as e:
         return {"error": str(e)}
@@ -5856,26 +5764,10 @@ def download_cached(s3_key):
 @app.route('/api/ai/insights', methods=['POST'])
 @requires_auth
 def api_ai_insights():
-    """Generate AI insights for a profile.
-    
-    Request body:
-    - profile: Profile data object (required)
-    - insight_type: 'core_snapshot' (default), 'standout_signals', 'brand_fit', 'narrative_bio', 'comparative'
-    - comparison_profile: Second profile for comparative analysis
-    - target_demo: Target demographic for comparative analysis
-    """
+    """Generate AI insights for a profile."""
     data = request.get_json()
     profile_data = data.get('profile', {})
-    insight_type = data.get('insight_type', 'core_snapshot')
-    comparison_profile = data.get('comparison_profile')
-    target_demo = data.get('target_demo')
-    
-    result = generate_ai_insights(
-        profile_data, 
-        insight_type=insight_type,
-        comparison_profile=comparison_profile,
-        target_demo=target_demo
-    )
+    result = generate_ai_insights(profile_data)
     return jsonify(result)
 
 @app.route('/api/ai/persona', methods=['POST'])
@@ -17330,12 +17222,15 @@ def extract_demographics_summary(csv_content):
         for _, row in df.iterrows():
             category = str(row.get('Column', '')).upper()
             value = row.get('Value', '')
-            pct = float(
-                row.get("Brand Penetration (Row)")
-                or row.get("Category Share")
-                or row.get("Percentage")
-                or 0
-            ) or 0
+            # ALWAYS use Brand Penetration (Row) = Column C, NEVER fall back to Category Share (Column D)
+            brand_pen_val = row.get("Brand Penetration (Row)")
+            if brand_pen_val is not None and str(brand_pen_val).strip() != '':
+                try:
+                    pct = float(brand_pen_val)
+                except (ValueError, TypeError):
+                    pct = 0
+            else:
+                pct = 0
 
             if category == "SAMPLE SIZE":
                 summary['sampleSize'] = int(row.get('Category Share', 0) or row.get('Original Raw Numbers', 0) or 0)
@@ -22422,6 +22317,8 @@ def submit_flywheel_conversion():
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         project_name = data.get('project_name', '').strip()
+        compare_start_date = data.get('compare_start_date')
+        compare_end_date = data.get('compare_end_date')
         
         if not entry_point:
             return jsonify({'error': 'Flywheel entry point is required'}), 400
@@ -22429,6 +22326,10 @@ def submit_flywheel_conversion():
             return jsonify({'error': 'Additional flywheel points are required'}), 400
         if not start_date or not end_date:
             return jsonify({'error': 'Start date and end date are required'}), 400
+        if compare_start_date and not compare_end_date:
+            return jsonify({'error': 'Comparison end date is required when comparing periods'}), 400
+        if compare_end_date and not compare_start_date:
+            return jsonify({'error': 'Comparison start date is required when comparing periods'}), 400
         if not project_name:
             project_name = f"Flywheel_{entry_point[:30]}"
         
@@ -22515,7 +22416,7 @@ def run_flywheel_conversion(job_id):
 
         import snowflake.connector
         
-        FLYWHEEL_WAREHOUSE = 'FLYWHEEL'
+        FLYWHEEL_WAREHOUSE = 'BEHAVIORGRAPH6X'
         
         conn = snowflake.connector.connect(
             user=os.environ.get('SNOWFLAKE_USER'),
