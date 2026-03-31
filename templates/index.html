@@ -13835,10 +13835,9 @@
                                 </div>
                                 
                                 <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
-                                    <button type="submit" id="talentFitAssessBtn" class="btn btn-primary" style="flex: 1;">Assess Talent Fit <span id="talentFitAssessCost" style="font-size: 0.75em; opacity: 0.9;"></span></button>
-                                    <button type="button" id="talentFitFindBtn" class="btn" style="flex: 1; background: var(--accent-secondary); color: white;" onclick="findMeTalent()">Find Me Talent <span id="talentFitFindCost" style="font-size: 0.75em; opacity: 0.9;"></span></button>
+                                    <button type="submit" id="talentFitAssessBtn" class="btn btn-primary" style="flex: 1;">Assess Talent Fit</button>
+                                    <button type="button" id="talentFitFindBtn" class="btn" style="flex: 1; background: var(--accent-secondary); color: white;" onclick="findMeTalent()">Find Me Talent</button>
                                 </div>
-                                <div id="talentFitCreditInfo" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
                             </form>
                             
                             <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
@@ -21449,47 +21448,6 @@
 
         // ===================== TALENT FIT ASSESSMENT =====================
         let _talentFitPollingId = null;
-        let _talentFitPricing = { talent_fit_per_talent: 5, talent_fit_find: 15 };
-
-        async function loadTalentFitPricing() {
-            try {
-                const res = await fetch('/api/admin/settings/pricing', { credentials: 'same-origin' });
-                const data = await res.json();
-                if (data.success && data.pricing) {
-                    _talentFitPricing = data.pricing;
-                    updateTalentFitCreditDisplay();
-                }
-            } catch (e) {
-                console.log('Could not load pricing, using defaults');
-            }
-        }
-
-        function updateTalentFitCreditDisplay() {
-            const perTalent = _talentFitPricing.talent_fit_per_talent || 5;
-            const findCost = _talentFitPricing.talent_fit_find || 15;
-            
-            const assessCostEl = document.getElementById('talentFitAssessCost');
-            const findCostEl = document.getElementById('talentFitFindCost');
-            const creditInfoEl = document.getElementById('talentFitCreditInfo');
-            
-            if (findCostEl) findCostEl.textContent = `(${findCost} credits)`;
-            if (creditInfoEl) creditInfoEl.innerHTML = `<strong>${perTalent}</strong> credits per talent assessed | <strong>${findCost}</strong> credits for Find Me Talent`;
-            
-            const talentsInput = document.getElementById('talentFitTalents');
-            if (talentsInput) {
-                talentsInput.addEventListener('input', function() {
-                    const talents = this.value.split(',').filter(t => t.trim()).length;
-                    const totalCost = talents * perTalent;
-                    if (assessCostEl) {
-                        assessCostEl.textContent = talents > 0 ? `(${totalCost} credits)` : '';
-                    }
-                });
-            }
-        }
-
-        (function initTalentFitPricing() {
-            loadTalentFitPricing();
-        })();
 
         function refreshTalentFitResults() {
             fetch('/api/talent-fit/results').then(r => r.json()).then(data => {
