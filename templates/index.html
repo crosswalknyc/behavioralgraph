@@ -18638,10 +18638,10 @@
             const avgHrs = parseFloat(conversionSummary.avgHours) || 0;
             document.getElementById('sfConvKpiAvgTime').textContent = avgHrs > 24 ? `${Math.round(avgHrs / 24)}d` : `${Math.round(avgHrs)}h`;
 
-            // Sub-value shows sample size
+            // Hide sample sub-value (user requested removal)
             const totalProjEl = document.getElementById('sfConvKpiTotalViewersProj');
-            if (totalProjEl && totalViewersSample > 0) {
-                totalProjEl.textContent = `Sample: ${totalViewersSample.toLocaleString()}`;
+            if (totalProjEl) {
+                totalProjEl.style.display = 'none';
             }
             // Hide converted sub-value
             const convProjEl = document.getElementById('sfConvKpiConvertedProj');
