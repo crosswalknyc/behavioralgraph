@@ -22473,17 +22473,31 @@ def run_flywheel_conversion(job_id):
         
         update_job_status(job_id, progress=20, message='Finding entry point users...')
         
-        entry_point_query = f"""
-        SELECT COUNT(DISTINCT UID) as unique_users
-        FROM CLICKSTREAM_FINAL
-        WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-          AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
-               OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
-        """
-        print(f"[Flywheel] Entry point query: {entry_point_query}")
-        cur.execute(entry_point_query)
-        entry_row = cur.fetchone()
-        entry_unique_users = entry_row[0] if entry_row else 0
+        # Create unique temp table names for this job
+        job_suffix = job_id.replace('-', '_')[:12]
+        entry_temp_table = f"FW_ENTRY_{job_suffix}"
+        current_step_table = f"FW_STEP_{job_suffix}"
+        
+        # OPTIMIZED: Create temp table with entry point UIDs (single query, filters DATE first)
+        print(f"[Flywheel] Creating temp table for entry point UIDs...")
+        try:
+            cur.execute(f"DROP TABLE IF EXISTS {entry_temp_table}")
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE {entry_temp_table} AS
+                SELECT DISTINCT UID
+                FROM CLICKSTREAM_FINAL
+                WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                  AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
+                       OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
+            """)
+            print(f"[Flywheel] Created temp table {entry_temp_table}")
+        except Exception as e:
+            print(f"[Flywheel] Error creating entry temp table: {e}")
+            raise
+        
+        # Get count from temp table (fast - just counting rows in small table)
+        cur.execute(f"SELECT COUNT(*) FROM {entry_temp_table}")
+        entry_unique_users = cur.fetchone()[0] or 0
         
         entry_boosted = entry_unique_users * BOOST_FACTOR
         entry_gen_pop = round(entry_boosted / SAMPLE_SIZE * US_POPULATION)
@@ -22500,23 +22514,17 @@ def run_flywheel_conversion(job_id):
         if entry_unique_users == 0:
             update_job_status(job_id, status='completed', progress=100, message='No users found for entry point')
             results['error'] = 'No users found matching the entry point criteria'
+            cur.execute(f"DROP TABLE IF EXISTS {entry_temp_table}")
             _save_flywheel_results(job_id, results, job)
             return
         
-        entry_uids_query = f"""
-        SELECT DISTINCT UID
-        FROM CLICKSTREAM_FINAL
-        WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-          AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
-               OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
-        """
-        cur.execute(entry_uids_query)
-        entry_uids = set(row[0] for row in cur.fetchall())
-        print(f"[Flywheel] Found {len(entry_uids)} entry point UIDs")
-        
         total_points = len(flywheel_points)
-        cumulative_uids = entry_uids.copy()
-        previous_step_uids = entry_uids.copy()
+        previous_step_count = entry_unique_users
+        
+        # Initialize current step table as a copy of entry table
+        cur.execute(f"DROP TABLE IF EXISTS {current_step_table}")
+        cur.execute(f"CREATE TEMPORARY TABLE {current_step_table} AS SELECT * FROM {entry_temp_table}")
+        print(f"[Flywheel] Initialized step table with {entry_unique_users} UIDs")
         
         for idx, point in enumerate(flywheel_points):
             progress = 25 + int((idx / total_points) * 60)
@@ -22524,7 +22532,11 @@ def run_flywheel_conversion(job_id):
             
             like_esc_point, _ = _escape_for_flywheel_sql(point)
             
-            if not cumulative_uids:
+            # Check if we still have UIDs to work with
+            cur.execute(f"SELECT COUNT(*) FROM {current_step_table}")
+            current_count = cur.fetchone()[0] or 0
+            
+            if current_count == 0:
                 results['flywheel_metrics'].append({
                     'point': point,
                     'position': idx + 1,
@@ -22535,28 +22547,33 @@ def run_flywheel_conversion(job_id):
                     'conversion_from_previous': 0,
                     'cumulative_retention': 0
                 })
+                previous_step_count = 0
                 continue
             
-            uid_list = ','.join(f"'{uid}'" for uid in list(cumulative_uids)[:50000])
+            # OPTIMIZED: Use temp table JOIN instead of massive IN clause
+            next_step_table = f"FW_NEXT_{job_suffix}"
+            print(f"[Flywheel] Querying point '{point[:40]}' using JOIN on temp table...")
             
-            point_query = f"""
-            SELECT DISTINCT UID
-            FROM CLICKSTREAM_FINAL
-            WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-              AND UID IN ({uid_list})
-              AND (LOWER(URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
-                   OR LOWER(COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
-            """
-            cur.execute(point_query)
-            point_uids = set(row[0] for row in cur.fetchall())
+            cur.execute(f"DROP TABLE IF EXISTS {next_step_table}")
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE {next_step_table} AS
+                SELECT DISTINCT c.UID
+                FROM CLICKSTREAM_FINAL c
+                INNER JOIN {current_step_table} s ON c.UID = s.UID
+                WHERE c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                  AND (LOWER(c.URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
+                       OR LOWER(c.COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
+            """)
             
-            point_unique_users = len(point_uids)
+            cur.execute(f"SELECT COUNT(*) FROM {next_step_table}")
+            point_unique_users = cur.fetchone()[0] or 0
+            
             point_boosted = point_unique_users * BOOST_FACTOR
             point_gen_pop = round(point_boosted / SAMPLE_SIZE * US_POPULATION)
             
-            conversion_from_entry = round(point_unique_users / len(entry_uids) * 100, 2) if entry_uids else 0
-            conversion_from_previous = round(point_unique_users / len(previous_step_uids) * 100, 2) if previous_step_uids else 0
-            cumulative_retention = round(point_unique_users / len(entry_uids) * 100, 2) if entry_uids else 0
+            conversion_from_entry = round(point_unique_users / entry_unique_users * 100, 2) if entry_unique_users else 0
+            conversion_from_previous = round(point_unique_users / previous_step_count * 100, 2) if previous_step_count else 0
+            cumulative_retention = round(point_unique_users / entry_unique_users * 100, 2) if entry_unique_users else 0
             
             results['flywheel_metrics'].append({
                 'point': point,
@@ -22569,10 +22586,19 @@ def run_flywheel_conversion(job_id):
                 'cumulative_retention': cumulative_retention
             })
             
-            print(f"[Flywheel] Point '{point}': {point_unique_users} users ({conversion_from_entry}% of entry)")
+            print(f"[Flywheel] Point '{point[:40]}': {point_unique_users} users ({conversion_from_entry}% of entry)")
             
-            cumulative_uids = point_uids
-            previous_step_uids = point_uids
+            # Update for next iteration: current step becomes the result of this step
+            cur.execute(f"DROP TABLE IF EXISTS {current_step_table}")
+            cur.execute(f"ALTER TABLE {next_step_table} RENAME TO {current_step_table}")
+            previous_step_count = point_unique_users
+        
+        # Cleanup temp tables
+        try:
+            cur.execute(f"DROP TABLE IF EXISTS {entry_temp_table}")
+            cur.execute(f"DROP TABLE IF EXISTS {current_step_table}")
+        except:
+            pass
         
         update_job_status(job_id, progress=88, message='Building funnel analysis...')
         
@@ -22600,16 +22626,27 @@ def run_flywheel_conversion(job_id):
             update_job_status(job_id, progress=89, message='Running comparison period analysis...')
             print(f"[Flywheel] Starting comparison period analysis: {compare_start_date} to {compare_end_date}")
             
-            compare_entry_query = f"""
-            SELECT COUNT(DISTINCT UID) as unique_users
-            FROM CLICKSTREAM_FINAL
-            WHERE DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
-              AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
-                   OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
-            """
-            cur.execute(compare_entry_query)
-            compare_entry_row = cur.fetchone()
-            compare_entry_unique_users = compare_entry_row[0] if compare_entry_row else 0
+            # OPTIMIZED: Use temp tables for comparison period too
+            compare_entry_table = f"FW_CMP_ENTRY_{job_suffix}"
+            compare_step_table = f"FW_CMP_STEP_{job_suffix}"
+            
+            try:
+                cur.execute(f"DROP TABLE IF EXISTS {compare_entry_table}")
+                cur.execute(f"""
+                    CREATE TEMPORARY TABLE {compare_entry_table} AS
+                    SELECT DISTINCT UID
+                    FROM CLICKSTREAM_FINAL
+                    WHERE DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
+                      AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
+                           OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
+                """)
+                print(f"[Flywheel] Created comparison entry temp table")
+            except Exception as e:
+                print(f"[Flywheel] Error creating comparison entry table: {e}")
+                raise
+            
+            cur.execute(f"SELECT COUNT(*) FROM {compare_entry_table}")
+            compare_entry_unique_users = cur.fetchone()[0] or 0
             
             compare_entry_boosted = compare_entry_unique_users * BOOST_FACTOR
             compare_entry_gen_pop = round(compare_entry_boosted / SAMPLE_SIZE * US_POPULATION)
@@ -22624,25 +22661,20 @@ def run_flywheel_conversion(job_id):
             print(f"[Flywheel] Comparison entry point: {compare_entry_unique_users} unique users")
             
             if compare_entry_unique_users > 0:
-                compare_uids_query = f"""
-                SELECT DISTINCT UID
-                FROM CLICKSTREAM_FINAL
-                WHERE DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
-                  AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
-                       OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
-                """
-                cur.execute(compare_uids_query)
-                compare_entry_uids = set(row[0] for row in cur.fetchall())
-                
-                compare_cumulative_uids = compare_entry_uids.copy()
-                compare_previous_step_uids = compare_entry_uids.copy()
+                # Initialize comparison step table
+                cur.execute(f"DROP TABLE IF EXISTS {compare_step_table}")
+                cur.execute(f"CREATE TEMPORARY TABLE {compare_step_table} AS SELECT * FROM {compare_entry_table}")
+                compare_previous_step_count = compare_entry_unique_users
                 
                 for idx, point in enumerate(flywheel_points):
                     update_job_status(job_id, progress=89 + int((idx / total_points) * 5), message=f'Comparing point {idx + 1}/{total_points}: {point[:30]}...')
                     
                     like_esc_point, _ = _escape_for_flywheel_sql(point)
                     
-                    if not compare_cumulative_uids:
+                    cur.execute(f"SELECT COUNT(*) FROM {compare_step_table}")
+                    compare_current_count = cur.fetchone()[0] or 0
+                    
+                    if compare_current_count == 0:
                         results['compare_flywheel_metrics'].append({
                             'point': point,
                             'position': idx + 1,
@@ -22653,27 +22685,30 @@ def run_flywheel_conversion(job_id):
                             'conversion_from_previous': 0,
                             'cumulative_retention': 0
                         })
+                        compare_previous_step_count = 0
                         continue
                     
-                    compare_uid_list = ','.join(f"'{uid}'" for uid in list(compare_cumulative_uids)[:50000])
+                    # OPTIMIZED: Use JOIN instead of IN clause
+                    compare_next_table = f"FW_CMP_NEXT_{job_suffix}"
+                    cur.execute(f"DROP TABLE IF EXISTS {compare_next_table}")
+                    cur.execute(f"""
+                        CREATE TEMPORARY TABLE {compare_next_table} AS
+                        SELECT DISTINCT c.UID
+                        FROM CLICKSTREAM_FINAL c
+                        INNER JOIN {compare_step_table} s ON c.UID = s.UID
+                        WHERE c.DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
+                          AND (LOWER(c.URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
+                               OR LOWER(c.COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
+                    """)
                     
-                    compare_point_query = f"""
-                    SELECT DISTINCT UID
-                    FROM CLICKSTREAM_FINAL
-                    WHERE DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
-                      AND UID IN ({compare_uid_list})
-                      AND (LOWER(URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
-                           OR LOWER(COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
-                    """
-                    cur.execute(compare_point_query)
-                    compare_point_uids = set(row[0] for row in cur.fetchall())
+                    cur.execute(f"SELECT COUNT(*) FROM {compare_next_table}")
+                    compare_point_unique = cur.fetchone()[0] or 0
                     
-                    compare_point_unique = len(compare_point_uids)
                     compare_point_boosted = compare_point_unique * BOOST_FACTOR
                     compare_point_gen_pop = round(compare_point_boosted / SAMPLE_SIZE * US_POPULATION)
                     
-                    compare_conv_from_entry = round(compare_point_unique / len(compare_entry_uids) * 100, 2) if compare_entry_uids else 0
-                    compare_conv_from_prev = round(compare_point_unique / len(compare_previous_step_uids) * 100, 2) if compare_previous_step_uids else 0
+                    compare_conv_from_entry = round(compare_point_unique / compare_entry_unique_users * 100, 2) if compare_entry_unique_users else 0
+                    compare_conv_from_prev = round(compare_point_unique / compare_previous_step_count * 100, 2) if compare_previous_step_count else 0
                     
                     results['compare_flywheel_metrics'].append({
                         'point': point,
@@ -22686,10 +22721,19 @@ def run_flywheel_conversion(job_id):
                         'cumulative_retention': compare_conv_from_entry
                     })
                     
-                    print(f"[Flywheel] Comparison point '{point}': {compare_point_unique} users ({compare_conv_from_entry}% of entry)")
+                    print(f"[Flywheel] Comparison point '{point[:40]}': {compare_point_unique} users ({compare_conv_from_entry}% of entry)")
                     
-                    compare_cumulative_uids = compare_point_uids
-                    compare_previous_step_uids = compare_point_uids
+                    # Update for next iteration
+                    cur.execute(f"DROP TABLE IF EXISTS {compare_step_table}")
+                    cur.execute(f"ALTER TABLE {compare_next_table} RENAME TO {compare_step_table}")
+                    compare_previous_step_count = compare_point_unique
+                
+                # Cleanup comparison temp tables
+                try:
+                    cur.execute(f"DROP TABLE IF EXISTS {compare_entry_table}")
+                    cur.execute(f"DROP TABLE IF EXISTS {compare_step_table}")
+                except:
+                    pass
                 
                 compare_funnel_steps = [{'step': 'Entry: ' + entry_point, 'users': compare_entry_unique_users, 'boosted': compare_entry_boosted, 'gen_pop': compare_entry_gen_pop, 'pct_of_entry': 100.0}]
                 for metric in results['compare_flywheel_metrics']:
