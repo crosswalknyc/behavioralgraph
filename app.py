@@ -21297,6 +21297,114 @@ def get_sf_lf_conversion_data(s3_key):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/sf-lf-conversion/performance-analysis', methods=['POST'])
+@requires_auth
+def sf_lf_performance_analysis():
+    """Analyze SF-LF conversion URLs for click farms and marketing effectiveness using GPT-4."""
+    try:
+        client = get_openai_client()
+        if not client:
+            return jsonify({'error': 'OpenAI not configured'}), 500
+        
+        data = request.json
+        urls = data.get('urls', [])
+        lf_title = data.get('lf_title', 'Unknown Title')
+        lf_platform = data.get('lf_platform', 'Unknown Platform')
+        total_views = data.get('total_views', 0)
+        converted = data.get('converted', 0)
+        conversion_rate = data.get('conversion_rate', '0%')
+        
+        if not urls:
+            return jsonify({'error': 'No URLs provided'}), 400
+        
+        # Format URLs for analysis
+        url_list = '\n'.join([f"- {url}" for url in urls[:50]])  # Limit to 50 URLs
+        
+        prompt = f"""You are a senior marketing analyst specializing in digital media attribution and influencer fraud detection. Analyze this short-form content campaign that was meant to drive viewers to "{lf_title}" on {lf_platform}.
+
+CAMPAIGN METRICS:
+- Total Short Form Views (Duplicated): {total_views:,}
+- Converted Users: {converted:,}
+- Conversion Rate: {conversion_rate}
+
+SHORT FORM CONTENT URLs ANALYZED:
+{url_list}
+
+ANALYSIS TASKS:
+1. Identify which URLs appear to be from:
+   - Click farms / viral clip aggregators (look for patterns like @klyro.ae, generic clip accounts, non-official accounts)
+   - Fan pages / unofficial accounts
+   - Official brand/studio accounts
+   - Regional aggregators (.ae, .pk, random account names)
+
+2. Estimate what percentage of views likely came from non-official/click farm sources
+
+3. Identify the TOP 3-5 FINDINGS that explain why this campaign succeeded or failed at driving conversions
+
+FORMAT YOUR RESPONSE AS JSON:
+{{
+    "click_farm_count": <number of URLs identified as click farms/aggregators>,
+    "official_count": <number of URLs from official accounts>,
+    "fan_page_count": <number of URLs from fan pages>,
+    "estimated_fake_view_percentage": <0-100 number>,
+    "risk_level": "HIGH" | "MEDIUM" | "LOW",
+    "findings": [
+        {{
+            "title": "Finding title",
+            "severity": "critical" | "warning" | "info",
+            "accounts_mentioned": ["@account1", "@account2"],
+            "explanation": "Detailed explanation of the finding and its impact on conversion",
+            "recommendation": "What should be done differently"
+        }}
+    ],
+    "summary": "2-3 sentence executive summary of the campaign's effectiveness"
+}}
+
+Be specific about which accounts are problematic and why. Think like a CMO reviewing why a campaign underperformed."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a marketing analytics expert. Always respond with valid JSON only, no markdown formatting."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        
+        # Parse JSON from response
+        import json
+        # Clean up potential markdown formatting
+        if result_text.startswith('```'):
+            result_text = result_text.split('```')[1]
+            if result_text.startswith('json'):
+                result_text = result_text[4:]
+        result_text = result_text.strip()
+        
+        try:
+            analysis = json.loads(result_text)
+        except json.JSONDecodeError:
+            # If JSON parsing fails, return the raw text
+            analysis = {
+                "click_farm_count": 0,
+                "official_count": 0,
+                "fan_page_count": len(urls),
+                "estimated_fake_view_percentage": 50,
+                "risk_level": "MEDIUM",
+                "findings": [{"title": "Analysis Error", "severity": "info", "accounts_mentioned": [], "explanation": result_text, "recommendation": "Please try again"}],
+                "summary": "Unable to parse analysis. Raw response included."
+            }
+        
+        return jsonify({'success': True, 'analysis': analysis})
+        
+    except Exception as e:
+        import traceback
+        print(f"[SF-LF Performance Analysis] Error: {e}\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/attribution/svod-acquisition', methods=['POST'])
 @requires_auth
 def submit_svod_acquisition():

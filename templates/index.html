@@ -15621,9 +15621,65 @@
                         </div>
                         
                         <!-- Conversion Funnel -->
-                        <div class="sf-conv-funnel" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                        <div class="sf-conv-funnel" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📊 Short Form → Long Form Conversion Funnel</h3>
                             <div id="sfConvFunnelChart" style="min-height: 200px;"></div>
+                        </div>
+                        
+                        <!-- Performance Analysis Section -->
+                        <div class="sf-conv-performance-analysis" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">🔍 Performance Analysis <span style="font-size: 0.7rem; color: var(--accent-cyan); font-weight: 400;">Powered by AI</span></h3>
+                                <button onclick="runSFConvPerformanceAnalysis()" id="sfConvRunAnalysisBtn" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.8rem;">
+                                    🤖 Analyze Campaign
+                                </button>
+                            </div>
+                            
+                            <!-- Analysis Results -->
+                            <div id="sfConvPerformanceResults" style="display: none;">
+                                <!-- Summary KPIs -->
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; text-align: center; border-left: 4px solid var(--accent-red);">
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Click Farm URLs</div>
+                                        <div id="sfConvClickFarmCount" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-red);">-</div>
+                                    </div>
+                                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; text-align: center; border-left: 4px solid var(--accent-orange);">
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Est. Fake Views %</div>
+                                        <div id="sfConvFakeViewsPct" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange);">-</div>
+                                    </div>
+                                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; text-align: center; border-left: 4px solid var(--accent-lime);">
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Official Accounts</div>
+                                        <div id="sfConvOfficialCount" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime);">-</div>
+                                    </div>
+                                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; text-align: center;" id="sfConvRiskLevelBox">
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Risk Level</div>
+                                        <div id="sfConvRiskLevel" style="font-size: 1.5rem; font-weight: 700;">-</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Executive Summary -->
+                                <div id="sfConvSummaryBox" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1)); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; border: 1px solid rgba(99, 102, 241, 0.3);">
+                                    <div style="font-size: 0.75rem; color: var(--accent-primary); text-transform: uppercase; margin-bottom: 0.5rem;">Executive Summary</div>
+                                    <div id="sfConvSummaryText" style="font-size: 0.85rem; color: var(--text-primary); line-height: 1.5;"></div>
+                                </div>
+                                
+                                <!-- Findings -->
+                                <div style="font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.75rem;">Key Findings</div>
+                                <div id="sfConvFindingsList"></div>
+                            </div>
+                            
+                            <!-- Loading State -->
+                            <div id="sfConvPerformanceLoading" style="display: none; text-align: center; padding: 2rem;">
+                                <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                                <div style="color: var(--text-secondary);">Analyzing campaign with AI...</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">This may take 10-20 seconds</div>
+                            </div>
+                            
+                            <!-- Empty State -->
+                            <div id="sfConvPerformanceEmpty" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎯</div>
+                                <div style="font-size: 0.85rem;">Click "Analyze Campaign" to get AI-powered insights on click farms, fake views, and why this campaign succeeded or failed.</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -18526,6 +18582,24 @@
             
             // Funnel Chart
             renderSFConvFunnel(conversionSummary, lfPlatformVisit);
+            
+            // Store data for performance analysis
+            window.sfConvAnalysisData = {
+                urls: urlMetrics.map(u => u.url).filter(Boolean),
+                lfTitle: projectInfo.lfTitle || '',
+                lfPlatform: projectInfo.lfPlatform || '',
+                totalViews: totalViewersSample,
+                converted: convertedSample,
+                conversionRate: (conversionSummary.convRate || '0') + '%'
+            };
+            
+            // Reset performance analysis UI
+            const perfResultsEl = document.getElementById('sfConvPerformanceResults');
+            const perfEmptyEl = document.getElementById('sfConvPerformanceEmpty');
+            const perfLoadingEl = document.getElementById('sfConvPerformanceLoading');
+            if (perfResultsEl) perfResultsEl.style.display = 'none';
+            if (perfEmptyEl) perfEmptyEl.style.display = 'block';
+            if (perfLoadingEl) perfLoadingEl.style.display = 'none';
         }
         
         function renderSFConvDemographics(containerId, data) {
@@ -18613,6 +18687,120 @@
                     </div>
                 </div>
             `;
+        }
+
+        // Store SF-LF Conversion data for performance analysis
+        window.sfConvAnalysisData = null;
+        
+        function runSFConvPerformanceAnalysis() {
+            const data = window.sfConvAnalysisData;
+            if (!data || !data.urls || data.urls.length === 0) {
+                alert('No URL data available for analysis. Please load a conversion report first.');
+                return;
+            }
+            
+            // Show loading state
+            document.getElementById('sfConvPerformanceEmpty').style.display = 'none';
+            document.getElementById('sfConvPerformanceResults').style.display = 'none';
+            document.getElementById('sfConvPerformanceLoading').style.display = 'block';
+            document.getElementById('sfConvRunAnalysisBtn').disabled = true;
+            document.getElementById('sfConvRunAnalysisBtn').innerHTML = '⏳ Analyzing...';
+            
+            fetch('/api/sf-lf-conversion/performance-analysis', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    urls: data.urls,
+                    lf_title: data.lfTitle || 'Unknown Title',
+                    lf_platform: data.lfPlatform || 'Unknown Platform',
+                    total_views: data.totalViews || 0,
+                    converted: data.converted || 0,
+                    conversion_rate: data.conversionRate || '0%'
+                })
+            })
+            .then(r => r.json())
+            .then(resp => {
+                document.getElementById('sfConvPerformanceLoading').style.display = 'none';
+                document.getElementById('sfConvRunAnalysisBtn').disabled = false;
+                document.getElementById('sfConvRunAnalysisBtn').innerHTML = '🤖 Analyze Campaign';
+                
+                if (resp.error) {
+                    alert('Analysis failed: ' + resp.error);
+                    document.getElementById('sfConvPerformanceEmpty').style.display = 'block';
+                    return;
+                }
+                
+                renderSFConvPerformanceAnalysis(resp.analysis);
+            })
+            .catch(err => {
+                console.error('Performance analysis error:', err);
+                document.getElementById('sfConvPerformanceLoading').style.display = 'none';
+                document.getElementById('sfConvRunAnalysisBtn').disabled = false;
+                document.getElementById('sfConvRunAnalysisBtn').innerHTML = '🤖 Analyze Campaign';
+                document.getElementById('sfConvPerformanceEmpty').style.display = 'block';
+                alert('Analysis failed: ' + err.message);
+            });
+        }
+        
+        function renderSFConvPerformanceAnalysis(analysis) {
+            document.getElementById('sfConvPerformanceResults').style.display = 'block';
+            
+            // Update KPI boxes
+            document.getElementById('sfConvClickFarmCount').textContent = analysis.click_farm_count || 0;
+            document.getElementById('sfConvFakeViewsPct').textContent = (analysis.estimated_fake_view_percentage || 0) + '%';
+            document.getElementById('sfConvOfficialCount').textContent = analysis.official_count || 0;
+            
+            // Risk level with color
+            const riskEl = document.getElementById('sfConvRiskLevel');
+            const riskBox = document.getElementById('sfConvRiskLevelBox');
+            const riskLevel = analysis.risk_level || 'MEDIUM';
+            riskEl.textContent = riskLevel;
+            
+            const riskColors = {
+                'HIGH': { color: 'var(--accent-red)', border: 'var(--accent-red)' },
+                'MEDIUM': { color: 'var(--accent-orange)', border: 'var(--accent-orange)' },
+                'LOW': { color: 'var(--accent-lime)', border: 'var(--accent-lime)' }
+            };
+            const rc = riskColors[riskLevel] || riskColors['MEDIUM'];
+            riskEl.style.color = rc.color;
+            riskBox.style.borderLeft = `4px solid ${rc.border}`;
+            
+            // Executive summary
+            document.getElementById('sfConvSummaryText').textContent = analysis.summary || 'No summary available.';
+            
+            // Findings
+            const findingsContainer = document.getElementById('sfConvFindingsList');
+            const findings = analysis.findings || [];
+            
+            if (findings.length === 0) {
+                findingsContainer.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center;">No findings to display.</div>';
+                return;
+            }
+            
+            const severityColors = {
+                'critical': { bg: 'rgba(239, 68, 68, 0.1)', border: 'var(--accent-red)', icon: '🚨' },
+                'warning': { bg: 'rgba(245, 158, 11, 0.1)', border: 'var(--accent-orange)', icon: '⚠️' },
+                'info': { bg: 'rgba(59, 130, 246, 0.1)', border: 'var(--accent-cyan)', icon: 'ℹ️' }
+            };
+            
+            findingsContainer.innerHTML = findings.map((f, idx) => {
+                const sc = severityColors[f.severity] || severityColors['info'];
+                const accounts = (f.accounts_mentioned || []).map(a => `<span style="background: var(--bg-dark); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-family: monospace;">${a}</span>`).join(' ');
+                
+                return `
+                    <div style="background: ${sc.bg}; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid ${sc.border};">
+                        <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                            <div style="font-size: 1.25rem;">${sc.icon}</div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Finding #${idx + 1}: ${f.title || 'Untitled'}</div>
+                                ${accounts ? `<div style="margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">${accounts}</div>` : ''}
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem;">${f.explanation || ''}</div>
+                                ${f.recommendation ? `<div style="font-size: 0.8rem; color: var(--accent-lime); background: rgba(132, 204, 22, 0.1); padding: 0.5rem 0.75rem; border-radius: 6px;"><strong>💡 Recommendation:</strong> ${f.recommendation}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         window.showRankerIQ = function() {
