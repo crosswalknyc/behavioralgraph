@@ -8444,6 +8444,7 @@ def _get_demographics_for_uids(cur, uid_table_name):
     """
     Get demographic breakdown (gender, ethnicity, income, age) for UIDs in a temp table.
     Returns dict with percentage breakdowns for each category.
+    Each category is rebased to 100% based on available data for that field.
     """
     try:
         # First check how many UIDs we're working with
@@ -8465,27 +8466,33 @@ def _get_demographics_for_uids(cur, uid_table_name):
             print(f"   ⚠️ No demographic data available - UIDs not in USER_DATA_SANITIZED")
             return {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
         
+        # Query each demographic category separately to rebase to 100%
+        # This ensures each category sums to 100% even if some fields are sparse
         demo_query = f"""
             WITH demo_data AS (
                 SELECT d.GENDER, d.ETHNICITY, d.INCOME, d.AGE
                 FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
                 INNER JOIN {uid_table_name} u ON d.UID = u.UID
             ),
-            total_count AS (SELECT COUNT(*) as total FROM demo_data)
+            gender_total AS (SELECT COUNT(*) as total FROM demo_data WHERE GENDER IS NOT NULL AND GENDER != ''),
+            ethnicity_total AS (SELECT COUNT(*) as total FROM demo_data WHERE ETHNICITY IS NOT NULL AND ETHNICITY != ''),
+            income_total AS (SELECT COUNT(*) as total FROM demo_data WHERE INCOME IS NOT NULL AND INCOME != ''),
+            age_total AS (SELECT COUNT(*) as total FROM demo_data WHERE AGE IS NOT NULL AND AGE != '')
+            
             SELECT 'GENDER' as category, GENDER as value, COUNT(*) as cnt, 
-                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM total_count), 0), 1) as pct
+                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM gender_total), 0), 1) as pct
             FROM demo_data WHERE GENDER IS NOT NULL AND GENDER != '' GROUP BY GENDER
             UNION ALL
             SELECT 'ETHNICITY', ETHNICITY, COUNT(*), 
-                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM total_count), 0), 1)
+                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM ethnicity_total), 0), 1)
             FROM demo_data WHERE ETHNICITY IS NOT NULL AND ETHNICITY != '' GROUP BY ETHNICITY
             UNION ALL
             SELECT 'INCOME', INCOME, COUNT(*), 
-                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM total_count), 0), 1)
+                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM income_total), 0), 1)
             FROM demo_data WHERE INCOME IS NOT NULL AND INCOME != '' GROUP BY INCOME
             UNION ALL
             SELECT 'AGE', AGE, COUNT(*), 
-                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM total_count), 0), 1)
+                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM age_total), 0), 1)
             FROM demo_data WHERE AGE IS NOT NULL AND AGE != '' GROUP BY AGE
             ORDER BY category, pct DESC
         """
