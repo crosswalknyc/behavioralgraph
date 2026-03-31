@@ -15505,9 +15505,9 @@
                     <!-- Empty State -->
                     <div id="sfConvEmptyState" class="dashboard-empty-state" style="display: flex;">
                         <div class="empty-state-icon">🔄</div>
-                        <h2>Short Form Conversion</h2>
+                        <h2>Short Form → Long Form Conversion</h2>
                         <p>Select an analysis from the sidebar to view conversion metrics.</p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Run new analyses from <strong>Analysis IQ → SF-LF Conversion</strong></p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Run new analyses from <strong>Analysis IQ → Short Form to Long Form Conversion</strong></p>
                     </div>
                     <!-- Dashboard Content -->
                     <div id="sfConvDashboardContent" style="display: none; flex: 1; overflow-y: auto; padding: 1.5rem;">
@@ -15571,10 +15571,10 @@
                                                 <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Duplicated Views</th>
                                                 <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted</th>
                                                 <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
-                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Projected</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="sfConvUrlTableBody"></tbody>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Sample</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sfConvUrlTableBody"></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -15592,7 +15592,7 @@
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Duplicated Views</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Projected</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Sample</th>
                                         </tr>
                                     </thead>
                                     <tbody id="sfConvPlatformTableBody"></tbody>
@@ -18224,7 +18224,7 @@
             const container = document.getElementById('sfConvProfileList');
             if (!container) return;
             if (!profiles || profiles.length === 0) {
-                container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No released SF-LF Conversion analyses found.<br><br>Run new analyses from <strong>Analysis IQ → SF-LF Conversion</strong></div>';
+                container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No released Short Form → Long Form Conversion analyses found.<br><br>Run new analyses from <strong>Analysis IQ → Short Form to Long Form Conversion</strong></div>';
                 return;
             }
             const html = profiles.map(p => {
@@ -18443,16 +18443,21 @@
                 perPlatSection.style.display = 'block';
                 const platformIcons = { 'Youtube': '📺', 'Tiktok': '🎵', 'Instagram': '📸' };
                 const platformColors = { 'Youtube': '#ef4444', 'Tiktok': '#10b981', 'Instagram': '#ec4899' };
-                perPlatCards.innerHTML = perPlatformConversion.map(p => `
+                perPlatCards.innerHTML = perPlatformConversion.map(p => {
+                    const viewersProj = parseInt(p.viewersGenPop) || 0;
+                    const viewersSample = parseInt(p.viewers) || 0;
+                    const convertedProj = parseInt(p.convertedGenPop) || 0;
+                    const convertedSample = parseInt(p.converted) || 0;
+                    return `
                     <div style="background: var(--bg-card); border-radius: 10px; padding: 1rem; border: 1px solid var(--border-color); border-left: 4px solid ${platformColors[p.platform] || 'var(--accent-primary)'};">
                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">${platformIcons[p.platform] || '📱'} ${p.platform}</div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.75rem;">
-                            <div><span style="color: var(--text-secondary);">Viewers:</span> <span style="font-weight: 600;">${parseInt(p.viewers || 0).toLocaleString()}</span></div>
-                            <div><span style="color: var(--text-secondary);">Converted:</span> <span style="font-weight: 600; color: var(--accent-lime);">${parseInt(p.converted || 0).toLocaleString()}</span></div>
+                            <div><span style="color: var(--text-secondary);">Viewers:</span> <span style="font-weight: 600;">${viewersProj > 0 ? formatGenPop(viewersProj) : viewersSample.toLocaleString()}</span></div>
+                            <div><span style="color: var(--text-secondary);">Converted:</span> <span style="font-weight: 600; color: var(--accent-lime);">${convertedProj > 0 ? formatGenPop(convertedProj) : convertedSample.toLocaleString()}</span></div>
                             <div style="grid-column: span 2;"><span style="color: var(--text-secondary);">Conv. Rate:</span> <span style="font-weight: 600; color: var(--accent-primary);">${p.convRate || '0'}%</span></div>
                         </div>
                     </div>
-                `).join('');
+                `}).join('');
             } else if (perPlatSection) {
                 perPlatSection.style.display = 'none';
             }
@@ -18463,36 +18468,46 @@
             document.getElementById('sfConvInfoDateRange').textContent = projectInfo.dateRange || '-';
             document.getElementById('sfConvInfoWindow').textContent = projectInfo.window || '-';
             
-            // URL Table
+            // URL Table - show projected numbers
             const urlTbody = document.getElementById('sfConvUrlTableBody');
             if (urlTbody) {
-                urlTbody.innerHTML = urlMetrics.slice(0, 20).map(u => `
+                urlTbody.innerHTML = urlMetrics.slice(0, 20).map(u => {
+                    const uniqueViewsProj = parseInt(u.uniqueViewsGenPop) || 0;
+                    const uniqueViewsSample = parseInt(u.uniqueViews) || 0;
+                    const convertedProj = parseInt(u.convertedGenPop) || 0;
+                    const convertedSample = parseInt(u.converted) || 0;
+                    return `
                     <tr>
                         <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${u.url}"><a href="${u.url}" target="_blank" style="color: var(--accent-cyan); text-decoration: none;">${u.url.substring(0, 50)}${u.url.length > 50 ? '...' : ''}</a></td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(u.uniqueViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : uniqueViewsSample.toLocaleString()}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(u.duplicatedViews || 0).toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(u.converted || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${convertedProj > 0 ? formatGenPop(convertedProj) : convertedSample.toLocaleString()}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${parseFloat(u.convRate || 0).toFixed(2)}%</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan);">${formatGenPop(u.convertedGenPop)}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.75rem;">${convertedProj > 0 ? convertedSample.toLocaleString() + ' sample' : '-'}</td>
                     </tr>
-                `).join('');
+                `}).join('');
             }
             
-            // Platform Table
+            // Platform Table - show projected numbers
             const platSection = document.getElementById('sfConvPlatformSection');
             const platTbody = document.getElementById('sfConvPlatformTableBody');
             if (platformMetrics.length > 0 && platSection && platTbody) {
                 platSection.style.display = 'block';
-                platTbody.innerHTML = platformMetrics.map(p => `
+                platTbody.innerHTML = platformMetrics.map(p => {
+                    const uniqueViewsProj = parseInt(p.uniqueViewsGenPop) || 0;
+                    const uniqueViewsSample = parseInt(p.uniqueViews) || 0;
+                    const convertedProj = parseInt(p.convertedGenPop) || 0;
+                    const convertedSample = parseInt(p.converted) || 0;
+                    return `
                     <tr style="${p.platform.includes('OVERALL') ? 'background: var(--bg-dark); font-weight: 600;' : ''}">
                         <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${p.platform}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(p.uniqueViews || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : uniqueViewsSample.toLocaleString()}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(p.duplicatedViews || 0).toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${parseInt(p.converted || 0).toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${convertedProj > 0 ? formatGenPop(convertedProj) : convertedSample.toLocaleString()}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${p.convRate || '0'}%</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan);">${formatGenPop(p.uniqueViewsGenPop)}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.75rem;">${uniqueViewsProj > 0 ? uniqueViewsSample.toLocaleString() + ' sample' : '-'}</td>
                     </tr>
-                `).join('');
+                `}).join('');
             } else if (platSection) {
                 platSection.style.display = 'none';
             }
@@ -18530,12 +18545,43 @@
             `).join('');
         }
         
+        function toggleSFConvUrlTable() {
+            const wrapper = document.getElementById('sfConvUrlTableWrapper');
+            const toggle = document.getElementById('sfConvUrlTableToggle');
+            if (wrapper && toggle) {
+                const isHidden = wrapper.style.display === 'none';
+                wrapper.style.display = isHidden ? 'block' : 'none';
+                toggle.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+            }
+        }
+
         function renderSFConvFunnel(summary, lfPlatformVisit = {}) {
             const container = document.getElementById('sfConvFunnelChart');
             if (!container) return;
-            const total = parseInt(summary.totalViewers) || 0;
-            const converted = parseInt(summary.converted) || 0;
-            const lfVisitors = parseInt(lfPlatformVisit.visitors) || 0;
+            
+            // Helper to format large numbers for funnel
+            const formatFunnelNum = (n) => {
+                if (!n || n === 0) return '0';
+                const num = parseInt(n);
+                if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
+                if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+                if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+                return num.toLocaleString();
+            };
+            
+            // Use projected numbers if available, otherwise sample
+            const totalProj = parseInt(summary.totalViewersGenPop) || 0;
+            const totalSample = parseInt(summary.totalViewers) || 0;
+            const total = totalProj > 0 ? totalProj : totalSample;
+            
+            const convertedProj = parseInt(summary.convertedGenPop) || 0;
+            const convertedSample = parseInt(summary.converted) || 0;
+            const converted = convertedProj > 0 ? convertedProj : convertedSample;
+            
+            const lfVisitorsProj = parseInt(lfPlatformVisit.genPop) || 0;
+            const lfVisitorsSample = parseInt(lfPlatformVisit.visitors) || 0;
+            const lfVisitors = lfVisitorsProj > 0 ? lfVisitorsProj : lfVisitorsSample;
+            
             if (total === 0) {
                 container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">No conversion data available</div>';
                 return;
@@ -18545,9 +18591,9 @@
             
             let funnelSteps = `
                 <div style="text-align: center;">
-                    <div style="width: 120px; height: 120px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 1.25rem; font-weight: 700; color: white;">${total.toLocaleString()}</div>
-                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.8);">SF Viewers</div>
+                    <div style="width: 130px; height: 130px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="font-size: 1.25rem; font-weight: 700; color: white;">${formatFunnelNum(total)}</div>
+                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.8); text-align: center; line-height: 1.2; padding: 0 0.25rem;">Short Form<br>Viewers</div>
                     </div>
                 </div>
                 <div style="font-size: 2rem; color: var(--text-secondary);">→</div>`;
@@ -18555,9 +18601,9 @@
             if (lfVisitors > 0) {
                 funnelSteps += `
                 <div style="text-align: center;">
-                    <div style="width: 120px; height: 120px; background: linear-gradient(135deg, var(--accent-pink), var(--accent-orange)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 1.25rem; font-weight: 700; color: white;">${lfVisitors.toLocaleString()}</div>
-                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.8);">Visited LF Platform</div>
+                    <div style="width: 130px; height: 130px; background: linear-gradient(135deg, var(--accent-pink), var(--accent-orange)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="font-size: 1.25rem; font-weight: 700; color: white;">${formatFunnelNum(lfVisitors)}</div>
+                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.8); text-align: center; line-height: 1.2; padding: 0 0.25rem;">Visited Long Form<br>Platform</div>
                     </div>
                     <div style="font-size: 0.7rem; color: var(--accent-pink); margin-top: 0.35rem;">${lfVisitPct}% of viewers</div>
                 </div>
@@ -18568,9 +18614,9 @@
                 <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; padding: 1rem; flex-wrap: wrap;">
                     ${funnelSteps}
                     <div style="text-align: center;">
-                        <div style="width: 120px; height: 120px; background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                            <div style="font-size: 1.5rem; font-weight: 700; color: white;">${converted.toLocaleString()}</div>
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.8);">Converted</div>
+                        <div style="width: 130px; height: 130px; background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <div style="font-size: 1.25rem; font-weight: 700; color: white;">${formatFunnelNum(converted)}</div>
+                            <div style="font-size: 0.6rem; color: rgba(255,255,255,0.8); text-align: center; line-height: 1.2; padding: 0 0.25rem;">Converted to<br>Long Form</div>
                         </div>
                     </div>
                     <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 12px;">
