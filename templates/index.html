@@ -15600,8 +15600,8 @@
                             </div>
                         </div>
                         
-                        <!-- Demographics Section -->
-                        <div class="sf-conv-demographics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                        <!-- Demographics Section - hidden by default, shown only if data exists -->
+                        <div id="sfConvDemographicsSection" class="sf-conv-demographics" style="display: none; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
                             <div class="demo-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
                                 <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">👤 Gender</h3>
                                 <div id="sfConvDemoGender" style="min-height: 150px;"></div>
@@ -18642,12 +18642,20 @@
                 platSection.style.display = 'none';
             }
             
-            // Demographics
-            renderSFConvDemographics('sfConvDemoGender', demographics.gender);
-            renderSFConvDemographics('sfConvDemoAge', demographics.age);
-            renderSFConvDemographics('sfConvDemoEthnicity', demographics.ethnicity);
-            renderSFConvDemographics('sfConvDemoIncome', demographics.income);
-            
+            // Demographics - only show section if there's data
+            const hasDemoData = demographics.gender.length > 0 || demographics.age.length > 0 || 
+                                demographics.ethnicity.length > 0 || demographics.income.length > 0;
+            const demoSection = document.getElementById('sfConvDemographicsSection');
+            if (demoSection) {
+                demoSection.style.display = hasDemoData ? 'grid' : 'none';
+            }
+            if (hasDemoData) {
+                renderSFConvDemographics('sfConvDemoGender', demographics.gender);
+                renderSFConvDemographics('sfConvDemoAge', demographics.age);
+                renderSFConvDemographics('sfConvDemoEthnicity', demographics.ethnicity);
+                renderSFConvDemographics('sfConvDemoIncome', demographics.income);
+            }
+
             // Funnel Chart
             renderSFConvFunnel(conversionSummary, lfPlatformVisit);
             
