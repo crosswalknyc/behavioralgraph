@@ -8502,9 +8502,11 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
     }
     
     with conn.cursor() as cur:
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        # Use dedicated TALENTFIT 6X-Large warehouse for maximum performance
+        cur.execute("USE WAREHOUSE TALENTFIT")
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
+        print("🚀 Using TALENTFIT warehouse (6X-Large) for Talent Fit analysis")
         
         # Handle comma-separated brands
         brand_terms = [b.strip() for b in brand.split(',') if b.strip()]
@@ -8606,9 +8608,11 @@ def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
     }
     
     with conn.cursor() as cur:
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        # Use dedicated TALENTFIT 6X-Large warehouse for maximum performance
+        cur.execute("USE WAREHOUSE TALENTFIT")
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
+        print("🚀 Using TALENTFIT warehouse (6X-Large) for Find Talent")
         
         # Handle comma-separated brands
         brand_terms = [b.strip() for b in brand.split(',') if b.strip()]
