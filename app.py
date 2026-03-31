@@ -22425,8 +22425,8 @@ def run_flywheel_conversion(job_id):
         print(f"[Flywheel] Set query timeout to 30 minutes")
         
         update_job_status(job_id, progress=15, message='Connected to Snowflake...')
-        
-        BOOST_FACTOR = 15
+
+        BOOST_FACTOR = 150
         SAMPLE_SIZE = 10_000_000
         US_POPULATION = 329_900_000
         
