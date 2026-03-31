@@ -20418,7 +20418,7 @@ def talent_fit_assess():
             }), 403
         
         import bg
-        conn = bg.connect_to_snowflake()
+        conn = bg.connect_snowflake()
         
         try:
             analysis_results = bg.run_talent_fit_analysis(conn, brand, talents, start_date, end_date)
@@ -20547,7 +20547,7 @@ def talent_fit_find_talent():
             }), 403
         
         import bg
-        conn = bg.connect_to_snowflake()
+        conn = bg.connect_snowflake()
         
         try:
             results = bg.find_talent_for_brand(conn, brand, start_date, end_date, limit=limit)
