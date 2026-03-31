@@ -21702,7 +21702,8 @@
             }
 
             cardsContainer.innerHTML = talents.map(t => {
-                const score = t.fit_score || {};
+                const score = t.impact_score || {};
+                const social = t.social_metrics || {};
                 const components = score.components || {};
                 const tooltipClass = showTooltips ? '' : 'style="display:none;"';
 
@@ -21718,8 +21719,8 @@
                         </div>
                         <div style="text-align:center;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;">
                             <div style="font-size:24px;font-weight:700;color:var(--accent-green);">${score.total?.toFixed(0) || 0}</div>
-                            <div style="font-size:11px;color:var(--text-secondary);">Fit Score</div>
-                            <div class="methodology-tooltip" ${tooltipClass} style="font-size:9px;color:var(--text-secondary);margin-top:2px;">Based on audience overlap % + scale bonus</div>
+                            <div style="font-size:11px;color:var(--text-secondary);">Impact Score</div>
+                            <div class="methodology-tooltip" ${tooltipClass} style="font-size:9px;color:var(--text-secondary);margin-top:2px;">40% overlap + 25% reach + 25% engagement + 10% experience</div>
                         </div>
                     </div>
                     
@@ -21729,15 +21730,28 @@
                         <div style="font-size:10px;color:var(--text-secondary);">Americans who engage with both brand and talent</div>
                     </div>
                     
-                    <div style="border-top:1px solid var(--border-color);padding-top:0.75rem;">
-                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">Score Breakdown</div>
+                    <div style="margin-bottom:1rem;">
+                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">Score Components</div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:11px;">
-                            <div style="display:flex;justify-content:space-between;"><span>Overlap Score:</span><span>${components.overlap_score?.toFixed(0) || 0}/100</span></div>
-                            <div style="display:flex;justify-content:space-between;"><span>Scale Bonus:</span><span>+${components.scale_bonus || 0}</span></div>
+                            <div style="display:flex;justify-content:space-between;"><span>Overlap:</span><span>${components.audience_overlap?.toFixed(0) || 0}/100</span></div>
+                            <div style="display:flex;justify-content:space-between;"><span>Reach:</span><span>${components.reach?.toFixed(0) || 0}/100</span></div>
+                            <div style="display:flex;justify-content:space-between;"><span>Engagement:</span><span>${components.engagement?.toFixed(0) || 0}/100</span></div>
+                            <div style="display:flex;justify-content:space-between;"><span>Experience:</span><span>${components.partnership_experience?.toFixed(0) || 0}/100</span></div>
                         </div>
                     </div>
                     
-                    <div class="methodology-tooltip" ${tooltipClass} style="position:absolute;top:8px;right:8px;font-size:9px;color:var(--text-secondary);cursor:help;" title="Fit Score = (Overlap % × 10) + Scale Bonus. Scale bonus based on absolute overlap count: 10k+=+20, 5k+=+15, 1k+=+10, 500+=+5">ℹ️</div>
+                    <div style="border-top:1px solid var(--border-color);padding-top:0.75rem;">
+                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">Social Media Metrics</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:11px;">
+                            <div><span style="color:var(--text-secondary);">Followers:</span> ${(social.follower_count || 0).toLocaleString()}</div>
+                            <div><span style="color:var(--text-secondary);">Engagement:</span> ${social.engagement_rate?.toFixed(1) || 0}%</div>
+                            <div><span style="color:var(--text-secondary);">Sponsored/mo:</span> ${social.sponsored_post_frequency || 0}</div>
+                            <div><span style="color:var(--text-secondary);">Partnerships:</span> ${(social.top_brand_partnerships || []).length}</div>
+                        </div>
+                        ${social.top_brand_partnerships?.length ? `<div style="margin-top:0.5rem;font-size:10px;color:var(--text-secondary);">Notable: ${social.top_brand_partnerships.slice(0,3).join(', ')}</div>` : ''}
+                    </div>
+                    
+                    <div class="methodology-tooltip" ${tooltipClass} style="position:absolute;top:8px;right:8px;font-size:9px;color:var(--text-secondary);cursor:help;" title="Impact Score = (Overlap×40%) + (Reach×25%) + (Engagement×25%) + (Experience×10%). Reach uses log scale of followers. Social data from GPT-4 analysis.">ℹ️</div>
                 </div>
                 `;
             }).join('');

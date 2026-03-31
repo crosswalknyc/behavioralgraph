@@ -8461,9 +8461,10 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
         
         brand_like_esc, brand_eq_esc = _escape_brand_for_sql(brand)
-        brand_filter = f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) = '{brand_eq_esc}')"
+        brand_filter = f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\')"
         
         print(f"📊 Step 1: Counting unique brand users...")
+        print(f"   Brand filter: {brand_filter}")
         brand_users_query = f"""
             SELECT COUNT(DISTINCT UID) as brand_users
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
@@ -8490,7 +8491,7 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
                 
             print(f"   Analyzing talent: {talent}")
             talent_like_esc, talent_eq_esc = _escape_brand_for_sql(talent)
-            talent_filter = f"(LOWER(URL) LIKE '%' || '{talent_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) = '{talent_eq_esc}')"
+            talent_filter = f"(LOWER(URL) LIKE '%' || '{talent_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) LIKE '%' || '{talent_like_esc}' || '%' ESCAPE '\\\\')"
             
             overlap_query = f"""
                 WITH brand_users AS (
@@ -8548,9 +8549,10 @@ def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
         
         brand_like_esc, brand_eq_esc = _escape_brand_for_sql(brand)
-        brand_filter = f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) = '{brand_eq_esc}')"
+        brand_filter = f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\')"
         
         print(f"📊 Step 1: Counting unique brand users...")
+        print(f"   Brand filter: {brand_filter}")
         brand_users_query = f"""
             SELECT COUNT(DISTINCT UID) as brand_users
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL

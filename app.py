@@ -20232,34 +20232,116 @@ def run_talent_search(job_id):
 # TALENT FIT ASSESSMENT ENDPOINTS
 # ============================================================================
 
-def calculate_talent_fit_score(overlap_pct, overlap_count, brand_users):
-    """
-    Calculate talent fit score based on CLICKSTREAM audience overlap.
+def analyze_talent_social_media(talent_name):
+    """Use GPT-4 to analyze a talent's social media presence for impact scoring."""
+    client = get_openai_client()
+    if not client:
+        return {
+            'follower_count': 0,
+            'engagement_rate': 0,
+            'sponsored_post_frequency': 0,
+            'top_brand_partnerships': [],
+            'audience_demographics': 'Unknown',
+            'error': 'OpenAI not configured'
+        }
     
-    Score is based on:
-    - Overlap percentage (how much of the brand audience engages with the talent)
-    - Scale factor based on absolute overlap count
+    try:
+        prompt = f"""Analyze the social media presence for talent/celebrity "{talent_name}".
+
+Based on publicly available information, provide your best estimates for:
+1. Total follower count across major platforms (Instagram, Twitter/X, TikTok, YouTube)
+2. Average engagement rate on recent posts (as a percentage)
+3. Sponsored post frequency (average posts per month with brand partnerships)
+4. Notable brand partnerships they've had
+5. Brief description of their typical audience demographics
+
+Return ONLY a valid JSON object with these exact keys:
+{{
+    "follower_count": <number>,
+    "engagement_rate": <number between 0-100>,
+    "sponsored_post_frequency": <number>,
+    "top_brand_partnerships": [<list of brand names>],
+    "audience_demographics": "<brief description>"
+}}
+
+If you cannot find reliable information, use reasonable estimates based on their celebrity status and platform presence. Do not include any explanatory text outside the JSON."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=500
+        )
+        
+        content = response.choices[0].message.content.strip()
+        if content.startswith('```'):
+            content = content.split('```')[1]
+            if content.startswith('json'):
+                content = content[4:]
+        content = content.strip()
+        
+        import json as json_module
+        result = json_module.loads(content)
+        return result
+        
+    except Exception as e:
+        print(f"⚠️ GPT-4 social analysis failed for {talent_name}: {e}")
+        return {
+            'follower_count': 0,
+            'engagement_rate': 0,
+            'sponsored_post_frequency': 0,
+            'top_brand_partnerships': [],
+            'audience_demographics': 'Analysis unavailable',
+            'error': str(e)
+        }
+
+
+def calculate_talent_impact_score(overlap_pct, social_data, brand_users):
     """
+    Calculate talent impact score using weighted formula.
+    
+    Components (each 0-100 scale):
+    - Audience Overlap (40%): Direct CLICKSTREAM overlap percentage
+    - Reach Score (25%): Social follower count (log scale)
+    - Engagement Score (25%): Avg engagement rate on posts
+    - Partnership Experience (10%): Frequency of brand deals
+    """
+    import math
+    
     overlap_score = min(overlap_pct * 10, 100)
     
-    if overlap_count >= 10000:
-        scale_bonus = 20
-    elif overlap_count >= 5000:
-        scale_bonus = 15
-    elif overlap_count >= 1000:
-        scale_bonus = 10
-    elif overlap_count >= 500:
-        scale_bonus = 5
+    followers = social_data.get('follower_count', 0)
+    if followers > 0:
+        reach_score = min((math.log10(followers) / 8) * 100, 100)
     else:
-        scale_bonus = 0
+        reach_score = 0
     
-    fit_score = min(overlap_score + scale_bonus, 100)
+    engagement_rate = social_data.get('engagement_rate', 0)
+    engagement_score = min(engagement_rate * 10, 100)
+    
+    sponsored_freq = social_data.get('sponsored_post_frequency', 0)
+    experience_score = min(sponsored_freq * 10, 100)
+    
+    impact_score = (
+        overlap_score * 0.40 +
+        reach_score * 0.25 +
+        engagement_score * 0.25 +
+        experience_score * 0.10
+    )
     
     return {
-        'total': round(fit_score, 1),
+        'total': round(impact_score, 1),
         'components': {
-            'overlap_score': round(overlap_score, 1),
-            'scale_bonus': scale_bonus
+            'audience_overlap': round(overlap_score, 1),
+            'reach': round(reach_score, 1),
+            'engagement': round(engagement_score, 1),
+            'partnership_experience': round(experience_score, 1)
+        },
+        'weights': {
+            'audience_overlap': 0.40,
+            'reach': 0.25,
+            'engagement': 0.25,
+            'partnership_experience': 0.10
         }
     }
 
@@ -20350,9 +20432,10 @@ def talent_fit_assess():
         enriched_talents = []
         
         for talent_data in analysis_results.get('talents', []):
-            fit_score = calculate_talent_fit_score(
+            social_data = analyze_talent_social_media(talent_data['name'])
+            impact_score = calculate_talent_impact_score(
                 talent_data['overlap_percentage'],
-                talent_data['overlap_count'],
+                social_data,
                 brand_users
             )
             
@@ -20365,7 +20448,8 @@ def talent_fit_assess():
                 'overlap_percentage': talent_data['overlap_percentage'],
                 'projected_overlap': projected_overlap,
                 'projected_brand_users': projected_brand_users,
-                'fit_score': fit_score
+                'social_metrics': social_data,
+                'impact_score': impact_score
             })
         
         result = {
