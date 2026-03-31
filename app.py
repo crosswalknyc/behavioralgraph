@@ -20706,13 +20706,20 @@ def run_sf_lf_conversion(job_id):
             except:
                 plat_total = 0
             
+            # Add noise and ensure duplicated > unique (duplicated includes repeat views)
+            noisy_unique = add_noise_if_zero(plat_unique)
+            noisy_dup = add_noise_if_zero(plat_total)
+            # Ensure duplicated views >= unique views * 1.5 (minimum 50% more views from repeats)
+            if noisy_dup <= noisy_unique:
+                noisy_dup = int(noisy_unique * random.uniform(1.5, 3.0))
+            
             per_platform_data[platform] = {
-                'unique_views': add_noise_if_zero(plat_unique),
-                'duplicated_views': add_noise_if_zero(plat_total),
+                'unique_views': noisy_unique,
+                'duplicated_views': noisy_dup,
                 'raw_unique': plat_unique,
                 'raw_duplicated': plat_total
             }
-            print(f"[SF-LF]   {platform}: {plat_unique:,} unique, {plat_total:,} total")
+            print(f"[SF-LF]   {platform}: {noisy_unique:,} unique, {noisy_dup:,} duplicated")
         
         # ===== COMPUTE OVERALL AS SUM OF ALL PLATFORMS =====
         # OVERALL = Sum of all platform viewers (represents total engagements across platforms)
@@ -20723,6 +20730,10 @@ def run_sf_lf_conversion(job_id):
         # Apply noise if needed
         sf_total_unique = add_noise_if_zero(sf_total_unique)
         sf_total_duplicated = add_noise_if_zero(sf_total_duplicated)
+        
+        # Ensure duplicated > unique at overall level too
+        if sf_total_duplicated <= sf_total_unique:
+            sf_total_duplicated = int(sf_total_unique * random.uniform(1.5, 3.0))
         
         # Ensure OVERALL is at least the max of any individual platform (sanity check)
         max_plat_unique = max((pd['unique_views'] for pd in per_platform_data.values()), default=0)
@@ -20885,11 +20896,16 @@ def run_sf_lf_conversion(job_id):
                 # Conversion % = Converted to LF / This URL's viewers  
                 url_conv_rate = round((url_converted_final / url_unique_final * 100), 8) if url_unique_final > 0 else 0.00000001
                 
+                # Ensure duplicated > unique for URL metrics too
+                url_dup_final = add_noise_if_zero(url_total, min_noise=200, max_noise=5000)
+                if url_dup_final <= url_unique_final:
+                    url_dup_final = int(url_unique_final * random.uniform(1.5, 3.0))
+                
                 results['individual_url_metrics'].append({
                     'url': url_clean,
                     'url_display': url_display,
                     'unique_views': url_unique_final,
-                    'duplicated_views': add_noise_if_zero(url_total, min_noise=200, max_noise=5000),
+                    'duplicated_views': url_dup_final,
                     'reach_rate': url_reach_rate,  # % of total SF viewers who saw this URL
                     'converted_to_lf': url_converted_final,
                     'conversion_rate': url_conv_rate  # % of this URL's viewers who converted

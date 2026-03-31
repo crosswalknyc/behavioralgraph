@@ -18543,19 +18543,19 @@
             const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
             const convertedSample = parseInt(conversionSummary.converted) || 0;
             
-            // Main values - sample for views, projected for converted
-            document.getElementById('sfConvKpiTotalViewers').textContent = totalViewersSample.toLocaleString();
+            // Main values - ALWAYS show projected values
+            document.getElementById('sfConvKpiTotalViewers').textContent = totalViewersGenPop > 0 ? formatGenPop(totalViewersGenPop) : totalViewersSample.toLocaleString();
             document.getElementById('sfConvKpiConverted').textContent = convertedGenPop > 0 ? formatGenPop(convertedGenPop) : convertedSample.toLocaleString();
             document.getElementById('sfConvKpiRate').textContent = (conversionSummary.convRate || '0') + '%';
             const avgHrs = parseFloat(conversionSummary.avgHours) || 0;
             document.getElementById('sfConvKpiAvgTime').textContent = avgHrs > 24 ? `${Math.round(avgHrs / 24)}d` : `${Math.round(avgHrs)}h`;
-            
-            // Projected sub-value for total viewers only
+
+            // Sub-value shows sample size
             const totalProjEl = document.getElementById('sfConvKpiTotalViewersProj');
-            if (totalProjEl && totalViewersGenPop > 0) {
-                totalProjEl.textContent = `Projected: ${formatGenPop(totalViewersGenPop)}`;
+            if (totalProjEl && totalViewersSample > 0) {
+                totalProjEl.textContent = `Sample: ${totalViewersSample.toLocaleString()}`;
             }
-            // Hide converted projected sub-value since main value is now projected
+            // Hide converted sub-value
             const convProjEl = document.getElementById('sfConvKpiConvertedProj');
             if (convProjEl) {
                 convProjEl.style.display = 'none';
@@ -18578,14 +18578,16 @@
                 const platformIcons = { 'Youtube': '📺', 'Tiktok': '🎵', 'Instagram': '📸' };
                 const platformColors = { 'Youtube': '#ef4444', 'Tiktok': '#10b981', 'Instagram': '#ec4899' };
                 perPlatCards.innerHTML = perPlatformConversion.map(p => {
-                    const viewersSample = parseInt(p.viewers) || 0;
-                    const convertedSample = parseInt(p.converted) || 0;
+                    const viewersProj = parseInt(p.viewersGenPop) || 0;
+                    const convertedProj = parseInt(p.convertedGenPop) || 0;
+                    const viewersDisplay = viewersProj > 0 ? formatGenPop(viewersProj) : (parseInt(p.viewers) || 0).toLocaleString();
+                    const convertedDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : (parseInt(p.converted) || 0).toLocaleString();
                     return `
                     <div style="background: var(--bg-card); border-radius: 10px; padding: 1rem; border: 1px solid var(--border-color); border-left: 4px solid ${platformColors[p.platform] || 'var(--accent-primary)'};">
                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">${platformIcons[p.platform] || '📱'} ${p.platform}</div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.75rem;">
-                            <div><span style="color: var(--text-secondary);">Duplicated Views:</span> <span style="font-weight: 600;">${viewersSample.toLocaleString()}</span></div>
-                            <div><span style="color: var(--text-secondary);">Converted:</span> <span style="font-weight: 600; color: var(--accent-lime);">${convertedSample.toLocaleString()}</span></div>
+                            <div><span style="color: var(--text-secondary);">Duplicated Views:</span> <span style="font-weight: 600;">${viewersDisplay}</span></div>
+                            <div><span style="color: var(--text-secondary);">Converted:</span> <span style="font-weight: 600; color: var(--accent-lime);">${convertedDisplay}</span></div>
                             <div style="grid-column: span 2;"><span style="color: var(--text-secondary);">Conv. Rate:</span> <span style="font-weight: 600; color: var(--accent-primary);">${p.convRate || '0'}%</span></div>
                         </div>
                     </div>
@@ -18600,17 +18602,20 @@
             document.getElementById('sfConvInfoDateRange').textContent = projectInfo.dateRange || '-';
             document.getElementById('sfConvInfoWindow').textContent = projectInfo.window || '-';
             
-            // URL Table - show regular sample values
+            // URL Table - show projected values
             const urlTbody = document.getElementById('sfConvUrlTableBody');
             const urlCountEl = document.getElementById('sfConvUrlCount');
             if (urlTbody) {
                 const top20Urls = urlMetrics.slice(0, 20);
                 if (urlCountEl) urlCountEl.textContent = `(${top20Urls.length} videos)`;
                 urlTbody.innerHTML = top20Urls.map((u, idx) => {
-                    const uniqueViewsSample = parseInt(u.uniqueViews) || 0;
+                    const uniqueViewsProj = parseInt(u.uniqueViewsGenPop) || 0;
                     const duplicatedViews = parseInt(u.duplicatedViews) || 0;
-                    const convertedSample = parseInt(u.converted) || 0;
                     const convertedProj = parseInt(u.convertedGenPop) || 0;
+                    // Show projected values
+                    const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : (parseInt(u.uniqueViews) || 0).toLocaleString();
+                    const dupDisplay = duplicatedViews > 0 ? duplicatedViews.toLocaleString() : '-';
+                    const convertedDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : (parseInt(u.converted) || 0).toLocaleString();
                     return `
                     <tr>
                         <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); max-width: 350px;">
@@ -18619,31 +18624,34 @@
                                 <a href="${u.url}" target="_blank" style="color: var(--accent-cyan); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${u.url}">${u.url.substring(0, 55)}${u.url.length > 55 ? '...' : ''}</a>
                             </div>
                         </td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueViewsSample.toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${duplicatedViews.toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convertedSample.toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueDisplay}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${dupDisplay}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convertedDisplay}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${parseFloat(u.convRate || 0).toFixed(2)}%</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan); font-size: 0.8rem;">${convertedProj > 0 ? formatGenPop(convertedProj) : '-'}</td>
                     </tr>
                 `}).join('');
             }
             
-            // Platform Table - show regular sample values
+            // Platform Table - show projected values
             const platSection = document.getElementById('sfConvPlatformSection');
             const platTbody = document.getElementById('sfConvPlatformTableBody');
             if (platformMetrics.length > 0 && platSection && platTbody) {
                 platSection.style.display = 'block';
                 platTbody.innerHTML = platformMetrics.map(p => {
-                    const uniqueViewsSample = parseInt(p.uniqueViews) || 0;
-                    const duplicatedViews = parseInt(p.duplicatedViews) || 0;
-                    const convertedSample = parseInt(p.converted) || 0;
                     const uniqueViewsProj = parseInt(p.uniqueViewsGenPop) || 0;
+                    const duplicatedViews = parseInt(p.duplicatedViews) || 0;
+                    const convertedProj = parseInt(p.convertedGenPop) || 0;
+                    // Show projected values
+                    const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : (parseInt(p.uniqueViews) || 0).toLocaleString();
+                    const dupDisplay = duplicatedViews > 0 ? duplicatedViews.toLocaleString() : '-';
+                    const convertedDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : (parseInt(p.converted) || 0).toLocaleString();
                     return `
                     <tr style="${p.platform.includes('OVERALL') ? 'background: var(--bg-dark); font-weight: 600;' : ''}">
                         <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${p.platform}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueViewsSample.toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${duplicatedViews.toLocaleString()}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convertedSample.toLocaleString()}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueDisplay}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${dupDisplay}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convertedDisplay}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${p.convRate || '0'}%</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan); font-size: 0.8rem;">${uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : '-'}</td>
                     </tr>
@@ -38550,10 +38558,9 @@
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
                 const items = aggregatedBehavioral[cat];
                 
-                // Exclude index 0; deduplicate items by normalized name before sorting
+                // Deduplicate items by normalized name before sorting (don't filter by index anymore)
                 const seenNormalized = new Set();
                 const dedupedItems = items.filter(item => {
-                    if (Number(item.index) === 0) return false;
                     const normalizedName = normalizeNameForDedup(item.name);
                     if (seenNormalized.has(normalizedName)) return false;
                     seenNormalized.add(normalizedName);
@@ -38563,14 +38570,38 @@
                 // Mark items that don't exist in gen pop (can't index against them) but still show them
                 // Previously this filtered them out, but users expect to see all items from their CSV
                 const isCurrentGenPop = currentS3Key?.toUpperCase().includes('GEN_POP') || currentS3Key?.toUpperCase().includes('GENPOP');
-                const gpCatItems = genPopBaselineData?.behavioral?.[cat];
-                const gpNameSet = new Set((gpCatItems || []).map(gp => (gp.name || '').toUpperCase().trim()));
+                
+                // Build a set of Gen Pop names - for aggregated categories like TALENT/SPORTS, 
+                // we need to check ALL the original subcategories in the Gen Pop baseline
+                const talentSubcats = ['ACTOR', 'ATHLETE', 'HOST/PERSONALITY', 'INFLUENCER/CREATOR', 'CREATOR/INFLUENCER',
+                    'MLB ATHLETE', 'MUSICIAN/BAND', 'NBA ATHLETE', 'NFL ATHLETE', 'NHL ATHLETE',
+                    'POLITICS/ACTIVIST', 'SOCCER ATHLETE', 'WNBA ATHLETE', 'WRITER/DIRECTOR/AUTHOR/ARTIST', 'TALENT'];
+                const sportsSubcats = ['AFC', 'SPORTS TEAM', 'LA LIGA', 'METROPOLITAN DIVISION', 'MLB', 'MLS',
+                    'EASTERN CONFERENCE', 'CENTRAL DIVISION', 'ATLANTIC DIVISION', 'AFC EAST', 'NBA', 'NFC EAST',
+                    'NFC NORTH', 'NFC SOUTH', 'NFC WEST', 'NFL', 'NFC', 'AFC NORTH', 'NWSL', 'PREMIER LEAGUE',
+                    'RUGBY', 'SERIE A', 'SOCCER', 'PACIFIC DIVISION', 'AFC SOUTH', 'AFC WEST', 'AL', 'WNBA',
+                    'AL CENTRAL', 'AL EAST', 'AL WEST', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'HORSE RACING', 'SPORTS'];
+                
+                // Determine which categories to check in Gen Pop baseline
+                let gpCatsToCheck = [cat];
+                if (cat.toUpperCase() === 'TALENT') gpCatsToCheck = talentSubcats;
+                if (cat.toUpperCase() === 'SPORTS') gpCatsToCheck = sportsSubcats;
+                
+                // Build combined name set from all relevant Gen Pop categories
+                const gpNameSet = new Set();
+                if (genPopBaselineData?.behavioral) {
+                    gpCatsToCheck.forEach(gpCat => {
+                        const gpItems = genPopBaselineData.behavioral[gpCat] || genPopBaselineData.behavioral[gpCat.toUpperCase()] || [];
+                        gpItems.forEach(gp => gpNameSet.add((gp.name || '').toUpperCase().trim()));
+                    });
+                }
+                
                 // Mark each item with whether it has a gen pop match (for index display)
                 dedupedItems.forEach(item => {
                     const itemName = (item.name || '').toUpperCase().trim();
-                    item._hasGenPopMatch = isCurrentGenPop || !gpCatItems || gpCatItems.length === 0 || gpNameSet.has(itemName);
+                    item._hasGenPopMatch = isCurrentGenPop || gpNameSet.size === 0 || gpNameSet.has(itemName);
                 });
-                // Show ALL items (don't filter) - index will show "-" for items without gen pop match
+                // Show ALL items (don't filter) - Gen Pop and Index will show "N/A" for items without gen pop match
                 const filteredItems = dedupedItems;
                 
                 // Default sort by percentage descending
@@ -39517,7 +39548,7 @@
                     : formatValueOrNA(genPopPct, true);
                 
                 // Check if item has gen pop match (for index display)
-                // Items without gen pop match will show "-" for index since we can't calculate it
+                // Items without gen pop match will show "N/A" for Gen Pop and Index since we can't calculate them
                 const hasGenPopMatch = item._hasGenPopMatch !== false;
                 const showIndex = hasGenPopMatch && genPopDisplay !== 'N/A';
 
@@ -39528,8 +39559,8 @@
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                         </div>
                         <span class="behavioral-pct" style="color: var(--text-primary);">${profileDisplay}</span>
-                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? '(' + genPopDisplay + ')' : '-'}</span>
-                        <span class="behavioral-index index-col" style="color: ${indexColor}; font-weight: 700;">${showIndex ? formatIndex(index) : '-'}</span>
+                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? '(' + genPopDisplay + ')' : '(N/A)'}</span>
+                        <span class="behavioral-index index-col" style="color: ${showIndex ? indexColor : 'var(--text-secondary)'}; font-weight: 700;">${showIndex ? formatIndex(index) : 'N/A'}</span>
                     </div>
                 `;
             }).join('');
