@@ -12039,6 +12039,7 @@
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="ecommerceIQ" {% if not has_ecommerce_iq_access %}disabled{% endif %}>🛒 E-Commerce IQ</option>
+                            <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
                             <option value="workspace">🗂️ Workspace</option>
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
@@ -12457,6 +12458,11 @@
                     </button>
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('ecommerce-iq')" id="customAnalysisTabEcommerceIQ">
                         🛒 E-Commerce IQ
+                    </button>
+                    {% endif %}
+                    {% if 'flywheel_conversion' in analysis_iq_modules or role == 'super_admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('flywheel-conversion')" id="customAnalysisTabFlywheelConversion">
+                        🔄 Flywheel Conversion <span style="font-size: 0.7em; opacity: 0.9;">(25 credits)</span>
                     </button>
                     {% endif %}
                 </div>
@@ -13880,6 +13886,96 @@
                             <div id="talentFitFindBrandInfo" style="font-size: 14px; color: var(--text-secondary);"></div>
                         </div>
                         <div id="talentFitFindTable" style="background: var(--bg-card); border-radius: 12px; overflow: hidden;"></div>
+                    </div>
+                </div>
+
+                <!-- Flywheel Conversion Tab Content -->
+                <div id="customAnalysisTabContentFlywheelConversion" class="custom-analysis-tab-content">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>🔄 Flywheel Conversion Analysis</h2>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">25 Credits Per Analysis</div>
+                            <p class="section-description">Analyze how users flow through your conversion flywheel. Track entry points and measure conversion through each subsequent touchpoint. Results are boosted by 15x and projected to US Gen Pop.</p>
+                            <form id="flywheelConversionForm" onsubmit="event.preventDefault(); submitFlywheelConversion();">
+                                <div class="form-section">
+                                    <div class="form-section-title">Entry Point</div>
+                                    <div class="form-row">
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label>Flywheel Entry Point <span style="font-weight: 400; color: var(--text-secondary);">(URL pattern, brand, or keyword)</span></label>
+                                            <input type="text" id="flywheelEntryPoint" placeholder="e.g., nike.com, Instagram Nike, Nike Store" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">This is where users enter your flywheel - the initial touchpoint to track</small>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Start Date</label>
+                                            <input type="date" id="flywheelStartDate" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>End Date</label>
+                                            <input type="date" id="flywheelEndDate" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-section">
+                                    <div class="form-section-title">Subsequent Flywheel Points</div>
+                                    <div class="form-row">
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label>Flywheel Touchpoints <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated or one per line)</span></label>
+                                            <textarea id="flywheelPoints" rows="5" placeholder="nike.com/checkout&#10;Nike App Download&#10;Nike Membership&#10;Nike Store Purchase&#10;&#10;Or comma-separated: point1, point2, point3" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Enter each step of your conversion funnel in order. We'll track how many entry point users reach each subsequent step.</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-section">
+                                    <div class="form-section-title">Project Details</div>
+                                    <div class="form-row">
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label>Project Name</label>
+                                            <input type="text" id="flywheelProjectName" placeholder="e.g., Nike Q1 Conversion Funnel" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Optional - will auto-generate from entry point if empty</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary" id="flywheelSubmitBtn">🔄 Run Flywheel Analysis</button>
+                                </div>
+                            </form>
+                            <div id="flywheelJobStatus" style="display: none; margin-top: 2rem;">
+                                <div class="status-panel">
+                                    <div id="flywheelStatusRunning">
+                                        <div class="spinner"></div>
+                                        <div class="pulse" id="flywheelStatusText">Processing...</div>
+                                        <div class="progress-bar"><div class="progress-fill" id="flywheelProgressFill" style="width: 0%"></div></div>
+                                    </div>
+                                    <div id="flywheelStatusComplete" style="display: none;">
+                                        <div style="font-size: 2.5rem;">✅</div>
+                                        <div style="margin: 0.5rem 0;">Complete! Your report is in purgatory and will appear in the Flywheel Conversion dashboard after admin approval.</div>
+                                        <button type="button" class="btn btn-primary" onclick="showFlywheelConversionDashboard()" style="margin-top: 1rem;">📊 Open Flywheel Dashboard</button>
+                                    </div>
+                                    <div id="flywheelStatusError" style="display: none;">
+                                        <div style="font-size: 2.5rem;">❌</div>
+                                        <div style="color: var(--accent-red);" id="flywheelErrorMessage"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                            <div id="flywheelResultsStatus" style="margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-secondary);"></div>
+                            <div style="margin: 0.5rem 0;">
+                                <input type="text" id="flywheelResultsSearchInput" placeholder="🔍 Search..." oninput="filterFlywheelResults()" style="margin-bottom: 0.35rem;">
+                                <select id="flywheelResultsStatusFilter" onchange="filterFlywheelResults()" style="font-size: 0.8rem;">
+                                    <option value="">All Status</option>
+                                    <option value="pending">⏳ Pending</option>
+                                    <option value="released">📊 In Dashboard</option>
+                                </select>
+                            </div>
+                            <div id="flywheelResultsList" style="max-height: 320px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">Loading...</div></div>
+                            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                <button type="button" class="btn" style="width: 100%; background: var(--accent-primary); color: white;" onclick="showFlywheelConversionDashboard()">📊 Open Flywheel Dashboard</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -15609,6 +15705,78 @@
                 </div>
             </div>
         </div><!-- End ecommerceIQView -->
+
+        <!-- FLYWHEEL CONVERSION VIEW -->
+        <div id="flywheelConversionView" style="display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden;">
+            <div class="dashboard-layout" style="height: 100%; min-height: 0;">
+                <!-- Persistent Sidebar - Left Side -->
+                <div class="persistent-sidebar" style="height: 100%; overflow-y: auto;">
+                    <div class="sidebar-header-section">
+                        <h3>🔄 Flywheel Analyses</h3>
+                        <div style="display: flex; gap: 0.25rem; align-items: center;">
+                            <input type="text" id="flywheelDashSearchInput" placeholder="Search..." class="sidebar-search has-tooltip" data-tooltip="Search Flywheel analyses by name." onkeyup="filterFlywheelDashResults()" style="flex: 1;">
+                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh result list" onclick="loadFlywheelDashProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                        </div>
+                    </div>
+                    <div id="flywheelDashProfileTree" class="profile-select-tree subscriber-shows-tree"></div>
+                </div>
+                <!-- Main Dashboard Area -->
+                <div class="dashboard-tab-content" id="flywheelDashboardContent" style="display: flex; flex-direction: column; overflow: hidden;">
+                    <!-- Empty State -->
+                    <div id="flywheelDashEmptyState" class="dashboard-empty-state">
+                        <div class="empty-state-content">
+                            <div class="empty-state-icon">🔄</div>
+                            <h2>Select a Flywheel Analysis</h2>
+                            <p>Choose a flywheel conversion analysis from the sidebar to view conversion funnel insights, or run a new analysis in Analysis IQ.</p>
+                            <button type="button" class="btn btn-primary" onclick="if(typeof showCustomAnalysis==='function'){showCustomAnalysis(); setTimeout(()=>switchCustomAnalysisTab('flywheel-conversion'),100);}">+ Run New Analysis</button>
+                        </div>
+                    </div>
+                    <!-- Dashboard Panels (shown when analysis selected) -->
+                    <div id="flywheelDashboardPanels" style="display: none; overflow-y: auto; flex: 1; padding: 1.5rem;">
+                        <!-- Header -->
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-shrink: 0;">
+                            <h2 id="flywheelDashTitle" style="margin: 0; font-size: 1.35rem;">Flywheel Conversion</h2>
+                            <span id="flywheelDashMeta" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
+                        </div>
+                        <!-- KPIs Row -->
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Entry Point Users</div>
+                                <div id="flywheelKpiEntry" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-lime);"></div>
+                                <div id="flywheelKpiEntryGenPop" style="font-size: 0.75rem; color: var(--text-secondary);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Overall Conversion</div>
+                                <div id="flywheelKpiConversion" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-cyan);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Flywheel Steps</div>
+                                <div id="flywheelKpiSteps" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Best Converting Step</div>
+                                <div id="flywheelKpiBestStep" style="font-size: 0.85rem; font-weight: 600; color: var(--accent-green);"></div>
+                            </div>
+                        </div>
+                        <!-- Funnel Chart -->
+                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+                            <h3 style="margin: 0 0 1rem; font-size: 0.95rem;">📊 Conversion Funnel</h3>
+                            <canvas id="flywheelFunnelChart" height="300"></canvas>
+                        </div>
+                        <!-- Funnel Table -->
+                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+                            <h3 style="margin: 0 0 1rem; font-size: 0.95rem;">📋 Funnel Detail</h3>
+                            <div id="flywheelFunnelTable" style="overflow-x: auto;"></div>
+                        </div>
+                        <!-- Conversion Insights -->
+                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                            <h3 style="margin: 0 0 1rem; font-size: 0.95rem;">💡 Conversion Insights</h3>
+                            <div id="flywheelInsights"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End flywheelConversionView -->
 
         <!-- Subscriber IQ Compare All Modal -->
         <div id="subscriberCompareAllModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10050; overflow-y: auto; align-items: flex-start; justify-content: center; padding: 2rem 1rem;">
@@ -17531,7 +17699,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -17568,6 +17736,7 @@
                 hedgeFundIQ: showHedgeFundIQ,
                 roasIQ: showRoasIQ,
                 ecommerceIQ: showEcommerceIQ,
+                flywheelConversion: showFlywheelConversionDashboard,
                 dashboard: showDashboardView,
                 workspace: function() {
                     if (typeof showProfileIQ === 'function') showProfileIQ();
@@ -17599,12 +17768,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'roasIQView', 'ecommerceIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'roasIQView', 'ecommerceIQView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -17623,6 +17792,7 @@
                 hedgeFundIQ: 'Hedge Fund IQ: View hedge fund and institutional engagement and exposure.',
                 roasIQ: 'ROAS IQ: Analyze return on ad spend by channel, source, and campaign attribution.',
                 ecommerceIQ: 'E-Commerce IQ: Explore purchase funnel activity across retailers and product pages.',
+                flywheelConversion: 'Flywheel Conversion: Track user journeys through your conversion funnel and measure drop-off at each touchpoint.',
                 workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
                 talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
@@ -21551,7 +21721,7 @@
             const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater',
                            'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow',
                            'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker', 'customAnalysisTabSFLFConversion',
-                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabTalentFit'];
+                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabTalentFit', 'customAnalysisTabFlywheelConversion'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -21563,7 +21733,7 @@
                                'customAnalysisTabContentCampaignROI', 'customAnalysisTabContentCrossShow',
                                'customAnalysisTabContentWatchTime', 'customAnalysisTabContentTicketSalesTracker',
                                'customAnalysisTabContentSFLFConversion', 'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ',
-                               'customAnalysisTabContentTalentFit'];
+                               'customAnalysisTabContentTalentFit', 'customAnalysisTabContentFlywheelConversion'];
             contentIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -21643,6 +21813,23 @@
                     const oneYearAgo = new Date();
                     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
                     startDateEl.value = oneYearAgo.toISOString().split('T')[0];
+                }
+                if (endDateEl && !endDateEl.value) {
+                    endDateEl.value = new Date().toISOString().split('T')[0];
+                }
+            } else if (tabName === 'flywheel-conversion') {
+                const tab = document.getElementById('customAnalysisTabFlywheelConversion');
+                const content = document.getElementById('customAnalysisTabContentFlywheelConversion');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                if (typeof loadFlywheelResults === 'function') loadFlywheelResults();
+                // Set default dates
+                const startDateEl = document.getElementById('flywheelStartDate');
+                const endDateEl = document.getElementById('flywheelEndDate');
+                if (startDateEl && !startDateEl.value) {
+                    const sixMonthsAgo = new Date();
+                    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+                    startDateEl.value = sixMonthsAgo.toISOString().split('T')[0];
                 }
                 if (endDateEl && !endDateEl.value) {
                     endDateEl.value = new Date().toISOString().split('T')[0];
@@ -22206,6 +22393,324 @@
             _ecomIQTable(pdps.length > 10 ? pdps.slice(-10).reverse() : [], 'ecomIQBottomPdp');
             _ecomIQTable(carts.slice(0,10), 'ecomIQCart');
             _ecomIQTable(purchases.slice(0,10), 'ecomIQPurchase');
+        }
+
+        // ===================== FLYWHEEL CONVERSION =====================
+        let _flywheelPollingId = null;
+        let _flywheelAllResults = [];
+        let _flywheelFunnelChart = null;
+
+        function submitFlywheelConversion() {
+            const entryPoint = document.getElementById('flywheelEntryPoint').value.trim();
+            const points = document.getElementById('flywheelPoints').value.trim();
+            const startDate = document.getElementById('flywheelStartDate').value;
+            const endDate = document.getElementById('flywheelEndDate').value;
+            const projectName = document.getElementById('flywheelProjectName').value.trim();
+            
+            if (!entryPoint) { alert('Please enter a flywheel entry point.'); return; }
+            if (!points) { alert('Please enter at least one flywheel point.'); return; }
+            if (!startDate || !endDate) { alert('Please select both start and end dates.'); return; }
+            
+            const btn = document.getElementById('flywheelSubmitBtn');
+            if (btn) btn.disabled = true;
+            document.getElementById('flywheelJobStatus').style.display = '';
+            document.getElementById('flywheelStatusRunning').style.display = '';
+            document.getElementById('flywheelStatusComplete').style.display = 'none';
+            document.getElementById('flywheelStatusError').style.display = 'none';
+            document.getElementById('flywheelStatusText').textContent = 'Submitting...';
+            document.getElementById('flywheelProgressFill').style.width = '0%';
+            
+            fetch('/api/attribution/flywheel-conversion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    entry_point: entryPoint,
+                    flywheel_points: points,
+                    start_date: startDate,
+                    end_date: endDate,
+                    project_name: projectName || 'Flywheel_' + entryPoint.substring(0, 30)
+                })
+            }).then(r => r.json()).then(data => {
+                if (data.error) {
+                    document.getElementById('flywheelStatusRunning').style.display = 'none';
+                    document.getElementById('flywheelStatusError').style.display = '';
+                    document.getElementById('flywheelErrorMessage').textContent = data.error;
+                    if (btn) btn.disabled = false;
+                    return;
+                }
+                _pollFlywheelJob(data.job_id);
+            }).catch(err => {
+                document.getElementById('flywheelStatusRunning').style.display = 'none';
+                document.getElementById('flywheelStatusError').style.display = '';
+                document.getElementById('flywheelErrorMessage').textContent = 'Submit failed: ' + err.message;
+                if (btn) btn.disabled = false;
+            });
+        }
+
+        function _pollFlywheelJob(jobId) {
+            if (_flywheelPollingId) clearInterval(_flywheelPollingId);
+            _flywheelPollingId = setInterval(() => {
+                fetch('/api/job-status/' + jobId, { credentials: 'same-origin' })
+                    .then(r => r.json())
+                    .then(data => {
+                        document.getElementById('flywheelStatusText').textContent = data.message || data.status;
+                        document.getElementById('flywheelProgressFill').style.width = (data.progress || 0) + '%';
+                        if (data.status === 'completed') {
+                            clearInterval(_flywheelPollingId);
+                            document.getElementById('flywheelStatusRunning').style.display = 'none';
+                            document.getElementById('flywheelStatusComplete').style.display = '';
+                            document.getElementById('flywheelSubmitBtn').disabled = false;
+                            loadFlywheelResults();
+                        } else if (data.status === 'failed') {
+                            clearInterval(_flywheelPollingId);
+                            document.getElementById('flywheelStatusRunning').style.display = 'none';
+                            document.getElementById('flywheelStatusError').style.display = '';
+                            document.getElementById('flywheelErrorMessage').textContent = data.error || 'Job failed';
+                            document.getElementById('flywheelSubmitBtn').disabled = false;
+                        }
+                    }).catch(() => {});
+            }, 2000);
+        }
+
+        function loadFlywheelResults() {
+            fetch('/api/flywheel/list', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    _flywheelAllResults = data.results || [];
+                    renderFlywheelResultsList();
+                }).catch(() => {});
+        }
+
+        function renderFlywheelResultsList() {
+            const el = document.getElementById('flywheelResultsList');
+            const statusEl = document.getElementById('flywheelResultsStatus');
+            if (!el) return;
+            
+            const searchVal = (document.getElementById('flywheelResultsSearchInput')?.value || '').toLowerCase();
+            const statusFilter = document.getElementById('flywheelResultsStatusFilter')?.value || '';
+            
+            let filtered = _flywheelAllResults;
+            if (searchVal) filtered = filtered.filter(r => r.name.toLowerCase().includes(searchVal));
+            if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
+            
+            if (statusEl) statusEl.textContent = filtered.length + ' result(s)';
+            
+            if (!filtered.length) {
+                el.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.8rem;">No results found.</div>';
+                return;
+            }
+            
+            el.innerHTML = filtered.map(r => {
+                const badge = r.status === 'pending' ? '<span style="color:#f59e0b;font-size:0.65rem;">⏳ Pending</span>' : '<span style="color:#10b981;font-size:0.65rem;">✓ Released</span>';
+                return '<div class="profile-tree-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="openFlywheelInDashboard(\'' + r.s3_key + '\')"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:500;font-size:0.85rem;">' + r.name + '</span>' + badge + '</div><div style="font-size:0.7rem;color:var(--text-secondary);">' + new Date(r.last_modified).toLocaleDateString() + '</div></div>';
+            }).join('');
+        }
+
+        function filterFlywheelResults() {
+            renderFlywheelResultsList();
+        }
+
+        function openFlywheelInDashboard(s3Key) {
+            showFlywheelConversionDashboard();
+            setTimeout(() => loadFlywheelDashData(s3Key), 200);
+        }
+
+        function showFlywheelConversionDashboard() {
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="flywheelConversion"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('flywheelConversion');
+
+            // Hide all other views
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
+            const customAnalysisView = document.getElementById('customAnalysisView');
+            if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const talentFitIQView = document.getElementById('talentFitIQView');
+            if (talentFitIQView) talentFitIQView.style.display = 'none';
+            const roasIQView = document.getElementById('roasIQView');
+            if (roasIQView) roasIQView.style.display = 'none';
+            const ecomIQView = document.getElementById('ecommerceIQView');
+            if (ecomIQView) ecomIQView.style.display = 'none';
+            if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
+
+            // Show flywheel view
+            const flywheelView = document.getElementById('flywheelConversionView');
+            if (flywheelView) flywheelView.style.display = 'flex';
+
+            // Load sidebar
+            loadFlywheelDashProfiles();
+        }
+
+        function loadFlywheelDashProfiles() {
+            fetch('/api/flywheel/list', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    _flywheelAllResults = data.results || [];
+                    renderFlywheelDashSidebar();
+                }).catch(() => {});
+        }
+
+        function renderFlywheelDashSidebar() {
+            const el = document.getElementById('flywheelDashProfileTree');
+            if (!el) return;
+            
+            const searchVal = (document.getElementById('flywheelDashSearchInput')?.value || '').toLowerCase();
+            let filtered = _flywheelAllResults;
+            if (searchVal) filtered = filtered.filter(r => r.name.toLowerCase().includes(searchVal));
+            
+            if (!filtered.length) {
+                el.innerHTML = '<div style="padding:1.5rem 1rem;text-align:center;color:var(--text-secondary);font-size:0.8rem;">No flywheel analyses found. Run one in Analysis IQ.</div>';
+                return;
+            }
+            
+            el.innerHTML = filtered.map(r => {
+                const badge = r.status === 'pending' ? '<span style="color:#f59e0b;font-size:0.6rem;margin-left:6px;">⏳</span>' : '';
+                return '<div class="profile-tree-item" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="loadFlywheelDashData(\'' + r.s3_key + '\')"><div style="font-weight:500;font-size:0.85rem;">' + r.name + badge + '</div><div style="font-size:0.7rem;color:var(--text-secondary);">' + new Date(r.last_modified).toLocaleDateString() + '</div></div>';
+            }).join('');
+        }
+
+        function filterFlywheelDashResults() {
+            renderFlywheelDashSidebar();
+        }
+
+        function loadFlywheelDashData(s3Key) {
+            fetch('/api/flywheel/data/' + encodeURIComponent(s3Key), { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(resp => {
+                    if (!resp.success || !resp.data) {
+                        console.error('Failed to load flywheel data');
+                        return;
+                    }
+                    renderFlywheelDashboard(resp.data);
+                }).catch(err => console.error('Error loading flywheel:', err));
+        }
+
+        function renderFlywheelDashboard(data) {
+            document.getElementById('flywheelDashEmptyState').style.display = 'none';
+            document.getElementById('flywheelDashboardPanels').style.display = '';
+            
+            const meta = data.metadata || {};
+            document.getElementById('flywheelDashTitle').textContent = '🔄 ' + (meta.project_name || 'Flywheel Conversion');
+            document.getElementById('flywheelDashMeta').textContent = (meta.date_range || '') + ' • Entry: ' + (meta.entry_point || 'N/A');
+            
+            const entry = data.entry_point_metrics || {};
+            document.getElementById('flywheelKpiEntry').textContent = parseInt(entry.count || 0).toLocaleString();
+            document.getElementById('flywheelKpiEntryGenPop').textContent = 'Gen Pop: ' + (entry.gen_pop || '0');
+            
+            const funnel = data.flywheel_funnel || [];
+            document.getElementById('flywheelKpiSteps').textContent = funnel.length;
+            
+            const convRates = data.conversion_rates || {};
+            document.getElementById('flywheelKpiConversion').textContent = convRates.overall || '0%';
+            document.getElementById('flywheelKpiBestStep').textContent = convRates.best_step || 'N/A';
+            
+            // Render funnel chart
+            renderFlywheelFunnelChart(data);
+            
+            // Render funnel table
+            renderFlywheelFunnelTable(data);
+            
+            // Render insights
+            renderFlywheelInsights(data);
+        }
+
+        function renderFlywheelFunnelChart(data) {
+            const canvas = document.getElementById('flywheelFunnelChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            
+            if (_flywheelFunnelChart) _flywheelFunnelChart.destroy();
+            
+            const entry = data.entry_point_metrics || {};
+            const funnel = data.flywheel_funnel || [];
+            
+            const labels = ['Entry Point'];
+            const values = [parseInt(entry.count || 0)];
+            const pcts = [100];
+            
+            funnel.forEach(step => {
+                labels.push(step.point || step.step);
+                values.push(parseInt(step.count || 0));
+                pcts.push(parseFloat((step.percentage || '0%').replace('%', '')));
+            });
+            
+            _flywheelFunnelChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Users',
+                        data: values,
+                        backgroundColor: labels.map((_, i) => i === 0 ? '#66d9ef' : (i === labels.length - 1 ? '#10b981' : '#3b82f6')),
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const idx = context.dataIndex;
+                                    return context.raw.toLocaleString() + ' users (' + pcts[idx].toFixed(1) + '% of entry)';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#e8e8e8' } },
+                        y: { grid: { display: false }, ticks: { color: '#e8e8e8' } }
+                    }
+                }
+            });
+        }
+
+        function renderFlywheelFunnelTable(data) {
+            const el = document.getElementById('flywheelFunnelTable');
+            if (!el) return;
+            
+            const entry = data.entry_point_metrics || {};
+            const funnel = data.flywheel_funnel || [];
+            
+            let rows = '<tr><td style="padding:10px;font-weight:600;">Entry Point</td><td style="padding:10px;">' + (data.metadata?.entry_point || 'N/A') + '</td><td style="padding:10px;text-align:right;">' + parseInt(entry.count || 0).toLocaleString() + '</td><td style="padding:10px;text-align:right;">100%</td><td style="padding:10px;text-align:right;">' + (entry.gen_pop || '0') + '</td></tr>';
+            
+            funnel.forEach((step, idx) => {
+                rows += '<tr><td style="padding:10px;font-weight:600;">Step ' + (idx + 1) + '</td><td style="padding:10px;">' + (step.point || step.step) + '</td><td style="padding:10px;text-align:right;">' + parseInt(step.count || 0).toLocaleString() + '</td><td style="padding:10px;text-align:right;">' + (step.percentage || '0%') + '</td><td style="padding:10px;text-align:right;">' + (step.gen_pop || '0') + '</td></tr>';
+            });
+            
+            el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:10px;text-align:left;">Step</th><th style="padding:10px;text-align:left;">Touchpoint</th><th style="padding:10px;text-align:right;">Users</th><th style="padding:10px;text-align:right;">% of Entry</th><th style="padding:10px;text-align:right;">Gen Pop Proj.</th></tr></thead><tbody>' + rows + '</tbody></table>';
+        }
+
+        function renderFlywheelInsights(data) {
+            const el = document.getElementById('flywheelInsights');
+            if (!el) return;
+            
+            const conv = data.conversion_rates || {};
+            const funnel = data.flywheel_funnel || [];
+            
+            let insights = '';
+            insights += '<div style="padding:0.75rem;background:rgba(102,217,239,0.1);border-radius:8px;margin-bottom:0.75rem;"><strong>Overall Conversion:</strong> ' + (conv.overall || '0%') + ' of entry point users completed the full flywheel journey.</div>';
+            
+            if (conv.avg_step) {
+                insights += '<div style="padding:0.75rem;background:rgba(59,130,246,0.1);border-radius:8px;margin-bottom:0.75rem;"><strong>Average Step Conversion:</strong> ' + conv.avg_step + ' average conversion between consecutive steps.</div>';
+            }
+            
+            if (conv.best_step) {
+                insights += '<div style="padding:0.75rem;background:rgba(16,185,129,0.1);border-radius:8px;margin-bottom:0.75rem;"><strong>🏆 Best Converting Step:</strong> ' + conv.best_step + '</div>';
+            }
+            
+            if (conv.worst_step) {
+                insights += '<div style="padding:0.75rem;background:rgba(249,38,114,0.1);border-radius:8px;"><strong>⚠️ Largest Drop-off:</strong> ' + conv.worst_step + ' — consider optimizing this step to improve overall conversion.</div>';
+            }
+            
+            el.innerHTML = insights || '<div style="color:var(--text-secondary);">No insights available.</div>';
         }
 
         // Custom Talent Search Form Handler

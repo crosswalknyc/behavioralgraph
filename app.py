@@ -156,6 +156,7 @@ HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker d
 TICKET_SALES_S3_BUCKET = 'ticket-sales-iq'  # Bucket for Ticket Sales IQ (talent-to-theater attribution)
 TICKET_SALES_TRACKER_S3_BUCKET = 'ticket-sales-tracker'  # Bucket for Ticket Sales Tracker (movie viewers → theater)
 SF_LF_CONV_S3_BUCKET = 'sf-lf-conversion'  # Bucket for Short Form to Long Form Conversion analysis
+FLYWHEEL_S3_BUCKET = 'flywheel'  # Bucket for Flywheel Conversion analysis
 # Talent Fit Assessment — talent-brand audience overlap analysis
 TALENT_FIT_S3_PREFIX = 'talent-fit/'
 # LLMO IQ — /api/llmo-iq/* + _llmo_* (rollup from build_llmo_summary.py on S3)
@@ -1233,6 +1234,7 @@ CREDITS_TALENT_FIT_PER_TALENT = 5  # Per talent assessed
 CREDITS_TALENT_FIT_FIND = 15  # For "Find Me Talent" feature
 CREDITS_SF_LF_CONVERSION = 10
 CREDITS_ECOMMERCE_IQ = 5
+CREDITS_FLYWHEEL_CONVERSION = 25
 
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
@@ -1249,7 +1251,8 @@ DEFAULT_PRICING = {
     'talent_fit_per_talent': 5,
     'talent_fit_find': 15,
     'sf_lf_conversion': 10,
-    'ecommerce_iq': 5
+    'ecommerce_iq': 5,
+    'flywheel_conversion': 25
 }
 
 _pricing_cache = {'data': None, 'loaded_at': 0}
@@ -5294,6 +5297,7 @@ def set_chat_status():
 _ANALYSIS_IQ_MODULES_FULL = [
     'profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign',
     'cross_show', 'watch_time', 'ticket_sales_tracker', 'sf_lf_conversion', 'talent_fit',
+    'flywheel_conversion',
 ]
 
 
@@ -5319,6 +5323,7 @@ def compute_product_access_flags(user, role):
             'has_ticket_sales_tracker_access': True,
             'has_llmo_iq_access': True,
             'has_talent_fit_access': True,
+            'has_flywheel_conversion_access': True,
         }
     u = user or {}
     return {
@@ -5341,6 +5346,7 @@ def compute_product_access_flags(user, role):
         'has_ticket_sales_tracker_access': bool(u.get('has_ticket_sales_tracker_access', False)),
         'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
+        'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
     }
 
 
@@ -5415,6 +5421,7 @@ def index():
     has_ticket_sales_tracker = _acc['has_ticket_sales_tracker_access']
     has_llmo_iq = _acc['has_llmo_iq_access']
     has_talent_fit = _acc.get('has_talent_fit_access', False)
+    has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
     
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -5464,6 +5471,7 @@ def index():
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
                            has_llmo_iq_access=has_llmo_iq,
                            has_talent_fit_access=has_talent_fit,
+                           has_flywheel_conversion_access=has_flywheel_conversion,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -22278,6 +22286,493 @@ def save_analysis_to_csv(s3_key, analysis):
     finally:
         import os
         os.unlink(tmp_path)
+
+
+# ============================================================================
+# FLYWHEEL CONVERSION ANALYSIS
+# ============================================================================
+
+@app.route('/api/attribution/flywheel-conversion', methods=['POST'], strict_slashes=False)
+@requires_auth
+def submit_flywheel_conversion():
+    """Submit a Flywheel Conversion analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        if not user_can_run_analysis_module(user, 'flywheel_conversion'):
+            return jsonify({'error': 'Analysis IQ access with Flywheel Conversion module required'}), 403
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        entry_point = data.get('entry_point', '').strip()
+        flywheel_points = data.get('flywheel_points', '').strip()
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        project_name = data.get('project_name', '').strip()
+        
+        if not entry_point:
+            return jsonify({'error': 'Flywheel entry point is required'}), 400
+        if not flywheel_points:
+            return jsonify({'error': 'Additional flywheel points are required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        if not project_name:
+            project_name = f"Flywheel_{entry_point[:30]}"
+        
+        username = session.get('username', 'unknown')
+        if not has_credits_for(username, CREDITS_FLYWHEEL_CONVERSION):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'Flywheel Conversion requires {CREDITS_FLYWHEEL_CONVERSION} credits. You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1
+            }), 403
+        
+        job_id = str(uuid.uuid4())
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'flywheel_conversion',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'project_name': project_name,
+            'params': {
+                'entry_point': entry_point,
+                'flywheel_points': flywheel_points,
+                'start_date': start_date,
+                'end_date': end_date,
+                'project_name': project_name
+            }
+        }
+        if s3_client:
+            _save_job_status_to_s3(job_id, jobs[job_id])
+
+        desc = f"{project_name} ({start_date}–{end_date})"
+        if not consume_credit(username, description=desc, job_id=job_id, pull_type='Flywheel Conversion', credits_used=CREDITS_FLYWHEEL_CONVERSION):
+            return jsonify({'error': 'Insufficient credits.'}), 403
+        
+        thread = threading.Thread(target=run_flywheel_conversion, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'job_id': job_id, 'message': 'Flywheel Conversion job submitted successfully', 'status': 'queued'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def _escape_for_flywheel_sql(term):
+    """Escape a term for use in SQL LIKE and exact match queries."""
+    eq_esc = term.replace("'", "''")
+    like_esc = eq_esc.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return like_esc, eq_esc
+
+
+def run_flywheel_conversion(job_id):
+    """Run the Flywheel Conversion analysis using Snowflake queries."""
+    conn = None
+    print(f"[Flywheel] Starting job {job_id}")
+    try:
+        update_job_status(job_id, progress=5, message='Initializing...')
+        
+        if job_id not in jobs:
+            print(f"[Flywheel] ERROR: Job {job_id} not found in jobs dict!")
+            update_job_status(job_id, status='failed', error='Job not found in tracker')
+            return
+        
+        job = jobs[job_id]
+        params = job['params']
+        print(f"[Flywheel] Params: {params}")
+        
+        entry_point = params.get('entry_point', '')
+        flywheel_points_raw = params.get('flywheel_points', '')
+        start_date = params.get('start_date')
+        end_date = params.get('end_date')
+        project_name = params.get('project_name', 'Flywheel Analysis')
+        
+        import re
+        flywheel_points_split = re.split(r'[,\n\r]+', flywheel_points_raw)
+        flywheel_points = [p.strip() for p in flywheel_points_split if p.strip()]
+        
+        print(f"[Flywheel] Entry point: {entry_point}, Flywheel points: {flywheel_points}")
+        update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
+
+        import snowflake.connector
+        
+        FLYWHEEL_WAREHOUSE = 'BEHAVIORGRAPH6X'
+        
+        conn = snowflake.connector.connect(
+            user=os.environ.get('SNOWFLAKE_USER'),
+            password=os.environ.get('SNOWFLAKE_PASSWORD'),
+            account=os.environ.get('SNOWFLAKE_ACCOUNT'),
+            warehouse=FLYWHEEL_WAREHOUSE,
+            database='PROCESSEDCLICKSTREAM',
+            schema='PUBLIC'
+        )
+        print(f"[Flywheel] Connected to Snowflake")
+        cur = conn.cursor()
+        
+        cur.execute(f"USE WAREHOUSE {FLYWHEEL_WAREHOUSE}")
+        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 1800")
+        print(f"[Flywheel] Set query timeout to 30 minutes")
+        
+        update_job_status(job_id, progress=15, message='Connected to Snowflake...')
+        
+        BOOST_FACTOR = 15
+        SAMPLE_SIZE = 10_000_000
+        US_POPULATION = 329_900_000
+        
+        results = {
+            'project_name': project_name,
+            'entry_point': entry_point,
+            'flywheel_points': flywheel_points,
+            'start_date': start_date,
+            'end_date': end_date,
+            'boost_factor': BOOST_FACTOR,
+            'sample_size': SAMPLE_SIZE,
+            'us_population': US_POPULATION,
+            'entry_point_metrics': {},
+            'flywheel_metrics': [],
+            'funnel_analysis': [],
+            'conversion_rates': {},
+            'demographics': {}
+        }
+        
+        like_esc_entry, _ = _escape_for_flywheel_sql(entry_point)
+        
+        update_job_status(job_id, progress=20, message='Finding entry point users...')
+        
+        entry_point_query = f"""
+        SELECT COUNT(DISTINCT UID) as unique_users
+        FROM CLICKSTREAM_FINAL
+        WHERE DATE BETWEEN '{start_date}' AND '{end_date}'
+          AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
+               OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
+        """
+        print(f"[Flywheel] Entry point query: {entry_point_query}")
+        cur.execute(entry_point_query)
+        entry_row = cur.fetchone()
+        entry_unique_users = entry_row[0] if entry_row else 0
+        
+        entry_boosted = entry_unique_users * BOOST_FACTOR
+        entry_gen_pop = round(entry_boosted / SAMPLE_SIZE * US_POPULATION)
+        
+        results['entry_point_metrics'] = {
+            'raw_unique_users': entry_unique_users,
+            'boosted_users': entry_boosted,
+            'gen_pop_projection': entry_gen_pop,
+            'percentage_of_sample': round(entry_boosted / SAMPLE_SIZE * 100, 2) if SAMPLE_SIZE > 0 else 0
+        }
+        
+        print(f"[Flywheel] Entry point: {entry_unique_users} unique users, {entry_boosted} boosted, {entry_gen_pop:,} gen pop")
+        
+        if entry_unique_users == 0:
+            update_job_status(job_id, status='completed', progress=100, message='No users found for entry point')
+            results['error'] = 'No users found matching the entry point criteria'
+            _save_flywheel_results(job_id, results, job)
+            return
+        
+        entry_uids_query = f"""
+        SELECT DISTINCT UID
+        FROM CLICKSTREAM_FINAL
+        WHERE DATE BETWEEN '{start_date}' AND '{end_date}'
+          AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
+               OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
+        """
+        cur.execute(entry_uids_query)
+        entry_uids = set(row[0] for row in cur.fetchall())
+        print(f"[Flywheel] Found {len(entry_uids)} entry point UIDs")
+        
+        total_points = len(flywheel_points)
+        cumulative_uids = entry_uids.copy()
+        previous_step_uids = entry_uids.copy()
+        
+        for idx, point in enumerate(flywheel_points):
+            progress = 25 + int((idx / total_points) * 60)
+            update_job_status(job_id, progress=progress, message=f'Analyzing flywheel point {idx + 1}/{total_points}: {point[:30]}...')
+            
+            like_esc_point, _ = _escape_for_flywheel_sql(point)
+            
+            if not cumulative_uids:
+                results['flywheel_metrics'].append({
+                    'point': point,
+                    'position': idx + 1,
+                    'raw_unique_users': 0,
+                    'boosted_users': 0,
+                    'gen_pop_projection': 0,
+                    'conversion_from_entry': 0,
+                    'conversion_from_previous': 0,
+                    'cumulative_retention': 0
+                })
+                continue
+            
+            uid_list = ','.join(f"'{uid}'" for uid in list(cumulative_uids)[:50000])
+            
+            point_query = f"""
+            SELECT DISTINCT UID
+            FROM CLICKSTREAM_FINAL
+            WHERE DATE BETWEEN '{start_date}' AND '{end_date}'
+              AND UID IN ({uid_list})
+              AND (LOWER(URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
+                   OR LOWER(COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
+            """
+            cur.execute(point_query)
+            point_uids = set(row[0] for row in cur.fetchall())
+            
+            point_unique_users = len(point_uids)
+            point_boosted = point_unique_users * BOOST_FACTOR
+            point_gen_pop = round(point_boosted / SAMPLE_SIZE * US_POPULATION)
+            
+            conversion_from_entry = round(point_unique_users / len(entry_uids) * 100, 2) if entry_uids else 0
+            conversion_from_previous = round(point_unique_users / len(previous_step_uids) * 100, 2) if previous_step_uids else 0
+            cumulative_retention = round(point_unique_users / len(entry_uids) * 100, 2) if entry_uids else 0
+            
+            results['flywheel_metrics'].append({
+                'point': point,
+                'position': idx + 1,
+                'raw_unique_users': point_unique_users,
+                'boosted_users': point_boosted,
+                'gen_pop_projection': point_gen_pop,
+                'conversion_from_entry': conversion_from_entry,
+                'conversion_from_previous': conversion_from_previous,
+                'cumulative_retention': cumulative_retention
+            })
+            
+            print(f"[Flywheel] Point '{point}': {point_unique_users} users ({conversion_from_entry}% of entry)")
+            
+            cumulative_uids = point_uids
+            previous_step_uids = point_uids
+        
+        update_job_status(job_id, progress=88, message='Building funnel analysis...')
+        
+        funnel_steps = [{'step': 'Entry: ' + entry_point, 'users': entry_unique_users, 'boosted': entry_boosted, 'gen_pop': entry_gen_pop, 'pct_of_entry': 100.0}]
+        for metric in results['flywheel_metrics']:
+            funnel_steps.append({
+                'step': f"Step {metric['position']}: {metric['point']}",
+                'users': metric['raw_unique_users'],
+                'boosted': metric['boosted_users'],
+                'gen_pop': metric['gen_pop_projection'],
+                'pct_of_entry': metric['conversion_from_entry']
+            })
+        results['funnel_analysis'] = funnel_steps
+        
+        if results['flywheel_metrics']:
+            final_metrics = results['flywheel_metrics'][-1]
+            results['conversion_rates'] = {
+                'overall_conversion': final_metrics['conversion_from_entry'],
+                'average_step_conversion': round(sum(m['conversion_from_previous'] for m in results['flywheel_metrics']) / len(results['flywheel_metrics']), 2) if results['flywheel_metrics'] else 0,
+                'best_converting_step': max(results['flywheel_metrics'], key=lambda x: x['conversion_from_previous'])['point'] if results['flywheel_metrics'] else None,
+                'worst_converting_step': min(results['flywheel_metrics'], key=lambda x: x['conversion_from_previous'])['point'] if results['flywheel_metrics'] else None
+            }
+        
+        update_job_status(job_id, progress=95, message='Saving results...')
+        _save_flywheel_results(job_id, results, job)
+        
+        update_job_status(job_id, status='completed', progress=100, message='Flywheel analysis complete!')
+        print(f"[Flywheel] Job {job_id} completed successfully")
+        
+    except Exception as e:
+        import traceback
+        error_msg = str(e)
+        print(f"[Flywheel] Error in job {job_id}: {error_msg}\n{traceback.format_exc()}")
+        update_job_status(job_id, status='failed', error=error_msg)
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+
+
+def _save_flywheel_results(job_id, results, job):
+    """Save flywheel results to CSV and upload to S3."""
+    import tempfile
+    from pathlib import Path
+    
+    try:
+        OUTPUT_DIR = os.environ.get('OUTPUT_DIR', os.path.join(os.path.dirname(__file__), 'output'))
+        output_folder = Path(OUTPUT_DIR) / "flywheel"
+        output_folder.mkdir(parents=True, exist_ok=True)
+        
+        project_name = results.get('project_name', 'Flywheel_Analysis')
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', project_name)[:50]
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{safe_name}_{timestamp}.csv"
+        filepath = output_folder / filename
+        
+        rows = []
+        
+        rows.append({'Column': 'METADATA', 'Value': 'Flywheel Conversion Analysis', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'PROJECT_NAME', 'Value': project_name, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'ENTRY_POINT', 'Value': results['entry_point'], 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'FLYWHEEL_POINTS', 'Value': ', '.join(results['flywheel_points']), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'DATE_RANGE', 'Value': f"{results['start_date']} to {results['end_date']}", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'BOOST_FACTOR', 'Value': str(results['boost_factor']), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        
+        entry_m = results.get('entry_point_metrics', {})
+        rows.append({'Column': 'ENTRY_POINT_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'Entry Point', 'Value': results['entry_point'], 'Metric': 'Unique Users', 'Count': entry_m.get('raw_unique_users', 0), 'Percentage': '100%', 'Gen_Pop_Projection': f"{entry_m.get('gen_pop_projection', 0):,}"})
+        rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        
+        rows.append({'Column': 'FLYWHEEL_FUNNEL', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        for metric in results.get('flywheel_metrics', []):
+            rows.append({
+                'Column': f"Step {metric['position']}", 
+                'Value': metric['point'], 
+                'Metric': 'Unique Users', 
+                'Count': metric['raw_unique_users'],
+                'Percentage': f"{metric['conversion_from_entry']}%",
+                'Gen_Pop_Projection': f"{metric['gen_pop_projection']:,}"
+            })
+        
+        rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'CONVERSION_RATES', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        conv = results.get('conversion_rates', {})
+        rows.append({'Column': 'Overall Conversion', 'Value': f"{conv.get('overall_conversion', 0)}%", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'Avg Step Conversion', 'Value': f"{conv.get('average_step_conversion', 0)}%", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'Best Converting Step', 'Value': conv.get('best_converting_step', 'N/A'), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'Worst Converting Step', 'Value': conv.get('worst_converting_step', 'N/A'), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        
+        df = pd.DataFrame(rows)
+        df.to_csv(filepath, index=False)
+        print(f"[Flywheel] Saved results to {filepath}")
+        
+        if s3_client:
+            s3_key = S3_PURGATORY_PREFIX + filename
+            try:
+                s3_client.upload_file(str(filepath), FLYWHEEL_S3_BUCKET, s3_key)
+                print(f"[Flywheel] Uploaded to S3: {FLYWHEEL_S3_BUCKET}/{s3_key}")
+                
+                username = job.get('username', 'unknown')
+                add_to_purgatory(
+                    s3_key=s3_key,
+                    bucket=FLYWHEEL_S3_BUCKET,
+                    created_by=username,
+                    project_name=project_name,
+                    category='FLYWHEEL',
+                    source_type='flywheel_conversion'
+                )
+                
+                job['s3_key'] = s3_key
+                job['bucket'] = FLYWHEEL_S3_BUCKET
+                job['result_file'] = str(filepath)
+                if s3_client:
+                    _save_job_status_to_s3(job_id, job)
+            except Exception as s3_err:
+                print(f"[Flywheel] S3 upload failed: {s3_err}")
+                
+    except Exception as e:
+        print(f"[Flywheel] Error saving results: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+@app.route('/api/flywheel/list')
+@requires_auth
+def list_flywheel_results():
+    """List all flywheel conversion results from S3."""
+    try:
+        if not s3_client:
+            return jsonify({'success': False, 'error': 'S3 not available'}), 500
+        
+        results = []
+        try:
+            response = s3_client.list_objects_v2(Bucket=FLYWHEEL_S3_BUCKET, Prefix='')
+            for obj in response.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('.csv'):
+                    is_purgatory = key.startswith(S3_PURGATORY_PREFIX)
+                    results.append({
+                        's3_key': key,
+                        'name': key.replace(S3_PURGATORY_PREFIX, '').replace('.csv', ''),
+                        'last_modified': obj['LastModified'].isoformat(),
+                        'size': obj['Size'],
+                        'status': 'pending' if is_purgatory else 'released'
+                    })
+        except Exception as e:
+            print(f"[Flywheel] Error listing S3: {e}")
+        
+        results.sort(key=lambda x: x['last_modified'], reverse=True)
+        return jsonify({'success': True, 'results': results})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/flywheel/data/<path:s3_key>')
+@requires_auth
+def get_flywheel_data(s3_key):
+    """Get flywheel conversion data from S3."""
+    try:
+        if not s3_client:
+            return jsonify({'success': False, 'error': 'S3 not available'}), 500
+        
+        response = s3_client.get_object(Bucket=FLYWHEEL_S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read().decode('utf-8')
+        
+        reader = csv.DictReader(io.StringIO(csv_content))
+        rows = list(reader)
+        
+        parsed = {
+            'metadata': {},
+            'entry_point_metrics': {},
+            'flywheel_funnel': [],
+            'conversion_rates': {},
+            'raw_rows': rows
+        }
+        
+        current_section = None
+        for row in rows:
+            col = row.get('Column', '').strip()
+            val = row.get('Value', '').strip()
+            
+            if col == 'PROJECT_NAME':
+                parsed['metadata']['project_name'] = val
+            elif col == 'ENTRY_POINT':
+                parsed['metadata']['entry_point'] = val
+            elif col == 'FLYWHEEL_POINTS':
+                parsed['metadata']['flywheel_points'] = [p.strip() for p in val.split(',')]
+            elif col == 'DATE_RANGE':
+                parsed['metadata']['date_range'] = val
+            elif col == 'ENTRY_POINT_METRICS':
+                current_section = 'entry_metrics'
+            elif col == 'FLYWHEEL_FUNNEL':
+                current_section = 'funnel'
+            elif col == 'CONVERSION_RATES':
+                current_section = 'conversion'
+            elif current_section == 'entry_metrics' and col == 'Entry Point':
+                parsed['entry_point_metrics'] = {
+                    'name': val,
+                    'count': row.get('Count', 0),
+                    'percentage': row.get('Percentage', '100%'),
+                    'gen_pop': row.get('Gen_Pop_Projection', '0')
+                }
+            elif current_section == 'funnel' and col.startswith('Step'):
+                parsed['flywheel_funnel'].append({
+                    'step': col,
+                    'point': val,
+                    'count': row.get('Count', 0),
+                    'percentage': row.get('Percentage', '0%'),
+                    'gen_pop': row.get('Gen_Pop_Projection', '0')
+                })
+            elif current_section == 'conversion':
+                if col == 'Overall Conversion':
+                    parsed['conversion_rates']['overall'] = val
+                elif col == 'Avg Step Conversion':
+                    parsed['conversion_rates']['avg_step'] = val
+                elif col == 'Best Converting Step':
+                    parsed['conversion_rates']['best_step'] = val
+                elif col == 'Worst Converting Step':
+                    parsed['conversion_rates']['worst_step'] = val
+        
+        return jsonify({'success': True, 'data': parsed})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/attribution/svod-acquisition', methods=['POST'])
