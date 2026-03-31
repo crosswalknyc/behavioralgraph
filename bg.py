@@ -8444,6 +8444,7 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
     """
     Analyze brand-talent audience overlap using CLICKSTREAM_FINAL.
     Returns overlap counts and percentages for each talent.
+    Brand can be comma-separated for multiple brands (will be OR'd together).
     """
     print(f"🎯 Running Talent Fit Analysis for brand '{brand}' with talents: {talents}")
     
@@ -8460,10 +8461,16 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
         
-        brand_like_esc, brand_eq_esc = _escape_brand_for_sql(brand)
-        brand_filter = f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\')"
+        # Handle comma-separated brands
+        brand_terms = [b.strip() for b in brand.split(',') if b.strip()]
+        brand_filters = []
+        for b in brand_terms:
+            brand_like_esc, _ = _escape_brand_for_sql(b)
+            brand_filters.append(f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\')")
+        brand_filter = ' OR '.join(brand_filters) if brand_filters else '1=0'
         
         print(f"📊 Step 1: Counting unique brand users...")
+        print(f"   Brand terms: {brand_terms}")
         print(f"   Brand filter: {brand_filter}")
         brand_users_query = f"""
             SELECT COUNT(DISTINCT UID) as brand_users
@@ -8532,6 +8539,7 @@ def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
     """
     Find top talents that overlap with a brand's audience.
     Filters CLICKSTREAM_FINAL to TALENT category entries.
+    Brand can be comma-separated for multiple brands (will be OR'd together).
     """
     print(f"🔍 Finding talents for brand '{brand}'...")
     
@@ -8548,10 +8556,16 @@ def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
         
-        brand_like_esc, brand_eq_esc = _escape_brand_for_sql(brand)
-        brand_filter = f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\')"
+        # Handle comma-separated brands
+        brand_terms = [b.strip() for b in brand.split(',') if b.strip()]
+        brand_filters = []
+        for b in brand_terms:
+            brand_like_esc, _ = _escape_brand_for_sql(b)
+            brand_filters.append(f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\')")
+        brand_filter = ' OR '.join(brand_filters) if brand_filters else '1=0'
         
         print(f"📊 Step 1: Counting unique brand users...")
+        print(f"   Brand terms: {brand_terms}")
         print(f"   Brand filter: {brand_filter}")
         brand_users_query = f"""
             SELECT COUNT(DISTINCT UID) as brand_users
