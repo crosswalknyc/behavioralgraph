@@ -18682,8 +18682,8 @@
                 renderSFConvDemographics('sfConvDemoIncome', demographics.income);
             }
 
-            // Funnel Chart
-            renderSFConvFunnel(conversionSummary, lfPlatformVisit);
+            // Funnel Chart - pass platform metrics for flow breakdown
+            renderSFConvFunnel(conversionSummary, lfPlatformVisit, platformMetrics);
             
             // Store data for performance analysis (for re-analysis button)
             window.sfConvAnalysisData = {
@@ -18752,14 +18752,29 @@
             }
         }
 
-        function renderSFConvFunnel(summary, lfPlatformVisit = {}) {
+        function renderSFConvFunnel(summary, lfPlatformVisit = {}, platformMetrics = []) {
             const container = document.getElementById('sfConvFunnelChart');
             if (!container) return;
             
-            // Use regular sample values
-            const total = parseInt(summary.totalViewers) || 0;
-            const converted = parseInt(summary.converted) || 0;
-            const lfVisitors = parseInt(lfPlatformVisit.visitors) || 0;
+            // Helper to format large numbers
+            const formatNum = (n) => {
+                if (!n || n === 0) return '0';
+                const num = parseInt(n);
+                if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
+                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                return num.toLocaleString();
+            };
+            
+            // Use PROJECTED values (GenPop)
+            const totalProj = parseInt(summary.totalViewersGenPop) || 0;
+            const convertedProj = parseInt(summary.convertedGenPop) || 0;
+            const lfVisitorsProj = parseInt(lfPlatformVisit.genPop) || 0;
+            
+            // Fallback to sample if no projection
+            const total = totalProj > 0 ? totalProj : (parseInt(summary.totalViewers) || 0);
+            const converted = convertedProj > 0 ? convertedProj : (parseInt(summary.converted) || 0);
+            const lfVisitors = lfVisitorsProj > 0 ? lfVisitorsProj : (parseInt(lfPlatformVisit.visitors) || 0);
             
             if (total === 0) {
                 container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">No conversion data available</div>';
@@ -18768,34 +18783,69 @@
             const convPct = ((converted / total) * 100).toFixed(4);
             const lfVisitPct = lfVisitors > 0 ? ((lfVisitors / total) * 100).toFixed(2) : null;
             
+            // Build platform breakdown for funnel (sorted by projected views)
+            const sortedPlatforms = platformMetrics
+                .filter(p => p.uniqueViewsGenPop && parseInt(p.uniqueViewsGenPop) > 0)
+                .sort((a, b) => (parseInt(b.uniqueViewsGenPop) || 0) - (parseInt(a.uniqueViewsGenPop) || 0))
+                .slice(0, 3);  // Top 3 platforms
+            
             let funnelSteps = `
                 <div style="text-align: center;">
-                    <div style="width: 130px; height: 130px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 1.25rem; font-weight: 700; color: white;">${total.toLocaleString()}</div>
-                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.8); text-align: center; line-height: 1.2; padding: 0 0.25rem;">Short Form<br>Viewers</div>
+                    <div style="width: 140px; height: 140px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="font-size: 1.4rem; font-weight: 700; color: #111;">${formatNum(total)}</div>
+                        <div style="font-size: 0.65rem; color: #333; text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">Short Form<br>Views</div>
                     </div>
                 </div>
                 <div style="font-size: 2rem; color: var(--text-secondary);">→</div>`;
+            
+            // Add platform breakdown steps
+            if (sortedPlatforms.length > 0) {
+                const platformColors = {
+                    'instagram': ['#E1306C', '#F77737'],
+                    'tiktok': ['#00f2ea', '#ff0050'],
+                    'youtube': ['#FF0000', '#cc0000'],
+                    'facebook': ['#1877F2', '#3b5998'],
+                    'twitter': ['#1DA1F2', '#0d8ecf'],
+                    'x': ['#000', '#333']
+                };
+                
+                sortedPlatforms.forEach((p, idx) => {
+                    const platName = (p.platform || '').toLowerCase();
+                    const colors = platformColors[platName] || ['#6366f1', '#8b5cf6'];
+                    const platViews = parseInt(p.uniqueViewsGenPop) || parseInt(p.uniqueViews) || 0;
+                    const platPct = total > 0 ? ((platViews / total) * 100).toFixed(1) : 0;
+                    
+                    funnelSteps += `
+                    <div style="text-align: center;">
+                        <div style="width: 120px; height: 120px; background: linear-gradient(135deg, ${colors[0]}, ${colors[1]}); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${formatNum(platViews)}</div>
+                            <div style="font-size: 0.6rem; color: rgba(255,255,255,0.9); text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">${p.platform || 'Platform'}</div>
+                        </div>
+                        <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.3rem;">${platPct}%</div>
+                    </div>
+                    <div style="font-size: 1.5rem; color: var(--text-secondary);">→</div>`;
+                });
+            }
             
             if (lfVisitors > 0) {
                 funnelSteps += `
                 <div style="text-align: center;">
                     <div style="width: 130px; height: 130px; background: linear-gradient(135deg, var(--accent-pink), var(--accent-orange)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 1.25rem; font-weight: 700; color: white;">${lfVisitors.toLocaleString()}</div>
-                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.8); text-align: center; line-height: 1.2; padding: 0 0.25rem;">Visited Long Form<br>Platform</div>
+                        <div style="font-size: 1.25rem; font-weight: 700; color: #111;">${formatNum(lfVisitors)}</div>
+                        <div style="font-size: 0.6rem; color: #333; text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">Visited Long Form<br>Platform</div>
                     </div>
-                    <div style="font-size: 0.7rem; color: var(--accent-pink); margin-top: 0.35rem;">${lfVisitPct}% of viewers</div>
+                    <div style="font-size: 0.65rem; color: var(--accent-pink); margin-top: 0.3rem;">${lfVisitPct}% of viewers</div>
                 </div>
                 <div style="font-size: 2rem; color: var(--text-secondary);">→</div>`;
             }
             
             container.innerHTML = `
-                <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; padding: 1rem; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 1rem; flex-wrap: wrap;">
                     ${funnelSteps}
                     <div style="text-align: center;">
-                        <div style="width: 130px; height: 130px; background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                            <div style="font-size: 1.25rem; font-weight: 700; color: white;">${converted.toLocaleString()}</div>
-                            <div style="font-size: 0.6rem; color: rgba(255,255,255,0.8); text-align: center; line-height: 1.2; padding: 0 0.25rem;">Converted to<br>Long Form</div>
+                        <div style="width: 140px; height: 140px; background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <div style="font-size: 1.4rem; font-weight: 700; color: #111;">${formatNum(converted)}</div>
+                            <div style="font-size: 0.65rem; color: #333; text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">Converted to<br>Long Form</div>
                         </div>
                     </div>
                     <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 12px;">
