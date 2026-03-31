@@ -21818,6 +21818,7 @@ def run_sf_lf_conversion(job_id):
         
         # Performance Analysis Section - Run AI analysis on URLs
         update_job_status(job_id, progress=90, message='Running AI performance analysis...')
+        print(f"[SF-LF] 🤖 Starting AI Performance Analysis on {len(sf_urls[:50])} URLs...")
         try:
             analysis_urls = sf_urls[:50]  # Limit to 50 URLs for analysis
             ai_analysis = run_sf_lf_performance_analysis_internal(
@@ -21826,14 +21827,18 @@ def run_sf_lf_conversion(job_id):
                 lf_platform=lf_platform,
                 total_views=total_viewers,
                 converted=conv_users,
-                conversion_rate=f"{conv_rate:.8f}%"
+                conversion_rate=f"{conv_rate:.8f}"
             )
-            
+
+            print(f"[SF-LF] 🤖 AI Analysis returned: {ai_analysis is not None}")
             if ai_analysis:
+                print(f"[SF-LF] 🤖 Adding {len(ai_analysis.keys())} analysis fields to CSV...")
                 csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'PERFORMANCE_ANALYSIS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_CLICK_FARM_COUNT', 'Value': str(ai_analysis.get('click_farm_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_CLICK_FARM_PCT', 'Value': str(ai_analysis.get('click_farm_percentage', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_OFFICIAL_COUNT', 'Value': str(ai_analysis.get('official_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_OFFICIAL_PCT', 'Value': str(ai_analysis.get('official_percentage', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_FAN_PAGE_COUNT', 'Value': str(ai_analysis.get('fan_page_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_PODCAST_CLIP_COUNT', 'Value': str(ai_analysis.get('podcast_clip_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_GEOGRAPHIC_LEAKAGE_COUNT', 'Value': str(ai_analysis.get('geographic_leakage_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
@@ -21865,9 +21870,13 @@ def run_sf_lf_conversion(job_id):
                     takeaway_json = json.dumps(takeaway)
                     csv_rows.append({'Column': f'ANALYSIS_POSITIVE_{idx + 1}', 'Value': takeaway_json, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
 
-                print(f"[SF-LF] ✅ AI Performance Analysis complete: {ai_analysis.get('risk_level', 'N/A')} risk, {ai_analysis.get('click_farm_count', 0)} click farms, {len(takeaways)} positive takeaways")
+                print(f"[SF-LF] ✅ AI Performance Analysis complete: {ai_analysis.get('risk_level', 'N/A')} risk, {ai_analysis.get('click_farm_percentage', 0)}% click farms, {len(takeaways)} positive takeaways")
+            else:
+                print(f"[SF-LF] ⚠️ AI Analysis returned None - no analysis data saved to CSV")
         except Exception as ai_err:
+            import traceback
             print(f"[SF-LF] ⚠️ AI Performance Analysis failed (non-fatal): {ai_err}")
+            print(f"[SF-LF] ⚠️ Traceback: {traceback.format_exc()}")
         
         # Write CSV
         import pandas as pd
@@ -22002,6 +22011,11 @@ CAMPAIGN METRICS:
 SHORT FORM CONTENT URLs:
 {url_list}
 
+CONVERSION DATA (CRITICAL FOR FAKE VIEW CALCULATION):
+- Total Views: {total_views:,}
+- Converted to Long Form: {converted:,}
+- Conversion Rate: {conversion_rate}%
+
 CONDUCT A DEEP STRUCTURAL ANALYSIS covering these areas:
 
 1. **OFFICIAL vs CLICK FARM ACCOUNTS** (CRITICAL)
@@ -22042,16 +22056,26 @@ CONDUCT A DEEP STRUCTURAL ANALYSIS covering these areas:
    - Podcast clip accounts distribute audio-heavy content incompatible with visual content conversion
    - Fan edit accounts may have engaged audiences but zero conversion architecture
 
+8. **FAKE VIEW CALCULATION** (CRITICAL - must factor in actual conversions)
+   - {converted:,} users actually converted to watching long form content
+   - These conversions PROVE those views were REAL - real humans took action
+   - If conversion rate is {conversion_rate}%, then AT LEAST that percentage of views were real
+   - estimated_fake_view_percentage CANNOT be higher than (100 - conversion_rate) because converted views are proven real
+   - Example: 0.0006% conversion = at least 0.0006% real views, so max fake is 99.9994%
+   - But with 71K+ conversions from 11B views, those 71K+ were definitely real users
+
 IMPORTANT: click_farm_count should include ALL non-official accounts including regional aggregators, fan edits, generic clip accounts, and any account that is not the verified official studio/network account.
 
 FORMAT AS JSON:
 {{
     "click_farm_count": <TOTAL number of non-official accounts - include regional, fan edits, clip farms, unknown>,
+    "click_farm_percentage": <percentage of analyzed URLs that are click farms, 0-100>,
     "official_count": <number of verified official studio/network accounts>,
+    "official_percentage": <percentage of analyzed URLs that are official, 0-100>,
     "fan_page_count": <subset of click farms that are fan pages>,
     "podcast_clip_count": <number>,
     "geographic_leakage_count": <subset of click farms from non-US regions>,
-    "estimated_fake_view_percentage": <0-100, should be HIGH if most accounts are click farms>,
+    "estimated_fake_view_percentage": <0-100, MUST be less than (100 - conversion_rate) since converted views are proven real>,
     "risk_level": "HIGH" | "MEDIUM" | "LOW",
     "platform_analysis": {{
         "dominant_platform": "Instagram" | "TikTok" | "YouTube" | "Mixed",
@@ -22060,12 +22084,12 @@ FORMAT AS JSON:
         "tiktok_underutilized": true | false
     }},
     "account_categorization": {{
-        "official": ["list of official accounts if any - should be empty if none found"],
-        "clip_farms": ["@klyro.ae (UAE)", "@pk_cinema (Pakistan)", "@cinemaclipss", "other clip farms"],
-        "fan_edits": ["@account_edits", "@th3editz"],
-        "podcast_clips": ["@podpeektv"],
-        "geographic_regional": ["@klyro.ae (UAE)", "@pk_cinema (Pakistan)"],
-        "unknown": ["unidentifiable accounts"]
+        "official_pct": <percentage of URLs from official accounts, 0-100>,
+        "clip_farms_pct": <percentage of URLs from clip farms, 0-100>,
+        "fan_edits_pct": <percentage of URLs from fan edit accounts, 0-100>,
+        "podcast_clips_pct": <percentage of URLs from podcast clip accounts, 0-100>,
+        "geographic_regional_pct": <percentage of URLs from regional/geographic accounts, 0-100>,
+        "unknown_pct": <percentage of URLs from unknown/unidentifiable accounts, 0-100>
     }},
     "structural_failures": [
         {{

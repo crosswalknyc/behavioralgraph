@@ -15741,6 +15741,7 @@
                                             <div style="position: absolute; top: -10px; right: -10px; font-size: 3rem; opacity: 0.1;">⚠️</div>
                                             <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Click Farm URLs</div>
                                             <div id="sfConvClickFarmCount" style="font-size: 2rem; font-weight: 800; color: #ef4444;">-</div>
+                                            <div id="sfConvClickFarmPct" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
                                         </div>
                                         <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05)); border-radius: 12px; padding: 1.25rem; text-align: center; border: 1px solid rgba(245, 158, 11, 0.2); position: relative; overflow: hidden;">
                                             <div style="position: absolute; top: -10px; right: -10px; font-size: 3rem; opacity: 0.1;">👁️</div>
@@ -18597,9 +18598,17 @@
                     if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
                     window.sfConvPrecomputedAnalysis.click_farm_count = parseInt(val) || 0;
                 }
+                else if (col === 'ANALYSIS_CLICK_FARM_PCT' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.click_farm_percentage = parseFloat(val) || 0;
+                }
                 else if (col === 'ANALYSIS_OFFICIAL_COUNT' && currentSection === 'performance_analysis') {
                     if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
                     window.sfConvPrecomputedAnalysis.official_count = parseInt(val) || 0;
+                }
+                else if (col === 'ANALYSIS_OFFICIAL_PCT' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.official_percentage = parseFloat(val) || 0;
                 }
                 else if (col === 'ANALYSIS_FAN_PAGE_COUNT' && currentSection === 'performance_analysis') {
                     if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
@@ -19052,10 +19061,16 @@
         function renderSFConvPerformanceAnalysis(analysis) {
             document.getElementById('sfConvPerformanceResults').style.display = 'block';
             
-            // Update KPI boxes
-            document.getElementById('sfConvClickFarmCount').textContent = analysis.click_farm_count || 0;
+            // Update KPI boxes - show percentages instead of raw counts
+            const clickFarmPct = analysis.click_farm_percentage || 0;
+            document.getElementById('sfConvClickFarmCount').textContent = clickFarmPct + '%';
+            const clickFarmPctEl = document.getElementById('sfConvClickFarmPct');
+            if (clickFarmPctEl && analysis.click_farm_count) {
+                clickFarmPctEl.textContent = `(${analysis.click_farm_count} of analyzed URLs)`;
+            }
             document.getElementById('sfConvFakeViewsPct').textContent = (analysis.estimated_fake_view_percentage || 0) + '%';
-            document.getElementById('sfConvOfficialCount').textContent = analysis.official_count || 0;
+            const officialPct = analysis.official_percentage || 0;
+            document.getElementById('sfConvOfficialCount').textContent = officialPct + '%';
             
             // Risk level with color
             const riskEl = document.getElementById('sfConvRiskLevel');
@@ -19106,27 +19121,28 @@
                 `;
             }
             
-            // Account Categorization (if available)
+            // Account Categorization (if available) - show percentages instead of individual accounts
             let acctHtml = '';
             if (acctCat) {
                 const categories = [
-                    { key: 'official', label: 'Official', color: 'var(--accent-lime)', icon: '✓' },
-                    { key: 'clip_farms', label: 'Clip Farms', color: 'var(--accent-red)', icon: '✂️' },
-                    { key: 'fan_edits', label: 'Fan Edits', color: 'var(--accent-orange)', icon: '🎬' },
-                    { key: 'podcast_clips', label: 'Podcast', color: 'var(--accent-pink)', icon: '🎙' },
-                    { key: 'geographic_regional', label: 'Geographic', color: 'var(--accent-cyan)', icon: '🌍' },
-                    { key: 'unknown', label: 'Unknown', color: 'var(--text-secondary)', icon: '❓' }
+                    { key: 'official_pct', label: 'Official', color: 'var(--accent-lime)', icon: '✓' },
+                    { key: 'clip_farms_pct', label: 'Clip Farms', color: 'var(--accent-red)', icon: '✂️' },
+                    { key: 'fan_edits_pct', label: 'Fan Edits', color: 'var(--accent-orange)', icon: '🎬' },
+                    { key: 'podcast_clips_pct', label: 'Podcast', color: 'var(--accent-pink)', icon: '🎙' },
+                    { key: 'geographic_regional_pct', label: 'Geographic', color: 'var(--accent-cyan)', icon: '🌍' },
+                    { key: 'unknown_pct', label: 'Unknown', color: 'var(--text-secondary)', icon: '❓' }
                 ];
                 
                 let catRows = categories.map(cat => {
-                    const accounts = acctCat[cat.key] || [];
-                    if (accounts.length === 0) return '';
+                    const pct = acctCat[cat.key] || 0;
+                    if (pct === 0) return '';
                     return `
-                        <div style="display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
-                            <span style="min-width: 100px; color: ${cat.color}; font-size: 0.75rem; font-weight: 600;">${cat.icon} ${cat.label} (${accounts.length})</span>
-                            <div style="flex: 1; font-size: 0.75rem; color: var(--text-secondary); font-family: monospace; line-height: 1.5;">
-                                ${accounts.slice(0, 8).join(', ')}${accounts.length > 8 ? `, +${accounts.length - 8} more` : ''}
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-dark); border-radius: 8px;">
+                            <span style="color: ${cat.color}; font-size: 0.8rem; font-weight: 600;">${cat.icon} ${cat.label}</span>
+                            <div style="flex: 1; height: 6px; background: var(--bg-darker); border-radius: 3px; overflow: hidden;">
+                                <div style="width: ${Math.min(pct, 100)}%; height: 100%; background: ${cat.color}; border-radius: 3px;"></div>
                             </div>
+                            <span style="min-width: 45px; text-align: right; color: ${cat.color}; font-size: 0.85rem; font-weight: 700;">${pct}%</span>
                         </div>
                     `;
                 }).filter(Boolean).join('');
@@ -19136,7 +19152,7 @@
                         <div style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.08)); border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid rgba(168, 85, 247, 0.15);">
                             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
                                 <span style="font-size: 1rem;">👥</span>
-                                <div style="font-size: 0.7rem; color: #a855f7; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Account Categorization</div>
+                                <div style="font-size: 0.7rem; color: #a855f7; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Account Distribution</div>
                             </div>
                             ${catRows}
                         </div>
