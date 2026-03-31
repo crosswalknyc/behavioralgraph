@@ -21176,6 +21176,98 @@ def recalculate_percentages_from_raw_numbers(df):
     
     return df
 
+def filter_invalid_dmas(df):
+    """
+    Filter out LOCATION entries that don't match the official 210 DMA list from GENPOP_DMA_PERCENTAGES.
+    This removes "short" DMA names like "Augusta GA" when we should only have "Augusta Ga Aiken Sc".
+    Uses the GenPop list as the canonical source since it has exactly 210 standard US DMAs.
+    """
+    if not SILENCE_VERBOSE_OUTPUT:
+        print("\n🔍 FILTERING INVALID DMAs AGAINST 210 CANONICAL DMAs")
+        print("=" * 40)
+
+    location_mask = df['Column'].str.upper() == 'LOCATION'
+    if not location_mask.any():
+        return df
+
+    location_df = df[location_mask].copy()
+    other_df = df[~location_mask].copy()
+    
+    # Build canonical DMA lookup from GENPOP_DMA_PERCENTAGES (the authoritative 210 DMA list)
+    canonical_dmas = {}  # key -> canonical display name
+    for dma_name, _ in GENPOP_DMA_PERCENTAGES:
+        key = dma_match_key(dma_name)
+        canonical_dmas[key] = dma_name
+    
+    # Also build word-set lookup for fuzzy matching
+    canonical_word_sets = {}
+    for dma_name, _ in GENPOP_DMA_PERCENTAGES:
+        key = dma_match_key(dma_name)
+        words = frozenset(key.split())
+        canonical_word_sets[words] = dma_name
+    
+    # Track which entries to keep (and optionally rename to canonical form)
+    valid_entries = []
+    removed_entries = []
+    
+    for idx, row in location_df.iterrows():
+        dma_value = str(row['Value']).strip()
+        dma_key = dma_match_key(dma_value)
+        dma_words = frozenset(dma_key.split())
+        
+        matched_canonical = None
+        
+        # 1. Exact key match
+        if dma_key in canonical_dmas:
+            matched_canonical = canonical_dmas[dma_key]
+        
+        # 2. Word set match (handles reordering like "Augusta Aiken SC GA" vs "Augusta Ga Aiken Sc")
+        elif dma_words in canonical_word_sets:
+            matched_canonical = canonical_word_sets[dma_words]
+        
+        # 3. Check if this is a SHORT version of a canonical DMA
+        # e.g., "Augusta GA" should NOT match "Augusta Ga Aiken Sc" - it's a subset
+        # We ONLY accept if ALL words in canonical are present in input
+        else:
+            for canonical_words, canonical_name in canonical_word_sets.items():
+                # If input words are a SUPERSET of canonical (has extra words), might be OK
+                # If input words are a SUBSET of canonical (missing words), it's the short version - REJECT
+                if dma_words.issubset(canonical_words) and dma_words != canonical_words:
+                    # This is a short version - DON'T match it
+                    continue
+                elif dma_words.issuperset(canonical_words) and len(dma_words - canonical_words) <= 1:
+                    # Input has 1 extra word but contains all canonical words - accept
+                    matched_canonical = canonical_name
+                    break
+        
+        if matched_canonical:
+            # Keep the entry (optionally use canonical name for consistency)
+            row_copy = row.copy()
+            # Normalize to canonical display format
+            row_copy['Value'] = normalize_dma_for_display(matched_canonical)
+            valid_entries.append(row_copy)
+        else:
+            removed_entries.append(dma_value)
+    
+    if not SILENCE_VERBOSE_OUTPUT:
+        print(f"  📊 Valid DMAs: {len(valid_entries)} / {len(location_df)}")
+        if removed_entries:
+            print(f"  🚫 Removed {len(removed_entries)} invalid/short DMAs:")
+            for dma in sorted(set(removed_entries))[:15]:  # Show first 15 unique
+                print(f"      - {dma}")
+            if len(set(removed_entries)) > 15:
+                print(f"      ... and {len(set(removed_entries)) - 15} more unique invalid DMAs")
+    
+    # Rebuild location dataframe with only valid entries
+    if valid_entries:
+        valid_location_df = pd.DataFrame(valid_entries)
+        result_df = pd.concat([other_df, valid_location_df], ignore_index=True)
+    else:
+        result_df = other_df
+    
+    return result_df
+
+
 def deduplicate_location_data(df):
     """
     Remove duplicate entries in the LOCATION category.
@@ -21184,35 +21276,35 @@ def deduplicate_location_data(df):
     if not SILENCE_VERBOSE_OUTPUT:
         print("\n🔍 DEDUPLICATING LOCATION DATA")
         print("=" * 40)
-    
+
     location_mask = df['Column'].str.upper() == 'LOCATION'
     if not location_mask.any():
         return df
-    
+
     location_df = df[location_mask].copy()
     other_df = df[~location_mask].copy()
-    
+
     # Convert percentages to float for proper sorting
     location_df['Percentage'] = pd.to_numeric(location_df['Percentage'], errors='coerce')
-    
+
     # Normalize display names and group case-insensitively
     location_df['Value'] = location_df['Value'].apply(normalize_dma_for_display)
     location_df['_match_key'] = location_df['Value'].apply(dma_match_key)
     location_deduplicated = location_df.sort_values('Percentage', ascending=False).drop_duplicates(subset='_match_key', keep='first')
     if '_match_key' in location_deduplicated.columns:
         location_deduplicated = location_deduplicated.drop(columns=['_match_key'])
-    
+
     # Count duplicates removed
     original_count = len(location_df)
     deduplicated_count = len(location_deduplicated)
     duplicates_removed = original_count - deduplicated_count
-    
+
     if not SILENCE_VERBOSE_OUTPUT:
         print(f"  📊 LOCATION entries: {original_count} → {deduplicated_count} (removed {duplicates_removed} duplicates)")
-    
+
     # Recombine with other data
     result_df = pd.concat([other_df, location_deduplicated], ignore_index=True)
-    
+
     return result_df
 
 def ensure_all_dmas_present(df):
@@ -21228,7 +21320,10 @@ def ensure_all_dmas_present(df):
     # Use the comprehensive ALLOWED_DMAS list (210 DMAs)
     major_dmas = list(ALLOWED_DMAS)
     
-    # First, deduplicate any existing LOCATION entries
+    # First, filter out invalid DMAs (short versions like "Augusta GA" that aren't in ALLOWED_DMAS)
+    df = filter_invalid_dmas(df)
+    
+    # Then deduplicate any remaining LOCATION entries
     df = deduplicate_location_data(df)
     
     # Normalize existing LOCATION display names
@@ -22023,7 +22118,10 @@ def ensure_all_dmas_in_location_category(df, conn=None):
     if not SILENCE_VERBOSE_OUTPUT:
         print("  📍 Ensuring all DMAs are in LOCATION category (minimum 210)")
     
-    # First, deduplicate any existing LOCATION entries
+    # First, filter out invalid DMAs (short versions like "Augusta GA" that aren't in ALLOWED_DMAS)
+    df = filter_invalid_dmas(df)
+    
+    # Then deduplicate any remaining LOCATION entries
     df = deduplicate_location_data(df)
     
     # Normalize existing LOCATION display names
