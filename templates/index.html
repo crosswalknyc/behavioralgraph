@@ -14136,7 +14136,21 @@
                     
                     <div id="ai-tab-insights" class="ai-tab-content">
                         <p class="ai-description">Get AI-powered insights about this audience.</p>
-                        <button class="btn btn-primary" onclick="generateInsights()" id="insightsBtn">Generate Insights</button>
+                        <div style="display: flex; gap: 0.75rem; align-items: flex-end; margin-bottom: 1rem; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">Analysis Type</label>
+                                <select id="insightTypeSelect" style="width: 100%; padding: 0.6rem 0.75rem; border-radius: 8px; background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.85rem;">
+                                    <option value="core_snapshot">📊 Core Audience Snapshot</option>
+                                    <option value="standout_signals">🎯 Standout Signals (Index Anomalies)</option>
+                                    <option value="brand_fit">🤝 Brand Fit Analysis</option>
+                                    <option value="narrative_bio">👤 Narrative Bio (Human Description)</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" onclick="generateInsights()" id="insightsBtn" style="white-space: nowrap;">✨ Generate Insights</button>
+                        </div>
+                        <div id="insightTypeDescription" style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 1rem; padding: 0.5rem 0.75rem; background: var(--bg-dark); border-radius: 6px;">
+                            Identifies the 3-5 most strategically significant audience characteristics, prioritizing index anomalies (>150 or <60).
+                        </div>
                         <div id="insightsResult" class="ai-result"></div>
                     </div>
                     <div id="ai-tab-persona" class="ai-tab-content">
@@ -45955,20 +45969,45 @@
             document.getElementById('ai-tab-' + tabName).classList.add('active');
         }
         
+        // Insight type descriptions
+        const insightTypeDescriptions = {
+            'core_snapshot': 'Identifies the 3-5 most strategically significant audience characteristics, prioritizing index anomalies (>150 or <60).',
+            'standout_signals': 'Finds index anomalies where audience index is above 150 or below 60, explaining strategic implications for brand partnerships and content.',
+            'brand_fit': 'Recommends 3 brand category fits and 3 mismatches based on index values across age, income, ethnicity, and lifestyle segments.',
+            'narrative_bio': 'Creates a vivid, human 2-sentence description of who this viewer is — no jargon or index numbers, just plain language.'
+        };
+        
+        function updateInsightTypeDescription() {
+            const select = document.getElementById('insightTypeSelect');
+            const desc = document.getElementById('insightTypeDescription');
+            if (select && desc) {
+                desc.textContent = insightTypeDescriptions[select.value] || '';
+            }
+        }
+        
+        // Add change listener when DOM loads
+        document.addEventListener('DOMContentLoaded', function() {
+            const select = document.getElementById('insightTypeSelect');
+            if (select) {
+                select.addEventListener('change', updateInsightTypeDescription);
+            }
+        });
+        
         async function generateInsights() {
             if (!currentProfileData) {
                 alert('Please select a profile first');
                 return;
             }
             
-            trackActivity('ai_insights', currentProfileData.name);
+            const insightType = document.getElementById('insightTypeSelect')?.value || 'core_snapshot';
+            trackActivity('ai_insights', currentProfileData.name + ' - ' + insightType);
             
             const btn = document.getElementById('insightsBtn');
             const result = document.getElementById('insightsResult');
             
             btn.disabled = true;
-            btn.textContent = 'Generating...';
-            result.innerHTML = '<div class="loading">Analyzing audience data...</div>';
+            btn.innerHTML = '⏳ Generating...';
+            result.innerHTML = '<div class="loading">Analyzing audience data with AI...</div>';
             result.classList.add('loading');
             
             try {
@@ -45976,7 +46015,10 @@
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ profile: currentProfileData })
+                    body: JSON.stringify({ 
+                        profile: currentProfileData,
+                        insight_type: insightType
+                    })
                 });
                 
                 const data = await response.json();
@@ -45993,7 +46035,7 @@
             }
             
             btn.disabled = false;
-            btn.textContent = 'Generate Insights';
+            btn.innerHTML = '✨ Generate Insights';
         }
         
         async function generatePersona() {
