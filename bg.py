@@ -8440,6 +8440,51 @@ def _escape_brand_for_sql(b):
     return like_esc, eq_esc
 
 
+def _get_demographics_for_uids(cur, uid_table_name):
+    """
+    Get demographic breakdown (gender, ethnicity, income, age) for UIDs in a temp table.
+    Returns dict with percentage breakdowns for each category.
+    """
+    try:
+        demo_query = f"""
+            WITH demo_data AS (
+                SELECT d.GENDER, d.ETHNICITY, d.INCOME, d.AGE
+                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+                INNER JOIN {uid_table_name} u ON d.UID = u.UID
+            ),
+            total_count AS (SELECT COUNT(*) as total FROM demo_data)
+            SELECT 'GENDER' as category, GENDER as value, COUNT(*) as cnt, 
+                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM total_count), 0), 1) as pct
+            FROM demo_data WHERE GENDER IS NOT NULL AND GENDER != '' GROUP BY GENDER
+            UNION ALL
+            SELECT 'ETHNICITY', ETHNICITY, COUNT(*), 
+                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM total_count), 0), 1)
+            FROM demo_data WHERE ETHNICITY IS NOT NULL AND ETHNICITY != '' GROUP BY ETHNICITY
+            UNION ALL
+            SELECT 'INCOME', INCOME, COUNT(*), 
+                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM total_count), 0), 1)
+            FROM demo_data WHERE INCOME IS NOT NULL AND INCOME != '' GROUP BY INCOME
+            UNION ALL
+            SELECT 'AGE', AGE, COUNT(*), 
+                   ROUND(100.0 * COUNT(*) / NULLIF((SELECT total FROM total_count), 0), 1)
+            FROM demo_data WHERE AGE IS NOT NULL AND AGE != '' GROUP BY AGE
+            ORDER BY category, pct DESC
+        """
+        rows = cur.execute(demo_query).fetchall()
+        
+        demographics = {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
+        for row in rows:
+            category, value, count, pct = row
+            cat_key = category.lower()
+            if cat_key in demographics:
+                demographics[cat_key].append({'value': value, 'count': int(count), 'percentage': float(pct or 0)})
+        
+        return demographics
+    except Exception as e:
+        print(f"⚠️ Demographics query failed: {e}")
+        return {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
+
+
 def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
     """
     Analyze brand-talent audience overlap using CLICKSTREAM_FINAL.
@@ -8469,19 +8514,23 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
             brand_filters.append(f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\')")
         brand_filter = ' OR '.join(brand_filters) if brand_filters else '1=0'
         
-        print(f"📊 Step 1: Counting unique brand users...")
+        print(f"📊 Step 1: Getting unique brand users...")
         print(f"   Brand terms: {brand_terms}")
         print(f"   Brand filter: {brand_filter}")
-        brand_users_query = f"""
-            SELECT COUNT(DISTINCT UID) as brand_users
+        
+        # Create temp table of brand UIDs for reuse
+        cur.execute(f"""
+            CREATE OR REPLACE TEMP TABLE TALENT_FIT_BRAND_UIDS AS
+            SELECT DISTINCT UID 
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
             WHERE DELIVERED >= '{start_date}'::DATE 
               AND DELIVERED <= '{end_date}'::DATE
               AND ({brand_filter})
               AND COMMON_NAME IS NOT NULL
               AND COMMON_NAME != ''
-        """
-        brand_result = cur.execute(brand_users_query).fetchone()
+        """)
+        
+        brand_result = cur.execute("SELECT COUNT(*) FROM TALENT_FIT_BRAND_UIDS").fetchone()
         brand_users = brand_result[0] if brand_result else 0
         results['brand_users'] = brand_users
         print(f"   Found {brand_users:,} unique users with brand touchpoints")
@@ -8490,7 +8539,13 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
             print("⚠️ No brand users found, returning empty results")
             return results
         
-        print(f"📊 Step 2: Analyzing talent overlaps...")
+        # Get demographics for brand users
+        print(f"📊 Step 2: Getting brand demographics...")
+        brand_demographics = _get_demographics_for_uids(cur, 'TALENT_FIT_BRAND_UIDS')
+        results['brand_demographics'] = brand_demographics
+        print(f"   Brand demographics retrieved")
+        
+        print(f"📊 Step 3: Analyzing talent overlaps...")
         for talent in talents:
             talent = talent.strip()
             if not talent:
@@ -8500,34 +8555,33 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
             talent_like_esc, talent_eq_esc = _escape_brand_for_sql(talent)
             talent_filter = f"(LOWER(URL) LIKE '%' || '{talent_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) LIKE '%' || '{talent_like_esc}' || '%' ESCAPE '\\\\')"
             
-            overlap_query = f"""
-                WITH brand_users AS (
-                    SELECT DISTINCT UID 
-                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                    WHERE DELIVERED >= '{start_date}'::DATE 
-                      AND DELIVERED <= '{end_date}'::DATE
-                      AND ({brand_filter})
-                      AND COMMON_NAME IS NOT NULL
-                      AND COMMON_NAME != ''
-                )
-                SELECT COUNT(DISTINCT c.UID) as overlap_count
+            # Create temp table for this talent's overlapping UIDs
+            cur.execute(f"""
+                CREATE OR REPLACE TEMP TABLE TALENT_FIT_OVERLAP_UIDS AS
+                SELECT DISTINCT c.UID
                 FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
-                INNER JOIN brand_users b ON c.UID = b.UID
+                INNER JOIN TALENT_FIT_BRAND_UIDS b ON c.UID = b.UID
                 WHERE c.DELIVERED >= '{start_date}'::DATE 
                   AND c.DELIVERED <= '{end_date}'::DATE
                   AND ({talent_filter})
                   AND c.COMMON_NAME IS NOT NULL
                   AND c.COMMON_NAME != ''
-            """
+            """)
             
-            overlap_result = cur.execute(overlap_query).fetchone()
+            overlap_result = cur.execute("SELECT COUNT(*) FROM TALENT_FIT_OVERLAP_UIDS").fetchone()
             overlap_count = overlap_result[0] if overlap_result else 0
             overlap_pct = (overlap_count / brand_users * 100) if brand_users > 0 else 0
+            
+            # Get demographics for this talent's overlap users
+            talent_demographics = {}
+            if overlap_count > 0:
+                talent_demographics = _get_demographics_for_uids(cur, 'TALENT_FIT_OVERLAP_UIDS')
             
             results['talents'].append({
                 'name': talent,
                 'overlap_count': overlap_count,
-                'overlap_percentage': round(overlap_pct, 2)
+                'overlap_percentage': round(overlap_pct, 2),
+                'demographics': talent_demographics
             })
             print(f"      Overlap: {overlap_count:,} users ({overlap_pct:.2f}%)")
     

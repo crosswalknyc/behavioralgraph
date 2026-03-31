@@ -20357,7 +20357,7 @@ def calculate_talent_impact_score(overlap_pct, social_data, brand_users):
 
 
 US_GEN_POP = 329_900_000
-TALENT_FIT_INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
+TALENT_FIT_INFLATION_OPTIONS = [150, 100, 50, 25, 10, 1]
 
 
 def project_to_genpop(sample_count, sample_size):
@@ -20439,6 +20439,7 @@ def talent_fit_assess():
                 pass
         
         brand_users = analysis_results.get('brand_users', 0)
+        brand_demographics = analysis_results.get('brand_demographics', {})
         enriched_talents = []
         
         for talent_data in analysis_results.get('talents', []):
@@ -20459,7 +20460,8 @@ def talent_fit_assess():
                 'projected_overlap': projected_overlap,
                 'projected_brand_users': projected_brand_users,
                 'social_metrics': social_data,
-                'impact_score': impact_score
+                'impact_score': impact_score,
+                'demographics': talent_data.get('demographics', {})
             })
         
         result = {
@@ -20467,6 +20469,7 @@ def talent_fit_assess():
             'brand': brand,
             'brand_users': brand_users,
             'projected_brand_users': project_to_genpop(brand_users, brand_users),
+            'brand_demographics': brand_demographics,
             'start_date': start_date,
             'end_date': end_date,
             'talents': enriched_talents,

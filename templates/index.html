@@ -22022,6 +22022,11 @@
             });
         }
 
+        function renderDemoBar(items, maxItems = 3) {
+            if (!items || !items.length) return '<span style="color:var(--text-secondary);font-style:italic;">No data</span>';
+            return items.slice(0, maxItems).map(d => `<span style="display:inline-block;background:var(--bg-secondary);padding:2px 6px;border-radius:4px;margin:2px;font-size:10px;">${d.value}: ${d.percentage}%</span>`).join('');
+        }
+
         function renderTalentFitDashboard(data) {
             const dashboard = document.getElementById('talentFitDashboard');
             const findResults = document.getElementById('talentFitFindResults');
@@ -22048,15 +22053,45 @@
             if (iqEmptyState) iqEmptyState.style.display = 'none';
 
             const talents = data.talents || [];
+            const brandDemo = data.brand_demographics || {};
+            
+            // Build brand demographics card
+            let brandDemoCard = '';
+            if (brandDemo.gender || brandDemo.ethnicity || brandDemo.income || brandDemo.age) {
+                brandDemoCard = `
+                <div class="card" style="grid-column: 1 / -1; background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);">
+                    <h3 style="margin:0 0 1rem;font-size:16px;">📊 Brand Audience Demographics — ${data.brand}</h3>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:1rem;">
+                        <div>
+                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">👤 GENDER</div>
+                            <div>${renderDemoBar(brandDemo.gender, 4)}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">🌍 ETHNICITY</div>
+                            <div>${renderDemoBar(brandDemo.ethnicity, 4)}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">💰 INCOME</div>
+                            <div>${renderDemoBar(brandDemo.income, 4)}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">🎂 AGE</div>
+                            <div>${renderDemoBar(brandDemo.age, 4)}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
             if (!talents.length) {
-                cardsContainer.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">No talent data found.</div>';
+                cardsContainer.innerHTML = brandDemoCard + '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">No talent data found.</div>';
                 return;
             }
 
-            cardsContainer.innerHTML = talents.map(t => {
+            cardsContainer.innerHTML = brandDemoCard + talents.map(t => {
                 const score = t.impact_score || {};
                 const social = t.social_metrics || {};
                 const components = score.components || {};
+                const demo = t.demographics || {};
                 const tooltipClass = showTooltips ? '' : 'style="display:none;"';
 
                 return `
@@ -22080,6 +22115,16 @@
                         <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">US Gen Pop Projection</div>
                         <div style="font-size:18px;font-weight:600;color:var(--text-primary);">~${(t.projected_overlap || 0).toLocaleString()}</div>
                         <div style="font-size:10px;color:var(--text-secondary);">Americans who engage with both brand and talent</div>
+                    </div>
+                    
+                    <div style="margin-bottom:1rem;border-top:1px solid var(--border-color);padding-top:0.75rem;">
+                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">📊 Overlap Demographics</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:10px;">
+                            <div><span style="color:var(--text-secondary);">Gender:</span> ${renderDemoBar(demo.gender, 2)}</div>
+                            <div><span style="color:var(--text-secondary);">Ethnicity:</span> ${renderDemoBar(demo.ethnicity, 2)}</div>
+                            <div><span style="color:var(--text-secondary);">Income:</span> ${renderDemoBar(demo.income, 2)}</div>
+                            <div><span style="color:var(--text-secondary);">Age:</span> ${renderDemoBar(demo.age, 2)}</div>
+                        </div>
                     </div>
                     
                     <div style="margin-bottom:1rem;">
