@@ -22694,18 +22694,39 @@
             document.getElementById('flywheelDashboardPanels').style.display = '';
             
             const meta = data.metadata || {};
-            document.getElementById('flywheelDashTitle').textContent = '🔄 ' + (meta.project_name || 'Flywheel Conversion');
-            document.getElementById('flywheelDashMeta').textContent = (meta.date_range || '') + ' • Entry: ' + (meta.entry_point || 'N/A');
+            const hasComparison = data.has_comparison || false;
+            let titleSuffix = hasComparison ? ' (with comparison)' : '';
+            document.getElementById('flywheelDashTitle').textContent = '🔄 ' + (meta.project_name || 'Flywheel Conversion') + titleSuffix;
+            
+            let metaText = (meta.date_range || '') + ' • Entry: ' + (meta.entry_point || 'N/A');
+            if (hasComparison && data.compare_date_range) {
+                metaText += ' • vs Prior: ' + data.compare_date_range;
+            }
+            document.getElementById('flywheelDashMeta').textContent = metaText;
             
             const entry = data.entry_point_metrics || {};
-            document.getElementById('flywheelKpiEntry').textContent = parseInt(entry.count || 0).toLocaleString();
+            let entryHtml = parseInt(entry.count || 0).toLocaleString();
+            if (hasComparison && data.period_comparison?.entry_users_change) {
+                const trend = data.period_comparison.entry_users_trend || '';
+                const trendIcon = trend === 'up' ? '↑' : (trend === 'down' ? '↓' : '→');
+                const trendColor = trend === 'up' ? '#10b981' : (trend === 'down' ? '#f92672' : '#888');
+                entryHtml += ' <span style="font-size:0.7rem;color:' + trendColor + ';">' + trendIcon + ' ' + data.period_comparison.entry_users_change + '</span>';
+            }
+            document.getElementById('flywheelKpiEntry').innerHTML = entryHtml;
             document.getElementById('flywheelKpiEntryGenPop').textContent = 'Gen Pop: ' + (entry.gen_pop || '0');
             
             const funnel = data.flywheel_funnel || [];
             document.getElementById('flywheelKpiSteps').textContent = funnel.length;
             
             const convRates = data.conversion_rates || {};
-            document.getElementById('flywheelKpiConversion').textContent = convRates.overall || '0%';
+            let convHtml = convRates.overall || '0%';
+            if (hasComparison && data.period_comparison?.overall_conversion_change) {
+                const trend = data.period_comparison.conversion_trend || '';
+                const trendIcon = trend === 'up' ? '↑' : (trend === 'down' ? '↓' : '→');
+                const trendColor = trend === 'up' ? '#10b981' : (trend === 'down' ? '#f92672' : '#888');
+                convHtml += ' <span style="font-size:0.7rem;color:' + trendColor + ';">' + trendIcon + ' ' + data.period_comparison.overall_conversion_change + '</span>';
+            }
+            document.getElementById('flywheelKpiConversion').innerHTML = convHtml;
             document.getElementById('flywheelKpiBestStep').textContent = convRates.best_step || 'N/A';
             
             // Render funnel chart
@@ -22727,39 +22748,62 @@
             
             const entry = data.entry_point_metrics || {};
             const funnel = data.flywheel_funnel || [];
+            const hasComparison = data.has_comparison || false;
+            const compareEntry = data.compare_entry_point_metrics || {};
+            const compareFunnel = data.compare_flywheel_funnel || [];
             
             const labels = ['Entry Point'];
             const values = [parseInt(entry.count || 0)];
             const pcts = [100];
+            const compareValues = hasComparison ? [parseInt(compareEntry.count || 0)] : [];
+            const comparePcts = hasComparison ? [100] : [];
             
-            funnel.forEach(step => {
+            funnel.forEach((step, idx) => {
                 labels.push(step.point || step.step);
                 values.push(parseInt(step.count || 0));
                 pcts.push(parseFloat((step.percentage || '0%').replace('%', '')));
+                if (hasComparison && compareFunnel[idx]) {
+                    compareValues.push(parseInt(compareFunnel[idx].count || 0));
+                    comparePcts.push(parseFloat((compareFunnel[idx].percentage || '0%').replace('%', '')));
+                }
             });
+            
+            const datasets = [{
+                label: 'Current Period',
+                data: values,
+                backgroundColor: labels.map((_, i) => i === 0 ? '#66d9ef' : (i === labels.length - 1 ? '#10b981' : '#3b82f6')),
+                borderRadius: 6
+            }];
+            
+            if (hasComparison && compareValues.length > 0) {
+                datasets.push({
+                    label: 'Prior Period',
+                    data: compareValues,
+                    backgroundColor: labels.map(() => 'rgba(136, 136, 136, 0.5)'),
+                    borderRadius: 6
+                });
+            }
             
             _flywheelFunnelChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
-                    datasets: [{
-                        label: 'Users',
-                        data: values,
-                        backgroundColor: labels.map((_, i) => i === 0 ? '#66d9ef' : (i === labels.length - 1 ? '#10b981' : '#3b82f6')),
-                        borderRadius: 6
-                    }]
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     indexAxis: 'y',
                     plugins: {
-                        legend: { display: false },
+                        legend: { display: hasComparison, labels: { color: '#e8e8e8' } },
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
                                     const idx = context.dataIndex;
-                                    return context.raw.toLocaleString() + ' users (' + pcts[idx].toFixed(1) + '% of entry)';
+                                    const datasetIdx = context.datasetIndex;
+                                    const pctArr = datasetIdx === 0 ? pcts : comparePcts;
+                                    const label = datasetIdx === 0 ? 'Current' : 'Prior';
+                                    return label + ': ' + context.raw.toLocaleString() + ' users (' + (pctArr[idx] || 0).toFixed(1) + '% of entry)';
                                 }
                             }
                         }
@@ -22778,14 +22822,39 @@
             
             const entry = data.entry_point_metrics || {};
             const funnel = data.flywheel_funnel || [];
+            const hasComparison = data.has_comparison || false;
+            const compareEntry = data.compare_entry_point_metrics || {};
+            const compareFunnel = data.compare_flywheel_funnel || [];
+            const stepChanges = data.period_comparison?.step_changes || [];
             
-            let rows = '<tr><td style="padding:10px;font-weight:600;">Entry Point</td><td style="padding:10px;">' + (data.metadata?.entry_point || 'N/A') + '</td><td style="padding:10px;text-align:right;">' + parseInt(entry.count || 0).toLocaleString() + '</td><td style="padding:10px;text-align:right;">100%</td><td style="padding:10px;text-align:right;">' + (entry.gen_pop || '0') + '</td></tr>';
+            let headers = '<th style="padding:10px;text-align:left;">Step</th><th style="padding:10px;text-align:left;">Touchpoint</th><th style="padding:10px;text-align:right;">Users</th><th style="padding:10px;text-align:right;">% of Entry</th><th style="padding:10px;text-align:right;">Gen Pop</th>';
+            if (hasComparison) {
+                headers += '<th style="padding:10px;text-align:right;background:rgba(102,217,239,0.1);">Prior Users</th><th style="padding:10px;text-align:right;background:rgba(102,217,239,0.1);">Prior %</th><th style="padding:10px;text-align:right;background:rgba(102,217,239,0.1);">Change</th>';
+            }
+            
+            let rows = '<tr><td style="padding:10px;font-weight:600;">Entry Point</td><td style="padding:10px;">' + (data.metadata?.entry_point || 'N/A') + '</td><td style="padding:10px;text-align:right;">' + parseInt(entry.count || 0).toLocaleString() + '</td><td style="padding:10px;text-align:right;">100%</td><td style="padding:10px;text-align:right;">' + (entry.gen_pop || '0') + '</td>';
+            if (hasComparison) {
+                const entryChange = data.period_comparison?.entry_users_change || '0%';
+                const entryTrend = data.period_comparison?.entry_users_trend || '';
+                const trendColor = entryTrend === 'up' ? '#10b981' : (entryTrend === 'down' ? '#f92672' : '#888');
+                rows += '<td style="padding:10px;text-align:right;background:rgba(102,217,239,0.05);">' + parseInt(compareEntry.count || 0).toLocaleString() + '</td><td style="padding:10px;text-align:right;background:rgba(102,217,239,0.05);">100%</td><td style="padding:10px;text-align:right;background:rgba(102,217,239,0.05);color:' + trendColor + ';">' + entryChange + '</td>';
+            }
+            rows += '</tr>';
             
             funnel.forEach((step, idx) => {
-                rows += '<tr><td style="padding:10px;font-weight:600;">Step ' + (idx + 1) + '</td><td style="padding:10px;">' + (step.point || step.step) + '</td><td style="padding:10px;text-align:right;">' + parseInt(step.count || 0).toLocaleString() + '</td><td style="padding:10px;text-align:right;">' + (step.percentage || '0%') + '</td><td style="padding:10px;text-align:right;">' + (step.gen_pop || '0') + '</td></tr>';
+                rows += '<tr><td style="padding:10px;font-weight:600;">Step ' + (idx + 1) + '</td><td style="padding:10px;">' + (step.point || step.step) + '</td><td style="padding:10px;text-align:right;">' + parseInt(step.count || 0).toLocaleString() + '</td><td style="padding:10px;text-align:right;">' + (step.percentage || '0%') + '</td><td style="padding:10px;text-align:right;">' + (step.gen_pop || '0') + '</td>';
+                if (hasComparison) {
+                    const compareStep = compareFunnel[idx] || {};
+                    const stepChange = stepChanges[idx] || {};
+                    const changeText = stepChange.changes || '';
+                    const usersTrend = stepChange.users_trend || '';
+                    const trendColor = usersTrend === 'up' ? '#10b981' : (usersTrend === 'down' ? '#f92672' : '#888');
+                    rows += '<td style="padding:10px;text-align:right;background:rgba(102,217,239,0.05);">' + parseInt(compareStep.count || 0).toLocaleString() + '</td><td style="padding:10px;text-align:right;background:rgba(102,217,239,0.05);">' + (compareStep.percentage || '0%') + '</td><td style="padding:10px;text-align:right;background:rgba(102,217,239,0.05);color:' + trendColor + ';font-size:0.75rem;">' + changeText + '</td>';
+                }
+                rows += '</tr>';
             });
             
-            el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="border-bottom:2px solid var(--border-color);"><th style="padding:10px;text-align:left;">Step</th><th style="padding:10px;text-align:left;">Touchpoint</th><th style="padding:10px;text-align:right;">Users</th><th style="padding:10px;text-align:right;">% of Entry</th><th style="padding:10px;text-align:right;">Gen Pop Proj.</th></tr></thead><tbody>' + rows + '</tbody></table>';
+            el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="border-bottom:2px solid var(--border-color);">' + headers + '</tr></thead><tbody>' + rows + '</tbody></table>';
         }
 
         function renderFlywheelInsights(data) {
@@ -22794,6 +22863,8 @@
             
             const conv = data.conversion_rates || {};
             const funnel = data.flywheel_funnel || [];
+            const hasComparison = data.has_comparison || false;
+            const periodComp = data.period_comparison || {};
             
             let insights = '';
             insights += '<div style="padding:0.75rem;background:rgba(102,217,239,0.1);border-radius:8px;margin-bottom:0.75rem;"><strong>Overall Conversion:</strong> ' + (conv.overall || '0%') + ' of entry point users completed the full flywheel journey.</div>';
@@ -22807,7 +22878,40 @@
             }
             
             if (conv.worst_step) {
-                insights += '<div style="padding:0.75rem;background:rgba(249,38,114,0.1);border-radius:8px;"><strong>⚠️ Largest Drop-off:</strong> ' + conv.worst_step + ' — consider optimizing this step to improve overall conversion.</div>';
+                insights += '<div style="padding:0.75rem;background:rgba(249,38,114,0.1);border-radius:8px;margin-bottom:0.75rem;"><strong>⚠️ Largest Drop-off:</strong> ' + conv.worst_step + ' — consider optimizing this step to improve overall conversion.</div>';
+            }
+            
+            if (hasComparison) {
+                insights += '<div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border-color);"><h4 style="margin:0 0 0.75rem 0;font-size:0.9rem;">📊 Period Comparison</h4>';
+                
+                if (periodComp.entry_users_change) {
+                    const trend = periodComp.entry_users_trend || '';
+                    const icon = trend === 'up' ? '📈' : (trend === 'down' ? '📉' : '➡️');
+                    const color = trend === 'up' ? 'rgba(16,185,129,0.1)' : (trend === 'down' ? 'rgba(249,38,114,0.1)' : 'rgba(136,136,136,0.1)');
+                    insights += '<div style="padding:0.75rem;background:' + color + ';border-radius:8px;margin-bottom:0.75rem;">' + icon + ' <strong>Entry Users:</strong> ' + periodComp.entry_users_change + ' vs prior period</div>';
+                }
+                
+                if (periodComp.overall_conversion_change) {
+                    const trend = periodComp.conversion_trend || '';
+                    const icon = trend === 'up' ? '📈' : (trend === 'down' ? '📉' : '➡️');
+                    const color = trend === 'up' ? 'rgba(16,185,129,0.1)' : (trend === 'down' ? 'rgba(249,38,114,0.1)' : 'rgba(136,136,136,0.1)');
+                    insights += '<div style="padding:0.75rem;background:' + color + ';border-radius:8px;margin-bottom:0.75rem;">' + icon + ' <strong>Overall Conversion:</strong> ' + periodComp.overall_conversion_change + ' vs prior period</div>';
+                }
+                
+                const stepChanges = periodComp.step_changes || [];
+                if (stepChanges.length > 0) {
+                    const improved = stepChanges.filter(s => s.conversion_trend === 'up');
+                    const declined = stepChanges.filter(s => s.conversion_trend === 'down');
+                    
+                    if (improved.length > 0) {
+                        insights += '<div style="padding:0.75rem;background:rgba(16,185,129,0.1);border-radius:8px;margin-bottom:0.75rem;"><strong>✅ Improved Steps:</strong> ' + improved.map(s => s.point).join(', ') + '</div>';
+                    }
+                    if (declined.length > 0) {
+                        insights += '<div style="padding:0.75rem;background:rgba(249,38,114,0.1);border-radius:8px;margin-bottom:0.75rem;"><strong>⚠️ Declining Steps:</strong> ' + declined.map(s => s.point).join(', ') + ' — these steps need attention</div>';
+                    }
+                }
+                
+                insights += '</div>';
             }
             
             el.innerHTML = insights || '<div style="color:var(--text-secondary);">No insights available.</div>';

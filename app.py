@@ -22811,6 +22811,50 @@ def _save_flywheel_results(job_id, results, job):
         rows.append({'Column': 'Best Converting Step', 'Value': conv.get('best_converting_step', 'N/A'), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         rows.append({'Column': 'Worst Converting Step', 'Value': conv.get('worst_converting_step', 'N/A'), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         
+        if results.get('has_comparison'):
+            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'COMPARISON_PERIOD', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'COMPARE_DATE_RANGE', 'Value': f"{results.get('compare_start_date')} to {results.get('compare_end_date')}", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            
+            compare_entry_m = results.get('compare_entry_point_metrics', {})
+            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'COMPARE_ENTRY_POINT_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'Prior Entry Point', 'Value': results['entry_point'], 'Metric': 'Unique Users', 'Count': compare_entry_m.get('raw_unique_users', 0), 'Percentage': '100%', 'Gen_Pop_Projection': f"{compare_entry_m.get('gen_pop_projection', 0):,}"})
+            
+            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'COMPARE_FLYWHEEL_FUNNEL', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            for metric in results.get('compare_flywheel_metrics', []):
+                rows.append({
+                    'Column': f"Prior Step {metric['position']}", 
+                    'Value': metric['point'], 
+                    'Metric': 'Unique Users', 
+                    'Count': metric['raw_unique_users'],
+                    'Percentage': f"{metric['conversion_from_entry']}%",
+                    'Gen_Pop_Projection': f"{metric['gen_pop_projection']:,}"
+                })
+            
+            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'COMPARE_CONVERSION_RATES', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            compare_conv = results.get('compare_conversion_rates', {})
+            rows.append({'Column': 'Prior Overall Conversion', 'Value': f"{compare_conv.get('overall_conversion', 0)}%", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'Prior Avg Step Conversion', 'Value': f"{compare_conv.get('average_step_conversion', 0)}%", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            
+            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'PERIOD_COMPARISON', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            period_comp = results.get('period_comparison', {})
+            rows.append({'Column': 'Entry Users Change', 'Value': f"{period_comp.get('entry_users_change_pct', 0):+.1f}%", 'Metric': period_comp.get('entry_users_trend', ''), 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'Overall Conv Change', 'Value': f"{period_comp.get('overall_conversion_change_pts', 0):+.1f}pts", 'Metric': period_comp.get('conversion_trend', ''), 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            
+            for step_change in period_comp.get('step_changes', []):
+                rows.append({
+                    'Column': f"Step {step_change['position']} Change", 
+                    'Value': step_change['point'], 
+                    'Metric': f"Users: {step_change['users_change_pct']:+.1f}%, Conv: {step_change['conversion_change_pts']:+.1f}pts",
+                    'Count': step_change['users_trend'],
+                    'Percentage': step_change['conversion_trend'],
+                    'Gen_Pop_Projection': ''
+                })
+        
         df = pd.DataFrame(rows)
         df.to_csv(filepath, index=False)
         print(f"[Flywheel] Saved results to {filepath}")
@@ -22895,6 +22939,12 @@ def get_flywheel_data(s3_key):
             'entry_point_metrics': {},
             'flywheel_funnel': [],
             'conversion_rates': {},
+            'has_comparison': False,
+            'compare_date_range': None,
+            'compare_entry_point_metrics': {},
+            'compare_flywheel_funnel': [],
+            'compare_conversion_rates': {},
+            'period_comparison': {},
             'raw_rows': rows
         }
         
@@ -22917,6 +22967,19 @@ def get_flywheel_data(s3_key):
                 current_section = 'funnel'
             elif col == 'CONVERSION_RATES':
                 current_section = 'conversion'
+            elif col == 'COMPARISON_PERIOD':
+                parsed['has_comparison'] = True
+                current_section = 'comparison_meta'
+            elif col == 'COMPARE_DATE_RANGE':
+                parsed['compare_date_range'] = val
+            elif col == 'COMPARE_ENTRY_POINT_METRICS':
+                current_section = 'compare_entry_metrics'
+            elif col == 'COMPARE_FLYWHEEL_FUNNEL':
+                current_section = 'compare_funnel'
+            elif col == 'COMPARE_CONVERSION_RATES':
+                current_section = 'compare_conversion'
+            elif col == 'PERIOD_COMPARISON':
+                current_section = 'period_comparison'
             elif current_section == 'entry_metrics' and col == 'Entry Point':
                 parsed['entry_point_metrics'] = {
                     'name': val,
@@ -22941,6 +23004,43 @@ def get_flywheel_data(s3_key):
                     parsed['conversion_rates']['best_step'] = val
                 elif col == 'Worst Converting Step':
                     parsed['conversion_rates']['worst_step'] = val
+            elif current_section == 'compare_entry_metrics' and col == 'Prior Entry Point':
+                parsed['compare_entry_point_metrics'] = {
+                    'name': val,
+                    'count': row.get('Count', 0),
+                    'percentage': row.get('Percentage', '100%'),
+                    'gen_pop': row.get('Gen_Pop_Projection', '0')
+                }
+            elif current_section == 'compare_funnel' and col.startswith('Prior Step'):
+                parsed['compare_flywheel_funnel'].append({
+                    'step': col.replace('Prior ', ''),
+                    'point': val,
+                    'count': row.get('Count', 0),
+                    'percentage': row.get('Percentage', '0%'),
+                    'gen_pop': row.get('Gen_Pop_Projection', '0')
+                })
+            elif current_section == 'compare_conversion':
+                if col == 'Prior Overall Conversion':
+                    parsed['compare_conversion_rates']['overall'] = val
+                elif col == 'Prior Avg Step Conversion':
+                    parsed['compare_conversion_rates']['avg_step'] = val
+            elif current_section == 'period_comparison':
+                if col == 'Entry Users Change':
+                    parsed['period_comparison']['entry_users_change'] = val
+                    parsed['period_comparison']['entry_users_trend'] = row.get('Metric', '')
+                elif col == 'Overall Conv Change':
+                    parsed['period_comparison']['overall_conversion_change'] = val
+                    parsed['period_comparison']['conversion_trend'] = row.get('Metric', '')
+                elif col.startswith('Step') and 'Change' in col:
+                    if 'step_changes' not in parsed['period_comparison']:
+                        parsed['period_comparison']['step_changes'] = []
+                    parsed['period_comparison']['step_changes'].append({
+                        'step': col,
+                        'point': val,
+                        'changes': row.get('Metric', ''),
+                        'users_trend': row.get('Count', ''),
+                        'conversion_trend': row.get('Percentage', '')
+                    })
         
         return jsonify({'success': True, 'data': parsed})
     except Exception as e:
