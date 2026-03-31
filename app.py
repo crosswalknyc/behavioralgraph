@@ -21758,33 +21758,43 @@ def run_sf_lf_conversion(job_id):
                 csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted to LF Title', 'Count': u_conv, 'Percentage': f"{u_conv_rate:.8f}% of URL viewers", 'Gen_Pop_Projection': project_to_gen_pop(u_conv)})
         
         # Conversion Summary Section - OVERALL
+        # Use pre-calculated values directly (noise already applied) - DO NOT add noise again!
         csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': 'CONVERSION_SUMMARY', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         sf_conv = results['conversions'].get('sf_url_to_lf_title', {})
-        total_viewers = add_noise_if_zero(sf_conv.get('total_sf_viewers', 0))
-        conv_users = add_noise_if_zero(sf_conv.get('converted_users', 0))
-        conv_rate = sf_conv.get('conversion_rate', 0.00000001)
-        if conv_rate == 0:
-            conv_rate = 0.00000001
-        avg_hours = add_noise_if_zero(sf_conv.get('avg_hours_to_conversion', 0))
+        total_viewers = sf_conv.get('total_sf_viewers', 0)  # Already has noise
+        avg_hours = sf_conv.get('avg_hours_to_conversion', 0)  # Already has noise
+        
+        # Get per-platform conversions (already have noise from earlier)
+        platform_conversions = {}
+        for pm in results['platform_metrics']:
+            if not pm.get('is_overall'):
+                plat_name = pm['platform']
+                platform_conversions[plat_name] = {
+                    'viewers': pm.get('unique_views', 0),
+                    'converted': pm.get('converted_to_title', 0),
+                    'rate': pm.get('conversion_rate_to_title', 0.00000001)
+                }
+        
+        # OVERALL converted = SUM of per-platform converted (for consistency)
+        conv_users = sum(pc['converted'] for pc in platform_conversions.values())
+        conv_rate = round((conv_users / total_viewers * 100), 8) if total_viewers > 0 else 0.00000001
         
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Total SF Viewers (All Platforms)', 'Metric': '', 'Count': total_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(total_viewers)})
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Converted Users', 'Metric': '', 'Count': conv_users, 'Percentage': f"{conv_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(conv_users)})
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Avg Hours to Conversion', 'Metric': '', 'Count': avg_hours, 'Percentage': '', 'Gen_Pop_Projection': ''})
         
-        # Per-Platform Conversion Summary
+        # Per-Platform Conversion Summary - use same values (no additional noise!)
         csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': 'PER_PLATFORM_CONVERSION', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-        for pm in results['platform_metrics']:
-            if not pm.get('is_overall'):
-                plat_name = pm['platform']
-                plat_viewers = add_noise_if_zero(pm.get('unique_views', 0))
-                plat_conv = add_noise_if_zero(pm.get('converted_to_title', 0))
-                plat_rate = pm.get('conversion_rate_to_title', 0.00000001)
-                if plat_rate == 0:
-                    plat_rate = 0.00000001
-                csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'SF Viewers', 'Metric': '', 'Count': plat_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(plat_viewers)})
-                csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'Converted to LF', 'Metric': '', 'Count': plat_conv, 'Percentage': f"{plat_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(plat_conv)})
+        for plat_name, pc in platform_conversions.items():
+            plat_viewers = pc['viewers']
+            plat_conv = pc['converted']
+            plat_rate = pc['rate'] if pc['rate'] > 0 else 0.00000001
+            csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'SF Viewers', 'Metric': '', 'Count': plat_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(plat_viewers)})
+            csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'Converted to LF', 'Metric': '', 'Count': plat_conv, 'Percentage': f"{plat_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(plat_conv)})
+        
+        print(f"[SF-LF] CSV: Overall converted={conv_users}, sum of platforms={sum(pc['converted'] for pc in platform_conversions.values())}")
         
         if 'sf_to_lf_platform' in results['conversions']:
             sf_plat_conv = results['conversions']['sf_to_lf_platform']
