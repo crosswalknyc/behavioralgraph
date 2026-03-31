@@ -22046,28 +22046,164 @@
             });
         }
 
-        function renderDemoBar(items, maxItems = 3) {
+        // Chart color palettes for demographics
+        const DEMO_COLORS = {
+            gender: ['#6366f1', '#ec4899', '#a855f7', '#14b8a6', '#f97316'],
+            ethnicity: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16'],
+            income: ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444', '#dc2626'],
+            age: ['#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef']
+        };
+
+        // Store chart instances for cleanup
+        let _talentFitCharts = [];
+
+        function destroyTalentFitCharts() {
+            _talentFitCharts.forEach(chart => {
+                if (chart && typeof chart.destroy === 'function') chart.destroy();
+            });
+            _talentFitCharts = [];
+        }
+
+        function createDemoDonutChart(canvasId, items, colorKey, label) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas || !items || !items.length) return null;
+            
+            const ctx = canvas.getContext('2d');
+            const colors = DEMO_COLORS[colorKey] || DEMO_COLORS.gender;
+            
+            const chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: items.map(d => d.value),
+                    datasets: [{
+                        data: items.map(d => d.percentage),
+                        backgroundColor: colors.slice(0, items.length),
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    return `${ctx.label}: ${ctx.parsed.toFixed(1)}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            _talentFitCharts.push(chart);
+            return chart;
+        }
+
+        function createComparisonBarChart(canvasId, brandItems, talentItems, colorKey, maxBars = 5) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return null;
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Merge labels from both datasets
+            const allLabels = new Set();
+            (brandItems || []).forEach(d => allLabels.add(d.value));
+            (talentItems || []).forEach(d => allLabels.add(d.value));
+            const labels = Array.from(allLabels).slice(0, maxBars);
+            
+            const brandData = labels.map(l => {
+                const item = (brandItems || []).find(d => d.value === l);
+                return item ? item.percentage : 0;
+            });
+            const talentData = labels.map(l => {
+                const item = (talentItems || []).find(d => d.value === l);
+                return item ? item.percentage : 0;
+            });
+            
+            const chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Brand Audience',
+                            data: brandData,
+                            backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Talent Overlap',
+                            data: talentData,
+                            backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: 'var(--text-secondary)', callback: v => v + '%' }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: 'var(--text-primary)', font: { size: 10 } }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: 'var(--text-secondary)', boxWidth: 12, font: { size: 10 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%`
+                            }
+                        }
+                    }
+                }
+            });
+            _talentFitCharts.push(chart);
+            return chart;
+        }
+
+        function renderDemoLegend(items, colors, maxItems = 5) {
             if (!items || !items.length) return '<span style="color:var(--text-secondary);font-style:italic;">No data</span>';
-            return items.slice(0, maxItems).map(d => `<span style="display:inline-block;background:var(--bg-secondary);padding:2px 6px;border-radius:4px;margin:2px;font-size:10px;">${d.value}: ${d.percentage}%</span>`).join('');
+            return items.slice(0, maxItems).map((d, i) => `
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;margin:2px 0;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:${colors[i % colors.length]};flex-shrink:0;"></span>
+                    <span style="color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.value}</span>
+                    <span style="font-weight:600;">${d.percentage.toFixed(1)}%</span>
+                </div>
+            `).join('');
         }
 
         function renderTalentFitDashboard(data) {
+            destroyTalentFitCharts();
+            
             const dashboard = document.getElementById('talentFitDashboard');
             const findResults = document.getElementById('talentFitFindResults');
             const cardsContainer = document.getElementById('talentFitCards');
             const showTooltipsEl = document.getElementById('talentFitShowTooltips') || document.getElementById('talentFitIQShowTooltips');
             const showTooltips = showTooltipsEl ? showTooltipsEl.checked : true;
 
-            // Hide find results if present
             if (findResults) findResults.style.display = 'none';
             dashboard.style.display = 'block';
 
-            // Update Talent Fit IQ header if visible
             const iqHeader = document.getElementById('talentFitIQHeader');
             const iqTitle = document.getElementById('talentFitIQTitle');
             const iqMeta = document.getElementById('talentFitIQMeta');
             const iqEmptyState = document.getElementById('talentFitIQEmptyState');
-            
+
             if (iqHeader) {
                 iqHeader.style.display = 'block';
                 if (iqTitle) iqTitle.textContent = `${data.brand} - Talent Analysis`;
@@ -22078,29 +22214,42 @@
 
             const talents = data.talents || [];
             const brandDemo = data.brand_demographics || {};
-            
-            // Build brand demographics card
+            const hasBrandDemo = brandDemo.gender?.length || brandDemo.ethnicity?.length || brandDemo.income?.length || brandDemo.age?.length;
+
+            // Brand demographics card with donut charts
             let brandDemoCard = '';
-            if (brandDemo.gender || brandDemo.ethnicity || brandDemo.income || brandDemo.age) {
+            if (hasBrandDemo) {
                 brandDemoCard = `
                 <div class="card" style="grid-column: 1 / -1; background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);">
-                    <h3 style="margin:0 0 1rem;font-size:16px;">📊 Brand Audience Demographics — ${data.brand}</h3>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:1rem;">
-                        <div>
-                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">👤 GENDER</div>
-                            <div>${renderDemoBar(brandDemo.gender, 4)}</div>
+                    <h3 style="margin:0 0 1.5rem;font-size:18px;font-weight:600;">📊 Brand Audience Demographics — ${data.brand}</h3>
+                    <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:1.5rem;">
+                        <div style="text-align:center;">
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">👤 GENDER</div>
+                            <div style="position:relative;height:120px;margin-bottom:8px;">
+                                <canvas id="brandDemoGender"></canvas>
+                            </div>
+                            <div style="text-align:left;">${renderDemoLegend(brandDemo.gender, DEMO_COLORS.gender)}</div>
                         </div>
-                        <div>
-                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">🌍 ETHNICITY</div>
-                            <div>${renderDemoBar(brandDemo.ethnicity, 4)}</div>
+                        <div style="text-align:center;">
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">🌍 ETHNICITY</div>
+                            <div style="position:relative;height:120px;margin-bottom:8px;">
+                                <canvas id="brandDemoEthnicity"></canvas>
+                            </div>
+                            <div style="text-align:left;">${renderDemoLegend(brandDemo.ethnicity, DEMO_COLORS.ethnicity)}</div>
                         </div>
-                        <div>
-                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">💰 INCOME</div>
-                            <div>${renderDemoBar(brandDemo.income, 4)}</div>
+                        <div style="text-align:center;">
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">💰 INCOME</div>
+                            <div style="position:relative;height:120px;margin-bottom:8px;">
+                                <canvas id="brandDemoIncome"></canvas>
+                            </div>
+                            <div style="text-align:left;">${renderDemoLegend(brandDemo.income, DEMO_COLORS.income)}</div>
                         </div>
-                        <div>
-                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">🎂 AGE</div>
-                            <div>${renderDemoBar(brandDemo.age, 4)}</div>
+                        <div style="text-align:center;">
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">🎂 AGE</div>
+                            <div style="position:relative;height:120px;margin-bottom:8px;">
+                                <canvas id="brandDemoAge"></canvas>
+                            </div>
+                            <div style="text-align:left;">${renderDemoLegend(brandDemo.age, DEMO_COLORS.age)}</div>
                         </div>
                     </div>
                 </div>`;
@@ -22108,74 +22257,151 @@
 
             if (!talents.length) {
                 cardsContainer.innerHTML = brandDemoCard + '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">No talent data found.</div>';
+                // Initialize brand demo charts after DOM update
+                setTimeout(() => {
+                    if (hasBrandDemo) {
+                        createDemoDonutChart('brandDemoGender', brandDemo.gender, 'gender');
+                        createDemoDonutChart('brandDemoEthnicity', brandDemo.ethnicity, 'ethnicity');
+                        createDemoDonutChart('brandDemoIncome', brandDemo.income, 'income');
+                        createDemoDonutChart('brandDemoAge', brandDemo.age, 'age');
+                    }
+                }, 50);
                 return;
             }
 
-            cardsContainer.innerHTML = brandDemoCard + talents.map(t => {
+            cardsContainer.innerHTML = brandDemoCard + talents.map((t, idx) => {
                 const score = t.impact_score || {};
                 const social = t.social_metrics || {};
                 const components = score.components || {};
                 const demo = t.demographics || {};
-                const tooltipClass = showTooltips ? '' : 'style="display:none;"';
+                const tooltipStyle = showTooltips ? '' : 'display:none;';
+                const talentId = `talent_${idx}`;
 
                 return `
-                <div class="card" style="position:relative;">
-                    <h3 style="margin:0 0 0.75rem;font-size:16px;">${t.name}</h3>
-                    
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
-                        <div style="text-align:center;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;">
-                            <div style="font-size:24px;font-weight:700;color:var(--accent-primary);">${t.overlap_percentage?.toFixed(1) || 0}%</div>
-                            <div style="font-size:11px;color:var(--text-secondary);">Audience Overlap</div>
+                <div class="card" style="position:relative;overflow:visible;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;">
+                        <h3 style="margin:0;font-size:18px;font-weight:600;">${t.name}</h3>
+                        <div class="methodology-tooltip" style="${tooltipStyle}font-size:10px;color:var(--text-secondary);cursor:help;" title="Impact Score = (Overlap×40%) + (Reach×25%) + (Engagement×25%) + (Experience×10%)">ℹ️</div>
+                    </div>
+
+                    <!-- Key Metrics Row -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:1.25rem;">
+                        <div style="text-align:center;padding:1rem;background:var(--bg-secondary);border-radius:10px;">
+                            <div style="font-size:28px;font-weight:700;color:var(--accent-primary);">${t.overlap_percentage?.toFixed(1) || 0}%</div>
+                            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">Audience Overlap</div>
                             <div style="font-size:10px;color:var(--text-secondary);">${(t.overlap_count || 0).toLocaleString()} users</div>
                         </div>
-                        <div style="text-align:center;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;">
-                            <div style="font-size:24px;font-weight:700;color:var(--accent-green);">${score.total?.toFixed(0) || 0}</div>
-                            <div style="font-size:11px;color:var(--text-secondary);">Impact Score</div>
-                            <div class="methodology-tooltip" ${tooltipClass} style="font-size:9px;color:var(--text-secondary);margin-top:2px;">40% overlap + 25% reach + 25% engagement + 10% experience</div>
+                        <div style="text-align:center;padding:1rem;background:var(--bg-secondary);border-radius:10px;">
+                            <div style="font-size:28px;font-weight:700;color:var(--accent-green);">${score.total?.toFixed(0) || 0}</div>
+                            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">Impact Score</div>
+                            <div class="methodology-tooltip" style="${tooltipStyle}font-size:9px;color:var(--text-secondary);">out of 100</div>
+                        </div>
+                        <div style="text-align:center;padding:1rem;background:var(--bg-secondary);border-radius:10px;">
+                            <div style="font-size:28px;font-weight:700;color:#f59e0b;">~${formatCompactNumber(t.projected_overlap || 0)}</div>
+                            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">US Gen Pop</div>
+                            <div style="font-size:10px;color:var(--text-secondary);">projected overlap</div>
                         </div>
                     </div>
-                    
-                    <div style="margin-bottom:1rem;">
-                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">US Gen Pop Projection</div>
-                        <div style="font-size:18px;font-weight:600;color:var(--text-primary);">~${(t.projected_overlap || 0).toLocaleString()}</div>
-                        <div style="font-size:10px;color:var(--text-secondary);">Americans who engage with both brand and talent</div>
-                    </div>
-                    
-                    <div style="margin-bottom:1rem;border-top:1px solid var(--border-color);padding-top:0.75rem;">
-                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">📊 Overlap Demographics</div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:10px;">
-                            <div><span style="color:var(--text-secondary);">Gender:</span> ${renderDemoBar(demo.gender, 2)}</div>
-                            <div><span style="color:var(--text-secondary);">Ethnicity:</span> ${renderDemoBar(demo.ethnicity, 2)}</div>
-                            <div><span style="color:var(--text-secondary);">Income:</span> ${renderDemoBar(demo.income, 2)}</div>
-                            <div><span style="color:var(--text-secondary);">Age:</span> ${renderDemoBar(demo.age, 2)}</div>
+
+                    <!-- Demographics Comparison Section -->
+                    <div style="margin-bottom:1.25rem;border-top:1px solid var(--border-color);padding-top:1rem;">
+                        <div style="font-size:13px;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:6px;">
+                            📊 Demographics Comparison
+                            <span style="font-size:10px;font-weight:400;color:var(--text-secondary);">(Brand vs Talent Overlap)</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                            <div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">👤 Gender</div>
+                                <div style="height:100px;"><canvas id="${talentId}_gender"></canvas></div>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">🌍 Ethnicity</div>
+                                <div style="height:100px;"><canvas id="${talentId}_ethnicity"></canvas></div>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">💰 Income</div>
+                                <div style="height:100px;"><canvas id="${talentId}_income"></canvas></div>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">🎂 Age</div>
+                                <div style="height:100px;"><canvas id="${talentId}_age"></canvas></div>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div style="margin-bottom:1rem;">
-                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">Score Components</div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:11px;">
-                            <div style="display:flex;justify-content:space-between;"><span>Overlap:</span><span>${components.audience_overlap?.toFixed(0) || 0}/100</span></div>
-                            <div style="display:flex;justify-content:space-between;"><span>Reach:</span><span>${components.reach?.toFixed(0) || 0}/100</span></div>
-                            <div style="display:flex;justify-content:space-between;"><span>Engagement:</span><span>${components.engagement?.toFixed(0) || 0}/100</span></div>
-                            <div style="display:flex;justify-content:space-between;"><span>Experience:</span><span>${components.partnership_experience?.toFixed(0) || 0}/100</span></div>
+
+                    <!-- Score Components -->
+                    <div style="margin-bottom:1rem;border-top:1px solid var(--border-color);padding-top:1rem;">
+                        <div style="font-size:13px;font-weight:600;margin-bottom:0.75rem;">🎯 Score Breakdown</div>
+                        <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:0.5rem;">
+                            ${[
+                                { label: 'Overlap', value: components.audience_overlap, color: '#6366f1', weight: '40%' },
+                                { label: 'Reach', value: components.reach, color: '#10b981', weight: '25%' },
+                                { label: 'Engagement', value: components.engagement, color: '#f59e0b', weight: '25%' },
+                                { label: 'Experience', value: components.partnership_experience, color: '#ec4899', weight: '10%' }
+                            ].map(c => `
+                                <div style="text-align:center;padding:0.5rem;background:var(--bg-secondary);border-radius:6px;">
+                                    <div style="font-size:18px;font-weight:700;color:${c.color};">${(c.value || 0).toFixed(0)}</div>
+                                    <div style="font-size:10px;color:var(--text-secondary);">${c.label}</div>
+                                    <div class="methodology-tooltip" style="${tooltipStyle}font-size:9px;color:var(--text-secondary);">${c.weight}</div>
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
-                    
-                    <div style="border-top:1px solid var(--border-color);padding-top:0.75rem;">
-                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">Social Media Metrics</div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:11px;">
-                            <div><span style="color:var(--text-secondary);">Followers:</span> ${(social.follower_count || 0).toLocaleString()}</div>
-                            <div><span style="color:var(--text-secondary);">Engagement:</span> ${social.engagement_rate?.toFixed(1) || 0}%</div>
-                            <div><span style="color:var(--text-secondary);">Sponsored/mo:</span> ${social.sponsored_post_frequency || 0}</div>
-                            <div><span style="color:var(--text-secondary);">Partnerships:</span> ${(social.top_brand_partnerships || []).length}</div>
+
+                    <!-- Social Media Metrics -->
+                    <div style="border-top:1px solid var(--border-color);padding-top:1rem;">
+                        <div style="font-size:13px;font-weight:600;margin-bottom:0.75rem;">📱 Social Media Metrics</div>
+                        <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:0.5rem;">
+                            <div style="text-align:center;padding:0.5rem;background:var(--bg-secondary);border-radius:6px;">
+                                <div style="font-size:14px;font-weight:600;">${formatCompactNumber(social.follower_count || 0)}</div>
+                                <div style="font-size:10px;color:var(--text-secondary);">Followers</div>
+                            </div>
+                            <div style="text-align:center;padding:0.5rem;background:var(--bg-secondary);border-radius:6px;">
+                                <div style="font-size:14px;font-weight:600;">${(social.engagement_rate || 0).toFixed(1)}%</div>
+                                <div style="font-size:10px;color:var(--text-secondary);">Engagement</div>
+                            </div>
+                            <div style="text-align:center;padding:0.5rem;background:var(--bg-secondary);border-radius:6px;">
+                                <div style="font-size:14px;font-weight:600;">${social.sponsored_post_frequency || 0}/mo</div>
+                                <div style="font-size:10px;color:var(--text-secondary);">Sponsored</div>
+                            </div>
+                            <div style="text-align:center;padding:0.5rem;background:var(--bg-secondary);border-radius:6px;">
+                                <div style="font-size:14px;font-weight:600;">${(social.top_brand_partnerships || []).length}</div>
+                                <div style="font-size:10px;color:var(--text-secondary);">Partnerships</div>
+                            </div>
                         </div>
-                        ${social.top_brand_partnerships?.length ? `<div style="margin-top:0.5rem;font-size:10px;color:var(--text-secondary);">Notable: ${social.top_brand_partnerships.slice(0,3).join(', ')}</div>` : ''}
+                        ${social.top_brand_partnerships?.length ? `<div style="margin-top:0.75rem;font-size:11px;color:var(--text-secondary);"><span style="font-weight:500;">Notable partners:</span> ${social.top_brand_partnerships.slice(0,4).join(', ')}</div>` : ''}
                     </div>
-                    
-                    <div class="methodology-tooltip" ${tooltipClass} style="position:absolute;top:8px;right:8px;font-size:9px;color:var(--text-secondary);cursor:help;" title="Impact Score = (Overlap×40%) + (Reach×25%) + (Engagement×25%) + (Experience×10%). Reach uses log scale of followers. Social data from GPT-4 analysis.">ℹ️</div>
                 </div>
                 `;
             }).join('');
+
+            // Initialize all charts after DOM is ready
+            setTimeout(() => {
+                // Brand demo donut charts
+                if (hasBrandDemo) {
+                    createDemoDonutChart('brandDemoGender', brandDemo.gender, 'gender');
+                    createDemoDonutChart('brandDemoEthnicity', brandDemo.ethnicity, 'ethnicity');
+                    createDemoDonutChart('brandDemoIncome', brandDemo.income, 'income');
+                    createDemoDonutChart('brandDemoAge', brandDemo.age, 'age');
+                }
+                
+                // Talent comparison bar charts
+                talents.forEach((t, idx) => {
+                    const talentId = `talent_${idx}`;
+                    const demo = t.demographics || {};
+                    createComparisonBarChart(`${talentId}_gender`, brandDemo.gender, demo.gender, 'gender', 4);
+                    createComparisonBarChart(`${talentId}_ethnicity`, brandDemo.ethnicity, demo.ethnicity, 'ethnicity', 5);
+                    createComparisonBarChart(`${talentId}_income`, brandDemo.income, demo.income, 'income', 5);
+                    createComparisonBarChart(`${talentId}_age`, brandDemo.age, demo.age, 'age', 5);
+                });
+            }, 100);
+        }
+
+        function formatCompactNumber(num) {
+            if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toLocaleString();
         }
 
         function renderFindTalentResults(data) {
