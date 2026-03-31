@@ -8433,8 +8433,8 @@ def clean_brand(brand):
     return re.sub(r'\W+', '', brand.strip().lower())
 
 def _escape_brand_for_sql(b):
-    """Return (escaped_for_like, escaped_for_eq) for safe use in SQL. LIKE needs % _ \\ escaped; = needs ' escaped."""
-    b = (b or '').strip()
+    """Return (escaped_for_like, escaped_for_eq) for safe use in SQL. LIKE needs % _ \\ escaped; = needs ' escaped. Both are lowercased for case-insensitive matching."""
+    b = (b or '').strip().lower()
     eq_esc = b.replace("'", "''")
     like_esc = eq_esc.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return like_esc, eq_esc
