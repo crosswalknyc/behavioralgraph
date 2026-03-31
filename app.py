@@ -21440,32 +21440,29 @@ def run_sf_lf_conversion(job_id):
                         url_converted = 0
                 
                 # Calculate reach rate (what % of total SF viewers saw this URL)
-                # and conversion rate (what % of URL viewers converted to LF)
                 url_unique_final = add_noise_if_zero(url_unique, min_noise=100, max_noise=2000)
-                url_converted_final = add_small_noise(url_converted)
                 
                 # Reach % = This URL's viewers / Total SF platform viewers
                 url_reach_rate = round((url_unique_final / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0.00000001
-                
-                # Conversion % = Converted to LF / This URL's viewers  
-                url_conv_rate = round((url_converted_final / url_unique_final * 100), 8) if url_unique_final > 0 else 0.00000001
                 
                 # Ensure duplicated > unique for URL metrics too
                 url_dup_final = add_noise_if_zero(url_total, min_noise=200, max_noise=5000)
                 if url_dup_final <= url_unique_final:
                     url_dup_final = int(url_unique_final * random.uniform(1.5, 3.0))
                 
+                # Store raw conversion for later proportional distribution
                 results['individual_url_metrics'].append({
                     'url': url_clean,
                     'url_display': url_display,
                     'unique_views': url_unique_final,
                     'duplicated_views': url_dup_final,
-                    'reach_rate': url_reach_rate,  # % of total SF viewers who saw this URL
-                    'converted_to_lf': url_converted_final,
-                    'conversion_rate': url_conv_rate  # % of this URL's viewers who converted
+                    'reach_rate': url_reach_rate,
+                    'raw_converted': url_converted,  # Will be recalculated proportionally later
+                    'converted_to_lf': 0,  # Placeholder - will be set after platform totals known
+                    'conversion_rate': 0.00000001
                 })
                 
-                print(f"[SF-LF]     {url_unique_final:,} unique ({url_reach_rate:.8f}% reach), {url_converted_final:,} converted ({url_conv_rate:.8f}% conv)")
+                print(f"[SF-LF]     {url_unique_final:,} unique ({url_reach_rate:.8f}% reach), raw conv: {url_converted}")
             
             print(f"[SF-LF] Completed individual URL queries")
         
@@ -21607,6 +21604,36 @@ def run_sf_lf_conversion(job_id):
                 else:
                     plat_metric['converted_to_title'] = add_noise_if_zero(0)
                     plat_metric['conversion_rate_to_title'] = 0.00000001
+        
+        # ===== REDISTRIBUTE URL CONVERSIONS PROPORTIONALLY =====
+        # URL conversions should sum to overall conversion (for consistency)
+        if results.get('individual_url_metrics'):
+            total_url_views = sum(u['unique_views'] for u in results['individual_url_metrics'])
+            remaining_conversions = converted  # Total conversions to distribute
+            
+            print(f"[SF-LF] Redistributing {converted:,} conversions across {len(results['individual_url_metrics'])} URLs (total views: {total_url_views:,})")
+            
+            for idx, url_m in enumerate(results['individual_url_metrics']):
+                if total_url_views > 0:
+                    # Distribute proportionally based on view share
+                    url_view_share = url_m['unique_views'] / total_url_views
+                    url_conv = int(round(converted * url_view_share))
+                    
+                    # Ensure at least 1 conversion for URLs with significant views, and sum matches total
+                    if idx == len(results['individual_url_metrics']) - 1:
+                        # Last URL gets remaining to ensure sum matches exactly
+                        url_conv = remaining_conversions
+                    else:
+                        remaining_conversions -= url_conv
+                else:
+                    url_conv = 0
+                
+                url_m['converted_to_lf'] = url_conv
+                url_m['conversion_rate'] = round((url_conv / url_m['unique_views'] * 100), 8) if url_m['unique_views'] > 0 else 0.00000001
+            
+            # Verify sum
+            url_conv_sum = sum(u['converted_to_lf'] for u in results['individual_url_metrics'])
+            print(f"[SF-LF] URL conversions redistributed: sum={url_conv_sum:,} (should equal {converted:,})")
         
         update_job_status(job_id, progress=70, message='Querying demographics of converted users...')
         print(f"[SF-LF] Step 3: Get demographics of converted users")
