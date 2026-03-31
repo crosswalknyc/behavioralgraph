@@ -15716,7 +15716,10 @@
                         <!-- Performance Analysis Section -->
                         <div class="sf-conv-performance-analysis" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">🔍 Performance Analysis</h3>
+                                <div>
+                                    <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">🔍 Performance Analysis</h3>
+                                    <div id="sfConvAnalysisUrlNote" style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem; display: none;">Based on top 20 URLs (of <span id="sfConvTotalUrlCount">0</span> total)</div>
+                                </div>
                                 <button onclick="runSFConvPerformanceAnalysis()" id="sfConvRunAnalysisBtn" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.8rem;" title="Run a fresh AI analysis">
                                     🤖 Analyze Campaign
                                 </button>
@@ -15750,8 +15753,7 @@
                                     <div id="sfConvSummaryText" style="font-size: 0.85rem; color: var(--text-primary); line-height: 1.5;"></div>
                                 </div>
                                 
-                                <!-- Findings -->
-                                <div style="font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.75rem;">Key Findings</div>
+                                <!-- Analysis Findings (Positive + Negative) -->
                                 <div id="sfConvFindingsList"></div>
                             </div>
                             
@@ -18774,8 +18776,10 @@
             renderSFConvFunnel(conversionSummary, lfPlatformVisit, platformMetrics);
             
             // Store data for performance analysis (for re-analysis button)
+            const allUrls = urlMetrics.map(u => u.url).filter(Boolean);
             window.sfConvAnalysisData = {
-                urls: urlMetrics.map(u => u.url).filter(Boolean),
+                urls: allUrls.slice(0, 20),  // Analysis uses top 20 only
+                totalUrls: allUrls.length,    // Track total for display
                 lfTitle: projectInfo.lfTitle || '',
                 lfPlatform: projectInfo.lfPlatform || '',
                 totalViews: totalViewersSample,
@@ -19130,7 +19134,7 @@
                 `;
             }).join('');
             
-            // Positive Takeaways section
+            // Positive Takeaways section (show FIRST - before negative findings)
             const takeaways = analysis.positive_takeaways || [];
             let takeawaysHtml = '';
             if (takeaways.length > 0) {
@@ -19148,7 +19152,7 @@
                 `).join('');
                 
                 takeawaysHtml = `
-                    <div style="margin-top: 1.5rem; margin-bottom: 1rem;">
+                    <div style="margin-bottom: 1.5rem;">
                         <div style="font-size: 0.8rem; color: var(--accent-lime); text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
                             <span>🎯</span> Positive Takeaways
                         </div>
@@ -19157,8 +19161,29 @@
                 `;
             }
             
-            // Combine all sections
-            findingsContainer.innerHTML = platformHtml + acctHtml + findingsHtml + takeawaysHtml;
+            // Structural Failures header (only show if there are failures)
+            let failuresHeader = '';
+            if (findings.length > 0) {
+                failuresHeader = `
+                    <div style="font-size: 0.8rem; color: var(--accent-red); text-transform: uppercase; margin-bottom: 0.75rem; margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>⚠️</span> Structural Failures
+                    </div>
+                `;
+            }
+            
+            // Combine all sections: Positive first, then Platform/Account analysis, then negative findings
+            findingsContainer.innerHTML = takeawaysHtml + platformHtml + acctHtml + failuresHeader + findingsHtml;
+            
+            // Show URL count note if we have data
+            const urlNote = document.getElementById('sfConvAnalysisUrlNote');
+            const totalUrlCount = document.getElementById('sfConvTotalUrlCount');
+            if (urlNote && window.sfConvAnalysisData && window.sfConvAnalysisData.totalUrls) {
+                const total = window.sfConvAnalysisData.totalUrls;
+                if (total > 20) {
+                    totalUrlCount.textContent = total;
+                    urlNote.style.display = 'block';
+                }
+            }
         }
 
         window.showRankerIQ = function() {
