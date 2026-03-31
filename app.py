@@ -156,6 +156,8 @@ HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker d
 TICKET_SALES_S3_BUCKET = 'ticket-sales-iq'  # Bucket for Ticket Sales IQ (talent-to-theater attribution)
 TICKET_SALES_TRACKER_S3_BUCKET = 'ticket-sales-tracker'  # Bucket for Ticket Sales Tracker (movie viewers → theater)
 SF_LF_CONV_S3_BUCKET = 'sf-lf-conversion'  # Bucket for Short Form to Long Form Conversion analysis
+# Talent Fit Assessment — talent-brand audience overlap analysis
+TALENT_FIT_S3_PREFIX = 'talent-fit/'
 # LLMO IQ — /api/llmo-iq/* + _llmo_* (rollup from build_llmo_summary.py on S3)
 LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000
 LLMO_S3_BUCKET = os.environ.get('LLMO_S3_BUCKET', 'llmo')
@@ -2683,6 +2685,7 @@ def create_user():
             'has_rankers_iq_access': req_data.get('has_rankers_iq_access', cd.get('has_rankers_iq_access', False) if cd else False),
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
             'has_llmo_iq_access': req_data.get('has_llmo_iq_access', cd.get('has_llmo_iq_access', False) if cd else False),
+            'has_talent_fit_access': req_data.get('has_talent_fit_access', cd.get('has_talent_fit_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -2804,6 +2807,8 @@ def update_user(username):
             user['rankers_iq_options'] = req_data['rankers_iq_options']
         if 'has_llmo_iq_access' in req_data:
             user['has_llmo_iq_access'] = bool(req_data['has_llmo_iq_access'])
+        if 'has_talent_fit_access' in req_data:
+            user['has_talent_fit_access'] = bool(req_data['has_talent_fit_access'])
         if 'auto_access_new' in req_data:
             user['auto_access_new'] = req_data['auto_access_new']
         if 'collab_team' in req_data:
@@ -5218,7 +5223,7 @@ def set_chat_status():
 
 _ANALYSIS_IQ_MODULES_FULL = [
     'profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign',
-    'cross_show', 'watch_time', 'ticket_sales_tracker', 'sf_lf_conversion',
+    'cross_show', 'watch_time', 'ticket_sales_tracker', 'sf_lf_conversion', 'talent_fit',
 ]
 
 
@@ -5243,6 +5248,7 @@ def compute_product_access_flags(user, role):
             'has_ticket_sales_iq_access': True,
             'has_ticket_sales_tracker_access': True,
             'has_llmo_iq_access': True,
+            'has_talent_fit_access': True,
         }
     u = user or {}
     return {
@@ -5264,6 +5270,7 @@ def compute_product_access_flags(user, role):
         'has_ticket_sales_iq_access': u.get('has_ticket_sales_iq_access', True) is not False,
         'has_ticket_sales_tracker_access': bool(u.get('has_ticket_sales_tracker_access', False)),
         'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
+        'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
     }
 
 
@@ -20106,6 +20113,403 @@ def run_talent_search(job_id):
         error_msg = f"Error running talent search: {str(e)}\n{traceback.format_exc()}"
         print(error_msg)
         update_job_status(job_id, status='failed', error=error_msg)
+
+
+# ============================================================================
+# TALENT FIT ASSESSMENT ENDPOINTS
+# ============================================================================
+
+def analyze_talent_social_media(talent_name):
+    """Use GPT-4 to analyze a talent's social media presence for impact scoring."""
+    client = get_openai_client()
+    if not client:
+        return {
+            'follower_count': 0,
+            'engagement_rate': 0,
+            'sponsored_post_frequency': 0,
+            'top_brand_partnerships': [],
+            'audience_demographics': 'Unknown',
+            'error': 'OpenAI not configured'
+        }
+    
+    try:
+        prompt = f"""Analyze the social media presence for talent/celebrity "{talent_name}".
+
+Based on publicly available information, provide your best estimates for:
+1. Total follower count across major platforms (Instagram, Twitter/X, TikTok, YouTube)
+2. Average engagement rate on recent posts (as a percentage)
+3. Sponsored post frequency (average posts per month with brand partnerships)
+4. Notable brand partnerships they've had
+5. Brief description of their typical audience demographics
+
+Return ONLY a valid JSON object with these exact keys:
+{{
+    "follower_count": <number>,
+    "engagement_rate": <number between 0-100>,
+    "sponsored_post_frequency": <number>,
+    "top_brand_partnerships": [<list of brand names>],
+    "audience_demographics": "<brief description>"
+}}
+
+If you cannot find reliable information, use reasonable estimates based on their celebrity status and platform presence. Do not include any explanatory text outside the JSON."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=500
+        )
+        
+        content = response.choices[0].message.content.strip()
+        if content.startswith('```'):
+            content = content.split('```')[1]
+            if content.startswith('json'):
+                content = content[4:]
+        content = content.strip()
+        
+        import json as json_module
+        result = json_module.loads(content)
+        return result
+        
+    except Exception as e:
+        print(f"⚠️ GPT-4 social analysis failed for {talent_name}: {e}")
+        return {
+            'follower_count': 0,
+            'engagement_rate': 0,
+            'sponsored_post_frequency': 0,
+            'top_brand_partnerships': [],
+            'audience_demographics': 'Analysis unavailable',
+            'error': str(e)
+        }
+
+
+def calculate_talent_impact_score(overlap_pct, social_data, brand_users):
+    """
+    Calculate talent impact score using weighted formula.
+    
+    Components (each 0-100 scale):
+    - Audience Overlap (40%): Direct CLICKSTREAM overlap percentage
+    - Reach Score (25%): Social follower count (log scale)
+    - Engagement Score (25%): Avg engagement rate on posts
+    - Partnership Experience (10%): Frequency of brand deals
+    """
+    import math
+    
+    overlap_score = min(overlap_pct * 10, 100)
+    
+    followers = social_data.get('follower_count', 0)
+    if followers > 0:
+        reach_score = min((math.log10(followers) / 8) * 100, 100)
+    else:
+        reach_score = 0
+    
+    engagement_rate = social_data.get('engagement_rate', 0)
+    engagement_score = min(engagement_rate * 10, 100)
+    
+    sponsored_freq = social_data.get('sponsored_post_frequency', 0)
+    experience_score = min(sponsored_freq * 10, 100)
+    
+    impact_score = (
+        overlap_score * 0.40 +
+        reach_score * 0.25 +
+        engagement_score * 0.25 +
+        experience_score * 0.10
+    )
+    
+    return {
+        'total': round(impact_score, 1),
+        'components': {
+            'audience_overlap': round(overlap_score, 1),
+            'reach': round(reach_score, 1),
+            'engagement': round(engagement_score, 1),
+            'partnership_experience': round(experience_score, 1)
+        },
+        'weights': {
+            'audience_overlap': 0.40,
+            'reach': 0.25,
+            'engagement': 0.25,
+            'partnership_experience': 0.10
+        }
+    }
+
+
+US_GEN_POP = 329_900_000
+TALENT_FIT_INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
+
+
+def project_to_genpop(sample_count, sample_size):
+    """Project sample counts to US Gen Pop using intelligent inflation."""
+    if sample_size <= 0:
+        return 0
+    
+    for mult in TALENT_FIT_INFLATION_OPTIONS:
+        if sample_size * mult <= 10_000_000:
+            inflation = mult
+            break
+    else:
+        inflation = 1
+    
+    inflated_sample = min(sample_size * inflation, 10_000_000)
+    percentage = (sample_count / sample_size) * 100 if sample_size > 0 else 0
+    projected = int((percentage / 100) * US_GEN_POP)
+    
+    return projected
+
+
+@app.route('/api/talent-fit/assess', methods=['POST'])
+@requires_auth
+def talent_fit_assess():
+    """Assess talent fit for a brand - calculates audience overlap and impact scores."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        if not user_can_run_analysis_module(user, 'talent_fit'):
+            return jsonify({'error': 'Talent Fit Assessment access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        brand = data.get('brand', '').strip()
+        talents_raw = data.get('talents', [])
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not brand:
+            return jsonify({'error': 'Brand name is required'}), 400
+        if not talents_raw:
+            return jsonify({'error': 'At least one talent name is required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start and end dates are required'}), 400
+        
+        if isinstance(talents_raw, str):
+            talents = [t.strip() for t in talents_raw.split(',') if t.strip()]
+        else:
+            talents = [t.strip() for t in talents_raw if t.strip()]
+        
+        if not talents:
+            return jsonify({'error': 'At least one valid talent name is required'}), 400
+        
+        import bg
+        conn = bg.connect_to_snowflake()
+        
+        try:
+            analysis_results = bg.run_talent_fit_analysis(conn, brand, talents, start_date, end_date)
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+        
+        brand_users = analysis_results.get('brand_users', 0)
+        enriched_talents = []
+        
+        for talent_data in analysis_results.get('talents', []):
+            social_data = analyze_talent_social_media(talent_data['name'])
+            impact_score = calculate_talent_impact_score(
+                talent_data['overlap_percentage'],
+                social_data,
+                brand_users
+            )
+            
+            projected_overlap = project_to_genpop(talent_data['overlap_count'], brand_users)
+            projected_brand_users = project_to_genpop(brand_users, brand_users)
+            
+            enriched_talents.append({
+                'name': talent_data['name'],
+                'overlap_count': talent_data['overlap_count'],
+                'overlap_percentage': talent_data['overlap_percentage'],
+                'projected_overlap': projected_overlap,
+                'projected_brand_users': projected_brand_users,
+                'social_metrics': social_data,
+                'impact_score': impact_score
+            })
+        
+        result = {
+            'success': True,
+            'brand': brand,
+            'brand_users': brand_users,
+            'projected_brand_users': project_to_genpop(brand_users, brand_users),
+            'start_date': start_date,
+            'end_date': end_date,
+            'talents': enriched_talents,
+            'analyzed_at': datetime.now().isoformat()
+        }
+        
+        try:
+            result_json = json.dumps(result, indent=2)
+            timestamp = datetime.now().strftime('%m%d%Y_%H%M')
+            safe_brand = re.sub(r'[^a-zA-Z0-9_-]', '_', brand)[:50]
+            safe_talents = '_'.join([re.sub(r'[^a-zA-Z0-9_-]', '_', t)[:20] for t in talents[:3]])
+            filename = f"{safe_brand}_{safe_talents}_{timestamp}.json"
+            s3_key = S3_PURGATORY_PREFIX + TALENT_FIT_S3_PREFIX + filename
+            
+            s3_client.put_object(
+                Bucket=S3_BUCKET,
+                Key=s3_key,
+                Body=result_json.encode('utf-8'),
+                ContentType='application/json'
+            )
+            
+            username = session.get('username', 'unknown')
+            purgatory_id = add_to_purgatory(
+                s3_key=s3_key,
+                bucket=S3_BUCKET,
+                created_by=username,
+                project_name=f"Talent Fit: {brand} x {', '.join(talents[:3])}",
+                category='talent_fit',
+                source_type='talent_fit'
+            )
+            
+            result['s3_key'] = s3_key
+            result['purgatory_id'] = purgatory_id
+            
+        except Exception as e:
+            print(f"⚠️ Failed to save to S3: {e}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/talent-fit/find-talent', methods=['POST'])
+@requires_auth
+def talent_fit_find_talent():
+    """Find talents that overlap with a brand's audience."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        if not user_can_run_analysis_module(user, 'talent_fit'):
+            return jsonify({'error': 'Talent Fit Assessment access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        brand = data.get('brand', '').strip()
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        limit = data.get('limit', 50)
+        
+        if not brand:
+            return jsonify({'error': 'Brand name is required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start and end dates are required'}), 400
+        
+        import bg
+        conn = bg.connect_to_snowflake()
+        
+        try:
+            results = bg.find_talent_for_brand(conn, brand, start_date, end_date, limit=limit)
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+        
+        brand_users = results.get('brand_users', 0)
+        enriched_talents = []
+        
+        for talent_data in results.get('talents', []):
+            projected_overlap = project_to_genpop(talent_data['overlap_count'], brand_users)
+            
+            enriched_talents.append({
+                'name': talent_data['name'],
+                'overlap_count': talent_data['overlap_count'],
+                'overlap_percentage': talent_data['overlap_percentage'],
+                'projected_overlap': projected_overlap
+            })
+        
+        return jsonify({
+            'success': True,
+            'brand': brand,
+            'brand_users': brand_users,
+            'projected_brand_users': project_to_genpop(brand_users, brand_users),
+            'start_date': start_date,
+            'end_date': end_date,
+            'talents': enriched_talents
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/talent-fit/results', methods=['GET'])
+@requires_auth
+def talent_fit_list_results():
+    """List all Talent Fit Assessment results from S3."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        if not user_can_run_analysis_module(user, 'talent_fit'):
+            return jsonify({'error': 'Talent Fit Assessment access required'}), 403
+        
+        results = []
+        
+        try:
+            response = s3_client.list_objects_v2(
+                Bucket=S3_BUCKET,
+                Prefix=TALENT_FIT_S3_PREFIX
+            )
+            
+            for obj in response.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('.json'):
+                    results.append({
+                        'key': key,
+                        'name': key.replace(TALENT_FIT_S3_PREFIX, '').replace('.json', ''),
+                        'last_modified': obj['LastModified'].isoformat(),
+                        'size': obj['Size']
+                    })
+        except Exception as e:
+            print(f"⚠️ Error listing talent-fit results: {e}")
+        
+        results.sort(key=lambda x: x['last_modified'], reverse=True)
+        
+        return jsonify({'success': True, 'results': results})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/talent-fit/results/<path:key>', methods=['GET'])
+@requires_auth
+def talent_fit_get_result(key):
+    """Get a specific Talent Fit Assessment result from S3."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        if not user_can_run_analysis_module(user, 'talent_fit'):
+            return jsonify({'error': 'Talent Fit Assessment access required'}), 403
+        
+        if not key.startswith(TALENT_FIT_S3_PREFIX):
+            key = TALENT_FIT_S3_PREFIX + key
+        
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+            content = response['Body'].read().decode('utf-8')
+            result = json.loads(content)
+            return jsonify({'success': True, 'result': result})
+        except s3_client.exceptions.NoSuchKey:
+            return jsonify({'error': 'Result not found'}), 404
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/admin/fix-csv-genpop', methods=['POST'])

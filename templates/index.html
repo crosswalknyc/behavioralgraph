@@ -12443,6 +12443,11 @@
                         🔄 SF-LF Conversion <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
                     </button>
                     {% endif %}
+                    {% if 'talent_fit' in analysis_iq_modules or role == 'super_admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-fit')" id="customAnalysisTabTalentFit">
+                        🎭 Talent Fit Assessment
+                    </button>
+                    {% endif %}
                     {% if role == 'super_admin' or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('roas-iq')" id="customAnalysisTabRoasIQ">
                         📊 ROAS IQ
@@ -13796,6 +13801,88 @@
                             <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Add-to-Cart</h3><div id="ecomIQCart"></div></div>
                             <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Completed Purchase</h3><div id="ecomIQPurchase"></div></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Talent Fit Assessment Tab Content -->
+                <div id="customAnalysisTabContentTalentFit" class="custom-analysis-tab-content">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>🎭 Talent Fit Assessment</h2>
+                            <p class="section-description">Analyze how well talents resonate with your brand's audience using behavioral data and social media metrics.</p>
+                            
+                            <form id="talentFitForm" onsubmit="event.preventDefault(); runTalentFitAssessment();">
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Brand Name</label>
+                                    <input type="text" id="talentFitBrand" placeholder="e.g. Nike, Apple, Coca-Cola" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                </div>
+                                
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Talent Names <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated)</span></label>
+                                    <textarea id="talentFitTalents" rows="2" placeholder="e.g. Taylor Swift, LeBron James, Beyoncé" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                                    <small style="color: var(--text-secondary); font-size: 11px;">Leave empty and click "Find Me Talent" to discover talents that match your brand's audience</small>
+                                </div>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
+                                        <input type="date" id="talentFitStartDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date</label>
+                                        <input type="date" id="talentFitEndDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
+                                    <button type="submit" id="talentFitAssessBtn" class="btn btn-primary" style="flex: 1;">Assess Talent Fit</button>
+                                    <button type="button" id="talentFitFindBtn" class="btn" style="flex: 1; background: var(--accent-secondary); color: white;" onclick="findMeTalent()">Find Me Talent</button>
+                                </div>
+                            </form>
+                            
+                            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+                                    <input type="checkbox" id="talentFitShowTooltips" checked style="cursor: pointer;">
+                                    Show methodology tooltips
+                                </label>
+                            </div>
+                            
+                            <div id="talentFitStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
+                                <div id="talentFitStatusText" style="font-weight: 600; margin-bottom: 4px;">Processing...</div>
+                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;">
+                                    <div id="talentFitProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <h2 style="margin:0;">Past Assessments</h2>
+                                <button type="button" class="btn btn-small" onclick="refreshTalentFitResults()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                            </div>
+                            <div id="talentFitResultsList" style="max-height: 320px; overflow-y: auto;">
+                                <div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No assessments yet. Run an analysis.</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Talent Fit Results Dashboard -->
+                    <div id="talentFitDashboard" style="display: none; margin-top: 1.5rem;">
+                        <div id="talentFitDashHeader" style="margin-bottom: 1.5rem;">
+                            <h3 style="margin: 0 0 0.5rem; font-size: 18px;">Assessment Results</h3>
+                            <div id="talentFitBrandInfo" style="font-size: 14px; color: var(--text-secondary);"></div>
+                        </div>
+                        
+                        <div id="talentFitCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;"></div>
+                    </div>
+                    
+                    <!-- Find Talent Results -->
+                    <div id="talentFitFindResults" style="display: none; margin-top: 1.5rem;">
+                        <div style="margin-bottom: 1rem;">
+                            <h3 style="margin: 0 0 0.5rem; font-size: 18px;">🔍 Talents Found for Your Brand</h3>
+                            <div id="talentFitFindBrandInfo" style="font-size: 14px; color: var(--text-secondary);"></div>
+                        </div>
+                        <div id="talentFitFindTable" style="background: var(--bg-card); border-radius: 12px; overflow: hidden;"></div>
                     </div>
                 </div>
 
@@ -18783,17 +18870,17 @@
             const convPct = ((converted / total) * 100).toFixed(4);
             const lfVisitPct = lfVisitors > 0 ? ((lfVisitors / total) * 100).toFixed(2) : null;
             
-            // Build platform breakdown for funnel (sorted by projected views)
+            // Build platform breakdown for funnel (sorted by projected views, exclude OVERALL)
             const sortedPlatforms = platformMetrics
-                .filter(p => p.uniqueViewsGenPop && parseInt(p.uniqueViewsGenPop) > 0)
+                .filter(p => p.uniqueViewsGenPop && parseInt(p.uniqueViewsGenPop) > 0 && !(p.platform || '').toUpperCase().includes('OVERALL'))
                 .sort((a, b) => (parseInt(b.uniqueViewsGenPop) || 0) - (parseInt(a.uniqueViewsGenPop) || 0))
                 .slice(0, 3);  // Top 3 platforms
             
             let funnelSteps = `
                 <div style="text-align: center;">
-                    <div style="width: 140px; height: 140px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 1.4rem; font-weight: 700; color: #111;">${formatNum(total)}</div>
-                        <div style="font-size: 0.65rem; color: #333; text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">Short Form<br>Views</div>
+                    <div style="width: 140px; height: 140px; background: linear-gradient(135deg, #3b82f6, #06b6d4); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
+                        <div style="font-size: 1.4rem; font-weight: 700; color: #fff;">${formatNum(total)}</div>
+                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.9); text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">Short Form<br>Views</div>
                     </div>
                 </div>
                 <div style="font-size: 2rem; color: var(--text-secondary);">→</div>`;
@@ -18830,11 +18917,11 @@
             if (lfVisitors > 0) {
                 funnelSteps += `
                 <div style="text-align: center;">
-                    <div style="width: 130px; height: 130px; background: linear-gradient(135deg, var(--accent-pink), var(--accent-orange)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 1.25rem; font-weight: 700; color: #111;">${formatNum(lfVisitors)}</div>
-                        <div style="font-size: 0.6rem; color: #333; text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">Visited Long Form<br>Platform</div>
+                    <div style="width: 130px; height: 130px; background: linear-gradient(135deg, #f472b6, #fb923c); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(244, 114, 182, 0.4);">
+                        <div style="font-size: 1.25rem; font-weight: 700; color: #fff;">${formatNum(lfVisitors)}</div>
+                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.9); text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">Visited Long Form<br>Platform</div>
                     </div>
-                    <div style="font-size: 0.65rem; color: var(--accent-pink); margin-top: 0.3rem;">${lfVisitPct}% of viewers</div>
+                    <div style="font-size: 0.65rem; color: #f472b6; margin-top: 0.3rem;">${lfVisitPct}% of viewers</div>
                 </div>
                 <div style="font-size: 2rem; color: var(--text-secondary);">→</div>`;
             }
@@ -18843,9 +18930,9 @@
                 <div style="display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 1rem; flex-wrap: wrap;">
                     ${funnelSteps}
                     <div style="text-align: center;">
-                        <div style="width: 140px; height: 140px; background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="width: 140px; height: 140px; background: linear-gradient(135deg, #84cc16, #22d3ee); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(132, 204, 22, 0.4);">
                             <div style="font-size: 1.4rem; font-weight: 700; color: #111;">${formatNum(converted)}</div>
-                            <div style="font-size: 0.65rem; color: #333; text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">Converted to<br>Long Form</div>
+                            <div style="font-size: 0.65rem; color: #222; text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">Converted to<br>Long Form</div>
                         </div>
                     </div>
                     <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 12px;">
@@ -21266,7 +21353,7 @@
             const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater',
                            'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow',
                            'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker', 'customAnalysisTabSFLFConversion',
-                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ'];
+                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabTalentFit'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -21277,7 +21364,8 @@
                                'customAnalysisTabContentTalentTheater', 'customAnalysisTabContentSVODAcquisition',
                                'customAnalysisTabContentCampaignROI', 'customAnalysisTabContentCrossShow',
                                'customAnalysisTabContentWatchTime', 'customAnalysisTabContentTicketSalesTracker',
-                               'customAnalysisTabContentSFLFConversion', 'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ'];
+                               'customAnalysisTabContentSFLFConversion', 'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ',
+                               'customAnalysisTabContentTalentFit'];
             contentIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -21344,10 +21432,288 @@
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
                 if (typeof refreshEcomIQList === 'function') refreshEcomIQList();
+            } else if (tabName === 'talent-fit') {
+                const tab = document.getElementById('customAnalysisTabTalentFit');
+                const content = document.getElementById('customAnalysisTabContentTalentFit');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                if (typeof refreshTalentFitResults === 'function') refreshTalentFitResults();
             }
         }
         
         // Custom Analysis Profile IQ now uses original formView - no custom form handler needed
+
+        // ===================== TALENT FIT ASSESSMENT =====================
+        let _talentFitPollingId = null;
+
+        function refreshTalentFitResults() {
+            fetch('/api/talent-fit/results').then(r => r.json()).then(data => {
+                const el = document.getElementById('talentFitResultsList');
+                if (!el) return;
+                const results = data.results || [];
+                if (!results.length) {
+                    el.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No assessments yet. Run an analysis.</div>';
+                    return;
+                }
+                el.innerHTML = results.map(r => `
+                    <div class="profile-tree-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="loadTalentFitResult('${r.key}')">
+                        <div style="font-weight:500;">${r.name}</div>
+                        <div style="font-size:11px;color:var(--text-secondary);">${new Date(r.last_modified).toLocaleDateString()}</div>
+                    </div>
+                `).join('');
+            }).catch(() => {});
+        }
+
+        function loadTalentFitResult(key) {
+            fetch(`/api/talent-fit/results/${encodeURIComponent(key)}`).then(r => r.json()).then(data => {
+                if (!data.success || !data.result) {
+                    alert('Failed to load result');
+                    return;
+                }
+                renderTalentFitDashboard(data.result);
+            }).catch(e => alert('Error loading result: ' + e));
+        }
+
+        function runTalentFitAssessment() {
+            const brand = document.getElementById('talentFitBrand').value.trim();
+            const talents = document.getElementById('talentFitTalents').value.trim();
+            const startDate = document.getElementById('talentFitStartDate').value;
+            const endDate = document.getElementById('talentFitEndDate').value;
+
+            if (!brand) { alert('Please enter a brand name'); return; }
+            if (!talents) { alert('Please enter at least one talent name, or use "Find Me Talent"'); return; }
+            if (!startDate || !endDate) { alert('Please select start and end dates'); return; }
+
+            const statusEl = document.getElementById('talentFitStatus');
+            const statusText = document.getElementById('talentFitStatusText');
+            const progressBar = document.getElementById('talentFitProgressBar');
+            const submitBtn = document.getElementById('talentFitAssessBtn');
+
+            statusEl.style.display = 'block';
+            statusText.textContent = 'Analyzing brand-talent fit...';
+            progressBar.style.width = '30%';
+            submitBtn.disabled = true;
+
+            fetch('/api/talent-fit/assess', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    brand: brand,
+                    talents: talents.split(',').map(t => t.trim()).filter(t => t),
+                    start_date: startDate,
+                    end_date: endDate
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                submitBtn.disabled = false;
+                if (data.error) {
+                    statusText.textContent = 'Error: ' + data.error;
+                    progressBar.style.width = '0%';
+                    return;
+                }
+                progressBar.style.width = '100%';
+                statusText.textContent = 'Analysis complete!';
+                setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+                renderTalentFitDashboard(data);
+                refreshTalentFitResults();
+            })
+            .catch(e => {
+                submitBtn.disabled = false;
+                statusText.textContent = 'Error: ' + e;
+                progressBar.style.width = '0%';
+            });
+        }
+
+        function findMeTalent() {
+            const brand = document.getElementById('talentFitBrand').value.trim();
+            const startDate = document.getElementById('talentFitStartDate').value;
+            const endDate = document.getElementById('talentFitEndDate').value;
+
+            if (!brand) { alert('Please enter a brand name'); return; }
+            if (!startDate || !endDate) { alert('Please select start and end dates'); return; }
+
+            const statusEl = document.getElementById('talentFitStatus');
+            const statusText = document.getElementById('talentFitStatusText');
+            const progressBar = document.getElementById('talentFitProgressBar');
+            const findBtn = document.getElementById('talentFitFindBtn');
+
+            statusEl.style.display = 'block';
+            statusText.textContent = 'Finding talents for your brand...';
+            progressBar.style.width = '30%';
+            findBtn.disabled = true;
+
+            fetch('/api/talent-fit/find-talent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    brand: brand,
+                    start_date: startDate,
+                    end_date: endDate,
+                    limit: 50
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                findBtn.disabled = false;
+                if (data.error) {
+                    statusText.textContent = 'Error: ' + data.error;
+                    progressBar.style.width = '0%';
+                    return;
+                }
+                progressBar.style.width = '100%';
+                statusText.textContent = 'Talents found!';
+                setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+                renderFindTalentResults(data);
+            })
+            .catch(e => {
+                findBtn.disabled = false;
+                statusText.textContent = 'Error: ' + e;
+                progressBar.style.width = '0%';
+            });
+        }
+
+        function renderTalentFitDashboard(data) {
+            const dashboard = document.getElementById('talentFitDashboard');
+            const findResults = document.getElementById('talentFitFindResults');
+            const brandInfo = document.getElementById('talentFitBrandInfo');
+            const cardsContainer = document.getElementById('talentFitCards');
+            const showTooltips = document.getElementById('talentFitShowTooltips').checked;
+
+            findResults.style.display = 'none';
+            dashboard.style.display = 'block';
+
+            const projectedBrandUsers = data.projected_brand_users || 0;
+            brandInfo.innerHTML = `
+                <strong>${data.brand}</strong> &bull; 
+                ${data.brand_users?.toLocaleString() || 0} sample users &bull;
+                ~${projectedBrandUsers.toLocaleString()} US Gen Pop projection &bull;
+                ${data.start_date} to ${data.end_date}
+            `;
+
+            const talents = data.talents || [];
+            if (!talents.length) {
+                cardsContainer.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">No talent data found.</div>';
+                return;
+            }
+
+            cardsContainer.innerHTML = talents.map(t => {
+                const score = t.impact_score || {};
+                const social = t.social_metrics || {};
+                const components = score.components || {};
+                const tooltipClass = showTooltips ? '' : 'style="display:none;"';
+
+                return `
+                <div class="card" style="position:relative;">
+                    <h3 style="margin:0 0 0.75rem;font-size:16px;">${t.name}</h3>
+                    
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+                        <div style="text-align:center;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;">
+                            <div style="font-size:24px;font-weight:700;color:var(--accent-primary);">${t.overlap_percentage?.toFixed(1) || 0}%</div>
+                            <div style="font-size:11px;color:var(--text-secondary);">Audience Overlap</div>
+                            <div style="font-size:10px;color:var(--text-secondary);">${(t.overlap_count || 0).toLocaleString()} users</div>
+                        </div>
+                        <div style="text-align:center;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;">
+                            <div style="font-size:24px;font-weight:700;color:var(--accent-green);">${score.total?.toFixed(0) || 0}</div>
+                            <div style="font-size:11px;color:var(--text-secondary);">Impact Score</div>
+                            <div class="methodology-tooltip" ${tooltipClass} style="font-size:9px;color:var(--text-secondary);margin-top:2px;">40% overlap + 25% reach + 25% engagement + 10% experience</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom:1rem;">
+                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">US Gen Pop Projection</div>
+                        <div style="font-size:18px;font-weight:600;color:var(--text-primary);">~${(t.projected_overlap || 0).toLocaleString()}</div>
+                        <div style="font-size:10px;color:var(--text-secondary);">Americans who engage with both brand and talent</div>
+                    </div>
+                    
+                    <div style="margin-bottom:1rem;">
+                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">Score Components</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:11px;">
+                            <div style="display:flex;justify-content:space-between;"><span>Overlap:</span><span>${components.audience_overlap?.toFixed(0) || 0}/100</span></div>
+                            <div style="display:flex;justify-content:space-between;"><span>Reach:</span><span>${components.reach?.toFixed(0) || 0}/100</span></div>
+                            <div style="display:flex;justify-content:space-between;"><span>Engagement:</span><span>${components.engagement?.toFixed(0) || 0}/100</span></div>
+                            <div style="display:flex;justify-content:space-between;"><span>Experience:</span><span>${components.partnership_experience?.toFixed(0) || 0}/100</span></div>
+                        </div>
+                    </div>
+                    
+                    <div style="border-top:1px solid var(--border-color);padding-top:0.75rem;">
+                        <div style="font-size:12px;font-weight:600;margin-bottom:0.5rem;">Social Media Metrics</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:11px;">
+                            <div><span style="color:var(--text-secondary);">Followers:</span> ${(social.follower_count || 0).toLocaleString()}</div>
+                            <div><span style="color:var(--text-secondary);">Engagement:</span> ${social.engagement_rate?.toFixed(1) || 0}%</div>
+                            <div><span style="color:var(--text-secondary);">Sponsored/mo:</span> ${social.sponsored_post_frequency || 0}</div>
+                            <div><span style="color:var(--text-secondary);">Partnerships:</span> ${(social.top_brand_partnerships || []).length}</div>
+                        </div>
+                        ${social.top_brand_partnerships?.length ? `<div style="margin-top:0.5rem;font-size:10px;color:var(--text-secondary);">Notable: ${social.top_brand_partnerships.slice(0,3).join(', ')}</div>` : ''}
+                    </div>
+                    
+                    <div class="methodology-tooltip" ${tooltipClass} style="position:absolute;top:8px;right:8px;font-size:9px;color:var(--text-secondary);cursor:help;" title="Impact Score = (Overlap×40%) + (Reach×25%) + (Engagement×25%) + (Experience×10%). Reach uses log scale of followers. Data from GPT-4 social analysis.">ℹ️</div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function renderFindTalentResults(data) {
+            const dashboard = document.getElementById('talentFitDashboard');
+            const findResults = document.getElementById('talentFitFindResults');
+            const brandInfo = document.getElementById('talentFitFindBrandInfo');
+            const tableContainer = document.getElementById('talentFitFindTable');
+
+            dashboard.style.display = 'none';
+            findResults.style.display = 'block';
+
+            brandInfo.innerHTML = `
+                <strong>${data.brand}</strong> &bull; 
+                ${data.brand_users?.toLocaleString() || 0} sample users &bull;
+                ~${(data.projected_brand_users || 0).toLocaleString()} US Gen Pop projection &bull;
+                ${data.start_date} to ${data.end_date}
+            `;
+
+            const talents = data.talents || [];
+            if (!talents.length) {
+                tableContainer.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">No talents found for this brand audience.</div>';
+                return;
+            }
+
+            tableContainer.innerHTML = `
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead>
+                        <tr style="background:var(--bg-secondary);">
+                            <th style="padding:12px;text-align:left;border-bottom:1px solid var(--border-color);">Talent</th>
+                            <th style="padding:12px;text-align:right;border-bottom:1px solid var(--border-color);">Overlap %</th>
+                            <th style="padding:12px;text-align:right;border-bottom:1px solid var(--border-color);">Sample Users</th>
+                            <th style="padding:12px;text-align:right;border-bottom:1px solid var(--border-color);">US Projection</th>
+                            <th style="padding:12px;text-align:center;border-bottom:1px solid var(--border-color);">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${talents.map((t, i) => `
+                            <tr style="background:${i % 2 ? 'var(--bg-secondary)' : 'transparent'};">
+                                <td style="padding:10px 12px;border-bottom:1px solid var(--border-color);font-weight:500;">${t.name}</td>
+                                <td style="padding:10px 12px;text-align:right;border-bottom:1px solid var(--border-color);">${t.overlap_percentage?.toFixed(2) || 0}%</td>
+                                <td style="padding:10px 12px;text-align:right;border-bottom:1px solid var(--border-color);">${(t.overlap_count || 0).toLocaleString()}</td>
+                                <td style="padding:10px 12px;text-align:right;border-bottom:1px solid var(--border-color);">~${(t.projected_overlap || 0).toLocaleString()}</td>
+                                <td style="padding:10px 12px;text-align:center;border-bottom:1px solid var(--border-color);">
+                                    <button class="btn btn-small" onclick="assessSingleTalent('${t.name.replace(/'/g, "\\'")}')">Assess</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function assessSingleTalent(talentName) {
+            document.getElementById('talentFitTalents').value = talentName;
+            runTalentFitAssessment();
+        }
+
+        document.getElementById('talentFitShowTooltips')?.addEventListener('change', function() {
+            const tooltips = document.querySelectorAll('#talentFitDashboard .methodology-tooltip');
+            tooltips.forEach(el => {
+                el.style.display = this.checked ? '' : 'none';
+            });
+        });
 
         // ===================== ROAS IQ =====================
         let _roasIQChartInst = null;

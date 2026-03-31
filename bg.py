@@ -8439,6 +8439,185 @@ def _escape_brand_for_sql(b):
     like_esc = eq_esc.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return like_esc, eq_esc
 
+
+def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
+    """
+    Analyze brand-talent audience overlap using CLICKSTREAM_FINAL.
+    Returns overlap counts and percentages for each talent.
+    """
+    print(f"🎯 Running Talent Fit Analysis for brand '{brand}' with talents: {talents}")
+    
+    results = {
+        'brand': brand,
+        'talents': [],
+        'brand_users': 0,
+        'start_date': start_date,
+        'end_date': end_date
+    }
+    
+    with conn.cursor() as cur:
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
+        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
+        
+        brand_like_esc, brand_eq_esc = _escape_brand_for_sql(brand)
+        brand_filter = f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) = '{brand_eq_esc}')"
+        
+        print(f"📊 Step 1: Counting unique brand users...")
+        brand_users_query = f"""
+            SELECT COUNT(DISTINCT UID) as brand_users
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+            WHERE DELIVERED >= '{start_date}'::DATE 
+              AND DELIVERED <= '{end_date}'::DATE
+              AND ({brand_filter})
+              AND COMMON_NAME IS NOT NULL
+              AND COMMON_NAME != ''
+        """
+        brand_result = cur.execute(brand_users_query).fetchone()
+        brand_users = brand_result[0] if brand_result else 0
+        results['brand_users'] = brand_users
+        print(f"   Found {brand_users:,} unique users with brand touchpoints")
+        
+        if brand_users == 0:
+            print("⚠️ No brand users found, returning empty results")
+            return results
+        
+        print(f"📊 Step 2: Analyzing talent overlaps...")
+        for talent in talents:
+            talent = talent.strip()
+            if not talent:
+                continue
+                
+            print(f"   Analyzing talent: {talent}")
+            talent_like_esc, talent_eq_esc = _escape_brand_for_sql(talent)
+            talent_filter = f"(LOWER(URL) LIKE '%' || '{talent_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) = '{talent_eq_esc}')"
+            
+            overlap_query = f"""
+                WITH brand_users AS (
+                    SELECT DISTINCT UID 
+                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+                    WHERE DELIVERED >= '{start_date}'::DATE 
+                      AND DELIVERED <= '{end_date}'::DATE
+                      AND ({brand_filter})
+                      AND COMMON_NAME IS NOT NULL
+                      AND COMMON_NAME != ''
+                )
+                SELECT COUNT(DISTINCT c.UID) as overlap_count
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                INNER JOIN brand_users b ON c.UID = b.UID
+                WHERE c.DELIVERED >= '{start_date}'::DATE 
+                  AND c.DELIVERED <= '{end_date}'::DATE
+                  AND ({talent_filter})
+                  AND c.COMMON_NAME IS NOT NULL
+                  AND c.COMMON_NAME != ''
+            """
+            
+            overlap_result = cur.execute(overlap_query).fetchone()
+            overlap_count = overlap_result[0] if overlap_result else 0
+            overlap_pct = (overlap_count / brand_users * 100) if brand_users > 0 else 0
+            
+            results['talents'].append({
+                'name': talent,
+                'overlap_count': overlap_count,
+                'overlap_percentage': round(overlap_pct, 2)
+            })
+            print(f"      Overlap: {overlap_count:,} users ({overlap_pct:.2f}%)")
+    
+    print(f"✅ Talent Fit Analysis complete")
+    return results
+
+
+def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
+    """
+    Find top talents that overlap with a brand's audience.
+    Filters CLICKSTREAM_FINAL to TALENT category entries.
+    """
+    print(f"🔍 Finding talents for brand '{brand}'...")
+    
+    results = {
+        'brand': brand,
+        'talents': [],
+        'brand_users': 0,
+        'start_date': start_date,
+        'end_date': end_date
+    }
+    
+    with conn.cursor() as cur:
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
+        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
+        
+        brand_like_esc, brand_eq_esc = _escape_brand_for_sql(brand)
+        brand_filter = f"(LOWER(URL) LIKE '%' || '{brand_like_esc}' || '%' ESCAPE '\\\\' OR LOWER(COMMON_NAME) = '{brand_eq_esc}')"
+        
+        print(f"📊 Step 1: Counting unique brand users...")
+        brand_users_query = f"""
+            SELECT COUNT(DISTINCT UID) as brand_users
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+            WHERE DELIVERED >= '{start_date}'::DATE 
+              AND DELIVERED <= '{end_date}'::DATE
+              AND ({brand_filter})
+              AND COMMON_NAME IS NOT NULL
+              AND COMMON_NAME != ''
+        """
+        brand_result = cur.execute(brand_users_query).fetchone()
+        brand_users = brand_result[0] if brand_result else 0
+        results['brand_users'] = brand_users
+        print(f"   Found {brand_users:,} unique users with brand touchpoints")
+        
+        if brand_users == 0:
+            print("⚠️ No brand users found, returning empty results")
+            return results
+        
+        print(f"📊 Step 2: Finding top talents from HOST_MAPPING TALENT category...")
+        talent_query = f"""
+            WITH brand_users AS (
+                SELECT DISTINCT UID 
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+                WHERE DELIVERED >= '{start_date}'::DATE 
+                  AND DELIVERED <= '{end_date}'::DATE
+                  AND ({brand_filter})
+                  AND COMMON_NAME IS NOT NULL
+                  AND COMMON_NAME != ''
+            ),
+            talent_brands AS (
+                SELECT DISTINCT Brand as talent_name
+                FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING
+                WHERE UPPER(Category) IN ('TALENT', 'ACTOR', 'MUSICIAN/BAND', 'HOST/PERSONALITY', 'ATHLETE', 'CREATOR/INFLUENCER', 'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST')
+                  AND Brand IS NOT NULL
+                  AND Brand != ''
+            )
+            SELECT 
+                tb.talent_name,
+                COUNT(DISTINCT c.UID) as overlap_count,
+                ROUND(COUNT(DISTINCT c.UID) * 100.0 / {brand_users}, 2) as overlap_pct
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+            INNER JOIN brand_users b ON c.UID = b.UID
+            INNER JOIN talent_brands tb ON LOWER(c.COMMON_NAME) = LOWER(tb.talent_name)
+            WHERE c.DELIVERED >= '{start_date}'::DATE 
+              AND c.DELIVERED <= '{end_date}'::DATE
+              AND c.COMMON_NAME IS NOT NULL
+            GROUP BY tb.talent_name
+            HAVING COUNT(DISTINCT c.UID) >= 10
+            ORDER BY overlap_count DESC
+            LIMIT {limit}
+        """
+        
+        talent_results = cur.execute(talent_query).fetchall()
+        
+        for row in talent_results:
+            results['talents'].append({
+                'name': row[0],
+                'overlap_count': row[1],
+                'overlap_percentage': float(row[2])
+            })
+        
+        print(f"   Found {len(results['talents'])} talents with overlapping audiences")
+    
+    print(f"✅ Find Talent complete")
+    return results
+
+
 def progress_monitor(label: str, conn):
     """Monitor long-running queries with progress updates"""
     import threading

@@ -2086,6 +2086,9 @@
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdLLMOIQ"> LLMO IQ
                                     </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdTalentFit"> Talent Fit Assessment
+                                    </label>
                                 </div>
                             </div>
                             <!-- Access to New Releases -->
@@ -2553,6 +2556,16 @@
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasLLMOIQAccess">
                                 <span style="font-weight: 600;">🤖 LLMO IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Talent Fit Assessment Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasTalentFitAccess">
+                                <span style="font-weight: 600;">🎭 Talent Fit Assessment</span>
                             </label>
                         </div>
                     </div>
@@ -3769,6 +3782,7 @@
                     document.getElementById('cdAnalysisIQ').checked = !!d.has_analysis_iq_access;
                     document.getElementById('cdRankersIQ').checked = !!d.has_rankers_iq_access;
                     document.getElementById('cdLLMOIQ').checked = !!d.has_llmo_iq_access;
+                    document.getElementById('cdTalentFit').checked = !!d.has_talent_fit_access;
                     document.getElementById('cdTicketTracker').checked = !!d.has_ticket_sales_tracker_access;
                     document.getElementById('cdDefaultCredits').value = d.credits ?? 5;
                     // Access to New Releases
@@ -3820,6 +3834,7 @@
                 has_analysis_iq_access: document.getElementById('cdAnalysisIQ').checked,
                 has_rankers_iq_access: document.getElementById('cdRankersIQ').checked,
                 has_llmo_iq_access: document.getElementById('cdLLMOIQ').checked,
+                has_talent_fit_access: document.getElementById('cdTalentFit').checked,
                 has_ticket_sales_tracker_access: document.getElementById('cdTicketTracker').checked,
                 credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
                 auto_access_new: {
@@ -6508,6 +6523,7 @@
             document.getElementById('hedgeFundIQDataCutoff').value = '';
             document.getElementById('hasAnalysisIQAccess').checked = false;
             document.getElementById('hasLLMOIQAccess').checked = false;
+            document.getElementById('hasTalentFitAccess').checked = false;
             document.getElementById('hasTicketSalesTrackerView').checked = false;
             document.getElementById('hasTicketSalesTrackerRun').checked = false;
             
@@ -6629,6 +6645,7 @@
             document.getElementById('getsHedgeFundIQEmails').checked = user.gets_hedge_fund_iq_emails === true; // Default false
             document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
             document.getElementById('hasLLMOIQAccess').checked = user.has_llmo_iq_access === true; // Default false
+            document.getElementById('hasTalentFitAccess').checked = user.has_talent_fit_access === true; // Default false
             document.getElementById('hasTicketSalesTrackerView').checked = user.has_ticket_sales_tracker_access === true;
             syncTSTRunWithModule();
             
@@ -8476,6 +8493,7 @@
                 has_analysis_iq_access: !!document.getElementById('hasAnalysisIQAccess').checked,
                 analysis_iq_modules: getAnalysisIQModules() || [],
                 has_llmo_iq_access: document.getElementById('hasLLMOIQAccess').checked,
+                has_talent_fit_access: document.getElementById('hasTalentFitAccess').checked,
                 has_ticket_sales_tracker_access: document.getElementById('hasTicketSalesTrackerView').checked,
                 has_rankers_iq_access: document.getElementById('hasRankersIQAccess').checked,
                 rankers_iq_options: getRankersIQOptions(),
