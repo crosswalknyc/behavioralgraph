@@ -38560,15 +38560,18 @@
                     return true;
                 });
                 
-                // Filter out items that don't exist in gen pop (can't index against them)
+                // Mark items that don't exist in gen pop (can't index against them) but still show them
+                // Previously this filtered them out, but users expect to see all items from their CSV
                 const isCurrentGenPop = currentS3Key?.toUpperCase().includes('GEN_POP') || currentS3Key?.toUpperCase().includes('GENPOP');
                 const gpCatItems = genPopBaselineData?.behavioral?.[cat];
-                const filteredItems = (!isCurrentGenPop && gpCatItems && gpCatItems.length > 0)
-                    ? dedupedItems.filter(item => {
-                        const itemName = (item.name || '').toUpperCase().trim();
-                        return gpCatItems.some(gp => (gp.name || '').toUpperCase().trim() === itemName);
-                    })
-                    : dedupedItems;
+                const gpNameSet = new Set((gpCatItems || []).map(gp => (gp.name || '').toUpperCase().trim()));
+                // Mark each item with whether it has a gen pop match (for index display)
+                dedupedItems.forEach(item => {
+                    const itemName = (item.name || '').toUpperCase().trim();
+                    item._hasGenPopMatch = isCurrentGenPop || !gpCatItems || gpCatItems.length === 0 || gpNameSet.has(itemName);
+                });
+                // Show ALL items (don't filter) - index will show "-" for items without gen pop match
+                const filteredItems = dedupedItems;
                 
                 // Default sort by percentage descending
                 const sortedItems = filteredItems.sort((a, b) => (b.pct || 0) - (a.pct || 0));
@@ -39503,16 +39506,21 @@
                 const profilePct = item.pct || 0;
                 // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
                 const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                
+
                 // Show profile % and gen pop % alongside index - use N/A for 0 (gen pop is actual %, e.g. 0.78 = 0.78%)
-                const profileDisplay = isProjection 
+                const profileDisplay = isProjection
                     ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || 0)))
                     : formatValueOrNA(profilePct, true);
                 const genPopProjection = item.genPopProjection ?? 0;
-                const genPopDisplay = isProjection 
+                const genPopDisplay = isProjection
                     ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                     : formatValueOrNA(genPopPct, true);
                 
+                // Check if item has gen pop match (for index display)
+                // Items without gen pop match will show "-" for index since we can't calculate it
+                const hasGenPopMatch = item._hasGenPopMatch !== false;
+                const showIndex = hasGenPopMatch && genPopDisplay !== 'N/A';
+
                 return `
                     <div class="behavioral-item">
                         <span class="behavioral-rank">${item._rank || (idx + 1)}</span>
@@ -39520,8 +39528,8 @@
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                         </div>
                         <span class="behavioral-pct" style="color: var(--text-primary);">${profileDisplay}</span>
-                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(${genPopDisplay})</span>
-                        <span class="behavioral-index index-col" style="color: ${indexColor}; font-weight: 700;">${genPopDisplay === 'N/A' ? '' : formatIndex(index)}</span>
+                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? '(' + genPopDisplay + ')' : '-'}</span>
+                        <span class="behavioral-index index-col" style="color: ${indexColor}; font-weight: 700;">${showIndex ? formatIndex(index) : '-'}</span>
                     </div>
                 `;
             }).join('');
