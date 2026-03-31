@@ -18475,6 +18475,14 @@
                     if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
                     window.sfConvPrecomputedAnalysis.fan_page_count = parseInt(val) || 0;
                 }
+                else if (col === 'ANALYSIS_PODCAST_CLIP_COUNT' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.podcast_clip_count = parseInt(val) || 0;
+                }
+                else if (col === 'ANALYSIS_GEOGRAPHIC_LEAKAGE_COUNT' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.geographic_leakage_count = parseInt(val) || 0;
+                }
                 else if (col === 'ANALYSIS_FAKE_VIEW_PCT' && currentSection === 'performance_analysis') {
                     if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
                     window.sfConvPrecomputedAnalysis.estimated_fake_view_percentage = parseInt(val) || 0;
@@ -18483,16 +18491,36 @@
                     if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
                     window.sfConvPrecomputedAnalysis.risk_level = val || 'MEDIUM';
                 }
+                else if (col === 'ANALYSIS_HAS_UTM_TRACKING' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.has_utm_tracking = val === 'true';
+                }
+                else if (col === 'ANALYSIS_HAS_PLATFORM_CTA' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.has_platform_cta = val === 'true';
+                }
                 else if (col === 'ANALYSIS_SUMMARY' && currentSection === 'performance_analysis') {
                     if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
                     window.sfConvPrecomputedAnalysis.summary = val || '';
                 }
+                else if (col === 'ANALYSIS_PLATFORM' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    try {
+                        window.sfConvPrecomputedAnalysis.platform_analysis = JSON.parse(val);
+                    } catch (e) { console.warn('Failed to parse platform analysis:', val); }
+                }
+                else if (col === 'ANALYSIS_ACCOUNT_CATEGORIZATION' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    try {
+                        window.sfConvPrecomputedAnalysis.account_categorization = JSON.parse(val);
+                    } catch (e) { console.warn('Failed to parse account categorization:', val); }
+                }
                 else if (col.startsWith('ANALYSIS_FINDING_') && currentSection === 'performance_analysis') {
                     if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
-                    if (!window.sfConvPrecomputedAnalysis.findings) window.sfConvPrecomputedAnalysis.findings = [];
+                    if (!window.sfConvPrecomputedAnalysis.structural_failures) window.sfConvPrecomputedAnalysis.structural_failures = [];
                     try {
                         const finding = JSON.parse(val);
-                        window.sfConvPrecomputedAnalysis.findings.push(finding);
+                        window.sfConvPrecomputedAnalysis.structural_failures.push(finding);
                     } catch (e) {
                         console.warn('Failed to parse finding:', val);
                     }
@@ -18823,11 +18851,76 @@
             // Executive summary
             document.getElementById('sfConvSummaryText').textContent = analysis.summary || 'No summary available.';
             
-            // Findings
-            const findingsContainer = document.getElementById('sfConvFindingsList');
-            const findings = analysis.findings || [];
+            // Platform Analysis (if available)
+            const platAnalysis = analysis.platform_analysis;
+            const acctCat = analysis.account_categorization;
+            let platformHtml = '';
             
-            if (findings.length === 0) {
+            if (platAnalysis) {
+                const monoIcon = platAnalysis.is_monoculture ? '🚨' : '✅';
+                const monoText = platAnalysis.is_monoculture 
+                    ? `Monoculture Campaign: ${platAnalysis.monoculture_percentage || 90}%+ on ${platAnalysis.dominant_platform}`
+                    : 'Multi-platform distribution';
+                const tiktokIcon = platAnalysis.tiktok_underutilized ? '⚠️' : '✅';
+                const tiktokText = platAnalysis.tiktok_underutilized 
+                    ? 'TikTok underutilized (highest discovery velocity)'
+                    : 'TikTok adequately utilized';
+                
+                platformHtml = `
+                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">Platform Distribution</div>
+                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                            <div style="font-size: 0.85rem;">${monoIcon} ${monoText}</div>
+                            <div style="font-size: 0.85rem;">${tiktokIcon} ${tiktokText}</div>
+                            <div style="font-size: 0.85rem;">${analysis.has_utm_tracking ? '✅' : '❌'} UTM Tracking</div>
+                            <div style="font-size: 0.85rem;">${analysis.has_platform_cta ? '✅' : '❌'} Platform CTA</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Account Categorization (if available)
+            let acctHtml = '';
+            if (acctCat) {
+                const categories = [
+                    { key: 'official', label: 'Official', color: 'var(--accent-lime)', icon: '✓' },
+                    { key: 'clip_farms', label: 'Clip Farms', color: 'var(--accent-red)', icon: '✂️' },
+                    { key: 'fan_edits', label: 'Fan Edits', color: 'var(--accent-orange)', icon: '🎬' },
+                    { key: 'podcast_clips', label: 'Podcast', color: 'var(--accent-pink)', icon: '🎙' },
+                    { key: 'geographic_regional', label: 'Geographic', color: 'var(--accent-cyan)', icon: '🌍' },
+                    { key: 'unknown', label: 'Unknown', color: 'var(--text-secondary)', icon: '❓' }
+                ];
+                
+                let catRows = categories.map(cat => {
+                    const accounts = acctCat[cat.key] || [];
+                    if (accounts.length === 0) return '';
+                    return `
+                        <div style="display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span style="min-width: 100px; color: ${cat.color}; font-size: 0.75rem; font-weight: 600;">${cat.icon} ${cat.label} (${accounts.length})</span>
+                            <div style="flex: 1; font-size: 0.75rem; color: var(--text-secondary); font-family: monospace; line-height: 1.5;">
+                                ${accounts.slice(0, 8).join(', ')}${accounts.length > 8 ? `, +${accounts.length - 8} more` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).filter(Boolean).join('');
+                
+                if (catRows) {
+                    acctHtml = `
+                        <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.75rem;">Account Categorization</div>
+                            ${catRows}
+                        </div>
+                    `;
+                }
+            }
+            
+            // Insert platform and account analysis before findings
+            const findingsContainer = document.getElementById('sfConvFindingsList');
+            
+            // Use structural_failures if available, fall back to findings
+            const findings = analysis.structural_failures || analysis.findings || [];
+            
+            if (findings.length === 0 && !platformHtml && !acctHtml) {
                 findingsContainer.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center;">No findings to display.</div>';
                 return;
             }
@@ -18838,7 +18931,7 @@
                 'info': { bg: 'rgba(59, 130, 246, 0.1)', border: 'var(--accent-cyan)', icon: 'ℹ️' }
             };
             
-            findingsContainer.innerHTML = findings.map((f, idx) => {
+            const findingsHtml = findings.map((f, idx) => {
                 const sc = severityColors[f.severity] || severityColors['info'];
                 const accounts = (f.accounts_mentioned || []).map(a => `<span style="background: var(--bg-dark); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-family: monospace;">${a}</span>`).join(' ');
                 
@@ -18847,15 +18940,18 @@
                         <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
                             <div style="font-size: 1.25rem;">${sc.icon}</div>
                             <div style="flex: 1;">
-                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Finding #${idx + 1}: ${f.title || 'Untitled'}</div>
+                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Structural Failure #${idx + 1}: ${f.title || 'Untitled'}</div>
                                 ${accounts ? `<div style="margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">${accounts}</div>` : ''}
-                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem;">${f.explanation || ''}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem; white-space: pre-wrap;">${f.explanation || ''}</div>
                                 ${f.recommendation ? `<div style="font-size: 0.8rem; color: var(--accent-lime); background: rgba(132, 204, 22, 0.1); padding: 0.5rem 0.75rem; border-radius: 6px;"><strong>💡 Recommendation:</strong> ${f.recommendation}</div>` : ''}
                             </div>
                         </div>
                     </div>
                 `;
             }).join('');
+            
+            // Combine all sections
+            findingsContainer.innerHTML = platformHtml + acctHtml + findingsHtml;
         }
 
         window.showRankerIQ = function() {

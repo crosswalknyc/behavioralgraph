@@ -21229,13 +21229,27 @@ def run_sf_lf_conversion(job_id):
                 csv_rows.append({'Column': 'ANALYSIS_CLICK_FARM_COUNT', 'Value': str(ai_analysis.get('click_farm_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_OFFICIAL_COUNT', 'Value': str(ai_analysis.get('official_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_FAN_PAGE_COUNT', 'Value': str(ai_analysis.get('fan_page_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_PODCAST_CLIP_COUNT', 'Value': str(ai_analysis.get('podcast_clip_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_GEOGRAPHIC_LEAKAGE_COUNT', 'Value': str(ai_analysis.get('geographic_leakage_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_FAKE_VIEW_PCT', 'Value': str(ai_analysis.get('estimated_fake_view_percentage', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_RISK_LEVEL', 'Value': ai_analysis.get('risk_level', 'MEDIUM'), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_HAS_UTM_TRACKING', 'Value': str(ai_analysis.get('has_utm_tracking', False)).lower(), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_HAS_PLATFORM_CTA', 'Value': str(ai_analysis.get('has_platform_cta', False)).lower(), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 csv_rows.append({'Column': 'ANALYSIS_SUMMARY', 'Value': ai_analysis.get('summary', ''), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 
-                # Store findings as JSON string
-                findings = ai_analysis.get('findings', [])
-                for idx, finding in enumerate(findings):
+                # Store platform analysis as JSON
+                platform_analysis = ai_analysis.get('platform_analysis')
+                if platform_analysis:
+                    csv_rows.append({'Column': 'ANALYSIS_PLATFORM', 'Value': json.dumps(platform_analysis), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                
+                # Store account categorization as JSON
+                account_cat = ai_analysis.get('account_categorization')
+                if account_cat:
+                    csv_rows.append({'Column': 'ANALYSIS_ACCOUNT_CATEGORIZATION', 'Value': json.dumps(account_cat), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                
+                # Store structural failures (or findings) as JSON strings
+                failures = ai_analysis.get('structural_failures') or ai_analysis.get('findings', [])
+                for idx, finding in enumerate(failures):
                     finding_json = json.dumps(finding)
                     csv_rows.append({'Column': f'ANALYSIS_FINDING_{idx + 1}', 'Value': finding_json, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 
@@ -21343,62 +21357,122 @@ def run_sf_lf_performance_analysis_internal(urls, lf_title, lf_platform, total_v
     # Format URLs for analysis
     url_list = '\n'.join([f"- {url}" for url in urls[:50]])
     
+    # Count platforms from URLs
+    platform_counts = {'tiktok': 0, 'instagram': 0, 'youtube': 0, 'other': 0}
+    for url in urls:
+        url_lower = url.lower()
+        if 'tiktok' in url_lower:
+            platform_counts['tiktok'] += 1
+        elif 'instagram' in url_lower or '/reel/' in url_lower:
+            platform_counts['instagram'] += 1
+        elif 'youtube' in url_lower or 'youtu.be' in url_lower:
+            platform_counts['youtube'] += 1
+        else:
+            platform_counts['other'] += 1
+    
+    total_urls = len(urls)
+    platform_dist = f"TikTok: {platform_counts['tiktok']} ({100*platform_counts['tiktok']/total_urls:.1f}%), Instagram: {platform_counts['instagram']} ({100*platform_counts['instagram']/total_urls:.1f}%), YouTube: {platform_counts['youtube']} ({100*platform_counts['youtube']/total_urls:.1f}%)"
+    
     # Format numbers for prompt
     tv = int(total_views) if isinstance(total_views, (int, float)) else 0
     cv = int(converted) if isinstance(converted, (int, float)) else 0
     cr = conversion_rate if isinstance(conversion_rate, str) else f"{conversion_rate}%"
     
-    prompt = f"""You are a senior marketing analyst specializing in digital media attribution and influencer fraud detection. Analyze this short-form content campaign that was meant to drive viewers to "{lf_title}" on {lf_platform}.
+    prompt = f"""You are a senior marketing analyst and media attribution expert at a major entertainment studio. You're reviewing a short-form content campaign meant to drive viewers to "{lf_title}" on {lf_platform}.
 
 CAMPAIGN METRICS:
-- Total Short Form Views (Duplicated): {tv:,}
-- Converted Users: {cv:,}
+- Total Short Form Views: {tv:,}
+- Converted Users: {cv:,}  
 - Conversion Rate: {cr}
+- Total URLs Analyzed: {total_urls}
+- Platform Distribution: {platform_dist}
 
-SHORT FORM CONTENT URLs ANALYZED:
+SHORT FORM CONTENT URLs:
 {url_list}
 
-ANALYSIS TASKS:
-1. Identify which URLs appear to be from:
-   - Click farms / viral clip aggregators (look for patterns like @klyro.ae, generic clip accounts, non-official accounts)
-   - Fan pages / unofficial accounts
-   - Official brand/studio accounts
-   - Regional aggregators (.ae, .pk, random account names)
+CONDUCT A DEEP STRUCTURAL ANALYSIS covering these areas:
 
-2. Estimate what percentage of views likely came from non-official/click farm sources
+1. **OFFICIAL vs UNOFFICIAL ACCOUNTS**
+   - Are ANY of these from official studio/network accounts (Sony, Netflix, official show accounts)?
+   - Categorize accounts into: Official, Clip Farms, Fan Edits, Podcast Clips, Geographic/Regional, Unknown
+   - Look for red flags: @klyro.ae (UAE aggregator), generic names like @cinemaclipss, @scripted.cinematic, _edits accounts
 
-3. Identify the TOP 3-5 FINDINGS that explain why this campaign succeeded or failed at driving conversions
+2. **PLATFORM DISTRIBUTION ANALYSIS**
+   - Is this a mono-culture campaign (90%+ on one platform)?
+   - TikTok drives highest short-form discovery velocity for entertainment - is it being used?
+   - Instagram Reels algorithm suppresses coordinated same-day content floods
 
-FORMAT YOUR RESPONSE AS JSON:
+3. **INSTAGRAM REEL ID CLUSTERING** (if Instagram URLs present)
+   - Instagram reel shortcodes encode timestamps. Similar prefixes (DVH, DVI, DVJ) = same-day posting
+   - Mass dumps in 24-hour windows trigger spam filters and suppress organic reach
+   - Look for coordinated posting patterns
+
+4. **UTM/TRACKING ANALYSIS**
+   - Do ANY URLs contain ?utm_source=, ?ref=, or tracking parameters?
+   - Without tracking, conversions cannot be attributed to specific assets
+   - No A/B testing possible without attribution
+
+5. **CTA AND DESTINATION ANALYSIS**
+   - Do any clips contain links to {lf_platform}?
+   - Are there "Now on Netflix" moments or platform identity signals?
+   - Clips without CTAs are entertainment objects, not marketing
+
+6. **GEOGRAPHIC LEAKAGE**
+   - Regional accounts (.ae, .pk, Korean accounts) may drive views from audiences outside the serviceable region
+   - Non-US views for US Netflix content = wasted impressions
+
+7. **CONTENT ECOSYSTEM MISMATCH**
+   - Podcast clip accounts distribute audio-heavy content incompatible with visual content conversion
+   - Fan edit accounts may have engaged audiences but zero conversion architecture
+
+FORMAT AS JSON:
 {{
-    "click_farm_count": <number of URLs identified as click farms/aggregators>,
-    "official_count": <number of URLs from official accounts>,
-    "fan_page_count": <number of URLs from fan pages>,
-    "estimated_fake_view_percentage": <0-100 number>,
+    "click_farm_count": <number>,
+    "official_count": <number>,
+    "fan_page_count": <number>,
+    "podcast_clip_count": <number>,
+    "geographic_leakage_count": <number>,
+    "estimated_fake_view_percentage": <0-100>,
     "risk_level": "HIGH" | "MEDIUM" | "LOW",
-    "findings": [
+    "platform_analysis": {{
+        "dominant_platform": "Instagram" | "TikTok" | "YouTube" | "Mixed",
+        "is_monoculture": true | false,
+        "monoculture_percentage": <number if monoculture>,
+        "tiktok_underutilized": true | false
+    }},
+    "account_categorization": {{
+        "official": ["list of official accounts if any"],
+        "clip_farms": ["@account1", "@account2"],
+        "fan_edits": ["@account1"],
+        "podcast_clips": ["@account1"],
+        "geographic_regional": ["@account1 (region)"],
+        "unknown": ["@account1"]
+    }},
+    "structural_failures": [
         {{
-            "title": "Finding title",
+            "title": "Specific failure title (e.g., 'Zero Official Accounts', 'Instagram Reel Timestamp Clustering')",
             "severity": "critical" | "warning" | "info",
             "accounts_mentioned": ["@account1", "@account2"],
-            "explanation": "Detailed explanation of the finding and its impact on conversion",
-            "recommendation": "What should be done differently"
+            "explanation": "Detailed explanation with specific evidence from the URLs. Be specific about WHY this kills conversion. Reference the accounts by name.",
+            "recommendation": "Actionable fix"
         }}
     ],
-    "summary": "2-3 sentence executive summary of the campaign's effectiveness"
+    "has_utm_tracking": false,
+    "has_platform_cta": false,
+    "summary": "Hard-hitting 2-3 sentence executive summary. Lead with the core structural problem. Example: 'This is a near-monoculture Instagram campaign masquerading as a multi-platform strategy. Zero official accounts across {total_urls} URLs means Sony effectively donated their IP to third-party accounts with zero conversion architecture.'"
 }}
 
-Be specific about which accounts are problematic and why. Think like a CMO reviewing why a campaign underperformed."""
+Be brutally honest. Think like a CMO who needs to explain to the board why a campaign underperformed. Name specific accounts and explain exactly why they're problematic."""
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a marketing analytics expert. Always respond with valid JSON only, no markdown formatting."},
+                {"role": "system", "content": "You are a senior entertainment marketing analyst known for brutally honest campaign post-mortems. You identify structural failures that explain conversion problems. Always respond with valid JSON only, no markdown."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
-            max_tokens=2000
+            temperature=0.4,
+            max_tokens=4000
         )
         
         result_text = response.choices[0].message.content.strip()
