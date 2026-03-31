@@ -22359,13 +22359,16 @@ def submit_flywheel_conversion():
                 'flywheel_points': flywheel_points,
                 'start_date': start_date,
                 'end_date': end_date,
-                'project_name': project_name
+                'project_name': project_name,
+                'compare_start_date': compare_start_date,
+                'compare_end_date': compare_end_date
             }
         }
         if s3_client:
             _save_job_status_to_s3(job_id, jobs[job_id])
 
-        desc = f"{project_name} ({start_date}–{end_date})"
+        compare_suffix = f" vs {compare_start_date}–{compare_end_date}" if compare_start_date else ""
+        desc = f"{project_name} ({start_date}–{end_date}{compare_suffix})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Flywheel Conversion', credits_used=CREDITS_FLYWHEEL_CONVERSION):
             return jsonify({'error': 'Insufficient credits.'}), 403
         
@@ -22406,12 +22409,15 @@ def run_flywheel_conversion(job_id):
         start_date = params.get('start_date')
         end_date = params.get('end_date')
         project_name = params.get('project_name', 'Flywheel Analysis')
+        compare_start_date = params.get('compare_start_date')
+        compare_end_date = params.get('compare_end_date')
+        has_comparison = bool(compare_start_date and compare_end_date)
         
         import re
         flywheel_points_split = re.split(r'[,\n\r]+', flywheel_points_raw)
         flywheel_points = [p.strip() for p in flywheel_points_split if p.strip()]
         
-        print(f"[Flywheel] Entry point: {entry_point}, Flywheel points: {flywheel_points}")
+        print(f"[Flywheel] Entry point: {entry_point}, Flywheel points: {flywheel_points}, Compare: {has_comparison}")
         update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
 
         import snowflake.connector
@@ -22452,7 +22458,15 @@ def run_flywheel_conversion(job_id):
             'flywheel_metrics': [],
             'funnel_analysis': [],
             'conversion_rates': {},
-            'demographics': {}
+            'demographics': {},
+            'has_comparison': has_comparison,
+            'compare_start_date': compare_start_date,
+            'compare_end_date': compare_end_date,
+            'compare_entry_point_metrics': {},
+            'compare_flywheel_metrics': [],
+            'compare_funnel_analysis': [],
+            'compare_conversion_rates': {},
+            'period_comparison': {}
         }
         
         like_esc_entry, _ = _escape_for_flywheel_sql(entry_point)
@@ -22581,6 +22595,152 @@ def run_flywheel_conversion(job_id):
                 'best_converting_step': max(results['flywheel_metrics'], key=lambda x: x['conversion_from_previous'])['point'] if results['flywheel_metrics'] else None,
                 'worst_converting_step': min(results['flywheel_metrics'], key=lambda x: x['conversion_from_previous'])['point'] if results['flywheel_metrics'] else None
             }
+        
+        if has_comparison:
+            update_job_status(job_id, progress=89, message='Running comparison period analysis...')
+            print(f"[Flywheel] Starting comparison period analysis: {compare_start_date} to {compare_end_date}")
+            
+            compare_entry_query = f"""
+            SELECT COUNT(DISTINCT UID) as unique_users
+            FROM CLICKSTREAM_FINAL
+            WHERE DATE BETWEEN '{compare_start_date}' AND '{compare_end_date}'
+              AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
+                   OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
+            """
+            cur.execute(compare_entry_query)
+            compare_entry_row = cur.fetchone()
+            compare_entry_unique_users = compare_entry_row[0] if compare_entry_row else 0
+            
+            compare_entry_boosted = compare_entry_unique_users * BOOST_FACTOR
+            compare_entry_gen_pop = round(compare_entry_boosted / SAMPLE_SIZE * US_POPULATION)
+            
+            results['compare_entry_point_metrics'] = {
+                'raw_unique_users': compare_entry_unique_users,
+                'boosted_users': compare_entry_boosted,
+                'gen_pop_projection': compare_entry_gen_pop,
+                'percentage_of_sample': round(compare_entry_boosted / SAMPLE_SIZE * 100, 2) if SAMPLE_SIZE > 0 else 0
+            }
+            
+            print(f"[Flywheel] Comparison entry point: {compare_entry_unique_users} unique users")
+            
+            if compare_entry_unique_users > 0:
+                compare_uids_query = f"""
+                SELECT DISTINCT UID
+                FROM CLICKSTREAM_FINAL
+                WHERE DATE BETWEEN '{compare_start_date}' AND '{compare_end_date}'
+                  AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
+                       OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
+                """
+                cur.execute(compare_uids_query)
+                compare_entry_uids = set(row[0] for row in cur.fetchall())
+                
+                compare_cumulative_uids = compare_entry_uids.copy()
+                compare_previous_step_uids = compare_entry_uids.copy()
+                
+                for idx, point in enumerate(flywheel_points):
+                    update_job_status(job_id, progress=89 + int((idx / total_points) * 5), message=f'Comparing point {idx + 1}/{total_points}: {point[:30]}...')
+                    
+                    like_esc_point, _ = _escape_for_flywheel_sql(point)
+                    
+                    if not compare_cumulative_uids:
+                        results['compare_flywheel_metrics'].append({
+                            'point': point,
+                            'position': idx + 1,
+                            'raw_unique_users': 0,
+                            'boosted_users': 0,
+                            'gen_pop_projection': 0,
+                            'conversion_from_entry': 0,
+                            'conversion_from_previous': 0,
+                            'cumulative_retention': 0
+                        })
+                        continue
+                    
+                    compare_uid_list = ','.join(f"'{uid}'" for uid in list(compare_cumulative_uids)[:50000])
+                    
+                    compare_point_query = f"""
+                    SELECT DISTINCT UID
+                    FROM CLICKSTREAM_FINAL
+                    WHERE DATE BETWEEN '{compare_start_date}' AND '{compare_end_date}'
+                      AND UID IN ({compare_uid_list})
+                      AND (LOWER(URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
+                           OR LOWER(COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
+                    """
+                    cur.execute(compare_point_query)
+                    compare_point_uids = set(row[0] for row in cur.fetchall())
+                    
+                    compare_point_unique = len(compare_point_uids)
+                    compare_point_boosted = compare_point_unique * BOOST_FACTOR
+                    compare_point_gen_pop = round(compare_point_boosted / SAMPLE_SIZE * US_POPULATION)
+                    
+                    compare_conv_from_entry = round(compare_point_unique / len(compare_entry_uids) * 100, 2) if compare_entry_uids else 0
+                    compare_conv_from_prev = round(compare_point_unique / len(compare_previous_step_uids) * 100, 2) if compare_previous_step_uids else 0
+                    
+                    results['compare_flywheel_metrics'].append({
+                        'point': point,
+                        'position': idx + 1,
+                        'raw_unique_users': compare_point_unique,
+                        'boosted_users': compare_point_boosted,
+                        'gen_pop_projection': compare_point_gen_pop,
+                        'conversion_from_entry': compare_conv_from_entry,
+                        'conversion_from_previous': compare_conv_from_prev,
+                        'cumulative_retention': compare_conv_from_entry
+                    })
+                    
+                    print(f"[Flywheel] Comparison point '{point}': {compare_point_unique} users ({compare_conv_from_entry}% of entry)")
+                    
+                    compare_cumulative_uids = compare_point_uids
+                    compare_previous_step_uids = compare_point_uids
+                
+                compare_funnel_steps = [{'step': 'Entry: ' + entry_point, 'users': compare_entry_unique_users, 'boosted': compare_entry_boosted, 'gen_pop': compare_entry_gen_pop, 'pct_of_entry': 100.0}]
+                for metric in results['compare_flywheel_metrics']:
+                    compare_funnel_steps.append({
+                        'step': f"Step {metric['position']}: {metric['point']}",
+                        'users': metric['raw_unique_users'],
+                        'boosted': metric['boosted_users'],
+                        'gen_pop': metric['gen_pop_projection'],
+                        'pct_of_entry': metric['conversion_from_entry']
+                    })
+                results['compare_funnel_analysis'] = compare_funnel_steps
+                
+                if results['compare_flywheel_metrics']:
+                    compare_final = results['compare_flywheel_metrics'][-1]
+                    results['compare_conversion_rates'] = {
+                        'overall_conversion': compare_final['conversion_from_entry'],
+                        'average_step_conversion': round(sum(m['conversion_from_previous'] for m in results['compare_flywheel_metrics']) / len(results['compare_flywheel_metrics']), 2) if results['compare_flywheel_metrics'] else 0,
+                        'best_converting_step': max(results['compare_flywheel_metrics'], key=lambda x: x['conversion_from_previous'])['point'] if results['compare_flywheel_metrics'] else None,
+                        'worst_converting_step': min(results['compare_flywheel_metrics'], key=lambda x: x['conversion_from_previous'])['point'] if results['compare_flywheel_metrics'] else None
+                    }
+            
+            entry_change = round(((entry_unique_users - compare_entry_unique_users) / compare_entry_unique_users * 100), 2) if compare_entry_unique_users > 0 else 0
+            current_overall = results['conversion_rates'].get('overall_conversion', 0)
+            compare_overall = results['compare_conversion_rates'].get('overall_conversion', 0)
+            conversion_change = round(current_overall - compare_overall, 2)
+            
+            results['period_comparison'] = {
+                'current_period': f"{start_date} to {end_date}",
+                'prior_period': f"{compare_start_date} to {compare_end_date}",
+                'entry_users_change_pct': entry_change,
+                'entry_users_trend': 'up' if entry_change > 0 else ('down' if entry_change < 0 else 'flat'),
+                'overall_conversion_change_pts': conversion_change,
+                'conversion_trend': 'up' if conversion_change > 0 else ('down' if conversion_change < 0 else 'flat'),
+                'step_changes': []
+            }
+            
+            for i, current_metric in enumerate(results['flywheel_metrics']):
+                if i < len(results['compare_flywheel_metrics']):
+                    compare_metric = results['compare_flywheel_metrics'][i]
+                    user_change = round(((current_metric['raw_unique_users'] - compare_metric['raw_unique_users']) / compare_metric['raw_unique_users'] * 100), 2) if compare_metric['raw_unique_users'] > 0 else 0
+                    conv_change = round(current_metric['conversion_from_entry'] - compare_metric['conversion_from_entry'], 2)
+                    results['period_comparison']['step_changes'].append({
+                        'point': current_metric['point'],
+                        'position': current_metric['position'],
+                        'users_change_pct': user_change,
+                        'users_trend': 'up' if user_change > 0 else ('down' if user_change < 0 else 'flat'),
+                        'conversion_change_pts': conv_change,
+                        'conversion_trend': 'up' if conv_change > 0 else ('down' if conv_change < 0 else 'flat')
+                    })
+            
+            print(f"[Flywheel] Comparison complete: Entry users {entry_change:+.1f}%, Overall conversion {conversion_change:+.1f}pts")
         
         update_job_status(job_id, progress=95, message='Saving results...')
         _save_flywheel_results(job_id, results, job)
