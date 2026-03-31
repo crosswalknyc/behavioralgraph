@@ -76,7 +76,7 @@ def calculate_boost_multiplier(raw_value):
 SNOWFLAKE_USER = "hotdogsandcheezeits"
 SNOWFLAKE_PASSWORD = "S3nshine2282!"
 SNOWFLAKE_ACCOUNT = "qsodrkt-hgb46445"
-SNOWFLAKE_WAREHOUSE = "ATTRIBUTIONPROCESSING"
+SNOWFLAKE_WAREHOUSE = "SUBSCRIBERIQ"  # 6XL warehouse for Subscriber IQ pipeline
 SNOWFLAKE_DATABASE = "PROCESSEDCLICKSTREAM"
 SNOWFLAKE_SCHEMA = "PUBLIC"
 
@@ -90,10 +90,11 @@ def connect_snowflake():
     user = os.environ.get("SNOWFLAKE_USER") or SNOWFLAKE_USER
     password = os.environ.get("SNOWFLAKE_PASSWORD") or SNOWFLAKE_PASSWORD
     account = os.environ.get("SNOWFLAKE_ACCOUNT") or SNOWFLAKE_ACCOUNT
-    warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE") or SNOWFLAKE_WAREHOUSE
+    # SUBSCRIBERIQ_WAREHOUSE env var takes precedence for this pipeline
+    warehouse = os.environ.get("SUBSCRIBERIQ_WAREHOUSE") or os.environ.get("SNOWFLAKE_WAREHOUSE") or SNOWFLAKE_WAREHOUSE
     database = os.environ.get("SNOWFLAKE_DATABASE") or SNOWFLAKE_DATABASE
     schema = os.environ.get("SNOWFLAKE_SCHEMA") or SNOWFLAKE_SCHEMA
-    print("Connecting to Snowflake...")
+    print(f"Connecting to Snowflake (warehouse: {warehouse})...")
     conn = snowflake.connector.connect(
         user=user,
         password=password,
