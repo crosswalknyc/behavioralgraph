@@ -22407,7 +22407,7 @@ def run_flywheel_conversion(job_id):
 
         import snowflake.connector
         
-        FLYWHEEL_WAREHOUSE = 'BEHAVIORGRAPH6X'
+        FLYWHEEL_WAREHOUSE = 'FLYWHEEL'
         
         conn = snowflake.connector.connect(
             user=os.environ.get('SNOWFLAKE_USER'),
