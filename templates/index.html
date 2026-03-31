@@ -18663,8 +18663,8 @@
             const perPlatCards = document.getElementById('sfConvPerPlatformCards');
             if (perPlatformConversion.length > 0 && perPlatSection && perPlatCards) {
                 perPlatSection.style.display = 'block';
-                const platformIcons = { 'Youtube': '📺', 'Tiktok': '🎵', 'Instagram': '📸' };
-                const platformColors = { 'Youtube': '#ef4444', 'Tiktok': '#10b981', 'Instagram': '#ec4899' };
+                const platformIcons = { 'Youtube': '📺', 'TikTok': '🎵', 'Instagram': '📸' };
+                const platformColors = { 'Youtube': '#ef4444', 'TikTok': '#10b981', 'Instagram': '#ec4899' };
                 perPlatCards.innerHTML = perPlatformConversion.map(p => {
                     const viewersProj = parseInt(p.viewersGenPop) || 0;
                     const convertedProj = parseInt(p.convertedGenPop) || 0;

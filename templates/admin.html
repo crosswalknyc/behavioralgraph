@@ -1751,81 +1751,6 @@
                 </div>
             </div>
 
-            <!-- Analysis Pricing Tab -->
-            <div id="settings-tab-analysisPricing" class="settings-tab-content" style="display: none;">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>💰 Analysis Pricing</h2>
-                        <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                            Configure the credit cost for each Analysis IQ feature. Changes take effect immediately for all users.
-                        </p>
-                    </div>
-                    <div style="padding: 1rem;">
-                        <div id="analysisPricingGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                            <div class="pricing-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">🎯 Profile Analysis</label>
-                                <input type="number" id="pricingProfileAnalysis" min="0" value="5" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per profile run</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">🎬 Impact IQ (Ticket Sales)</label>
-                                <input type="number" id="pricingTicketSales" min="0" value="10" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per talent-movie analysis</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">🎬 Ticket Sales Tracker</label>
-                                <input type="number" id="pricingTicketSalesTracker" min="0" value="10" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per movie tracker run</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">📺 Subscriber IQ (SVOD)</label>
-                                <input type="number" id="pricingSvod" min="0" value="10" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per acquisition analysis</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">💰 Campaign ROI</label>
-                                <input type="number" id="pricingCampaignRoi" min="0" value="5" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per campaign analysis</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">⏱️ Watch Time IQ</label>
-                                <input type="number" id="pricingWatchTime" min="0" value="1" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per watch time analysis</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">📊 ROAS IQ</label>
-                                <input type="number" id="pricingRoasIq" min="0" value="8" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per ROAS analysis</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">🔄 SF-LF Conversion</label>
-                                <input type="number" id="pricingSfLfConversion" min="0" value="10" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per conversion analysis</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">🛒 E-Commerce IQ</label>
-                                <input type="number" id="pricingEcommerceIq" min="0" value="5" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per e-commerce analysis</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--accent-primary); background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.15)); padding: 1rem; border-radius: 8px; border: 1px solid var(--accent-primary);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">🎭 Talent Fit - Per Talent</label>
-                                <input type="number" id="pricingTalentFitPerTalent" min="0" value="5" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits per talent assessed</small>
-                            </div>
-                            <div class="pricing-item" style="background: var(--accent-primary); background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.15)); padding: 1rem; border-radius: 8px; border: 1px solid var(--accent-primary);">
-                                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">🔍 Talent Fit - Find Me Talent</label>
-                                <input type="number" id="pricingTalentFitFind" min="0" value="15" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Credits for talent discovery</small>
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 1rem; align-items: center;">
-                            <button type="button" class="btn btn-primary" onclick="saveAnalysisPricing()">💾 Save Pricing Settings</button>
-                            <span id="analysisPricingStatus" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Credit Usage by Period Tab -->
             <div id="settings-tab-creditUsageExport" class="settings-tab-content" style="display: none;">
                 <div class="card">
@@ -4639,10 +4564,6 @@
                 loadSvodPricingUI();
             }
             
-            if (tabName === 'analysisPricing') {
-                loadAnalysisPricingUI();
-            }
-            
             if (tabName === 'liveFeatures') {
                 loadLiveFeatures();
             }
@@ -4845,90 +4766,6 @@
                 if (typeof showToast === 'function') showToast('SVOD pricing saved');
                 else alert('SVOD pricing saved');
             } catch (e) {
-                if (typeof showToast === 'function') showToast(e.message || 'Error saving', true);
-                else alert('Error: ' + e.message);
-            }
-        }
-
-        // Analysis Pricing (Settings)
-        async function loadAnalysisPricingUI() {
-            try {
-                const res = await fetch('/api/admin/settings/pricing', { credentials: 'same-origin' });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'Failed to load');
-                const pricing = data.pricing || {};
-                
-                const fieldMap = {
-                    'pricingProfileAnalysis': 'profile_analysis',
-                    'pricingTicketSales': 'ticket_sales',
-                    'pricingTicketSalesTracker': 'ticket_sales_tracker',
-                    'pricingSvod': 'svod',
-                    'pricingCampaignRoi': 'campaign_roi',
-                    'pricingWatchTime': 'watch_time',
-                    'pricingRoasIq': 'roas_iq',
-                    'pricingSfLfConversion': 'sf_lf_conversion',
-                    'pricingEcommerceIq': 'ecommerce_iq',
-                    'pricingTalentFitPerTalent': 'talent_fit_per_talent',
-                    'pricingTalentFitFind': 'talent_fit_find'
-                };
-                
-                for (const [fieldId, pricingKey] of Object.entries(fieldMap)) {
-                    const el = document.getElementById(fieldId);
-                    if (el && pricing[pricingKey] !== undefined) {
-                        el.value = pricing[pricingKey];
-                    }
-                }
-            } catch (e) {
-                console.error('Error loading analysis pricing:', e);
-            }
-        }
-
-        async function saveAnalysisPricing() {
-            const statusEl = document.getElementById('analysisPricingStatus');
-            if (statusEl) statusEl.textContent = 'Saving...';
-            
-            const fieldMap = {
-                'pricingProfileAnalysis': 'profile_analysis',
-                'pricingTicketSales': 'ticket_sales',
-                'pricingTicketSalesTracker': 'ticket_sales_tracker',
-                'pricingSvod': 'svod',
-                'pricingCampaignRoi': 'campaign_roi',
-                'pricingWatchTime': 'watch_time',
-                'pricingRoasIq': 'roas_iq',
-                'pricingSfLfConversion': 'sf_lf_conversion',
-                'pricingEcommerceIq': 'ecommerce_iq',
-                'pricingTalentFitPerTalent': 'talent_fit_per_talent',
-                'pricingTalentFitFind': 'talent_fit_find'
-            };
-            
-            const pricing = {};
-            for (const [fieldId, pricingKey] of Object.entries(fieldMap)) {
-                const el = document.getElementById(fieldId);
-                if (el) {
-                    pricing[pricingKey] = parseInt(el.value) || 0;
-                }
-            }
-            
-            try {
-                const res = await fetch('/api/admin/settings/pricing', {
-                    method: 'PUT',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(pricing)
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'Save failed');
-                if (statusEl) {
-                    statusEl.textContent = 'Pricing saved!';
-                    statusEl.style.color = 'var(--accent-green, #22c55e)';
-                    setTimeout(() => { statusEl.textContent = ''; }, 3000);
-                }
-                if (typeof showToast === 'function') showToast('Analysis pricing saved');
-            } catch (e) {
-                if (statusEl) {
-                    statusEl.textContent = 'Error: ' + e.message;
-                    statusEl.style.color = 'var(--accent-red, #ef4444)';
-                }
                 if (typeof showToast === 'function') showToast(e.message || 'Error saving', true);
                 else alert('Error: ' + e.message);
             }
