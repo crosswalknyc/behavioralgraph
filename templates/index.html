@@ -15714,63 +15714,103 @@
                         </div>
                         
                         <!-- Performance Analysis Section -->
-                        <div class="sf-conv-performance-analysis" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <div>
-                                    <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">🔍 Performance Analysis</h3>
-                                    <div id="sfConvAnalysisUrlNote" style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem; display: none;">Based on top 20 URLs (of <span id="sfConvTotalUrlCount">0</span> total)</div>
+                        <div class="sf-conv-performance-analysis" style="background: var(--bg-card); border-radius: 16px; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                            <!-- Header with gradient -->
+                            <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15)); padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-color);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <h3 style="margin: 0; font-size: 1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                            <span style="font-size: 1.25rem;">🤖</span> AI Performance Analysis
+                                        </h3>
+                                        <div id="sfConvAnalysisUrlNote" style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.35rem; display: none;">
+                                            📊 Based on top 20 URLs (of <span id="sfConvTotalUrlCount">0</span> total)
+                                        </div>
+                                    </div>
+                                    <button onclick="runSFConvPerformanceAnalysis()" id="sfConvRunAnalysisBtn" style="padding: 0.6rem 1.25rem; font-size: 0.8rem; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(99, 102, 241, 0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(99, 102, 241, 0.3)';">
+                                        ✨ Analyze Campaign
+                                    </button>
                                 </div>
-                                <button onclick="runSFConvPerformanceAnalysis()" id="sfConvRunAnalysisBtn" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.8rem;" title="Run a fresh AI analysis">
-                                    🤖 Analyze Campaign
-                                </button>
                             </div>
                             
-                            <!-- Analysis Results -->
-                            <div id="sfConvPerformanceResults" style="display: none;">
-                                <!-- Summary KPIs -->
-                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; text-align: center; border-left: 4px solid var(--accent-red);">
-                                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Click Farm URLs</div>
-                                        <div id="sfConvClickFarmCount" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-red);">-</div>
+                            <div style="padding: 1.5rem;">
+                                <!-- Analysis Results -->
+                                <div id="sfConvPerformanceResults" style="display: none;">
+                                    <!-- Summary KPIs - Modern Cards -->
+                                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.75rem;">
+                                        <div style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05)); border-radius: 12px; padding: 1.25rem; text-align: center; border: 1px solid rgba(239, 68, 68, 0.2); position: relative; overflow: hidden;">
+                                            <div style="position: absolute; top: -10px; right: -10px; font-size: 3rem; opacity: 0.1;">⚠️</div>
+                                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Click Farm URLs</div>
+                                            <div id="sfConvClickFarmCount" style="font-size: 2rem; font-weight: 800; color: #ef4444;">-</div>
+                                        </div>
+                                        <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05)); border-radius: 12px; padding: 1.25rem; text-align: center; border: 1px solid rgba(245, 158, 11, 0.2); position: relative; overflow: hidden;">
+                                            <div style="position: absolute; top: -10px; right: -10px; font-size: 3rem; opacity: 0.1;">👁️</div>
+                                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Est. Fake Views</div>
+                                            <div id="sfConvFakeViewsPct" style="font-size: 2rem; font-weight: 800; color: #f59e0b;">-</div>
+                                        </div>
+                                        <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05)); border-radius: 12px; padding: 1.25rem; text-align: center; border: 1px solid rgba(34, 197, 94, 0.2); position: relative; overflow: hidden;">
+                                            <div style="position: absolute; top: -10px; right: -10px; font-size: 3rem; opacity: 0.1;">✓</div>
+                                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Official Accounts</div>
+                                            <div id="sfConvOfficialCount" style="font-size: 2rem; font-weight: 800; color: #22c55e;">-</div>
+                                        </div>
+                                        <div id="sfConvRiskLevelBox" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(99, 102, 241, 0.05)); border-radius: 12px; padding: 1.25rem; text-align: center; border: 1px solid rgba(99, 102, 241, 0.2); position: relative; overflow: hidden;">
+                                            <div style="position: absolute; top: -10px; right: -10px; font-size: 3rem; opacity: 0.1;">📊</div>
+                                            <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Risk Level</div>
+                                            <div id="sfConvRiskLevel" style="font-size: 2rem; font-weight: 800;">-</div>
+                                        </div>
                                     </div>
-                                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; text-align: center; border-left: 4px solid var(--accent-orange);">
-                                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Est. Fake Views %</div>
-                                        <div id="sfConvFakeViewsPct" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange);">-</div>
+                                    
+                                    <!-- Executive Summary - Premium Card -->
+                                    <div id="sfConvSummaryBox" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.08)); border-radius: 14px; padding: 1.5rem; margin-bottom: 1.75rem; border: 1px solid rgba(99, 102, 241, 0.2); position: relative;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                            <span style="font-size: 1.1rem;">📝</span>
+                                            <div style="font-size: 0.75rem; color: #a78bfa; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Executive Summary</div>
+                                        </div>
+                                        <div id="sfConvSummaryText" style="font-size: 0.9rem; color: var(--text-primary); line-height: 1.7;"></div>
                                     </div>
-                                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; text-align: center; border-left: 4px solid var(--accent-lime);">
-                                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Official Accounts</div>
-                                        <div id="sfConvOfficialCount" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime);">-</div>
-                                    </div>
-                                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; text-align: center;" id="sfConvRiskLevelBox">
-                                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Risk Level</div>
-                                        <div id="sfConvRiskLevel" style="font-size: 1.5rem; font-weight: 700;">-</div>
-                                    </div>
+                                    
+                                    <!-- Analysis Findings (Positive + Negative) -->
+                                    <div id="sfConvFindingsList"></div>
                                 </div>
                                 
-                                <!-- Executive Summary -->
-                                <div id="sfConvSummaryBox" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1)); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; border: 1px solid rgba(99, 102, 241, 0.3);">
-                                    <div style="font-size: 0.75rem; color: var(--accent-primary); text-transform: uppercase; margin-bottom: 0.5rem;">Executive Summary</div>
-                                    <div id="sfConvSummaryText" style="font-size: 0.85rem; color: var(--text-primary); line-height: 1.5;"></div>
+                                <!-- Loading State - Animated -->
+                                <div id="sfConvPerformanceLoading" style="display: none; text-align: center; padding: 3rem 2rem;">
+                                    <div style="width: 60px; height: 60px; margin: 0 auto 1.5rem; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #a855f7); animation: pulse 1.5s ease-in-out infinite; display: flex; align-items: center; justify-content: center;">
+                                        <span style="font-size: 1.5rem;">🤖</span>
+                                    </div>
+                                    <div style="color: var(--text-primary); font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem;">Analyzing Campaign...</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Our AI is reviewing URLs for click farms, engagement quality, and campaign effectiveness</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-tertiary); margin-top: 1rem;">⏱️ This typically takes 10-20 seconds</div>
                                 </div>
                                 
-                                <!-- Analysis Findings (Positive + Negative) -->
-                                <div id="sfConvFindingsList"></div>
-                            </div>
-                            
-                            <!-- Loading State -->
-                            <div id="sfConvPerformanceLoading" style="display: none; text-align: center; padding: 2rem;">
-                                <div class="spinner" style="margin: 0 auto 1rem;"></div>
-                                <div style="color: var(--text-secondary);">Analyzing campaign with AI...</div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">This may take 10-20 seconds</div>
-                            </div>
-                            
-                            <!-- Empty State -->
-                            <div id="sfConvPerformanceEmpty" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎯</div>
-                                <div style="font-size: 0.85rem;">No analysis available yet. Click "Analyze Campaign" to get AI-powered insights on click farms, fake views, and why this campaign succeeded or failed.</div>
-                                <div style="font-size: 0.75rem; margin-top: 0.5rem; color: var(--text-tertiary);">Note: New reports automatically include AI analysis.</div>
+                                <!-- Empty State - Inviting Design -->
+                                <div id="sfConvPerformanceEmpty" style="text-align: center; padding: 3rem 2rem;">
+                                    <div style="width: 80px; height: 80px; margin: 0 auto 1.25rem; border-radius: 20px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2)); display: flex; align-items: center; justify-content: center;">
+                                        <span style="font-size: 2.5rem;">🔍</span>
+                                    </div>
+                                    <div style="font-size: 1.1rem; color: var(--text-primary); font-weight: 600; margin-bottom: 0.75rem;">Ready to Analyze</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary); max-width: 400px; margin: 0 auto; line-height: 1.6;">
+                                        Click <strong>"Analyze Campaign"</strong> to get AI-powered insights on click farms, fake views, and campaign effectiveness.
+                                    </div>
+                                    <div style="margin-top: 1.25rem; display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap;">
+                                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--text-tertiary);">
+                                            <span>✓</span> Click Farm Detection
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--text-tertiary);">
+                                            <span>✓</span> Account Categorization
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--text-tertiary);">
+                                            <span>✓</span> Strategic Recommendations
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                        <style>
+                            @keyframes pulse {
+                                0%, 100% { transform: scale(1); opacity: 1; }
+                                50% { transform: scale(1.05); opacity: 0.8; }
+                            }
+                        </style>
                     </div>
                 </div>
             </div>
@@ -19051,13 +19091,16 @@
                     : 'TikTok adequately utilized';
                 
                 platformHtml = `
-                    <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">Platform Distribution</div>
-                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-                            <div style="font-size: 0.85rem;">${monoIcon} ${monoText}</div>
-                            <div style="font-size: 0.85rem;">${tiktokIcon} ${tiktokText}</div>
-                            <div style="font-size: 0.85rem;">${analysis.has_utm_tracking ? '✅' : '❌'} UTM Tracking</div>
-                            <div style="font-size: 0.85rem;">${analysis.has_platform_cta ? '✅' : '❌'} Platform CTA</div>
+                    <div style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(6, 182, 212, 0.08)); border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid rgba(59, 130, 246, 0.15);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                            <span style="font-size: 1rem;">📊</span>
+                            <div style="font-size: 0.7rem; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Platform Distribution</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; padding: 0.5rem 0.75rem; background: var(--bg-dark); border-radius: 8px;">${monoIcon} ${monoText}</div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; padding: 0.5rem 0.75rem; background: var(--bg-dark); border-radius: 8px;">${tiktokIcon} ${tiktokText}</div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; padding: 0.5rem 0.75rem; background: var(--bg-dark); border-radius: 8px;">${analysis.has_utm_tracking ? '✅' : '❌'} UTM Tracking</div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; padding: 0.5rem 0.75rem; background: var(--bg-dark); border-radius: 8px;">${analysis.has_platform_cta ? '✅' : '❌'} Platform CTA</div>
                         </div>
                     </div>
                 `;
@@ -19090,8 +19133,11 @@
                 
                 if (catRows) {
                     acctHtml = `
-                        <div style="background: var(--bg-dark); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
-                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.75rem;">Account Categorization</div>
+                        <div style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.08)); border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid rgba(168, 85, 247, 0.15);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                <span style="font-size: 1rem;">👥</span>
+                                <div style="font-size: 0.7rem; color: #a855f7; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Account Categorization</div>
+                            </div>
                             ${catRows}
                         </div>
                     `;
@@ -19117,17 +19163,19 @@
             
             const findingsHtml = findings.map((f, idx) => {
                 const sc = severityColors[f.severity] || severityColors['info'];
-                const accounts = (f.accounts_mentioned || []).map(a => `<span style="background: var(--bg-dark); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-family: monospace;">${a}</span>`).join(' ');
+                const accounts = (f.accounts_mentioned || []).map(a => `<span style="background: var(--bg-dark); padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-family: monospace; border: 1px solid var(--border-color);">${a}</span>`).join(' ');
                 
                 return `
-                    <div style="background: ${sc.bg}; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid ${sc.border};">
-                        <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-                            <div style="font-size: 1.25rem;">${sc.icon}</div>
+                    <div style="background: ${sc.bg}; border-radius: 12px; padding: 1.25rem; margin-bottom: 0.75rem; border: 1px solid ${sc.border}30;">
+                        <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                            <div style="width: 40px; height: 40px; border-radius: 10px; background: ${sc.bg}; border: 2px solid ${sc.border}50; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <span style="font-size: 1.1rem;">${sc.icon}</span>
+                            </div>
                             <div style="flex: 1;">
-                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Structural Failure #${idx + 1}: ${f.title || 'Untitled'}</div>
-                                ${accounts ? `<div style="margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">${accounts}</div>` : ''}
-                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem; white-space: pre-wrap;">${f.explanation || ''}</div>
-                                ${f.recommendation ? `<div style="font-size: 0.8rem; color: var(--accent-lime); background: rgba(132, 204, 22, 0.1); padding: 0.5rem 0.75rem; border-radius: 6px;"><strong>💡 Recommendation:</strong> ${f.recommendation}</div>` : ''}
+                                <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem; font-size: 0.95rem;">Finding #${idx + 1}: ${f.title || 'Untitled'}</div>
+                                ${accounts ? `<div style="margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.4rem;">${accounts}</div>` : ''}
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.65; margin-bottom: 0.75rem; white-space: pre-wrap;">${f.explanation || ''}</div>
+                                ${f.recommendation ? `<div style="font-size: 0.8rem; color: #22c55e; background: rgba(34, 197, 94, 0.1); padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid rgba(34, 197, 94, 0.2);"><strong>💡 Recommendation:</strong> ${f.recommendation}</div>` : ''}
                             </div>
                         </div>
                     </div>
@@ -19139,22 +19187,26 @@
             let takeawaysHtml = '';
             if (takeaways.length > 0) {
                 const takeawayItems = takeaways.map((t, idx) => `
-                    <div style="background: rgba(132, 204, 22, 0.1); border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem; border-left: 4px solid var(--accent-lime);">
-                        <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-                            <div style="font-size: 1.25rem;">✅</div>
+                    <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(132, 204, 22, 0.05)); border-radius: 12px; padding: 1.25rem; margin-bottom: 0.75rem; border: 1px solid rgba(34, 197, 94, 0.2);">
+                        <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                            <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(34, 197, 94, 0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <span style="font-size: 1.25rem;">✅</span>
+                            </div>
                             <div style="flex: 1;">
-                                <div style="font-weight: 600; color: var(--accent-lime); margin-bottom: 0.5rem;">${t.title || 'Strategic Value'}</div>
-                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.5rem;">${t.explanation || ''}</div>
-                                ${t.business_value ? `<div style="font-size: 0.8rem; color: var(--accent-cyan); background: rgba(6, 182, 212, 0.1); padding: 0.5rem 0.75rem; border-radius: 6px;"><strong>💼 Business Value:</strong> ${t.business_value}</div>` : ''}
+                                <div style="font-weight: 700; color: #22c55e; margin-bottom: 0.5rem; font-size: 0.95rem;">${t.title || 'Strategic Value'}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem;">${t.explanation || ''}</div>
+                                ${t.business_value ? `<div style="font-size: 0.8rem; color: #06b6d4; background: rgba(6, 182, 212, 0.1); padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid rgba(6, 182, 212, 0.2);"><strong>💼 Business Value:</strong> ${t.business_value}</div>` : ''}
                             </div>
                         </div>
                     </div>
                 `).join('');
                 
                 takeawaysHtml = `
-                    <div style="margin-bottom: 1.5rem;">
-                        <div style="font-size: 0.8rem; color: var(--accent-lime); text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>🎯</span> Positive Takeaways
+                    <div style="margin-bottom: 1.75rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span style="font-size: 1.1rem;">🎯</span>
+                            <div style="font-size: 0.75rem; color: #22c55e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Positive Takeaways</div>
+                            <div style="flex: 1; height: 1px; background: linear-gradient(90deg, rgba(34, 197, 94, 0.3), transparent); margin-left: 0.5rem;"></div>
                         </div>
                         ${takeawayItems}
                     </div>
@@ -19165,8 +19217,10 @@
             let failuresHeader = '';
             if (findings.length > 0) {
                 failuresHeader = `
-                    <div style="font-size: 0.8rem; color: var(--accent-red); text-transform: uppercase; margin-bottom: 0.75rem; margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <span>⚠️</span> Structural Failures
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; margin-top: 1.5rem;">
+                        <span style="font-size: 1.1rem;">⚠️</span>
+                        <div style="font-size: 0.75rem; color: #ef4444; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Structural Failures</div>
+                        <div style="flex: 1; height: 1px; background: linear-gradient(90deg, rgba(239, 68, 68, 0.3), transparent); margin-left: 0.5rem;"></div>
                     </div>
                 `;
             }
