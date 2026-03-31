@@ -21253,7 +21253,13 @@ def run_sf_lf_conversion(job_id):
                     finding_json = json.dumps(finding)
                     csv_rows.append({'Column': f'ANALYSIS_FINDING_{idx + 1}', 'Value': finding_json, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 
-                print(f"[SF-LF] ✅ AI Performance Analysis complete: {ai_analysis.get('risk_level', 'N/A')} risk, {ai_analysis.get('click_farm_count', 0)} click farms")
+                # Store positive takeaways as JSON strings
+                takeaways = ai_analysis.get('positive_takeaways', [])
+                for idx, takeaway in enumerate(takeaways):
+                    takeaway_json = json.dumps(takeaway)
+                    csv_rows.append({'Column': f'ANALYSIS_POSITIVE_{idx + 1}', 'Value': takeaway_json, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+
+                print(f"[SF-LF] ✅ AI Performance Analysis complete: {ai_analysis.get('risk_level', 'N/A')} risk, {ai_analysis.get('click_farm_count', 0)} click farms, {len(takeaways)} positive takeaways")
         except Exception as ai_err:
             print(f"[SF-LF] ⚠️ AI Performance Analysis failed (non-fatal): {ai_err}")
         
@@ -21464,12 +21470,27 @@ FORMAT AS JSON:
             "recommendation": "Actionable fix"
         }}
     ],
+    "positive_takeaways": [
+        {{
+            "title": "Strategic goal achieved (e.g., 'Demonstrate Cultural Mass', 'Global Fan Ecosystem Proof')",
+            "explanation": "Explain the strategic business value even if conversions are low. Think about: renewal negotiations, franchise value, international licensing, audience investment proof.",
+            "business_value": "What this proves to stakeholders (Netflix, investors, territory licensors)"
+        }}
+    ],
     "has_utm_tracking": false,
     "has_platform_cta": false,
     "summary": "Hard-hitting 2-3 sentence executive summary. If regional click farms found, call them out by name: '@klyro.ae and @pk_cinema are regional click farms harvesting views from non-serviceable markets.'"
 }}
 
-Be brutally honest. Think like a CMO who needs to explain to the board why a campaign underperformed. Name specific accounts and explain exactly why they're problematic."""
+IMPORTANT - POSITIVE TAKEAWAYS SECTION:
+Even if conversion metrics are poor, identify 2-4 strategic business wins. Consider:
+- **Demonstrate Cultural Mass**: Billions of social views = proof the IP "moves the needle globally" — evidence for renewal negotiations
+- **Organic Fan Ecosystem**: Hundreds of clips from creators worldwide = unprompted audience investment, shows the franchise has cultural relevance
+- **International Franchise Reach**: Fan accounts in UAE, Korea, Pakistan, etc. = proof of global reach for future territory licensing deals
+- **Counter-Evidence for Renewal**: If there was "softness" in streaming numbers, viral social clips provide counter-evidence to justify continued investment
+- **Franchise Value Protection**: Active fan engagement protects long-term IP valuation
+
+Be balanced. Identify real structural failures AND genuine strategic value. Think like a CMO who needs to explain both why conversion was low AND why the campaign still delivered business value."""
 
     try:
         response = client.chat.completions.create(

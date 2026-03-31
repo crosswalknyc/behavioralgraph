@@ -18525,6 +18525,16 @@
                         console.warn('Failed to parse finding:', val);
                     }
                 }
+                else if (col.startsWith('ANALYSIS_POSITIVE_') && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    if (!window.sfConvPrecomputedAnalysis.positive_takeaways) window.sfConvPrecomputedAnalysis.positive_takeaways = [];
+                    try {
+                        const takeaway = JSON.parse(val);
+                        window.sfConvPrecomputedAnalysis.positive_takeaways.push(takeaway);
+                    } catch (e) {
+                        console.warn('Failed to parse positive takeaway:', val);
+                    }
+                }
             });
             
             // Update KPIs - Show regular sample values as main
@@ -18958,8 +18968,35 @@
                 `;
             }).join('');
             
+            // Positive Takeaways section
+            const takeaways = analysis.positive_takeaways || [];
+            let takeawaysHtml = '';
+            if (takeaways.length > 0) {
+                const takeawayItems = takeaways.map((t, idx) => `
+                    <div style="background: rgba(132, 204, 22, 0.1); border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem; border-left: 4px solid var(--accent-lime);">
+                        <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                            <div style="font-size: 1.25rem;">✅</div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: var(--accent-lime); margin-bottom: 0.5rem;">${t.title || 'Strategic Value'}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.5rem;">${t.explanation || ''}</div>
+                                ${t.business_value ? `<div style="font-size: 0.8rem; color: var(--accent-cyan); background: rgba(6, 182, 212, 0.1); padding: 0.5rem 0.75rem; border-radius: 6px;"><strong>💼 Business Value:</strong> ${t.business_value}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                takeawaysHtml = `
+                    <div style="margin-top: 1.5rem; margin-bottom: 1rem;">
+                        <div style="font-size: 0.8rem; color: var(--accent-lime); text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>🎯</span> Positive Takeaways
+                        </div>
+                        ${takeawayItems}
+                    </div>
+                `;
+            }
+            
             // Combine all sections
-            findingsContainer.innerHTML = platformHtml + acctHtml + findingsHtml;
+            findingsContainer.innerHTML = platformHtml + acctHtml + findingsHtml + takeawaysHtml;
         }
 
         window.showRankerIQ = function() {
