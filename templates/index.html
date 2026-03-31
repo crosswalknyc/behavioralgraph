@@ -18427,13 +18427,13 @@
                 convProjEl.style.display = 'none';
             }
             
-            // LF Platform Visitors KPI
+            // LF Platform Visitors KPI - show percentage as main value
             const lfPlatformCard = document.getElementById('sfConvKpiLFPlatformCard');
             if (lfPlatformCard && lfPlatformVisit.visitors) {
                 lfPlatformCard.style.display = 'block';
-                const lfVisitorsSample = parseInt(lfPlatformVisit.visitors) || 0;
-                document.getElementById('sfConvKpiLFPlatformVisitors').textContent = lfVisitorsSample.toLocaleString();
-                document.getElementById('sfConvKpiLFPlatformRate').textContent = lfPlatformVisit.rate ? `${parseFloat(lfPlatformVisit.rate).toFixed(2)}% of Short Form viewers` : '';
+                const lfRate = parseFloat(lfPlatformVisit.rate) || 0;
+                document.getElementById('sfConvKpiLFPlatformVisitors').textContent = lfRate.toFixed(2) + '%';
+                document.getElementById('sfConvKpiLFPlatformRate').style.display = 'none';
             }
             
             // Per-Platform Conversion Cards
