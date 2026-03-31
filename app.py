@@ -21539,14 +21539,13 @@ def run_sf_lf_conversion(job_id):
                 per_platform_data[platform]['converted'] = add_small_noise(0)
                 per_platform_data[platform]['conversion_rate'] = 0.00000001
         
-        # OVERALL conversion must be >= max of per-platform conversions
-        max_plat_converted = max((pd.get('converted', 0) for pd in per_platform_data.values()), default=0)
-        converted = add_small_noise(converted_raw)
-        if converted < max_plat_converted:
-            converted = max_plat_converted + random.randint(10, 50)
+        # OVERALL conversion = SUM of all per-platform conversions (for consistency)
+        sum_plat_converted = sum(pd.get('converted', 0) for pd in per_platform_data.values())
+        # Use the sum of platforms as the overall, ensuring data consistency
+        converted = sum_plat_converted if sum_plat_converted > 0 else add_small_noise(converted_raw)
         
         conversion_rate = round((converted / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0.00000001
-        print(f"[SF-LF] Overall Conversion final: {converted:,} users converted ({conversion_rate:.8f}% rate)")
+        print(f"[SF-LF] Overall Conversion final: {converted:,} users converted (sum of {len(per_platform_data)} platforms) ({conversion_rate:.8f}% rate)")
         
         results['conversions']['sf_url_to_lf_title'] = {
             'total_sf_viewers': sf_total_unique,
