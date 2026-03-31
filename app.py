@@ -1221,7 +1221,7 @@ def remove_run_from_all_users(s3_key):
         print(f"⚠️ remove_run_from_all_users error: {e}")
 
 
-# Credit cost per analysis type
+# Credit cost per analysis type (defaults - can be overridden by pricing settings)
 CREDITS_PROFILE_ANALYSIS = 5
 CREDITS_TICKET_SALES = 10
 CREDITS_TICKET_SALES_TRACKER = 10
@@ -1229,6 +1229,76 @@ CREDITS_SVOD = 10
 CREDITS_CAMPAIGN_ROI = 5
 CREDITS_WATCH_TIME = 1
 CREDITS_ROAS_IQ = 8
+CREDITS_TALENT_FIT_PER_TALENT = 5  # Per talent assessed
+CREDITS_TALENT_FIT_FIND = 15  # For "Find Me Talent" feature
+CREDITS_SF_LF_CONVERSION = 10
+CREDITS_ECOMMERCE_IQ = 5
+
+# Pricing settings S3 key
+PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
+
+# Default pricing settings (used if no S3 settings exist)
+DEFAULT_PRICING = {
+    'profile_analysis': 5,
+    'ticket_sales': 10,
+    'ticket_sales_tracker': 10,
+    'svod': 10,
+    'campaign_roi': 5,
+    'watch_time': 1,
+    'roas_iq': 8,
+    'talent_fit_per_talent': 5,
+    'talent_fit_find': 15,
+    'sf_lf_conversion': 10,
+    'ecommerce_iq': 5
+}
+
+_pricing_cache = {'data': None, 'loaded_at': 0}
+PRICING_CACHE_TTL = 300  # 5 minutes
+
+
+def load_pricing_settings():
+    """Load pricing settings from S3, with caching."""
+    import time
+    now = time.time()
+    if _pricing_cache['data'] and (now - _pricing_cache['loaded_at']) < PRICING_CACHE_TTL:
+        return _pricing_cache['data']
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=PRICING_SETTINGS_KEY)
+        data = json.loads(response['Body'].read().decode('utf-8'))
+        merged = {**DEFAULT_PRICING, **data}
+        _pricing_cache['data'] = merged
+        _pricing_cache['loaded_at'] = now
+        return merged
+    except Exception as e:
+        print(f"⚠️ Could not load pricing settings: {e}, using defaults")
+        _pricing_cache['data'] = DEFAULT_PRICING.copy()
+        _pricing_cache['loaded_at'] = now
+        return DEFAULT_PRICING.copy()
+
+
+def save_pricing_settings(settings):
+    """Save pricing settings to S3."""
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=PRICING_SETTINGS_KEY,
+            Body=json.dumps(settings, indent=2).encode('utf-8'),
+            ContentType='application/json'
+        )
+        _pricing_cache['data'] = settings
+        _pricing_cache['loaded_at'] = 0  # Force refresh on next load
+        return True
+    except Exception as e:
+        print(f"❌ Failed to save pricing settings: {e}")
+        return False
+
+
+def get_credit_cost(analysis_type):
+    """Get the credit cost for an analysis type from pricing settings."""
+    pricing = load_pricing_settings()
+    return pricing.get(analysis_type, DEFAULT_PRICING.get(analysis_type, 1))
+
 
 ROAS_BOOST_FACTOR = 15
 ROAS_SAMPLE_SIZE = 10_000_000
@@ -16215,6 +16285,49 @@ def set_default_profile_photo():
         print(f"Error setting default profile photo: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# ============================================================================
+# ADMIN PRICING SETTINGS
+# ============================================================================
+
+@app.route('/api/admin/settings/pricing', methods=['GET'])
+@requires_auth
+def get_pricing_settings():
+    """Get current pricing settings for all analysis types."""
+    try:
+        pricing = load_pricing_settings()
+        return jsonify({'success': True, 'pricing': pricing})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/settings/pricing', methods=['PUT'])
+@requires_admin
+def update_pricing_settings():
+    """Update pricing settings. Admin only."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        current = load_pricing_settings()
+        
+        for key, value in data.items():
+            if key in DEFAULT_PRICING:
+                try:
+                    current[key] = int(value)
+                except (ValueError, TypeError):
+                    return jsonify({'success': False, 'error': f'Invalid value for {key}'}), 400
+        
+        if save_pricing_settings(current):
+            return jsonify({'success': True, 'message': 'Pricing settings updated', 'pricing': current})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save settings'}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/purgatory/my-items', methods=['GET'])
 @requires_auth
 def get_my_purgatory_items():
@@ -20292,6 +20405,18 @@ def talent_fit_assess():
         if not talents:
             return jsonify({'error': 'At least one valid talent name is required'}), 400
         
+        username = session.get('username', 'unknown')
+        credit_cost_per_talent = get_credit_cost('talent_fit_per_talent')
+        total_credits = credit_cost_per_talent * len(talents)
+        
+        if not has_credits_for(username, total_credits):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': f'Talent Fit Assessment requires {total_credits} credits ({credit_cost_per_talent} per talent x {len(talents)} talents). You have {"no" if credits_left == 0 else credits_left} remaining.',
+                'credits_left': 0 if credits_left != -1 else -1,
+                'credits_required': total_credits
+            }), 403
+        
         import bg
         conn = bg.connect_to_snowflake()
         
@@ -21962,6 +22087,7 @@ def sf_lf_performance_analysis():
         total_views = data.get('total_views', 0)
         converted = data.get('converted', 0)
         conversion_rate = data.get('conversion_rate', '0%')
+        s3_key = data.get('s3_key', '')
         
         if not urls:
             return jsonify({'error': 'No URLs provided'}), 400
@@ -21971,12 +22097,100 @@ def sf_lf_performance_analysis():
         if analysis is None:
             return jsonify({'error': 'OpenAI not configured or analysis failed'}), 500
         
+        # If s3_key provided, save analysis back to CSV
+        if s3_key:
+            try:
+                save_analysis_to_csv(s3_key, analysis)
+                print(f"[SF-LF] ✅ Analysis saved to CSV: {s3_key}")
+            except Exception as save_err:
+                print(f"[SF-LF] ⚠️ Failed to save analysis to CSV: {save_err}")
+        
         return jsonify({'success': True, 'analysis': analysis})
         
     except Exception as e:
         import traceback
         print(f"[SF-LF Performance Analysis] Error: {e}\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
+
+
+def save_analysis_to_csv(s3_key, analysis):
+    """Save AI analysis results back to the CSV in S3."""
+    import pandas as pd
+    from io import StringIO
+    import tempfile
+    
+    if not s3_client:
+        raise Exception("S3 client not available")
+    
+    # Download current CSV from S3
+    try:
+        response = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read().decode('utf-8')
+    except Exception as e:
+        raise Exception(f"Failed to download CSV from S3: {e}")
+    
+    # Parse CSV
+    df = pd.read_csv(StringIO(csv_content))
+    
+    # Remove existing analysis rows (if any)
+    analysis_cols = ['PERFORMANCE_ANALYSIS', 'ANALYSIS_CLICK_FARM_COUNT', 'ANALYSIS_OFFICIAL_COUNT',
+                     'ANALYSIS_FAN_PAGE_COUNT', 'ANALYSIS_PODCAST_CLIP_COUNT', 'ANALYSIS_GEOGRAPHIC_LEAKAGE_COUNT',
+                     'ANALYSIS_FAKE_VIEW_PCT', 'ANALYSIS_RISK_LEVEL', 'ANALYSIS_HAS_UTM_TRACKING',
+                     'ANALYSIS_HAS_PLATFORM_CTA', 'ANALYSIS_SUMMARY', 'ANALYSIS_PLATFORM', 
+                     'ANALYSIS_ACCOUNT_CATEGORIZATION']
+    df = df[~df['Column'].astype(str).str.startswith('ANALYSIS_')]
+    df = df[df['Column'] != 'PERFORMANCE_ANALYSIS']
+    
+    # Build new analysis rows
+    new_rows = []
+    new_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'PERFORMANCE_ANALYSIS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_CLICK_FARM_COUNT', 'Value': str(analysis.get('click_farm_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_OFFICIAL_COUNT', 'Value': str(analysis.get('official_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_FAN_PAGE_COUNT', 'Value': str(analysis.get('fan_page_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_PODCAST_CLIP_COUNT', 'Value': str(analysis.get('podcast_clip_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_GEOGRAPHIC_LEAKAGE_COUNT', 'Value': str(analysis.get('geographic_leakage_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_FAKE_VIEW_PCT', 'Value': str(analysis.get('estimated_fake_view_percentage', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_RISK_LEVEL', 'Value': analysis.get('risk_level', 'MEDIUM'), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_HAS_UTM_TRACKING', 'Value': str(analysis.get('has_utm_tracking', False)).lower(), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_HAS_PLATFORM_CTA', 'Value': str(analysis.get('has_platform_cta', False)).lower(), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    new_rows.append({'Column': 'ANALYSIS_SUMMARY', 'Value': analysis.get('summary', ''), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    
+    # Platform analysis JSON
+    platform_analysis = analysis.get('platform_analysis')
+    if platform_analysis:
+        new_rows.append({'Column': 'ANALYSIS_PLATFORM', 'Value': json.dumps(platform_analysis), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    
+    # Account categorization JSON
+    account_cat = analysis.get('account_categorization')
+    if account_cat:
+        new_rows.append({'Column': 'ANALYSIS_ACCOUNT_CATEGORIZATION', 'Value': json.dumps(account_cat), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    
+    # Structural failures/findings
+    failures = analysis.get('structural_failures') or analysis.get('findings', [])
+    for idx, finding in enumerate(failures):
+        new_rows.append({'Column': f'ANALYSIS_FINDING_{idx + 1}', 'Value': json.dumps(finding), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    
+    # Positive takeaways
+    takeaways = analysis.get('positive_takeaways', [])
+    for idx, takeaway in enumerate(takeaways):
+        new_rows.append({'Column': f'ANALYSIS_POSITIVE_{idx + 1}', 'Value': json.dumps(takeaway), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+    
+    # Append new rows
+    new_df = pd.DataFrame(new_rows)
+    df = pd.concat([df, new_df], ignore_index=True)
+    
+    # Upload back to S3
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as tmp:
+        df.to_csv(tmp.name, index=False)
+        tmp_path = tmp.name
+    
+    try:
+        s3_client.upload_file(tmp_path, SF_LF_CONV_S3_BUCKET, s3_key)
+        print(f"[SF-LF] ✅ Updated CSV uploaded to S3: {s3_key}")
+    finally:
+        import os
+        os.unlink(tmp_path)
 
 
 @app.route('/api/attribution/svod-acquisition', methods=['POST'])

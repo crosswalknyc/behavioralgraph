@@ -18454,6 +18454,7 @@
                 const response = await fetch(`/api/sf-lf-conversion/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
                 if (!response.ok) throw new Error('Failed to load data');
                 const data = await response.json();
+                data.s3Key = s3Key;  // Store the S3 key with the data
                 currentSFConvData = data;
                 renderSFConvDashboard(data);
             } catch (err) {
@@ -18779,7 +18780,8 @@
                 lfPlatform: projectInfo.lfPlatform || '',
                 totalViews: totalViewersSample,
                 converted: convertedSample,
-                conversionRate: (conversionSummary.convRate || '0') + '%'
+                conversionRate: (conversionSummary.convRate || '0') + '%',
+                s3Key: data.s3Key || ''  // Include S3 key for saving analysis back
             };
             
             // Check for pre-computed analysis in CSV and display it
@@ -18969,7 +18971,8 @@
                     lf_platform: data.lfPlatform || 'Unknown Platform',
                     total_views: data.totalViews || 0,
                     converted: data.converted || 0,
-                    conversion_rate: data.conversionRate || '0%'
+                    conversion_rate: data.conversionRate || '0%',
+                    s3_key: data.s3Key || ''  // Pass S3 key to save analysis back to CSV
                 })
             })
             .then(r => r.json())
