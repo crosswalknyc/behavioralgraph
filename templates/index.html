@@ -15173,7 +15173,7 @@
                             <div class="dashboard-tabs" id="subscriberTabs" style="margin-bottom: 0;">
                                 <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('revenue')"><span class="tab-icon">💰</span><span class="tab-label">REVENUE</span></button>
-                                <button class="tab-btn" id="subscriberEpisodesTabBtn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
+                                <button class="tab-btn" id="subscriberEpisodesTabBtn" onclick="showSubscriberTab('episodes')" style="display: none;"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                                 <button class="tab-btn" id="subscriberTimingTabBtn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
                                 <button class="tab-btn" id="subscriberViewNumbersTabBtn" data-feature="viewNumbers" onclick="showSubscriberTab('viewnumbers')" style="display: none;"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
@@ -15207,8 +15207,8 @@
                             <div id="subscriberSubscriptionRevenue" class="strategic-section"></div>
                         </div>
 
-                        <!-- Episodes Tab -->
-                        <div id="subscriber-tab-episodes" class="tab-content">
+                        <!-- Episodes Tab (hidden - not used in current implementation) -->
+                        <div id="subscriber-tab-episodes" class="tab-content" style="display: none !important;">
                             <div class="tab-section">
                                 <h3>📺 Episode Performance</h3>
                                 <p class="section-description">Which episodes drove the most platform signups</p>
@@ -15514,14 +15514,14 @@
                         <!-- KPI Summary Cards - Row 1 -->
                         <div class="sf-conv-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
                             <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
-                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total SF Viewers</div>
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Short Form Viewers</div>
                                 <div class="kpi-value" id="sfConvKpiTotalViewers" style="font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-top: 0.25rem;">-</div>
-                                <div class="kpi-subvalue" id="sfConvKpiTotalViewersGenPop" style="font-size: 0.7rem; color: var(--accent-cyan); margin-top: 0.25rem;"></div>
+                                <div class="kpi-subvalue" id="sfConvKpiTotalViewersSample" style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
                             </div>
                             <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
                                 <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Converted Users</div>
                                 <div class="kpi-value" id="sfConvKpiConverted" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-lime); margin-top: 0.25rem;">-</div>
-                                <div class="kpi-subvalue" id="sfConvKpiConvertedGenPop" style="font-size: 0.7rem; color: var(--accent-cyan); margin-top: 0.25rem;"></div>
+                                <div class="kpi-subvalue" id="sfConvKpiConvertedSample" style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
                             </div>
                             <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
                                 <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Conversion Rate</div>
@@ -15532,7 +15532,7 @@
                                 <div class="kpi-value" id="sfConvKpiAvgTime" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange); margin-top: 0.25rem;">-</div>
                             </div>
                             <div class="kpi-card" id="sfConvKpiLFPlatformCard" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color); display: none;">
-                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Visited LF Platform</div>
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Visited Long Form Platform</div>
                                 <div class="kpi-value" id="sfConvKpiLFPlatformVisitors" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-pink); margin-top: 0.25rem;">-</div>
                                 <div class="kpi-subvalue" id="sfConvKpiLFPlatformRate" style="font-size: 0.7rem; color: var(--accent-cyan); margin-top: 0.25rem;"></div>
                             </div>
@@ -15548,36 +15548,41 @@
                         <div class="sf-conv-info-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
                             <h3 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: var(--text-primary);">Analysis Parameters</h3>
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0.75rem; font-size: 0.85rem;">
-                                <div><span style="color: var(--text-secondary);">Long Form Title:</span> <span id="sfConvInfoLFTitle" style="font-weight: 600;">-</span></div>
+                                <div><span style="color: var(--text-secondary);">Long Form Content Title:</span> <span id="sfConvInfoLFTitle" style="font-weight: 600;">-</span></div>
                                 <div><span style="color: var(--text-secondary);">Long Form Platform:</span> <span id="sfConvInfoLFPlatform" style="font-weight: 600;">-</span></div>
                                 <div><span style="color: var(--text-secondary);">Date Range:</span> <span id="sfConvInfoDateRange" style="font-weight: 600;">-</span></div>
                                 <div><span style="color: var(--text-secondary);">Attribution Window:</span> <span id="sfConvInfoWindow" style="font-weight: 600;">-</span></div>
                             </div>
                         </div>
                         
-                        <!-- URL Metrics Table -->
-                        <div class="sf-conv-section" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
-                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📎 Top Input URLs Performance</h3>
-                            <div style="overflow-x: auto;">
-                                <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
-                                    <thead>
-                                        <tr style="background: var(--bg-dark);">
-                                            <th style="text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Short Form URL</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Unique Views</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Duplicated Views</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Gen Pop Proj.</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="sfConvUrlTableBody"></tbody>
-                                </table>
+                        <!-- URL Metrics Table - Collapsible -->
+                        <div class="sf-conv-section" style="background: var(--bg-card); border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
+                            <div onclick="toggleSFConvUrlTable()" style="padding: 1.25rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">📎 Top 20 Short Form Content URLs</h3>
+                                <span id="sfConvUrlTableToggle" style="font-size: 1.2rem; color: var(--text-secondary); transition: transform 0.3s;">▶</span>
+                            </div>
+                            <div id="sfConvUrlTableWrapper" style="display: none; padding: 0 1.25rem 1.25rem 1.25rem;">
+                                <div style="overflow-x: auto;">
+                                    <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                        <thead>
+                                            <tr style="background: var(--bg-dark);">
+                                                <th style="text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Short Form URL</th>
+                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Unique Views</th>
+                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Duplicated Views</th>
+                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted</th>
+                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
+                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Projected</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="sfConvUrlTableBody"></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                         
                         <!-- Platform Metrics Table -->
                         <div class="sf-conv-section" id="sfConvPlatformSection" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color); display: none;">
-                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📱 Platform Performance</h3>
+                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📱 Short Form Platform Performance</h3>
                             <div style="overflow-x: auto;">
                                 <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
                                     <thead>
@@ -15587,7 +15592,7 @@
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Duplicated Views</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Gen Pop Proj.</th>
+                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Projected</th>
                                         </tr>
                                     </thead>
                                     <tbody id="sfConvPlatformTableBody"></tbody>
@@ -15617,7 +15622,7 @@
                         
                         <!-- Conversion Funnel -->
                         <div class="sf-conv-funnel" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
-                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📊 Conversion Funnel</h3>
+                            <h3 style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--text-primary);">📊 Short Form → Long Form Conversion Funnel</h3>
                             <div id="sfConvFunnelChart" style="min-height: 200px;"></div>
                         </div>
                     </div>
@@ -18398,29 +18403,37 @@
                 }
             });
             
-            // Update KPIs
-            document.getElementById('sfConvKpiTotalViewers').textContent = (conversionSummary.totalViewers || 0).toLocaleString();
-            document.getElementById('sfConvKpiConverted').textContent = (conversionSummary.converted || 0).toLocaleString();
+            // Update KPIs - Show projected numbers as main values
+            const totalViewersGenPop = parseInt(conversionSummary.totalViewersGenPop) || 0;
+            const convertedGenPop = parseInt(conversionSummary.convertedGenPop) || 0;
+            const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
+            const convertedSample = parseInt(conversionSummary.converted) || 0;
+            
+            // Main values are projected (Gen Pop)
+            document.getElementById('sfConvKpiTotalViewers').textContent = totalViewersGenPop > 0 ? formatGenPop(totalViewersGenPop) : totalViewersSample.toLocaleString();
+            document.getElementById('sfConvKpiConverted').textContent = convertedGenPop > 0 ? formatGenPop(convertedGenPop) : convertedSample.toLocaleString();
             document.getElementById('sfConvKpiRate').textContent = (conversionSummary.convRate || '0') + '%';
             const avgHrs = parseFloat(conversionSummary.avgHours) || 0;
             document.getElementById('sfConvKpiAvgTime').textContent = avgHrs > 24 ? `${Math.round(avgHrs / 24)}d` : `${Math.round(avgHrs)}h`;
             
-            // Gen Pop sub-values
-            const totalGenPopEl = document.getElementById('sfConvKpiTotalViewersGenPop');
-            if (totalGenPopEl && conversionSummary.totalViewersGenPop) {
-                totalGenPopEl.textContent = `Gen Pop: ${formatGenPop(conversionSummary.totalViewersGenPop)}`;
+            // Sample size sub-values
+            const totalSampleEl = document.getElementById('sfConvKpiTotalViewersSample');
+            if (totalSampleEl && totalViewersSample > 0 && totalViewersGenPop > 0) {
+                totalSampleEl.textContent = `Sample: ${totalViewersSample.toLocaleString()}`;
             }
-            const convGenPopEl = document.getElementById('sfConvKpiConvertedGenPop');
-            if (convGenPopEl && conversionSummary.convertedGenPop) {
-                convGenPopEl.textContent = `Gen Pop: ${formatGenPop(conversionSummary.convertedGenPop)}`;
+            const convSampleEl = document.getElementById('sfConvKpiConvertedSample');
+            if (convSampleEl && convertedSample > 0 && convertedGenPop > 0) {
+                convSampleEl.textContent = `Sample: ${convertedSample.toLocaleString()}`;
             }
             
             // LF Platform Visitors KPI
             const lfPlatformCard = document.getElementById('sfConvKpiLFPlatformCard');
             if (lfPlatformCard && lfPlatformVisit.visitors) {
                 lfPlatformCard.style.display = 'block';
-                document.getElementById('sfConvKpiLFPlatformVisitors').textContent = parseInt(lfPlatformVisit.visitors || 0).toLocaleString();
-                document.getElementById('sfConvKpiLFPlatformRate').textContent = lfPlatformVisit.rate ? `${parseFloat(lfPlatformVisit.rate).toFixed(2)}% of SF viewers` : '';
+                const lfVisitorsGenPop = parseInt(lfPlatformVisit.genPop) || 0;
+                const lfVisitorsSample = parseInt(lfPlatformVisit.visitors) || 0;
+                document.getElementById('sfConvKpiLFPlatformVisitors').textContent = lfVisitorsGenPop > 0 ? formatGenPop(lfVisitorsGenPop) : lfVisitorsSample.toLocaleString();
+                document.getElementById('sfConvKpiLFPlatformRate').textContent = lfPlatformVisit.rate ? `${parseFloat(lfPlatformVisit.rate).toFixed(2)}% of Short Form viewers` : '';
             }
             
             // Per-Platform Conversion Cards
