@@ -15629,8 +15629,8 @@
                         <!-- Performance Analysis Section -->
                         <div class="sf-conv-performance-analysis" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">🔍 Performance Analysis <span style="font-size: 0.7rem; color: var(--accent-cyan); font-weight: 400;">Powered by AI</span></h3>
-                                <button onclick="runSFConvPerformanceAnalysis()" id="sfConvRunAnalysisBtn" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.8rem;">
+                                <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">🔍 Performance Analysis <span style="font-size: 0.7rem; color: var(--accent-cyan); font-weight: 400;">Powered by GPT-4</span></h3>
+                                <button onclick="runSFConvPerformanceAnalysis()" id="sfConvRunAnalysisBtn" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.8rem;" title="Run a fresh AI analysis">
                                     🤖 Analyze Campaign
                                 </button>
                             </div>
@@ -15678,7 +15678,8 @@
                             <!-- Empty State -->
                             <div id="sfConvPerformanceEmpty" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎯</div>
-                                <div style="font-size: 0.85rem;">Click "Analyze Campaign" to get AI-powered insights on click farms, fake views, and why this campaign succeeded or failed.</div>
+                                <div style="font-size: 0.85rem;">No analysis available yet. Click "Analyze Campaign" to get AI-powered insights on click farms, fake views, and why this campaign succeeded or failed.</div>
+                                <div style="font-size: 0.75rem; margin-top: 0.5rem; color: var(--text-tertiary);">Note: New reports automatically include AI analysis.</div>
                             </div>
                         </div>
                     </div>
@@ -18385,6 +18386,9 @@
             let projectInfo = {};
             let lfPlatformVisit = {};
             
+            // Reset pre-computed analysis
+            window.sfConvPrecomputedAnalysis = null;
+            
             // Helper to format large numbers
             const formatGenPop = (n) => {
                 if (!n || n === 0) return '-';
@@ -18455,6 +18459,42 @@
                     const demoType = col.toLowerCase();
                     if (demographics[demoType]) {
                         demographics[demoType].push({ value: val, count: count, percentage: parseFloat(pct) || 0 });
+                    }
+                }
+                // Performance Analysis section
+                else if (col === 'PERFORMANCE_ANALYSIS') currentSection = 'performance_analysis';
+                else if (col === 'ANALYSIS_CLICK_FARM_COUNT' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.click_farm_count = parseInt(val) || 0;
+                }
+                else if (col === 'ANALYSIS_OFFICIAL_COUNT' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.official_count = parseInt(val) || 0;
+                }
+                else if (col === 'ANALYSIS_FAN_PAGE_COUNT' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.fan_page_count = parseInt(val) || 0;
+                }
+                else if (col === 'ANALYSIS_FAKE_VIEW_PCT' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.estimated_fake_view_percentage = parseInt(val) || 0;
+                }
+                else if (col === 'ANALYSIS_RISK_LEVEL' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.risk_level = val || 'MEDIUM';
+                }
+                else if (col === 'ANALYSIS_SUMMARY' && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    window.sfConvPrecomputedAnalysis.summary = val || '';
+                }
+                else if (col.startsWith('ANALYSIS_FINDING_') && currentSection === 'performance_analysis') {
+                    if (!window.sfConvPrecomputedAnalysis) window.sfConvPrecomputedAnalysis = {};
+                    if (!window.sfConvPrecomputedAnalysis.findings) window.sfConvPrecomputedAnalysis.findings = [];
+                    try {
+                        const finding = JSON.parse(val);
+                        window.sfConvPrecomputedAnalysis.findings.push(finding);
+                    } catch (e) {
+                        console.warn('Failed to parse finding:', val);
                     }
                 }
             });
@@ -18583,7 +18623,7 @@
             // Funnel Chart
             renderSFConvFunnel(conversionSummary, lfPlatformVisit);
             
-            // Store data for performance analysis
+            // Store data for performance analysis (for re-analysis button)
             window.sfConvAnalysisData = {
                 urls: urlMetrics.map(u => u.url).filter(Boolean),
                 lfTitle: projectInfo.lfTitle || '',
@@ -18593,13 +18633,28 @@
                 conversionRate: (conversionSummary.convRate || '0') + '%'
             };
             
-            // Reset performance analysis UI
+            // Check for pre-computed analysis in CSV and display it
             const perfResultsEl = document.getElementById('sfConvPerformanceResults');
             const perfEmptyEl = document.getElementById('sfConvPerformanceEmpty');
             const perfLoadingEl = document.getElementById('sfConvPerformanceLoading');
-            if (perfResultsEl) perfResultsEl.style.display = 'none';
-            if (perfEmptyEl) perfEmptyEl.style.display = 'block';
-            if (perfLoadingEl) perfLoadingEl.style.display = 'none';
+            const perfRunBtn = document.getElementById('sfConvRunAnalysisBtn');
+            
+            if (window.sfConvPrecomputedAnalysis && window.sfConvPrecomputedAnalysis.risk_level) {
+                // Pre-computed analysis exists - render it immediately
+                if (perfLoadingEl) perfLoadingEl.style.display = 'none';
+                if (perfEmptyEl) perfEmptyEl.style.display = 'none';
+                if (perfRunBtn) {
+                    perfRunBtn.innerHTML = '🔄 Re-Analyze';
+                    perfRunBtn.title = 'Run a fresh AI analysis';
+                }
+                renderSFConvPerformanceAnalysis(window.sfConvPrecomputedAnalysis);
+            } else {
+                // No pre-computed analysis - show empty state
+                if (perfResultsEl) perfResultsEl.style.display = 'none';
+                if (perfEmptyEl) perfEmptyEl.style.display = 'block';
+                if (perfLoadingEl) perfLoadingEl.style.display = 'none';
+                if (perfRunBtn) perfRunBtn.innerHTML = '🤖 Analyze Campaign';
+            }
         }
         
         function renderSFConvDemographics(containerId, data) {

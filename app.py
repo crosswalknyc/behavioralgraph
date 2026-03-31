@@ -21210,6 +21210,39 @@ def run_sf_lf_conversion(job_id):
                     demo_pct = round(random.uniform(0.00001, 0.0002), 8)
                 csv_rows.append({'Column': demo_type.upper(), 'Value': value, 'Metric': '', 'Count': demo_count, 'Percentage': f"{demo_pct:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(demo_count)})
         
+        # Performance Analysis Section - Run AI analysis on URLs
+        update_job_status(job_id, progress=90, message='Running AI performance analysis...')
+        try:
+            analysis_urls = sf_urls[:50]  # Limit to 50 URLs for analysis
+            ai_analysis = run_sf_lf_performance_analysis_internal(
+                urls=analysis_urls,
+                lf_title=lf_title,
+                lf_platform=lf_platform,
+                total_views=total_viewers,
+                converted=conv_users,
+                conversion_rate=f"{conv_rate:.8f}%"
+            )
+            
+            if ai_analysis:
+                csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'PERFORMANCE_ANALYSIS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_CLICK_FARM_COUNT', 'Value': str(ai_analysis.get('click_farm_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_OFFICIAL_COUNT', 'Value': str(ai_analysis.get('official_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_FAN_PAGE_COUNT', 'Value': str(ai_analysis.get('fan_page_count', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_FAKE_VIEW_PCT', 'Value': str(ai_analysis.get('estimated_fake_view_percentage', 0)), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_RISK_LEVEL', 'Value': ai_analysis.get('risk_level', 'MEDIUM'), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                csv_rows.append({'Column': 'ANALYSIS_SUMMARY', 'Value': ai_analysis.get('summary', ''), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                
+                # Store findings as JSON string
+                findings = ai_analysis.get('findings', [])
+                for idx, finding in enumerate(findings):
+                    finding_json = json.dumps(finding)
+                    csv_rows.append({'Column': f'ANALYSIS_FINDING_{idx + 1}', 'Value': finding_json, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                
+                print(f"[SF-LF] ✅ AI Performance Analysis complete: {ai_analysis.get('risk_level', 'N/A')} risk, {ai_analysis.get('click_farm_count', 0)} click farms")
+        except Exception as ai_err:
+            print(f"[SF-LF] ⚠️ AI Performance Analysis failed (non-fatal): {ai_err}")
+        
         # Write CSV
         import pandas as pd
         df = pd.DataFrame(csv_rows)
@@ -21297,35 +21330,30 @@ def get_sf_lf_conversion_data(s3_key):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/sf-lf-conversion/performance-analysis', methods=['POST'])
-@requires_auth
-def sf_lf_performance_analysis():
-    """Analyze SF-LF conversion URLs for click farms and marketing effectiveness using GPT-4."""
-    try:
-        client = get_openai_client()
-        if not client:
-            return jsonify({'error': 'OpenAI not configured'}), 500
-        
-        data = request.json
-        urls = data.get('urls', [])
-        lf_title = data.get('lf_title', 'Unknown Title')
-        lf_platform = data.get('lf_platform', 'Unknown Platform')
-        total_views = data.get('total_views', 0)
-        converted = data.get('converted', 0)
-        conversion_rate = data.get('conversion_rate', '0%')
-        
-        if not urls:
-            return jsonify({'error': 'No URLs provided'}), 400
-        
-        # Format URLs for analysis
-        url_list = '\n'.join([f"- {url}" for url in urls[:50]])  # Limit to 50 URLs
-        
-        prompt = f"""You are a senior marketing analyst specializing in digital media attribution and influencer fraud detection. Analyze this short-form content campaign that was meant to drive viewers to "{lf_title}" on {lf_platform}.
+def run_sf_lf_performance_analysis_internal(urls, lf_title, lf_platform, total_views, converted, conversion_rate):
+    """Internal function to run AI performance analysis on SF-LF URLs. Used by pipeline and API."""
+    client = get_openai_client()
+    if not client:
+        print("[SF-LF Analysis] OpenAI client not available")
+        return None
+    
+    if not urls:
+        return None
+    
+    # Format URLs for analysis
+    url_list = '\n'.join([f"- {url}" for url in urls[:50]])
+    
+    # Format numbers for prompt
+    tv = int(total_views) if isinstance(total_views, (int, float)) else 0
+    cv = int(converted) if isinstance(converted, (int, float)) else 0
+    cr = conversion_rate if isinstance(conversion_rate, str) else f"{conversion_rate}%"
+    
+    prompt = f"""You are a senior marketing analyst specializing in digital media attribution and influencer fraud detection. Analyze this short-form content campaign that was meant to drive viewers to "{lf_title}" on {lf_platform}.
 
 CAMPAIGN METRICS:
-- Total Short Form Views (Duplicated): {total_views:,}
-- Converted Users: {converted:,}
-- Conversion Rate: {conversion_rate}
+- Total Short Form Views (Duplicated): {tv:,}
+- Converted Users: {cv:,}
+- Conversion Rate: {cr}
 
 SHORT FORM CONTENT URLs ANALYZED:
 {url_list}
@@ -21362,6 +21390,7 @@ FORMAT YOUR RESPONSE AS JSON:
 
 Be specific about which accounts are problematic and why. Think like a CMO reviewing why a campaign underperformed."""
 
+    try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -21374,8 +21403,6 @@ Be specific about which accounts are problematic and why. Think like a CMO revie
         
         result_text = response.choices[0].message.content.strip()
         
-        # Parse JSON from response
-        import json
         # Clean up potential markdown formatting
         if result_text.startswith('```'):
             result_text = result_text.split('```')[1]
@@ -21385,9 +21412,9 @@ Be specific about which accounts are problematic and why. Think like a CMO revie
         
         try:
             analysis = json.loads(result_text)
+            return analysis
         except json.JSONDecodeError:
-            # If JSON parsing fails, return the raw text
-            analysis = {
+            return {
                 "click_farm_count": 0,
                 "official_count": 0,
                 "fan_page_count": len(urls),
@@ -21396,6 +21423,31 @@ Be specific about which accounts are problematic and why. Think like a CMO revie
                 "findings": [{"title": "Analysis Error", "severity": "info", "accounts_mentioned": [], "explanation": result_text, "recommendation": "Please try again"}],
                 "summary": "Unable to parse analysis. Raw response included."
             }
+    except Exception as e:
+        print(f"[SF-LF Analysis] OpenAI API error: {e}")
+        return None
+
+
+@app.route('/api/sf-lf-conversion/performance-analysis', methods=['POST'])
+@requires_auth
+def sf_lf_performance_analysis():
+    """Analyze SF-LF conversion URLs for click farms and marketing effectiveness using GPT-4."""
+    try:
+        data = request.json
+        urls = data.get('urls', [])
+        lf_title = data.get('lf_title', 'Unknown Title')
+        lf_platform = data.get('lf_platform', 'Unknown Platform')
+        total_views = data.get('total_views', 0)
+        converted = data.get('converted', 0)
+        conversion_rate = data.get('conversion_rate', '0%')
+        
+        if not urls:
+            return jsonify({'error': 'No URLs provided'}), 400
+        
+        analysis = run_sf_lf_performance_analysis_internal(urls, lf_title, lf_platform, total_views, converted, conversion_rate)
+        
+        if analysis is None:
+            return jsonify({'error': 'OpenAI not configured or analysis failed'}), 500
         
         return jsonify({'success': True, 'analysis': analysis})
         
