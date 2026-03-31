@@ -12043,7 +12043,7 @@
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
                             {% endif %}
-                            {% if has_talent_fit_access %}
+                            {% if role == 'super_admin' or role == 'admin' or has_talent_fit_access %}
                             <option value="talentFitIQ">🎭 Talent Fit IQ</option>
                             {% endif %}
                         {% if role == 'super_admin' or role == 'admin' %}

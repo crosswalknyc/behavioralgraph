@@ -5414,6 +5414,7 @@ def index():
     has_ticket_sales_iq = _acc['has_ticket_sales_iq_access']
     has_ticket_sales_tracker = _acc['has_ticket_sales_tracker_access']
     has_llmo_iq = _acc['has_llmo_iq_access']
+    has_talent_fit = _acc.get('has_talent_fit_access', False)
     
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -5462,6 +5463,7 @@ def index():
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
                            has_llmo_iq_access=has_llmo_iq,
+                           has_talent_fit_access=has_talent_fit,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
