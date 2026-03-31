@@ -28465,13 +28465,10 @@
             if (tabs) tabs.style.display = 'flex';
             if (actionRow) actionRow.style.display = 'flex';
             
-            // Hide Episodes tab for Stand Up Comedy, Movie genres, and All at Once cadence
+            // Always hide Episodes tab (not used in current implementation)
             const episodesTabBtn = document.getElementById('subscriberEpisodesTabBtn');
             if (episodesTabBtn) {
-                const genreLower = (genre || '').toLowerCase();
-                const cadenceLower = (contentCadence || '').toLowerCase();
-                const hideEpisodes = genreLower.includes('stand up comedy') || genreLower.includes('movie') || cadenceLower.includes('all at once');
-                episodesTabBtn.style.display = hideEpisodes ? 'none' : '';
+                episodesTabBtn.style.display = 'none';
             }
             
             // Load profile image if available
@@ -28518,20 +28515,10 @@
         
         // Hide/show subscriber tabs based on data availability
         function updateSubscriberTabVisibility(data) {
-            // Episodes tab - hide if no episode data, movie genre, stand up, or all-at-once cadence
+            // Episodes tab - always hidden (not used in current implementation)
             const episodesTabBtn = document.getElementById('subscriberEpisodesTabBtn');
             if (episodesTabBtn) {
-                const metaGenre = ((data.metadata && data.metadata.genre) || '').toLowerCase();
-                const metaCadence = ((data.metadata && data.metadata.content_cadence) || '').toLowerCase();
-                const isMovieGenre = metaGenre.includes('movie');
-                const isStandUp = metaGenre.includes('stand up comedy');
-                const isAllAtOnce = metaCadence.includes('all at once');
-                if (isMovieGenre || isStandUp || isAllAtOnce) {
-                    episodesTabBtn.style.display = 'none';
-                } else {
-                    const episodes = (data.episode_attribution || []).filter(ep => (Number(ep.signups) || 0) > 0);
-                    episodesTabBtn.style.display = episodes.length > 0 ? '' : 'none';
-                }
+                episodesTabBtn.style.display = 'none';
             }
             
             // Timing tab - hide if no signup_timing data AND no episode_signup_timing data
