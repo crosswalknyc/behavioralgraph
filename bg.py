@@ -8446,6 +8446,25 @@ def _get_demographics_for_uids(cur, uid_table_name):
     Returns dict with percentage breakdowns for each category.
     """
     try:
+        # First check how many UIDs we're working with
+        uid_count_result = cur.execute(f"SELECT COUNT(*) FROM {uid_table_name}").fetchone()
+        uid_count = uid_count_result[0] if uid_count_result else 0
+        print(f"   📊 Demographics: {uid_count:,} UIDs in {uid_table_name}")
+        
+        # Check how many match in USER_DATA_SANITIZED
+        match_query = f"""
+            SELECT COUNT(*) 
+            FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+            INNER JOIN {uid_table_name} u ON d.UID = u.UID
+        """
+        match_result = cur.execute(match_query).fetchone()
+        match_count = match_result[0] if match_result else 0
+        print(f"   📊 Demographics: {match_count:,} UIDs found in USER_DATA_SANITIZED ({100*match_count/max(uid_count,1):.1f}% match rate)")
+        
+        if match_count == 0:
+            print(f"   ⚠️ No demographic data available - UIDs not in USER_DATA_SANITIZED")
+            return {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
+        
         demo_query = f"""
             WITH demo_data AS (
                 SELECT d.GENDER, d.ETHNICITY, d.INCOME, d.AGE
@@ -8471,6 +8490,7 @@ def _get_demographics_for_uids(cur, uid_table_name):
             ORDER BY category, pct DESC
         """
         rows = cur.execute(demo_query).fetchall()
+        print(f"   📊 Demographics query returned {len(rows)} rows")
         
         demographics = {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
         for row in rows:
@@ -8479,9 +8499,12 @@ def _get_demographics_for_uids(cur, uid_table_name):
             if cat_key in demographics:
                 demographics[cat_key].append({'value': value, 'count': int(count), 'percentage': float(pct or 0)})
         
+        print(f"   ✅ Demographics: Gender={len(demographics['gender'])}, Ethnicity={len(demographics['ethnicity'])}, Income={len(demographics['income'])}, Age={len(demographics['age'])}")
         return demographics
     except Exception as e:
         print(f"⚠️ Demographics query failed: {e}")
+        import traceback
+        traceback.print_exc()
         return {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
 
 
