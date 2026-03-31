@@ -15514,7 +15514,7 @@
                         <!-- KPI Summary Cards - Row 1 -->
                         <div class="sf-conv-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
                             <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
-                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Short Form Viewers</div>
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Short Form Views (Duplicated)</div>
                                 <div class="kpi-value" id="sfConvKpiTotalViewers" style="font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-top: 0.25rem;">-</div>
                                 <div class="kpi-subvalue" id="sfConvKpiTotalViewersProj" style="font-size: 0.7rem; color: var(--accent-cyan); margin-top: 0.25rem;"></div>
                             </div>
@@ -18409,21 +18409,22 @@
             const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
             const convertedSample = parseInt(conversionSummary.converted) || 0;
             
-            // Main values are sample counts
+            // Main values - sample for views, projected for converted
             document.getElementById('sfConvKpiTotalViewers').textContent = totalViewersSample.toLocaleString();
-            document.getElementById('sfConvKpiConverted').textContent = convertedSample.toLocaleString();
+            document.getElementById('sfConvKpiConverted').textContent = convertedGenPop > 0 ? formatGenPop(convertedGenPop) : convertedSample.toLocaleString();
             document.getElementById('sfConvKpiRate').textContent = (conversionSummary.convRate || '0') + '%';
             const avgHrs = parseFloat(conversionSummary.avgHours) || 0;
             document.getElementById('sfConvKpiAvgTime').textContent = avgHrs > 24 ? `${Math.round(avgHrs / 24)}d` : `${Math.round(avgHrs)}h`;
             
-            // Projected sub-values
+            // Projected sub-value for total viewers only
             const totalProjEl = document.getElementById('sfConvKpiTotalViewersProj');
             if (totalProjEl && totalViewersGenPop > 0) {
                 totalProjEl.textContent = `Projected: ${formatGenPop(totalViewersGenPop)}`;
             }
+            // Hide converted projected sub-value since main value is now projected
             const convProjEl = document.getElementById('sfConvKpiConvertedProj');
-            if (convProjEl && convertedGenPop > 0) {
-                convProjEl.textContent = `Projected: ${formatGenPop(convertedGenPop)}`;
+            if (convProjEl) {
+                convProjEl.style.display = 'none';
             }
             
             // LF Platform Visitors KPI
