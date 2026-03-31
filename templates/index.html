@@ -38571,28 +38571,14 @@
                 // Previously this filtered them out, but users expect to see all items from their CSV
                 const isCurrentGenPop = currentS3Key?.toUpperCase().includes('GEN_POP') || currentS3Key?.toUpperCase().includes('GENPOP');
                 
-                // Build a set of Gen Pop names - for aggregated categories like TALENT/SPORTS, 
-                // we need to check ALL the original subcategories in the Gen Pop baseline
-                const talentSubcats = ['ACTOR', 'ATHLETE', 'HOST/PERSONALITY', 'INFLUENCER/CREATOR', 'CREATOR/INFLUENCER',
-                    'MLB ATHLETE', 'MUSICIAN/BAND', 'NBA ATHLETE', 'NFL ATHLETE', 'NHL ATHLETE',
-                    'POLITICS/ACTIVIST', 'SOCCER ATHLETE', 'WNBA ATHLETE', 'WRITER/DIRECTOR/AUTHOR/ARTIST', 'TALENT'];
-                const sportsSubcats = ['AFC', 'SPORTS TEAM', 'LA LIGA', 'METROPOLITAN DIVISION', 'MLB', 'MLS',
-                    'EASTERN CONFERENCE', 'CENTRAL DIVISION', 'ATLANTIC DIVISION', 'AFC EAST', 'NBA', 'NFC EAST',
-                    'NFC NORTH', 'NFC SOUTH', 'NFC WEST', 'NFL', 'NFC', 'AFC NORTH', 'NWSL', 'PREMIER LEAGUE',
-                    'RUGBY', 'SERIE A', 'SOCCER', 'PACIFIC DIVISION', 'AFC SOUTH', 'AFC WEST', 'AL', 'WNBA',
-                    'AL CENTRAL', 'AL EAST', 'AL WEST', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'HORSE RACING', 'SPORTS'];
-                
-                // Determine which categories to check in Gen Pop baseline
-                let gpCatsToCheck = [cat];
-                if (cat.toUpperCase() === 'TALENT') gpCatsToCheck = talentSubcats;
-                if (cat.toUpperCase() === 'SPORTS') gpCatsToCheck = sportsSubcats;
-                
-                // Build combined name set from all relevant Gen Pop categories
+                // Build a set of ALL Gen Pop names from ALL categories
+                // This ensures items are matched even if they appear in different/related categories
                 const gpNameSet = new Set();
                 if (genPopBaselineData?.behavioral) {
-                    gpCatsToCheck.forEach(gpCat => {
-                        const gpItems = genPopBaselineData.behavioral[gpCat] || genPopBaselineData.behavioral[gpCat.toUpperCase()] || [];
-                        gpItems.forEach(gp => gpNameSet.add((gp.name || '').toUpperCase().trim()));
+                    Object.values(genPopBaselineData.behavioral).forEach(gpItems => {
+                        if (Array.isArray(gpItems)) {
+                            gpItems.forEach(gp => gpNameSet.add((gp.name || '').toUpperCase().trim()));
+                        }
                     });
                 }
                 
