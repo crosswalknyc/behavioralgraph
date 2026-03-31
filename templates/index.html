@@ -18887,7 +18887,7 @@
                 </div>
                 <div style="font-size: 2rem; color: var(--text-secondary);">→</div>`;
             
-            // Add platform breakdown steps
+            // Add platform breakdown as vertical stack
             if (sortedPlatforms.length > 0) {
                 const platformColors = {
                     'instagram': ['#E1306C', '#F77737'],
@@ -18898,22 +18898,28 @@
                     'x': ['#000', '#333']
                 };
                 
+                let platformBoxes = '';
                 sortedPlatforms.forEach((p, idx) => {
                     const platName = (p.platform || '').toLowerCase();
                     const colors = platformColors[platName] || ['#6366f1', '#8b5cf6'];
                     const platViews = parseInt(p.uniqueViewsGenPop) || parseInt(p.uniqueViews) || 0;
                     const platPct = total > 0 ? ((platViews / total) * 100).toFixed(1) : 0;
                     
-                    funnelSteps += `
-                    <div style="text-align: center;">
-                        <div style="width: 120px; height: 120px; background: linear-gradient(135deg, ${colors[0]}, ${colors[1]}); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                            <div style="font-size: 1.1rem; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${formatNum(platViews)}</div>
-                            <div style="font-size: 0.6rem; color: rgba(255,255,255,0.9); text-align: center; line-height: 1.2; padding: 0 0.25rem; font-weight: 500;">${p.platform || 'Platform'}</div>
-                        </div>
-                        <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.3rem;">${platPct}%</div>
-                    </div>
-                    <div style="font-size: 1.5rem; color: var(--text-secondary);">→</div>`;
+                    platformBoxes += `
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="width: 90px; height: 70px; background: linear-gradient(135deg, ${colors[0]}, ${colors[1]}); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <div style="font-size: 0.95rem; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${formatNum(platViews)}</div>
+                                <div style="font-size: 0.55rem; color: rgba(255,255,255,0.9); text-align: center; line-height: 1.1; font-weight: 500;">${p.platform || 'Platform'}</div>
+                            </div>
+                            <div style="font-size: 0.6rem; color: var(--text-secondary);">${platPct}%</div>
+                        </div>`;
                 });
+                
+                funnelSteps += `
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: center;">
+                    ${platformBoxes}
+                </div>
+                <div style="font-size: 1.5rem; color: var(--text-secondary);">→</div>`;
             }
             
             if (lfVisitors > 0) {
