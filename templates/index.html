@@ -12043,6 +12043,9 @@
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
                             {% endif %}
+                            {% if has_talent_fit_access %}
+                            <option value="talentFitIQ">🎭 Talent Fit IQ</option>
+                            {% endif %}
                         {% if role == 'super_admin' or role == 'admin' %}
                         <option value="admin">🔐 Admin</option>
                         {% endif %}
@@ -12441,11 +12444,6 @@
                     {% if 'sf_lf_conversion' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('sf-lf-conversion')" id="customAnalysisTabSFLFConversion">
                         🔄 SF-LF Conversion <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
-                    </button>
-                    {% endif %}
-                    {% if 'talent_fit' in analysis_iq_modules or role == 'super_admin' %}
-                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-fit')" id="customAnalysisTabTalentFit">
-                        🎭 Talent Fit Assessment
                     </button>
                     {% endif %}
                     {% if role == 'super_admin' or role == 'admin' %}
@@ -13804,90 +13802,96 @@
                     </div>
                 </div>
 
-                <!-- Talent Fit Assessment Tab Content -->
-                <div id="customAnalysisTabContentTalentFit" class="custom-analysis-tab-content">
-                    <div class="main-grid">
-                        <div class="card">
-                            <h2>🎭 Talent Fit Assessment</h2>
-                            <p class="section-description">Analyze how well talents resonate with your brand's audience using behavioral data and social media metrics.</p>
-                            
-                            <form id="talentFitForm" onsubmit="event.preventDefault(); runTalentFitAssessment();">
-                                <div style="margin-bottom: 1rem;">
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Brand Name</label>
-                                    <input type="text" id="talentFitBrand" placeholder="e.g. Nike, Apple, Coca-Cola" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                </div>
-                                
-                                <div style="margin-bottom: 1rem;">
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Talent Names <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated)</span></label>
-                                    <textarea id="talentFitTalents" rows="2" placeholder="e.g. Taylor Swift, LeBron James, Beyoncé" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
-                                    <small style="color: var(--text-secondary); font-size: 11px;">Leave empty and click "Find Me Talent" to discover talents that match your brand's audience</small>
-                                </div>
-                                
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                                    <div>
-                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
-                                        <input type="date" id="talentFitStartDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                    </div>
-                                    <div>
-                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date</label>
-                                        <input type="date" id="talentFitEndDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                    </div>
-                                </div>
-                                
-                                <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
-                                    <button type="submit" id="talentFitAssessBtn" class="btn btn-primary" style="flex: 1;">Assess Talent Fit</button>
-                                    <button type="button" id="talentFitFindBtn" class="btn" style="flex: 1; background: var(--accent-secondary); color: white;" onclick="findMeTalent()">Find Me Talent</button>
-                                </div>
-                            </form>
-                            
-                            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-                                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
-                                    <input type="checkbox" id="talentFitShowTooltips" checked style="cursor: pointer;">
-                                    Show methodology tooltips
-                                </label>
-                            </div>
-                            
-                            <div id="talentFitStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
-                                <div id="talentFitStatusText" style="font-weight: 600; margin-bottom: 4px;">Processing...</div>
-                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;">
-                                    <div id="talentFitProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="card">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                                <h2 style="margin:0;">Past Assessments</h2>
-                                <button type="button" class="btn btn-small" onclick="refreshTalentFitResults()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
-                            </div>
-                            <div id="talentFitResultsList" style="max-height: 320px; overflow-y: auto;">
-                                <div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No assessments yet. Run an analysis.</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Talent Fit Results Dashboard -->
-                    <div id="talentFitDashboard" style="display: none; margin-top: 1.5rem;">
-                        <div id="talentFitDashHeader" style="margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.5rem; font-size: 18px;">Assessment Results</h3>
-                            <div id="talentFitBrandInfo" style="font-size: 14px; color: var(--text-secondary);"></div>
-                        </div>
-                        
-                        <div id="talentFitCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;"></div>
-                    </div>
-                    
-                    <!-- Find Talent Results -->
-                    <div id="talentFitFindResults" style="display: none; margin-top: 1.5rem;">
-                        <div style="margin-bottom: 1rem;">
-                            <h3 style="margin: 0 0 0.5rem; font-size: 18px;">🔍 Talents Found for Your Brand</h3>
-                            <div id="talentFitFindBrandInfo" style="font-size: 14px; color: var(--text-secondary);"></div>
-                        </div>
-                        <div id="talentFitFindTable" style="background: var(--bg-card); border-radius: 12px; overflow: hidden;"></div>
-                    </div>
-                </div>
-
             </div><!-- End tab content area -->
         </div><!-- End customAnalysisView -->
+
+        <!-- TALENT FIT IQ VIEW -->
+        <div id="talentFitIQView" style="display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 1.5rem;">
+            <div style="max-width: 1400px; margin: 0 auto; width: 100%;">
+                <div style="margin-bottom: 1.5rem;">
+                    <h1 style="margin: 0 0 0.5rem; font-size: 28px; font-weight: 700;">🎭 Talent Fit IQ</h1>
+                    <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">Analyze how well talents resonate with your brand's audience using behavioral data and social media metrics.</p>
+                </div>
+                
+                <div class="main-grid" style="margin-bottom: 2rem;">
+                    <div class="card">
+                        <h2 style="margin: 0 0 1rem;">Brand & Talent Assessment</h2>
+                        
+                        <form id="talentFitForm" onsubmit="event.preventDefault(); runTalentFitAssessment();">
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Brand Name</label>
+                                <input type="text" id="talentFitBrand" placeholder="e.g. Nike, Apple, Coca-Cola" required style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                            </div>
+                            
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Talent Names <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated)</span></label>
+                                <textarea id="talentFitTalents" rows="2" placeholder="e.g. Taylor Swift, LeBron James, Beyoncé" style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                                <small style="color: var(--text-secondary); font-size: 11px;">Leave empty and click "Find Me Talent" to discover talents that match your brand's audience</small>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                                <div>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
+                                    <input type="date" id="talentFitStartDate" required style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date</label>
+                                    <input type="date" id="talentFitEndDate" required style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
+                                <button type="submit" id="talentFitAssessBtn" class="btn btn-primary" style="flex: 1; padding: 12px 16px; font-size: 14px; font-weight: 600;">🔍 Assess Talent Fit</button>
+                                <button type="button" id="talentFitFindBtn" class="btn" style="flex: 1; padding: 12px 16px; font-size: 14px; font-weight: 600; background: var(--accent-secondary); color: white;" onclick="findMeTalent()">✨ Find Me Talent</button>
+                            </div>
+                        </form>
+                        
+                        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+                                <input type="checkbox" id="talentFitShowTooltips" checked style="cursor: pointer;">
+                                Show methodology tooltips
+                            </label>
+                        </div>
+                        
+                        <div id="talentFitStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
+                            <div id="talentFitStatusText" style="font-weight: 600; margin-bottom: 4px;">Processing...</div>
+                            <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;">
+                                <div id="talentFitProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <h2 style="margin:0;">📋 Past Assessments</h2>
+                            <button type="button" class="btn btn-small" onclick="refreshTalentFitResults()" style="padding: 0.35rem 0.75rem; min-width: auto; font-size: 12px;">↻ Refresh</button>
+                        </div>
+                        <div id="talentFitResultsList" style="max-height: 400px; overflow-y: auto;">
+                            <div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No assessments yet. Run an analysis.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Talent Fit Results Dashboard -->
+                <div id="talentFitDashboard" style="display: none;">
+                    <div id="talentFitDashHeader" style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color);">
+                        <h2 style="margin: 0 0 0.5rem; font-size: 20px;">📊 Assessment Results</h2>
+                        <div id="talentFitBrandInfo" style="font-size: 14px; color: var(--text-secondary);"></div>
+                    </div>
+                    
+                    <div id="talentFitCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.5rem;"></div>
+                </div>
+                
+                <!-- Find Talent Results -->
+                <div id="talentFitFindResults" style="display: none;">
+                    <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color);">
+                        <h2 style="margin: 0 0 0.5rem; font-size: 20px;">✨ Talents Found for Your Brand</h2>
+                        <div id="talentFitFindBrandInfo" style="font-size: 14px; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="talentFitFindTable" style="background: var(--bg-card); border-radius: 12px; overflow: hidden;"></div>
+                </div>
+            </div>
+        </div>
 
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView"{% if default_view_hedge_fund_iq %} style="display: none;"{% endif %}>
@@ -17478,7 +17482,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, customAnalysis: showCustomAnalysis, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -17521,6 +17525,7 @@
                     if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50);
                 },
                 customAnalysis: showCustomAnalysis,
+                talentFitIQ: showTalentFitIQ,
                 admin: function() { window.location.href = '/admin'; },
                 purgatory: function() { window.location.href = '/admin#purgatory'; }
             };
@@ -17545,12 +17550,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'roasIQView', 'ecommerceIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'roasIQView', 'ecommerceIQView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -17571,6 +17576,7 @@
                 ecommerceIQ: 'E-Commerce IQ: Explore purchase funnel activity across retailers and product pages.',
                 workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
+                talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
                 admin: 'Admin: Manage users, access, and system settings.',
                 purgatory: 'Purgatory: Review and release items pending admin approval.'
             };
@@ -18282,6 +18288,8 @@
             if (roasIQViewEl) roasIQViewEl.style.display = 'none';
             const ecomIQViewEl = document.getElementById('ecommerceIQView');
             if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
+            const talentFitIQView = document.getElementById('talentFitIQView');
+            if (talentFitIQView) talentFitIQView.style.display = 'none';
             hideLLMOIQView();
             
             // Load profiles
@@ -21436,6 +21444,8 @@
             if (roasIQViewEl) roasIQViewEl.style.display = 'none';
             const ecomIQViewEl = document.getElementById('ecommerceIQView');
             if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
+            const talentFitIQView = document.getElementById('talentFitIQView');
+            if (talentFitIQView) talentFitIQView.style.display = 'none';
             hideLLMOIQView();
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) {
@@ -21452,12 +21462,59 @@
             }
         }
         
+        window.showTalentFitIQ = function() {
+            const dd = document.getElementById('viewNavDropdown');
+            const opt = dd?.querySelector('option[value="talentFitIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('talentFitIQ');
+            
+            // Hide all other views
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
+            const customAnalysisView = document.getElementById('customAnalysisView');
+            if (customAnalysisView) customAnalysisView.style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
+            const roasIQViewEl = document.getElementById('roasIQView');
+            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
+            const ecomIQViewEl = document.getElementById('ecommerceIQView');
+            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
+            hideLLMOIQView();
+            
+            // Show Talent Fit IQ view
+            const talentFitIQView = document.getElementById('talentFitIQView');
+            if (talentFitIQView) {
+                talentFitIQView.style.display = 'flex';
+            }
+            
+            // Set default dates if not already set
+            const startDateEl = document.getElementById('talentFitStartDate');
+            const endDateEl = document.getElementById('talentFitEndDate');
+            if (startDateEl && !startDateEl.value) {
+                const oneYearAgo = new Date();
+                oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                startDateEl.value = oneYearAgo.toISOString().split('T')[0];
+            }
+            if (endDateEl && !endDateEl.value) {
+                endDateEl.value = new Date().toISOString().split('T')[0];
+            }
+            
+            // Load past assessments
+            if (typeof refreshTalentFitResults === 'function') {
+                refreshTalentFitResults();
+            }
+        }
+        
         function switchCustomAnalysisTab(tabName) {
             // Update tab buttons - use optional chaining for tabs that may not exist
             const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater',
                            'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow',
                            'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker', 'customAnalysisTabSFLFConversion',
-                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabTalentFit'];
+                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -21468,8 +21525,7 @@
                                'customAnalysisTabContentTalentTheater', 'customAnalysisTabContentSVODAcquisition',
                                'customAnalysisTabContentCampaignROI', 'customAnalysisTabContentCrossShow',
                                'customAnalysisTabContentWatchTime', 'customAnalysisTabContentTicketSalesTracker',
-                               'customAnalysisTabContentSFLFConversion', 'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ',
-                               'customAnalysisTabContentTalentFit'];
+                               'customAnalysisTabContentSFLFConversion', 'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ'];
             contentIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -21536,12 +21592,6 @@
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
                 if (typeof refreshEcomIQList === 'function') refreshEcomIQList();
-            } else if (tabName === 'talent-fit') {
-                const tab = document.getElementById('customAnalysisTabTalentFit');
-                const content = document.getElementById('customAnalysisTabContentTalentFit');
-                if (tab) tab.classList.add('active');
-                if (content) content.classList.add('active');
-                if (typeof refreshTalentFitResults === 'function') refreshTalentFitResults();
             }
         }
         
