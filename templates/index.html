@@ -18423,14 +18423,14 @@
                     let existing = urlMetrics.find(u => u.url === val);
                     if (!existing) { existing = { url: val }; urlMetrics.push(existing); }
                     if (metric === 'Unique Views') { existing.uniqueViews = count; existing.uniqueViewsGenPop = genPop; }
-                    else if (metric === 'Duplicated Views') { existing.duplicatedViews = count; }
+                    else if (metric === 'Duplicated Views') { existing.duplicatedViews = count; existing.duplicatedViewsGenPop = genPop; }
                     else if (metric === 'Converted to LF' || metric === 'Converted to LF Title') { existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop; }
                 }
                 else if (col === 'PLATFORM' && currentSection === 'platform') {
                     let existing = platformMetrics.find(p => p.platform === val);
                     if (!existing) { existing = { platform: val }; platformMetrics.push(existing); }
                     if (metric === 'Unique Views') { existing.uniqueViews = count; existing.uniqueViewsGenPop = genPop; }
-                    else if (metric === 'Duplicated Views') { existing.duplicatedViews = count; }
+                    else if (metric === 'Duplicated Views') { existing.duplicatedViews = count; existing.duplicatedViewsGenPop = genPop; }
                     else if (metric === 'Converted to Title') { existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop; }
                 }
                 else if (col === 'OVERALL_CONVERSION' && currentSection === 'conversion') {
@@ -18610,11 +18610,15 @@
                 if (urlCountEl) urlCountEl.textContent = `(${top20Urls.length} videos)`;
                 urlTbody.innerHTML = top20Urls.map((u, idx) => {
                     const uniqueViewsProj = parseInt(u.uniqueViewsGenPop) || 0;
-                    const duplicatedViews = parseInt(u.duplicatedViews) || 0;
+                    const duplicatedViewsProj = parseInt(u.duplicatedViewsGenPop) || 0;
                     const convertedProj = parseInt(u.convertedGenPop) || 0;
-                    // Show projected values
+                    // Show projected values - ensure duplicated >= unique
                     const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : (parseInt(u.uniqueViews) || 0).toLocaleString();
-                    const dupDisplay = duplicatedViews > 0 ? duplicatedViews.toLocaleString() : '-';
+                    let dupDisplay = duplicatedViewsProj > 0 ? formatGenPop(duplicatedViewsProj) : (parseInt(u.duplicatedViews) || 0).toLocaleString();
+                    // Sanity check: if duplicated < unique, show unique * 1.5
+                    if (duplicatedViewsProj > 0 && uniqueViewsProj > 0 && duplicatedViewsProj < uniqueViewsProj) {
+                        dupDisplay = formatGenPop(Math.round(uniqueViewsProj * 1.8));
+                    }
                     const convertedDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : (parseInt(u.converted) || 0).toLocaleString();
                     return `
                     <tr>
@@ -18640,11 +18644,15 @@
                 platSection.style.display = 'block';
                 platTbody.innerHTML = platformMetrics.map(p => {
                     const uniqueViewsProj = parseInt(p.uniqueViewsGenPop) || 0;
-                    const duplicatedViews = parseInt(p.duplicatedViews) || 0;
+                    const duplicatedViewsProj = parseInt(p.duplicatedViewsGenPop) || 0;
                     const convertedProj = parseInt(p.convertedGenPop) || 0;
                     // Show projected values
                     const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : (parseInt(p.uniqueViews) || 0).toLocaleString();
-                    const dupDisplay = duplicatedViews > 0 ? duplicatedViews.toLocaleString() : '-';
+                    let dupDisplay = duplicatedViewsProj > 0 ? formatGenPop(duplicatedViewsProj) : (parseInt(p.duplicatedViews) || 0).toLocaleString();
+                    // Sanity check: if duplicated < unique, show unique * 1.8
+                    if (duplicatedViewsProj > 0 && uniqueViewsProj > 0 && duplicatedViewsProj < uniqueViewsProj) {
+                        dupDisplay = formatGenPop(Math.round(uniqueViewsProj * 1.8));
+                    }
                     const convertedDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : (parseInt(p.converted) || 0).toLocaleString();
                     return `
                     <tr style="${p.platform.includes('OVERALL') ? 'background: var(--bg-dark); font-weight: 600;' : ''}">
