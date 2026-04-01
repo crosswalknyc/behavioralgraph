@@ -158,7 +158,8 @@ TICKET_SALES_TRACKER_S3_BUCKET = 'ticket-sales-tracker'  # Bucket for Ticket Sal
 SF_LF_CONV_S3_BUCKET = 'sf-lf-conversion'  # Bucket for Short Form to Long Form Conversion analysis
 FLYWHEEL_S3_BUCKET = 'flywheeliq'  # Bucket for Flywheel Conversion analysis
 # Talent Fit Assessment — talent-brand audience overlap analysis
-TALENT_FIT_S3_PREFIX = 'talent-fit/'
+TALENT_FIT_S3_BUCKET = 'talent-fit'
+TALENT_FIT_S3_PREFIX = 'purgatory/'
 # LLMO IQ — /api/llmo-iq/* + _llmo_* (rollup from build_llmo_summary.py on S3)
 LLMO_PROJECTION_MULT = 329_900_000 / 10_000_000
 LLMO_S3_BUCKET = os.environ.get('LLMO_S3_BUCKET', 'llmo')
@@ -20485,10 +20486,10 @@ def talent_fit_assess():
             safe_brand = re.sub(r'[^a-zA-Z0-9_-]', '_', brand)[:50]
             safe_talents = '_'.join([re.sub(r'[^a-zA-Z0-9_-]', '_', t)[:20] for t in talents[:3]])
             filename = f"{safe_brand}_{safe_talents}_{timestamp}.json"
-            s3_key = S3_PURGATORY_PREFIX + TALENT_FIT_S3_PREFIX + filename
+            s3_key = TALENT_FIT_S3_PREFIX + filename
             
             s3_client.put_object(
-                Bucket=S3_BUCKET,
+                Bucket=TALENT_FIT_S3_BUCKET,
                 Key=s3_key,
                 Body=result_json.encode('utf-8'),
                 ContentType='application/json'
@@ -20497,7 +20498,7 @@ def talent_fit_assess():
             username = session.get('username', 'unknown')
             purgatory_id = add_to_purgatory(
                 s3_key=s3_key,
-                bucket=S3_BUCKET,
+                bucket=TALENT_FIT_S3_BUCKET,
                 created_by=username,
                 project_name=f"Talent Fit: {brand} x {', '.join(talents[:3])}",
                 category='talent_fit',
@@ -20625,8 +20626,8 @@ def talent_fit_list_results():
         
         try:
             response = s3_client.list_objects_v2(
-                Bucket=S3_BUCKET,
-                Prefix=S3_PURGATORY_PREFIX + TALENT_FIT_S3_PREFIX
+                Bucket=TALENT_FIT_S3_BUCKET,
+                Prefix=TALENT_FIT_S3_PREFIX
             )
             
             for obj in response.get('Contents', []):
@@ -20634,7 +20635,7 @@ def talent_fit_list_results():
                 if key.endswith('.json'):
                     results.append({
                         'key': key,
-                        'name': key.replace(S3_PURGATORY_PREFIX + TALENT_FIT_S3_PREFIX, '').replace('.json', ''),
+                        'name': key.replace(TALENT_FIT_S3_PREFIX, '').replace('.json', ''),
                         'last_modified': obj['LastModified'].isoformat(),
                         'size': obj['Size']
                     })
@@ -20661,12 +20662,11 @@ def talent_fit_get_result(key):
         if not user_can_run_analysis_module(user, 'talent_fit'):
             return jsonify({'error': 'Talent Fit Assessment access required'}), 403
         
-        full_prefix = S3_PURGATORY_PREFIX + TALENT_FIT_S3_PREFIX
-        if not key.startswith(full_prefix):
-            key = full_prefix + key
+        if not key.startswith(TALENT_FIT_S3_PREFIX):
+            key = TALENT_FIT_S3_PREFIX + key
         
         try:
-            response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+            response = s3_client.get_object(Bucket=TALENT_FIT_S3_BUCKET, Key=key)
             content = response['Body'].read().decode('utf-8')
             result = json.loads(content)
             return jsonify({'success': True, 'result': result})
