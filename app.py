@@ -20618,18 +20618,21 @@ def talent_fit_list_results():
         user = get_current_user()
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
-        
+
         if not user_can_run_analysis_module(user, 'talent_fit'):
             return jsonify({'error': 'Talent Fit Assessment access required'}), 403
-        
+
         results = []
-        
+
         try:
+            # List files in purgatory/ prefix
+            print(f"📂 Listing talent-fit results from bucket={TALENT_FIT_S3_BUCKET}, prefix={TALENT_FIT_S3_PREFIX}")
             response = s3_client.list_objects_v2(
                 Bucket=TALENT_FIT_S3_BUCKET,
                 Prefix=TALENT_FIT_S3_PREFIX
             )
-            
+            print(f"   Found {len(response.get('Contents', []))} objects in purgatory/")
+
             for obj in response.get('Contents', []):
                 key = obj['Key']
                 if key.endswith('.json'):
@@ -20639,8 +20642,31 @@ def talent_fit_list_results():
                         'last_modified': obj['LastModified'].isoformat(),
                         'size': obj['Size']
                     })
+            
+            # Also check root of bucket for any legacy files
+            response_root = s3_client.list_objects_v2(
+                Bucket=TALENT_FIT_S3_BUCKET,
+                Prefix=''
+            )
+            print(f"   Found {len(response_root.get('Contents', []))} total objects in bucket")
+            for obj in response_root.get('Contents', []):
+                key = obj['Key']
+                # Skip if already in purgatory/ (already added above)
+                if key.startswith(TALENT_FIT_S3_PREFIX):
+                    continue
+                if key.endswith('.json'):
+                    print(f"   Adding legacy file: {key}")
+                    results.append({
+                        'key': key,
+                        'name': key.replace('.json', ''),
+                        'last_modified': obj['LastModified'].isoformat(),
+                        'size': obj['Size']
+                    })
+                    
         except Exception as e:
             print(f"⚠️ Error listing talent-fit results: {e}")
+            import traceback
+            traceback.print_exc()
         
         results.sort(key=lambda x: x['last_modified'], reverse=True)
         
