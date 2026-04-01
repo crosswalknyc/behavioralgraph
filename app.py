@@ -22392,10 +22392,9 @@ def submit_flywheel_conversion():
 
 
 def _escape_for_flywheel_sql(term):
-    """Escape a term for use in SQL LIKE and exact match queries."""
-    eq_esc = term.replace("'", "''")
-    like_esc = eq_esc.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return like_esc, eq_esc
+    """Escape a term for use in SQL ILIKE queries (simple escape for single quotes only)."""
+    escaped = term.replace("'", "''")
+    return escaped
 
 
 def run_flywheel_conversion(job_id):
@@ -22479,7 +22478,7 @@ def run_flywheel_conversion(job_id):
             'period_comparison': {}
         }
         
-        like_esc_entry, _ = _escape_for_flywheel_sql(entry_point)
+        safe_entry = _escape_for_flywheel_sql(entry_point)
         
         update_job_status(job_id, progress=20, message='Finding entry point users...')
         
@@ -22489,7 +22488,8 @@ def run_flywheel_conversion(job_id):
         current_step_table = f"FW_STEP_{job_suffix}"
         
         # OPTIMIZED: Create temp table with entry point UIDs (single query, filters DATE first)
-        print(f"[Flywheel] Creating temp table for entry point UIDs...")
+        # Using ILIKE for case-insensitive matching (same pattern as Profile IQ)
+        print(f"[Flywheel] Creating temp table for entry point UIDs with term: {safe_entry}")
         try:
             cur.execute(f"DROP TABLE IF EXISTS {entry_temp_table}")
             cur.execute(f"""
@@ -22497,8 +22497,7 @@ def run_flywheel_conversion(job_id):
                 SELECT DISTINCT UID
                 FROM CLICKSTREAM_FINAL
                 WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                  AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
-                       OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
+                  AND (URL ILIKE '%{safe_entry}%' OR COMMON_NAME ILIKE '%{safe_entry}%')
             """)
             print(f"[Flywheel] Created temp table {entry_temp_table}")
         except Exception as e:
