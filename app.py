@@ -20613,7 +20613,7 @@ def talent_fit_find_talent():
 @app.route('/api/talent-fit/results', methods=['GET'])
 @requires_auth
 def talent_fit_list_results():
-    """List all Talent Fit Assessment results from S3."""
+    """List all released Talent Fit Assessment results from S3 (not in purgatory)."""
     try:
         user = get_current_user()
         if not user:
@@ -20625,43 +20625,27 @@ def talent_fit_list_results():
         results = []
 
         try:
-            # List files in purgatory/ prefix
-            print(f"📂 Listing talent-fit results from bucket={TALENT_FIT_S3_BUCKET}, prefix={TALENT_FIT_S3_PREFIX}")
+            # Only list released files (at root, NOT in purgatory/)
+            print(f"📂 Listing released talent-fit results from bucket={TALENT_FIT_S3_BUCKET}")
             response = s3_client.list_objects_v2(
-                Bucket=TALENT_FIT_S3_BUCKET,
-                Prefix=TALENT_FIT_S3_PREFIX
-            )
-            print(f"   Found {len(response.get('Contents', []))} objects in purgatory/")
-
-            for obj in response.get('Contents', []):
-                key = obj['Key']
-                if key.endswith('.json'):
-                    results.append({
-                        'key': key,
-                        'name': key.replace(TALENT_FIT_S3_PREFIX, '').replace('.json', ''),
-                        'last_modified': obj['LastModified'].isoformat(),
-                        'size': obj['Size']
-                    })
-            
-            # Also check root of bucket for any legacy files
-            response_root = s3_client.list_objects_v2(
                 Bucket=TALENT_FIT_S3_BUCKET,
                 Prefix=''
             )
-            print(f"   Found {len(response_root.get('Contents', []))} total objects in bucket")
-            for obj in response_root.get('Contents', []):
+            
+            for obj in response.get('Contents', []):
                 key = obj['Key']
-                # Skip if already in purgatory/ (already added above)
-                if key.startswith(TALENT_FIT_S3_PREFIX):
+                # Skip purgatory files - only show released files
+                if key.startswith('purgatory/'):
                     continue
                 if key.endswith('.json'):
-                    print(f"   Adding legacy file: {key}")
                     results.append({
                         'key': key,
                         'name': key.replace('.json', ''),
                         'last_modified': obj['LastModified'].isoformat(),
                         'size': obj['Size']
                     })
+            
+            print(f"   Found {len(results)} released files")
                     
         except Exception as e:
             print(f"⚠️ Error listing talent-fit results: {e}")
@@ -20688,8 +20672,7 @@ def talent_fit_get_result(key):
         if not user_can_run_analysis_module(user, 'talent_fit'):
             return jsonify({'error': 'Talent Fit Assessment access required'}), 403
         
-        if not key.startswith(TALENT_FIT_S3_PREFIX):
-            key = TALENT_FIT_S3_PREFIX + key
+        # Don't add purgatory prefix - we're fetching released files from root
         
         try:
             response = s3_client.get_object(Bucket=TALENT_FIT_S3_BUCKET, Key=key)
