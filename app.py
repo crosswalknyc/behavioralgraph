@@ -22539,7 +22539,7 @@ def run_flywheel_conversion(job_id):
             progress = 25 + int((idx / total_points) * 60)
             update_job_status(job_id, progress=progress, message=f'Analyzing flywheel point {idx + 1}/{total_points}: {point[:30]}...')
             
-            like_esc_point, _ = _escape_for_flywheel_sql(point)
+            safe_point = _escape_for_flywheel_sql(point)
             
             # Check if we still have UIDs to work with
             cur.execute(f"SELECT COUNT(*) FROM {current_step_table}")
@@ -22570,8 +22570,7 @@ def run_flywheel_conversion(job_id):
                 FROM CLICKSTREAM_FINAL c
                 INNER JOIN {current_step_table} s ON c.UID = s.UID
                 WHERE c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                  AND (LOWER(c.URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
-                       OR LOWER(c.COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
+                  AND (c.URL ILIKE '%{safe_point}%' OR c.COMMON_NAME ILIKE '%{safe_point}%')
             """)
             
             cur.execute(f"SELECT COUNT(*) FROM {next_step_table}")
@@ -22646,8 +22645,7 @@ def run_flywheel_conversion(job_id):
                     SELECT DISTINCT UID
                     FROM CLICKSTREAM_FINAL
                     WHERE DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
-                      AND (LOWER(URL) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\' 
-                           OR LOWER(COMMON_NAME) LIKE '%{like_esc_entry.lower()}%' ESCAPE '\\\\')
+                      AND (URL ILIKE '%{safe_entry}%' OR COMMON_NAME ILIKE '%{safe_entry}%')
                 """)
                 print(f"[Flywheel] Created comparison entry temp table")
             except Exception as e:
@@ -22678,7 +22676,7 @@ def run_flywheel_conversion(job_id):
                 for idx, point in enumerate(flywheel_points):
                     update_job_status(job_id, progress=89 + int((idx / total_points) * 5), message=f'Comparing point {idx + 1}/{total_points}: {point[:30]}...')
                     
-                    like_esc_point, _ = _escape_for_flywheel_sql(point)
+                    safe_cmp_point = _escape_for_flywheel_sql(point)
                     
                     cur.execute(f"SELECT COUNT(*) FROM {compare_step_table}")
                     compare_current_count = cur.fetchone()[0] or 0
@@ -22706,8 +22704,7 @@ def run_flywheel_conversion(job_id):
                         FROM CLICKSTREAM_FINAL c
                         INNER JOIN {compare_step_table} s ON c.UID = s.UID
                         WHERE c.DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
-                          AND (LOWER(c.URL) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\' 
-                               OR LOWER(c.COMMON_NAME) LIKE '%{like_esc_point.lower()}%' ESCAPE '\\\\')
+                          AND (c.URL ILIKE '%{safe_cmp_point}%' OR c.COMMON_NAME ILIKE '%{safe_cmp_point}%')
                     """)
                     
                     cur.execute(f"SELECT COUNT(*) FROM {compare_next_table}")
