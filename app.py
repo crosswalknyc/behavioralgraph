@@ -156,7 +156,7 @@ HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker d
 TICKET_SALES_S3_BUCKET = 'ticket-sales-iq'  # Bucket for Ticket Sales IQ (talent-to-theater attribution)
 TICKET_SALES_TRACKER_S3_BUCKET = 'ticket-sales-tracker'  # Bucket for Ticket Sales Tracker (movie viewers → theater)
 SF_LF_CONV_S3_BUCKET = 'sf-lf-conversion'  # Bucket for Short Form to Long Form Conversion analysis
-FLYWHEEL_S3_BUCKET = 'flywheel'  # Bucket for Flywheel Conversion analysis
+FLYWHEEL_S3_BUCKET = 'flywheeliq'  # Bucket for Flywheel Conversion analysis
 # Talent Fit Assessment — talent-brand audience overlap analysis
 TALENT_FIT_S3_PREFIX = 'talent-fit/'
 # LLMO IQ — /api/llmo-iq/* + _llmo_* (rollup from build_llmo_summary.py on S3)
@@ -20626,7 +20626,7 @@ def talent_fit_list_results():
         try:
             response = s3_client.list_objects_v2(
                 Bucket=S3_BUCKET,
-                Prefix=TALENT_FIT_S3_PREFIX
+                Prefix=S3_PURGATORY_PREFIX + TALENT_FIT_S3_PREFIX
             )
             
             for obj in response.get('Contents', []):
@@ -20634,7 +20634,7 @@ def talent_fit_list_results():
                 if key.endswith('.json'):
                     results.append({
                         'key': key,
-                        'name': key.replace(TALENT_FIT_S3_PREFIX, '').replace('.json', ''),
+                        'name': key.replace(S3_PURGATORY_PREFIX + TALENT_FIT_S3_PREFIX, '').replace('.json', ''),
                         'last_modified': obj['LastModified'].isoformat(),
                         'size': obj['Size']
                     })
@@ -20661,8 +20661,9 @@ def talent_fit_get_result(key):
         if not user_can_run_analysis_module(user, 'talent_fit'):
             return jsonify({'error': 'Talent Fit Assessment access required'}), 403
         
-        if not key.startswith(TALENT_FIT_S3_PREFIX):
-            key = TALENT_FIT_S3_PREFIX + key
+        full_prefix = S3_PURGATORY_PREFIX + TALENT_FIT_S3_PREFIX
+        if not key.startswith(full_prefix):
+            key = full_prefix + key
         
         try:
             response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
