@@ -1751,6 +1751,27 @@
                 </div>
             </div>
 
+            <!-- Analysis Pricing Tab -->
+            <div id="settings-tab-analysisPricing" class="settings-tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>💰 Analysis Pricing</h2>
+                        <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            Set the credit cost for each Analysis IQ module. Changes take effect immediately for new runs.
+                        </p>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div id="analysisPricingList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                            <!-- Rows populated by JS -->
+                        </div>
+                        <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+                            <button class="btn btn-primary" onclick="saveAnalysisPricing()">💾 Save Pricing</button>
+                        </div>
+                        <p id="analysisPricingMessage" style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);"></p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Credit Usage by Period Tab -->
             <div id="settings-tab-creditUsageExport" class="settings-tab-content" style="display: none;">
                 <div class="card">
@@ -4564,6 +4585,10 @@
                 loadSvodPricingUI();
             }
             
+            if (tabName === 'analysisPricing') {
+                loadAnalysisPricingUI();
+            }
+            
             if (tabName === 'liveFeatures') {
                 loadLiveFeatures();
             }
@@ -4768,6 +4793,109 @@
             } catch (e) {
                 if (typeof showToast === 'function') showToast(e.message || 'Error saving', true);
                 else alert('Error: ' + e.message);
+            }
+        }
+        
+        // Analysis Pricing (Settings)
+        const ANALYSIS_PRICING_LABELS = {
+            'profile_analysis': { label: 'Profile IQ', icon: '👤' },
+            'svod': { label: 'Subscriber IQ', icon: '📺' },
+            'ticket_sales': { label: 'Ticket Sales', icon: '🎟️' },
+            'ticket_sales_tracker': { label: 'Ticket Sales Tracker', icon: '📊' },
+            'campaign_roi': { label: 'Campaign ROI', icon: '📈' },
+            'watch_time': { label: 'Watch Time', icon: '⏱️' },
+            'roas_iq': { label: 'ROAS IQ', icon: '💹' },
+            'talent_fit_per_talent': { label: 'Talent Fit (per talent)', icon: '🌟' },
+            'talent_fit_find': { label: 'Find Me Talent', icon: '🔍' },
+            'sf_lf_conversion': { label: 'Short-Form to Long-Form', icon: '🎬' },
+            'ecommerce_iq': { label: 'Ecommerce IQ', icon: '🛒' },
+            'flywheel_conversion': { label: 'Flywheel Conversion', icon: '🔄' }
+        };
+        
+        async function loadAnalysisPricingUI() {
+            const listEl = document.getElementById('analysisPricingList');
+            const msgEl = document.getElementById('analysisPricingMessage');
+            if (!listEl) return;
+            if (msgEl) msgEl.textContent = 'Loading...';
+            
+            try {
+                const res = await fetch('/api/admin/settings/pricing', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed to load pricing');
+                
+                const pricing = data.pricing || {};
+                listEl.innerHTML = '';
+                
+                Object.keys(ANALYSIS_PRICING_LABELS).forEach(key => {
+                    const meta = ANALYSIS_PRICING_LABELS[key];
+                    const value = pricing[key] !== undefined ? pricing[key] : '';
+                    
+                    const card = document.createElement('div');
+                    card.className = 'analysis-pricing-card';
+                    card.style.cssText = 'background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem;';
+                    card.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+                            <span style="font-size: 1.2rem;">${meta.icon}</span>
+                            <span>${meta.label}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="number" min="0" step="1" value="${value}" data-pricing-key="${key}" 
+                                   style="flex: 1; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 1rem;">
+                            <span style="color: var(--text-secondary); font-size: 0.85rem;">credits</span>
+                        </div>
+                    `;
+                    listEl.appendChild(card);
+                });
+                
+                if (msgEl) msgEl.textContent = '';
+            } catch (e) {
+                if (msgEl) {
+                    msgEl.textContent = 'Error loading pricing: ' + e.message;
+                    msgEl.style.color = 'var(--accent-red, #ef4444)';
+                }
+            }
+        }
+        
+        async function saveAnalysisPricing() {
+            const listEl = document.getElementById('analysisPricingList');
+            const msgEl = document.getElementById('analysisPricingMessage');
+            if (!listEl) return;
+            
+            const inputs = listEl.querySelectorAll('input[data-pricing-key]');
+            const pricing = {};
+            inputs.forEach(input => {
+                const key = input.getAttribute('data-pricing-key');
+                const value = input.value.trim();
+                if (key && value !== '') {
+                    pricing[key] = parseInt(value, 10);
+                }
+            });
+            
+            try {
+                const res = await fetch('/api/admin/settings/pricing', {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pricing)
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Save failed');
+                
+                if (typeof showToast === 'function') showToast('Analysis pricing saved');
+                else alert('Analysis pricing saved');
+                
+                if (msgEl) {
+                    msgEl.textContent = 'Pricing saved successfully.';
+                    msgEl.style.color = 'var(--accent-green, #22c55e)';
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast(e.message || 'Error saving', true);
+                else alert('Error: ' + e.message);
+                
+                if (msgEl) {
+                    msgEl.textContent = 'Error saving: ' + e.message;
+                    msgEl.style.color = 'var(--accent-red, #ef4444)';
+                }
             }
         }
         

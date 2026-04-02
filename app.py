@@ -22614,7 +22614,7 @@ Respond with ONLY a number between 1000 and 500000. No explanation, just the num
                     print(f"[Flywheel] Using default estimate: {estimated_users}")
             
             if estimated_users > 0:
-                update_job_status(job_id, progress=28, message=f'Selecting {estimated_users:,} sample users...')
+                update_job_status(job_id, progress=28, message='Analyzing entry point engagement...')
                 print(f"[Flywheel] Using fallback with {estimated_users} estimated users")
                 
                 # Select random UIDs from the date range
