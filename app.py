@@ -22759,166 +22759,134 @@ Respond with ONLY a number between 1000 and 500000. No explanation, just the num
             }
         
         if has_comparison:
-            update_job_status(job_id, progress=89, message='Running comparison period analysis...')
-            print(f"[Flywheel] Starting comparison period analysis: {compare_start_date} to {compare_end_date}")
+            update_job_status(job_id, progress=89, message='Analyzing pre-period behavior of entry point users...')
+            print(f"[Flywheel] Starting PRE-PERIOD comparison: {compare_start_date} to {compare_end_date}")
+            print(f"[Flywheel] Taking {entry_unique_users} entry point users and checking their PRIOR engagement with flywheel touchpoints")
             
-            # OPTIMIZED: Use temp tables for comparison period too
-            compare_entry_table = f"FW_CMP_ENTRY_{job_suffix}"
-            compare_step_table = f"FW_CMP_STEP_{job_suffix}"
+            # KEY INSIGHT: We use the SAME users who had the entry point touchpoint
+            # and check if they had flywheel touchpoints BEFORE (pre-launch period)
+            # This shows: did entry point exposure INCREASE engagement with flywheel touchpoints?
             
-            try:
-                cur.execute(f"DROP TABLE IF EXISTS {compare_entry_table}")
-                cur.execute(f"""
-                    CREATE TEMPORARY TABLE {compare_entry_table} AS
-                    SELECT DISTINCT UID
-                    FROM CLICKSTREAM_FINAL
-                    WHERE DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
-                      AND (URL ILIKE '%{safe_entry}%' OR COMMON_NAME ILIKE '%{safe_entry}%')
-                """)
-                print(f"[Flywheel] Created comparison entry temp table")
-            except Exception as e:
-                print(f"[Flywheel] Error creating comparison entry table: {e}")
-                raise
-            
-            cur.execute(f"SELECT COUNT(*) FROM {compare_entry_table}")
-            compare_entry_unique_users = cur.fetchone()[0] or 0
-            
-            compare_entry_boosted = compare_entry_unique_users * BOOST_FACTOR
-            compare_entry_gen_pop = round(compare_entry_boosted / SAMPLE_SIZE * US_POPULATION)
+            # The entry point won't have hits in pre-period (it's pre-launch), so we skip it
+            # We only check the OTHER flywheel touchpoints
             
             results['compare_entry_point_metrics'] = {
-                'raw_unique_users': compare_entry_unique_users,
-                'boosted_users': compare_entry_boosted,
-                'gen_pop_projection': compare_entry_gen_pop,
-                'percentage_of_sample': round(compare_entry_boosted / SAMPLE_SIZE * 100, 2) if SAMPLE_SIZE > 0 else 0
+                'raw_unique_users': entry_unique_users,  # Same users as current period
+                'boosted_users': entry_boosted,
+                'gen_pop_projection': entry_gen_pop,
+                'percentage_of_sample': round(entry_boosted / SAMPLE_SIZE * 100, 2) if SAMPLE_SIZE > 0 else 0,
+                'note': 'Same users as entry point - checking their pre-period flywheel engagement'
             }
             
-            print(f"[Flywheel] Comparison entry point: {compare_entry_unique_users} unique users")
-            
-            if compare_entry_unique_users > 0:
-                # Initialize comparison step table
-                cur.execute(f"DROP TABLE IF EXISTS {compare_step_table}")
-                cur.execute(f"CREATE TEMPORARY TABLE {compare_step_table} AS SELECT * FROM {compare_entry_table}")
-                compare_previous_step_count = compare_entry_unique_users
+            # For each flywheel touchpoint, check how many entry point users had engagement BEFORE
+            for idx, point in enumerate(flywheel_points):
+                update_job_status(job_id, progress=89 + int((idx / total_points) * 5), message=f'Checking pre-period engagement: {point[:30]}...')
                 
-                for idx, point in enumerate(flywheel_points):
-                    update_job_status(job_id, progress=89 + int((idx / total_points) * 5), message=f'Comparing point {idx + 1}/{total_points}: {point[:30]}...')
-                    
-                    safe_cmp_point = _escape_for_flywheel_sql(point)
-                    
-                    cur.execute(f"SELECT COUNT(*) FROM {compare_step_table}")
-                    compare_current_count = cur.fetchone()[0] or 0
-                    
-                    if compare_current_count == 0:
-                        results['compare_flywheel_metrics'].append({
-                            'point': point,
-                            'position': idx + 1,
-                            'raw_unique_users': 0,
-                            'boosted_users': 0,
-                            'gen_pop_projection': 0,
-                            'conversion_from_entry': 0,
-                            'conversion_from_previous': 0,
-                            'cumulative_retention': 0
-                        })
-                        compare_previous_step_count = 0
-                        continue
-                    
-                    # OPTIMIZED: Use JOIN instead of IN clause
-                    compare_next_table = f"FW_CMP_NEXT_{job_suffix}"
-                    cur.execute(f"DROP TABLE IF EXISTS {compare_next_table}")
-                    cur.execute(f"""
-                        CREATE TEMPORARY TABLE {compare_next_table} AS
-                        SELECT DISTINCT c.UID
-                        FROM CLICKSTREAM_FINAL c
-                        INNER JOIN {compare_step_table} s ON c.UID = s.UID
-                        WHERE c.DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
-                          AND (c.URL ILIKE '%{safe_cmp_point}%' OR c.COMMON_NAME ILIKE '%{safe_cmp_point}%')
-                    """)
-                    
-                    cur.execute(f"SELECT COUNT(*) FROM {compare_next_table}")
-                    compare_point_unique = cur.fetchone()[0] or 0
-                    
-                    compare_point_boosted = compare_point_unique * BOOST_FACTOR
-                    compare_point_gen_pop = round(compare_point_boosted / SAMPLE_SIZE * US_POPULATION)
-                    
-                    compare_conv_from_entry = round(compare_point_unique / compare_entry_unique_users * 100, 2) if compare_entry_unique_users else 0
-                    compare_conv_from_prev = round(compare_point_unique / compare_previous_step_count * 100, 2) if compare_previous_step_count else 0
-                    
-                    results['compare_flywheel_metrics'].append({
-                        'point': point,
-                        'position': idx + 1,
-                        'raw_unique_users': compare_point_unique,
-                        'boosted_users': compare_point_boosted,
-                        'gen_pop_projection': compare_point_gen_pop,
-                        'conversion_from_entry': compare_conv_from_entry,
-                        'conversion_from_previous': compare_conv_from_prev,
-                        'cumulative_retention': compare_conv_from_entry
-                    })
-                    
-                    print(f"[Flywheel] Comparison point '{point[:40]}': {compare_point_unique} users ({compare_conv_from_entry}% of entry)")
-                    
-                    # Update for next iteration
-                    cur.execute(f"DROP TABLE IF EXISTS {compare_step_table}")
-                    cur.execute(f"ALTER TABLE {compare_next_table} RENAME TO {compare_step_table}")
-                    compare_previous_step_count = compare_point_unique
+                safe_cmp_point = _escape_for_flywheel_sql(point)
                 
-                # Cleanup comparison temp tables
+                # Query: How many of our ENTRY POINT users had this touchpoint in the PRE-PERIOD?
+                pre_period_query = f"""
+                    SELECT COUNT(DISTINCT c.UID)
+                    FROM CLICKSTREAM_FINAL c
+                    INNER JOIN {entry_temp_table} e ON c.UID = e.UID
+                    WHERE c.DELIVERED BETWEEN '{compare_start_date}' AND '{compare_end_date}'
+                      AND (c.URL ILIKE '%{safe_cmp_point}%' OR c.COMMON_NAME ILIKE '%{safe_cmp_point}%')
+                """
+                
                 try:
-                    cur.execute(f"DROP TABLE IF EXISTS {compare_entry_table}")
-                    cur.execute(f"DROP TABLE IF EXISTS {compare_step_table}")
-                except:
-                    pass
+                    cur.execute(pre_period_query)
+                    pre_period_users = cur.fetchone()[0] or 0
+                except Exception as e:
+                    print(f"[Flywheel] Error querying pre-period for {point}: {e}")
+                    pre_period_users = 0
                 
-                compare_funnel_steps = [{'step': 'Entry: ' + entry_point, 'users': compare_entry_unique_users, 'boosted': compare_entry_boosted, 'gen_pop': compare_entry_gen_pop, 'pct_of_entry': 100.0}]
-                for metric in results['compare_flywheel_metrics']:
-                    compare_funnel_steps.append({
-                        'step': f"Step {metric['position']}: {metric['point']}",
-                        'users': metric['raw_unique_users'],
-                        'boosted': metric['boosted_users'],
-                        'gen_pop': metric['gen_pop_projection'],
-                        'pct_of_entry': metric['conversion_from_entry']
-                    })
-                results['compare_funnel_analysis'] = compare_funnel_steps
+                pre_period_boosted = pre_period_users * BOOST_FACTOR
+                pre_period_gen_pop = round(pre_period_boosted / SAMPLE_SIZE * US_POPULATION)
+                pre_period_pct = round(pre_period_users / entry_unique_users * 100, 2) if entry_unique_users else 0
                 
-                if results['compare_flywheel_metrics']:
-                    compare_final = results['compare_flywheel_metrics'][-1]
-                    results['compare_conversion_rates'] = {
-                        'overall_conversion': compare_final['conversion_from_entry'],
-                        'average_step_conversion': round(sum(m['conversion_from_previous'] for m in results['compare_flywheel_metrics']) / len(results['compare_flywheel_metrics']), 2) if results['compare_flywheel_metrics'] else 0,
-                        'best_converting_step': max(results['compare_flywheel_metrics'], key=lambda x: x['conversion_from_previous'])['point'] if results['compare_flywheel_metrics'] else None,
-                        'worst_converting_step': min(results['compare_flywheel_metrics'], key=lambda x: x['conversion_from_previous'])['point'] if results['compare_flywheel_metrics'] else None
-                    }
+                # Get current period metrics for comparison
+                current_metric = results['flywheel_metrics'][idx] if idx < len(results['flywheel_metrics']) else None
+                current_pct = current_metric['conversion_from_entry'] if current_metric else 0
+                
+                # Calculate lift: how much did engagement INCREASE after entry point exposure?
+                lift_pct = round(current_pct - pre_period_pct, 2)
+                lift_direction = 'increase' if lift_pct > 0 else ('decrease' if lift_pct < 0 else 'no_change')
+                
+                results['compare_flywheel_metrics'].append({
+                    'point': point,
+                    'position': idx + 1,
+                    'raw_unique_users': pre_period_users,
+                    'boosted_users': pre_period_boosted,
+                    'gen_pop_projection': pre_period_gen_pop,
+                    'conversion_from_entry': pre_period_pct,
+                    'conversion_from_previous': pre_period_pct,  # Same as entry since no sequential tracking in pre-period
+                    'cumulative_retention': pre_period_pct,
+                    'lift_vs_current': lift_pct,
+                    'lift_direction': lift_direction
+                })
+                
+                print(f"[Flywheel] Pre-period '{point[:40]}': {pre_period_users} users ({pre_period_pct}%) | Current: {current_pct}% | Lift: {lift_pct:+.2f}%")
             
-            entry_change = round(((entry_unique_users - compare_entry_unique_users) / compare_entry_unique_users * 100), 2) if compare_entry_unique_users > 0 else 0
-            current_overall = results['conversion_rates'].get('overall_conversion', 0)
-            compare_overall = results['compare_conversion_rates'].get('overall_conversion', 0)
-            conversion_change = round(current_overall - compare_overall, 2)
+            # Build comparison summary - the story of lift
+            total_pre_engagement = sum(m['conversion_from_entry'] for m in results['compare_flywheel_metrics'])
+            total_current_engagement = sum(m['conversion_from_entry'] for m in results['flywheel_metrics'])
+            overall_lift = round(total_current_engagement - total_pre_engagement, 2)
+            
+            results['compare_conversion_rates'] = {
+                'overall_conversion': round(total_pre_engagement / len(flywheel_points), 2) if flywheel_points else 0,
+                'average_step_conversion': round(total_pre_engagement / len(flywheel_points), 2) if flywheel_points else 0,
+                'best_converting_step': max(results['compare_flywheel_metrics'], key=lambda x: x['conversion_from_entry'])['point'] if results['compare_flywheel_metrics'] else None,
+                'worst_converting_step': min(results['compare_flywheel_metrics'], key=lambda x: x['conversion_from_entry'])['point'] if results['compare_flywheel_metrics'] else None
+            }
+            
+            # Build lift analysis
+            results['lift_analysis'] = {
+                'pre_period': f"{compare_start_date} to {compare_end_date}",
+                'post_period': f"{start_date} to {end_date}",
+                'entry_point': entry_point,
+                'total_entry_users': entry_unique_users,
+                'total_entry_gen_pop': entry_gen_pop,
+                'overall_engagement_lift': overall_lift,
+                'lift_direction': 'positive' if overall_lift > 0 else ('negative' if overall_lift < 0 else 'neutral'),
+                'step_lifts': []
+            }
+            
+            for i, current_m in enumerate(results['flywheel_metrics']):
+                if i < len(results['compare_flywheel_metrics']):
+                    pre_m = results['compare_flywheel_metrics'][i]
+                    results['lift_analysis']['step_lifts'].append({
+                        'point': current_m['point'],
+                        'pre_pct': pre_m['conversion_from_entry'],
+                        'post_pct': current_m['conversion_from_entry'],
+                        'lift_pct': pre_m.get('lift_vs_current', 0),
+                        'pre_gen_pop': pre_m['gen_pop_projection'],
+                        'post_gen_pop': current_m['gen_pop_projection']
+                    })
+            
+            # Build period_comparison using lift analysis
+            overall_lift = results['lift_analysis'].get('overall_engagement_lift', 0)
             
             results['period_comparison'] = {
                 'current_period': f"{start_date} to {end_date}",
                 'prior_period': f"{compare_start_date} to {compare_end_date}",
-                'entry_users_change_pct': entry_change,
-                'entry_users_trend': 'up' if entry_change > 0 else ('down' if entry_change < 0 else 'flat'),
-                'overall_conversion_change_pts': conversion_change,
-                'conversion_trend': 'up' if conversion_change > 0 else ('down' if conversion_change < 0 else 'flat'),
+                'entry_users_gen_pop': entry_gen_pop,
+                'overall_engagement_lift': overall_lift,
+                'lift_direction': results['lift_analysis'].get('lift_direction', 'neutral'),
                 'step_changes': []
             }
             
-            for i, current_metric in enumerate(results['flywheel_metrics']):
-                if i < len(results['compare_flywheel_metrics']):
-                    compare_metric = results['compare_flywheel_metrics'][i]
-                    user_change = round(((current_metric['raw_unique_users'] - compare_metric['raw_unique_users']) / compare_metric['raw_unique_users'] * 100), 2) if compare_metric['raw_unique_users'] > 0 else 0
-                    conv_change = round(current_metric['conversion_from_entry'] - compare_metric['conversion_from_entry'], 2)
-                    results['period_comparison']['step_changes'].append({
-                        'point': current_metric['point'],
-                        'position': current_metric['position'],
-                        'users_change_pct': user_change,
-                        'users_trend': 'up' if user_change > 0 else ('down' if user_change < 0 else 'flat'),
-                        'conversion_change_pts': conv_change,
-                        'conversion_trend': 'up' if conv_change > 0 else ('down' if conv_change < 0 else 'flat')
-                    })
+            for step_lift in results['lift_analysis'].get('step_lifts', []):
+                results['period_comparison']['step_changes'].append({
+                    'point': step_lift['point'],
+                    'pre_pct': step_lift['pre_pct'],
+                    'post_pct': step_lift['post_pct'],
+                    'lift_pct': step_lift['lift_pct'],
+                    'lift_direction': 'up' if step_lift['lift_pct'] > 0 else ('down' if step_lift['lift_pct'] < 0 else 'flat'),
+                    'pre_gen_pop': step_lift['pre_gen_pop'],
+                    'post_gen_pop': step_lift['post_gen_pop']
+                })
             
-            print(f"[Flywheel] Comparison complete: Entry users {entry_change:+.1f}%, Overall conversion {conversion_change:+.1f}pts")
+            print(f"[Flywheel] Lift analysis complete: Overall lift {overall_lift:+.2f}%")
         
         update_job_status(job_id, progress=95, message='Saving results...')
         _save_flywheel_results(job_id, results, job)
@@ -22962,21 +22930,20 @@ def _save_flywheel_results(job_id, results, job):
         rows.append({'Column': 'ENTRY_POINT', 'Value': results['entry_point'], 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         rows.append({'Column': 'FLYWHEEL_POINTS', 'Value': ', '.join(results['flywheel_points']), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         rows.append({'Column': 'DATE_RANGE', 'Value': f"{results['start_date']} to {results['end_date']}", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-        rows.append({'Column': 'BOOST_FACTOR', 'Value': str(results['boost_factor']), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         
         entry_m = results.get('entry_point_metrics', {})
-        rows.append({'Column': 'ENTRY_POINT_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-        rows.append({'Column': 'Entry Point', 'Value': results['entry_point'], 'Metric': 'Unique Users', 'Count': entry_m.get('raw_unique_users', 0), 'Percentage': '100%', 'Gen_Pop_Projection': f"{entry_m.get('gen_pop_projection', 0):,}"})
-        rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'ENTRY_POINT_METRICS', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'Entry Point', 'Value': results['entry_point'], 'Metric': 'Projected Users', 'Projected_Users': f"{entry_m.get('gen_pop_projection', 0):,}", 'Percentage': '100%', 'Gen_Pop_Projection': f"{entry_m.get('gen_pop_projection', 0):,}"})
+        rows.append({'Column': '', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         
-        rows.append({'Column': 'FLYWHEEL_FUNNEL', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        rows.append({'Column': 'FLYWHEEL_FUNNEL', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         for metric in results.get('flywheel_metrics', []):
             rows.append({
                 'Column': f"Step {metric['position']}", 
                 'Value': metric['point'], 
-                'Metric': 'Unique Users', 
-                'Count': metric['raw_unique_users'],
+                'Metric': 'Projected Users', 
+                'Projected_Users': f"{metric['gen_pop_projection']:,}",
                 'Percentage': f"{metric['conversion_from_entry']}%",
                 'Gen_Pop_Projection': f"{metric['gen_pop_projection']:,}"
             })
@@ -22990,48 +22957,51 @@ def _save_flywheel_results(job_id, results, job):
         rows.append({'Column': 'Worst Converting Step', 'Value': conv.get('worst_converting_step', 'N/A'), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         
         if results.get('has_comparison'):
-            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            rows.append({'Column': 'COMPARISON_PERIOD', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            rows.append({'Column': 'COMPARE_DATE_RANGE', 'Value': f"{results.get('compare_start_date')} to {results.get('compare_end_date')}", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'PRE_PERIOD_ANALYSIS', 'Value': 'Same entry point users - their flywheel engagement BEFORE entry touchpoint', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'PRE_PERIOD_DATE_RANGE', 'Value': f"{results.get('compare_start_date')} to {results.get('compare_end_date')}", 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
             
-            compare_entry_m = results.get('compare_entry_point_metrics', {})
-            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            rows.append({'Column': 'COMPARE_ENTRY_POINT_METRICS', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            rows.append({'Column': 'Prior Entry Point', 'Value': results['entry_point'], 'Metric': 'Unique Users', 'Count': compare_entry_m.get('raw_unique_users', 0), 'Percentage': '100%', 'Gen_Pop_Projection': f"{compare_entry_m.get('gen_pop_projection', 0):,}"})
-            
-            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            rows.append({'Column': 'COMPARE_FLYWHEEL_FUNNEL', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+            rows.append({'Column': 'PRE_PERIOD_FLYWHEEL_ENGAGEMENT', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
             for metric in results.get('compare_flywheel_metrics', []):
+                lift = metric.get('lift_vs_current', 0)
+                lift_icon = '📈' if lift > 0 else ('📉' if lift < 0 else '➡️')
                 rows.append({
-                    'Column': f"Prior Step {metric['position']}", 
+                    'Column': f"Pre Step {metric['position']}", 
                     'Value': metric['point'], 
-                    'Metric': 'Unique Users', 
-                    'Count': metric['raw_unique_users'],
+                    'Metric': f"{lift_icon} Lift: {lift:+.2f}%", 
+                    'Projected_Users': f"{metric['gen_pop_projection']:,}",
                     'Percentage': f"{metric['conversion_from_entry']}%",
                     'Gen_Pop_Projection': f"{metric['gen_pop_projection']:,}"
                 })
             
-            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            rows.append({'Column': 'COMPARE_CONVERSION_RATES', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            compare_conv = results.get('compare_conversion_rates', {})
-            rows.append({'Column': 'Prior Overall Conversion', 'Value': f"{compare_conv.get('overall_conversion', 0)}%", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            rows.append({'Column': 'Prior Avg Step Conversion', 'Value': f"{compare_conv.get('average_step_conversion', 0)}%", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            
-            rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            rows.append({'Column': 'PERIOD_COMPARISON', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            period_comp = results.get('period_comparison', {})
-            rows.append({'Column': 'Entry Users Change', 'Value': f"{period_comp.get('entry_users_change_pct', 0):+.1f}%", 'Metric': period_comp.get('entry_users_trend', ''), 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            rows.append({'Column': 'Overall Conv Change', 'Value': f"{period_comp.get('overall_conversion_change_pts', 0):+.1f}pts", 'Metric': period_comp.get('conversion_trend', ''), 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            
-            for step_change in period_comp.get('step_changes', []):
-                rows.append({
-                    'Column': f"Step {step_change['position']} Change", 
-                    'Value': step_change['point'], 
-                    'Metric': f"Users: {step_change['users_change_pct']:+.1f}%, Conv: {step_change['conversion_change_pts']:+.1f}pts",
-                    'Count': step_change['users_trend'],
-                    'Percentage': step_change['conversion_trend'],
-                    'Gen_Pop_Projection': ''
-                })
+            # Add lift analysis summary
+            lift_analysis = results.get('lift_analysis', {})
+            if lift_analysis:
+                rows.append({'Column': '', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                rows.append({'Column': 'LIFT_ANALYSIS', 'Value': 'Impact of Entry Point Exposure', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                
+                overall_lift = lift_analysis.get('overall_engagement_lift', 0)
+                lift_direction = lift_analysis.get('lift_direction', 'neutral')
+                lift_icon = '📈 POSITIVE' if lift_direction == 'positive' else ('📉 NEGATIVE' if lift_direction == 'negative' else '➡️ NEUTRAL')
+                
+                rows.append({'Column': 'Overall Engagement Lift', 'Value': f"{overall_lift:+.2f}%", 'Metric': lift_icon, 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                rows.append({'Column': 'Entry Point Users', 'Value': f"{lift_analysis.get('total_entry_gen_pop', 0):,}", 'Metric': 'Gen Pop Projection', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                
+                rows.append({'Column': '', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                rows.append({'Column': 'STEP_BY_STEP_LIFT', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                
+                for step_lift in lift_analysis.get('step_lifts', []):
+                    lift_pct = step_lift.get('lift_pct', 0)
+                    lift_icon = '📈' if lift_pct > 0 else ('📉' if lift_pct < 0 else '➡️')
+                    rows.append({
+                        'Column': step_lift['point'],
+                        'Value': f"Pre: {step_lift['pre_pct']}% → Post: {step_lift['post_pct']}%",
+                        'Metric': f"{lift_icon} {lift_pct:+.2f}% lift",
+                        'Projected_Users': f"Pre: {step_lift['pre_gen_pop']:,} → Post: {step_lift['post_gen_pop']:,}",
+                        'Percentage': f"{lift_pct:+.2f}%",
+                        'Gen_Pop_Projection': f"{step_lift['post_gen_pop']:,}"
+                    })
         
         df = pd.DataFrame(rows)
         df.to_csv(filepath, index=False)
