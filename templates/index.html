@@ -22751,12 +22751,14 @@
             
             const btn = document.getElementById('flywheelSubmitBtn');
             if (btn) btn.disabled = true;
-            document.getElementById('flywheelJobStatus').style.display = '';
-            document.getElementById('flywheelStatusRunning').style.display = '';
-            document.getElementById('flywheelStatusComplete').style.display = 'none';
-            document.getElementById('flywheelStatusError').style.display = 'none';
-            document.getElementById('flywheelStatusText').textContent = 'Submitting...';
-            document.getElementById('flywheelProgressFill').style.width = '0%';
+            
+            // Show the analysis status modal popup
+            showAnalysisStatusModal();
+            updateAnalysisStatusModal({
+                display_name: projectName || 'Flywheel: ' + entryPoint.substring(0, 30),
+                message: 'Submitting analysis...',
+                progress: 0
+            });
             
             const payload = {
                 entry_point: entryPoint,
@@ -22777,40 +22779,43 @@
                 body: JSON.stringify(payload)
             }).then(r => r.json()).then(data => {
                 if (data.error) {
-                    document.getElementById('flywheelStatusRunning').style.display = 'none';
-                    document.getElementById('flywheelStatusError').style.display = '';
-                    document.getElementById('flywheelErrorMessage').textContent = data.error;
+                    showAnalysisStatusModalError(data.error);
                     if (btn) btn.disabled = false;
                     return;
                 }
-                _pollFlywheelJob(data.job_id);
+                _pollFlywheelJob(data.job_id, payload.project_name);
             }).catch(err => {
-                document.getElementById('flywheelStatusRunning').style.display = 'none';
-                document.getElementById('flywheelStatusError').style.display = '';
-                document.getElementById('flywheelErrorMessage').textContent = 'Submit failed: ' + err.message;
+                showAnalysisStatusModalError('Submit failed: ' + err.message);
                 if (btn) btn.disabled = false;
             });
         }
 
-        function _pollFlywheelJob(jobId) {
+        function _pollFlywheelJob(jobId, projectName) {
             if (_flywheelPollingId) clearInterval(_flywheelPollingId);
             _flywheelPollingId = setInterval(() => {
                 fetch('/api/job-status/' + jobId, { credentials: 'same-origin' })
                     .then(r => r.json())
                     .then(data => {
-                        document.getElementById('flywheelStatusText').textContent = data.message || data.status;
-                        document.getElementById('flywheelProgressFill').style.width = (data.progress || 0) + '%';
+                        updateAnalysisStatusModal({
+                            display_name: projectName || 'Flywheel Conversion',
+                            message: data.message || data.status,
+                            progress: data.progress || 0
+                        });
                         if (data.status === 'completed') {
                             clearInterval(_flywheelPollingId);
-                            document.getElementById('flywheelStatusRunning').style.display = 'none';
-                            document.getElementById('flywheelStatusComplete').style.display = '';
+                            showAnalysisStatusModalComplete();
                             document.getElementById('flywheelSubmitBtn').disabled = false;
                             loadFlywheelResults();
+                            // Close modal after a brief delay and offer to view dashboard
+                            setTimeout(() => {
+                                closeAnalysisStatusModal();
+                                if (confirm('Flywheel Conversion analysis complete! It is pending admin review.\n\nWould you like to view the Flywheel Dashboard?')) {
+                                    showFlywheelConversionDashboard();
+                                }
+                            }, 1500);
                         } else if (data.status === 'failed') {
                             clearInterval(_flywheelPollingId);
-                            document.getElementById('flywheelStatusRunning').style.display = 'none';
-                            document.getElementById('flywheelStatusError').style.display = '';
-                            document.getElementById('flywheelErrorMessage').textContent = data.error || 'Job failed';
+                            showAnalysisStatusModalError(data.error || 'Analysis failed');
                             document.getElementById('flywheelSubmitBtn').disabled = false;
                         }
                     }).catch(() => {});
