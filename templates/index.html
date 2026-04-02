@@ -18936,12 +18936,16 @@
             const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
             const convertedSample = parseInt(conversionSummary.converted) || 0;
             
-            // Main values - ALWAYS show projected values
-            document.getElementById('sfConvKpiTotalViewers').textContent = totalViewersGenPop > 0 ? formatGenPop(totalViewersGenPop) : totalViewersSample.toLocaleString();
-            document.getElementById('sfConvKpiConverted').textContent = convertedGenPop > 0 ? formatGenPop(convertedGenPop) : convertedSample.toLocaleString();
-            document.getElementById('sfConvKpiRate').textContent = (conversionSummary.convRate || '0') + '%';
+            // Main values - ALWAYS show projected values (with null checks)
+            const kpiTotalViewersEl = document.getElementById('sfConvKpiTotalViewers');
+            const kpiConvertedEl = document.getElementById('sfConvKpiConverted');
+            const kpiRateEl = document.getElementById('sfConvKpiRate');
+            const kpiAvgTimeEl = document.getElementById('sfConvKpiAvgTime');
+            if (kpiTotalViewersEl) kpiTotalViewersEl.textContent = totalViewersGenPop > 0 ? formatGenPop(totalViewersGenPop) : totalViewersSample.toLocaleString();
+            if (kpiConvertedEl) kpiConvertedEl.textContent = convertedGenPop > 0 ? formatGenPop(convertedGenPop) : convertedSample.toLocaleString();
+            if (kpiRateEl) kpiRateEl.textContent = (conversionSummary.convRate || '0') + '%';
             const avgHrs = parseFloat(conversionSummary.avgHours) || 0;
-            document.getElementById('sfConvKpiAvgTime').textContent = avgHrs > 24 ? `${Math.round(avgHrs / 24)}d` : `${Math.round(avgHrs)}h`;
+            if (kpiAvgTimeEl) kpiAvgTimeEl.textContent = avgHrs > 24 ? `${Math.round(avgHrs / 24)}d` : `${Math.round(avgHrs)}h`;
 
             // Hide sample sub-value (user requested removal)
             const totalProjEl = document.getElementById('sfConvKpiTotalViewersProj');
@@ -18959,8 +18963,10 @@
             if (lfPlatformCard && lfPlatformVisit.visitors) {
                 lfPlatformCard.style.display = 'block';
                 const lfRate = parseFloat(lfPlatformVisit.rate) || 0;
-                document.getElementById('sfConvKpiLFPlatformVisitors').textContent = lfRate.toFixed(2) + '%';
-                document.getElementById('sfConvKpiLFPlatformRate').style.display = 'none';
+                const lfVisitorsEl = document.getElementById('sfConvKpiLFPlatformVisitors');
+                const lfRateEl = document.getElementById('sfConvKpiLFPlatformRate');
+                if (lfVisitorsEl) lfVisitorsEl.textContent = lfRate.toFixed(2) + '%';
+                if (lfRateEl) lfRateEl.style.display = 'none';
             }
             
             // Per-Platform Conversion Cards
@@ -18991,9 +18997,12 @@
             
             // Update info
             document.getElementById('sfConvInfoLFTitle').textContent = projectInfo.lfTitle || '-';
-            document.getElementById('sfConvInfoLFPlatform').textContent = projectInfo.lfPlatform || '-';
-            document.getElementById('sfConvInfoDateRange').textContent = projectInfo.dateRange || '-';
-            document.getElementById('sfConvInfoWindow').textContent = projectInfo.window || '-';
+            const infoLFPlatformEl = document.getElementById('sfConvInfoLFPlatform');
+            const infoDateRangeEl = document.getElementById('sfConvInfoDateRange');
+            const infoWindowEl = document.getElementById('sfConvInfoWindow');
+            if (infoLFPlatformEl) infoLFPlatformEl.textContent = projectInfo.lfPlatform || '-';
+            if (infoDateRangeEl) infoDateRangeEl.textContent = projectInfo.dateRange || '-';
+            if (infoWindowEl) infoWindowEl.textContent = projectInfo.window || '-';
             
             // URL Table - show projected values
             const urlTbody = document.getElementById('sfConvUrlTableBody');
