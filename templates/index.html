@@ -34859,6 +34859,19 @@
 
         // Profile-released notifications (when purgatory profile is released)
         let currentProfileReleasedNotification = null;
+        
+        // Map source_type to display info
+        const ANALYSIS_TYPE_INFO = {
+            'profile_analysis': { title: 'Profile IQ Ready', label: 'Profile IQ', btnText: 'VIEW IN PROFILE IQ' },
+            'svod_acquisition': { title: 'Subscriber IQ Ready', label: 'Subscriber IQ report', btnText: 'VIEW IN SUBSCRIBER IQ' },
+            'ticket_sales_iq': { title: 'Ticket Sales Ready', label: 'Ticket Sales report', btnText: 'VIEW IN TICKET SALES' },
+            'ticket_sales_tracker': { title: 'Ticket Sales Tracker Ready', label: 'Ticket Sales Tracker report', btnText: 'VIEW IN TICKET SALES TRACKER' },
+            'sf_lf_conversion': { title: 'SF-LF Conversion Ready', label: 'Short-Form to Long-Form Conversion report', btnText: 'VIEW IN SF CONVERSION' },
+            'flywheel_conversion': { title: 'Flywheel IQ Ready', label: 'Flywheel Conversion report', btnText: 'VIEW IN FLYWHEEL IQ' },
+            'talent_fit': { title: 'Talent Fit Ready', label: 'Talent Fit report', btnText: 'VIEW IN TALENT FIT IQ' },
+            'roas_iq': { title: 'ROAS IQ Ready', label: 'ROAS IQ report', btnText: 'VIEW IN ROAS IQ' },
+            'ecommerce_iq': { title: 'E-Commerce IQ Ready', label: 'E-Commerce IQ report', btnText: 'VIEW IN E-COMMERCE IQ' }
+        };
 
         async function checkProfileReleasedNotifications() {
             try {
@@ -34869,14 +34882,12 @@
                 if (notifications.length > 0) {
                     const n = notifications[0];
                     currentProfileReleasedNotification = n;
-                    const isSvod = (n.source_type || '') === 'svod_acquisition';
-                    const isTST = (n.source_type || '') === 'ticket_sales_tracker';
+                    const sourceType = n.source_type || 'profile_analysis';
+                    const typeInfo = ANALYSIS_TYPE_INFO[sourceType] || ANALYSIS_TYPE_INFO['profile_analysis'];
                     const name = (n.profile_name || 'Unknown').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-                    document.getElementById('profileReleasedTitle').textContent = isSvod ? '✅ Subscriber Acquisition report ready' : (isTST ? '✅ Ticket Sales Tracker Ready' : '✅ Profile IQ Ready');
-                    document.getElementById('profileReleasedMessage').innerHTML = isSvod
-                        ? 'Your Subscriber Acquisition report for <strong>' + name + '</strong> has been loaded into your dashboard.'
-                        : (isTST ? 'Your Ticket Sales Tracker report for <strong>' + name + '</strong> has been loaded into your dashboard.' : 'Your Profile IQ of <strong>' + name + '</strong> has been loaded into your dashboard.');
-                    document.getElementById('profileReleasedViewBtn').textContent = isSvod ? 'View Subscriber Acquisition report' : (isTST ? 'View in Ticket Sales Tracker' : 'View in Profile IQ');
+                    document.getElementById('profileReleasedTitle').textContent = '✅ ' + typeInfo.title;
+                    document.getElementById('profileReleasedMessage').innerHTML = 'Your ' + typeInfo.label + ' of <strong>' + name + '</strong> has been loaded into your dashboard.';
+                    document.getElementById('profileReleasedViewBtn').textContent = typeInfo.btnText;
                     document.getElementById('profileReleasedModal').style.display = 'flex';
                 }
             } catch (e) { console.warn('Profile-released check failed:', e); }
@@ -34900,8 +34911,7 @@
         async function handleProfileReleasedView() {
             const n = currentProfileReleasedNotification;
             if (!n || !n.s3_key) { closeProfileReleasedModal(); return; }
-            const isSvod = (n.source_type || '') === 'svod_acquisition';
-            const isTST = (n.source_type || '') === 'ticket_sales_tracker';
+            const sourceType = n.source_type || 'profile_analysis';
             closeProfileReleasedModal();
             try {
                 await fetch('/api/notifications/profile-released/dismiss', {
@@ -34910,28 +34920,52 @@
                     body: JSON.stringify({ ids: [n.id] })
                 });
             } catch (_) {}
-            if (isSvod) {
-                if (typeof showSubscriberIQ === 'function') showSubscriberIQ();
-                await loadSubscriberProfiles();
-                if (typeof selectSubscriberProfile === 'function') selectSubscriberProfile(n.s3_key);
-                return;
+            
+            // Route to the appropriate dashboard based on source_type
+            switch (sourceType) {
+                case 'svod_acquisition':
+                    if (typeof showSubscriberIQ === 'function') showSubscriberIQ();
+                    await loadSubscriberProfiles();
+                    if (typeof selectSubscriberProfile === 'function') selectSubscriberProfile(n.s3_key);
+                    return;
+                case 'ticket_sales_tracker':
+                    if (typeof showTicketSalesTracker === 'function') showTicketSalesTracker();
+                    await loadTSTProfiles();
+                    if (typeof selectTSTProfile === 'function') selectTSTProfile(n.s3_key);
+                    return;
+                case 'ticket_sales_iq':
+                    if (typeof showTicketSalesIQ === 'function') showTicketSalesIQ();
+                    return;
+                case 'flywheel_conversion':
+                    if (typeof showFlywheelConversionDashboard === 'function') showFlywheelConversionDashboard();
+                    if (typeof loadFlywheelDashData === 'function') setTimeout(() => loadFlywheelDashData(n.s3_key), 300);
+                    return;
+                case 'sf_lf_conversion':
+                    if (typeof showSFConversion === 'function') showSFConversion();
+                    return;
+                case 'talent_fit':
+                    if (typeof showTalentFitIQ === 'function') showTalentFitIQ();
+                    return;
+                case 'roas_iq':
+                    if (typeof showRoasIQ === 'function') showRoasIQ();
+                    return;
+                case 'ecommerce_iq':
+                    if (typeof showEcommerceIQ === 'function') showEcommerceIQ();
+                    return;
+                case 'profile_analysis':
+                default:
+                    if (typeof showProfileIQ === 'function') showProfileIQ();
+                    clearSessionJobsCache();
+                    const container = document.getElementById('dashProfileTree');
+                    if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Refreshing...</div>';
+                    const res = await fetch(`/api/jobs?refresh=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.jobs) { setSessionJobsCache(data); dashboardProfiles = data.jobs; renderDashboardProfileTree(dashboardProfiles); }
+                    }
+                    if (typeof selectDashboardProfile === 'function') selectDashboardProfile(n.s3_key);
+                    return;
             }
-            if (isTST) {
-                if (typeof showTicketSalesTracker === 'function') showTicketSalesTracker();
-                await loadTSTProfiles();
-                if (typeof selectTSTProfile === 'function') selectTSTProfile(n.s3_key);
-                return;
-            }
-            if (typeof showProfileIQ === 'function') showProfileIQ();
-            clearSessionJobsCache();
-            const container = document.getElementById('dashProfileTree');
-            if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Refreshing...</div>';
-            const res = await fetch(`/api/jobs?refresh=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.jobs) { setSessionJobsCache(data); dashboardProfiles = data.jobs; renderDashboardProfileTree(dashboardProfiles); }
-            }
-            if (typeof selectDashboardProfile === 'function') selectDashboardProfile(n.s3_key);
         }
 
         async function selectDashboardProfile(profileId, forceReload) {
