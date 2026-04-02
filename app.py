@@ -22729,9 +22729,8 @@ Respond with ONLY a number between 1000 and 500000. No explanation, just the num
             cur.execute(f"ALTER TABLE {next_step_table} RENAME TO {current_step_table}")
             previous_step_count = point_unique_users
         
-        # Cleanup temp tables
+        # Cleanup step table only - keep entry_temp_table for comparison analysis
         try:
-            cur.execute(f"DROP TABLE IF EXISTS {entry_temp_table}")
             cur.execute(f"DROP TABLE IF EXISTS {current_step_table}")
         except:
             pass
@@ -22888,6 +22887,12 @@ Respond with ONLY a number between 1000 and 500000. No explanation, just the num
             
             print(f"[Flywheel] Lift analysis complete: Overall lift {overall_lift:+.2f}%")
         
+        # Cleanup entry_temp_table after comparison is done
+        try:
+            cur.execute(f"DROP TABLE IF EXISTS {entry_temp_table}")
+        except:
+            pass
+        
         update_job_status(job_id, progress=95, message='Saving results...')
         _save_flywheel_results(job_id, results, job)
         
@@ -22965,11 +22970,11 @@ def _save_flywheel_results(job_id, results, job):
             rows.append({'Column': 'PRE_PERIOD_FLYWHEEL_ENGAGEMENT', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
             for metric in results.get('compare_flywheel_metrics', []):
                 lift = metric.get('lift_vs_current', 0)
-                lift_icon = '📈' if lift > 0 else ('📉' if lift < 0 else '➡️')
+                lift_indicator = '(+)' if lift > 0 else ('(-)' if lift < 0 else '(=)')
                 rows.append({
                     'Column': f"Pre Step {metric['position']}", 
                     'Value': metric['point'], 
-                    'Metric': f"{lift_icon} Lift: {lift:+.2f}%", 
+                    'Metric': f"{lift_indicator} Lift: {lift:+.2f}%", 
                     'Projected_Users': f"{metric['gen_pop_projection']:,}",
                     'Percentage': f"{metric['conversion_from_entry']}%",
                     'Gen_Pop_Projection': f"{metric['gen_pop_projection']:,}"
@@ -22983,9 +22988,9 @@ def _save_flywheel_results(job_id, results, job):
                 
                 overall_lift = lift_analysis.get('overall_engagement_lift', 0)
                 lift_direction = lift_analysis.get('lift_direction', 'neutral')
-                lift_icon = '📈 POSITIVE' if lift_direction == 'positive' else ('📉 NEGATIVE' if lift_direction == 'negative' else '➡️ NEUTRAL')
+                lift_label = 'POSITIVE' if lift_direction == 'positive' else ('NEGATIVE' if lift_direction == 'negative' else 'NEUTRAL')
                 
-                rows.append({'Column': 'Overall Engagement Lift', 'Value': f"{overall_lift:+.2f}%", 'Metric': lift_icon, 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+                rows.append({'Column': 'Overall Engagement Lift', 'Value': f"{overall_lift:+.2f}%", 'Metric': lift_label, 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 rows.append({'Column': 'Entry Point Users', 'Value': f"{lift_analysis.get('total_entry_gen_pop', 0):,}", 'Metric': 'Gen Pop Projection', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
                 
                 rows.append({'Column': '', 'Value': '', 'Metric': '', 'Projected_Users': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
@@ -22993,12 +22998,12 @@ def _save_flywheel_results(job_id, results, job):
                 
                 for step_lift in lift_analysis.get('step_lifts', []):
                     lift_pct = step_lift.get('lift_pct', 0)
-                    lift_icon = '📈' if lift_pct > 0 else ('📉' if lift_pct < 0 else '➡️')
+                    lift_indicator = '(+)' if lift_pct > 0 else ('(-)' if lift_pct < 0 else '(=)')
                     rows.append({
                         'Column': step_lift['point'],
-                        'Value': f"Pre: {step_lift['pre_pct']}% → Post: {step_lift['post_pct']}%",
-                        'Metric': f"{lift_icon} {lift_pct:+.2f}% lift",
-                        'Projected_Users': f"Pre: {step_lift['pre_gen_pop']:,} → Post: {step_lift['post_gen_pop']:,}",
+                        'Value': f"Pre: {step_lift['pre_pct']}% -> Post: {step_lift['post_pct']}%",
+                        'Metric': f"{lift_indicator} {lift_pct:+.2f}% lift",
+                        'Projected_Users': f"Pre: {step_lift['pre_gen_pop']:,} -> Post: {step_lift['post_gen_pop']:,}",
                         'Percentage': f"{lift_pct:+.2f}%",
                         'Gen_Pop_Projection': f"{step_lift['post_gen_pop']:,}"
                     })
