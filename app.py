@@ -23136,7 +23136,7 @@ def get_flywheel_data(s3_key):
             elif current_section == 'entry_metrics' and col == 'Entry Point':
                 parsed['entry_point_metrics'] = {
                     'name': val,
-                    'count': row.get('Count', 0),
+                    'users': row.get('Projected_Users', row.get('Gen_Pop_Projection', '0')),
                     'percentage': row.get('Percentage', '100%'),
                     'gen_pop': row.get('Gen_Pop_Projection', '0')
                 }
@@ -23144,7 +23144,7 @@ def get_flywheel_data(s3_key):
                 parsed['flywheel_funnel'].append({
                     'step': col,
                     'point': val,
-                    'count': row.get('Count', 0),
+                    'users': row.get('Projected_Users', row.get('Gen_Pop_Projection', '0')),
                     'percentage': row.get('Percentage', '0%'),
                     'gen_pop': row.get('Gen_Pop_Projection', '0')
                 })
@@ -23160,7 +23160,7 @@ def get_flywheel_data(s3_key):
             elif current_section == 'compare_entry_metrics' and col == 'Prior Entry Point':
                 parsed['compare_entry_point_metrics'] = {
                     'name': val,
-                    'count': row.get('Count', 0),
+                    'users': row.get('Projected_Users', row.get('Gen_Pop_Projection', '0')),
                     'percentage': row.get('Percentage', '100%'),
                     'gen_pop': row.get('Gen_Pop_Projection', '0')
                 }
@@ -23168,7 +23168,7 @@ def get_flywheel_data(s3_key):
                 parsed['compare_flywheel_funnel'].append({
                     'step': col.replace('Prior ', ''),
                     'point': val,
-                    'count': row.get('Count', 0),
+                    'users': row.get('Projected_Users', row.get('Gen_Pop_Projection', '0')),
                     'percentage': row.get('Percentage', '0%'),
                     'gen_pop': row.get('Gen_Pop_Projection', '0')
                 })
@@ -23194,6 +23194,43 @@ def get_flywheel_data(s3_key):
                         'users_trend': row.get('Count', ''),
                         'conversion_trend': row.get('Percentage', '')
                     })
+            # Parse new pre-period and lift analysis sections
+            elif col == 'PRE_PERIOD_ANALYSIS':
+                parsed['has_comparison'] = True
+                current_section = 'pre_period_analysis'
+            elif col == 'PRE_PERIOD_DATE_RANGE':
+                parsed['compare_date_range'] = val
+            elif col == 'PRE_PERIOD_FLYWHEEL_ENGAGEMENT':
+                current_section = 'pre_period_funnel'
+            elif current_section == 'pre_period_funnel' and col.startswith('Pre Step'):
+                parsed['compare_flywheel_funnel'].append({
+                    'step': col.replace('Pre ', ''),
+                    'point': val,
+                    'users': row.get('Projected_Users', row.get('Gen_Pop_Projection', '0')),
+                    'percentage': row.get('Percentage', '0%'),
+                    'gen_pop': row.get('Gen_Pop_Projection', '0'),
+                    'lift': row.get('Metric', '')
+                })
+            elif col == 'LIFT_ANALYSIS':
+                current_section = 'lift_analysis'
+                parsed['lift_analysis'] = {}
+            elif current_section == 'lift_analysis':
+                if col == 'Overall Engagement Lift':
+                    parsed['lift_analysis']['overall_lift'] = val
+                    parsed['lift_analysis']['lift_direction'] = row.get('Metric', '')
+                elif col == 'Entry Point Users':
+                    parsed['lift_analysis']['entry_users'] = val
+            elif col == 'STEP_BY_STEP_LIFT':
+                current_section = 'step_lift'
+                parsed['lift_analysis']['step_lifts'] = []
+            elif current_section == 'step_lift' and col and val:
+                parsed['lift_analysis']['step_lifts'].append({
+                    'point': col,
+                    'change': val,
+                    'lift': row.get('Metric', ''),
+                    'users_change': row.get('Projected_Users', ''),
+                    'lift_pct': row.get('Percentage', '')
+                })
         
         return jsonify({'success': True, 'data': parsed})
     except Exception as e:
