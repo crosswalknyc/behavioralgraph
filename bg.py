@@ -6133,6 +6133,356 @@ Each corrected category sums to 100. JSON only, no markdown."""
         return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
+# ─── LOCATION / DMA REVIEW AGENT ─────────────────────────────────────
+#
+# Dedicated agent that focuses solely on validating geographic distribution.
+# Ensures locations make sense for the audience (e.g., Black audience with
+# Southern ties → Atlanta high, San Antonio Spurs → San Antonio/Austin high).
+# Guarantees that all location Brand Penetration values sum to 100%.
+
+def ai_location_review(df, brand_category, project_name, brands):
+    """GPT-4o powered location/DMA review agent.
+    
+    Focuses exclusively on ensuring the geographic distribution makes sense
+    for this specific audience. Also ensures all LOCATION Brand Penetration
+    values sum to exactly 100%.
+    
+    Examples of audience-appropriate location distributions:
+    - Black audience with Southern ties → Atlanta, Houston, DC, Memphis high
+    - San Antonio Spurs fans → San Antonio, Austin heavily over-index
+    - Country music fans → Nashville, Dallas, Houston over-index
+    - Tech workers → San Francisco, Seattle, Austin, Denver over-index
+    - Retirees → Phoenix, Tampa, Miami over-index
+    """
+    client = _get_openai_client()
+    if not client:
+        print("⚠️  OpenAI not available — skipping location review")
+        return df
+    
+    import json as _json
+    
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+    
+    if bp_col not in df.columns:
+        return df
+    
+    df = df.copy()
+    
+    # Get subject name
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
+    
+    # Get sample size
+    sample_raw = 1
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            sample_raw = 1
+    
+    # Extract all location data
+    loc_mask = df['Column'].str.upper().str.strip() == 'LOCATION'
+    if not loc_mask.any():
+        print("📍 Location review: No LOCATION data found")
+        return df
+    
+    loc_items = []
+    for idx, row in df[loc_mask].iterrows():
+        val = str(row.get('Value', '')).strip()
+        try:
+            bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            bp = 0
+        try:
+            cs = float(str(row.get(cs_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            cs = 0
+        if val:
+            loc_items.append((val, bp, cs, idx))
+    
+    if not loc_items:
+        print("📍 Location review: No location items with data")
+        return df
+    
+    # Sort by BP descending
+    loc_items.sort(key=lambda x: -x[1])
+    
+    # Extract demographic context for the AI
+    demo_context = []
+    
+    # Ethnicity breakdown
+    eth_mask = df['Column'].str.upper().str.strip() == 'ETHNICITY'
+    if eth_mask.any():
+        eth_items = []
+        for _, row in df[eth_mask].iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0
+            if val and bp > 0:
+                eth_items.append(f"{val}: {bp:.1f}%")
+        if eth_items:
+            demo_context.append(f"Ethnicity: {', '.join(eth_items[:5])}")
+    
+    # Age breakdown
+    age_mask = df['Column'].str.upper().str.strip() == 'AGE'
+    if age_mask.any():
+        age_items = []
+        for _, row in df[age_mask].iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0
+            if val and bp > 0:
+                age_items.append(f"{val}: {bp:.1f}%")
+        if age_items:
+            demo_context.append(f"Age: {', '.join(age_items[:5])}")
+    
+    # Income breakdown
+    inc_mask = df['Column'].str.upper().str.strip() == 'INCOME'
+    if inc_mask.any():
+        inc_items = []
+        for _, row in df[inc_mask].iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0
+            if val and bp > 0:
+                inc_items.append(f"{val}: {bp:.1f}%")
+        if inc_items:
+            demo_context.append(f"Income: {', '.join(inc_items[:3])}")
+    
+    demo_context_str = '\n'.join(demo_context) if demo_context else 'No demographic context available'
+    
+    # Build location data for prompt (all locations, not just top 30)
+    loc_lines = []
+    for dma, bp, cs, _ in loc_items[:50]:  # Show top 50 for context
+        loc_lines.append(f"  {dma}: {bp:.2f}%")
+    
+    current_total = sum(bp for _, bp, _, _ in loc_items)
+    
+    prompt = f"""You are a US consumer research analyst specializing in GEOGRAPHIC DISTRIBUTION analysis.
+
+Your task: Review the location/DMA distribution for this audience and ensure it makes sense.
+Then provide corrected percentages that sum to EXACTLY 100%.
+
+=== AUDIENCE PROFILE ===
+Subject: {subject_clean}
+Category: {brand_category or 'General'}
+
+=== DEMOGRAPHIC CONTEXT ===
+{demo_context_str}
+
+=== CURRENT LOCATION DISTRIBUTION (Top 50 DMAs) ===
+Current total: {current_total:.2f}% (should be 100%)
+{chr(10).join(loc_lines)}
+
+=== LOCATION LOGIC RULES ===
+
+1. **Regional Brands/Teams**: If this is a regional entity (sports team, local chain, regional media), 
+   the HOME MARKET should HEAVILY dominate (often 5-15% vs <1% elsewhere).
+   - San Antonio Spurs → San Antonio 8-12%, Austin 3-5%, Houston 2-4%
+   - Atlanta Hawks → Atlanta 10-15%, nearby Southern markets elevated
+   - In-N-Out → California markets dominate, minimal elsewhere
+
+2. **Ethnic/Cultural Audiences**: Match known population distributions.
+   - Black audience → Atlanta, DC, Houston, Memphis, New Orleans, Detroit elevated
+   - Hispanic audience → LA, Houston, Miami, San Antonio, Phoenix elevated
+   - Asian audience → SF Bay Area, LA, NYC, Seattle elevated
+
+3. **Age/Lifestyle Patterns**:
+   - Young professionals → NYC, LA, SF, Seattle, Denver, Austin elevated
+   - Retirees → Phoenix, Tampa, Miami, Sarasota elevated
+   - Families → Suburban metros across all regions
+
+4. **Income Patterns**:
+   - Luxury brands → NYC, SF, LA, DC, Boston elevated
+   - Value brands → More evenly distributed with middle-America strength
+
+5. **National Brands**: Should roughly follow US population distribution:
+   - NYC ~6%, LA ~4.5%, Chicago ~3%, Dallas ~2.5%, Houston ~2.3%, etc.
+   - Adjust based on brand's specific customer profile
+
+=== YOUR TASK ===
+
+1. Analyze if the current distribution makes sense for "{subject_clean}"
+2. Identify any locations that are too high or too low
+3. Return corrected percentages that:
+   - Make sense for this specific audience
+   - SUM TO EXACTLY 100% across all {len(loc_items)} DMAs
+   - Preserve relative ordering where sensible (unless clearly wrong)
+
+Return ONLY valid JSON:
+If OK (just normalize to 100%): {{"status":"OK","notes":"reason","normalized":{{"DMA Name": pct, ...}}}}
+If corrections needed: {{"status":"FIX","notes":"what's wrong","corrected":{{"DMA Name": pct, ...}}}}
+
+CRITICAL: The values in "normalized" or "corrected" MUST sum to exactly 100.0.
+Include ALL {len(loc_items)} DMAs in your response. You can abbreviate smaller ones.
+For DMAs you don't explicitly list, they'll keep their proportional share of the remaining percentage.
+JSON only, no markdown."""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.1,
+            max_tokens=4000
+        )
+        text = resp.choices[0].message.content.strip()
+        
+        # Parse JSON
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+        
+        result = _json.loads(text)
+        
+        # Get the new percentages (either normalized or corrected)
+        new_pcts = result.get('corrected') or result.get('normalized') or {}
+        
+        if not new_pcts:
+            # No explicit corrections - just normalize existing to 100%
+            if current_total > 0:
+                scale = 100.0 / current_total
+                for dma, bp, cs, idx in loc_items:
+                    new_bp = round(bp * scale, 4)
+                    new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
+                    df.at[idx, bp_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, bp_col], str) else new_bp
+                    df.at[idx, raw_col] = str(new_raw)
+                    df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                    df.at[idx, cs_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, cs_col], str) else new_bp
+                print(f"📍 Location review: Normalized to 100% (was {current_total:.1f}%)")
+            return df
+        
+        # Build lookup for matching
+        dma_idx_map = {}
+        for dma, bp, cs, idx in loc_items:
+            dma_idx_map[dma.upper()] = (idx, bp)
+            # Also add simplified versions
+            simple = dma.upper().split()[0] if dma else ''
+            if simple and simple not in dma_idx_map:
+                dma_idx_map[simple] = (idx, bp)
+        
+        # Apply the new percentages
+        changes = 0
+        assigned_total = 0.0
+        assigned_indices = set()
+        
+        for dma_name, new_pct in new_pcts.items():
+            dma_upper = str(dma_name).strip().upper()
+            try:
+                new_bp = float(new_pct)
+            except (ValueError, TypeError):
+                continue
+            
+            # Find matching DMA
+            matched = None
+            if dma_upper in dma_idx_map:
+                matched = dma_idx_map[dma_upper]
+            else:
+                # Fuzzy match
+                words = [w for w in dma_upper.split() if len(w) > 2]
+                for key in dma_idx_map:
+                    if all(w in key for w in words):
+                        matched = dma_idx_map[key]
+                        break
+            
+            if matched:
+                idx, old_bp = matched
+                if idx not in assigned_indices:
+                    new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
+                    df.at[idx, bp_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, bp_col], str) else new_bp
+                    df.at[idx, raw_col] = str(new_raw)
+                    df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                    df.at[idx, cs_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, cs_col], str) else new_bp
+                    
+                    assigned_total += new_bp
+                    assigned_indices.add(idx)
+                    
+                    if abs(new_bp - old_bp) > 0.1:
+                        changes += 1
+        
+        # Handle unassigned DMAs - distribute remaining percentage proportionally
+        remaining_pct = 100.0 - assigned_total
+        unassigned = [(dma, bp, idx) for dma, bp, cs, idx in loc_items if idx not in assigned_indices]
+        
+        if unassigned and remaining_pct > 0:
+            unassigned_total = sum(bp for _, bp, _ in unassigned)
+            if unassigned_total > 0:
+                scale = remaining_pct / unassigned_total
+                for dma, bp, idx in unassigned:
+                    new_bp = round(bp * scale, 4)
+                    new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
+                    df.at[idx, bp_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, bp_col], str) else new_bp
+                    df.at[idx, raw_col] = str(new_raw)
+                    df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                    df.at[idx, cs_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, cs_col], str) else new_bp
+        
+        # Final verification - ensure total is exactly 100%
+        final_total = 0.0
+        for dma, bp, cs, idx in loc_items:
+            try:
+                final_total += float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                pass
+        
+        # If not exactly 100, do a final normalization
+        if abs(final_total - 100.0) > 0.01:
+            scale = 100.0 / final_total if final_total > 0 else 1.0
+            for dma, bp, cs, idx in loc_items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                    new_bp = round(cur_bp * scale, 4)
+                    new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
+                    df.at[idx, bp_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, bp_col], str) else new_bp
+                    df.at[idx, raw_col] = str(new_raw)
+                    df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                    df.at[idx, cs_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, cs_col], str) else new_bp
+                except (ValueError, TypeError):
+                    pass
+        
+        status = result.get('status', 'OK')
+        notes = result.get('notes', '')[:80]
+        print(f"📍 Location review: {status} — {changes} adjustments, total=100% — {notes}")
+        
+        return df
+        
+    except Exception as e:
+        print(f"⚠️  Location review error: {e}")
+        # Fallback: just normalize to 100%
+        if current_total > 0 and current_total != 100.0:
+            scale = 100.0 / current_total
+            for dma, bp, cs, idx in loc_items:
+                new_bp = round(bp * scale, 4)
+                new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
+                df.at[idx, bp_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, bp_col], str) else new_bp
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                df.at[idx, cs_col] = f'{new_bp:.4f}' if isinstance(df.at[idx, cs_col], str) else new_bp
+            print(f"📍 Location review: Normalized to 100% (fallback, was {current_total:.1f}%)")
+        return df
+
+
 # ─── COMPREHENSIVE FINAL GUT-CHECK AGENT ─────────────────────────────
 #
 # The final line of defense before a profile ships to S3.
@@ -13034,6 +13384,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
         # Universal catch-all: handles ANY category not covered above
         df_final = ai_universal_demographic_review(df_final, brand_category, project_name, brands)
+
+        # Location/DMA review: ensures geographic distribution makes sense for this audience
+        # and that all location Brand Penetration values sum to exactly 100%
+        df_final = ai_location_review(df_final, brand_category, project_name, brands)
 
     # Gender distribution: from panel + demographic AI agents only (no archetype overwrite).
 
