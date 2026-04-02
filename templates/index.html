@@ -22855,7 +22855,8 @@
             
             el.innerHTML = filtered.map(r => {
                 const badge = r.status === 'pending' ? '<span style="color:#f59e0b;font-size:0.65rem;">⏳ Pending</span>' : '<span style="color:#10b981;font-size:0.65rem;">✓ Released</span>';
-                return '<div class="profile-tree-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="openFlywheelInDashboard(\'' + r.s3_key + '\')"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:500;font-size:0.85rem;">' + r.name + '</span>' + badge + '</div><div style="font-size:0.7rem;color:var(--text-secondary);">' + new Date(r.last_modified).toLocaleDateString() + '</div></div>';
+                const displayName = (r.name || '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+                return '<div class="profile-tree-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="openFlywheelInDashboard(\'' + r.s3_key + '\')"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-weight:500;font-size:0.85rem;">' + displayName + '</span>' + badge + '</div><div style="font-size:0.7rem;color:var(--text-secondary);">' + new Date(r.last_modified).toLocaleDateString() + '</div></div>';
             }).join('');
         }
 
@@ -22921,7 +22922,8 @@
             
             el.innerHTML = filtered.map(r => {
                 const badge = r.status === 'pending' ? '<span style="color:#f59e0b;font-size:0.6rem;margin-left:6px;">⏳</span>' : '';
-                return '<div class="profile-tree-item" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="loadFlywheelDashData(\'' + r.s3_key + '\')"><div style="font-weight:500;font-size:0.85rem;">' + r.name + badge + '</div><div style="font-size:0.7rem;color:var(--text-secondary);">' + new Date(r.last_modified).toLocaleDateString() + '</div></div>';
+                const displayName = (r.name || '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+                return '<div class="profile-tree-item" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border-color);" onclick="loadFlywheelDashData(\'' + r.s3_key + '\')"><div style="font-weight:500;font-size:0.85rem;">' + displayName + badge + '</div><div style="font-size:0.7rem;color:var(--text-secondary);">' + new Date(r.last_modified).toLocaleDateString() + '</div></div>';
             }).join('');
         }
 
