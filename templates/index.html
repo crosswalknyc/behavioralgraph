@@ -23082,27 +23082,24 @@
                 // Use lift_analysis overall lift if available
                 overallLiftPct = parseFloat(liftAnalysis.overall_lift) || 0;
             } else {
-                // Calculate average lift across all funnel steps
-                const compareFunnel = data.compare_flywheel_funnel || [];
+                // Calculate average lift from funnel display_lift_pct values (pre-calculated by backend)
                 const stepLifts = liftAnalysis.step_lifts || [];
                 
                 if (stepLifts.length > 0) {
                     const lifts = stepLifts.map(s => parseFloat(s.lift_pct) || 0);
                     overallLiftPct = lifts.reduce((a, b) => a + b, 0) / lifts.length;
                 } else if (funnel.length > 0) {
-                    // Generate lift values similar to table
-                    const parseNum = (val) => parseInt(String(val || '0').replace(/,/g, '')) || 0;
+                    // Use pre-calculated display_lift_pct from backend (no random)
                     let totalLift = 0;
-                    funnel.forEach((step, idx) => {
-                        const postUsers = parseNum(step.users || step.gen_pop) || (Math.floor(Math.random() * 400000) + 50000);
-                        const compareStep = compareFunnel[idx] || {};
-                        let preUsers = parseNum(compareStep.users || compareStep.gen_pop);
-                        if (!preUsers) preUsers = Math.floor(postUsers * (0.7 + Math.random() * 0.6));
-                        if (preUsers > 0) {
-                            totalLift += ((postUsers - preUsers) / preUsers * 100);
+                    let liftCount = 0;
+                    funnel.forEach((step) => {
+                        const liftPct = step.display_lift_pct;
+                        if (liftPct !== undefined && liftPct !== null) {
+                            totalLift += parseFloat(liftPct);
+                            liftCount++;
                         }
                     });
-                    overallLiftPct = funnel.length > 0 ? totalLift / funnel.length : 0;
+                    overallLiftPct = liftCount > 0 ? totalLift / liftCount : 0;
                 }
             }
             
