@@ -15805,12 +15805,14 @@
                         </div>
                         <!-- Funnel Chart -->
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
                                 <h3 style="margin: 0; font-size: 0.95rem;">📊 Conversion Funnel</h3>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <button type="button" onclick="setFlywheelChartView('lift')" id="flywheelChartBtnLift" class="btn-sm" style="padding: 4px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--accent-green); background: var(--accent-green); color: white; cursor: pointer;">% Lift</button>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button type="button" onclick="setFlywheelChartView('lift')" id="flywheelChartBtnLift" class="btn-sm" style="padding: 4px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--accent-green); background: var(--accent-green); color: #000; font-weight: 600; cursor: pointer;">% Lift</button>
                                     <button type="button" onclick="setFlywheelChartView('post')" id="flywheelChartBtnPost" class="btn-sm" style="padding: 4px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">Post Users</button>
                                     <button type="button" onclick="setFlywheelChartView('pre')" id="flywheelChartBtnPre" class="btn-sm" style="padding: 4px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">Pre Users</button>
+                                    <span style="color: var(--text-secondary); margin-left: 0.5rem;">|</span>
+                                    <button type="button" onclick="toggleFlywheelChartSort()" id="flywheelChartSortBtn" class="btn-sm" style="padding: 4px 10px; font-size: 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">↓ High to Low</button>
                                 </div>
                             </div>
                             <div id="flywheelChartEntryLabel" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;"></div>
@@ -22749,6 +22751,7 @@
         let _flywheelFunnelChart = null;
         let _flywheelChartData = null;  // Store chart data for view toggling
         let _flywheelChartView = 'lift';  // Default view: 'lift', 'post', 'pre'
+        let _flywheelChartSortDesc = true;  // Default: descending (high to low)
 
         function setFlywheelChartView(view) {
             _flywheelChartView = view;
@@ -22763,17 +22766,34 @@
                     btn.style.background = 'transparent';
                     btn.style.color = 'var(--text-secondary)';
                     btn.style.borderColor = 'var(--border-color)';
+                    btn.style.fontWeight = 'normal';
                 }
             });
             
             const activeBtn = view === 'lift' ? btnLift : (view === 'post' ? btnPost : btnPre);
             if (activeBtn) {
                 activeBtn.style.background = 'var(--accent-green)';
-                activeBtn.style.color = 'white';
+                activeBtn.style.color = '#000';
                 activeBtn.style.borderColor = 'var(--accent-green)';
+                activeBtn.style.fontWeight = '600';
             }
             
             // Re-render chart with new view
+            if (_flywheelChartData) {
+                renderFlywheelFunnelChart(_flywheelChartData);
+            }
+        }
+        
+        function toggleFlywheelChartSort() {
+            _flywheelChartSortDesc = !_flywheelChartSortDesc;
+            
+            // Update sort button text
+            const sortBtn = document.getElementById('flywheelChartSortBtn');
+            if (sortBtn) {
+                sortBtn.textContent = _flywheelChartSortDesc ? '↓ High to Low' : '↑ Low to High';
+            }
+            
+            // Re-render chart with new sort
             if (_flywheelChartData) {
                 renderFlywheelFunnelChart(_flywheelChartData);
             }
@@ -23195,6 +23215,21 @@
                 valueFormatter = (val) => val.toLocaleString();
                 barColors = preValues.map(() => 'rgba(136, 136, 136, 0.7)');
             }
+            
+            // Sort data by value (descending by default)
+            const sortedItems = chartLabels.map((label, i) => ({
+                label: label,
+                value: chartData[i],
+                color: barColors[i]
+            }));
+            
+            sortedItems.sort((a, b) => {
+                return _flywheelChartSortDesc ? (b.value - a.value) : (a.value - b.value);
+            });
+            
+            chartLabels = sortedItems.map(item => item.label);
+            chartData = sortedItems.map(item => item.value);
+            barColors = sortedItems.map(item => item.color);
             
             _flywheelFunnelChart = new Chart(ctx, {
                 type: 'bar',
