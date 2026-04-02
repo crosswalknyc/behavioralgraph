@@ -22329,6 +22329,7 @@ def submit_flywheel_conversion():
         project_name = data.get('project_name', '').strip()
         compare_start_date = data.get('compare_start_date')
         compare_end_date = data.get('compare_end_date')
+        viewer_platform = data.get('viewer_platform', '').strip()  # Platform for players/viewers
         
         if not entry_point:
             return jsonify({'error': 'Flywheel entry point is required'}), 400
@@ -22371,7 +22372,8 @@ def submit_flywheel_conversion():
                 'end_date': end_date,
                 'project_name': project_name,
                 'compare_start_date': compare_start_date,
-                'compare_end_date': compare_end_date
+                'compare_end_date': compare_end_date,
+                'viewer_platform': viewer_platform
             }
         }
         if s3_client:
@@ -22420,13 +22422,23 @@ def run_flywheel_conversion(job_id):
         project_name = params.get('project_name', 'Flywheel Analysis')
         compare_start_date = params.get('compare_start_date')
         compare_end_date = params.get('compare_end_date')
+        viewer_platform = params.get('viewer_platform', '')  # Platform for players/viewers
         has_comparison = bool(compare_start_date and compare_end_date)
         
         import re
         flywheel_points_split = re.split(r'[,\n\r]+', flywheel_points_raw)
         flywheel_points = [p.strip() for p in flywheel_points_split if p.strip()]
         
-        print(f"[Flywheel] Entry point: {entry_point}, Flywheel points: {flywheel_points}, Compare: {has_comparison}")
+        # Check if viewer_platform matches any flywheel option (case-insensitive)
+        viewer_platform_match_idx = None
+        if viewer_platform:
+            for idx, point in enumerate(flywheel_points):
+                if point.lower() == viewer_platform.lower():
+                    viewer_platform_match_idx = idx
+                    print(f"[Flywheel] Viewer platform '{viewer_platform}' matches flywheel option {idx + 1}: '{point}'")
+                    break
+        
+        print(f"[Flywheel] Entry point: {entry_point}, Flywheel points: {flywheel_points}, Compare: {has_comparison}, Viewer platform: {viewer_platform}")
         update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
 
         import snowflake.connector
@@ -22475,6 +22487,8 @@ def run_flywheel_conversion(job_id):
             'compare_flywheel_metrics': [],
             'compare_funnel_analysis': [],
             'compare_conversion_rates': {},
+            'viewer_platform': viewer_platform,
+            'viewer_platform_match_idx': viewer_platform_match_idx,
             'period_comparison': {}
         }
         
@@ -22914,8 +22928,18 @@ Respond with ONLY a number between 1000 and 500000. No explanation, just the num
         results['entry_point_metrics']['display_users_pre'] = 0  # Entry point is always 0 pre
         
         # Add display values to each flywheel metric
+        entry_users_post = results['entry_point_metrics'].get('display_users_post', 0)
+        viewer_platform_match_idx = results.get('viewer_platform_match_idx')
+        
         for idx, metric in enumerate(results.get('flywheel_metrics', [])):
-            post_users = add_organic_noise(metric.get('gen_pop_projection', 0))
+            # If this option matches the viewer platform, set to 100% of entry point users
+            if viewer_platform_match_idx is not None and idx == viewer_platform_match_idx:
+                post_users = entry_users_post
+                metric['is_viewer_platform'] = True
+                print(f"[Flywheel] Option {idx + 1} '{metric['point']}' is viewer platform - setting to 100% of entry ({post_users:,})")
+            else:
+                post_users = add_organic_noise(metric.get('gen_pop_projection', 0))
+            
             metric['display_users_post'] = post_users
             
             # Get pre-period value if comparison exists
@@ -22993,6 +23017,8 @@ def _save_flywheel_results(job_id, results, job):
         rows.append({'Column': 'ENTRY_POINT', 'Value': results['entry_point'], 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         rows.append({'Column': 'FLYWHEEL_POINTS', 'Value': ', '.join(results['flywheel_points']), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         rows.append({'Column': 'DATE_RANGE', 'Value': f"{results['start_date']} to {results['end_date']}", 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        if results.get('viewer_platform'):
+            rows.append({'Column': 'VIEWER_PLATFORM', 'Value': results['viewer_platform'], 'Metric': 'Players/Viewers on this platform = 100% of entry', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         
         entry_m = results.get('entry_point_metrics', {})
