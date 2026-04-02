@@ -15805,7 +15805,14 @@
                         </div>
                         <!-- Funnel Chart -->
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.5rem; font-size: 0.95rem;">📊 Conversion Funnel</h3>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <h3 style="margin: 0; font-size: 0.95rem;">📊 Conversion Funnel</h3>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button type="button" onclick="setFlywheelChartView('lift')" id="flywheelChartBtnLift" class="btn-sm" style="padding: 4px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--accent-green); background: var(--accent-green); color: white; cursor: pointer;">% Lift</button>
+                                    <button type="button" onclick="setFlywheelChartView('post')" id="flywheelChartBtnPost" class="btn-sm" style="padding: 4px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">Post Users</button>
+                                    <button type="button" onclick="setFlywheelChartView('pre')" id="flywheelChartBtnPre" class="btn-sm" style="padding: 4px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">Pre Users</button>
+                                </div>
+                            </div>
                             <div id="flywheelChartEntryLabel" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;"></div>
                             <div style="height: 320px; max-height: 320px; position: relative;">
                                 <canvas id="flywheelFunnelChart"></canvas>
@@ -22740,6 +22747,37 @@
         let _flywheelPollingId = null;
         let _flywheelAllResults = [];
         let _flywheelFunnelChart = null;
+        let _flywheelChartData = null;  // Store chart data for view toggling
+        let _flywheelChartView = 'lift';  // Default view: 'lift', 'post', 'pre'
+
+        function setFlywheelChartView(view) {
+            _flywheelChartView = view;
+            
+            // Update button styles
+            const btnLift = document.getElementById('flywheelChartBtnLift');
+            const btnPost = document.getElementById('flywheelChartBtnPost');
+            const btnPre = document.getElementById('flywheelChartBtnPre');
+            
+            [btnLift, btnPost, btnPre].forEach(btn => {
+                if (btn) {
+                    btn.style.background = 'transparent';
+                    btn.style.color = 'var(--text-secondary)';
+                    btn.style.borderColor = 'var(--border-color)';
+                }
+            });
+            
+            const activeBtn = view === 'lift' ? btnLift : (view === 'post' ? btnPost : btnPre);
+            if (activeBtn) {
+                activeBtn.style.background = 'var(--accent-green)';
+                activeBtn.style.color = 'white';
+                activeBtn.style.borderColor = 'var(--accent-green)';
+            }
+            
+            // Re-render chart with new view
+            if (_flywheelChartData) {
+                renderFlywheelFunnelChart(_flywheelChartData);
+            }
+        }
 
         function toggleFlywheelCompare() {
             const toggle = document.getElementById('flywheelCompareToggle');
@@ -23084,6 +23122,9 @@
         }
 
         function renderFlywheelFunnelChart(data) {
+            // Store data for view toggling
+            _flywheelChartData = data;
+            
             const canvas = document.getElementById('flywheelFunnelChart');
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
@@ -23098,78 +23139,99 @@
             
             const entry = data.entry_point_metrics || {};
             const funnel = data.flywheel_funnel || [];
-            const hasComparison = data.has_comparison || false;
-            const compareEntry = data.compare_entry_point_metrics || {};
-            const compareFunnel = data.compare_flywheel_funnel || [];
+            const parseGenPop = (val) => parseInt(String(val || '0').replace(/,/g, '')) || 0;
             
             // Set entry point label
             const entryPointName = capitalize(data.metadata?.entry_point || 'N/A');
             const entryLabelEl = document.getElementById('flywheelChartEntryLabel');
             if (entryLabelEl) entryLabelEl.textContent = 'Entry Point: ' + entryPointName;
             
-            const labels = [capitalize(data.metadata?.entry_point || 'Entry Point')];
-            // Parse gen_pop value (may have commas)
-            const parseGenPop = (val) => parseInt(String(val || '0').replace(/,/g, '')) || 0;
-            // Use backend display values for consistency with table
-            const entryVal = entry.display_users_post || parseGenPop(entry.users || entry.gen_pop);
-            const values = [entryVal];
-            const pcts = [100];
-            const compareValues = hasComparison ? [entry.display_users_pre || parseGenPop(compareEntry.users || compareEntry.gen_pop)] : [];
-            const comparePcts = hasComparison ? [100] : [];
+            // Build labels (excluding entry point for lift view)
+            const allLabels = [capitalize(data.metadata?.entry_point || 'Entry Point')];
+            funnel.forEach(step => allLabels.push(capitalize(step.point || step.step)));
             
-            funnel.forEach((step, idx) => {
-                labels.push(capitalize(step.point || step.step));
-                // Use backend display values for consistency with table
-                values.push(step.display_users_post || parseGenPop(step.users || step.gen_pop));
-                pcts.push(parseFloat((step.percentage || '0%').replace('%', '')));
-                if (hasComparison) {
-                    compareValues.push(step.display_users_pre || parseGenPop(compareFunnel[idx]?.users || compareFunnel[idx]?.gen_pop || 0));
-                    comparePcts.push(parseFloat((compareFunnel[idx]?.percentage || '0%').replace('%', '')));
-                }
+            // Get post users values
+            const entryPostVal = entry.display_users_post || parseGenPop(entry.users || entry.gen_pop);
+            const entryPreVal = entry.display_users_pre || 0;
+            const postValues = [entryPostVal];
+            const preValues = [entryPreVal];
+            const liftValues = [];  // Entry point has no lift (it's "NEW")
+            
+            funnel.forEach((step) => {
+                const postUsers = step.display_users_post || parseGenPop(step.users || step.gen_pop);
+                const preUsers = step.display_users_pre || 0;
+                postValues.push(postUsers);
+                preValues.push(preUsers);
+                
+                // Calculate lift percentage
+                const liftPct = step.display_lift_pct !== undefined ? step.display_lift_pct : 
+                    (preUsers > 0 ? ((postUsers - preUsers) / preUsers * 100) : 0);
+                liftValues.push(liftPct);
             });
             
-            const datasets = [{
-                label: 'Current Period',
-                data: values,
-                backgroundColor: labels.map((_, i) => i === 0 ? '#66d9ef' : (i === labels.length - 1 ? '#10b981' : '#3b82f6')),
-                borderRadius: 6
-            }];
+            // Determine which data to show based on view mode
+            let chartLabels, chartData, chartTitle, valueFormatter, barColors;
+            const view = _flywheelChartView || 'lift';
             
-            if (hasComparison && compareValues.length > 0) {
-                datasets.push({
-                    label: 'Prior Period',
-                    data: compareValues,
-                    backgroundColor: labels.map(() => 'rgba(136, 136, 136, 0.5)'),
-                    borderRadius: 6
-                });
+            if (view === 'lift') {
+                // Lift view - exclude entry point (no lift for entry)
+                chartLabels = allLabels.slice(1);
+                chartData = liftValues;
+                chartTitle = '% Lift (Pre → Post)';
+                valueFormatter = (val) => (val > 0 ? '+' : '') + val.toFixed(1) + '%';
+                barColors = liftValues.map(v => v > 0 ? '#10b981' : (v < 0 ? '#f92672' : '#888'));
+            } else if (view === 'post') {
+                // Post users view - include entry point
+                chartLabels = allLabels;
+                chartData = postValues;
+                chartTitle = 'Users (Post Period)';
+                valueFormatter = (val) => val.toLocaleString();
+                barColors = postValues.map((_, i) => i === 0 ? '#66d9ef' : '#3b82f6');
+            } else {
+                // Pre users view - include entry point
+                chartLabels = allLabels;
+                chartData = preValues;
+                chartTitle = 'Users (Pre Period)';
+                valueFormatter = (val) => val.toLocaleString();
+                barColors = preValues.map(() => 'rgba(136, 136, 136, 0.7)');
             }
             
             _flywheelFunnelChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: labels,
-                    datasets: datasets
+                    labels: chartLabels,
+                    datasets: [{
+                        label: chartTitle,
+                        data: chartData,
+                        backgroundColor: barColors,
+                        borderRadius: 6
+                    }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     indexAxis: 'y',
                     plugins: {
-                        legend: { display: hasComparison, labels: { color: '#e8e8e8' } },
+                        legend: { display: false },
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    const idx = context.dataIndex;
-                                    const datasetIdx = context.datasetIndex;
-                                    const pctArr = datasetIdx === 0 ? pcts : comparePcts;
-                                    const label = datasetIdx === 0 ? 'Current' : 'Prior';
-                                    return label + ': ' + context.raw.toLocaleString() + ' users (' + (pctArr[idx] || 0).toFixed(1) + '% of entry)';
+                                    return valueFormatter(context.raw);
                                 }
                             }
                         }
                     },
                     scales: {
-                        x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#e8e8e8' } },
+                        x: { 
+                            grid: { color: 'rgba(255,255,255,0.06)' }, 
+                            ticks: { 
+                                color: '#e8e8e8',
+                                callback: function(value) {
+                                    if (view === 'lift') return (value > 0 ? '+' : '') + value + '%';
+                                    return value >= 1000000 ? (value / 1000000).toFixed(1) + 'M' : (value >= 1000 ? (value / 1000).toFixed(0) + 'K' : value);
+                                }
+                            }
+                        },
                         y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
                     }
                 }
