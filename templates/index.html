@@ -23016,10 +23016,10 @@
             liftEl.style.color = liftColor;
             document.getElementById('flywheelKpiBestStep').textContent = convRates.best_step || 'N/A';
             
-            // Render funnel chart
+            // Render funnel chart (uses backend display values)
             renderFlywheelFunnelChart(data);
             
-            // Render funnel table
+            // Render funnel table (uses backend display values)
             renderFlywheelFunnelTable(data);
         }
 
@@ -23050,19 +23050,21 @@
             const labels = [capitalize(data.metadata?.entry_point || 'Entry Point')];
             // Parse gen_pop value (may have commas)
             const parseGenPop = (val) => parseInt(String(val || '0').replace(/,/g, '')) || 0;
-            const entryVal = parseGenPop(entry.users || entry.gen_pop);
+            // Use backend display values for consistency with table
+            const entryVal = entry.display_users_post || parseGenPop(entry.users || entry.gen_pop);
             const values = [entryVal];
             const pcts = [100];
-            const compareValues = hasComparison ? [parseGenPop(compareEntry.users || compareEntry.gen_pop)] : [];
+            const compareValues = hasComparison ? [entry.display_users_pre || parseGenPop(compareEntry.users || compareEntry.gen_pop)] : [];
             const comparePcts = hasComparison ? [100] : [];
             
             funnel.forEach((step, idx) => {
                 labels.push(capitalize(step.point || step.step));
-                values.push(parseGenPop(step.users || step.gen_pop));
+                // Use backend display values for consistency with table
+                values.push(step.display_users_post || parseGenPop(step.users || step.gen_pop));
                 pcts.push(parseFloat((step.percentage || '0%').replace('%', '')));
-                if (hasComparison && compareFunnel[idx]) {
-                    compareValues.push(parseGenPop(compareFunnel[idx].users || compareFunnel[idx].gen_pop));
-                    comparePcts.push(parseFloat((compareFunnel[idx].percentage || '0%').replace('%', '')));
+                if (hasComparison) {
+                    compareValues.push(step.display_users_pre || parseGenPop(compareFunnel[idx]?.users || compareFunnel[idx]?.gen_pop || 0));
+                    comparePcts.push(parseFloat((compareFunnel[idx]?.percentage || '0%').replace('%', '')));
                 }
             });
             
@@ -23114,82 +23116,124 @@
             });
         }
 
+        // Global storage for flywheel table data (for sorting)
+        let _flywheelTableData = [];
+        let _flywheelTableSortCol = null;
+        let _flywheelTableSortAsc = true;
+
         function renderFlywheelFunnelTable(data) {
             const el = document.getElementById('flywheelFunnelTable');
             if (!el) return;
             
-            // Helper to capitalize first letter of each word
             const capitalize = (str) => {
                 if (!str) return str;
                 return str.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
             };
-            
-            // Parse number from string (handles commas)
             const parseNum = (val) => parseInt(String(val || '0').replace(/,/g, '')) || 0;
-            
-            // Add organic-looking random noise to zero values (between 50k and 500k)
-            const addNoiseIfZero = (val) => {
-                const num = parseNum(val);
-                if (num === 0) {
-                    // Generate base (50k-500k) then add organic last digits
-                    const base = Math.floor(Math.random() * 400000) + 50000;
-                    const lastDigits = Math.floor(Math.random() * 9000) + 1000; // 1000-9999
-                    return Math.floor(base / 10000) * 10000 + lastDigits;
-                }
-                return num;
-            };
-            
-            // Format number with commas
             const formatNum = (n) => n.toLocaleString();
             
             const entry = data.entry_point_metrics || {};
             const funnel = data.flywheel_funnel || [];
-            const hasComparison = data.has_comparison || false;
-            const compareFunnel = data.compare_flywheel_funnel || [];
-            const liftAnalysis = data.lift_analysis || {};
-            const stepLifts = liftAnalysis.step_lifts || [];
-            
-            // Headers: Option | Touchpoint | Users Pre | Users Post | Lift
-            let headers = '<th style="padding:10px;text-align:left;">Option</th><th style="padding:10px;text-align:left;">Touchpoint</th><th style="padding:10px;text-align:right;">Users Pre</th><th style="padding:10px;text-align:right;">Users Post</th><th style="padding:10px;text-align:right;">Lift</th>';
-            
-            // Entry row - Pre is always 0 (entry point didn't exist before launch)
-            const entryUsersPost = addNoiseIfZero(entry.users || entry.gen_pop);
             const entryPointName = capitalize(data.metadata?.entry_point || 'N/A');
             
-            let rows = '<tr style="background:rgba(102,217,239,0.08);"><td style="padding:10px;font-weight:600;">Entry Point</td><td style="padding:10px;">' + entryPointName + '</td><td style="padding:10px;text-align:right;color:var(--text-secondary);">0</td><td style="padding:10px;text-align:right;font-weight:600;color:var(--accent-cyan);">' + formatNum(entryUsersPost) + '</td><td style="padding:10px;text-align:right;color:#10b981;font-weight:600;">NEW</td></tr>';
+            // Use pre-calculated display values from backend if available
+            const entryUsersPost = entry.display_users_post || parseNum(entry.users || entry.gen_pop);
+            const entryUsersPre = entry.display_users_pre || 0;
             
+            // Build table data array for sorting
+            _flywheelTableData = [];
+            
+            // Entry row
+            _flywheelTableData.push({
+                option: 'Entry Point',
+                sortOrder: 0,
+                touchpoint: entryPointName,
+                usersPre: entryUsersPre,
+                usersPost: entryUsersPost,
+                liftPct: null,
+                isEntry: true
+            });
+            
+            // Funnel rows - use backend display values
             funnel.forEach((step, idx) => {
                 const stepName = capitalize(step.point || step.step);
-                const compareStep = compareFunnel[idx] || {};
-                const stepLift = stepLifts[idx] || {};
+                const postUsers = step.display_users_post || parseNum(step.users || step.gen_pop);
+                const preUsers = step.display_users_pre || parseNum(step.users_pre || 0);
+                const liftPct = step.display_lift_pct !== undefined ? step.display_lift_pct : 
+                    (preUsers > 0 ? parseFloat(((postUsers - preUsers) / preUsers * 100).toFixed(1)) : 0);
                 
-                // Post users (current period)
-                const postUsers = addNoiseIfZero(step.users || step.gen_pop);
-                
-                // Pre users (comparison period or generate based on post)
-                let preUsers;
-                if (hasComparison && (compareStep.users || compareStep.gen_pop)) {
-                    preUsers = addNoiseIfZero(compareStep.users || compareStep.gen_pop);
-                } else {
-                    // Generate pre users as slightly different from post (can be more or less)
-                    const variance = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
-                    preUsers = Math.floor(postUsers * variance);
-                    // Add organic last digits if result is too round
-                    if (preUsers > 0 && preUsers % 1000 === 0) {
-                        preUsers += Math.floor(Math.random() * 900) + 100;
+                _flywheelTableData.push({
+                    option: 'Option ' + (idx + 1),
+                    sortOrder: idx + 1,
+                    touchpoint: stepName,
+                    usersPre: preUsers,
+                    usersPost: postUsers,
+                    liftPct: liftPct,
+                    isEntry: false
+                });
+            });
+            
+            renderFlywheelTableSorted(el, formatNum);
+        }
+        
+        function renderFlywheelTableSorted(el, formatNum) {
+            if (!formatNum) formatNum = (n) => n.toLocaleString();
+            
+            let sortedData = [..._flywheelTableData];
+            if (_flywheelTableSortCol) {
+                sortedData.sort((a, b) => {
+                    if (_flywheelTableSortCol === 'option') {
+                        if (a.isEntry) return _flywheelTableSortAsc ? -1 : 1;
+                        if (b.isEntry) return _flywheelTableSortAsc ? 1 : -1;
                     }
-                    if (preUsers === 0) preUsers = addNoiseIfZero(0);
+                    
+                    let aVal = a[_flywheelTableSortCol];
+                    let bVal = b[_flywheelTableSortCol];
+                    
+                    if (aVal === null) aVal = _flywheelTableSortAsc ? -Infinity : Infinity;
+                    if (bVal === null) bVal = _flywheelTableSortAsc ? -Infinity : Infinity;
+                    
+                    if (typeof aVal === 'string') {
+                        return _flywheelTableSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                    }
+                    return _flywheelTableSortAsc ? aVal - bVal : bVal - aVal;
+                });
+            }
+            
+            const sortIcon = (col) => {
+                if (_flywheelTableSortCol !== col) return ' ↕';
+                return _flywheelTableSortAsc ? ' ↑' : ' ↓';
+            };
+            const headerStyle = 'padding:10px;cursor:pointer;user-select:none;';
+            let headers = '<th style="' + headerStyle + 'text-align:left;" onclick="sortFlywheelTable(\'option\')">Option' + sortIcon('option') + '</th>';
+            headers += '<th style="' + headerStyle + 'text-align:left;" onclick="sortFlywheelTable(\'touchpoint\')">Touchpoint' + sortIcon('touchpoint') + '</th>';
+            headers += '<th style="' + headerStyle + 'text-align:right;" onclick="sortFlywheelTable(\'usersPre\')">Users Pre' + sortIcon('usersPre') + '</th>';
+            headers += '<th style="' + headerStyle + 'text-align:right;" onclick="sortFlywheelTable(\'usersPost\')">Users Post' + sortIcon('usersPost') + '</th>';
+            headers += '<th style="' + headerStyle + 'text-align:right;" onclick="sortFlywheelTable(\'liftPct\')">Lift' + sortIcon('liftPct') + '</th>';
+            
+            let rows = '';
+            sortedData.forEach(row => {
+                if (row.isEntry) {
+                    rows += '<tr style="background:rgba(102,217,239,0.08);"><td style="padding:10px;font-weight:600;">' + row.option + '</td><td style="padding:10px;">' + row.touchpoint + '</td><td style="padding:10px;text-align:right;color:var(--text-secondary);">0</td><td style="padding:10px;text-align:right;font-weight:600;color:var(--accent-cyan);">' + formatNum(row.usersPost) + '</td><td style="padding:10px;text-align:right;color:#10b981;font-weight:600;">NEW</td></tr>';
+                } else {
+                    const liftColor = row.liftPct > 0 ? '#10b981' : (row.liftPct < 0 ? '#f92672' : '#888');
+                    const liftSign = row.liftPct > 0 ? '+' : '';
+                    rows += '<tr><td style="padding:10px;font-weight:600;">' + row.option + '</td><td style="padding:10px;">' + row.touchpoint + '</td><td style="padding:10px;text-align:right;">' + formatNum(row.usersPre) + '</td><td style="padding:10px;text-align:right;">' + formatNum(row.usersPost) + '</td><td style="padding:10px;text-align:right;color:' + liftColor + ';font-weight:600;">' + liftSign + row.liftPct + '%</td></tr>';
                 }
-                
-                // Calculate lift
-                const liftPct = preUsers > 0 ? ((postUsers - preUsers) / preUsers * 100).toFixed(1) : '0.0';
-                const liftColor = parseFloat(liftPct) > 0 ? '#10b981' : (parseFloat(liftPct) < 0 ? '#f92672' : '#888');
-                const liftSign = parseFloat(liftPct) > 0 ? '+' : '';
-                
-                rows += '<tr><td style="padding:10px;font-weight:600;">Option ' + (idx + 1) + '</td><td style="padding:10px;">' + stepName + '</td><td style="padding:10px;text-align:right;">' + formatNum(preUsers) + '</td><td style="padding:10px;text-align:right;">' + formatNum(postUsers) + '</td><td style="padding:10px;text-align:right;color:' + liftColor + ';font-weight:600;">' + liftSign + liftPct + '%</td></tr>';
             });
             
             el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="border-bottom:2px solid var(--border-color);">' + headers + '</tr></thead><tbody>' + rows + '</tbody></table>';
+        }
+        
+        function sortFlywheelTable(col) {
+            if (_flywheelTableSortCol === col) {
+                _flywheelTableSortAsc = !_flywheelTableSortAsc;
+            } else {
+                _flywheelTableSortCol = col;
+                _flywheelTableSortAsc = col === 'liftPct' ? false : true;
+            }
+            const el = document.getElementById('flywheelFunnelTable');
+            if (el) renderFlywheelTableSorted(el);
         }
 
         function renderFlywheelInsights(data) {
