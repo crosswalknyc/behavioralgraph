@@ -23014,7 +23014,27 @@
             const liftEl = document.getElementById('flywheelKpiConversion');
             liftEl.innerHTML = liftSign + overallLiftPct.toFixed(1) + '%';
             liftEl.style.color = liftColor;
-            document.getElementById('flywheelKpiBestStep').textContent = convRates.best_step || 'N/A';
+            
+            // Find option with highest individual lift
+            let bestOption = 'N/A';
+            let highestLift = -Infinity;
+            const parseNum = (val) => parseInt(String(val || '0').replace(/,/g, '')) || 0;
+            const capitalize = (str) => str ? str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : str;
+            
+            funnel.forEach((step, idx) => {
+                const stepLift = step.display_lift_pct !== undefined ? step.display_lift_pct : 
+                    (stepLifts[idx]?.lift_pct ? parseFloat(stepLifts[idx].lift_pct) : null);
+                if (stepLift !== null && stepLift > highestLift) {
+                    highestLift = stepLift;
+                    bestOption = capitalize(step.point || step.step);
+                }
+            });
+            
+            if (highestLift > -Infinity && highestLift !== 0) {
+                const bestLiftSign = highestLift > 0 ? '+' : '';
+                bestOption += ' (' + bestLiftSign + highestLift.toFixed(1) + '%)';
+            }
+            document.getElementById('flywheelKpiBestStep').textContent = bestOption;
             
             // Render funnel chart (uses backend display values)
             renderFlywheelFunnelChart(data);

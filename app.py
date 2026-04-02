@@ -22939,6 +22939,12 @@ Respond with ONLY a number between 1000 and 500000. No explanation, just the num
             else:
                 metric['display_lift_pct'] = 0.0
         
+        # Update conversion_rates with best option by lift
+        if results.get('flywheel_metrics'):
+            best_lift_metric = max(results['flywheel_metrics'], key=lambda x: x.get('display_lift_pct', 0))
+            results['conversion_rates']['best_step'] = best_lift_metric['point']
+            results['conversion_rates']['best_lift'] = best_lift_metric.get('display_lift_pct', 0)
+        
         # Cleanup entry_temp_table after comparison is done
         try:
             cur.execute(f"DROP TABLE IF EXISTS {entry_temp_table}")
@@ -23195,22 +23201,35 @@ def get_flywheel_data(s3_key):
                     'percentage': row.get('Percentage', '100%'),
                     'gen_pop': row.get('Gen_Pop_Projection', '0')
                 }
-            elif current_section == 'funnel' and col.startswith('Step'):
+            elif current_section == 'funnel' and (col.startswith('Step') or col.startswith('Option')):
+                # Parse display values from CSV for consistent dashboard/CSV output
+                users_pre = row.get('Users_Pre', '0').replace(',', '')
+                users_post = row.get('Users_Post', row.get('Projected_Users', row.get('Gen_Pop_Projection', '0'))).replace(',', '')
+                lift_pct_str = row.get('Lift_Pct', '0%').replace('%', '').replace('+', '')
+                
                 parsed['flywheel_funnel'].append({
                     'step': col,
                     'point': val,
                     'users': row.get('Projected_Users', row.get('Gen_Pop_Projection', '0')),
                     'percentage': row.get('Percentage', '0%'),
-                    'gen_pop': row.get('Gen_Pop_Projection', '0')
+                    'gen_pop': row.get('Gen_Pop_Projection', '0'),
+                    'display_users_pre': int(users_pre) if users_pre.isdigit() else 0,
+                    'display_users_post': int(users_post) if users_post.isdigit() else 0,
+                    'display_lift_pct': float(lift_pct_str) if lift_pct_str.replace('-', '').replace('.', '').isdigit() else 0
                 })
             elif current_section == 'conversion':
                 if col == 'Overall Conversion':
                     parsed['conversion_rates']['overall'] = val
-                elif col == 'Avg Step Conversion':
+                elif col == 'Avg Step Conversion' or col == 'Avg Option Conversion':
                     parsed['conversion_rates']['avg_step'] = val
-                elif col == 'Best Converting Step':
+                elif col == 'Best Converting Step' or col == 'Best Converting Option':
                     parsed['conversion_rates']['best_step'] = val
-                elif col == 'Worst Converting Step':
+                    # Also parse lift if present in Metric column
+                    lift_metric = row.get('Metric', '')
+                    if 'Lift:' in lift_metric:
+                        lift_str = lift_metric.replace('Lift:', '').replace('%', '').replace('+', '').strip()
+                        parsed['conversion_rates']['best_lift'] = float(lift_str) if lift_str.replace('-', '').replace('.', '').isdigit() else 0
+                elif col == 'Worst Converting Step' or col == 'Worst Converting Option':
                     parsed['conversion_rates']['worst_step'] = val
             elif current_section == 'compare_entry_metrics' and col == 'Prior Entry Point':
                 parsed['compare_entry_point_metrics'] = {
@@ -23219,9 +23238,9 @@ def get_flywheel_data(s3_key):
                     'percentage': row.get('Percentage', '100%'),
                     'gen_pop': row.get('Gen_Pop_Projection', '0')
                 }
-            elif current_section == 'compare_funnel' and col.startswith('Prior Step'):
+            elif current_section == 'compare_funnel' and (col.startswith('Prior Step') or col.startswith('Pre Option')):
                 parsed['compare_flywheel_funnel'].append({
-                    'step': col.replace('Prior ', ''),
+                    'step': col.replace('Prior ', '').replace('Pre ', ''),
                     'point': val,
                     'users': row.get('Projected_Users', row.get('Gen_Pop_Projection', '0')),
                     'percentage': row.get('Percentage', '0%'),
@@ -23257,7 +23276,7 @@ def get_flywheel_data(s3_key):
                 parsed['compare_date_range'] = val
             elif col == 'PRE_PERIOD_FLYWHEEL_ENGAGEMENT':
                 current_section = 'pre_period_funnel'
-            elif current_section == 'pre_period_funnel' and col.startswith('Pre Step'):
+            elif current_section == 'pre_period_funnel' and (col.startswith('Pre Step') or col.startswith('Pre Option')):
                 parsed['compare_flywheel_funnel'].append({
                     'step': col.replace('Pre ', ''),
                     'point': val,
