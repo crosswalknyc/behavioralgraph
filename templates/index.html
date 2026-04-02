@@ -23160,19 +23160,11 @@
             // Headers: Step | Touchpoint | Users Pre | Users Post | Lift
             let headers = '<th style="padding:10px;text-align:left;">Step</th><th style="padding:10px;text-align:left;">Touchpoint</th><th style="padding:10px;text-align:right;">Users Pre</th><th style="padding:10px;text-align:right;">Users Post</th><th style="padding:10px;text-align:right;">Lift</th>';
             
-            // Entry row
+            // Entry row - Pre is always 0 (entry point didn't exist before launch)
             const entryUsersPost = addNoiseIfZero(entry.users || entry.gen_pop);
-            let entryUsersPre = Math.floor(entryUsersPost * (0.85 + Math.random() * 0.1)); // Pre is slightly less than post for entry
-            // Add organic last digits if too round
-            if (entryUsersPre > 0 && entryUsersPre % 1000 === 0) {
-                entryUsersPre += Math.floor(Math.random() * 900) + 100;
-            }
-            const entryLift = ((entryUsersPost - entryUsersPre) / entryUsersPre * 100).toFixed(1);
             const entryPointName = capitalize(data.metadata?.entry_point || 'N/A');
-            const entryLiftColor = parseFloat(entryLift) > 0 ? '#10b981' : (parseFloat(entryLift) < 0 ? '#f92672' : '#888');
-            const entryLiftSign = parseFloat(entryLift) > 0 ? '+' : '';
             
-            let rows = '<tr style="background:rgba(102,217,239,0.08);"><td style="padding:10px;font-weight:600;">Entry Point</td><td style="padding:10px;">' + entryPointName + '</td><td style="padding:10px;text-align:right;">' + formatNum(entryUsersPre) + '</td><td style="padding:10px;text-align:right;font-weight:600;color:var(--accent-cyan);">' + formatNum(entryUsersPost) + '</td><td style="padding:10px;text-align:right;color:' + entryLiftColor + ';font-weight:600;">' + entryLiftSign + entryLift + '%</td></tr>';
+            let rows = '<tr style="background:rgba(102,217,239,0.08);"><td style="padding:10px;font-weight:600;">Entry Point</td><td style="padding:10px;">' + entryPointName + '</td><td style="padding:10px;text-align:right;color:var(--text-secondary);">0</td><td style="padding:10px;text-align:right;font-weight:600;color:var(--accent-cyan);">' + formatNum(entryUsersPost) + '</td><td style="padding:10px;text-align:right;color:#10b981;font-weight:600;">NEW</td></tr>';
             
             funnel.forEach((step, idx) => {
                 const stepName = capitalize(step.point || step.step);
