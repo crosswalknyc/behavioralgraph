@@ -13942,12 +13942,12 @@
                                     </div>
                                 </div>
                                 <div class="form-section">
-                                    <div class="form-section-title">Subsequent Flywheel Points</div>
+                                    <div class="form-section-title">Flywheel Options</div>
                                     <div class="form-row">
                                         <div class="form-group" style="grid-column: 1 / -1;">
                                             <label>Flywheel Touchpoints <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated or one per line)</span></label>
-                                            <textarea id="flywheelPoints" rows="5" placeholder="nike.com/checkout&#10;Nike App Download&#10;Nike Membership&#10;Nike Store Purchase&#10;&#10;Or comma-separated: point1, point2, point3" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
-                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Enter each step of your conversion funnel in order. We'll track how many entry point users reach each subsequent step.</small>
+                                            <textarea id="flywheelPoints" rows="5" placeholder="nike.com/checkout&#10;Nike App Download&#10;Nike Membership&#10;Nike Store Purchase&#10;&#10;Or comma-separated: option1, option2, option3" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Enter each option of your conversion funnel in order. We'll track how many entry point users reach each subsequent option.</small>
                                         </div>
                                     </div>
                                 </div>
@@ -15774,11 +15774,11 @@
                                 <div id="flywheelKpiConversion" style="font-size: 1.75rem; font-weight: 700;"></div>
                             </div>
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Flywheel Steps</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Flywheel Options</div>
                                 <div id="flywheelKpiSteps" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange);"></div>
                             </div>
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Best Converting Step</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Best Converting Option</div>
                                 <div id="flywheelKpiBestStep" style="font-size: 0.85rem; font-weight: 600; color: var(--accent-green);"></div>
                             </div>
                         </div>
@@ -23157,8 +23157,8 @@
             const liftAnalysis = data.lift_analysis || {};
             const stepLifts = liftAnalysis.step_lifts || [];
             
-            // Headers: Step | Touchpoint | Users Pre | Users Post | Lift
-            let headers = '<th style="padding:10px;text-align:left;">Step</th><th style="padding:10px;text-align:left;">Touchpoint</th><th style="padding:10px;text-align:right;">Users Pre</th><th style="padding:10px;text-align:right;">Users Post</th><th style="padding:10px;text-align:right;">Lift</th>';
+            // Headers: Option | Touchpoint | Users Pre | Users Post | Lift
+            let headers = '<th style="padding:10px;text-align:left;">Option</th><th style="padding:10px;text-align:left;">Touchpoint</th><th style="padding:10px;text-align:right;">Users Pre</th><th style="padding:10px;text-align:right;">Users Post</th><th style="padding:10px;text-align:right;">Lift</th>';
             
             // Entry row - Pre is always 0 (entry point didn't exist before launch)
             const entryUsersPost = addNoiseIfZero(entry.users || entry.gen_pop);
@@ -23194,7 +23194,7 @@
                 const liftColor = parseFloat(liftPct) > 0 ? '#10b981' : (parseFloat(liftPct) < 0 ? '#f92672' : '#888');
                 const liftSign = parseFloat(liftPct) > 0 ? '+' : '';
                 
-                rows += '<tr><td style="padding:10px;font-weight:600;">Step ' + (idx + 1) + '</td><td style="padding:10px;">' + stepName + '</td><td style="padding:10px;text-align:right;">' + formatNum(preUsers) + '</td><td style="padding:10px;text-align:right;">' + formatNum(postUsers) + '</td><td style="padding:10px;text-align:right;color:' + liftColor + ';font-weight:600;">' + liftSign + liftPct + '%</td></tr>';
+                rows += '<tr><td style="padding:10px;font-weight:600;">Option ' + (idx + 1) + '</td><td style="padding:10px;">' + stepName + '</td><td style="padding:10px;text-align:right;">' + formatNum(preUsers) + '</td><td style="padding:10px;text-align:right;">' + formatNum(postUsers) + '</td><td style="padding:10px;text-align:right;color:' + liftColor + ';font-weight:600;">' + liftSign + liftPct + '%</td></tr>';
             });
             
             el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="border-bottom:2px solid var(--border-color);">' + headers + '</tr></thead><tbody>' + rows + '</tbody></table>';
