@@ -15784,8 +15784,11 @@
                         </div>
                         <!-- Funnel Chart -->
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 1rem; font-size: 0.95rem;">📊 Conversion Funnel</h3>
-                            <canvas id="flywheelFunnelChart" height="300"></canvas>
+                            <h3 style="margin: 0 0 0.5rem; font-size: 0.95rem;">📊 Conversion Funnel</h3>
+                            <div id="flywheelChartEntryLabel" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;"></div>
+                            <div style="height: 320px; max-height: 320px; position: relative;">
+                                <canvas id="flywheelFunnelChart"></canvas>
+                            </div>
                         </div>
                         <!-- Funnel Table -->
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
@@ -22990,13 +22993,24 @@
             
             if (_flywheelFunnelChart) _flywheelFunnelChart.destroy();
             
+            // Helper to capitalize first letter of each word
+            const capitalize = (str) => {
+                if (!str) return str;
+                return str.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+            };
+            
             const entry = data.entry_point_metrics || {};
             const funnel = data.flywheel_funnel || [];
             const hasComparison = data.has_comparison || false;
             const compareEntry = data.compare_entry_point_metrics || {};
             const compareFunnel = data.compare_flywheel_funnel || [];
             
-            const labels = ['Entry Point'];
+            // Set entry point label
+            const entryPointName = capitalize(data.metadata?.entry_point || 'N/A');
+            const entryLabelEl = document.getElementById('flywheelChartEntryLabel');
+            if (entryLabelEl) entryLabelEl.textContent = 'Entry Point: ' + entryPointName;
+            
+            const labels = [capitalize(data.metadata?.entry_point || 'Entry Point')];
             // Parse gen_pop value (may have commas)
             const parseGenPop = (val) => parseInt(String(val || '0').replace(/,/g, '')) || 0;
             const entryVal = parseGenPop(entry.users || entry.gen_pop);
@@ -23006,7 +23020,7 @@
             const comparePcts = hasComparison ? [100] : [];
             
             funnel.forEach((step, idx) => {
-                labels.push(step.point || step.step);
+                labels.push(capitalize(step.point || step.step));
                 values.push(parseGenPop(step.users || step.gen_pop));
                 pcts.push(parseFloat((step.percentage || '0%').replace('%', '')));
                 if (hasComparison && compareFunnel[idx]) {
@@ -23057,7 +23071,7 @@
                     },
                     scales: {
                         x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#e8e8e8' } },
-                        y: { grid: { display: false }, ticks: { color: '#e8e8e8' } }
+                        y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
                     }
                 }
             });
@@ -23066,6 +23080,12 @@
         function renderFlywheelFunnelTable(data) {
             const el = document.getElementById('flywheelFunnelTable');
             if (!el) return;
+            
+            // Helper to capitalize first letter of each word
+            const capitalize = (str) => {
+                if (!str) return str;
+                return str.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+            };
             
             const entry = data.entry_point_metrics || {};
             const funnel = data.flywheel_funnel || [];
@@ -23082,7 +23102,8 @@
             
             // Entry row - use gen_pop or users field for display
             const entryUsers = entry.users || entry.gen_pop || '0';
-            let rows = '<tr style="background:rgba(102,217,239,0.08);"><td style="padding:10px;font-weight:600;">Entry Point</td><td style="padding:10px;">' + (data.metadata?.entry_point || 'N/A') + '</td><td style="padding:10px;text-align:right;font-weight:600;color:var(--accent-cyan);">' + entryUsers + '</td><td style="padding:10px;text-align:right;">100%</td>';
+            const entryPointName = capitalize(data.metadata?.entry_point || 'N/A');
+            let rows = '<tr style="background:rgba(102,217,239,0.08);"><td style="padding:10px;font-weight:600;">Entry Point</td><td style="padding:10px;">' + entryPointName + '</td><td style="padding:10px;text-align:right;font-weight:600;color:var(--accent-cyan);">' + entryUsers + '</td><td style="padding:10px;text-align:right;">100%</td>';
             if (hasComparison) {
                 rows += '<td style="padding:10px;text-align:right;background:rgba(102,217,239,0.05);">—</td><td style="padding:10px;text-align:right;background:rgba(102,217,239,0.05);">—</td><td style="padding:10px;text-align:right;background:rgba(102,217,239,0.05);">—</td>';
             }
@@ -23090,7 +23111,8 @@
             
             funnel.forEach((step, idx) => {
                 const stepUsers = step.users || step.gen_pop || '0';
-                rows += '<tr><td style="padding:10px;font-weight:600;">Step ' + (idx + 1) + '</td><td style="padding:10px;">' + (step.point || step.step) + '</td><td style="padding:10px;text-align:right;">' + stepUsers + '</td><td style="padding:10px;text-align:right;">' + (step.percentage || '0%') + '</td>';
+                const stepName = capitalize(step.point || step.step);
+                rows += '<tr><td style="padding:10px;font-weight:600;">Step ' + (idx + 1) + '</td><td style="padding:10px;">' + stepName + '</td><td style="padding:10px;text-align:right;">' + stepUsers + '</td><td style="padding:10px;text-align:right;">' + (step.percentage || '0%') + '</td>';
                 if (hasComparison) {
                     const compareStep = compareFunnel[idx] || {};
                     const stepLift = stepLifts[idx] || {};
