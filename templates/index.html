@@ -34452,9 +34452,9 @@
                     }
                     
                     // If this IS the Gen Pop profile being viewed, use Brand Penetration as Gen Pop %
+                    // NOTE: Only check currentS3Key, NOT currentProfileData.name (which may be stale from previous profile)
                     const isGenPopProfile = currentS3Key?.toUpperCase().includes('GEN_POP') || 
-                                           currentS3Key?.toUpperCase().includes('GENPOP') ||
-                                           currentProfileData?.name?.toUpperCase().includes('GEN POP');
+                                           currentS3Key?.toUpperCase().includes('GENPOP');
                     if (isGenPopProfile) {
                         genPopPct = pct; // Gen Pop's own Brand Penetration is the Gen Pop %
                         genPopProjection = usProjection;
