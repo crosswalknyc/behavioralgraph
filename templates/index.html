@@ -52383,7 +52383,9 @@
         };
         
         function getStateFromLocation(locationName) {
-            if (CANONICAL_DMA_STATE[locationName]) return CANONICAL_DMA_STATE[locationName];
+            // Use getDMAState from DMA_MASTER (the unified DMA data source)
+            const dmaState = getDMAState(locationName);
+            if (dmaState) return dmaState;
             const upper = locationName.toUpperCase();
             const stateMatch = upper.match(/\b([A-Z]{2})$/);
             if (stateMatch) return stateMatch[1];
