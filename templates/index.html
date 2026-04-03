@@ -34233,9 +34233,12 @@
                     }
                 }
                 
-                // For behavioral
+                // For behavioral - use case-insensitive matching
                 if (genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
-                    const item = genPopBaselineData.behavioral[category].find(i => i.name === value);
+                    const valueUpper = (value || '').trim().toUpperCase();
+                    const item = genPopBaselineData.behavioral[category].find(i => 
+                        (i.name || '').trim().toUpperCase() === valueUpper
+                    );
                     if (item) return item.pct || 0;
                 }
                 
@@ -34436,30 +34439,30 @@
                     }
                 } else {
                     // For behavioral items, try to get Gen Pop percentage and projection from loaded baseline data
+                    // Use case-insensitive lookup with trimming to ensure match
+                    const valueUpper = (value || '').trim().toUpperCase();
                     if (genPopBaselineData && genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
-                        const genPopItem = genPopBaselineData.behavioral[category].find(item => item.name === value);
+                        const genPopItem = genPopBaselineData.behavioral[category].find(item => 
+                            (item.name || '').trim().toUpperCase() === valueUpper
+                        );
                         if (genPopItem) {
                             genPopPct = genPopItem.pct || 0;
                             genPopProjection = genPopItem.projection || 0;
                         }
                     }
                     
-                    // Fallback: Use Category Share if Gen Pop baseline not available
-                    if (genPopPct === 0) {
-                        genPopPct = catShare > 0 ? catShare : 0;
+                    // If this IS the Gen Pop profile being viewed, use Brand Penetration as Gen Pop %
+                    const isGenPopProfile = currentS3Key?.toUpperCase().includes('GEN_POP') || 
+                                           currentS3Key?.toUpperCase().includes('GENPOP') ||
+                                           currentProfileData?.name?.toUpperCase().includes('GEN POP');
+                    if (isGenPopProfile) {
+                        genPopPct = pct; // Gen Pop's own Brand Penetration is the Gen Pop %
+                        genPopProjection = usProjection;
                     }
                     
                     // Fallback for genPopProjection: calculate from genPopPct if not available
                     if (genPopProjection === 0 && genPopPct > 0) {
                         genPopProjection = Math.round((genPopPct / 100) * 329900000);
-                    }
-                    
-                    // If this IS the Gen Pop profile, use profile pct as gen pop pct (they should be the same)
-                    const isGenPopProfile = currentS3Key?.toUpperCase().includes('GEN_POP') || 
-                                           currentS3Key?.toUpperCase().includes('GENPOP') ||
-                                           currentProfileData?.name?.toUpperCase().includes('GEN POP');
-                    if (isGenPopProfile && genPopPct === 0) {
-                        genPopPct = pct; // Use profile percentage as gen pop percentage
                     }
                 }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
