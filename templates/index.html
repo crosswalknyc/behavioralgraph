@@ -42298,94 +42298,334 @@
             if (allSelect) allSelect.value = `${locationSortState.all.column}-${locationSortState.all.direction}`;
         }
         
+        // =========================================================================
+        // 2026 DMA MASTER LIST - Single source of truth for all DMA data
+        // Generated from '2026 DMA Official Rankings.xlsx'
+        // Key = CW Nomenclature (display name) - used for matching and display
+        // =========================================================================
+        const DMA_MASTER = {
+            "New York": { rank: 1, state: "NY", pct: 6.124, official: "New York, NY" },
+            "Los Angeles": { rank: 2, state: "CA", pct: 4.611, official: "Los Angeles, CA" },
+            "Chicago": { rank: 3, state: "IL", pct: 2.93, official: "Chicago, IL" },
+            "Dallas Fort Worth": { rank: 4, state: "TX", pct: 2.576, official: "Dallas-Ft. Worth, TX" },
+            "Philadelphia": { rank: 5, state: "PA", pct: 2.479, official: "Philadelphia, PA" },
+            "Houston": { rank: 6, state: "TX", pct: 2.28, official: "Houston, TX" },
+            "Atlanta": { rank: 7, state: "GA", pct: 2.189, official: "Atlanta, GA" },
+            "Washington": { rank: 8, state: "DC", pct: 2.103, official: "Washington, DC (Hagerstown, MD)" },
+            "San Francisco Oakland San Jose": { rank: 9, state: "CA", pct: 2.039, official: "San Francisco-Oakland-San Jose, CA" },
+            "Boston": { rank: 10, state: "MA", pct: 2.03, official: "Boston, MA (Manchester, NH)" },
+            "Tampa St Petersburg": { rank: 11, state: "FL", pct: 1.783, official: "Tampa-St. Petersburg (Sarasota), FL" },
+            "Phoenix": { rank: 12, state: "AZ", pct: 1.757, official: "Phoenix (Prescott), AZ" },
+            "Seattle Tacoma": { rank: 13, state: "WA", pct: 1.676, official: "Seattle-Tacoma, WA" },
+            "Detroit": { rank: 14, state: "MI", pct: 1.54, official: "Detroit, MI" },
+            "Orlando Daytona Beach Melbourne": { rank: 15, state: "FL", pct: 1.536, official: "Orlando-Daytona Beach-Melbourne, FL" },
+            "Minneapolis St Paul": { rank: 16, state: "MN", pct: 1.501, official: "Minneapolis-St. Paul, MN" },
+            "Denver": { rank: 17, state: "CO", pct: 1.448, official: "Denver, CO" },
+            "Miami Ft Lauderdale": { rank: 18, state: "FL", pct: 1.42, official: "Miami-Ft. Lauderdale, FL" },
+            "Cleveland Akron": { rank: 19, state: "OH", pct: 1.22, official: "Cleveland-Akron (Canton), OH" },
+            "Sacramento Stockton Modesto": { rank: 20, state: "CA", pct: 1.214, official: "Sacramento-Stockton-Modesto, CA" },
+            "Charlotte": { rank: 21, state: "NC", pct: 1.118, official: "Charlotte, NC" },
+            "Raleigh Durham": { rank: 22, state: "NC", pct: 1.074, official: "Raleigh-Durham (Fayetteville), NC" },
+            "Portland": { rank: 23, state: "OR", pct: 1.006, official: "Portland, OR" },
+            "St Louis": { rank: 24, state: "MO", pct: 0.984, official: "St. Louis, MO" },
+            "Nashville": { rank: 25, state: "TN", pct: 0.976, official: "Nashville, TN" },
+            "Indianapolis": { rank: 26, state: "IN", pct: 0.975, official: "Indianapolis, IN" },
+            "Salt Lake City": { rank: 27, state: "UT", pct: 0.919, official: "Salt Lake City, UT" },
+            "Pittsburgh": { rank: 28, state: "PA", pct: 0.908, official: "Pittsburgh, PA" },
+            "Baltimore": { rank: 29, state: "MD", pct: 0.908, official: "Baltimore, MD" },
+            "San Diego": { rank: 30, state: "CA", pct: 0.892, official: "San Diego, CA" },
+            "San Antonio": { rank: 31, state: "TX", pct: 0.869, official: "San Antonio, TX" },
+            "Austin": { rank: 32, state: "TX", pct: 0.839, official: "Austin, TX" },
+            "Hartford New Haven": { rank: 33, state: "CT", pct: 0.839, official: "Hartford & New Haven, CT" },
+            "Columbus": { rank: 34, state: "OH", pct: 0.821, official: "Columbus, OH" },
+            "Kansas City": { rank: 35, state: "MO", pct: 0.82, official: "Kansas City, MO" },
+            "Greenville Spartanburg Asheville NC Anderson": { rank: 36, state: "SC", pct: 0.775, official: "Greenville-Spartanburg, SC-Asheville, NC-Anderson, SC" },
+            "West Palm Beach Ft Pierce": { rank: 37, state: "FL", pct: 0.76, official: "West Palm Beach-Ft. Pierce, FL" },
+            "Cincinnati": { rank: 38, state: "OH", pct: 0.755, official: "Cincinnati, OH" },
+            "Milwaukee": { rank: 39, state: "WI", pct: 0.748, official: "Milwaukee, WI" },
+            "Las Vegas": { rank: 40, state: "NV", pct: 0.723, official: "Las Vegas, NV" },
+            "Jacksonville": { rank: 41, state: "FL", pct: 0.661, official: "Jacksonville, FL" },
+            "Harrisburg Lancaster Lebanon York": { rank: 42, state: "PA", pct: 0.632, official: "Harrisburg-Lancaster-Lebanon-York, PA" },
+            "Grand Rapids Kalamazoo Battle Creek": { rank: 43, state: "MI", pct: 0.631, official: "Grand Rapids-Kalamazoo-Battle Creek, MI" },
+            "Norfolk Portsmouth Newport News": { rank: 44, state: "VA", pct: 0.612, official: "Norfolk-Portsmouth-Newport News, VA" },
+            "Oklahoma City": { rank: 45, state: "OK", pct: 0.607, official: "Oklahoma City, OK" },
+            "Birmingham": { rank: 46, state: "AL", pct: 0.607, official: "Birmingham (Anniston and Tuscaloosa), AL" },
+            "Greensboro High Point Winston Salem": { rank: 47, state: "NC", pct: 0.604, official: "Greensboro-High Point-Winston Salem, NC" },
+            "Louisville": { rank: 48, state: "KY", pct: 0.566, official: "Louisville, KY" },
+            "Albuquerque Santa Fe": { rank: 49, state: "NM", pct: 0.559, official: "Albuquerque-Santa Fe, NM" },
+            "New Orleans": { rank: 50, state: "LA", pct: 0.535, official: "New Orleans, LA" },
+            "Memphis": { rank: 51, state: "TN", pct: 0.53, official: "Memphis, TN" },
+            "Fort Myers Naples": { rank: 52, state: "FL", pct: 0.527, official: "Ft. Myers-Naples, FL" },
+            "Providence New Bedford MA": { rank: 53, state: "MA", pct: 0.519, official: "Providence, RI-New Bedford, MA" },
+            "Richmond Petersburg": { rank: 54, state: "VA", pct: 0.504, official: "Richmond-Petersburg, VA" },
+            "Buffalo": { rank: 55, state: "NY", pct: 0.502, official: "Buffalo, NY" },
+            "Fresno Visalia": { rank: 56, state: "CA", pct: 0.497, official: "Fresno-Visalia, CA" },
+            "Mobile Pensacola FL": { rank: 57, state: "FL", pct: 0.481, official: "Mobile, AL-Pensacola (Ft. Walton Beach), FL" },
+            "Wilkes Barre Scranton Hazleton": { rank: 58, state: "PA", pct: 0.466, official: "Wilkes Barre-Scranton-Hazleton, PA" },
+            "Little Rock Pine Bluff": { rank: 59, state: "AR", pct: 0.46, official: "Little Rock-Pine Bluff, AR" },
+            "Albany Schenectady Troy": { rank: 60, state: "NY", pct: 0.456, official: "Albany-Schenectady-Troy, NY" },
+            "Knoxville": { rank: 61, state: "TN", pct: 0.456, official: "Knoxville, TN" },
+            "Tulsa": { rank: 62, state: "OK", pct: 0.447, official: "Tulsa, OK" },
+            "Lexington": { rank: 63, state: "KY", pct: 0.412, official: "Lexington, KY" },
+            "Tucson": { rank: 64, state: "AZ", pct: 0.397, official: "Tucson (Sierra Vista), AZ" },
+            "Dayton": { rank: 65, state: "OH", pct: 0.396, official: "Dayton, OH" },
+            "Spokane": { rank: 66, state: "WA", pct: 0.396, official: "Spokane, WA" },
+            "Des Moines Ames": { rank: 67, state: "IA", pct: 0.385, official: "Des Moines-Ames, IA" },
+            "Green Bay Appleton": { rank: 68, state: "WI", pct: 0.38, official: "Green Bay-Appleton, WI" },
+            "Honolulu": { rank: 69, state: "HI", pct: 0.366, official: "Honolulu, HI" },
+            "Roanoke Lynchburg": { rank: 70, state: "VA", pct: 0.364, official: "Roanoke-Lynchburg, VA" },
+            "Omaha": { rank: 71, state: "NE", pct: 0.363, official: "Omaha, NE" },
+            "Wichita Hutchinson": { rank: 72, state: "KS", pct: 0.36, official: "Wichita-Hutchinson, KS Plus" },
+            "Huntsville Decatur": { rank: 73, state: "AL", pct: 0.359, official: "Huntsville-Decatur (Florence), AL" },
+            "Springfield": { rank: 74, state: "MO", pct: 0.356, official: "Springfield, MO" },
+            "Flint Saginaw Bay City": { rank: 75, state: "MI", pct: 0.356, official: "Flint-Saginaw-Bay City, MI" },
+            "Columbia": { rank: 76, state: "SC", pct: 0.356, official: "Columbia, SC" },
+            "Rochester": { rank: 77, state: "NY", pct: 0.347, official: "Rochester, NY" },
+            "Madison": { rank: 78, state: "WI", pct: 0.345, official: "Madison, WI" },
+            "Portland Auburn": { rank: 79, state: "ME", pct: 0.343, official: "Portland-Auburn, ME" },
+            "Harlingen Weslaco Brownsville McAllen": { rank: 80, state: "TX", pct: 0.339, official: "Harlingen-Weslaco-Brownsville-McAllen, TX" },
+            "Toledo": { rank: 81, state: "OH", pct: 0.333, official: "Toledo, OH" },
+            "Charleston Huntington": { rank: 82, state: "WV", pct: 0.332, official: "Charleston-Huntington, WV" },
+            "Waco Temple Bryan": { rank: 83, state: "TX", pct: 0.331, official: "Waco-Temple-Bryan, TX" },
+            "Savannah": { rank: 84, state: "GA", pct: 0.318, official: "Savannah, GA" },
+            "Charleston": { rank: 85, state: "SC", pct: 0.316, official: "Charleston, SC" },
+            "Chattanooga": { rank: 86, state: "TN", pct: 0.314, official: "Chattanooga, TN" },
+            "Syracuse": { rank: 87, state: "NY", pct: 0.309, official: "Syracuse, NY" },
+            "El Paso": { rank: 88, state: "TX", pct: 0.303, official: "El Paso, TX (Las Cruces, NM)" },
+            "Colorado Springs Pueblo": { rank: 89, state: "CO", pct: 0.303, official: "Colorado Springs-Pueblo, CO" },
+            "Champaign Springfield Decatur": { rank: 90, state: "IL", pct: 0.294, official: "Champaign & Springfield-Decatur, IL" },
+            "Shreveport": { rank: 91, state: "LA", pct: 0.293, official: "Shreveport, LA" },
+            "Paducah Cape Girardeau MO Harrisburg IL": { rank: 92, state: "IL", pct: 0.291, official: "Paducah, KY-Cape Girardeau, MO-Harrisburg, IL" },
+            "Cedar Rapids Waterloo Iowa City Dubuque": { rank: 93, state: "IA", pct: 0.289, official: "Cedar Rapids-Waterloo-Iowa City & Dubuque, IA" },
+            "Burlington Plattsburgh NY": { rank: 94, state: "NY", pct: 0.284, official: "Burlington, VT-Plattsburgh, NY" },
+            "Fort Smith Fayetteville Springdale Rogers": { rank: 95, state: "AR", pct: 0.283, official: "Ft. Smith-Fayetteville-Springdale-Rogers, AR" },
+            "Baton Rouge": { rank: 96, state: "LA", pct: 0.283, official: "Baton Rouge, LA" },
+            "Boise": { rank: 97, state: "ID", pct: 0.277, official: "Boise, ID" },
+            "Myrtle Beach Florence": { rank: 98, state: "SC", pct: 0.276, official: "Myrtle Beach-Florence, SC" },
+            "South Bend Elkhart": { rank: 99, state: "IN", pct: 0.269, official: "South Bend-Elkhart, IN" },
+            "Jackson MS": { rank: 100, state: "MS", pct: 0.263, official: "Jackson, MS" },
+            "Tri Cities TN VA": { rank: 101, state: "TN", pct: 0.257, official: "Tri-Cities, TN-VA" },
+            "Greenville New Bern Washington": { rank: 102, state: "NC", pct: 0.25, official: "Greenville-New Bern-Washington, NC" },
+            "Reno": { rank: 103, state: "NV", pct: 0.246, official: "Reno, NV" },
+            "Tallahassee Thomasville GA": { rank: 104, state: "GA", pct: 0.237, official: "Tallahassee, FL-Thomasville, GA" },
+            "Davenport Rock Island Moline IL": { rank: 105, state: "IL", pct: 0.236, official: "Davenport, IA-Rock Island-Moline, IL" },
+            "Lincoln Hastings Kearney": { rank: 106, state: "NE", pct: 0.234, official: "Lincoln & Hastings-Kearney, NE" },
+            "Tyler Longview": { rank: 107, state: "TX", pct: 0.234, official: "Tyler-Longview(Lufkin & Nacogdoches), TX" },
+            "Fort Wayne": { rank: 108, state: "IN", pct: 0.231, official: "Ft. Wayne, IN" },
+            "Evansville": { rank: 109, state: "IN", pct: 0.23, official: "Evansville, IN" },
+            "Augusta Aiken SC": { rank: 110, state: "SC", pct: 0.228, official: "Augusta, GA-Aiken, SC" },
+            "Johnstown Altoona State College": { rank: 111, state: "PA", pct: 0.225, official: "Johnstown-Altoona-State College, PA" },
+            "Sioux Falls": { rank: 112, state: "SD", pct: 0.216, official: "Sioux Falls(Mitchell), SD" },
+            "Lansing": { rank: 113, state: "MI", pct: 0.212, official: "Lansing, MI" },
+            "Fargo": { rank: 114, state: "ND", pct: 0.211, official: "Fargo, ND" },
+            "Springfield Holyoke": { rank: 115, state: "MA", pct: 0.21, official: "Springfield-Holyoke, MA" },
+            "Yakima Pasco Richland Kennewick": { rank: 116, state: "WA", pct: 0.209, official: "Yakima-Pasco-Richland-Kennewick, WA" },
+            "Youngstown": { rank: 117, state: "OH", pct: 0.206, official: "Youngstown, OH" },
+            "Traverse City Cadillac": { rank: 118, state: "MI", pct: 0.204, official: "Traverse City-Cadillac, MI" },
+            "Macon": { rank: 119, state: "GA", pct: 0.203, official: "Macon, GA" },
+            "Eugene": { rank: 120, state: "OR", pct: 0.201, official: "Eugene, OR" },
+            "Bakersfield": { rank: 121, state: "CA", pct: 0.195, official: "Bakersfield, CA" },
+            "Peoria Bloomington": { rank: 122, state: "IL", pct: 0.195, official: "Peoria-Bloomington, IL" },
+            "Santa Barbara Santa Maria San Luis Obispo": { rank: 123, state: "CA", pct: 0.194, official: "Santa Barbara-Santa Maria-San Luis Obispo, CA" },
+            "Lafayette LA": { rank: 124, state: "LA", pct: 0.192, official: "Lafayette, LA" },
+            "Wilmington": { rank: 125, state: "NC", pct: 0.192, official: "Wilmington, NC" },
+            "Columbus Opelika AL": { rank: 126, state: "GA", pct: 0.189, official: "Columbus, GA (Opelika, AL)" },
+            "Montgomery Selma": { rank: 127, state: "AL", pct: 0.183, official: "Montgomery-Selma, AL" },
+            "Monterey Salinas": { rank: 128, state: "CA", pct: 0.18, official: "Monterey-Salinas, CA" },
+            "La Crosse Eau Claire": { rank: 129, state: "WI", pct: 0.178, official: "La Crosse-Eau Claire, WI" },
+            "Corpus Christi": { rank: 130, state: "TX", pct: 0.168, official: "Corpus Christi, TX" },
+            "Salisbury": { rank: 131, state: "MD", pct: 0.16, official: "Salisbury, MD" },
+            "Amarillo": { rank: 132, state: "TX", pct: 0.156, official: "Amarillo, TX" },
+            "Wausau Rhinelander": { rank: 133, state: "WI", pct: 0.153, official: "Wausau-Rhinelander, WI" },
+            "Columbia Jefferson City": { rank: 134, state: "MO", pct: 0.152, official: "Columbia-Jefferson City, MO" },
+            "Columbus Tupelo West Point": { rank: 135, state: "MS", pct: 0.15, official: "Columbus-Tupelo-West Point, MS" },
+            "Chico Redding": { rank: 136, state: "CA", pct: 0.148, official: "Chico-Redding, CA" },
+            "Rockford": { rank: 137, state: "IL", pct: 0.144, official: "Rockford, IL" },
+            "Medford Klamath Falls": { rank: 138, state: "OR", pct: 0.14, official: "Medford-Klamath Falls, OR" },
+            "Duluth Superior WI": { rank: 139, state: "WI", pct: 0.14, official: "Duluth, MN-Superior, WI" },
+            "Lubbock": { rank: 140, state: "TX", pct: 0.139, official: "Lubbock, TX" },
+            "Topeka": { rank: 141, state: "KS", pct: 0.139, official: "Topeka, KS" },
+            "Palm Springs": { rank: 142, state: "CA", pct: 0.135, official: "Palm Springs, CA" },
+            "Panama City": { rank: 143, state: "FL", pct: 0.134, official: "Panama City, FL" },
+            "Monroe El Dorado AR": { rank: 144, state: "AR", pct: 0.134, official: "Monroe, LA-El Dorado, AR" },
+            "Beaumont Port Arthur": { rank: 145, state: "TX", pct: 0.134, official: "Beaumont-Port Arthur, TX" },
+            "Odessa Midland": { rank: 146, state: "TX", pct: 0.133, official: "Odessa-Midland, TX" },
+            "Anchorage": { rank: 147, state: "AK", pct: 0.13, official: "Anchorage, AK" },
+            "Bismarck Minot Dickinson": { rank: 148, state: "ND", pct: 0.128, official: "Bismarck-Minot-Dickinson(Williston),ND" },
+            "Wichita Falls Lawton OK": { rank: 149, state: "TX", pct: 0.124, official: "Wichita Falls, TX & Lawton, OK" },
+            "Sioux City": { rank: 150, state: "IA", pct: 0.124, official: "Sioux City, IA" },
+            "Joplin Pittsburg KS": { rank: 151, state: "KS", pct: 0.121, official: "Joplin, MO-Pittsburg, KS" },
+            "Rochester Mason City IA Austin": { rank: 152, state: "MN", pct: 0.12, official: "Rochester, MN-Mason City, IA-Austin, MN" },
+            "Erie": { rank: 153, state: "PA", pct: 0.12, official: "Erie, PA" },
+            "Albany": { rank: 154, state: "GA", pct: 0.119, official: "Albany, GA" },
+            "Idaho Falls Pocatello": { rank: 155, state: "ID", pct: 0.118, official: "Idaho Falls-Pocatello, ID (Jackson, WY)" },
+            "Gainesville": { rank: 156, state: "FL", pct: 0.116, official: "Gainesville, FL" },
+            "Bangor": { rank: 157, state: "ME", pct: 0.115, official: "Bangor, ME" },
+            "Biloxi Gulfport": { rank: 158, state: "MS", pct: 0.115, official: "Biloxi-Gulfport, MS" },
+            "Sherman Ada OK": { rank: 159, state: "OK", pct: 0.112, official: "Sherman, TX-Ada, OK" },
+            "Terre Haute": { rank: 160, state: "IN", pct: 0.11, official: "Terre Haute, IN" },
+            "Missoula": { rank: 161, state: "MT", pct: 0.11, official: "Missoula, MT" },
+            "Binghamton": { rank: 162, state: "NY", pct: 0.106, official: "Binghamton, NY" },
+            "Yuma El Centro CA": { rank: 163, state: "CA", pct: 0.102, official: "Yuma, AZ-El Centro, CA" },
+            "Wheeling Steubenville OH": { rank: 164, state: "OH", pct: 0.099, official: "Wheeling, WV-Steubenville, OH" },
+            "Dothan": { rank: 165, state: "AL", pct: 0.099, official: "Dothan, AL" },
+            "Billings": { rank: 166, state: "MT", pct: 0.096, official: "Billings, MT" },
+            "Abilene Sweetwater": { rank: 167, state: "TX", pct: 0.094, official: "Abilene-Sweetwater, TX" },
+            "Bluefield Beckley Oak Hill": { rank: 168, state: "WV", pct: 0.092, official: "Bluefield-Beckley-Oak Hill, WV" },
+            "Hattiesburg Laurel": { rank: 169, state: "MS", pct: 0.089, official: "Hattiesburg-Laurel, MS" },
+            "Rapid City": { rank: 170, state: "SD", pct: 0.088, official: "Rapid City, SD" },
+            "Utica": { rank: 171, state: "NY", pct: 0.081, official: "Utica, NY" },
+            "Harrisonburg": { rank: 172, state: "VA", pct: 0.08, official: "Harrisonburg, VA" },
+            "Clarksburg Weston": { rank: 173, state: "WV", pct: 0.079, official: "Clarksburg-Weston, WV" },
+            "Charlottesville": { rank: 174, state: "VA", pct: 0.079, official: "Charlottesville, VA" },
+            "Jackson TN": { rank: 175, state: "TN", pct: 0.079, official: "Jackson, TN" },
+            "Lake Charles": { rank: 176, state: "LA", pct: 0.078, official: "Lake Charles, LA" },
+            "Quincy Hannibal MO Keokuk IA": { rank: 177, state: "IA", pct: 0.078, official: "Quincy, IL-Hannibal, MO-Keokuk, IA" },
+            "Bowling Green": { rank: 178, state: "KY", pct: 0.074, official: "Bowling Green, KY" },
+            "Elmira": { rank: 179, state: "NY", pct: 0.074, official: "Elmira (Corning), NY" },
+            "Watertown": { rank: 180, state: "NY", pct: 0.073, official: "Watertown, NY" },
+            "Marquette": { rank: 181, state: "MI", pct: 0.071, official: "Marquette, MI" },
+            "Jonesboro": { rank: 182, state: "AR", pct: 0.07, official: "Jonesboro, AR" },
+            "Alexandria": { rank: 183, state: "LA", pct: 0.069, official: "Alexandria, LA" },
+            "Butte Bozeman": { rank: 184, state: "MT", pct: 0.067, official: "Butte-Bozeman, MT" },
+            "Laredo": { rank: 185, state: "TX", pct: 0.066, official: "Laredo, TX" },
+            "Grand Junction Montrose": { rank: 186, state: "CO", pct: 0.065, official: "Grand Junction-Montrose, CO" },
+            "Bend": { rank: 187, state: "OR", pct: 0.065, official: "Bend, OR" },
+            "Twin Falls": { rank: 188, state: "ID", pct: 0.061, official: "Twin Falls, ID" },
+            "Lafayette IN": { rank: 189, state: "IN", pct: 0.057, official: "Lafayette, IN" },
+            "Lima": { rank: 190, state: "OH", pct: 0.055, official: "Lima, OH" },
+            "Great Falls": { rank: 191, state: "MT", pct: 0.051, official: "Great Falls, MT" },
+            "Meridian": { rank: 192, state: "MS", pct: 0.051, official: "Meridian, MS" },
+            "Cheyenne Scottsbluff NE": { rank: 193, state: "NE", pct: 0.049, official: "Cheyenne, WY-Scottsbluff, NE" },
+            "Parkersburg": { rank: 194, state: "WV", pct: 0.048, official: "Parkersburg, WV" },
+            "Eureka": { rank: 195, state: "CA", pct: 0.048, official: "Eureka, CA" },
+            "Greenwood Greenville": { rank: 196, state: "MS", pct: 0.046, official: "Greenwood-Greenville, MS" },
+            "San Angelo": { rank: 197, state: "TX", pct: 0.046, official: "San Angelo, TX" },
+            "Casper Riverton": { rank: 198, state: "WY", pct: 0.044, official: "Casper-Riverton, WY" },
+            "Mankato": { rank: 199, state: "MN", pct: 0.044, official: "Mankato, MN" },
+            "Ottumwa Kirksville MO": { rank: 200, state: "MO", pct: 0.038, official: "Ottumwa, IA-Kirksville, MO" },
+            "St Joseph": { rank: 201, state: "MO", pct: 0.036, official: "St. Joseph, MO" },
+            "Fairbanks": { rank: 202, state: "AK", pct: 0.03, official: "Fairbanks, AK" },
+            "Helena": { rank: 203, state: "MT", pct: 0.027, official: "Helena, MT" },
+            "Zanesville": { rank: 204, state: "OH", pct: 0.027, official: "Zanesville, OH" },
+            "Victoria": { rank: 205, state: "TX", pct: 0.027, official: "Victoria, TX" },
+            "Presque Isle": { rank: 206, state: "ME", pct: 0.022, official: "Presque Isle, ME" },
+            "Juneau": { rank: 207, state: "AK", pct: 0.021, official: "Juneau, AK" },
+            "Alpena": { rank: 208, state: "MI", pct: 0.014, official: "Alpena, MI" },
+            "North Platte": { rank: 209, state: "NE", pct: 0.011, official: "North Platte, NE" },
+            "Glendive": { rank: 210, state: "MT", pct: 0.003, official: "Glendive, MT" },
+        };
+
+        // Derived arrays from DMA_MASTER
+        const CANONICAL_DMAS = Object.keys(DMA_MASTER);
+        
+        // DMAs to exclude from Profile IQ dashboard display (data quality issues)
+        const EXCLUDED_DMAS = new Set([
+            "Joplin Pittsburg KS",
+            "Augusta Aiken SC",
+            "Duluth Superior WI",
+            "Quincy Hannibal MO Keokuk IA",
+            "Yuma El Centro CA",
+            "Mobile Pensacola FL"
+        ]);
+
+        // State abbreviations for display formatting
         const _STATE_ABBREVS = new Set(['al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id','il','in','ia','ks','ky','la','me','md','ma','mi','mn','ms','mo','mt','ne','nv','nh','nj','nm','ny','nc','nd','oh','ok','or','pa','ri','sc','sd','tn','tx','ut','vt','va','wa','wv','wi','wy','dc']);
+        
         function normalizeDmaDisplay(s) {
             if (!s || typeof s !== 'string') return s || '';
+            // If it's a canonical name in DMA_MASTER, append state
+            const dmaInfo = DMA_MASTER[s];
+            if (dmaInfo && dmaInfo.state) {
+                return s + ', ' + dmaInfo.state;
+            }
+            // Otherwise capitalize state abbreviations
             return s.replace(/\b([A-Za-z]{2})\b/g, function(m) {
                 return _STATE_ABBREVS.has(m.toLowerCase()) ? m.toUpperCase() : m;
             });
         }
 
-        // 2025 DMA Market Rankings (by Total Homes) - Nielsen DMA list
-        const DMA_RANKS = {
-            "New York NY": 1, "Los Angeles CA": 2, "Chicago IL": 3, "Dallas Ft. Worth TX": 4,
-            "Philadelphia PA": 5, "Houston TX": 6, "Atlanta GA": 7, "Washington DC (Hagerstown MD)": 8,
-            "Boston MA (Manchester NH)": 9, "San Francisco Oakland San Jose CA": 10,
-            "Tampa St. Petersburg (Sarasota) FL": 11, "Phoenix (Prescott) AZ": 12, "Seattle Tacoma WA": 13,
-            "Detroit MI": 14, "Orlando Daytona Beach Melbourne FL": 15, "Minneapolis St. Paul MN": 16,
-            "Denver CO": 17, "Miami Ft. Lauderdale FL": 18, "Cleveland Akron (Canton) OH": 19,
-            "Sacramento Stockton Modesto CA": 20, "Charlotte NC": 21, "Raleigh Durham (Fayetteville) NC": 22,
-            "Portland OR": 23, "St. Louis MO": 24, "Nashville TN": 25, "Indianapolis IN": 26,
-            "Salt Lake City UT": 27, "Pittsburgh PA": 28, "Baltimore MD": 29, "San Diego CA": 30,
-            "San Antonio TX": 31, "Hartford & New Haven CT": 32, "Austin TX": 33, "Columbus OH": 34,
-            "Kansas City MO": 35, "Greenville Spartanburg SC Asheville NC": 36, "Cincinnati OH": 37,
-            "West Palm Beach Ft. Pierce FL": 38, "Milwaukee WI": 39, "Las Vegas NV": 40, "Jacksonville FL": 41,
-            "Harrisburg Lancaster Lebanon York PA": 42, "Grand Rapids Kalamazoo Battle Creek MI": 43,
-            "Norfolk Portsmouth Newport News VA": 44, "Birmingham Anniston and Tuscaloosa AL": 45,
-            "Oklahoma City OK": 46, "Greensboro High Point Winston Salem NC": 47, "Albuquerque Santa Fe NM": 48,
-            "Louisville KY": 49, "Memphis TN": 50, "New Orleans LA": 51, "Providence RI New Bedford MA": 52,
-            "Ft. Myers Naples FL": 53, "Fresno Visalia CA": 54, "Buffalo NY": 55, "Richmond Petersburg VA": 56,
-            "Mobile AL Pensacola (Ft. Walton Beach) FL": 57, "Knoxville TN": 58,
-            "Wilkes Barre Scranton Hazleton PA": 59, "Little Rock Pine Bluff AR": 60,
-            "Albany Schenectady Troy NY": 61, "Tulsa OK": 62, "Lexington KY": 63, "Spokane WA": 64,
-            "Tucson (Sierra Vista) AZ": 65, "Dayton OH": 66, "Des Moines Ames IA": 67, "Green Bay Appleton WI": 68,
-            "Honolulu HI": 69, "Wichita Hutchinson KS Plus": 70, "Omaha NE": 71,
-            "Roanoke Lynchburg VA": 72, "Huntsville Decatur (Florence) AL": 73, "Flint Saginaw Bay City MI": 74,
-            "Springfield MO": 75, "Columbia SC": 76, "Portland Auburn ME": 77, "Madison WI": 78, "Rochester NY": 79,
-            "Harlingen Weslaco Brownsville McAllen TX": 80, "Toledo OH": 81, "Waco Temple Bryan TX": 82,
-            "Charleston Huntington WV": 83, "Charleston SC": 84, "Savannah GA": 85, "Chattanooga TN": 86,
-            "Syracuse NY": 87, "Colorado Springs Pueblo CO": 88, "El Paso TX (Las Cruces NM)": 89,
-            "Champaign & Springfield Decatur IL": 90, "Burlington VT Plattsburgh NY": 91, "Shreveport LA": 92,
-            "Paducah KY Cape Girardeau MO": 93, "Cedar Rapids Waterloo Iowa City & Dubuque IA": 94,
-            "Ft. Smith Fayetteville Springdale Rogers AR": 95, "Baton Rouge LA": 96, "Boise ID": 97,
-            "Myrtle Beach Florence SC": 98, "South Bend Elkhart IN": 99, "Jackson MS": 100,
-            "Tri Cities TN VA": 101, "Greenville New Bern Washington NC": 102, "Reno NV": 103,
-            "Tallahassee FL Thomasville GA": 104, "Davenport IA Rock Island Moline IL": 105,
-            "Tyler Longview (Lufkin & Nacogdoches) TX": 106, "Lincoln & Hastings Kearney NE": 107,
-            "Ft. Wayne IN": 108, "Augusta GA Aiken SC": 109, "Evansville IN": 110,
-            "Johnstown Altoona State College PA": 111, "Sioux Falls (Mitchell) SD": 112,
-            "Springfield Holyoke MA": 113, "Fargo ND": 114, "Lansing MI": 115,
-            "Yakima Pasco Richland Kennewick WA": 116, "Yuma AZ El Centro CA": 117,
-            "Traverse City Cadillac MI": 118, "Youngstown OH": 119, "Eugene OR": 120, "Macon GA": 121,
-            "Bakersfield CA": 122, "Peoria Bloomington IL": 123, "Santa Barbara Santa Maria San Luis Obispo CA": 124,
-            "Lafayette LA": 125, "Wilmington NC": 126, "Columbus GA (Opelika AL)": 127, "Monterey Salinas CA": 128,
-            "Montgomery Selma AL": 129, "La Crosse Eau Claire WI": 130, "Corpus Christi TX": 131,
-            "Salisbury MD": 132, "Amarillo TX": 133, "Wausau Rhinelander WI": 134, "Columbia Jefferson City MO": 135,
-            "Chico Redding CA": 136, "Columbus Tupelo West Point MS": 137, "Rockford IL": 138,
-            "Duluth MN Superior WI": 139, "Medford Klamath Falls OR": 140, "Topeka KS": 141,
-            "Lubbock TX": 142, "Anchorage AK": 143, "Beaumont Port Arthur TX": 144,
-            "Monroe LA El Dorado AR": 145, "Palm Springs CA": 146, "Odessa Midland TX": 147,
-            "Panama City FL": 148, "Bismarck Minot Dickinson (Williston) ND": 149,
-            "Wichita Falls TX & Lawton OK": 150, "Sioux City IA": 151, "Joplin MO Pittsburg KS": 152,
-            "Albany GA": 153, "Rochester MN Mason City IA Austin MN": 154, "Erie PA": 155,
-            "Idaho Falls Pocatello ID (Jackson WY)": 156, "Gainesville FL": 157, "Bangor ME": 158,
-            "Biloxi Gulfport MS": 159, "Sherman TX Ada OK": 160, "Terre Haute IN": 161, "Missoula MT": 162,
-            "Binghamton NY": 163, "Wheeling WV Steubenville OH": 164,
-            "Dothan AL": 165, "Billings MT": 166, "Abilene Sweetwater TX": 167, "Bluefield Beckley Oak Hill WV": 168,
-            "Bluefield Beckley Oak Hill WV": 168, "Hattiesburg Laurel MS": 169, "Rapid City SD": 170,
-            "Utica NY": 171, "Harrisonburg VA": 172, "Charlottesville VA": 173,
-            "Clarksburg Weston WV": 174, "Lake Charles LA": 175, "Jackson TN": 176,
-            "Quincy IL Hannibal MO Keokuk IA": 177, "Bowling Green KY": 178, "Elmira (Corning) NY": 179,
-            "Watertown NY": 180, "Marquette MI": 181, "Jonesboro AR": 182, "Alexandria LA": 183,
-            "Butte Bozeman MT": 184, "Laredo TX": 185, "Bend OR": 186,
-            "Grand Junction Montrose CO": 187, "Twin Falls ID": 188, "Lafayette IN": 189, "Lima OH": 190,
-            "Great Falls MT": 191, "Meridian MS": 192, "Eureka CA": 193, "Cheyenne WY Scottsbluff NE": 194,
-            "Parkersburg WV": 195, "Greenwood Greenville MS": 196, "San Angelo TX": 197,
-            "Casper Riverton WY": 198, "Mankato MN": 199, "Ottumwa IA Kirksville MO": 200,
-            "St. Joseph MO": 201, "Fairbanks AK": 202, "Helena MT": 203, "Zanesville OH": 204,
-            "Victoria TX": 205, "Presque Isle ME": 206, "Juneau AK": 207, "Alpena MI": 208,
-            "North Platte NE": 209, "Glendive MT": 210
-        };
+        // Normalize a DMA name for matching (lowercase, expand abbreviations, remove punctuation)
+        function _dmaNorm(s) {
+            return s.toLowerCase()
+                .replace(/\bft\.?\s/g,'fort ')
+                .replace(/\bst\.?\s/g,'saint ')
+                .replace(/\bft\.?$/g,'fort')
+                .replace(/\bst\.?$/g,'saint')
+                .replace(/[^a-z0-9]/g,'');
+        }
         
-        // 2026 Gen Pop Actuals — DMA % of US (source: Nielsen)
-        const GP_ACTUAL_DMA = {"New York, NY":6.187,"Los Angeles, CA":4.616,"Chicago, IL":2.864,"Dallas-Ft. Worth, TX":2.567,"Philadelphia, PA":2.493,"Houston, TX":2.247,"Atlanta, GA":2.186,"Washington, DC (Hagerstown, MD)":2.097,"Boston, MA (Manchester, NH)":2.063,"San Francisco-Oakland-San Jose, CA":2.047,"Tampa-St. Petersburg (Sarasota), FL":1.775,"Phoenix (Prescott), AZ":1.759,"Seattle-Tacoma, WA":1.706,"Detroit, MI":1.529,"Orlando-Daytona Beach-Melbourne, FL":1.515,"Minneapolis-St. Paul, MN":1.494,"Denver, CO":1.437,"Miami-Ft. Lauderdale, FL":1.431,"Cleveland-Akron (Canton), OH":1.227,"Sacramento-Stockton-Modesto, CA":1.209,"Charlotte, NC":1.105,"Raleigh-Durham (Fayetteville), NC":1.073,"Portland, OR":1.041,"St. Louis, MO":0.987,"Nashville, TN":0.978,"Indianapolis, IN":0.973,"Salt Lake City, UT":0.935,"Pittsburgh, PA":0.91,"Baltimore, MD":0.899,"San Diego, CA":0.882,"San Antonio, TX":0.868,"Hartford & New Haven, CT":0.837,"Austin, TX":0.833,"Columbus, OH":0.819,"Kansas City, MO":0.812,"Greenville-Spartanburg, SC-Asheville, NC-Anderson, SC":0.792,"Cincinnati, OH":0.755,"West Palm Beach-Ft. Pierce, FL":0.746,"Milwaukee, WI":0.736,"Las Vegas, NV":0.717,"Jacksonville, FL":0.67,"Harrisburg-Lancaster-Lebanon-York, PA":0.634,"Grand Rapids-Kalamazoo-Battle Creek, MI":0.63,"Norfolk-Portsmouth-Newport News, VA":0.601,"Birmingham (Anniston and Tuscaloosa), AL":0.601,"Oklahoma City, OK":0.6,"Greensboro-High Point-Winston Salem, NC":0.597,"Albuquerque-Santa Fe, NM":0.585,"Louisville, KY":0.567,"Memphis, TN":0.533,"New Orleans, LA":0.529,"Providence, RI-New Bedford, MA":0.523,"Ft. Myers-Naples, FL":0.521,"Fresno-Visalia, CA":0.505,"Buffalo, NY":0.5,"Richmond-Petersburg, VA":0.491,"Mobile, AL-Pensacola (Ft. Walton Beach), FL":0.482,"Knoxville, TN":0.467,"Wilkes Barre-Scranton-Hazleton, PA":0.465,"Little Rock-Pine Bluff, AR":0.461,"Albany-Schenectady-Troy, NY":0.458,"Tulsa, OK":0.446,"Lexington, KY":0.413,"Spokane, WA":0.398,"Tucson (Sierra Vista), AZ":0.398,"Dayton, OH":0.387,"Des Moines-Ames, IA":0.385,"Green Bay-Appleton, WI":0.375,"Honolulu, HI":0.371,"Wichita-Hutchinson, KS Plus":0.364,"Omaha, NE":0.364,"Roanoke-Lynchburg, VA":0.362,"Huntsville-Decatur (Florence), AL":0.359,"Flint-Saginaw-Bay City, MI":0.356,"Springfield, MO":0.355,"Columbia, SC":0.355,"Portland-Auburn, ME":0.348,"Madison, WI":0.344,"Rochester, NY":0.344,"Harlingen-Weslaco-Brownsville-McAllen, TX":0.339,"Toledo, OH":0.332,"Waco-Temple-Bryan, TX":0.332,"Charleston-Huntington, WV":0.331,"Charleston, SC":0.317,"Savannah, GA":0.316,"Chattanooga, TN":0.314,"Syracuse, NY":0.309,"Colorado Springs-Pueblo, CO":0.306,"El Paso, TX (Las Cruces, NM)":0.301,"Champaign & Springfield-Decatur, IL":0.295,"Burlington, VT-Plattsburgh, NY":0.294,"Shreveport, LA":0.291,"Paducah, KY-Cape Girardeau, MO-Harrisburg, IL":0.291,"Cedar Rapids-Waterloo-Iowa City & Dubuque, IA":0.288,"Ft. Smith-Fayetteville-Springdale-Rogers, AR":0.283,"Baton Rouge, LA":0.282,"Boise, ID":0.276,"Myrtle Beach-Florence, SC":0.275,"South Bend-Elkhart, IN":0.267,"Jackson, MS":0.264,"Tri-Cities, TN-VA":0.257,"Greenville-New Bern-Washington, NC":0.25,"Reno, NV":0.249,"Tallahassee, FL-Thomasville, GA":0.239,"Davenport, IA-Rock Island-Moline, IL":0.238,"Tyler-Longview(Lufkin & Nacogdoches), TX":0.233,"Lincoln & Hastings-Kearney, NE":0.233,"Ft. Wayne, IN":0.23,"Augusta, GA-Aiken, SC":0.229,"Evansville, IN":0.228,"Johnstown-Altoona-State College, PA":0.225,"Sioux Falls(Mitchell), SD":0.225,"Springfield-Holyoke, MA":0.212,"Fargo, ND":0.212,"Lansing, MI":0.211,"Yakima-Pasco-Richland-Kennewick, WA":0.209,"Traverse City-Cadillac, MI":0.205,"Youngstown, OH":0.204,"Eugene, OR":0.203,"Macon, GA":0.202,"Bakersfield, CA":0.197,"Peoria-Bloomington, IL":0.195,"Santa Barbara-Santa Maria-San Luis Obispo, CA":0.193,"Lafayette, LA":0.192,"Wilmington, NC":0.19,"Columbus, GA (Opelika, AL)":0.186,"Monterey-Salinas, CA":0.184,"Montgomery-Selma, AL":0.183,"La Crosse-Eau Claire, WI":0.177,"Corpus Christi, TX":0.165,"Salisbury, MD":0.157,"Amarillo, TX":0.157,"Wausau-Rhinelander, WI":0.151,"Columbia-Jefferson City, MO":0.15,"Chico-Redding, CA":0.15,"Columbus-Tupelo-West Point, MS":0.15,"Rockford, IL":0.143,"Duluth, MN-Superior, WI":0.141,"Medford-Klamath Falls, OR":0.141,"Topeka, KS":0.14,"Lubbock, TX":0.139,"Anchorage, AK":0.135,"Beaumont-Port Arthur, TX":0.134,"Monroe, LA-El Dorado, AR":0.134,"Palm Springs, CA":0.134,"Odessa-Midland, TX":0.134,"Panama City, FL":0.134,"Bismarck-Minot-Dickinson(Williston),ND":0.131,"Wichita Falls, TX & Lawton, OK":0.124,"Sioux City, IA":0.123,"Joplin, MO-Pittsburg, KS":0.122,"Albany, GA":0.121,"Rochester, MN-Mason City, IA-Austin, MN":0.12,"Erie, PA":0.119,"Idaho Falls-Pocatello, ID (Jackson, WY)":0.118,"Gainesville, FL":0.118,"Bangor, ME":0.118,"Biloxi-Gulfport, MS":0.115,"Sherman, TX-Ada, OK":0.112,"Terre Haute, IN":0.111,"Missoula, MT":0.111,"Binghamton, NY":0.105,"Yuma, AZ-El Centro, CA":0.1,"Wheeling, WV-Steubenville, OH":0.098,"Dothan, AL":0.097,"Billings, MT":0.096,"Abilene-Sweetwater, TX":0.094,"Bluefield-Beckley-Oak Hill, WV":0.093,"Hattiesburg-Laurel, MS":0.089,"Rapid City, SD":0.088,"Utica, NY":0.082,"Harrisonburg, VA":0.081,"Charlottesville, VA":0.081,"Clarksburg-Weston, WV":0.079,"Lake Charles, LA":0.079,"Jackson, TN":0.079,"Quincy, IL-Hannibal, MO-Keokuk, IA":0.078,"Bowling Green, KY":0.075,"Elmira (Corning), NY":0.074,"Watertown, NY":0.073,"Marquette, MI":0.071,"Jonesboro, AR":0.07,"Alexandria, LA":0.068,"Butte-Bozeman, MT":0.067,"Laredo, TX":0.066,"Bend, OR":0.066,"Grand Junction-Montrose, CO":0.065,"Twin Falls, ID":0.061,"Lafayette, IN":0.059,"Lima, OH":0.055,"Great Falls, MT":0.052,"Meridian, MS":0.051,"Eureka, CA":0.048,"Cheyenne, WY-Scottsbluff, NE":0.048,"Parkersburg, WV":0.048,"Greenwood-Greenville, MS":0.047,"San Angelo, TX":0.045,"Casper-Riverton, WY":0.045,"Mankato, MN":0.044,"Ottumwa, IA-Kirksville, MO":0.038,"St. Joseph, MO":0.036,"Fairbanks, AK":0.031,"Helena, MT":0.027,"Zanesville, OH":0.027,"Victoria, TX":0.027,"Presque Isle, ME":0.023,"Juneau, AK":0.022,"Alpena, MI":0.014,"North Platte, NE":0.011,"Glendive, MT":0.003};
-        // Pre-built canonical name → GP Actual lookup (populated after CANONICAL_DMAS is defined)
-        const _canonicalGpActual = {};
+        // Pre-build normalized lookup index for fast matching
+        const _canonNorm = {};
+        CANONICAL_DMAS.forEach(c => { _canonNorm[_dmaNorm(c)] = c; });
+        
+        // Match any raw DMA name to a canonical DMA_MASTER key
+        function matchCanonicalDMA(rawName) {
+            if (!rawName) return null;
+            
+            // Direct match first
+            if (DMA_MASTER[rawName]) return rawName;
+            
+            // Normalized exact match
+            const norm = _dmaNorm(rawName);
+            if (_canonNorm[norm]) return _canonNorm[norm];
+            
+            // Fuzzy prefix match - use first two significant words
+            const words = rawName.toLowerCase()
+                .replace(/\bft\.?\s/g,'fort ').replace(/\bst\.?\s/g,'saint ')
+                .replace(/\bft\.?$/g,'fort').replace(/\bst\.?$/g,'saint')
+                .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ');
+            const primary = words.slice(0, 2).filter(w => w.length > 1).join('');
+            
+            let best = null, bestDiff = Infinity;
+            for (const [k, v] of Object.entries(_canonNorm)) {
+                if (k.startsWith(primary) || norm.startsWith(k.substring(0, Math.min(k.length, 8)))) {
+                    const diff = Math.abs(k.length - norm.length);
+                    if (diff < bestDiff) { bestDiff = diff; best = v; }
+                }
+            }
+            return best;
+        }
+        
+        // Get DMA rank (1-210) from DMA_MASTER
+        function getDMARank(dmaName) {
+            if (!dmaName) return null;
+            
+            // Direct lookup
+            if (DMA_MASTER[dmaName]) return DMA_MASTER[dmaName].rank;
+            
+            // Try canonical match
+            const canon = matchCanonicalDMA(dmaName);
+            if (canon && DMA_MASTER[canon]) return DMA_MASTER[canon].rank;
+            
+            return null;
+        }
+        
+        // Get Gen Pop actual percentage from DMA_MASTER
         function getGPActualDMA(dmaName) {
             if (!dmaName) return null;
-            if (_canonicalGpActual[dmaName] != null) return _canonicalGpActual[dmaName];
-            const raw = GP_ACTUAL_DMA[dmaName];
-            if (raw != null) return raw;
+            
+            // Direct lookup
+            if (DMA_MASTER[dmaName]) return DMA_MASTER[dmaName].pct;
+            
+            // Try canonical match
+            const canon = matchCanonicalDMA(dmaName);
+            if (canon && DMA_MASTER[canon]) return DMA_MASTER[canon].pct;
+            
+            return null;
+        }
+        
+        // Get state for a DMA
+        function getDMAState(dmaName) {
+            if (!dmaName) return null;
+            
+            // Direct lookup
+            if (DMA_MASTER[dmaName]) return DMA_MASTER[dmaName].state;
+            
+            // Try canonical match
+            const canon = matchCanonicalDMA(dmaName);
+            if (canon && DMA_MASTER[canon]) return DMA_MASTER[canon].state;
+            
             return null;
         }
 
@@ -42407,65 +42647,6 @@
             return null;
         }
 
-        // Canonical 210 DMAs from match sheet — only these are displayed
-        const CANONICAL_DMA_STATE = {"Abilene Sweetwater":"TX","Albany":"GA","Albany Schenectady Troy":"NY","Albuquerque Santa Fe":"NM","Alexandria":"LA","Alpena":"MI","Amarillo":"TX","Anchorage":"AK","Atlanta":"GA","Augusta Aiken SC":"GA","Austin":"TX","Bakersfield":"CA","Baltimore":"MD","Bangor":"ME","Baton Rouge":"LA","Beaumont Port Arthur":"TX","Bend":"OR","Billings":"MT","Biloxi Gulfport":"MS","Binghamton":"NY","Birmingham":"AL","Bismarck Minot Dickinson":"ND","Bluefield Beckley Oak Hill":"WV","Boise":"ID","Boston":"MA","Bowling Green":"KY","Buffalo":"NY","Burlington Plattsburgh NY":"VT","Butte Bozeman":"MT","Casper Riverton":"WY","Cedar Rapids Waterloo Iowa City Dubuque":"IA","Champaign Springfield Decatur":"IL","Charleston":"SC","Charleston Huntington":"WV","Charlotte":"NC","Charlottesville":"VA","Chattanooga":"TN","Cheyenne Scottsbluff NE":"WY","Chicago":"IL","Chico Redding":"CA","Cincinnati":"OH","Clarksburg Weston":"WV","Cleveland Akron":"OH","Colorado Springs Pueblo":"CO","Columbia":"SC","Columbia Jefferson City":"MO","Columbus Opelika AL":"GA","Columbus":"OH","Columbus Tupelo West Point":"MS","Corpus Christi":"TX","Dallas Fort Worth":"TX","Davenport Rock Island Moline IL":"IA","Dayton":"OH","Denver":"CO","Des Moines Ames":"IA","Detroit":"MI","Dothan":"AL","Duluth Superior WI":"MN","El Paso":"TX","Elmira":"NY","Erie":"PA","Eugene":"OR","Eureka":"CA","Evansville":"IN","Fairbanks":"AK","Fargo":"ND","Flint Saginaw Bay City":"MI","Fresno Visalia":"CA","Fort Myers Naples":"FL","Fort Smith Fayetteville Springdale Rogers":"AR","Fort Wayne":"IN","Gainesville":"FL","Glendive":"MT","Grand Junction Montrose":"CO","Grand Rapids Kalamazoo Battle Creek":"MI","Great Falls":"MT","Green Bay Appleton":"WI","Greensboro High Point Winston Salem":"NC","Greenville New Bern Washington":"NC","Greenville Spartanburg Asheville NC Anderson":"SC","Greenwood Greenville":"MS","Harlingen Weslaco Brownsville McAllen":"TX","Harrisburg Lancaster Lebanon York":"PA","Harrisonburg":"VA","Hartford New Haven":"CT","Hattiesburg Laurel":"MS","Helena":"MT","Honolulu":"HI","Houston":"TX","Huntsville Decatur":"AL","Idaho Falls Pocatello":"ID","Indianapolis":"IN","Jackson MS":"MS","Jackson TN":"TN","Jacksonville":"FL","Johnstown Altoona State College":"PA","Jonesboro":"AR","Joplin Pittsburg KS":"MO","Juneau":"AK","Kansas City":"MO","Knoxville":"TN","La Crosse Eau Claire":"WI","Lafayette IN":"IN","Lafayette LA":"LA","Lake Charles":"LA","Lansing":"MI","Laredo":"TX","Las Vegas":"NV","Lexington":"KY","Lima":"OH","Lincoln Hastings Kearney":"NE","Little Rock Pine Bluff":"AR","Los Angeles":"CA","Louisville":"KY","Lubbock":"TX","Macon":"GA","Madison":"WI","Mankato":"MN","Marquette":"MI","Medford Klamath Falls":"OR","Memphis":"TN","Meridian":"MS","Miami Ft Lauderdale":"FL","Milwaukee":"WI","Minneapolis St Paul":"MN","Missoula":"MT","Mobile Pensacola FL":"AL","Monroe El Dorado AR":"LA","Monterey Salinas":"CA","Montgomery Selma":"AL","Myrtle Beach Florence":"SC","Nashville":"TN","New Orleans":"LA","New York":"NY","Norfolk Portsmouth Newport News":"VA","North Platte":"NE","Odessa Midland":"TX","Oklahoma City":"OK","Omaha":"NE","Orlando Daytona Beach Melbourne":"FL","Ottumwa Kirksville MO":"IA","Paducah Cape Girardeau MO Harrisburg IL":"KY","Palm Springs":"CA","Panama City":"FL","Parkersburg":"WV","Peoria Bloomington":"IL","Philadelphia":"PA","Phoenix":"AZ","Pittsburgh":"PA","Portland":"OR","Portland Auburn":"ME","Presque Isle":"ME","Providence New Bedford MA":"RI","Quincy Hannibal MO Keokuk IA":"IL","Raleigh Durham":"NC","Rapid City":"SD","Reno":"NV","Richmond Petersburg":"VA","Roanoke Lynchburg":"VA","Rochester Mason City IA Austin":"MN","Rochester":"NY","Rockford":"IL","Sacramento Stockton Modesto":"CA","Salisbury":"MD","Salt Lake City":"UT","San Angelo":"TX","San Antonio":"TX","San Diego":"CA","San Francisco Oakland San Jose":"CA","Santa Barbara Santa Maria San Luis Obispo":"CA","Savannah":"GA","Seattle Tacoma":"WA","Sherman Ada OK":"TX","Shreveport":"LA","Sioux City":"IA","Sioux Falls":"SD","South Bend Elkhart":"IN","Spokane":"WA","Springfield":"MO","Springfield Holyoke":"MA","St Joseph":"MO","St Louis":"MO","Syracuse":"NY","Tallahassee Thomasville GA":"FL","Tampa St Petersburg":"FL","Terre Haute":"IN","Toledo":"OH","Topeka":"KS","Traverse City Cadillac":"MI","Tri Cities TN VA":"TN","Tucson":"AZ","Tulsa":"OK","Twin Falls":"ID","Tyler Longview":"TX","Utica":"NY","Victoria":"TX","Waco Temple Bryan":"TX","Washington":"DC","Watertown":"NY","Wausau Rhinelander":"WI","West Palm Beach Ft Pierce":"FL","Wheeling Steubenville OH":"WV","Wichita Falls Lawton OK":"TX","Wichita Hutchinson":"KS","Wilkes Barre Scranton Hazleton":"PA","Wilmington":"NC","Yakima Pasco Richland Kennewick":"WA","Youngstown":"OH","Yuma El Centro CA":"AZ","Zanesville":"OH"};
-        const CANONICAL_DMAS = ["Abilene Sweetwater","Albany","Albany Schenectady Troy","Albuquerque Santa Fe","Alexandria","Alpena","Amarillo","Anchorage","Atlanta","Augusta Aiken SC","Austin","Bakersfield","Baltimore","Bangor","Baton Rouge","Beaumont Port Arthur","Bend","Billings","Biloxi Gulfport","Binghamton","Birmingham","Bismarck Minot Dickinson","Bluefield Beckley Oak Hill","Boise","Boston","Bowling Green","Buffalo","Burlington Plattsburgh NY","Butte Bozeman","Casper Riverton","Cedar Rapids Waterloo Iowa City Dubuque","Champaign Springfield Decatur","Charleston","Charleston Huntington","Charlotte","Charlottesville","Chattanooga","Cheyenne Scottsbluff NE","Chicago","Chico Redding","Cincinnati","Clarksburg Weston","Cleveland Akron","Colorado Springs Pueblo","Columbia","Columbia Jefferson City","Columbus Opelika AL","Columbus","Columbus Tupelo West Point","Corpus Christi","Dallas Fort Worth","Davenport Rock Island Moline IL","Dayton","Denver","Des Moines Ames","Detroit","Dothan","Duluth Superior WI","El Paso","Elmira","Erie","Eugene","Eureka","Evansville","Fairbanks","Fargo","Flint Saginaw Bay City","Fresno Visalia","Fort Myers Naples","Fort Smith Fayetteville Springdale Rogers","Fort Wayne","Gainesville","Glendive","Grand Junction Montrose","Grand Rapids Kalamazoo Battle Creek","Great Falls","Green Bay Appleton","Greensboro High Point Winston Salem","Greenville New Bern Washington","Greenville Spartanburg Asheville NC Anderson","Greenwood Greenville","Harlingen Weslaco Brownsville McAllen","Harrisburg Lancaster Lebanon York","Harrisonburg","Hartford New Haven","Hattiesburg Laurel","Helena","Honolulu","Houston","Huntsville Decatur","Idaho Falls Pocatello","Indianapolis","Jackson MS","Jackson TN","Jacksonville","Johnstown Altoona State College","Jonesboro","Joplin Pittsburg KS","Juneau","Kansas City","Knoxville","La Crosse Eau Claire","Lafayette IN","Lafayette LA","Lake Charles","Lansing","Laredo","Las Vegas","Lexington","Lima","Lincoln Hastings Kearney","Little Rock Pine Bluff","Los Angeles","Louisville","Lubbock","Macon","Madison","Mankato","Marquette","Medford Klamath Falls","Memphis","Meridian","Miami Ft Lauderdale","Milwaukee","Minneapolis St Paul","Missoula","Mobile Pensacola FL","Monroe El Dorado AR","Monterey Salinas","Montgomery Selma","Myrtle Beach Florence","Nashville","New Orleans","New York","Norfolk Portsmouth Newport News","North Platte","Odessa Midland","Oklahoma City","Omaha","Orlando Daytona Beach Melbourne","Ottumwa Kirksville MO","Paducah Cape Girardeau MO Harrisburg IL","Palm Springs","Panama City","Parkersburg","Peoria Bloomington","Philadelphia","Phoenix","Pittsburgh","Portland","Portland Auburn","Presque Isle","Providence New Bedford MA","Quincy Hannibal MO Keokuk IA","Raleigh Durham","Rapid City","Reno","Richmond Petersburg","Roanoke Lynchburg","Rochester Mason City IA Austin","Rochester","Rockford","Sacramento Stockton Modesto","Salisbury","Salt Lake City","San Angelo","San Antonio","San Diego","San Francisco Oakland San Jose","Santa Barbara Santa Maria San Luis Obispo","Savannah","Seattle Tacoma","Sherman Ada OK","Shreveport","Sioux City","Sioux Falls","South Bend Elkhart","Spokane","Springfield","Springfield Holyoke","St Joseph","St Louis","Syracuse","Tallahassee Thomasville GA","Tampa St Petersburg","Terre Haute","Toledo","Topeka","Traverse City Cadillac","Tri Cities TN VA","Tucson","Tulsa","Twin Falls","Tyler Longview","Utica","Victoria","Waco Temple Bryan","Washington","Watertown","Wausau Rhinelander","West Palm Beach Ft Pierce","Wheeling Steubenville OH","Wichita Falls Lawton OK","Wichita Hutchinson","Wilkes Barre Scranton Hazleton","Wilmington","Yakima Pasco Richland Kennewick","Youngstown","Yuma El Centro CA","Zanesville"];
-        
-        // DMAs to exclude from Profile IQ dashboard display (data quality issues)
-        const EXCLUDED_DMAS = new Set([
-            "Joplin Pittsburg KS",
-            "Augusta Aiken SC",
-            "Duluth Superior WI",
-            "Quincy Hannibal MO Keokuk IA",
-            "Yuma El Centro CA",
-            "Mobile Pensacola FL"
-        ]);
-        
-        function _dmaNorm(s) {
-            return s.toLowerCase()
-                .replace(/\bft\.?\s/g,'fort ')
-                .replace(/\bst\.?\s/g,'saint ')
-                .replace(/\bft\.?$/g,'fort')
-                .replace(/\bst\.?$/g,'saint')
-                .replace(/[^a-z0-9]/g,'');
-        }
-        const _canonNorm = {};
-        CANONICAL_DMAS.forEach(c => { _canonNorm[_dmaNorm(c)] = c; });
-        (function buildCanonGpIndex() {
-            const normGp = {};
-            Object.entries(GP_ACTUAL_DMA).forEach(([k, v]) => { normGp[_dmaNorm(k)] = v; });
-            CANONICAL_DMAS.forEach(c => {
-                const cn = _dmaNorm(c);
-                if (normGp[cn]) { _canonicalGpActual[c] = normGp[cn]; return; }
-                let bestVal = null, bestDiff = Infinity;
-                const primary = cn.substring(0, Math.min(cn.length, 10));
-                for (const [k, v] of Object.entries(normGp)) {
-                    if (k.startsWith(primary) || (cn.length >= 8 && primary.startsWith(k.substring(0, 8)))) {
-                        const diff = Math.abs(k.length - cn.length);
-                        if (diff < bestDiff) { bestDiff = diff; bestVal = v; }
-                    }
-                }
-                if (bestVal !== null) { _canonicalGpActual[c] = bestVal; }
-            });
-        })();
-        function matchCanonicalDMA(rawName) {
-            if (!rawName) return null;
-            const norm = _dmaNorm(rawName);
-            if (_canonNorm[norm]) return _canonNorm[norm];
-            const words = rawName.toLowerCase()
-                .replace(/\bft\.?\s/g,'fort ').replace(/\bst\.?\s/g,'saint ')
-                .replace(/\bft\.?$/g,'fort').replace(/\bst\.?$/g,'saint')
-                .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ');
-            const primary = words.slice(0, 2).filter(w => w.length > 1).join('');
-            let best = null, bestDiff = Infinity;
-            for (const [k, v] of Object.entries(_canonNorm)) {
-                if (k.startsWith(primary) || norm.startsWith(k.substring(0, Math.min(k.length, 8)))) {
-                    const diff = Math.abs(k.length - norm.length);
-                    if (diff < bestDiff) { bestDiff = diff; best = v; }
-                }
-            }
-            return best;
-        }
         function condenseDMALocations(locations) {
             const buckets = {};
             let unmatchedPct = 0;
@@ -42516,98 +42697,6 @@
             return arr;
         }
 
-        // Pre-built canonical name → DMA rank lookup
-        const _canonicalDmaRank = {};
-        (function buildCanonRankIndex() {
-            const normRanks = {};
-            Object.entries(DMA_RANKS).forEach(([k, v]) => { normRanks[_dmaNorm(k)] = v; });
-            CANONICAL_DMAS.forEach(c => {
-                const cn = _dmaNorm(c);
-                if (normRanks[cn]) { _canonicalDmaRank[c] = normRanks[cn]; return; }
-                let bestRank = null, bestDiff = Infinity;
-                const primary = cn.substring(0, Math.min(cn.length, 12));
-                for (const [k, v] of Object.entries(normRanks)) {
-                    if (k.startsWith(primary) || (cn.length >= 8 && primary.startsWith(k.substring(0, 8)))) {
-                        const diff = Math.abs(k.length - cn.length);
-                        if (diff < bestDiff) { bestDiff = diff; bestRank = v; }
-                    }
-                }
-                if (bestRank !== null) { _canonicalDmaRank[c] = bestRank; }
-            });
-        })();
-
-        // Helper function to get DMA rank with fuzzy matching
-        function getDMARank(dmaName) {
-            if (dmaName == null || typeof dmaName !== 'string') return null;
-            
-            // Canonical lookup first (fast path for condensed names)
-            if (_canonicalDmaRank[dmaName]) return _canonicalDmaRank[dmaName];
-            
-            // Direct match
-            if (DMA_RANKS[dmaName]) return DMA_RANKS[dmaName];
-            
-            // Normalize function for comparison
-            const normalize = (str) => {
-                return str.toLowerCase()
-                    .replace(/ft\./g, 'fort')           // Ft. -> Fort
-                    .replace(/st\./g, 'saint')          // St. -> Saint
-                    .replace(/\([^)]*\)/g, '')          // Remove parenthetical parts like (Prescott)
-                    .replace(/[^a-z0-9\s]/g, '')        // Remove punctuation
-                    .replace(/\s+/g, ' ')               // Normalize spaces
-                    .trim();
-            };
-            
-            // Get just the primary city name (before state abbreviation)
-            const getPrimaryCity = (str) => {
-                const normalized = normalize(str);
-                // Split on double space or state abbreviation pattern
-                const parts = normalized.split(/\s{2,}/);
-                return parts[0].trim();
-            };
-            
-            // Get state abbreviation
-            const getState = (str) => {
-                const match = str.match(/\b([A-Z]{2})\s*$/i) || str.match(/\s{2,}([A-Z]{2})\b/i);
-                return match ? match[1].toLowerCase() : '';
-            };
-            
-            const normalizedInput = normalize(dmaName);
-            const inputCity = getPrimaryCity(dmaName);
-            const inputState = getState(dmaName);
-            
-            for (const [key, rank] of Object.entries(DMA_RANKS)) {
-                const normalizedKey = normalize(key);
-                
-                // Exact normalized match
-                if (normalizedKey === normalizedInput) return rank;
-                
-                // Match primary city + state
-                const keyCity = getPrimaryCity(key);
-                const keyState = getState(key);
-                
-                if (inputCity && keyCity && inputState && keyState) {
-                    // Primary city and state match
-                    if (inputCity === keyCity && inputState === keyState) return rank;
-                    
-                    // Check if input city starts with or contains key city
-                    if (inputState === keyState) {
-                        if (inputCity.startsWith(keyCity) || keyCity.startsWith(inputCity)) return rank;
-                        // Check if first word matches (e.g., "dallas" matches "dallas fort worth")
-                        const inputFirstWord = inputCity.split(' ')[0];
-                        const keyFirstWord = keyCity.split(' ')[0];
-                        if (inputFirstWord === keyFirstWord && inputFirstWord.length > 3) return rank;
-                    }
-                }
-                
-                // Alphanumeric only comparison (catches most variations)
-                const alphaInput = dmaName.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const alphaKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-                if (alphaInput === alphaKey) return rank;
-            }
-            
-            return null;
-        }
-        
         function renderLocationTable(locations) {
             locations = condenseDMALocations(locations);
             const isProjection = dashDisplayMode === 'projection';
