@@ -22331,6 +22331,7 @@ def submit_flywheel_conversion():
         compare_end_date = data.get('compare_end_date')
         viewer_platform = data.get('viewer_platform', '').strip()  # Platform for players/viewers
         svod_tracking = data.get('svod_tracking', False)  # Enable SVOD subscriber tracking
+        svod_only_new_subs = data.get('svod_only_new_subs', False)  # Use New Signups as sample size
         
         if not entry_point:
             return jsonify({'error': 'Flywheel entry point is required'}), 400
@@ -22375,7 +22376,8 @@ def submit_flywheel_conversion():
                 'compare_start_date': compare_start_date,
                 'compare_end_date': compare_end_date,
                 'viewer_platform': viewer_platform,
-                'svod_tracking': svod_tracking
+                'svod_tracking': svod_tracking,
+                'svod_only_new_subs': svod_only_new_subs
             }
         }
         if s3_client:
@@ -22426,6 +22428,7 @@ def run_flywheel_conversion(job_id):
         compare_end_date = params.get('compare_end_date')
         viewer_platform = params.get('viewer_platform', '')  # Platform for players/viewers
         svod_tracking = params.get('svod_tracking', False)  # SVOD subscriber tracking enabled
+        svod_only_new_subs = params.get('svod_only_new_subs', False)  # Use New Signups as sample size
         # When svod_tracking is enabled, use entry_point as show name and viewer_platform as platform
         svod_show = entry_point if svod_tracking else ''
         svod_platform = viewer_platform if svod_tracking else ''
@@ -22564,11 +22567,12 @@ def run_flywheel_conversion(job_id):
             'viewer_platform': viewer_platform,
             'viewer_platform_match_idx': viewer_platform_match_idx,
             'svod_tracking': svod_tracking,
+            'svod_only_new_subs': svod_only_new_subs,
             'svod_show': svod_show,  # Same as entry_point when svod_tracking enabled
             'svod_platform': svod_platform,  # Same as viewer_platform when svod_tracking enabled
             'svod_platform_match_idx': svod_platform_match_idx,
-            'svod_sample_size': svod_sample_size,  # Total Show Watchers (entry point)
-            'svod_platform_signups': svod_platform_signups,  # New Platform Signups (platform 100%)
+            'svod_sample_size': svod_sample_size,  # Total Show Watchers
+            'svod_platform_signups': svod_platform_signups,  # New Platform Signups
             'period_comparison': {}
         }
         
@@ -22606,9 +22610,15 @@ def run_flywheel_conversion(job_id):
         entry_gen_pop = round(entry_boosted / SAMPLE_SIZE * US_POPULATION)
         
         # Override with SVOD sample size if provided
-        if svod_sample_size and svod_sample_size > 0:
-            entry_gen_pop = svod_sample_size
-            print(f"[Flywheel] Using SVOD sample size as entry gen pop: {entry_gen_pop:,}")
+        if svod_tracking:
+            if svod_only_new_subs and svod_platform_signups and svod_platform_signups > 0:
+                # Use New Platform Signups as sample size (only new subscribers)
+                entry_gen_pop = svod_platform_signups
+                print(f"[Flywheel] Using SVOD New Platform Signups as entry gen pop (only new subs): {entry_gen_pop:,}")
+            elif svod_sample_size and svod_sample_size > 0:
+                # Use Total Show Watchers as sample size (all viewers)
+                entry_gen_pop = svod_sample_size
+                print(f"[Flywheel] Using SVOD Total Show Watchers as entry gen pop: {entry_gen_pop:,}")
         
         results['entry_point_metrics'] = {
             'raw_unique_users': entry_unique_users,
