@@ -13676,7 +13676,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                             temperature=0.2,
                             max_tokens=6000
                         )
-                        _result = _parse_ai_json(_resp.choices[0].message.content.strip())
+                        _result = _parse_ai_json_response(_resp.choices[0].message.content.strip())
                         _ai_items = _result.get('items', [])
                         for _ai_item in _ai_items:
                             try:
@@ -13970,7 +13970,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         temperature=0.15,
                         max_tokens=8000
                     )
-                    _r_result = _parse_ai_json(_r_resp.choices[0].message.content.strip())
+                    _r_result = _parse_ai_json_response(_r_resp.choices[0].message.content.strip())
                     _corrections = _r_result.get('corrections', [])
                     for _corr in _corrections:
                         try:
