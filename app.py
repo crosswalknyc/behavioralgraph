@@ -22330,8 +22330,7 @@ def submit_flywheel_conversion():
         compare_start_date = data.get('compare_start_date')
         compare_end_date = data.get('compare_end_date')
         viewer_platform = data.get('viewer_platform', '').strip()  # Platform for players/viewers
-        svod_show = data.get('svod_show', '').strip()  # SVOD show to look up for sample size
-        svod_platform = data.get('svod_platform', '').strip()  # SVOD platform (100% if matches flywheel option)
+        svod_tracking = data.get('svod_tracking', False)  # Enable SVOD subscriber tracking
         
         if not entry_point:
             return jsonify({'error': 'Flywheel entry point is required'}), 400
@@ -22376,8 +22375,7 @@ def submit_flywheel_conversion():
                 'compare_start_date': compare_start_date,
                 'compare_end_date': compare_end_date,
                 'viewer_platform': viewer_platform,
-                'svod_show': svod_show,
-                'svod_platform': svod_platform
+                'svod_tracking': svod_tracking
             }
         }
         if s3_client:
@@ -22427,8 +22425,10 @@ def run_flywheel_conversion(job_id):
         compare_start_date = params.get('compare_start_date')
         compare_end_date = params.get('compare_end_date')
         viewer_platform = params.get('viewer_platform', '')  # Platform for players/viewers
-        svod_show = params.get('svod_show', '')  # SVOD show to look up for sample size
-        svod_platform = params.get('svod_platform', '')  # SVOD platform (100% if matches flywheel option)
+        svod_tracking = params.get('svod_tracking', False)  # SVOD subscriber tracking enabled
+        # When svod_tracking is enabled, use entry_point as show name and viewer_platform as platform
+        svod_show = entry_point if svod_tracking else ''
+        svod_platform = viewer_platform if svod_tracking else ''
         has_comparison = bool(compare_start_date and compare_end_date)
         
         import re
@@ -22563,8 +22563,9 @@ def run_flywheel_conversion(job_id):
             'compare_conversion_rates': {},
             'viewer_platform': viewer_platform,
             'viewer_platform_match_idx': viewer_platform_match_idx,
-            'svod_show': svod_show,
-            'svod_platform': svod_platform,
+            'svod_tracking': svod_tracking,
+            'svod_show': svod_show,  # Same as entry_point when svod_tracking enabled
+            'svod_platform': svod_platform,  # Same as viewer_platform when svod_tracking enabled
             'svod_platform_match_idx': svod_platform_match_idx,
             'svod_sample_size': svod_sample_size,  # Total Show Watchers (entry point)
             'svod_platform_signups': svod_platform_signups,  # New Platform Signups (platform 100%)
