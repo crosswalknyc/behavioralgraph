@@ -13456,6 +13456,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("🔍 Running comprehensive final gut check (demographics + locations + behavioral)...")
         df_final = ai_final_gut_check(df_final, brand_category, project_name, brands)
 
+    # ── DEMOGRAPHIC COMPLETENESS CHECK ─────────────────────────────────
+    # Ensure all demographic categories have representation (no missing age groups,
+    # genders, income levels, etc.). Adds missing values with small noise (0.01-0.05%)
+    # and renormalizes each category to sum to 100%.
+    print("🔍 Ensuring demographic completeness (all groups represented)...")
+    df_final = ensure_all_demographic_values(df_final, sample_size=final_sample_size)
+
     # ── Post-gut-check: recalculate BP from raw numbers ──────────────────
     df_final = add_brand_penetration_column_using_final_raw(df_final)
 
@@ -19790,62 +19797,145 @@ REQUIRED_DEMOGRAPHICS = {
     ]
 }
 
-def ensure_all_demographic_values(df_final):
+def ensure_all_demographic_values(df_final, sample_size=None):
     """
-    Ensure every required demographic value is present with a small nonzero value (with noise).
-    Renormalize each demographic category to sum to 100% after adding missing values.
+    Ensure every required demographic value is present with at least 0.01% (with small noise).
+    Renormalize each demographic category so Brand Penetration sums to 100% after adding missing values.
+    Also recalculates Original Raw Numbers and US Gen Pop Projection for consistency.
+    
+    This prevents profiles from having missing demographic groups, which is unrealistic
+    (e.g., a TV show audience should have at least some representation in every age group).
     """
     import numpy as np
     df = df_final.copy()
     
-    print("🔍 DEBUG: Checking demographic values...")
-    print(f"🔍 Current demographic categories in data: {sorted(df[df['Column'].isin(REQUIRED_DEMOGRAPHICS.keys())]['Column'].unique())}")
+    # Determine correct column names
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else 'Percentage'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else bp_col
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in df.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in df.columns else None
     
-    for category, required_values in REQUIRED_DEMOGRAPHICS.items():
-        mask = df['Column'] == category
-        present_values = set(df.loc[mask, 'Value'].str.strip().str.lower())
+    # Get sample size from data if not provided
+    if sample_size is None:
+        ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any() and raw_col:
+            try:
+                sample_size = int(float(str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')))
+            except Exception:
+                sample_size = 132040  # Default fallback
+        else:
+            sample_size = 132040
+    
+    MULT = 329_900_000 / 10_000_000  # Projection multiplier
+    
+    print("🔍 Ensuring all demographic values are represented...")
+    
+    # Demographic categories to check (excluding LOCATION which has too many values)
+    DEMO_CATEGORIES = {k: v for k, v in REQUIRED_DEMOGRAPHICS.items() if k != 'LOCATION'}
+    
+    added_count = 0
+    for category, required_values in DEMO_CATEGORIES.items():
+        mask = df['Column'].str.upper().str.strip() == category.upper()
         
-        print(f"🔍 {category}: Found {len(present_values)} values, need {len(required_values)} values")
+        # Get present values (case-insensitive)
+        present_values_raw = df.loc[mask, 'Value'].tolist() if mask.any() else []
+        present_values_lower = set(str(v).strip().lower() for v in present_values_raw)
         
+        missing_values = []
         for val in required_values:
             norm_val = val.strip().lower()
-            if norm_val not in present_values:
+            # Skip "Prefer Not to Say" and similar values - they're optional
+            if 'prefer not' in norm_val or norm_val == 'other':
+                continue
+            if norm_val not in present_values_lower:
+                missing_values.append(val)
+        
+        if missing_values:
+            print(f"   {category}: Adding {len(missing_values)} missing values: {missing_values[:3]}{'...' if len(missing_values) > 3 else ''}")
+            
+            for val in missing_values:
+                # Add noise between 0.01% and 0.05% for realism
                 noise = np.random.uniform(0.01, 0.05)
+                raw_num = max(1, int(round(noise / 100.0 * sample_size)))
+                proj_num = int(round(raw_num * MULT))
+                
                 new_row = {
                     'Column': category,
                     'Value': val,
-                    'Percentage': noise
+                    bp_col: noise,
+                    cs_col: noise,
                 }
+                if raw_col:
+                    new_row[raw_col] = raw_num
+                if proj_col:
+                    new_row[proj_col] = proj_num
+                
+                # Add any other columns that exist in the dataframe
+                for col in df.columns:
+                    if col not in new_row:
+                        new_row[col] = ''
+                
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                print(f"➕ Added missing {category}|{val} with {noise:.4f}%")
+                added_count += 1
     
-    # Never allow zero values (add noise if any are zero)
-    zero_count = 0
-    for idx, row in df.iterrows():
+    if added_count > 0:
+        print(f"   ➕ Added {added_count} missing demographic values")
+    
+    # Now renormalize each demographic category to sum to 100%
+    renorm_count = 0
+    for category in DEMO_CATEGORIES.keys():
+        mask = df['Column'].str.upper().str.strip() == category.upper()
+        if not mask.any():
+            continue
+        
+        # Convert to float for calculation
         try:
-            pct = float(row['Percentage'])
+            df.loc[mask, bp_col] = pd.to_numeric(df.loc[mask, bp_col], errors='coerce').fillna(0.01)
         except Exception:
             continue
-        if pct <= 0:
+        
+        category_total = df.loc[mask, bp_col].sum()
+        
+        if category_total > 0 and abs(category_total - 100.0) > 0.01:
+            scale_factor = 100.0 / category_total
+            df.loc[mask, bp_col] = df.loc[mask, bp_col] * scale_factor
+            df.loc[mask, cs_col] = df.loc[mask, bp_col]  # Keep in sync
+            
+            # Recalculate raw numbers and projections
+            if raw_col:
+                df.loc[mask, raw_col] = (df.loc[mask, bp_col] / 100.0 * sample_size).round().astype(int).clip(lower=1)
+            if proj_col:
+                df.loc[mask, proj_col] = (df.loc[mask, raw_col].astype(float) * MULT).round().astype(int)
+            
+            renorm_count += 1
+    
+    if renorm_count > 0:
+        print(f"   📏 Renormalized {renorm_count} demographic categories to sum to 100%")
+    
+    # Final check: ensure no zeros (add minimum noise if any remain)
+    zero_fix_count = 0
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat not in [k.upper() for k in DEMO_CATEGORIES.keys()]:
+            continue
+        try:
+            bp_val = float(str(row.get(bp_col, 0)).replace(',', '').replace('%', ''))
+        except (ValueError, TypeError):
+            continue
+        if bp_val <= 0:
             noise = np.random.uniform(0.01, 0.05)
-            df.loc[idx, 'Percentage'] = noise
-            print(f"🔧 Replaced zero {row['Column']}|{row['Value']} with {noise:.4f}%")
-            zero_count += 1
+            df.at[idx, bp_col] = noise
+            df.at[idx, cs_col] = noise
+            if raw_col:
+                df.at[idx, raw_col] = max(1, int(round(noise / 100.0 * sample_size)))
+            if proj_col and raw_col:
+                df.at[idx, proj_col] = int(round(df.at[idx, raw_col] * MULT))
+            zero_fix_count += 1
     
-    if zero_count > 0:
-        print(f"🔧 Fixed {zero_count} zero values in demographics")
+    if zero_fix_count > 0:
+        print(f"   🔧 Fixed {zero_fix_count} zero-value demographics")
     
-    # Renormalize each demographic category to sum to 100%
-    for category in REQUIRED_DEMOGRAPHICS.keys():
-        mask = df['Column'] == category
-        if mask.any():
-            # Convert to float for calculation
-            df.loc[mask, 'Percentage'] = df.loc[mask, 'Percentage'].astype(float)
-            category_total = df.loc[mask, 'Percentage'].sum()
-            if category_total > 0:
-                df.loc[mask, 'Percentage'] = (df.loc[mask, 'Percentage'] / category_total * 100.0)
-                print(f"📏 Renormalized {category} to sum to 100.00% (was {category_total:.2f}%)")
-    
+    print(f"✅ Demographic completeness check done ({added_count} added, {renorm_count} renormalized)")
     return df
 
 # Canonical lists and special rules for behavioral categories (comprehensive lists)
