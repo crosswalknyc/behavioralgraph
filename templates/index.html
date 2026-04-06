@@ -55102,8 +55102,8 @@
                 return null;
             }
             
-            // Order for common age keys (others sorted by start); include Gen Pop labels (exact and lower)
-            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '17 and Under', '17 and under', 'under 17', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older', '65 or older', '65 and older', '65+'];
+            // Order for common age keys (others sorted by start); all lowercase for case-insensitive matching
+            const orderLower = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '17 and under', 'under 17', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or older', '65 and older', '65+'];
             const brackets = [];
             Object.entries(ageData).forEach(([key, pct]) => {
                 const val = parseFloat(pct);
@@ -55114,15 +55114,9 @@
             
             if (brackets.length === 0) return 0;
             
-            // Sort by start age (use order for known keys, else numeric)
-            brackets.sort((a, b) => {
-                const idxA = order.indexOf(a.key);
-                const idxB = order.indexOf(b.key);
-                if (idxA >= 0 && idxB >= 0) return idxA - idxB;
-                if (idxA >= 0) return -1;
-                if (idxB >= 0) return 1;
-                return a.start - b.start;
-            });
+            // Sort by start age - ALWAYS use numeric start for correct ordering
+            // The order array caused bugs when keys didn't match exactly (case sensitivity)
+            brackets.sort((a, b) => a.start - b.start);
             
             // Step 1: Find median group (add % in order until we cross 50%)
             let cumulativeBefore = 0;
