@@ -22330,6 +22330,8 @@ def submit_flywheel_conversion():
         compare_start_date = data.get('compare_start_date')
         compare_end_date = data.get('compare_end_date')
         viewer_platform = data.get('viewer_platform', '').strip()  # Platform for players/viewers
+        svod_show = data.get('svod_show', '').strip()  # SVOD show to look up for sample size
+        svod_platform = data.get('svod_platform', '').strip()  # SVOD platform (100% if matches flywheel option)
         
         if not entry_point:
             return jsonify({'error': 'Flywheel entry point is required'}), 400
@@ -22373,7 +22375,9 @@ def submit_flywheel_conversion():
                 'project_name': project_name,
                 'compare_start_date': compare_start_date,
                 'compare_end_date': compare_end_date,
-                'viewer_platform': viewer_platform
+                'viewer_platform': viewer_platform,
+                'svod_show': svod_show,
+                'svod_platform': svod_platform
             }
         }
         if s3_client:
@@ -22423,6 +22427,8 @@ def run_flywheel_conversion(job_id):
         compare_start_date = params.get('compare_start_date')
         compare_end_date = params.get('compare_end_date')
         viewer_platform = params.get('viewer_platform', '')  # Platform for players/viewers
+        svod_show = params.get('svod_show', '')  # SVOD show to look up for sample size
+        svod_platform = params.get('svod_platform', '')  # SVOD platform (100% if matches flywheel option)
         has_comparison = bool(compare_start_date and compare_end_date)
         
         import re
@@ -22438,7 +22444,61 @@ def run_flywheel_conversion(job_id):
                     print(f"[Flywheel] Viewer platform '{viewer_platform}' matches flywheel option {idx + 1}: '{point}'")
                     break
         
-        print(f"[Flywheel] Entry point: {entry_point}, Flywheel points: {flywheel_points}, Compare: {has_comparison}, Viewer platform: {viewer_platform}")
+        # Check if svod_platform matches any flywheel option (case-insensitive)
+        svod_platform_match_idx = None
+        if svod_platform:
+            for idx, point in enumerate(flywheel_points):
+                if point.lower() == svod_platform.lower():
+                    svod_platform_match_idx = idx
+                    print(f"[Flywheel] SVOD platform '{svod_platform}' matches flywheel option {idx + 1}: '{point}'")
+                    break
+        
+        # Look up SVOD show to get sample size from New Platform Signups
+        svod_sample_size = None
+        if svod_show and s3_client:
+            update_job_status(job_id, progress=8, message=f'Looking up SVOD show: {svod_show}...')
+            try:
+                # List files in SVOD bucket
+                svod_response = s3_client.list_objects_v2(Bucket=SVOD_S3_BUCKET)
+                svod_files = [obj['Key'] for obj in svod_response.get('Contents', []) if obj['Key'].endswith('.csv')]
+                
+                # Find matching show file
+                svod_show_lower = svod_show.lower().replace(' ', '_')
+                matching_file = None
+                for f in svod_files:
+                    if svod_show_lower in f.lower():
+                        matching_file = f
+                        print(f"[Flywheel] Found SVOD file: {f}")
+                        break
+                
+                if matching_file:
+                    # Download and parse the SVOD CSV
+                    svod_obj = s3_client.get_object(Bucket=SVOD_S3_BUCKET, Key=matching_file)
+                    svod_content = svod_obj['Body'].read().decode('utf-8')
+                    
+                    import csv
+                    import io
+                    svod_reader = csv.DictReader(io.StringIO(svod_content))
+                    
+                    for row in svod_reader:
+                        metric = row.get('Metric', '').strip()
+                        if 'new platform signup' in metric.lower() or 'new_platform_signup' in metric.lower():
+                            gen_pop_val = row.get('Gen_Pop_Projection', row.get('Gen Pop Projection', row.get('GenPop', '0')))
+                            try:
+                                svod_sample_size = int(str(gen_pop_val).replace(',', ''))
+                                print(f"[Flywheel] Found New Platform Signups: {svod_sample_size:,}")
+                            except:
+                                pass
+                            break
+                    
+                    if not svod_sample_size:
+                        print(f"[Flywheel] Could not find 'New Platform Signups' row in {matching_file}")
+                else:
+                    print(f"[Flywheel] No matching SVOD file found for show: {svod_show}")
+            except Exception as e:
+                print(f"[Flywheel] Error looking up SVOD show: {e}")
+        
+        print(f"[Flywheel] Entry point: {entry_point}, Flywheel points: {flywheel_points}, Compare: {has_comparison}, Viewer platform: {viewer_platform}, SVOD show: {svod_show}, SVOD sample: {svod_sample_size}")
         update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
 
         import snowflake.connector
@@ -22489,6 +22549,10 @@ def run_flywheel_conversion(job_id):
             'compare_conversion_rates': {},
             'viewer_platform': viewer_platform,
             'viewer_platform_match_idx': viewer_platform_match_idx,
+            'svod_show': svod_show,
+            'svod_platform': svod_platform,
+            'svod_platform_match_idx': svod_platform_match_idx,
+            'svod_sample_size': svod_sample_size,
             'period_comparison': {}
         }
         
@@ -22525,11 +22589,17 @@ def run_flywheel_conversion(job_id):
         entry_boosted = entry_unique_users * BOOST_FACTOR
         entry_gen_pop = round(entry_boosted / SAMPLE_SIZE * US_POPULATION)
         
+        # Override with SVOD sample size if provided
+        if svod_sample_size and svod_sample_size > 0:
+            entry_gen_pop = svod_sample_size
+            print(f"[Flywheel] Using SVOD sample size as entry gen pop: {entry_gen_pop:,}")
+        
         results['entry_point_metrics'] = {
             'raw_unique_users': entry_unique_users,
             'boosted_users': entry_boosted,
             'gen_pop_projection': entry_gen_pop,
-            'percentage_of_sample': round(entry_boosted / SAMPLE_SIZE * 100, 2) if SAMPLE_SIZE > 0 else 0
+            'percentage_of_sample': round(entry_boosted / SAMPLE_SIZE * 100, 2) if SAMPLE_SIZE > 0 else 0,
+            'svod_sample_used': svod_sample_size if svod_sample_size else None
         }
         
         print(f"[Flywheel] Entry point: {entry_unique_users} unique users, {entry_boosted} boosted, {entry_gen_pop:,} gen pop")
@@ -22930,13 +23000,18 @@ Respond with ONLY a number between 1000 and 500000. No explanation, just the num
         # Add display values to each flywheel metric
         entry_users_post = results['entry_point_metrics'].get('display_users_post', 0)
         viewer_platform_match_idx = results.get('viewer_platform_match_idx')
+        svod_platform_match_idx = results.get('svod_platform_match_idx')
         
         for idx, metric in enumerate(results.get('flywheel_metrics', [])):
-            # If this option matches the viewer platform, set to 100% of entry point users
+            # If this option matches the viewer platform OR svod platform, set to 100% of entry point users
             if viewer_platform_match_idx is not None and idx == viewer_platform_match_idx:
                 post_users = entry_users_post
                 metric['is_viewer_platform'] = True
                 print(f"[Flywheel] Option {idx + 1} '{metric['point']}' is viewer platform - setting to 100% of entry ({post_users:,})")
+            elif svod_platform_match_idx is not None and idx == svod_platform_match_idx:
+                post_users = entry_users_post
+                metric['is_svod_platform'] = True
+                print(f"[Flywheel] Option {idx + 1} '{metric['point']}' is SVOD platform - setting to 100% of entry ({post_users:,})")
             else:
                 post_users = add_organic_noise(metric.get('gen_pop_projection', 0))
             

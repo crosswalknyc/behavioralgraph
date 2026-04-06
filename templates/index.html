@@ -13973,6 +13973,32 @@
                                     </div>
                                 </div>
                                 <div class="form-section">
+                                    <div class="form-section-title">SVOD Subscriber Tracking</div>
+                                    <div class="form-row">
+                                        <div class="form-group" style="grid-column: 1 / -1;">
+                                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                                <input type="checkbox" id="flywheelSvodToggle" onchange="toggleFlywheelSvod()" style="width: 18px; height: 18px; cursor: pointer;">
+                                                <span>Track new SVOD subscribers who watched content?</span>
+                                            </label>
+                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Use sample size from an existing SVOD acquisition analysis</small>
+                                        </div>
+                                    </div>
+                                    <div id="flywheelSvodFields" style="display: none;">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>What Show?</label>
+                                                <input type="text" id="flywheelSvodShow" placeholder="e.g., Reacher, The Boys, Wednesday" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Enter the show name to find in SVOD analyses</small>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>What Platform?</label>
+                                                <input type="text" id="flywheelSvodPlatform" placeholder="e.g., Amazon Prime Video, Netflix" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                                <small style="color: var(--text-secondary); font-size: 0.75rem;">If this platform is a flywheel option, it shows 100% of signups</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-section">
                                     <div class="form-section-title">Project Details</div>
                                     <div class="form-row">
                                         <div class="form-group" style="grid-column: 1 / -1;">
@@ -22829,6 +22855,20 @@
                 }
             }
         }
+        
+        function toggleFlywheelSvod() {
+            const toggle = document.getElementById('flywheelSvodToggle');
+            const fields = document.getElementById('flywheelSvodFields');
+            const showInput = document.getElementById('flywheelSvodShow');
+            const platformInput = document.getElementById('flywheelSvodPlatform');
+            if (toggle && fields) {
+                fields.style.display = toggle.checked ? '' : 'none';
+                if (!toggle.checked) {
+                    if (showInput) showInput.value = '';
+                    if (platformInput) platformInput.value = '';
+                }
+            }
+        }
 
         function submitFlywheelConversion() {
             const entryPoint = document.getElementById('flywheelEntryPoint').value.trim();
@@ -22875,6 +22915,17 @@
             const viewerPlatform = document.getElementById('flywheelViewerPlatform')?.value?.trim();
             if (viewerToggle && viewerToggle.checked && viewerPlatform) {
                 payload.viewer_platform = viewerPlatform;
+            }
+            
+            // Add SVOD subscriber tracking if specified
+            const svodToggle = document.getElementById('flywheelSvodToggle');
+            const svodShow = document.getElementById('flywheelSvodShow')?.value?.trim();
+            const svodPlatform = document.getElementById('flywheelSvodPlatform')?.value?.trim();
+            if (svodToggle && svodToggle.checked && svodShow) {
+                payload.svod_show = svodShow;
+                if (svodPlatform) {
+                    payload.svod_platform = svodPlatform;
+                }
             }
             
             fetch('/api/attribution/flywheel-conversion', {
