@@ -1466,12 +1466,28 @@ def _try_gpt_archetype(project_name, brands, brand_category=None):
         f'  "behavioral_high": ["categories whose audience should OVER-index"],\n'
         f'  "behavioral_low": ["categories whose audience should UNDER-index"]\n'
         f'}}\n\n'
+        f'=== CRITICAL: ETHNICITY GUIDANCE ===\n'
+        f'Consider CULTURAL and REGIONAL factors when determining ethnicity_over_index:\n'
+        f'- BASEBALL/MLB: Strong HISPANIC/LATINO fanbase (~25-30% of viewership, high Latino player representation)\n'
+        f'- SOCCER/MLS: Very strong HISPANIC/LATINO fanbase (often 40%+)\n'
+        f'- BASKETBALL/NBA/WNBA: Strong BLACK/AFRICAN AMERICAN fanbase (often 35-45%)\n'
+        f'- HOCKEY/NHL: Predominantly WHITE fanbase\n'
+        f'- Regional teams: Factor in LOCAL MARKET demographics\n'
+        f'  * LA teams (Dodgers, Lakers, Rams): Heavy HISPANIC presence (LA is ~48% Hispanic)\n'
+        f'  * Miami teams: Strong HISPANIC/LATINO presence\n'
+        f'  * Atlanta teams: Strong BLACK/AFRICAN AMERICAN presence\n'
+        f'  * Texas teams: Significant HISPANIC presence\n'
+        f'- Hip-hop/R&B artists: Strong BLACK audience\n'
+        f'- K-pop artists: Strong ASIAN audience\n'
+        f'- Latin music artists: Strong HISPANIC audience\n\n'
         f'Available behavioral categories: {CATS}\n\n'
         f'Examples:\n'
-        f'- The Rock: male, diverse ethnicity, SPORTS/WORKOUT FACILITY high, BEAUTY/WELLNESS low\n'
-        f'- Taylor Swift: female, younger, BEAUTY/WELLNESS/APPAREL high, HEAVY MACHINERY low\n'
-        f'- YouTube: balanced, SOCIAL MEDIA/STREAMING high\n'
-        f'- NFL: male, SPORTS/BETTING high, BEAUTY/WELLNESS lower\n\n'
+        f'- Mookie Betts (LA Dodgers): male, HISPANIC + BLACK over-index (baseball + LA market)\n'
+        f'- Shohei Ohtani: male, HISPANIC + ASIAN over-index (baseball + Japanese star)\n'
+        f'- Bad Bunny: balanced gender, younger, very strong HISPANIC over-index\n'
+        f'- LeBron James: male, strong BLACK over-index, SPORTS/BETTING high\n'
+        f'- Taylor Swift: female, younger, WHITE skew, BEAUTY/WELLNESS/APPAREL high\n'
+        f'- NFL: male, diverse but BLACK over-index, SPORTS/BETTING high\n\n'
         f'Return ONLY the JSON object.'
     )
     try:
@@ -1608,20 +1624,59 @@ def validate_demographics(df, archetype, sample_size):
     # ── GENDER: never overwrite from archetype — use panel + AI demographic agents ──
     # (Hard-coded M/F targets contradicted file-derived audiences, e.g. balanced profiles.)
 
-    # ── ETHNICITY (light touch -- only dampen extreme outliers) ───────────
+    # ── ETHNICITY (smart validation: dampen unexpected highs AND boost expected lows) ───────────
     expected_high = [e.upper() for e in archetype.get('ethnicity_over_index', [])]
     em = df['Column'].str.upper() == 'ETHNICITY'
+    
+    # First pass: collect current ethnicity values
+    eth_data = {}
     for idx in df[em].index:
         val = str(df.at[idx, 'Value']).upper()
         try:
             cur = float(df.at[idx, pct_col])
         except (ValueError, TypeError):
-            continue
+            cur = 0.0
         gp_val = gp_demo.get('ETHNICITY', {}).get(val, cur)
+        eth_data[idx] = {'val': val, 'cur': cur, 'gp': gp_val}
+    
+    # Target thresholds for expected ethnicities based on category context
+    ETH_MIN_TARGETS = {
+        'HISPANIC': 20.0,  # For baseball/soccer audiences, should be at least 20%
+        'LATINO': 20.0,
+        'BLACK': 25.0,     # For basketball/urban audiences, should be at least 25%
+        'AFRICAN AMERICAN': 25.0,
+        'ASIAN': 10.0,     # For K-pop/anime/tech audiences
+    }
+    
+    for idx, data in eth_data.items():
+        val = data['val']
+        cur = data['cur']
+        gp_val = data['gp']
         if gp_val <= 0:
-            continue
+            gp_val = cur if cur > 0 else 5.0  # Fallback
+        
         is_expected = any(exp in val or val in exp for exp in expected_high)
-        if not is_expected and cur / gp_val > 2.0:
+        
+        # BOOST: If this ethnicity is expected to over-index but is too low
+        if is_expected:
+            # Find target minimum for this ethnicity
+            target_min = None
+            for eth_key, min_val in ETH_MIN_TARGETS.items():
+                if eth_key in val:
+                    target_min = min_val
+                    break
+            
+            if target_min and cur < target_min:
+                # Boost toward target (blend: 60% target, 40% current)
+                new_val = round(target_min * 0.6 + cur * 0.4, 4)
+                df.at[idx, pct_col] = f"{new_val:.4f}"
+                if bp_col and bp_col in df.columns:
+                    df.at[idx, bp_col] = f"{new_val:.4f}"
+                corrections += 1
+                print(f"   🔧 Ethnicity: boosted {val} from {cur:.1f}% to {new_val:.1f}% (expected for archetype)")
+        
+        # DAMPEN: If this ethnicity is unexpectedly high (>2x Gen Pop and not expected)
+        elif cur / gp_val > 2.0:
             _ep = round(gp_val * 0.6 + cur * 0.4, 4)
             df.at[idx, pct_col] = f"{_ep:.4f}"
             if bp_col and bp_col in df.columns:
