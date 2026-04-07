@@ -9862,7 +9862,7 @@ def improved_organic_scaling(group, min_cap=18.0, max_cap=31.0, jitter=True):
     - Add jitter, clamp to peak, round
     """
     group = group.copy()
-    original = group["Percentage"].astype(float).values
+    original = pd.to_numeric(group["Percentage"], errors='coerce').fillna(0).values
     if len(original) == 0 or original.max() == 0:
         return group
 
@@ -9904,7 +9904,7 @@ def log_transform_mid_up_top_down_shifted_mid(
     - Draw a random peak ∼ Uniform(base_cap_range), add small jitter, clamp, and round.
     """
     group = group.copy()
-    original = group["Percentage"].astype(float).values
+    original = pd.to_numeric(group["Percentage"], errors='coerce').fillna(0).values
     if original.size == 0 or original.max() == 0:
         group["Percentage"] = 0.0
         return group
@@ -9934,7 +9934,7 @@ def add_dirichlet_noise(df_cat: pd.DataFrame, alpha: float = 0.05) -> pd.DataFra
     and add it to the original percentages before renormalizing and rounding to 2 decimals.
     """
     df = df_cat.copy()
-    orig = df["Percentage"].astype(float).values
+    orig = pd.to_numeric(df["Percentage"], errors='coerce').fillna(0).values
     if orig.sum() == 0:
         return df
     probs = orig / orig.sum()
@@ -12377,7 +12377,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         the sums of percentages remain 100% within this category. Finally, round to 2 decimals.
         """
         df_cat = df_cat.copy()
-        orig = df_cat["Percentage"].astype(float).values
+        orig = pd.to_numeric(df_cat["Percentage"], errors='coerce').fillna(0).values
         if orig.sum() == 0:
             return df_cat
 
@@ -19958,9 +19958,13 @@ def ensure_all_demographic_values(df_final, sample_size=None):
             
             # Recalculate raw numbers and projections
             if raw_col:
-                df.loc[mask, raw_col] = (df.loc[mask, bp_col] / 100.0 * sample_size).round().astype(int).clip(lower=1)
-            if proj_col:
-                df.loc[mask, proj_col] = (df.loc[mask, raw_col].astype(float) * MULT).round().astype(int)
+                # Convert to numeric first, handling any empty strings or invalid values
+                raw_values = pd.to_numeric(df.loc[mask, bp_col], errors='coerce').fillna(0.01)
+                df.loc[mask, raw_col] = (raw_values / 100.0 * sample_size).round().astype(int).clip(lower=1)
+            if proj_col and raw_col:
+                # Convert raw_col to numeric, handling empty strings
+                raw_nums = pd.to_numeric(df.loc[mask, raw_col], errors='coerce').fillna(1)
+                df.loc[mask, proj_col] = (raw_nums * MULT).round().astype(int)
             
             renorm_count += 1
     
