@@ -18997,16 +18997,17 @@
             
             // Update KPIs - Show regular sample values as main
             const totalViewersGenPop = parseInt(conversionSummary.totalViewersGenPop) || 0;
-            const convertedGenPop = parseInt(conversionSummary.convertedGenPop) || 0;
-            const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
-            const convertedSample = parseInt(conversionSummary.converted) || 0;
-            
-            // DEBUG: Log conversion values
-            console.log('[SF-LF DEBUG] conversionSummary:', conversionSummary);
-            console.log('[SF-LF DEBUG] convertedGenPop (overall):', convertedGenPop);
-            console.log('[SF-LF DEBUG] perPlatformConversion:', perPlatformConversion);
+            // Calculate CONVERTED USERS as SUM of per-platform conversions (for consistency)
             const sumPerPlatGenPop = perPlatformConversion.reduce((sum, p) => sum + (parseInt(p.convertedGenPop) || 0), 0);
-            console.log('[SF-LF DEBUG] Sum of per-platform GenPop:', sumPerPlatGenPop);
+            const sumPerPlatRaw = perPlatformConversion.reduce((sum, p) => sum + (parseInt(p.converted) || 0), 0);
+            
+            // Use sum of per-platform values if available, otherwise fall back to overall
+            const convertedGenPop = sumPerPlatGenPop > 0 ? sumPerPlatGenPop : (parseInt(conversionSummary.convertedGenPop) || 0);
+            const convertedSample = sumPerPlatRaw > 0 ? sumPerPlatRaw : (parseInt(conversionSummary.converted) || 0);
+            const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
+            
+            console.log('[SF-LF DEBUG] Per-platform sum GenPop:', sumPerPlatGenPop, 'Per-platform sum raw:', sumPerPlatRaw);
+            console.log('[SF-LF DEBUG] Using convertedGenPop:', convertedGenPop);
             
             // Main values - ALWAYS show projected values (with null checks)
             const kpiTotalViewersEl = document.getElementById('sfConvKpiTotalViewers');
