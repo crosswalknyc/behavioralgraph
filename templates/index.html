@@ -19004,7 +19004,9 @@
             const kpiAvgTimeEl = document.getElementById('sfConvKpiAvgTime');
             if (kpiTotalViewersEl) kpiTotalViewersEl.textContent = totalViewersGenPop > 0 ? formatGenPop(totalViewersGenPop) : totalViewersSample.toLocaleString();
             if (kpiConvertedEl) kpiConvertedEl.textContent = convertedGenPop > 0 ? formatGenPop(convertedGenPop) : convertedSample.toLocaleString();
-            if (kpiRateEl) kpiRateEl.textContent = (conversionSummary.convRate || '0') + '%';
+            // Calculate conversion rate to 5 decimal places
+            const convRateCalc = totalViewersGenPop > 0 ? (convertedGenPop / totalViewersGenPop * 100) : (totalViewersSample > 0 ? (convertedSample / totalViewersSample * 100) : 0);
+            if (kpiRateEl) kpiRateEl.textContent = convRateCalc.toFixed(5) + '%';
             const avgHrs = parseFloat(conversionSummary.avgHours) || 0;
             if (kpiAvgTimeEl) kpiAvgTimeEl.textContent = avgHrs > 24 ? `${Math.round(avgHrs / 24)}d` : `${Math.round(avgHrs)}h`;
 
