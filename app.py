@@ -21830,8 +21830,10 @@ def run_sf_lf_conversion(job_id):
         print(f"[SF-LF] DEBUG: CSV will write: Count={conv_users}, Gen_Pop_Projection={conv_users_genpop}")
         conv_rate = round((conv_users / total_viewers * 100), 8) if total_viewers > 0 else 0.00000001
         
+        overall_conv_genpop = project_to_gen_pop(conv_users)
+        print(f"[SF-LF] WRITING CSV: OVERALL_CONVERSION Converted Users -> Count={conv_users}, Gen_Pop_Projection={overall_conv_genpop}")
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Total SF Viewers (All Platforms)', 'Metric': '', 'Count': total_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(total_viewers)})
-        csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Converted Users', 'Metric': '', 'Count': conv_users, 'Percentage': f"{conv_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(conv_users)})
+        csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Converted Users', 'Metric': '', 'Count': conv_users, 'Percentage': f"{conv_rate:.8f}%", 'Gen_Pop_Projection': overall_conv_genpop})
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Avg Hours to Conversion', 'Metric': '', 'Count': avg_hours, 'Percentage': '', 'Gen_Pop_Projection': ''})
         
         # Per-Platform Conversion Summary - use same values (no additional noise!)
@@ -21840,9 +21842,11 @@ def run_sf_lf_conversion(job_id):
         for plat_name, pc in platform_conversions.items():
             plat_viewers = pc['viewers']
             plat_conv = pc['converted']
+            plat_conv_genpop = project_to_gen_pop(plat_conv)
             plat_rate = pc['rate'] if pc['rate'] > 0 else 0.00000001
+            print(f"[SF-LF] WRITING CSV: {plat_name.upper()}_CONVERSION Converted to LF -> Count={plat_conv}, Gen_Pop_Projection={plat_conv_genpop}")
             csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'SF Viewers', 'Metric': '', 'Count': plat_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(plat_viewers)})
-            csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'Converted to LF', 'Metric': '', 'Count': plat_conv, 'Percentage': f"{plat_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(plat_conv)})
+            csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'Converted to LF', 'Metric': '', 'Count': plat_conv, 'Percentage': f"{plat_rate:.8f}%", 'Gen_Pop_Projection': plat_conv_genpop})
         
         print(f"[SF-LF] CSV: Overall converted={conv_users}, sum of platforms={sum(pc['converted'] for pc in platform_conversions.values())}")
         
