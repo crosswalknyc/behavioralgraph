@@ -21618,18 +21618,23 @@ def run_sf_lf_conversion(job_id):
                 url_metric['conversion_rate'] = 0.00000001
         
         # Update platform metrics with conversion data
+        print(f"[SF-LF] DEBUG: per_platform_data keys: {list(per_platform_data.keys())}")
         for plat_metric in results['platform_metrics']:
             if plat_metric.get('is_overall'):
                 plat_metric['converted_to_title'] = converted
                 plat_metric['conversion_rate_to_title'] = conversion_rate
+                print(f"[SF-LF] DEBUG: OVERALL converted_to_title = {converted}")
             else:
                 plat = plat_metric['platform']
                 if plat in per_platform_data:
-                    plat_metric['converted_to_title'] = per_platform_data[plat].get('converted', add_noise_if_zero(0))
+                    conv_val = per_platform_data[plat].get('converted', add_noise_if_zero(0))
+                    plat_metric['converted_to_title'] = conv_val
                     plat_metric['conversion_rate_to_title'] = per_platform_data[plat].get('conversion_rate', 0.00000001)
+                    print(f"[SF-LF] DEBUG: {plat} converted_to_title = {conv_val} (from per_platform_data)")
                 else:
                     plat_metric['converted_to_title'] = add_noise_if_zero(0)
                     plat_metric['conversion_rate_to_title'] = 0.00000001
+                    print(f"[SF-LF] DEBUG: {plat} NOT in per_platform_data, using noise")
         
         # ===== REDISTRIBUTE URL CONVERSIONS PROPORTIONALLY =====
         # URL conversions should sum to overall conversion (for consistency)
@@ -21793,7 +21798,9 @@ def run_sf_lf_conversion(job_id):
         
         # Get per-platform conversions (already have noise from earlier)
         platform_conversions = {}
+        print(f"[SF-LF] DEBUG: Building platform_conversions from {len(results['platform_metrics'])} platform_metrics entries")
         for pm in results['platform_metrics']:
+            print(f"[SF-LF] DEBUG: Platform metric: {pm.get('platform')}, is_overall={pm.get('is_overall')}, converted_to_title={pm.get('converted_to_title')}")
             if not pm.get('is_overall'):
                 plat_name = pm['platform']
                 platform_conversions[plat_name] = {
@@ -21803,7 +21810,11 @@ def run_sf_lf_conversion(job_id):
                 }
         
         # OVERALL converted = SUM of per-platform converted (for consistency)
+        print(f"[SF-LF] DEBUG: platform_conversions keys: {list(platform_conversions.keys())}")
+        for plat_name, pc in platform_conversions.items():
+            print(f"[SF-LF] DEBUG: {plat_name} converted (raw) = {pc['converted']}, GenPop = {project_to_gen_pop(pc['converted'])}")
         conv_users = sum(pc['converted'] for pc in platform_conversions.values())
+        print(f"[SF-LF] DEBUG: conv_users (sum of all platforms) = {conv_users}, GenPop = {project_to_gen_pop(conv_users)}")
         conv_rate = round((conv_users / total_viewers * 100), 8) if total_viewers > 0 else 0.00000001
         
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Total SF Viewers (All Platforms)', 'Metric': '', 'Count': total_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(total_viewers)})
