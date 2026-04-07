@@ -5516,6 +5516,191 @@ Each corrected category sums to 100. JSON only, no markdown."""
         return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
+# ── Catastrophic Demographic Failure Detection ──
+
+def _detect_and_fix_catastrophic_demographics(df, subject_clean, brand_category):
+    """Detect and fix catastrophically broken demographics that AI review missed.
+    
+    This catches cases where:
+    - Single age group has >80% (e.g., 99% "17 AND UNDER" for adult streaming service)
+    - LGBTQ+ is >25% (US baseline is ~7%)
+    - Native American is >15% (US baseline is ~1%)
+    - Gender is equally distributed across all categories including Trans (~18% each)
+    
+    Uses GenPop baseline as fallback when catastrophic failures are detected.
+    """
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+    
+    if bp_col not in df.columns:
+        return df
+    
+    sample_raw = 132040  # Default
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except (ValueError, TypeError):
+            pass
+    
+    catastrophic_fixes = 0
+    
+    # ── Check AGE for catastrophic failure ──
+    age_mask = df['Column'].str.upper().str.strip() == 'AGE'
+    if age_mask.any():
+        age_items = []
+        for idx, row in df[age_mask].iterrows():
+            val = str(row.get('Value', '')).strip().upper()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            age_items.append((val, bp, idx))
+        
+        total_bp = sum(bp for _, bp, _ in age_items)
+        if total_bp > 0:
+            shares = {v: bp / total_bp * 100 for v, bp, _ in age_items}
+            # Check if any single age group has >80%
+            max_share = max(shares.values())
+            max_group = max(shares, key=shares.get)
+            
+            # "17 AND UNDER" having >80% is catastrophic for most adult brands
+            if max_share > 80 and '17' in max_group:
+                print(f"   🚨 CATASTROPHIC AGE FAILURE: {max_group} = {max_share:.1f}%")
+                print(f"   🔧 Applying GenPop fallback for AGE distribution")
+                # Apply GenPop-like age distribution
+                genpop_age = {
+                    '17 AND UNDER': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6,
+                    '45-54': 12.4, '55-64': 12.5, '65 OR OLDER': 19.1
+                }
+                for val, bp, idx in age_items:
+                    val_upper = val.upper()
+                    if val_upper in genpop_age:
+                        new_pct = genpop_age[val_upper]
+                        new_bp = new_pct * total_bp / 100.0
+                        df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                        new_raw = round(sample_raw * new_pct / 100.0)
+                        df.at[idx, raw_col] = str(new_raw)
+                        df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                        catastrophic_fixes += 1
+    
+    # ── Check GENDER for equal distribution failure ──
+    gender_mask = df['Column'].str.upper().str.strip() == 'GENDER'
+    if gender_mask.any():
+        gender_items = []
+        for idx, row in df[gender_mask].iterrows():
+            val = str(row.get('Value', '')).strip().upper()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            gender_items.append((val, bp, idx))
+        
+        total_bp = sum(bp for _, bp, _ in gender_items)
+        if total_bp > 0:
+            shares = {v: bp / total_bp * 100 for v, bp, _ in gender_items}
+            # Check for suspicious equal distribution (all ~18% including Trans)
+            trans_male = shares.get('TRANS MALE', 0)
+            trans_female = shares.get('TRANS FEMALE', 0)
+            if trans_male > 10 or trans_female > 10:
+                print(f"   🚨 CATASTROPHIC GENDER FAILURE: Trans Male={trans_male:.1f}%, Trans Female={trans_female:.1f}%")
+                print(f"   🔧 Applying GenPop fallback for GENDER distribution")
+                genpop_gender = {
+                    'MALE': 47.9, 'FEMALE': 49.7, 'TRANS MALE': 0.6,
+                    'TRANS FEMALE': 0.5, 'NON-BINARY': 1.4, 'PREFER NOT TO SAY': 0.0
+                }
+                for val, bp, idx in gender_items:
+                    val_upper = val.upper()
+                    if val_upper in genpop_gender:
+                        new_pct = genpop_gender[val_upper]
+                        new_bp = new_pct * total_bp / 100.0
+                        df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                        new_raw = round(sample_raw * new_pct / 100.0)
+                        df.at[idx, raw_col] = str(new_raw)
+                        df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                        catastrophic_fixes += 1
+    
+    # ── Check ETHNICITY for Native American >15% ──
+    eth_mask = df['Column'].str.upper().str.strip() == 'ETHNICITY'
+    if eth_mask.any():
+        eth_items = []
+        for idx, row in df[eth_mask].iterrows():
+            val = str(row.get('Value', '')).strip().upper()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            eth_items.append((val, bp, idx))
+        
+        total_bp = sum(bp for _, bp, _ in eth_items)
+        if total_bp > 0:
+            shares = {v: bp / total_bp * 100 for v, bp, _ in eth_items}
+            native_pct = shares.get('NATIVE AMERICAN / ALASKA NATIVE', shares.get('NATIVE AMERICAN', 0))
+            if native_pct > 15:
+                print(f"   🚨 CATASTROPHIC ETHNICITY FAILURE: Native American = {native_pct:.1f}%")
+                print(f"   🔧 Applying GenPop fallback for ETHNICITY distribution")
+                genpop_eth = {
+                    'WHITE': 57.8, 'BLACK OR AFRICAN AMERICAN': 11.9, 'HISPANIC OR LATINO': 18.0,
+                    'ASIAN': 6.2, 'NATIVE AMERICAN / ALASKA NATIVE': 1.0, 'ANOTHER RACE/ETHNICITY': 5.2
+                }
+                for val, bp, idx in eth_items:
+                    val_upper = val.upper()
+                    if val_upper in genpop_eth:
+                        new_pct = genpop_eth[val_upper]
+                        new_bp = new_pct * total_bp / 100.0
+                        df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                        new_raw = round(sample_raw * new_pct / 100.0)
+                        df.at[idx, raw_col] = str(new_raw)
+                        df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                        catastrophic_fixes += 1
+    
+    # ── Check SEXUAL_ORIENTATION for LGBTQ+ >25% ──
+    so_mask = df['Column'].str.upper().str.strip() == 'SEXUAL_ORIENTATION'
+    if so_mask.any():
+        so_items = []
+        for idx, row in df[so_mask].iterrows():
+            val = str(row.get('Value', '')).strip().upper()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            so_items.append((val, bp, idx))
+        
+        total_bp = sum(bp for _, bp, _ in so_items)
+        if total_bp > 0:
+            shares = {v: bp / total_bp * 100 for v, bp, _ in so_items}
+            gay_pct = shares.get('GAY OR LESBIAN', 0)
+            another_pct = shares.get('ANOTHER SEXUAL ORIENTATION', 0)
+            lgbtq_total = gay_pct + another_pct
+            if lgbtq_total > 25:
+                print(f"   🚨 CATASTROPHIC SEXUAL ORIENTATION FAILURE: LGBTQ+ = {lgbtq_total:.1f}%")
+                print(f"   🔧 Applying GenPop fallback for SEXUAL_ORIENTATION distribution")
+                genpop_so = {
+                    'STRAIGHT / HETEROSEXUAL': 88.5, 'GAY OR LESBIAN': 6.3,
+                    'ANOTHER SEXUAL ORIENTATION': 5.2, 'PREFER NOT TO SAY': 0.0
+                }
+                for val, bp, idx in so_items:
+                    val_upper = val.upper()
+                    if val_upper in genpop_so:
+                        new_pct = genpop_so[val_upper]
+                        new_bp = new_pct * total_bp / 100.0
+                        df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                        new_raw = round(sample_raw * new_pct / 100.0)
+                        df.at[idx, raw_col] = str(new_raw)
+                        df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                        catastrophic_fixes += 1
+    
+    if catastrophic_fixes > 0:
+        print(f"   ✅ Fixed {catastrophic_fixes} catastrophic demographic failures with GenPop fallback")
+    
+    return df
+
+
 # ── Universal demographic calibration (all demographics, not just age) ──
 
 def _enforce_all_demographics(df, subject_clean, brand_category):
@@ -5536,6 +5721,10 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
 
     if bp_col not in df.columns:
         return df
+
+    # ── CATASTROPHIC FAILURE DETECTION ──
+    # Detect when AI reviews completely failed and demographics are obviously broken
+    df = _detect_and_fix_catastrophic_demographics(df, subject_clean, brand_category)
 
     df = _enforce_age_calibration(df, subject_clean, brand_category)
 
