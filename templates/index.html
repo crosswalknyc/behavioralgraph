@@ -17846,12 +17846,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'roasIQView', 'ecommerceIQView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'roasIQView', 'ecommerceIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -18679,6 +18679,10 @@
             if (roasIQViewEl) roasIQViewEl.style.display = 'none';
             const ecomIQViewEl = document.getElementById('ecommerceIQView');
             if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
+            const flywheelViewEl = document.getElementById('flywheelConversionView');
+            if (flywheelViewEl) flywheelViewEl.style.display = 'none';
+            const talentFitViewEl = document.getElementById('talentFitIQView');
+            if (talentFitViewEl) talentFitViewEl.style.display = 'none';
             hideLLMOIQView();
             
             // Show SF Conversion view
@@ -23066,6 +23070,20 @@
             if (roasIQView) roasIQView.style.display = 'none';
             const ecomIQView = document.getElementById('ecommerceIQView');
             if (ecomIQView) ecomIQView.style.display = 'none';
+            const sfConvView = document.getElementById('sfConversionView');
+            if (sfConvView) sfConvView.style.display = 'none';
+            const rankerIQView = document.getElementById('rankerIQView');
+            if (rankerIQView) rankerIQView.style.display = 'none';
+            const ticketSalesView = document.getElementById('ticketSalesIQView');
+            if (ticketSalesView) ticketSalesView.style.display = 'none';
+            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
+            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
+            const hedgeFundView = document.getElementById('hedgeFundIQView');
+            if (hedgeFundView) hedgeFundView.style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
             if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
 
             // Show flywheel view
