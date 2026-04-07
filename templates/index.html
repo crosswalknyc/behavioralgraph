@@ -23351,6 +23351,7 @@
                 touchpoint: entryPointName,
                 usersPre: entryUsersPre,
                 usersPost: entryUsersPost,
+                difference: entryUsersPost - entryUsersPre,
                 liftPct: null,
                 isEntry: true
             });
@@ -23362,6 +23363,7 @@
                 const preUsers = step.display_users_pre || parseNum(step.users_pre || 0);
                 const liftPct = step.display_lift_pct !== undefined ? step.display_lift_pct : 
                     (preUsers > 0 ? parseFloat(((postUsers - preUsers) / preUsers * 100).toFixed(1)) : 0);
+                const difference = postUsers - preUsers;
                 
                 _flywheelTableData.push({
                     option: 'Option ' + (idx + 1),
@@ -23369,6 +23371,7 @@
                     touchpoint: stepName,
                     usersPre: preUsers,
                     usersPost: postUsers,
+                    difference: difference,
                     liftPct: liftPct,
                     isEntry: false
                 });
@@ -23410,16 +23413,20 @@
             headers += '<th style="' + headerStyle + 'text-align:left;" onclick="sortFlywheelTable(\'touchpoint\')">Touchpoint' + sortIcon('touchpoint') + '</th>';
             headers += '<th style="' + headerStyle + 'text-align:right;" onclick="sortFlywheelTable(\'usersPre\')">Users Pre' + sortIcon('usersPre') + '</th>';
             headers += '<th style="' + headerStyle + 'text-align:right;" onclick="sortFlywheelTable(\'usersPost\')">Users Post' + sortIcon('usersPost') + '</th>';
+            headers += '<th style="' + headerStyle + 'text-align:right;" onclick="sortFlywheelTable(\'difference\')">Difference' + sortIcon('difference') + '</th>';
             headers += '<th style="' + headerStyle + 'text-align:right;" onclick="sortFlywheelTable(\'liftPct\')">Lift' + sortIcon('liftPct') + '</th>';
             
             let rows = '';
             sortedData.forEach(row => {
+                const diffColor = row.difference > 0 ? '#10b981' : (row.difference < 0 ? '#f92672' : '#888');
+                const diffSign = row.difference > 0 ? '+' : '';
+                
                 if (row.isEntry) {
-                    rows += '<tr style="background:rgba(102,217,239,0.08);"><td style="padding:10px;font-weight:600;">' + row.option + '</td><td style="padding:10px;">' + row.touchpoint + '</td><td style="padding:10px;text-align:right;color:var(--text-secondary);">0</td><td style="padding:10px;text-align:right;font-weight:600;color:var(--accent-cyan);">' + formatNum(row.usersPost) + '</td><td style="padding:10px;text-align:right;color:#10b981;font-weight:600;">NEW</td></tr>';
+                    rows += '<tr style="background:rgba(102,217,239,0.08);"><td style="padding:10px;font-weight:600;">' + row.option + '</td><td style="padding:10px;">' + row.touchpoint + '</td><td style="padding:10px;text-align:right;color:var(--text-secondary);">0</td><td style="padding:10px;text-align:right;font-weight:600;color:var(--accent-cyan);">' + formatNum(row.usersPost) + '</td><td style="padding:10px;text-align:right;color:#10b981;font-weight:600;">+' + formatNum(row.usersPost) + '</td><td style="padding:10px;text-align:right;color:#10b981;font-weight:600;">NEW</td></tr>';
                 } else {
                     const liftColor = row.liftPct > 0 ? '#10b981' : (row.liftPct < 0 ? '#f92672' : '#888');
                     const liftSign = row.liftPct > 0 ? '+' : '';
-                    rows += '<tr><td style="padding:10px;font-weight:600;">' + row.option + '</td><td style="padding:10px;">' + row.touchpoint + '</td><td style="padding:10px;text-align:right;">' + formatNum(row.usersPre) + '</td><td style="padding:10px;text-align:right;">' + formatNum(row.usersPost) + '</td><td style="padding:10px;text-align:right;color:' + liftColor + ';font-weight:600;">' + liftSign + row.liftPct + '%</td></tr>';
+                    rows += '<tr><td style="padding:10px;font-weight:600;">' + row.option + '</td><td style="padding:10px;">' + row.touchpoint + '</td><td style="padding:10px;text-align:right;">' + formatNum(row.usersPre) + '</td><td style="padding:10px;text-align:right;">' + formatNum(row.usersPost) + '</td><td style="padding:10px;text-align:right;color:' + diffColor + ';font-weight:600;">' + diffSign + formatNum(row.difference) + '</td><td style="padding:10px;text-align:right;color:' + liftColor + ';font-weight:600;">' + liftSign + row.liftPct + '%</td></tr>';
                 }
             });
             
