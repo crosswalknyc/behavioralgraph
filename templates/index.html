@@ -18730,8 +18730,9 @@
             const html = profiles.map(p => {
                 const s3KeyEsc = (p.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 let name = (p.display_name && p.display_name.trim()) ? p.display_name.trim() : (p.project_name || 'Unknown').replace(/_/g, ' ').trim();
-                // Remove timestamp pattern (e.g., 20260402 034944)
+                // Remove timestamp patterns (e.g., "20260402 034944" or "03 30 2026 23 49")
                 name = name.replace(/\s*\d{8}\s*\d{6}\s*$/, '').trim();
+                name = name.replace(/\s*\d{2}\s+\d{2}\s+\d{4}\s+\d{2}\s+\d{2}\s*$/, '').trim();
                 const dateStr = p.created_at ? formatDatePST(p.created_at) : '';
                 return `<div class="profile-item" onclick="selectSFConvProfile('${s3KeyEsc}')" style="padding: 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-color);">
                     <div style="font-weight: 600; font-size: 0.85rem;">${name}</div>
