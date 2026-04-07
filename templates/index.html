@@ -19001,6 +19001,13 @@
             const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
             const convertedSample = parseInt(conversionSummary.converted) || 0;
             
+            // DEBUG: Log conversion values
+            console.log('[SF-LF DEBUG] conversionSummary:', conversionSummary);
+            console.log('[SF-LF DEBUG] convertedGenPop (overall):', convertedGenPop);
+            console.log('[SF-LF DEBUG] perPlatformConversion:', perPlatformConversion);
+            const sumPerPlatGenPop = perPlatformConversion.reduce((sum, p) => sum + (parseInt(p.convertedGenPop) || 0), 0);
+            console.log('[SF-LF DEBUG] Sum of per-platform GenPop:', sumPerPlatGenPop);
+            
             // Main values - ALWAYS show projected values (with null checks)
             const kpiTotalViewersEl = document.getElementById('sfConvKpiTotalViewers');
             const kpiConvertedEl = document.getElementById('sfConvKpiConverted');

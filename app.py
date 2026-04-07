@@ -21813,11 +21813,21 @@ def run_sf_lf_conversion(job_id):
                 }
         
         # OVERALL converted = SUM of per-platform converted (for consistency)
-        print(f"[SF-LF] DEBUG: platform_conversions keys: {list(platform_conversions.keys())}")
+        print(f"[SF-LF] DEBUG: platform_conversions has {len(platform_conversions)} platforms: {list(platform_conversions.keys())}")
+        per_plat_values = []
         for plat_name, pc in platform_conversions.items():
-            print(f"[SF-LF] DEBUG: {plat_name} converted (raw) = {pc['converted']}, GenPop = {project_to_gen_pop(pc['converted'])}")
+            plat_conv = pc['converted']
+            plat_genpop = project_to_gen_pop(plat_conv)
+            per_plat_values.append((plat_name, plat_conv, plat_genpop))
+            print(f"[SF-LF] DEBUG: {plat_name} converted (raw) = {plat_conv}, GenPop = {plat_genpop}")
+        
         conv_users = sum(pc['converted'] for pc in platform_conversions.values())
-        print(f"[SF-LF] DEBUG: conv_users (sum of all platforms) = {conv_users}, GenPop = {project_to_gen_pop(conv_users)}")
+        conv_users_genpop = project_to_gen_pop(conv_users)
+        sum_individual_genpop = sum(v[2] for v in per_plat_values)
+        print(f"[SF-LF] DEBUG: conv_users (raw sum) = {conv_users}")
+        print(f"[SF-LF] DEBUG: conv_users GenPop = {conv_users_genpop}")
+        print(f"[SF-LF] DEBUG: Sum of individual GenPops = {sum_individual_genpop}")
+        print(f"[SF-LF] DEBUG: CSV will write: Count={conv_users}, Gen_Pop_Projection={conv_users_genpop}")
         conv_rate = round((conv_users / total_viewers * 100), 8) if total_viewers > 0 else 0.00000001
         
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Total SF Viewers (All Platforms)', 'Metric': '', 'Count': total_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(total_viewers)})
