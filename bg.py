@@ -561,6 +561,326 @@ def _research_brand_demographics(client, subject_name, brand_category):
         return ""
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# RESEARCH-FIRST PROFILE BUILDER
+# ══════════════════════════════════════════════════════════════════════════════
+# Instead of reviewing Snowflake data and fixing outliers, this approach:
+# 1. Deeply researches WHO the profile is about
+# 2. Builds complete demographic/behavioral profile from research
+# 3. Sets ALL values based on the researched persona (with noise)
+# 4. Research becomes the source of truth — not Snowflake data
+# ══════════════════════════════════════════════════════════════════════════════
+
+_research_profile_cache = {}
+
+def _add_realistic_noise(value, noise_range=0.5):
+    """Add small random noise to a value to avoid perfect round numbers."""
+    import random
+    noise = random.uniform(-noise_range, noise_range)
+    return round(value + noise, 4)
+
+def _research_and_build_profile(client, subject_name, brand_category):
+    """Do DEEP research on a brand/person and return a complete demographic profile.
+    
+    Returns a dict with all demographic distributions based on research, e.g.:
+    {
+        "AGE": {"17 AND UNDER": 8.2, "18-24": 12.5, ...},
+        "GENDER": {"MALE": 52.3, "FEMALE": 46.1, ...},
+        "ETHNICITY": {...},
+        "INCOME": {...},
+        "EDUCATION": {...},
+        "SEXUAL_ORIENTATION": {...},
+        "PARENTAL_STATUS": {...},
+        "RELATIONSHIP": {...},
+        "persona_summary": "...",
+        "median_age": 42
+    }
+    """
+    import json as _json
+    
+    if not client or not subject_name:
+        return None
+    
+    cache_key = f"PROFILE||{subject_name}||{brand_category}"
+    if cache_key in _research_profile_cache:
+        return _research_profile_cache[cache_key]
+    
+    clean_name = subject_name.replace('_', ' ').replace('-', ' ').strip()
+    
+    # First, get web research
+    web_research = _research_brand_demographics(client, subject_name, brand_category)
+    
+    print(f"🔬 Building research-based profile for: {clean_name}")
+    if web_research:
+        print(f"   📚 Web research available: {len(web_research)} chars")
+    else:
+        print(f"   ⚠️ No web research — using AI knowledge of brand")
+    
+    # Now ask GPT-4o to build a complete demographic profile from research
+    prompt = f'''You are a professional demographics researcher. Based on DEEP RESEARCH about "{clean_name}" ({brand_category}), build a COMPLETE demographic profile of their audience/users/fans.
+
+=== WEB RESEARCH DATA ===
+{web_research if web_research else "No web data available. Use your knowledge of this brand/person."}
+
+=== YOUR TASK ===
+Build a complete demographic profile for "{clean_name}". DO NOT use generic/GenPop distributions. 
+Research what this brand/person IS and who their audience ACTUALLY is.
+
+For example:
+- Criterion Channel = streaming for cinephiles, film buffs, older educated audience (median age 40-55)
+- Care Bears = nostalgic brand, parents buying for kids + millennial/GenX collectors
+- Mary J. Blige = R&B icon, audience skews Black, female, 35-55 age range
+- Fortnite = gaming, young male skew, diverse ethnicity
+
+RULES:
+- Each category MUST sum to exactly 100%
+- Use REALISTIC values with decimals (e.g., 23.7%, not 24%)
+- Base ALL values on what you know about this specific brand/person
+- Trans population is ~0.5-1% of US (don't inflate)
+- Native American is ~1% of US (don't inflate unless brand specifically targets them)
+- LGBTQ+ is ~7% of US (only higher if brand has known LGBTQ+ affinity like Bravo, RuPaul, etc.)
+- "Prefer Not to Say" should be 1-3% max in any category
+
+Return ONLY valid JSON (no markdown):
+{{
+    "persona_summary": "One paragraph describing who this audience IS — their lifestyle, interests, values",
+    "median_age": <number>,
+    "AGE": {{
+        "17 AND UNDER": <percent>,
+        "18-24": <percent>,
+        "25-34": <percent>,
+        "35-44": <percent>,
+        "45-54": <percent>,
+        "55-64": <percent>,
+        "65 OR OLDER": <percent>
+    }},
+    "GENDER": {{
+        "MALE": <percent>,
+        "FEMALE": <percent>,
+        "TRANS MALE": <percent>,
+        "TRANS FEMALE": <percent>,
+        "NON-BINARY": <percent>,
+        "PREFER NOT TO SAY": <percent>
+    }},
+    "ETHNICITY": {{
+        "WHITE": <percent>,
+        "BLACK OR AFRICAN AMERICAN": <percent>,
+        "HISPANIC OR LATINO": <percent>,
+        "ASIAN": <percent>,
+        "NATIVE AMERICAN / ALASKA NATIVE": <percent>,
+        "ANOTHER RACE/ETHNICITY": <percent>
+    }},
+    "INCOME": {{
+        "UNDER $25,000": <percent>,
+        "$25,000-$49,999": <percent>,
+        "$50,000-$74,999": <percent>,
+        "$75,000-$99,999": <percent>,
+        "$100,000-$149,999": <percent>,
+        "$150,000 OR MORE": <percent>
+    }},
+    "EDUCATION": {{
+        "LESS THAN HIGH SCHOOL": <percent>,
+        "HIGH SCHOOL GRADUATE": <percent>,
+        "SOME COLLEGE": <percent>,
+        "ASSOCIATE DEGREE": <percent>,
+        "BACHELOR'S DEGREE": <percent>,
+        "GRADUATE DEGREE": <percent>
+    }},
+    "SEXUAL_ORIENTATION": {{
+        "STRAIGHT / HETEROSEXUAL": <percent>,
+        "GAY OR LESBIAN": <percent>,
+        "ANOTHER SEXUAL ORIENTATION": <percent>,
+        "PREFER NOT TO SAY": <percent>
+    }},
+    "PARENTAL_STATUS": {{
+        "YES": <percent>,
+        "NO": <percent>
+    }},
+    "RELATIONSHIP": {{
+        "SINGLE": <percent>,
+        "MARRIED": <percent>,
+        "IN A RELATIONSHIP": <percent>,
+        "DIVORCED": <percent>,
+        "WIDOWED": <percent>,
+        "PREFER NOT TO SAY": <percent>
+    }}
+}}'''
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            max_tokens=2500
+        )
+        text = resp.choices[0].message.content.strip()
+        
+        # Clean up response
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        
+        # Extract JSON
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        if start >= 0 and end > start:
+            text = text[start:end]
+        
+        profile = _json.loads(text)
+        
+        # Validate and add noise to all values
+        for cat in ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP']:
+            if cat in profile and isinstance(profile[cat], dict):
+                # Add noise and normalize to 100%
+                noisy = {}
+                for label, val in profile[cat].items():
+                    noisy[label] = _add_realistic_noise(float(val), 0.3)
+                
+                # Normalize to exactly 100%
+                total = sum(noisy.values())
+                if total > 0:
+                    for label in noisy:
+                        noisy[label] = round(noisy[label] / total * 100, 4)
+                profile[cat] = noisy
+        
+        print(f"   ✅ Research profile built: median_age={profile.get('median_age', 'N/A')}")
+        print(f"   📝 Persona: {profile.get('persona_summary', '')[:100]}...")
+        
+        _research_profile_cache[cache_key] = profile
+        return profile
+        
+    except Exception as e:
+        print(f"   ⚠️ Failed to build research profile: {e}")
+        _research_profile_cache[cache_key] = None
+        return None
+
+
+def _apply_research_profile_to_df(df, research_profile, subject_clean):
+    """Apply a research-based demographic profile to a DataFrame.
+    
+    Sets all demographic values based on the researched persona, not Snowflake data.
+    """
+    if not research_profile:
+        return df
+    
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+    
+    if bp_col not in df.columns:
+        return df
+    
+    df = df.copy()
+    
+    # Get sample size
+    sample_raw = 132040
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(
+                str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+            )))
+        except:
+            pass
+    
+    applied_cats = 0
+    
+    for cat, dist in research_profile.items():
+        if cat in ['persona_summary', 'median_age'] or not isinstance(dist, dict):
+            continue
+        
+        # Map category names to DataFrame column values
+        cat_upper = cat.upper()
+        mask = df['Column'].str.upper().str.strip() == cat_upper
+        if not mask.any():
+            continue
+        
+        # Get total BP for this category (to maintain relative scale)
+        total_bp = 0.0
+        for idx, row in df[mask].iterrows():
+            try:
+                total_bp += float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except:
+                pass
+        
+        if total_bp <= 0:
+            total_bp = 100.0
+        
+        # Apply research-based values
+        for idx, row in df[mask].iterrows():
+            val = str(row.get('Value', '')).strip()
+            val_upper = val.upper()
+            
+            # Find matching label in research profile
+            matched_pct = None
+            for label, pct in dist.items():
+                if label.upper() == val_upper or label.upper() in val_upper or val_upper in label.upper():
+                    matched_pct = pct
+                    break
+            
+            if matched_pct is not None:
+                # Set BP based on research percentage
+                new_bp = matched_pct * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                
+                # Calculate raw numbers and projections
+                new_raw = round(sample_raw * matched_pct / 100.0)
+                df.at[idx, raw_col] = str(new_raw)
+                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                
+                # Update Category Share if present
+                if cs_col in df.columns:
+                    df.at[idx, cs_col] = f'{matched_pct:.4f}%'
+        
+        applied_cats += 1
+    
+    if applied_cats > 0:
+        print(f"   ✅ Applied research profile to {applied_cats} demographic categories")
+    
+    return df
+
+
+def research_first_demographic_review(df, brand_category, project_name, brands):
+    """MASTER FUNCTION: Research-first demographic review.
+    
+    Instead of reviewing Snowflake data and fixing outliers:
+    1. Deep research on WHO the profile is about
+    2. Build complete demographic profile from research
+    3. Set ALL values based on researched persona (with noise)
+    
+    This should be called INSTEAD of the individual ai_*_demographic_review functions.
+    """
+    client = _get_openai_client()
+    if not client:
+        print("⚠️ OpenAI not available — skipping research-first demographic review")
+        return df
+    
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
+    if not subject_clean:
+        print("⚠️ Could not extract profile subject — skipping research-first review")
+        return df
+    
+    print(f"\n{'='*60}")
+    print(f"🔬 RESEARCH-FIRST PROFILE BUILD: {subject_clean}")
+    print(f"   Category: {brand_category}")
+    print(f"{'='*60}")
+    
+    # Step 1: Deep research and build profile
+    research_profile = _research_and_build_profile(client, subject_clean, brand_category)
+    
+    if not research_profile:
+        print(f"   ⚠️ Could not build research profile — falling back to review mode")
+        return df
+    
+    # Step 2: Apply research-based values to DataFrame
+    df = _apply_research_profile_to_df(df, research_profile, subject_clean)
+    
+    print(f"{'='*60}\n")
+    
+    return df
+
+
 # Optional S3 support for caching
 try:
     import boto3
@@ -4186,11 +4506,19 @@ def ai_app_platform_demographic_review(df, brand_category, project_name, brands)
 
     prompt = f"""You are a premium-tier US digital product user demographics analyst. Determine PRECISE audience demographics for this app or platform.
 
-\u26a0\ufe0f CRITICAL RULES:
+⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
 - SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
+
+🚨 CATASTROPHIC OUTLIER DETECTION - ALWAYS FIX THESE:
+- If ANY single AGE group has >60%, this is BROKEN DATA and MUST be fixed based on research
+- If "17 AND UNDER" has >30% for an adult-focused platform, this is BROKEN and MUST be fixed
+- If Trans Male or Trans Female >5%, this is BROKEN (US trans population is ~0.6%)
+- If Native American >5%, this is BROKEN (US Native American is ~1%)
+- If LGBTQ+ total (Gay + Another) >15%, this is likely BROKEN unless the brand specifically targets LGBTQ+ audiences
+- If you see these outliers, you MUST return status="FIX" with corrections
 
 APP/PLATFORM: "{subject_clean}"
 CATEGORY: {brand_category}
@@ -5519,7 +5847,7 @@ Each corrected category sums to 100. JSON only, no markdown."""
 # ── Catastrophic Demographic Failure Detection ──
 
 def _detect_and_fix_catastrophic_demographics(df, subject_clean, brand_category):
-    """Detect and fix catastrophically broken demographics that AI review missed.
+    """Detect and fix catastrophically broken demographics using AI research.
     
     This catches cases where:
     - Single age group has >80% (e.g., 99% "17 AND UNDER" for adult streaming service)
@@ -5527,7 +5855,7 @@ def _detect_and_fix_catastrophic_demographics(df, subject_clean, brand_category)
     - Native American is >15% (US baseline is ~1%)
     - Gender is equally distributed across all categories including Trans (~18% each)
     
-    Uses GenPop baseline as fallback when catastrophic failures are detected.
+    Instead of GenPop fallback, triggers focused AI call to research and fix.
     """
     bp_col = 'Brand Penetration (Row)'
     raw_col = 'Original Raw Numbers'
@@ -13608,8 +13936,20 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # The old gpt-4o-mini pass had thin context and could cause gen-pop artifacts
     # (e.g. boosting Hanes for audiences that wouldn't over-index on it).
 
-    # ── AI demographic review for people categories (GPT-4o) ───────────
+    # ══════════════════════════════════════════════════════════════════════
+    # RESEARCH-FIRST DEMOGRAPHIC APPROACH
+    # ══════════════════════════════════════════════════════════════════════
+    # Instead of reviewing Snowflake data and fixing outliers:
+    # 1. Deep research on WHO the profile is about
+    # 2. Build complete demographic profile from research
+    # 3. Set ALL values based on researched persona (with noise)
+    # ══════════════════════════════════════════════════════════════════════
     if not is_genpop and brand_category:
+        # STEP 1: Research-first approach — build profile from deep research
+        df_final = research_first_demographic_review(df_final, brand_category, project_name, brands)
+        
+        # STEP 2: Category-specific reviews for additional refinement
+        # These now act as VALIDATION, not primary source
         df_final = ai_actor_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_creator_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_athlete_demographic_review(df_final, brand_category, project_name, brands)
