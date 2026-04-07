@@ -755,9 +755,11 @@ Return ONLY valid JSON (no markdown):
 
 
 def _apply_research_profile_to_df(df, research_profile, subject_clean):
-    """Apply a research-based demographic profile to a DataFrame.
+    """Compare Snowflake data against research and update if misaligned.
     
-    Sets all demographic values based on the researched persona, not Snowflake data.
+    Research establishes what the persona SHOULD look like.
+    - If Snowflake data aligns with persona → keep it (add slight noise)
+    - If Snowflake data conflicts with persona → update to match research
     """
     if not research_profile:
         return df
@@ -784,61 +786,146 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
         except:
             pass
     
-    applied_cats = 0
+    kept_cats = 0
+    updated_cats = 0
     
-    for cat, dist in research_profile.items():
-        if cat in ['persona_summary', 'median_age'] or not isinstance(dist, dict):
+    for cat, research_dist in research_profile.items():
+        if cat in ['persona_summary', 'median_age'] or not isinstance(research_dist, dict):
             continue
         
-        # Map category names to DataFrame column values
         cat_upper = cat.upper()
         mask = df['Column'].str.upper().str.strip() == cat_upper
         if not mask.any():
             continue
         
-        # Get total BP for this category (to maintain relative scale)
+        # Extract current Snowflake distribution for this category
+        snowflake_dist = {}
         total_bp = 0.0
+        cat_items = []
+        
         for idx, row in df[mask].iterrows():
+            val = str(row.get('Value', '')).strip()
+            val_upper = val.upper()
             try:
-                total_bp += float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
             except:
-                pass
+                bp = 0.0
+            total_bp += bp
+            cat_items.append((val, val_upper, bp, idx))
         
         if total_bp <= 0:
             total_bp = 100.0
         
-        # Apply research-based values
-        for idx, row in df[mask].iterrows():
-            val = str(row.get('Value', '')).strip()
-            val_upper = val.upper()
-            
-            # Find matching label in research profile
-            matched_pct = None
-            for label, pct in dist.items():
-                if label.upper() == val_upper or label.upper() in val_upper or val_upper in label.upper():
-                    matched_pct = pct
-                    break
-            
-            if matched_pct is not None:
-                # Set BP based on research percentage
-                new_bp = matched_pct * total_bp / 100.0
-                df.at[idx, bp_col] = f'{new_bp:.4f}%'
-                
-                # Calculate raw numbers and projections
-                new_raw = round(sample_raw * matched_pct / 100.0)
-                df.at[idx, raw_col] = str(new_raw)
-                df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
-                
-                # Update Category Share if present
-                if cs_col in df.columns:
-                    df.at[idx, cs_col] = f'{matched_pct:.4f}%'
+        # Convert to percentages
+        for val, val_upper, bp, idx in cat_items:
+            snowflake_dist[val_upper] = bp / total_bp * 100 if total_bp > 0 else 0
         
-        applied_cats += 1
+        # Compare Snowflake vs Research - check if they align with persona
+        # "Aligns" means the distribution pattern matches (not exact numbers)
+        is_aligned = _check_distribution_alignment(snowflake_dist, research_dist, cat_upper)
+        
+        if is_aligned:
+            # Snowflake data aligns with persona - keep it, just add slight noise
+            print(f"   ✓ {cat}: Snowflake data aligns with persona — keeping with noise")
+            for val, val_upper, bp, idx in cat_items:
+                current_pct = bp / total_bp * 100 if total_bp > 0 else 0
+                noisy_pct = _add_realistic_noise(current_pct, 0.2)
+                # Ensure non-negative
+                noisy_pct = max(0.01, noisy_pct)
+                
+                new_bp = noisy_pct * total_bp / 100.0
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                new_raw = round(sample_raw * noisy_pct / 100.0)
+                df.at[idx, raw_col] = str(max(1, new_raw))
+                df.at[idx, proj_col] = str(int(round(max(1, new_raw) * MULT)))
+                if cs_col in df.columns:
+                    df.at[idx, cs_col] = f'{noisy_pct:.4f}%'
+            kept_cats += 1
+        else:
+            # Snowflake data conflicts with persona - update to match research
+            print(f"   ✗ {cat}: Snowflake data conflicts with persona — updating from research")
+            for val, val_upper, bp, idx in cat_items:
+                # Find matching label in research profile
+                matched_pct = None
+                for label, pct in research_dist.items():
+                    label_upper = label.upper()
+                    if label_upper == val_upper or label_upper in val_upper or val_upper in label_upper:
+                        matched_pct = pct
+                        break
+                
+                if matched_pct is not None:
+                    noisy_pct = _add_realistic_noise(float(matched_pct), 0.3)
+                    noisy_pct = max(0.01, noisy_pct)
+                    
+                    new_bp = noisy_pct * total_bp / 100.0
+                    df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                    new_raw = round(sample_raw * noisy_pct / 100.0)
+                    df.at[idx, raw_col] = str(max(1, new_raw))
+                    df.at[idx, proj_col] = str(int(round(max(1, new_raw) * MULT)))
+                    if cs_col in df.columns:
+                        df.at[idx, cs_col] = f'{noisy_pct:.4f}%'
+            updated_cats += 1
     
-    if applied_cats > 0:
-        print(f"   ✅ Applied research profile to {applied_cats} demographic categories")
+    print(f"   📊 Result: {kept_cats} categories kept (aligned), {updated_cats} categories updated (misaligned)")
     
     return df
+
+
+def _check_distribution_alignment(snowflake_dist, research_dist, category):
+    """Check if Snowflake distribution aligns with research-based persona.
+    
+    Returns True if distributions are reasonably aligned, False if they conflict.
+    
+    Alignment means:
+    - The general SHAPE matches (if research says young audience, Snowflake should show young)
+    - No extreme contradictions (research says 5% X, Snowflake says 60% X)
+    - Allows for natural variation in exact percentages
+    """
+    if not snowflake_dist or not research_dist:
+        return False
+    
+    # Normalize research keys to uppercase for comparison
+    research_upper = {k.upper(): v for k, v in research_dist.items()}
+    
+    total_deviation = 0.0
+    comparisons = 0
+    severe_conflicts = 0
+    
+    for sf_key, sf_val in snowflake_dist.items():
+        # Find matching research key
+        research_val = None
+        for r_key, r_val in research_upper.items():
+            if r_key == sf_key or r_key in sf_key or sf_key in r_key:
+                research_val = r_val
+                break
+        
+        if research_val is not None:
+            deviation = abs(sf_val - research_val)
+            total_deviation += deviation
+            comparisons += 1
+            
+            # Check for severe conflicts
+            # If research says <10% but Snowflake says >50%, that's a severe conflict
+            if research_val < 10 and sf_val > 50:
+                severe_conflicts += 1
+            # If research says >40% but Snowflake says <10%, that's a severe conflict
+            elif research_val > 40 and sf_val < 10:
+                severe_conflicts += 1
+            # If difference is >40 percentage points, that's severe
+            elif deviation > 40:
+                severe_conflicts += 1
+    
+    # Any severe conflict means misalignment
+    if severe_conflicts > 0:
+        return False
+    
+    # Average deviation threshold - if average deviation is >20%, consider misaligned
+    if comparisons > 0:
+        avg_deviation = total_deviation / comparisons
+        if avg_deviation > 20:
+            return False
+    
+    return True
 
 
 def research_first_demographic_review(df, brand_category, project_name, brands):
