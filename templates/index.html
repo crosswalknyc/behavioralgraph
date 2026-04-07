@@ -15872,7 +15872,10 @@
                 <div class="persistent-sidebar" style="height: 100%; overflow-y: auto;">
                     <div class="sidebar-header-section">
                         <h3>Select Analysis</h3>
-                        <input type="text" id="sfConvSearchInput" class="sidebar-search-input" placeholder="🔍 Search analyses..." oninput="filterSFConvProfiles()">
+                        <div style="display: flex; gap: 0.25rem; align-items: center;">
+                            <input type="text" id="sfConvSearchInput" class="sidebar-search-input" placeholder="🔍 Search analyses..." oninput="filterSFConvProfiles()" style="flex: 1;">
+                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh result list" onclick="loadSFConvProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                        </div>
                     </div>
                     <div class="profile-list scrollable-list" id="sfConvProfileList">
                         <div class="loading-state" style="padding: 1rem; text-align: center; color: var(--text-secondary);">
@@ -18690,14 +18693,22 @@
             if (container) container.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);"><div class="spinner"></div><div style="margin-top: 0.5rem;">Loading...</div></div>';
             
             try {
-                const response = await fetch('/api/my-results', { credentials: 'same-origin' });
+                const response = await fetch('/api/sf-lf-conversion/list', { credentials: 'same-origin' });
                 if (response.status === 401) { window.location.href = '/login'; return; }
                 const data = await response.json();
                 if (!data.success) throw new Error(data.error || 'Failed to load');
                 
-                sfConvProfiles = (data.results || []).filter(r => (r.source_type || '') === 'sf_lf_conversion' && r.status === 'released');
+                // Filter to only show released (non-purgatory) files
+                sfConvProfiles = (data.results || []).filter(r => r.status === 'released').map(r => ({
+                    s3_key: r.s3_key,
+                    project_name: r.name,
+                    display_name: r.name,
+                    created_at: r.last_modified,
+                    status: r.status
+                }));
                 filterSFConvProfiles();
             } catch (err) {
+                console.error('Error loading SF Conversion profiles:', err);
                 if (container) container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">Unable to load analyses.</div>';
             }
         }
@@ -18718,7 +18729,9 @@
             }
             const html = profiles.map(p => {
                 const s3KeyEsc = (p.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-                const name = (p.display_name && p.display_name.trim()) ? p.display_name.trim() : (p.project_name || 'Unknown').replace(/_/g, ' ').trim();
+                let name = (p.display_name && p.display_name.trim()) ? p.display_name.trim() : (p.project_name || 'Unknown').replace(/_/g, ' ').trim();
+                // Remove timestamp pattern (e.g., 20260402 034944)
+                name = name.replace(/\s*\d{8}\s*\d{6}\s*$/, '').trim();
                 const dateStr = p.created_at ? formatDatePST(p.created_at) : '';
                 return `<div class="profile-item" onclick="selectSFConvProfile('${s3KeyEsc}')" style="padding: 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-color);">
                     <div style="font-weight: 600; font-size: 0.85rem;">${name}</div>

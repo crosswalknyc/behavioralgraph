@@ -21952,6 +21952,38 @@ def run_sf_lf_conversion(job_id):
                 pass
 
 
+@app.route('/api/sf-lf-conversion/list')
+@requires_auth
+def list_sf_lf_conversion_results():
+    """List all SF-LF Conversion results from S3 bucket."""
+    try:
+        if not s3_client:
+            return jsonify({'success': False, 'error': 'S3 not available'}), 500
+        
+        results = []
+        try:
+            response = s3_client.list_objects_v2(Bucket=SF_LF_CONV_S3_BUCKET, Prefix='')
+            for obj in response.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('.csv'):
+                    is_purgatory = key.startswith(S3_PURGATORY_PREFIX)
+                    name = key.replace(S3_PURGATORY_PREFIX, '').replace('.csv', '').replace('_', ' ')
+                    results.append({
+                        's3_key': key,
+                        'name': name,
+                        'last_modified': obj['LastModified'].isoformat(),
+                        'size': obj['Size'],
+                        'status': 'pending' if is_purgatory else 'released'
+                    })
+        except Exception as e:
+            print(f"[SF-LF] Error listing S3: {e}")
+        
+        results.sort(key=lambda x: x['last_modified'], reverse=True)
+        return jsonify({'success': True, 'results': results})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/sf-lf-conversion/download/<path:s3_key>')
 @requires_auth
 def download_sf_lf_conversion(s3_key):
