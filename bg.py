@@ -12945,7 +12945,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         sort_column = "Original Raw Numbers (Database)" if "Original Raw Numbers (Database)" in df_prelim.columns else "Original Raw Numbers"
         df_final = df_prelim.sort_values(by=["Sort", "Column", sort_column], ascending=[True, True, False])
         df_final.drop(columns=["Sort"], inplace=True)
-        df_final["Percentage"] = df_final["Percentage"].astype(object)
+        df_final["Percentage"] = pd.to_numeric(df_final["Percentage"], errors='coerce').fillna(0)
 
         # Normalize Most Purchased Categories to sum to 100%
         mpc_mask = df_final["Column"].str.upper() == "MOST PURCHASED CATEGORIES"
@@ -13037,7 +13037,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         sort_column = "Original Raw Numbers (Database)" if "Original Raw Numbers (Database)" in df_prelim.columns else "Original Raw Numbers"
         df_final = df_prelim.sort_values(by=["Sort", "Column", sort_column], ascending=[True, True, False])
         df_final.drop(columns=["Sort"], inplace=True)
-        df_final["Percentage"] = df_final["Percentage"].astype(object)
+        df_final["Percentage"] = pd.to_numeric(df_final["Percentage"], errors='coerce').fillna(0)
 
         # Normalize Most Purchased Categories to sum to 100%
         mpc_mask = df_final["Column"].str.upper() == "MOST PURCHASED CATEGORIES"
@@ -19928,7 +19928,13 @@ def ensure_all_demographic_values(df_final, sample_size=None):
                 # Add any other columns that exist in the dataframe
                 for col in df.columns:
                     if col not in new_row:
-                        new_row[col] = ''
+                        # Use appropriate default values for different column types
+                        if col in ['Percentage', 'Brand Penetration', 'Category Share']:
+                            new_row[col] = noise  # Use the same noise value for consistency
+                        elif col in ['Original Raw Numbers', 'US Gen Pop Projection']:
+                            new_row[col] = raw_num if col == 'Original Raw Numbers' else proj_num
+                        else:
+                            new_row[col] = ''
                 
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 added_count += 1
