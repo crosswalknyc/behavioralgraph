@@ -5108,6 +5108,9 @@ def get_user_info():
         'success': True,
         'username': session['username'],
         'role': _normalize_role(user.get('role', 'user')),
+        'first_name': user.get('first_name', ''),
+        'last_name': user.get('last_name', ''),
+        'email': user.get('email', ''),
         'company': user.get('company', ''),
         'company_logo': user.get('company_logo', ''),
         'department': user.get('department', ''),
@@ -5116,6 +5119,45 @@ def get_user_info():
         'allowed_categories': user.get('allowed_categories', ['*']),
         'allowed_runs': user.get('allowed_runs', ['*']),
         'collab_team': user.get('collab_team', [])
+    })
+
+
+@app.route('/api/user/profile', methods=['PUT'])
+@requires_auth
+def update_user_profile():
+    """Let a logged-in user update their own profile info and/or password."""
+    username = session.get('username')
+    if not username:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    req = request.json or {}
+    users_data = load_users()
+    user = users_data['users'].get(username)
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+
+    for field in ('first_name', 'last_name', 'email', 'company', 'department'):
+        if field in req:
+            user[field] = req[field].strip()
+
+    new_password = req.get('new_password', '').strip()
+    if new_password:
+        current_password = req.get('current_password', '')
+        if not verify_password(user.get('password_hash', ''), current_password):
+            return jsonify({'success': False, 'error': 'Current password is incorrect'})
+        if len(new_password) < 8:
+            return jsonify({'success': False, 'error': 'New password must be at least 8 characters'})
+        user['password_hash'] = hash_password(new_password)
+
+    save_users(users_data)
+    return jsonify({
+        'success': True,
+        'message': 'Profile updated',
+        'first_name': user.get('first_name', ''),
+        'last_name': user.get('last_name', ''),
+        'email': user.get('email', ''),
+        'company': user.get('company', ''),
+        'department': user.get('department', ''),
     })
 
 

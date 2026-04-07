@@ -365,6 +365,116 @@
         }
         
         /* Profile Picture Upload Modal */
+        .profile-settings-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10001;
+        }
+        .profile-settings-modal.open {
+            display: flex;
+        }
+        .profile-settings-content {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 480px;
+            width: 92%;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        .profile-settings-content h3 {
+            margin: 0 0 1.5rem 0;
+            color: var(--text-primary);
+            font-size: 1.2rem;
+        }
+        .profile-field {
+            margin-bottom: 1rem;
+        }
+        .profile-field label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.35rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .profile-field input {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-input);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+        .profile-field input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+        .profile-field input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .profile-divider {
+            border: none;
+            border-top: 1px solid var(--border-color);
+            margin: 1.25rem 0;
+        }
+        .profile-btn-row {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+        .profile-btn-row button {
+            flex: 1;
+            padding: 0.65rem 1rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+        .profile-btn-row button:hover { opacity: 0.85; }
+        .profile-btn-save {
+            background: var(--accent-primary);
+            color: #fff;
+        }
+        .profile-btn-cancel {
+            background: var(--bg-input);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color) !important;
+        }
+        .profile-msg {
+            margin-top: 0.75rem;
+            font-size: 0.85rem;
+            text-align: center;
+            min-height: 1.2em;
+        }
+        .profile-msg.success { color: #a6e3a1; }
+        .profile-msg.error { color: #f38ba8; }
+        .user-menu-clickable {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 8px;
+            transition: background 0.15s;
+        }
+        .user-menu-clickable:hover {
+            background: rgba(255,255,255,0.08);
+        }
+
         .avatar-upload-modal {
             position: fixed;
             top: 0;
@@ -12014,14 +12124,16 @@
                         <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
                     </div>
                     <div class="user-menu">
-                        <div class="user-avatar" onclick="openAvatarUpload()" title="Click to change profile picture">
-                            {% if profile_picture %}
-                            <img src="{{ profile_picture }}" alt="Profile">
-                            {% else %}
-                            <span class="user-avatar-initials">{{ username[:2] }}</span>
-                            {% endif %}
+                        <div class="user-menu-clickable" onclick="openProfileSettings()" title="Click to edit profile">
+                            <div class="user-avatar">
+                                {% if profile_picture %}
+                                <img src="{{ profile_picture }}" alt="Profile">
+                                {% else %}
+                                <span class="user-avatar-initials">{{ username[:2] }}</span>
+                                {% endif %}
+                            </div>
+                            <span class="user-name">{{ username }}</span>
                         </div>
-                        <span class="user-name">{{ username }}</span>
                         <a href="/logout" class="header-btn logout-btn">Logout</a>
                     </div>
                 </div>
@@ -68441,9 +68553,96 @@
         }
         
         // ============================================================================
+        // PROFILE SETTINGS MODAL
+        // ============================================================================
+
+        function openProfileSettings() {
+            var modal = document.getElementById('profileSettingsModal');
+            modal.classList.add('open');
+            document.getElementById('profileMsg').textContent = '';
+            document.getElementById('profileCurrentPw').value = '';
+            document.getElementById('profileNewPw').value = '';
+            document.getElementById('profileConfirmPw').value = '';
+            fetch('/api/user/info', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (!d.success) return;
+                    document.getElementById('profileUsername').value = d.username || '';
+                    document.getElementById('profileFirstName').value = d.first_name || '';
+                    document.getElementById('profileLastName').value = d.last_name || '';
+                    document.getElementById('profileEmail').value = d.email || '';
+                    document.getElementById('profileCompany').value = d.company || '';
+                    document.getElementById('profileDepartment').value = d.department || '';
+                }).catch(function() {});
+        }
+
+        function closeProfileSettings() {
+            document.getElementById('profileSettingsModal').classList.remove('open');
+        }
+
+        function saveProfileSettings() {
+            var msg = document.getElementById('profileMsg');
+            msg.textContent = '';
+            msg.className = 'profile-msg';
+            var newPw = document.getElementById('profileNewPw').value;
+            var confirmPw = document.getElementById('profileConfirmPw').value;
+            if (newPw && newPw !== confirmPw) {
+                msg.textContent = 'New passwords do not match.';
+                msg.classList.add('error');
+                return;
+            }
+            if (newPw && newPw.length < 8) {
+                msg.textContent = 'New password must be at least 8 characters.';
+                msg.classList.add('error');
+                return;
+            }
+            var body = {
+                first_name: document.getElementById('profileFirstName').value,
+                last_name: document.getElementById('profileLastName').value,
+                email: document.getElementById('profileEmail').value,
+                company: document.getElementById('profileCompany').value,
+                department: document.getElementById('profileDepartment').value
+            };
+            if (newPw) {
+                body.current_password = document.getElementById('profileCurrentPw').value;
+                body.new_password = newPw;
+            }
+            var btn = document.getElementById('profileSaveBtn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            fetch('/api/user/profile', {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+                if (d.success) {
+                    msg.textContent = 'Profile updated successfully.';
+                    msg.classList.add('success');
+                    document.getElementById('profileCurrentPw').value = '';
+                    document.getElementById('profileNewPw').value = '';
+                    document.getElementById('profileConfirmPw').value = '';
+                } else {
+                    msg.textContent = d.error || 'Update failed.';
+                    msg.classList.add('error');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+                msg.textContent = 'Network error. Please try again.';
+                msg.classList.add('error');
+            });
+        }
+
+        // ============================================================================
         // PROFILE PICTURE UPLOAD
         // ============================================================================
-        
+
         function openAvatarUpload() {
             document.getElementById('avatarUploadModal').classList.add('open');
             updateAvatarPreview();
@@ -69247,6 +69446,67 @@
         }
     </script>
     
+    <!-- Profile Settings Modal -->
+    <div id="profileSettingsModal" class="profile-settings-modal" onclick="if(event.target === this) closeProfileSettings()">
+        <div class="profile-settings-content">
+            <h3>Account Settings</h3>
+            <div class="profile-field">
+                <label>Username</label>
+                <input type="text" id="profileUsername" disabled>
+            </div>
+            <div class="profile-field">
+                <label>First Name</label>
+                <input type="text" id="profileFirstName" placeholder="First name">
+            </div>
+            <div class="profile-field">
+                <label>Last Name</label>
+                <input type="text" id="profileLastName" placeholder="Last name">
+            </div>
+            <div class="profile-field">
+                <label>Email</label>
+                <input type="email" id="profileEmail" placeholder="Email address">
+            </div>
+            <div class="profile-field">
+                <label>Company</label>
+                <input type="text" id="profileCompany" placeholder="Company">
+            </div>
+            <div class="profile-field">
+                <label>Department</label>
+                <input type="text" id="profileDepartment" placeholder="Department">
+            </div>
+            <hr class="profile-divider">
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+                <div class="user-avatar" id="profileAvatarPreview" onclick="openAvatarUpload()" title="Change picture" style="cursor:pointer;flex-shrink:0;">
+                    {% if profile_picture %}
+                    <img src="{{ profile_picture }}" alt="Profile">
+                    {% else %}
+                    <span class="user-avatar-initials">{{ username[:2] }}</span>
+                    {% endif %}
+                </div>
+                <button type="button" onclick="openAvatarUpload()" style="background:var(--bg-input);color:var(--text-secondary);border:1px solid var(--border-color);padding:0.45rem 0.9rem;border-radius:8px;cursor:pointer;font-size:0.85rem;">Change Photo</button>
+            </div>
+            <hr class="profile-divider">
+            <h3 style="font-size:1rem;margin:0 0 1rem 0;">Change Password</h3>
+            <div class="profile-field">
+                <label>Current Password</label>
+                <input type="password" id="profileCurrentPw" placeholder="Enter current password">
+            </div>
+            <div class="profile-field">
+                <label>New Password</label>
+                <input type="password" id="profileNewPw" placeholder="Min 8 characters">
+            </div>
+            <div class="profile-field">
+                <label>Confirm New Password</label>
+                <input type="password" id="profileConfirmPw" placeholder="Re-enter new password">
+            </div>
+            <div class="profile-msg" id="profileMsg"></div>
+            <div class="profile-btn-row">
+                <button type="button" class="profile-btn-cancel" onclick="closeProfileSettings()">Cancel</button>
+                <button type="button" class="profile-btn-save" id="profileSaveBtn" onclick="saveProfileSettings()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Profile Picture Upload Modal -->
     <div id="avatarUploadModal" class="avatar-upload-modal" onclick="if(event.target === this) closeAvatarUpload()">
         <div class="avatar-upload-content">
