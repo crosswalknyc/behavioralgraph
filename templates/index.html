@@ -18749,9 +18749,12 @@
             // Add to tabs if not already there
             if (!openSFConvTabs.find(t => t.s3Key === s3Key)) {
                 const profile = sfConvProfiles.find(p => p.s3_key === s3Key);
+                let tabName = (profile?.project_name || 'Analysis').replace(/_/g, ' ');
+                // Remove timestamp pattern (e.g., 03 30 2026 23 49)
+                tabName = tabName.replace(/\s*\d{2}\s+\d{2}\s+\d{4}\s+\d{2}\s+\d{2}\s*$/, '').trim();
                 openSFConvTabs.push({
                     s3Key: s3Key,
-                    name: profile?.project_name || 'Analysis'
+                    name: tabName
                 });
                 renderSFConvTabsBar();
             }
