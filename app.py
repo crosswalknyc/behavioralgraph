@@ -21569,6 +21569,9 @@ def run_sf_lf_conversion(job_id):
         
         conversion_rate = round((converted / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0.00000001
         print(f"[SF-LF] Overall Conversion final: {converted:,} users converted (sum of {len(per_platform_data)} platforms) ({conversion_rate:.8f}% rate)")
+        # DEBUG: Show each platform's converted value from per_platform_data
+        for plat_name, plat_data in per_platform_data.items():
+            print(f"[SF-LF] DEBUG per_platform_data: {plat_name} = {plat_data.get('converted', 0):,} converted")
         
         results['conversions']['sf_url_to_lf_title'] = {
             'total_sf_viewers': sf_total_unique,
