@@ -18584,6 +18584,7 @@ import time as time_module
 
 cache_loading_complete = False
 BACKGROUND_CHECK_INTERVAL = 60  # Check for new files every 1 minute so new S3 uploads show up quickly
+MIN_BACKGROUND_CHECK_INTERVAL = 30  # Hard floor to prevent accidental tight loops in production
 
 def async_cache_loader():
     """Load cache in background - doesn't block app startup."""
@@ -18755,9 +18756,12 @@ def prefetch_profile_images():
 
 def background_cache_checker():
     """Background thread that checks for new/modified files every 5 minutes."""
+    interval_seconds = max(int(BACKGROUND_CHECK_INTERVAL or 0), MIN_BACKGROUND_CHECK_INTERVAL)
+    sleep_gate = threading.Event()
+
     # Wait for initial cache load
     while not cache_loading_complete:
-        time_module.sleep(1)
+        sleep_gate.wait(1)
     
     # Pre-fetch profile images after startup
     time_module.sleep(5)  # Wait a bit before starting
@@ -18766,9 +18770,10 @@ def background_cache_checker():
     except Exception as e:
         print(f"   ⚠️ Image prefetch error: {e}")
     
-    print("🔄 Starting background cache checker (every 1 min)...")
+    print(f"🔄 Starting background cache checker (every {interval_seconds} sec)...")
     while True:
-        time_module.sleep(BACKGROUND_CHECK_INTERVAL)
+        # Use Event.wait with a hard floor so this loop cannot run unthrottled.
+        sleep_gate.wait(interval_seconds)
         try:
             print("🔍 Background check for new files...")
             result = smart_cache_update()
