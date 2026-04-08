@@ -1319,6 +1319,14 @@ def _get_company_pool(data, company_name):
     return data.get('companies', {}).get(company_name)
 
 
+def _numeric_credits_balance(user):
+    """Personal `credits` field on user dict: None/missing → 0; -1 means unlimited."""
+    if not user:
+        return 0
+    c = user.get('credits')
+    return 0 if c is None else c
+
+
 def check_user_credits(username):
     """Check if user has credits remaining.  Returns (has_credits, credits_left).
 
@@ -1336,7 +1344,7 @@ def check_user_credits(username):
     if not user:
         return False, 0
 
-    user_credits = user.get('credits', 0)
+    user_credits = _numeric_credits_balance(user)
     user_unlimited = user_credits == -1
 
     company = (user.get('company') or '').strip()
@@ -1399,7 +1407,7 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         'credits_used': credits_used
     }
 
-    user_unlimited = user.get('credits', 0) == -1
+    user_unlimited = _numeric_credits_balance(user) == -1
 
     company = (user.get('company') or '').strip()
     pool = _get_company_pool(data, company)
@@ -1431,11 +1439,11 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         save_users(data)
         return True
 
-    if not user_unlimited and user.get('credits', 0) < credits_used:
+    if not user_unlimited and _numeric_credits_balance(user) < credits_used:
         return False
 
     if not user_unlimited:
-        user['credits'] -= credits_used
+        user['credits'] = _numeric_credits_balance(user) - credits_used
     user['credits_used'] = user.get('credits_used', 0) + credits_used
     history = user.setdefault('credit_usage_history', [])
     history.insert(0, entry)
@@ -2928,7 +2936,13 @@ def update_user(username):
 @app.route('/api/admin/users/<username>/add-credits', methods=['POST'])
 @requires_admin
 def add_user_credits(username):
-    """Add credits to a user and record attribution (what the credits were for). Admin only."""
+    """Add credits to a user and record attribution (what the credits were for). Admin only.
+
+    Personal-credit users: increments ``user['credits']`` (None is treated as 0).
+
+    Company pool users (not on personal override): increases the shared company
+    ``credit_pool`` so the allocation is actually spendable from the pool.
+    """
     try:
         req = request.get_json() or {}
         credits = req.get('credits')
@@ -2946,12 +2960,34 @@ def add_user_credits(username):
         if username not in data['users']:
             return jsonify({'success': False, 'error': 'User not found'})
         user = data['users'][username]
-        if user.get('credits') == -1:
+        bal = _numeric_credits_balance(user)
+        if bal == -1:
             return jsonify({'success': False, 'error': 'User has unlimited credits; cannot add'})
 
         added_by = (get_current_user() or {}).get('username') or 'admin'
         added_at = datetime.now().isoformat()
-        user['credits'] = user.get('credits', 0) + credits
+
+        company = (user.get('company') or '').strip()
+        pool = _get_company_pool(data, company)
+        use_pool = pool is not None and user.get('credit_source') != 'personal'
+
+        if use_pool:
+            pt = pool.get('credit_pool')
+            if pt is None:
+                pt = 0
+            if pt == -1:
+                # Unlimited pool — record attribution only; nothing to add
+                resp_balance = -1
+            else:
+                pool['credit_pool'] = pt + credits
+                pu = pool.get('credit_pool_used')
+                if pu is None:
+                    pu = 0
+                resp_balance = max(pool['credit_pool'] - pu, 0)
+        else:
+            user['credits'] = bal + credits
+            resp_balance = user['credits']
+
         history = user.setdefault('credit_attribution_history', [])
         history.insert(0, {
             'added_at': added_at,
@@ -2961,7 +2997,12 @@ def add_user_credits(username):
         })
         user['credit_attribution_history'] = history[:500]
         save_users(data)
-        return jsonify({'success': True, 'message': f'Added {credits} credits to {username}', 'credits': user['credits']})
+        return jsonify({
+            'success': True,
+            'message': f'Added {credits} credits to {username}',
+            'credits': resp_balance,
+            'credit_source': 'pool' if use_pool else 'personal'
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -3161,7 +3202,9 @@ def api_update_company_credits(company_name):
         if 'credit_pool' in req:
             pool['credit_pool'] = req['credit_pool']
         if req.get('add_credits'):
-            current = pool.get('credit_pool', 0)
+            current = pool.get('credit_pool')
+            if current is None:
+                current = 0
             if current != -1:
                 pool['credit_pool'] = current + int(req['add_credits'])
         save_users(data)
