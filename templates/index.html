@@ -375,7 +375,7 @@
             display: none;
             justify-content: center;
             align-items: center;
-            z-index: 10001;
+            z-index: 200000; /* above .chat-widget (100000) so Account Settings is visible */
         }
         .profile-settings-modal.open {
             display: flex;
@@ -470,6 +470,8 @@
             padding: 0.25rem 0.5rem;
             border-radius: 8px;
             transition: background 0.15s;
+            position: relative;
+            z-index: 10060; /* above product dropdown row so clicks reach profile */
         }
         .user-menu-clickable:hover {
             background: rgba(255,255,255,0.08);
@@ -485,7 +487,7 @@
             display: none;
             justify-content: center;
             align-items: center;
-            z-index: 10000;
+            z-index: 200001; /* above profile settings backdrop */
         }
         
         .avatar-upload-modal.open {
@@ -12124,7 +12126,7 @@
                         <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
                     </div>
                     <div class="user-menu">
-                        <div class="user-menu-clickable" onclick="openProfileSettings()" title="Click to edit profile">
+                        <div class="user-menu-clickable" data-open-profile="1" role="button" tabindex="0" title="Click to edit profile">
                             <div class="user-avatar">
                                 {% if profile_picture %}
                                 <img src="{{ profile_picture }}" alt="Profile">
@@ -17639,8 +17641,28 @@
     </div>
 
     <script>
-        // VERSION: 2026-04-07-v4 - Profile settings: modals before script + window.* handlers
-        console.log('🔄 Script version: 2026-04-07-v4');
+        // VERSION: 2026-04-07-v5 - Profile open: capture delegation + header z-index + modal stacking
+        console.log('🔄 Script version: 2026-04-07-v5');
+        
+        // Open Account Settings via [data-open-profile] — capture phase so clicks are not lost to overlapping UI
+        document.addEventListener('click', function(ev) {
+            var opener = ev.target.closest && ev.target.closest('[data-open-profile]');
+            if (!opener) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (typeof window.openProfileSettings === 'function') {
+                window.openProfileSettings();
+            }
+        }, true);
+        document.addEventListener('keydown', function(ev) {
+            if (ev.key !== 'Enter' && ev.key !== ' ') return;
+            var opener = ev.target.closest && ev.target.closest('[data-open-profile]');
+            if (!opener) return;
+            ev.preventDefault();
+            if (typeof window.openProfileSettings === 'function') {
+                window.openProfileSettings();
+            }
+        }, true);
         
         let currentJobId = null;
         let pollInterval = null;
