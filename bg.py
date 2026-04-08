@@ -14023,20 +14023,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # The old gpt-4o-mini pass had thin context and could cause gen-pop artifacts
     # (e.g. boosting Hanes for audiences that wouldn't over-index on it).
 
-    # ══════════════════════════════════════════════════════════════════════
-    # RESEARCH-FIRST DEMOGRAPHIC APPROACH
-    # ══════════════════════════════════════════════════════════════════════
-    # Instead of reviewing Snowflake data and fixing outliers:
-    # 1. Deep research on WHO the profile is about
-    # 2. Build complete demographic profile from research
-    # 3. Set ALL values based on researched persona (with noise)
-    # ══════════════════════════════════════════════════════════════════════
     if not is_genpop and brand_category:
-        # STEP 1: Research-first approach — build profile from deep research
-        df_final = research_first_demographic_review(df_final, brand_category, project_name, brands)
-        
-        # STEP 2: Category-specific reviews for additional refinement
-        # These now act as VALIDATION, not primary source
+        # Category-specific demographic review (persona-guided, adjust existing rows)
         df_final = ai_actor_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_creator_demographic_review(df_final, brand_category, project_name, brands)
         df_final = ai_athlete_demographic_review(df_final, brand_category, project_name, brands)
@@ -20468,14 +20456,98 @@ REQUIRED_DEMOGRAPHICS = {
     ]
 }
 
+# Valid demographic values observed in Snowflake source table:
+# PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED
+# Used to prevent invalid labels (e.g., ETHNICITY values not present in source data)
+# from surviving into final CSV output.
+VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS = {
+    'AGE': {
+        '17 AND UNDER',
+        '18-24',
+        '25-34',
+        '25–34',
+        '35-44',
+        '45-54',
+        '55-64',
+        '65 OR OLDER',
+        'OTHER',
+    },
+    'EDUCATION': {
+        "BACHELOR'S DEGREE",
+        'GRADUATE OR PROFESSIONAL DEGREE',
+        'HIGH SCHOOL OR LESS',
+        'PREFER NOT TO SAY',
+        'SOME COLLEGE / ASSOCIATE DEGREE',
+    },
+    'ETHNICITY': {
+        'ANOTHER RACE/ETHNICITY',
+        'ASIAN',
+        'BLACK OR AFRICAN AMERICAN',
+        'HISPANIC OR LATINO',
+        'WHITE',
+    },
+    'GENDER': {
+        'FEMALE', 'MALE', 'NON-BINARY', 'PREFER NOT TO SAY', 'TRANS FEMALE', 'TRANS MALE',
+    },
+    'INCOME': {
+        '$25,000 - $49,999',
+        '$50,000 - $74,999',
+        '$75,000 - $99,999',
+        '$100,000 - $149,999',
+        '$150,000 - $249,999',
+        '$200,000 - $249,999',
+        '$250,000 OR MORE',
+    },
+    'RELATIONSHIP': {
+        'DIVORCED OR SEPARATED',
+        'IN A RELATIONSHIP',
+        'LIVING WITH A PARTNER / DOMESTIC PARTNERSHIP',
+        'MARRIED',
+        'PREFER NOT TO SAY',
+        'SINGLE',
+        'SINGLE (NOT LIVING WITH A PARTNER)',
+    },
+    'SEXUAL_ORIENTATION': {
+        'ANOTHER SEXUAL ORIENTATION', 'ASEXUAL', 'GAY OR LESBIAN',
+        'PREFER NOT TO SAY', 'STRAIGHT / HETEROSEXUAL',
+    },
+    'PARENTAL_STATUS': {
+        'HAS CHILDREN',
+        'NO',
+        'NO CHILDREN',
+        'PREFER NOT TO SAY',
+    },
+    'OCCUPATION': {
+        'AGRICULTURE & OUTDOOR',
+        'EDUCATION OR LIBRARY SERVICES',
+        'HEALTHCARE PRACTITIONERS OR SUPPORT',
+        'LEGAL',
+        'MANAGEMENT, BUSINESS & PROFESSIONAL',
+        'MANUFACTURING & PRODUCTION',
+        'OTHER',
+        'PUBLIC SAFETY & PROTECTIVE SERVICES',
+        'SALES & RETAIL',
+        'SCIENCE, TECHNOLOGY & TECHNICAL PROFESSIONS',
+        'SELF-EMPLOYED',
+        'SERVICE & HOSPITALITY',
+        'SKILLED TRADES/CONSTRUCTION OR MAINTENANCE',
+        'TRANSPORTATION & LOGISTICS',
+    },
+}
+
 def ensure_all_demographic_values(df_final, sample_size=None):
     """
-    Ensure every required demographic value is present with at least 0.01% (with small noise).
-    Renormalize each demographic category so Brand Penetration sums to 100% after adding missing values.
+    Normalize demographics with strict source-option enforcement.
+
+    Rules:
+    - Use Snowflake-valid options only (except LOCATION handled elsewhere).
+    - Split combined ETHNICITY values with commas into separate options.
+      Example: "BLACK OR AFRICAN AMERICAN, HISPANIC OR LATINO" becomes
+      separate rows for each option.
+    - Ensure ALL valid options for each demographic category are present.
+    - Every demographic option has at least 0.01%.
+    - Each demographic category sums to exactly 100%.
     Also recalculates Original Raw Numbers and US Gen Pop Projection for consistency.
-    
-    This prevents profiles from having missing demographic groups, which is unrealistic
-    (e.g., a TV show audience should have at least some representation in every age group).
     """
     import numpy as np
     df = df_final.copy()
@@ -20499,124 +20571,215 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     
     MULT = 329_900_000 / 10_000_000  # Projection multiplier
     
-    print("🔍 Ensuring all demographic values are represented...")
-    
-    # Demographic categories to check (excluding LOCATION which has too many values)
+    print("🔍 Normalizing demographics (Snowflake-valid options, min 0.01%)...")
+    MIN_PCT = 0.01
+
+    # Demographic categories to check (excluding LOCATION)
     DEMO_CATEGORIES = {k: v for k, v in REQUIRED_DEMOGRAPHICS.items() if k != 'LOCATION'}
-    
-    added_count = 0
-    for category, required_values in DEMO_CATEGORIES.items():
-        mask = df['Column'].str.upper().str.strip() == category.upper()
-        
-        # Get present values (case-insensitive)
-        present_values_raw = df.loc[mask, 'Value'].tolist() if mask.any() else []
-        present_values_lower = set(str(v).strip().lower() for v in present_values_raw)
-        
-        missing_values = []
-        for val in required_values:
-            norm_val = val.strip().lower()
-            # Skip "Prefer Not to Say" and similar values - they're optional
-            if 'prefer not' in norm_val or norm_val == 'other':
+
+    def _to_pct(val):
+        try:
+            return float(str(val).replace(',', '').replace('%', ''))
+        except Exception:
+            return 0.0
+
+    def _normalize_with_floor(values, floor):
+        arr = np.array(values, dtype=float)
+        if len(arr) == 0:
+            return arr
+        arr = np.where(arr < floor, floor, arr)
+        total = float(arr.sum())
+        if total <= 0:
+            arr[:] = 100.0 / len(arr)
+        elif abs(total - 100.0) > 1e-9:
+            arr = arr / total * 100.0
+            arr = np.where(arr < floor, floor, arr)
+            # If floor pushes us over 100, remove excess proportionally from rows above floor
+            for _ in range(8):
+                excess = float(arr.sum() - 100.0)
+                if excess <= 1e-9:
+                    break
+                room = arr - floor
+                can_reduce = room > 0
+                room_sum = float(room[can_reduce].sum())
+                if room_sum <= 0:
+                    break
+                arr[can_reduce] = arr[can_reduce] - excess * (room[can_reduce] / room_sum)
+                arr = np.where(arr < floor, floor, arr)
+            # If still under, distribute deficit by weight
+            deficit = float(100.0 - arr.sum())
+            if deficit > 1e-9:
+                weights = np.where(arr > 0, arr, 1.0)
+                arr = arr + deficit * (weights / float(weights.sum()))
+
+        arr = np.round(arr, 4)
+        drift = round(100.0 - float(arr.sum()), 4)
+        if abs(drift) > 0 and len(arr) > 0:
+            max_i = int(np.argmax(arr))
+            arr[max_i] = round(float(arr[max_i]) + drift, 4)
+        return arr
+
+    # 1) Split comma-combined ETHNICITY values into separate rows
+    split_rows = []
+    split_count = 0
+    eth_valid = VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.get('ETHNICITY', set())
+    eth_mask = df['Column'].astype(str).str.upper().str.strip() == 'ETHNICITY'
+    for idx in df[eth_mask].index.tolist():
+        raw_val = str(df.at[idx, 'Value']).strip()
+        if ',' not in raw_val:
+            continue
+        parts = [p.strip().upper() for p in raw_val.split(',') if p.strip()]
+        valid_parts = [p for p in parts if p in eth_valid]
+        if len(valid_parts) < 2:
+            continue
+        base_pct = max(MIN_PCT, _to_pct(df.at[idx, bp_col]))
+        per_pct = max(MIN_PCT, base_pct / len(valid_parts))
+        df.at[idx, 'Value'] = valid_parts[0]
+        df.at[idx, bp_col] = per_pct
+        df.at[idx, cs_col] = per_pct
+        for part in valid_parts[1:]:
+            new_row = df.loc[idx].copy()
+            new_row['Value'] = part
+            new_row[bp_col] = per_pct
+            new_row[cs_col] = per_pct
+            split_rows.append(new_row)
+        split_count += 1
+    if split_rows:
+        df = pd.concat([df, pd.DataFrame(split_rows)], ignore_index=True)
+
+    # 2) Remove invalid options and add all missing valid options
+    removed_invalid = 0
+    added_missing = 0
+    for category, valid_set in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.items():
+        mask = df['Column'].astype(str).str.upper().str.strip() == category
+        cat_idx = df[mask].index.tolist()
+
+        # Remove invalid values for this category
+        to_drop = []
+        for idx in cat_idx:
+            val = str(df.at[idx, 'Value']).strip().upper()
+            if val not in valid_set:
+                to_drop.append(idx)
+        if to_drop:
+            removed_invalid += len(to_drop)
+            df = df.drop(index=to_drop)
+            df = df.reset_index(drop=True)
+            mask = df['Column'].astype(str).str.upper().str.strip() == category
+            cat_idx = df[mask].index.tolist()
+
+        # Ensure all valid options exist
+        present = set(str(df.at[idx, 'Value']).strip().upper() for idx in cat_idx)
+        template = df.loc[cat_idx[0]].copy() if cat_idx else pd.Series({c: '' for c in df.columns})
+        for opt in sorted(valid_set):
+            if opt in present:
                 continue
-            if norm_val not in present_values_lower:
-                missing_values.append(val)
-        
-        if missing_values:
-            print(f"   {category}: Adding {len(missing_values)} missing values: {missing_values[:3]}{'...' if len(missing_values) > 3 else ''}")
-            
-            for val in missing_values:
-                # Add noise between 0.01% and 0.05% for realism
-                noise = np.random.uniform(0.01, 0.05)
-                raw_num = max(1, int(round(noise / 100.0 * sample_size)))
-                proj_num = int(round(raw_num * MULT))
-                
-                new_row = {
-                    'Column': category,
-                    'Value': val,
-                    bp_col: noise,
-                    cs_col: noise,
-                }
-                if raw_col:
-                    new_row[raw_col] = raw_num
-                if proj_col:
-                    new_row[proj_col] = proj_num
-                
-                # Add any other columns that exist in the dataframe
-                for col in df.columns:
-                    if col not in new_row:
-                        # Use appropriate default values for different column types
-                        if col in ['Percentage', 'Brand Penetration', 'Category Share']:
-                            new_row[col] = noise  # Use the same noise value for consistency
-                        elif col in ['Original Raw Numbers', 'US Gen Pop Projection']:
-                            new_row[col] = raw_num if col == 'Original Raw Numbers' else proj_num
-                        else:
-                            new_row[col] = ''
-                
-                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                added_count += 1
-    
-    if added_count > 0:
-        print(f"   ➕ Added {added_count} missing demographic values")
-    
-    # Now renormalize each demographic category to sum to 100%
+            row = template.copy()
+            row['Column'] = category
+            row['Value'] = opt
+            row[bp_col] = MIN_PCT
+            row[cs_col] = MIN_PCT
+            if raw_col:
+                row[raw_col] = max(1, int(round(MIN_PCT / 100.0 * sample_size)))
+            if proj_col and raw_col:
+                row[proj_col] = int(round(int(row[raw_col]) * MULT))
+            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+            added_missing += 1
+
+    # 3) Consolidate duplicates by (category, value) by summing percentages
+    dedup_drops = []
+    for category in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.keys():
+        mask = df['Column'].astype(str).str.upper().str.strip() == category
+        idxs = df[mask].index.tolist()
+        groups = {}
+        for idx in idxs:
+            key = str(df.at[idx, 'Value']).strip().upper()
+            groups.setdefault(key, []).append(idx)
+        for key, gidxs in groups.items():
+            if len(gidxs) <= 1:
+                continue
+            keep = gidxs[0]
+            total_pct = sum(_to_pct(df.at[i, bp_col]) for i in gidxs)
+            df.at[keep, 'Value'] = key
+            df.at[keep, bp_col] = total_pct
+            df.at[keep, cs_col] = total_pct
+            dedup_drops.extend(gidxs[1:])
+    if dedup_drops:
+        df = df.drop(index=dedup_drops).reset_index(drop=True)
+
+    # 4) Normalize each demographic category with floor/minimum
     renorm_count = 0
+    for category in DEMO_CATEGORIES.keys():
+        mask = df['Column'].astype(str).str.upper().str.strip() == category.upper()
+        if not mask.any():
+            continue
+        idxs = df[mask].index.tolist()
+        vals = [_to_pct(df.at[idx, bp_col]) for idx in idxs]
+        vals = _normalize_with_floor(vals, MIN_PCT)
+        for i, idx in enumerate(idxs):
+            pct = float(vals[i])
+            df.at[idx, bp_col] = pct
+            df.at[idx, cs_col] = pct
+            if raw_col:
+                raw_num = max(1, int(round(pct / 100.0 * sample_size)))
+                df.at[idx, raw_col] = raw_num
+                if proj_col:
+                    df.at[idx, proj_col] = int(round(raw_num * MULT))
+        renorm_count += 1
+    
+    # Add micro-noise to avoid exact round numbers like 25.0000/30.0000,
+    # then re-balance each category back to exactly 100%.
+    non_round_fixes = 0
     for category in DEMO_CATEGORIES.keys():
         mask = df['Column'].str.upper().str.strip() == category.upper()
         if not mask.any():
             continue
-        
-        # Convert to float for calculation
-        try:
-            df.loc[mask, bp_col] = pd.to_numeric(df.loc[mask, bp_col], errors='coerce').fillna(0.01)
-        except Exception:
+        idxs = df[mask].index.tolist()
+        if len(idxs) < 2:
             continue
-        
-        category_total = df.loc[mask, bp_col].sum()
-        
-        if category_total > 0 and abs(category_total - 100.0) > 0.01:
-            scale_factor = 100.0 / category_total
-            df.loc[mask, bp_col] = df.loc[mask, bp_col] * scale_factor
-            df.loc[mask, cs_col] = df.loc[mask, bp_col]  # Keep in sync
-            
-            # Recalculate raw numbers and projections
-            if raw_col:
-                # Convert to numeric first, handling any empty strings or invalid values
-                raw_values = pd.to_numeric(df.loc[mask, bp_col], errors='coerce').fillna(0.01)
-                df.loc[mask, raw_col] = (raw_values / 100.0 * sample_size).round().astype(int).clip(lower=1)
-            if proj_col and raw_col:
-                # Convert raw_col to numeric, handling empty strings
-                raw_nums = pd.to_numeric(df.loc[mask, raw_col], errors='coerce').fillna(1)
-                df.loc[mask, proj_col] = (raw_nums * MULT).round().astype(int)
-            
-            renorm_count += 1
-    
-    if renorm_count > 0:
-        print(f"   📏 Renormalized {renorm_count} demographic categories to sum to 100%")
-    
-    # Final check: ensure no zeros (add minimum noise if any remain)
-    zero_fix_count = 0
-    for idx, row in df.iterrows():
-        cat = str(row.get('Column', '')).strip().upper()
-        if cat not in [k.upper() for k in DEMO_CATEGORIES.keys()]:
-            continue
-        try:
-            bp_val = float(str(row.get(bp_col, 0)).replace(',', '').replace('%', ''))
-        except (ValueError, TypeError):
-            continue
-        if bp_val <= 0:
-            noise = np.random.uniform(0.01, 0.05)
-            df.at[idx, bp_col] = noise
-            df.at[idx, cs_col] = noise
-            if raw_col:
-                df.at[idx, raw_col] = max(1, int(round(noise / 100.0 * sample_size)))
-            if proj_col and raw_col:
-                df.at[idx, proj_col] = int(round(df.at[idx, raw_col] * MULT))
-            zero_fix_count += 1
-    
-    if zero_fix_count > 0:
-        print(f"   🔧 Fixed {zero_fix_count} zero-value demographics")
-    
-    print(f"✅ Demographic completeness check done ({added_count} added, {renorm_count} renormalized)")
+
+        vals = pd.to_numeric(
+            df.loc[idxs, bp_col]
+            .astype(str)
+            .str.replace('%', '', regex=False)
+            .str.replace(',', '', regex=False),
+            errors='coerce'
+        ).fillna(0.0)
+
+        changed = False
+        for j, idx in enumerate(idxs):
+            v = float(vals.loc[idx])
+            # integer-like value at 4dp precision
+            if abs(v - round(v)) < 1e-9:
+                # deterministic tiny perturbation
+                delta = 0.0007 * (1 if (j % 2 == 0) else -1)
+                vals.loc[idx] = max(MIN_PCT, v + delta)
+                changed = True
+
+        if changed:
+            total = float(vals.sum())
+            if total > 0:
+                vals = (vals / total * 100.0).round(4)
+                # final exact 100% correction on largest row
+                drift = 100.0 - float(vals.sum())
+                if abs(drift) > 0 and len(vals) > 0:
+                    max_idx = vals.idxmax()
+                    vals.loc[max_idx] = round(float(vals.loc[max_idx]) + drift, 4)
+
+                for idx in idxs:
+                    df.at[idx, bp_col] = float(vals.loc[idx])
+                    df.at[idx, cs_col] = float(vals.loc[idx])
+                    if raw_col:
+                        raw_num = max(1, int(round(float(vals.loc[idx]) / 100.0 * sample_size)))
+                        df.at[idx, raw_col] = raw_num
+                        if proj_col:
+                            df.at[idx, proj_col] = int(round(raw_num * MULT))
+                non_round_fixes += 1
+
+    print(
+        f"✅ Demographic normalization done "
+        f"({added_missing} added, {renorm_count} renormalized, {removed_invalid} invalid removed, "
+        f"{non_round_fixes} de-rounded, {split_count} ethnicity splits)"
+    )
     return df
 
 # Canonical lists and special rules for behavioral categories (comprehensive lists)
