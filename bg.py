@@ -978,6 +978,10 @@ except ImportError:
     print("⚠️ boto3 not available - S3 caching disabled")
 
 OUTPUT_FOLDER = os.path.expanduser("~/Desktop/Behavioral_Graph")
+OFFICIAL_DMA_XLSX_PATH = os.getenv(
+    "OFFICIAL_DMA_XLSX_PATH",
+    "/Users/jennamenking/Downloads/2026 DMA Official Rankings.xlsx"
+)
 
 # S3 Configuration (use us-east-2 to match app.py; explicit endpoint avoids env override with bad cert)
 S3_BUCKET = 'dashboard-inputs'
@@ -9188,11 +9192,71 @@ def normalize_dma_for_display(s: str) -> str:
             result.append(w.title())
     return ' '.join(result)
 
+def _load_official_dma_names_from_xlsx(path: str):
+    """Load canonical DMA names from the official rankings xlsx, if available.
+
+    Returns list[str] or None on any failure.
+    """
+    try:
+        import pandas as pd
+        import os
+        if not path or not os.path.exists(path):
+            return None
+
+        xl = pd.ExcelFile(path)
+        # Try all sheets; prefer a column containing "dma"/"market"
+        for sheet in xl.sheet_names:
+            df = pd.read_excel(path, sheet_name=sheet)
+            if df is None or df.empty:
+                continue
+            col_candidates = []
+            for c in df.columns:
+                c_str = str(c).strip().lower()
+                if 'dma' in c_str or 'market' in c_str:
+                    col_candidates.append(c)
+            if not col_candidates:
+                # fallback to first object-like column
+                obj_cols = [c for c in df.columns if str(df[c].dtype) == 'object']
+                if obj_cols:
+                    col_candidates = [obj_cols[0]]
+            if not col_candidates:
+                continue
+
+            for col in col_candidates:
+                names = []
+                for v in df[col].dropna().tolist():
+                    s = str(v).strip()
+                    if not s:
+                        continue
+                    # Skip header-like artifacts
+                    if s.lower() in {'dma', 'market', 'rank', 'ranking'}:
+                        continue
+                    names.append(normalize_dma_for_display(s))
+                # Keep only plausible DMA-like rows
+                cleaned = []
+                for n in names:
+                    if len(n) < 4:
+                        continue
+                    cleaned.append(n)
+                # Deduplicate preserve order
+                seen = set()
+                deduped = [n for n in cleaned if not (n in seen or seen.add(n))]
+                if len(deduped) >= 200:
+                    return deduped
+        return None
+    except Exception:
+        return None
+
 def dma_match_key(s: str) -> str:
     """Produce a lowercased, punctuation-stripped key for case-insensitive DMA matching."""
     if not s:
         return ''
     return re.sub(r'[^a-z0-9 ]', '', s.strip().lower()).strip()
+
+# Canonical DMA set (authoritative): derive from 2026 GenPop 210 DMA table.
+# This overrides any legacy static ALLOWED_DMAS definitions above.
+ALLOWED_DMAS = set(normalize_dma_for_display(str(name)) for name, _ in GENPOP_DMA_PERCENTAGES)
+ALLOWED_DMAS_UPPER = set(x.upper() for x in ALLOWED_DMAS)
 
 def compute_noisy_sample_size(original_n: int) -> int:
     """
@@ -13998,9 +14062,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if col in df_final.columns:
             df_final = df_final.drop(columns=[col])
 
+    df_final = deduplicate_values_within_category(df_final)
     df_final = ensure_percentage_four_decimals(df_final)
     df_final = enforce_max_four_decimals_across_columns(df_final)
-    df_final = deduplicate_location_data(df_final)
+    df_final = enforce_exact_210_dmas(df_final)
 
     df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
     df_final = add_brand_penetration_column_using_final_raw(df_final)
@@ -14504,6 +14569,32 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         "Review **every line**; lower any marketplace above 90% unless it is truly "
                         "universal (essentially never for Etsy/eBay).\n"
                     )
+                elif _rc_upper == 'BETTING':
+                    _category_deep_check = (
+                        "\n=== DEEP CHECK: BETTING (US audience realism) ===\n"
+                        "For US mainstream audiences, **DraftKings and FanDuel** are usually top-tier. "
+                        "**Bet365** can be present but should not lead DK/FD for a broad US digital fanbase. "
+                        "If Bet365 outranks both DK and FD, correct rank order and magnitudes.\n"
+                    )
+                elif _rc_upper == 'MEDIA':
+                    _category_deep_check = (
+                        "\n=== DEEP CHECK: MEDIA (persona fit over generic panel noise) ===\n"
+                        "For male-skewing, younger hip-hop/music audiences, mainstream daytime TV signals "
+                        "(e.g. TODAY / TODAY SHOW) should not dominate the category. Prioritize music, sports, "
+                        "and culturally aligned media properties over generic daytime/news inflation.\n"
+                    )
+                elif _rc_upper == 'WHERE THEY DINE':
+                    _category_deep_check = (
+                        "\n=== DEEP CHECK: WHERE THEY DINE (brand familiarity + plausibility) ===\n"
+                        "Unknown or ultra-niche restaurants should not be the #1 row unless there is a clear "
+                        "regional/persona reason. Nationally recognizable chains should generally occupy the top tier.\n"
+                    )
+                elif _rc_upper == 'QSR':
+                    _category_deep_check = (
+                        "\n=== DEEP CHECK: QSR (male/younger fanbase) ===\n"
+                        "For younger male online music/sports-adjacent audiences, sports-viewing QSR brands "
+                        "(e.g. Buffalo Wild Wings) should be meaningfully represented, not buried at the bottom.\n"
+                    )
 
                 _review_prompt = (
                     f"You are a senior consumer research analyst doing the FINAL "
@@ -14556,7 +14647,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     f"Google should dominate search/AI.\n"
                     f"12. WHERE THEY SHOP: If this category is in the batch, apply the "
                     f"DEEP CHECK for retail literally — **Etsy/eBay cannot be ~90%**; "
-                    f"Amazon should lead. Missing this is a common failure mode.\n\n"
+                    f"Amazon should lead. Missing this is a common failure mode.\n"
+                    f"13. Avoid synthetic templating: do not return a ladder of cloned values "
+                    f"(e.g., many 25.0000/30.0000 style repeats). Use realistic spread that reflects "
+                    f"true differences in audience affinity.\n"
+                    f"14. For Black hip-hop online fanbases, keep outputs culturally plausible across "
+                    f"BETTING, MEDIA, QSR, WHERE THEY DINE, and WHERE THEY SHOP; avoid generic daytime-TV "
+                    f"or obscure-niche leaders without a clear reason.\n"
+                    f"15. Demographic conditioning is mandatory: if the profile skews differently "
+                    f"(e.g., female + Hispanic/Latino), the category leaders/rank order must shift "
+                    f"accordingly. Never force a male-hip-hop pattern onto a different audience mix.\n\n"
                     f"For EACH item that needs correction, provide the "
                     f"realistic BP value. Leave correct items alone.\n\n"
                     f"Return ONLY valid JSON:\n"
@@ -14632,6 +14732,19 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                                 pass
 
             print(f"🔬 FINAL REVIEW complete: {_final_adj} corrections applied")
+
+    # Deterministic geographic guardrails AFTER all AI passes.
+    # Ensures clearly Black-skewing audiences cannot underweight core Black DMAs
+    # due to an LLM returning "OK" on location.
+    if not is_genpop:
+        df_final = enforce_black_audience_dma_guard(df_final)
+        df_final = enforce_behavioral_category_plausibility(
+            df_final,
+            brand_category=brand_category,
+            project_name=project_name,
+            brands=brands,
+        )
+        df_final = enforce_behavioral_bp_uniqueness(df_final)
 
     # Re-run formatting to ensure 4 decimal places after final review
     for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
@@ -14750,6 +14863,28 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             df_final.at[idx, _cs_col_fe] = v
             if 'Percentage' in df_final.columns:
                 df_final.at[idx, 'Percentage'] = v
+
+        # Demographic skew snapshot for persona-sensitive hard checks.
+        male_pct = 0.0
+        young_pct = 0.0
+        black_pct = 0.0
+        _gmask_he = df_final['Column'].str.upper().str.strip() == 'GENDER'
+        for _gix in df_final[_gmask_he].index:
+            _gv = str(df_final.at[_gix, 'Value']).strip().upper()
+            _gb = _read_bp(_gix)
+            if _gv in ('MALE', 'TRANS MALE'):
+                male_pct += _gb
+        _amask_he = df_final['Column'].str.upper().str.strip() == 'AGE'
+        for _aix in df_final[_amask_he].index:
+            _av = str(df_final.at[_aix, 'Value']).strip().upper()
+            _ab = _read_bp(_aix)
+            if any(_k in _av for _k in ('18-24', '25-34', '18 -', '25 -', 'GEN Z', 'MILLENNIAL')):
+                young_pct += _ab
+        _emask_he = df_final['Column'].str.upper().str.strip() == 'ETHNICITY'
+        for _eix in df_final[_emask_he].index:
+            _ev = str(df_final.at[_eix, 'Value']).strip().upper()
+            if 'BLACK' in _ev and 'AFRICAN' in _ev:
+                black_pct += _read_bp(_eix)
 
         # ─── 1. PREFER NOT TO SAY: ≤10% in ALL demo categories ──────
         _PNTS_CAP = 10.0
@@ -14908,16 +15043,22 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     _write_bp(_vi, _new_vbp)
                     print(f"   ✅ HARD FIX VENUE: {_vn} {_vbp:.1f}% → {_new_vbp:.4f}%")
 
-        # ─── 4. BETTING: DraftKings must beat Bet365 ────────────────
+        # ─── 4. BETTING: US sports-betting order checks (audience-conditional) ─
         _bet_mask = df_final['Column'].str.upper().str.strip() == 'BETTING'
-        if _bet_mask.any():
+        _sports_betting_shape = (male_pct >= 52.0) or (young_pct >= 45.0) or (black_pct >= 25.0 and male_pct >= 45.0)
+        if _bet_mask.any() and _sports_betting_shape:
             _dk_idx = _b365_idx = None
+            _fd_idx = None
             _dk_bp = _b365_bp = 0
+            _fd_bp = 0
             for _bi in df_final[_bet_mask].index:
                 _bn = str(df_final.at[_bi, 'Value']).strip().upper()
                 if 'DRAFTKINGS' in _bn:
                     _dk_idx = _bi
                     _dk_bp = _read_bp(_bi)
+                elif 'FANDUEL' in _bn or 'FAN DUEL' in _bn:
+                    _fd_idx = _bi
+                    _fd_bp = _read_bp(_bi)
                 elif 'BET365' in _bn:
                     _b365_idx = _bi
                     _b365_bp = _read_bp(_bi)
@@ -14928,6 +15069,58 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _write_bp(_b365_idx, max(1.0, _b365_new))
                 print(f"   ✅ HARD FIX BETTING: DraftKings {_dk_bp:.1f}→{_dk_new:.4f}, "
                       f"Bet365 {_b365_bp:.1f}→{_b365_new:.4f}")
+            if _fd_idx is not None and _b365_idx is not None and _b365_bp >= _fd_bp:
+                _fd_new = round(max(_fd_bp, _b365_bp + 2.0), 4)
+                _b365_new2 = round(min(_read_bp(_b365_idx), _fd_new - 2.0), 4)
+                _write_bp(_fd_idx, _fd_new)
+                _write_bp(_b365_idx, max(1.0, _b365_new2))
+                print(f"   ✅ HARD FIX BETTING: FanDuel {_fd_bp:.1f}→{_fd_new:.4f}, "
+                      f"Bet365→{_b365_new2:.4f}")
+
+        # ─── 4b. MEDIA: cap TODAY dominance for younger/male skew ───────
+        if (male_pct >= 55.0 and young_pct >= 40.0) or (black_pct >= 25.0):
+            _med_mask = df_final['Column'].str.upper().str.strip() == 'MEDIA'
+            if _med_mask.any():
+                for _mi in df_final[_med_mask].index:
+                    _mn = str(df_final.at[_mi, 'Value']).strip().upper()
+                    if _mn in ('TODAY', 'TODAY SHOW', 'THE TODAY SHOW'):
+                        _mcur = _read_bp(_mi)
+                        if _mcur > 8.0:
+                            _write_bp(_mi, 8.0)
+                            print(f"   ✅ HARD FIX MEDIA: {_mn} {_mcur:.1f}% → 8.0000%")
+                        break
+
+        # ─── 4c. WHERE THEY DINE: niche leader cap ───────────────────────
+        _dine_mask = df_final['Column'].str.upper().str.strip() == 'WHERE THEY DINE'
+        if _dine_mask.any():
+            _dine_idx = list(df_final[_dine_mask].index)
+            if _dine_idx:
+                _top_i = max(_dine_idx, key=lambda _i: _read_bp(_i))
+                _top_name = str(df_final.at[_top_i, 'Value']).strip().upper()
+                _top_bp = _read_bp(_top_i)
+                _mainstream = (
+                    'APPLEBEE' in _top_name or 'CHILI' in _top_name or
+                    'OLIVE GARDEN' in _top_name or 'TEXAS ROADHOUSE' in _top_name or
+                    'CHEESECAKE FACTORY' in _top_name or 'IHOP' in _top_name or
+                    'RED LOBSTER' in _top_name or 'RED ROBIN' in _top_name or
+                    'LONGHORN' in _top_name or 'BUFFALO WILD WINGS' in _top_name
+                )
+                if (not _mainstream) and _top_bp >= 8.0:
+                    _write_bp(_top_i, 3.5)
+                    print(f"   ✅ HARD FIX WHERE THEY DINE: niche top '{_top_name}' {_top_bp:.1f}% → 3.5000%")
+
+        # ─── 4d. QSR: ensure Buffalo Wild Wings not buried ───────────────
+        if (male_pct >= 55.0 and young_pct >= 40.0) or (black_pct >= 25.0):
+            _qsr_mask = df_final['Column'].str.upper().str.strip() == 'QSR'
+            if _qsr_mask.any():
+                for _qi in df_final[_qsr_mask].index:
+                    _qn = str(df_final.at[_qi, 'Value']).strip().upper()
+                    if 'BUFFALO WILD WINGS' in _qn or _qn == 'BWW':
+                        _qcur = _read_bp(_qi)
+                        if _qcur < 6.5:
+                            _write_bp(_qi, 7.5)
+                            print(f"   ✅ HARD FIX QSR: {_qn} {_qcur:.1f}% → 7.5000%")
+                        break
 
         # ─── 5. EVENTS: cap at 15% (most people don't attend events) ─
         _ev_mask = df_final['Column'].str.upper().str.strip() == 'EVENTS'
@@ -20535,6 +20728,18 @@ VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS = {
     },
 }
 
+def _canonical_demo_value(category: str, value: str) -> str:
+    """Canonicalize demographic value labels for dedupe within a category."""
+    import re
+    cat = str(category or '').strip().upper()
+    v = str(value or '').strip().upper().replace('–', '-')
+    v = re.sub(r'\s+', ' ', v)
+    if cat in {'INCOME', 'AGE'}:
+        # Normalize spacing around hyphens so "$50,000-$74,999" == "$50,000 - $74,999"
+        v = re.sub(r'\s*-\s*', ' - ', v)
+        v = re.sub(r'\s+', ' ', v).strip()
+    return v
+
 def ensure_all_demographic_values(df_final, sample_size=None):
     """
     Normalize demographics with strict source-option enforcement.
@@ -20656,10 +20861,15 @@ def ensure_all_demographic_values(df_final, sample_size=None):
 
         # Remove invalid values for this category
         to_drop = []
+        canonical_valid = {_canonical_demo_value(category, v): v for v in valid_set}
         for idx in cat_idx:
-            val = str(df.at[idx, 'Value']).strip().upper()
-            if val not in valid_set:
+            raw_val = str(df.at[idx, 'Value']).strip()
+            canon = _canonical_demo_value(category, raw_val)
+            if canon not in canonical_valid:
                 to_drop.append(idx)
+            else:
+                # Rewrite variants to canonical display label from valid set
+                df.at[idx, 'Value'] = canonical_valid[canon]
         if to_drop:
             removed_invalid += len(to_drop)
             df = df.drop(index=to_drop)
@@ -20668,10 +20878,13 @@ def ensure_all_demographic_values(df_final, sample_size=None):
             cat_idx = df[mask].index.tolist()
 
         # Ensure all valid options exist
-        present = set(str(df.at[idx, 'Value']).strip().upper() for idx in cat_idx)
+        present = set(
+            _canonical_demo_value(category, str(df.at[idx, 'Value']).strip())
+            for idx in cat_idx
+        )
         template = df.loc[cat_idx[0]].copy() if cat_idx else pd.Series({c: '' for c in df.columns})
         for opt in sorted(valid_set):
-            if opt in present:
+            if _canonical_demo_value(category, opt) in present:
                 continue
             row = template.copy()
             row['Column'] = category
@@ -20685,21 +20898,26 @@ def ensure_all_demographic_values(df_final, sample_size=None):
             df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
             added_missing += 1
 
-    # 3) Consolidate duplicates by (category, value) by summing percentages
+    # 3) Consolidate duplicates by (category, value) by summing percentages.
+    # Uses canonical category-value key to collapse label variants.
     dedup_drops = []
     for category in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.keys():
         mask = df['Column'].astype(str).str.upper().str.strip() == category
         idxs = df[mask].index.tolist()
+        canonical_valid = {
+            _canonical_demo_value(category, v): v
+            for v in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.get(category, set())
+        }
         groups = {}
         for idx in idxs:
-            key = str(df.at[idx, 'Value']).strip().upper()
+            key = _canonical_demo_value(category, str(df.at[idx, 'Value']).strip())
             groups.setdefault(key, []).append(idx)
         for key, gidxs in groups.items():
             if len(gidxs) <= 1:
                 continue
             keep = gidxs[0]
             total_pct = sum(_to_pct(df.at[i, bp_col]) for i in gidxs)
-            df.at[keep, 'Value'] = key
+            df.at[keep, 'Value'] = canonical_valid.get(key, key)
             df.at[keep, bp_col] = total_pct
             df.at[keep, cs_col] = total_pct
             dedup_drops.extend(gidxs[1:])
@@ -20726,8 +20944,8 @@ def ensure_all_demographic_values(df_final, sample_size=None):
                     df.at[idx, proj_col] = int(round(raw_num * MULT))
         renorm_count += 1
     
-    # Add micro-noise to avoid exact round numbers like 25.0000/30.0000,
-    # then re-balance each category back to exactly 100%.
+    # Add realistic de-rounding so values don't look synthetic
+    # (e.g., 25.0005, 15.0006). Then re-balance to exactly 100%.
     non_round_fixes = 0
     for category in DEMO_CATEGORIES.keys():
         mask = df['Column'].str.upper().str.strip() == category.upper()
@@ -20748,17 +20966,25 @@ def ensure_all_demographic_values(df_final, sample_size=None):
         changed = False
         for j, idx in enumerate(idxs):
             v = float(vals.loc[idx])
-            # integer-like value at 4dp precision
-            if abs(v - round(v)) < 1e-9:
-                # deterministic tiny perturbation
-                delta = 0.0007 * (1 if (j % 2 == 0) else -1)
-                vals.loc[idx] = max(MIN_PCT, v + delta)
+            frac = abs(v - round(v))
+            # If value is too close to whole number, push it farther away
+            # with deterministic non-trivial offsets.
+            if frac < 0.025 or frac > 0.975:
+                # Deterministic "random-like" magnitude in ~[0.08, 0.35]
+                val_key = str(df.at[idx, 'Value']).strip().upper()
+                h = sum(ord(c) for c in f"{category}|{val_key}|{j}")
+                mag = 0.08 + ((h % 271) / 1000.0)  # 0.080 .. 0.351
+                sign = 1.0 if (h % 2 == 0) else -1.0
+                vals.loc[idx] = max(MIN_PCT, v + sign * mag)
                 changed = True
 
         if changed:
             total = float(vals.sum())
             if total > 0:
-                vals = (vals / total * 100.0).round(4)
+                vals = (vals / total * 100.0)
+                vals = vals.clip(lower=MIN_PCT)
+                vals = vals / float(vals.sum()) * 100.0
+                vals = vals.round(4)
                 # final exact 100% correction on largest row
                 drift = 100.0 - float(vals.sum())
                 if abs(drift) > 0 and len(vals) > 0:
@@ -22885,6 +23111,621 @@ def deduplicate_location_data(df):
     result_df = pd.concat([other_df, location_deduplicated], ignore_index=True)
 
     return result_df
+
+def enforce_exact_210_dmas(df):
+    """
+    Final hard gate for LOCATION:
+    - Only canonical DMAs from ALLOWED_DMAS are permitted
+    - Exactly 210 LOCATION rows are output
+    - Percentages are renormalized to 100 with 4 decimals
+    """
+    import pandas as pd
+    import numpy as np
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    pct_col = 'Percentage' if 'Percentage' in df.columns else cs_col
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in df.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in df.columns else None
+    MULT = 329_900_000 / 10_000_000
+
+    def _to_num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', ''))
+        except Exception:
+            return 0.0
+
+    out = df.copy()
+    loc_mask = out['Column'].astype(str).str.upper().str.strip() == 'LOCATION'
+    if not loc_mask.any():
+        return out
+
+    # Build canonical DMA map from the authoritative 210 DMA source.
+    # Use GENPOP_DMA_PERCENTAGES names first; fallback to ALLOWED_DMAS.
+    canonical_dma_names = []
+    xlsx_dmas = _load_official_dma_names_from_xlsx(OFFICIAL_DMA_XLSX_PATH)
+    if xlsx_dmas:
+        canonical_dma_names = [normalize_dma_for_display(x) for x in xlsx_dmas]
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"📍 Using official DMA xlsx list: {len(canonical_dma_names)} rows")
+    try:
+        if not canonical_dma_names:
+            canonical_dma_names = [normalize_dma_for_display(str(name)) for name, _ in GENPOP_DMA_PERCENTAGES]
+    except Exception:
+        if not canonical_dma_names:
+            canonical_dma_names = []
+    if not canonical_dma_names:
+        canonical_dma_names = [normalize_dma_for_display(x) for x in ALLOWED_DMAS]
+
+    # Deduplicate while preserving order
+    seen = set()
+    canonical_dma_names = [d for d in canonical_dma_names if not (d in seen or seen.add(d))]
+
+    # Build normalized match map
+    canonical_map = {}
+    for dma in canonical_dma_names:
+        canonical_map[dma_match_key(dma)] = dma
+
+    loc_df = out[loc_mask].copy()
+    other_df = out[~loc_mask].copy()
+
+    # Keep only rows that map to a canonical DMA key
+    grouped = {}
+    for _, row in loc_df.iterrows():
+        key = dma_match_key(str(row.get('Value', '')))
+        if key not in canonical_map:
+            continue
+        canon = canonical_map[key]
+        grouped.setdefault(canon, 0.0)
+        grouped[canon] += _to_num(row.get(cs_col, row.get(pct_col, 0)))
+
+    # Ensure all canonical DMAs exist (expected 210)
+    for canon in canonical_dma_names:
+        grouped.setdefault(canon, 0.01)
+
+    # Rebuild LOCATION frame with exactly 210 rows
+    vals = pd.Series(grouped, dtype=float)
+    vals[vals < 0.01] = 0.01
+    vals = vals / float(vals.sum()) * 100.0
+    vals = vals.round(4)
+    drift = round(100.0 - float(vals.sum()), 4)
+    if abs(drift) > 0:
+        mx = vals.idxmax()
+        vals[mx] = round(float(vals[mx]) + drift, 4)
+
+    # Sample size for raw/projection recalc
+    sample_size = 132040
+    if raw_col:
+        ss_mask = other_df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any():
+            try:
+                sample_size = max(1, int(float(str(other_df.loc[ss_mask, raw_col].iloc[0]).replace(',', ''))))
+            except Exception:
+                pass
+
+    loc_rows = []
+    for dma_name, pct in vals.items():
+        row = {'Column': 'LOCATION', 'Value': dma_name}
+        if bp_col:
+            row[bp_col] = f"{float(pct):.4f}"
+        if cs_col:
+            row[cs_col] = f"{float(pct):.4f}"
+        if pct_col:
+            row[pct_col] = f"{float(pct):.4f}"
+        if raw_col:
+            raw_num = max(1, int(round(float(pct) / 100.0 * sample_size)))
+            row[raw_col] = str(raw_num)
+            if proj_col:
+                row[proj_col] = str(int(round(raw_num * MULT)))
+        loc_rows.append(row)
+
+    new_loc_df = pd.DataFrame(loc_rows)
+    result = pd.concat([other_df, new_loc_df], ignore_index=True)
+    if not SILENCE_VERBOSE_OUTPUT:
+        print(f"📍 Final LOCATION canonicalization: {len(new_loc_df)} DMAs (expected 210)")
+    return result
+
+def enforce_black_audience_dma_guard(df):
+    """
+    Deterministic post-AI LOCATION guard:
+    if ETHNICITY indicates a clearly Black-skewing audience, enforce minimum
+    floors for core Black-audience DMAs (e.g., DC, Atlanta, Houston, Detroit).
+    Then renormalize LOCATION back to exactly 100%.
+    """
+    import pandas as pd
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    pct_col = 'Percentage' if 'Percentage' in df.columns else cs_col
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in df.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in df.columns else None
+    MULT = 329_900_000 / 10_000_000
+
+    def _to_num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', ''))
+        except Exception:
+            return 0.0
+
+    out = df.copy()
+
+    # Detect Black-audience skew from ETHNICITY rows.
+    eth_mask = out['Column'].astype(str).str.upper().str.strip() == 'ETHNICITY'
+    if not eth_mask.any():
+        return out
+
+    black_pct = 0.0
+    for _, row in out[eth_mask].iterrows():
+        v = str(row.get('Value', '')).strip().upper()
+        if 'BLACK' in v and 'AFRICAN' in v:
+            black_pct += _to_num(row.get(cs_col, row.get(pct_col, 0)))
+
+    # Trigger only for clearly Black-skewing audiences.
+    if black_pct < 16.0:
+        return out
+
+    loc_mask = out['Column'].astype(str).str.upper().str.strip() == 'LOCATION'
+    if not loc_mask.any():
+        return out
+
+    loc_idx = list(out[loc_mask].index)
+    if not loc_idx:
+        return out
+
+    # Build LOCATION table.
+    loc_vals = {}
+    loc_names = {}
+    for i in loc_idx:
+        name = str(out.at[i, 'Value']).strip()
+        loc_names[i] = name
+        loc_vals[i] = max(0.01, _to_num(out.at[i, cs_col] if cs_col in out.columns else out.at[i, pct_col]))
+
+    # Match DMA rows using robust keyword matching against canonical names.
+    def _find_dma_idx(required_words):
+        candidates = []
+        req = [w.lower() for w in required_words]
+        for i in loc_idx:
+            key = dma_match_key(loc_names.get(i, ''))
+            if all(w in key for w in req):
+                candidates.append(i)
+        if not candidates:
+            return None
+        return max(candidates, key=lambda x: loc_vals.get(x, 0.0))
+
+    # Dynamic floors based on Black share. Tuned to be directional, not extreme.
+    signal = max(0.0, black_pct - 12.0)
+    floor_map = {
+        ('WASHINGTON', 'DC'): min(4.5, 1.2 + 0.06 * signal),
+        ('ATLANTA',): min(5.5, 1.6 + 0.08 * signal),
+        ('HOUSTON',): min(4.0, 1.2 + 0.06 * signal),
+        ('DETROIT',): min(3.5, 0.9 + 0.05 * signal),
+        ('MEMPHIS',): min(2.0, 0.45 + 0.03 * signal),
+        ('NEW', 'ORLEANS'): min(2.0, 0.45 + 0.03 * signal),
+        ('BALTIMORE',): min(2.8, 0.7 + 0.04 * signal),
+    }
+
+    # Lift floors to at least modest over-index vs GenPop for matching DMAs.
+    gp_dma = {str(name).upper(): float(pct) for name, pct in GENPOP_DMA_PERCENTAGES}
+    targets = []
+    for words, floor in floor_map.items():
+        idx = _find_dma_idx(words)
+        if idx is None:
+            continue
+        dma_name = str(loc_names[idx]).upper()
+        gp_pct = gp_dma.get(dma_name, 0.0)
+        floor = max(floor, gp_pct * 1.15)
+        targets.append((idx, floor))
+
+    if not targets:
+        return out
+
+    changed = 0
+    for idx, floor in targets:
+        cur = loc_vals[idx]
+        if cur + 1e-9 < floor:
+            loc_vals[idx] = floor
+            changed += 1
+
+    if changed == 0:
+        return out
+
+    # Renormalize back to 100 while preserving minimum 0.01 everywhere.
+    total = sum(loc_vals.values())
+    if total <= 0:
+        return out
+
+    excess = total - 100.0
+    if excess > 0:
+        target_idx = {i for i, _ in targets}
+        reducible = [i for i in loc_idx if i not in target_idx and loc_vals[i] > 0.01]
+        available = sum(max(0.0, loc_vals[i] - 0.01) for i in reducible)
+        if available > 0:
+            take = min(excess, available)
+            for i in reducible:
+                headroom = max(0.0, loc_vals[i] - 0.01)
+                if headroom <= 0:
+                    continue
+                delta = take * (headroom / available)
+                loc_vals[i] = max(0.01, loc_vals[i] - delta)
+        else:
+            scale = 100.0 / total
+            for i in loc_idx:
+                loc_vals[i] = max(0.01, loc_vals[i] * scale)
+
+    # Final exact normalization + 4-decimal drift correction.
+    vals = pd.Series({i: loc_vals[i] for i in loc_idx}, dtype=float)
+    vals[vals < 0.01] = 0.01
+    vals = vals / float(vals.sum()) * 100.0
+    vals = vals.round(4)
+    drift = round(100.0 - float(vals.sum()), 4)
+    if abs(drift) > 0:
+        mx = vals.idxmax()
+        vals[mx] = round(float(vals[mx]) + drift, 4)
+
+    # Recompute raw/projection from SAMPLE SIZE.
+    sample_size = 132040
+    if raw_col:
+        ss_mask = out['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any():
+            try:
+                sample_size = max(1, int(float(str(out.loc[ss_mask, raw_col].iloc[0]).replace(',', ''))))
+            except Exception:
+                pass
+
+    for i in loc_idx:
+        pct = float(vals[i])
+        if bp_col:
+            out.at[i, bp_col] = f"{pct:.4f}"
+        if cs_col:
+            out.at[i, cs_col] = f"{pct:.4f}"
+        if pct_col:
+            out.at[i, pct_col] = f"{pct:.4f}"
+        if raw_col:
+            raw_num = max(1, int(round(pct / 100.0 * sample_size)))
+            out.at[i, raw_col] = str(raw_num)
+            if proj_col:
+                out.at[i, proj_col] = str(int(round(raw_num * MULT)))
+
+    if not SILENCE_VERBOSE_OUTPUT:
+        print(f"📍 Black-audience DMA guard: Black={black_pct:.2f}% — enforced {changed} DMA floor(s)")
+
+    return out
+
+def enforce_behavioral_category_plausibility(df, brand_category=None, project_name=None, brands=None):
+    """
+    Deterministic post-AI behavioral guardrails for obvious US plausibility misses.
+    These are intentionally narrow and only apply directional corrections.
+    """
+    import pandas as pd
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    out = df.copy()
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in out.columns else None
+    if not bp_col:
+        return out
+    cs_col = 'Category Share' if 'Category Share' in out.columns else 'Percentage'
+    pct_col = 'Percentage' if 'Percentage' in out.columns else cs_col
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in out.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in out.columns else None
+    MULT = 329_900_000 / 10_000_000
+
+    def _to_num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', ''))
+        except Exception:
+            return 0.0
+
+    # sample size for raw/projection refresh
+    sample_size = 132040
+    if raw_col:
+        ss_mask = out['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any():
+            try:
+                sample_size = max(1, int(float(str(out.loc[ss_mask, raw_col].iloc[0]).replace(',', ''))))
+            except Exception:
+                pass
+
+    # demographic skew controls (only for context-sensitive rules)
+    male_pct = 0.0
+    young_pct = 0.0
+    black_pct = 0.0
+    gmask = out['Column'].astype(str).str.upper().str.strip() == 'GENDER'
+    for _, row in out[gmask].iterrows():
+        val = str(row.get('Value', '')).strip().upper()
+        p = _to_num(row.get(cs_col, row.get(pct_col, 0)))
+        if val in ('MALE', 'TRANS MALE'):
+            male_pct += p
+    amask = out['Column'].astype(str).str.upper().str.strip() == 'AGE'
+    for _, row in out[amask].iterrows():
+        val = str(row.get('Value', '')).strip().upper()
+        p = _to_num(row.get(cs_col, row.get(pct_col, 0)))
+        if any(x in val for x in ['18-24', '25-34', '18 -', '25 -', 'GEN Z', 'MILLENNIAL']):
+            young_pct += p
+    emask = out['Column'].astype(str).str.upper().str.strip() == 'ETHNICITY'
+    for _, row in out[emask].iterrows():
+        val = str(row.get('Value', '')).strip().upper()
+        p = _to_num(row.get(cs_col, row.get(pct_col, 0)))
+        if 'BLACK' in val and 'AFRICAN' in val:
+            black_pct += p
+
+    def _cat_rows(cat):
+        m = out['Column'].astype(str).str.upper().str.strip() == str(cat).upper()
+        rows = []
+        for idx, row in out[m].iterrows():
+            rows.append((idx, str(row.get('Value', '')).strip(), _to_num(row.get(bp_col, 0))))
+        return rows
+
+    def _find_idx(cat, needle_list):
+        rows = _cat_rows(cat)
+        for n in needle_list:
+            n_up = str(n).upper()
+            for idx, val, _bp in rows:
+                if n_up in str(val).upper():
+                    return idx
+        return None
+
+    def _bp(idx):
+        return _to_num(out.at[idx, bp_col])
+
+    def _write_bp(idx, new_bp):
+        new_bp = max(0.01, min(float(new_bp), 95.0))
+        s = f"{new_bp:.4f}"
+        out.at[idx, bp_col] = s
+        if cs_col in out.columns:
+            out.at[idx, cs_col] = s
+        if pct_col in out.columns:
+            out.at[idx, pct_col] = s
+        if raw_col:
+            raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+            out.at[idx, raw_col] = str(raw)
+            if proj_col:
+                out.at[idx, proj_col] = str(int(round(raw * MULT)))
+
+    fixes = 0
+
+    # 1) BETTING: DK/FD over Bet365 only for likely US sports-betting audience shape
+    sports_betting_shape = (male_pct >= 52.0) or (young_pct >= 45.0) or (black_pct >= 25.0 and male_pct >= 45.0)
+    if sports_betting_shape:
+        bet365_idx = _find_idx('BETTING', ['BET365'])
+        dk_idx = _find_idx('BETTING', ['DRAFTKINGS', 'DRAFT KINGS'])
+        fd_idx = _find_idx('BETTING', ['FANDUEL', 'FAN DUEL'])
+        if bet365_idx is not None and (dk_idx is not None or fd_idx is not None):
+            b = _bp(bet365_idx)
+            dk = _bp(dk_idx) if dk_idx is not None else None
+            fd = _bp(fd_idx) if fd_idx is not None else None
+            leader = max([x for x in [dk, fd] if x is not None] or [0.0])
+            if b > leader and leader > 0:
+                target_b = max(0.01, leader * 0.92)
+                _write_bp(bet365_idx, target_b)
+                fixes += 1
+                b = target_b
+            if dk_idx is not None and dk is not None and dk < b * 1.05:
+                _write_bp(dk_idx, min(95.0, b * 1.08))
+                fixes += 1
+            if fd_idx is not None and fd is not None and fd < b * 1.05:
+                _write_bp(fd_idx, min(95.0, b * 1.08))
+                fixes += 1
+
+    # 2) MEDIA: TODAY/TODAY SHOW should not dominate younger/male-skewing audiences
+    if (male_pct >= 55.0 and young_pct >= 40.0) or (black_pct >= 25.0):
+        today_idx = _find_idx('MEDIA', ['TODAY SHOW', 'THE TODAY SHOW', 'TODAY'])
+        if today_idx is not None and _bp(today_idx) > 8.0:
+            _write_bp(today_idx, 8.0)
+            fixes += 1
+
+    # 3) WHERE THEY DINE: if top item is unknown/niche and too high, cap it
+    mainstream_dine_tokens = [
+        'APPLEBEE', 'CHILI', 'BUFFALO WILD WINGS', 'OLIVE GARDEN', 'TEXAS ROADHOUSE',
+        'CHEESECAKE FACTORY', 'LONGHORN', 'IHOP', 'RED LOBSTER', 'RED ROBIN',
+        'OUTBACK', 'DAVE & BUSTER', 'TGI FRIDAYS'
+    ]
+    dine_rows = sorted(_cat_rows('WHERE THEY DINE'), key=lambda x: -x[2])
+    if dine_rows:
+        top_idx, top_val, top_bp = dine_rows[0]
+        is_mainstream = any(tok in top_val.upper() for tok in mainstream_dine_tokens)
+        if (not is_mainstream) and top_bp >= 8.0:
+            _write_bp(top_idx, 3.5)
+            fixes += 1
+
+    # 4) QSR: Buffalo Wild Wings should not be buried for this audience shape
+    if (male_pct >= 55.0 and young_pct >= 40.0) or (black_pct >= 25.0):
+        bww_idx = _find_idx('QSR', ['BUFFALO WILD WINGS', 'BWW'])
+        if bww_idx is not None and _bp(bww_idx) < 6.5:
+            _write_bp(bww_idx, 7.5)
+            fixes += 1
+
+    # 5) WHERE THEY SHOP: small uplift for sports/shoe retail presence
+    if (male_pct >= 55.0 and young_pct >= 40.0) or (black_pct >= 25.0):
+        shop_rows = _cat_rows('WHERE THEY SHOP')
+        sport_tokens = [
+            'FOOT LOCKER', 'DICKS SPORTING', "DICK'S SPORTING", 'CHAMPS',
+            'FINISH LINE', 'JD SPORTS', 'HIBBETT', 'SNIPES', 'NIKE', 'ADIDAS'
+        ]
+        for idx, val, cur in shop_rows:
+            if any(tok in val.upper() for tok in sport_tokens):
+                new_v = min(95.0, cur * 1.12)
+                if abs(new_v - cur) >= 0.15:
+                    _write_bp(idx, new_v)
+                    fixes += 1
+
+    if not SILENCE_VERBOSE_OUTPUT and fixes:
+        print(f"🛡️ Behavioral plausibility guard: {fixes} deterministic correction(s)")
+
+    return out
+
+def enforce_behavioral_bp_uniqueness(df):
+    """
+    Reduce synthetic-looking repeated Brand Penetration values in behavioral
+    categories by applying tiny deterministic jitter to ties.
+    """
+    import pandas as pd
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    out = df.copy()
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in out.columns else None
+    if not bp_col:
+        return out
+    cs_col = 'Category Share' if 'Category Share' in out.columns else 'Percentage'
+    pct_col = 'Percentage' if 'Percentage' in out.columns else cs_col
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in out.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in out.columns else None
+    MULT = 329_900_000 / 10_000_000
+
+    demo_meta = {
+        'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
+        'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+        'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'
+    }
+
+    def _to_num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', ''))
+        except Exception:
+            return 0.0
+
+    sample_size = 132040
+    if raw_col:
+        ss_mask = out['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any():
+            try:
+                sample_size = max(1, int(float(str(out.loc[ss_mask, raw_col].iloc[0]).replace(',', ''))))
+            except Exception:
+                pass
+
+    touched = 0
+    for cat in out['Column'].astype(str).str.upper().str.strip().unique():
+        if cat in demo_meta:
+            continue
+        cm = out['Column'].astype(str).str.upper().str.strip() == cat
+        sub = out[cm].copy()
+        if sub.empty:
+            continue
+        sub['_bp'] = sub[bp_col].map(_to_num).round(4)
+        dup_counts = sub['_bp'].value_counts()
+        dup_vals = [v for v, c in dup_counts.items() if c > 1 and v >= 0.05]
+        if not dup_vals:
+            continue
+        for dv in dup_vals:
+            dup_idx = list(sub[sub['_bp'] == dv].index)
+            for k, ridx in enumerate(dup_idx):
+                # deterministic micro-jitter (~0.0001-0.0490) with alternating sign.
+                # Wider spread avoids repeated 4-decimal ties across large groups.
+                step = ((abs(hash(f"{cat}|{ridx}|{k}")) % 490) + 1) / 10000.0
+                sign = -1.0 if (k % 2 == 0) else 1.0
+                new_bp = max(0.01, min(95.0, dv + sign * step))
+                s = f"{new_bp:.4f}"
+                out.at[ridx, bp_col] = s
+                if cs_col in out.columns:
+                    out.at[ridx, cs_col] = s
+                if pct_col in out.columns:
+                    out.at[ridx, pct_col] = s
+                if raw_col:
+                    raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+                    out.at[ridx, raw_col] = str(raw)
+                    if proj_col:
+                        out.at[ridx, proj_col] = str(int(round(raw * MULT)))
+                touched += 1
+
+        # Second pass: de-round suspiciously "perfect" values like 40.0004,
+        # 25.0006, 60.0098 in behavioral categories.
+        for ridx in sub.index:
+            cur = _to_num(out.at[ridx, bp_col])
+            if cur <= 0.01:
+                continue
+            frac = abs(cur - round(cur))
+            near_integer = (frac < 0.02) or (frac > 0.98)
+            # Also catch values that are effectively one-decimal/whole-number shapes.
+            near_one_decimal = abs(cur - round(cur, 1)) < 0.01
+            if not (near_integer or near_one_decimal):
+                continue
+            # Deterministic perturbation: 0.0830..0.3470
+            mag = ((abs(hash(f"deround|{cat}|{ridx}")) % 265) + 83) / 1000.0
+            sign = -1.0 if (abs(hash(f"sign|{cat}|{ridx}")) % 2 == 0) else 1.0
+            new_bp = max(0.01, min(95.0, cur + sign * mag))
+            # If this still lands near integer, nudge again.
+            nfrac = abs(new_bp - round(new_bp))
+            if nfrac < 0.01 or nfrac > 0.99:
+                new_bp = max(0.01, min(95.0, new_bp + (0.137 if sign < 0 else -0.137)))
+            s = f"{new_bp:.4f}"
+            out.at[ridx, bp_col] = s
+            if cs_col in out.columns:
+                out.at[ridx, cs_col] = s
+            if pct_col in out.columns:
+                out.at[ridx, pct_col] = s
+            if raw_col:
+                raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+                out.at[ridx, raw_col] = str(raw)
+                if proj_col:
+                    out.at[ridx, proj_col] = str(int(round(raw * MULT)))
+            touched += 1
+
+    if not SILENCE_VERBOSE_OUTPUT and touched:
+        print(f"🎛️ Behavioral BP uniqueness guard: jittered {touched} tied values")
+    return out
+
+def deduplicate_values_within_category(df):
+    """
+    Final safeguard: remove duplicate Value rows inside each Column category.
+    Keeps one row per canonicalized value and sums percentages/counts.
+    """
+    import pandas as pd
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
+    cs_col = 'Category Share' if 'Category Share' in df.columns else None
+    pct_col = 'Percentage' if 'Percentage' in df.columns else None
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in df.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in df.columns else None
+
+    def _num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', ''))
+        except Exception:
+            return 0.0
+
+    out = df.copy()
+    out['_CAT_KEY'] = out['Column'].astype(str).str.strip().str.upper()
+    out['_VAL_KEY'] = out.apply(
+        lambda r: _canonical_demo_value(str(r['Column']), str(r['Value'])),
+        axis=1
+    )
+
+    keep_rows = []
+    for (cat_key, val_key), g in out.groupby(['_CAT_KEY', '_VAL_KEY'], dropna=False):
+        row = g.iloc[0].copy()
+        row['Column'] = cat_key
+        row['Value'] = str(g.iloc[0]['Value']).strip()
+        # Sum numeric-like metrics where present
+        if bp_col:
+            row[bp_col] = sum(_num(v) for v in g[bp_col].tolist())
+        if cs_col:
+            row[cs_col] = sum(_num(v) for v in g[cs_col].tolist())
+        if pct_col and (cs_col is None or pct_col != cs_col):
+            row[pct_col] = sum(_num(v) for v in g[pct_col].tolist())
+        if raw_col:
+            row[raw_col] = int(round(sum(_num(v) for v in g[raw_col].tolist())))
+        if proj_col:
+            row[proj_col] = int(round(sum(_num(v) for v in g[proj_col].tolist())))
+        keep_rows.append(row)
+
+    result = pd.DataFrame(keep_rows).drop(columns=['_CAT_KEY', '_VAL_KEY'], errors='ignore')
+    if not SILENCE_VERBOSE_OUTPUT:
+        removed = len(df) - len(result)
+        if removed > 0:
+            print(f"🧹 Final category dedupe: removed {removed} duplicate rows")
+    return result
 
 def ensure_all_dmas_present(df):
     """
@@ -26873,6 +27714,8 @@ def ensure_percentage_four_decimals(df):
     Keeps non-numeric entries as-is (but normally everything should be numeric here).
     """
     import pandas as pd
+    if 'Percentage' not in df.columns:
+        return df
     s = pd.to_numeric(df['Percentage'], errors='coerce')
     # Fallback zeros for NaNs
     s = s.fillna(0.0)
@@ -26888,6 +27731,8 @@ def enforce_max_four_decimals_across_columns(df):
     import re
     numeric_like_cols = [
         'Percentage',
+        'Brand Penetration (Row)',
+        'Category Share',
         'Original Raw Numbers',
         'Original Raw Numbers (Database)',
         'Estimated Raw Numbers (From Final %)',
