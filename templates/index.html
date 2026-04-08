@@ -17641,29 +17641,232 @@
     </div>
 
     <script>
-        // VERSION: 2026-04-07-v5 - Profile open: capture delegation + header z-index + modal stacking
-        console.log('🔄 Script version: 2026-04-07-v5');
+        // VERSION: 2026-04-07-v6 - Profile handlers at top of script (avoid never-defined if later code throws)
+        console.log('🔄 Script version: 2026-04-07-v6');
+
+        // ============================================================================
+        // PROFILE SETTINGS MODAL (window.* so inline onclick in HTML resolves reliably)
+        // ============================================================================
+
+        window.openProfileSettings = function openProfileSettings() {
+            var modal = document.getElementById('profileSettingsModal');
+            if (!modal) return;
+            modal.classList.add('open');
+            var pm = document.getElementById('profileMsg');
+            if (pm) pm.textContent = '';
+            var cur = document.getElementById('profileCurrentPw');
+            var np = document.getElementById('profileNewPw');
+            var cp = document.getElementById('profileConfirmPw');
+            if (cur) cur.value = '';
+            if (np) np.value = '';
+            if (cp) cp.value = '';
+            fetch('/api/user/info', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (!d.success) return;
+                    var set = function(id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; };
+                    set('profileUsername', d.username);
+                    set('profileFirstName', d.first_name);
+                    set('profileLastName', d.last_name);
+                    set('profileEmail', d.email);
+                    set('profileCompany', d.company);
+                    set('profileDepartment', d.department);
+                }).catch(function() {});
+        };
+
+        window.closeProfileSettings = function closeProfileSettings() {
+            var m = document.getElementById('profileSettingsModal');
+            if (m) m.classList.remove('open');
+        };
+
+        window.saveProfileSettings = function saveProfileSettings() {
+            var msg = document.getElementById('profileMsg');
+            if (!msg) return;
+            msg.textContent = '';
+            msg.className = 'profile-msg';
+            var newPw = document.getElementById('profileNewPw').value;
+            var confirmPw = document.getElementById('profileConfirmPw').value;
+            if (newPw && newPw !== confirmPw) {
+                msg.textContent = 'New passwords do not match.';
+                msg.classList.add('error');
+                return;
+            }
+            if (newPw && newPw.length < 8) {
+                msg.textContent = 'New password must be at least 8 characters.';
+                msg.classList.add('error');
+                return;
+            }
+            var body = {
+                first_name: document.getElementById('profileFirstName').value,
+                last_name: document.getElementById('profileLastName').value,
+                email: document.getElementById('profileEmail').value,
+                company: document.getElementById('profileCompany').value,
+                department: document.getElementById('profileDepartment').value
+            };
+            if (newPw) {
+                body.current_password = document.getElementById('profileCurrentPw').value;
+                body.new_password = newPw;
+            }
+            var btn = document.getElementById('profileSaveBtn');
+            if (!btn) return;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            fetch('/api/user/profile', {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+                if (d.success) {
+                    msg.textContent = 'Profile updated successfully.';
+                    msg.classList.add('success');
+                    document.getElementById('profileCurrentPw').value = '';
+                    document.getElementById('profileNewPw').value = '';
+                    document.getElementById('profileConfirmPw').value = '';
+                } else {
+                    msg.textContent = d.error || 'Update failed.';
+                    msg.classList.add('error');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+                msg.textContent = 'Network error. Please try again.';
+                msg.classList.add('error');
+            });
+        };
+
+        // ============================================================================
+        // PROFILE PICTURE UPLOAD
+        // ============================================================================
+
+        window.openAvatarUpload = function openAvatarUpload() {
+            var m = document.getElementById('avatarUploadModal');
+            if (m) m.classList.add('open');
+            updateAvatarPreview();
+        };
         
-        // Open Account Settings via [data-open-profile] — capture phase so clicks are not lost to overlapping UI
-        document.addEventListener('click', function(ev) {
-            var opener = ev.target.closest && ev.target.closest('[data-open-profile]');
-            if (!opener) return;
-            ev.preventDefault();
-            ev.stopPropagation();
-            if (typeof window.openProfileSettings === 'function') {
+        window.closeAvatarUpload = function closeAvatarUpload() {
+            var m = document.getElementById('avatarUploadModal');
+            if (m) m.classList.remove('open');
+        };
+        
+        function updateAvatarPreview() {
+            const preview = document.getElementById('avatarPreview');
+            if (!preview) return;
+            const currentPic = '{{ profile_picture }}';
+            if (currentPic) {
+                preview.innerHTML = `<img src="${currentPic}" alt="Current avatar">`;
+            } else {
+                preview.innerHTML = `<span class="avatar-preview-initials">{{ username[:2] }}</span>`;
+            }
+        }
+        
+        window.triggerAvatarUpload = function triggerAvatarUpload() {
+            var inp = document.getElementById('avatarFileInput');
+            if (inp) inp.click();
+        };
+        
+        window.handleAvatarUpload = async function handleAvatarUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const file = input.files[0];
+            
+            // Check file size (500KB max)
+            if (file.size > 500 * 1024) {
+                alert('File too large. Maximum size is 500KB.');
+                return;
+            }
+            
+            // Preview the image
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('avatarPreview').innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+            };
+            reader.readAsDataURL(file);
+            
+            // Upload to server
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/profile-picture', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update the header avatar
+                    const headerAvatar = document.querySelector('.user-avatar');
+                    headerAvatar.innerHTML = `<img src="${data.profile_picture}" alt="Profile">`;
+                    alert('Profile picture updated!');
+                    closeAvatarUpload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Upload failed: ' + e.message);
+            }
+        };
+        
+        window.removeAvatar = async function removeAvatar() {
+            if (!confirm('Remove your profile picture?')) return;
+            
+            try {
+                const response = await fetch('/api/profile-picture', {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update the header avatar to initials
+                    const headerAvatar = document.querySelector('.user-avatar');
+                    headerAvatar.innerHTML = `<span class="user-avatar-initials">{{ username[:2] }}</span>`;
+                    updateAvatarPreview();
+                    alert('Profile picture removed.');
+                    closeAvatarUpload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Failed to remove: ' + e.message);
+            }
+        };
+        // Direct bind on profile row (header is already in DOM above this script). Guard so we never double-bind.
+        (function wireProfileMenuButton() {
+            function go(e) {
+                if (e) { e.preventDefault(); e.stopPropagation(); }
                 window.openProfileSettings();
             }
-        }, true);
-        document.addEventListener('keydown', function(ev) {
-            if (ev.key !== 'Enter' && ev.key !== ' ') return;
-            var opener = ev.target.closest && ev.target.closest('[data-open-profile]');
-            if (!opener) return;
-            ev.preventDefault();
-            if (typeof window.openProfileSettings === 'function') {
-                window.openProfileSettings();
+            function bind() {
+                var row = document.querySelector('.user-menu [data-open-profile]');
+                if (!row) {
+                    console.warn('[Account Settings] .user-menu [data-open-profile] not found');
+                    return;
+                }
+                if (row.getAttribute('data-profile-wired') === '1') return;
+                row.setAttribute('data-profile-wired', '1');
+                row.addEventListener('click', go, false);
+                row.addEventListener('keydown', function(ev) {
+                    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+                    go(ev);
+                }, false);
             }
-        }, true);
-        
+            bind();
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', bind, { once: true });
+            }
+        })();
+
         let currentJobId = null;
         let pollInterval = null;
         let currentCSVData = null;
@@ -68655,202 +68858,6 @@
             }
         }
         
-        // ============================================================================
-        // PROFILE SETTINGS MODAL (window.* so inline onclick in HTML resolves reliably)
-        // ============================================================================
-
-        window.openProfileSettings = function openProfileSettings() {
-            var modal = document.getElementById('profileSettingsModal');
-            if (!modal) return;
-            modal.classList.add('open');
-            var pm = document.getElementById('profileMsg');
-            if (pm) pm.textContent = '';
-            var cur = document.getElementById('profileCurrentPw');
-            var np = document.getElementById('profileNewPw');
-            var cp = document.getElementById('profileConfirmPw');
-            if (cur) cur.value = '';
-            if (np) np.value = '';
-            if (cp) cp.value = '';
-            fetch('/api/user/info', { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (!d.success) return;
-                    var set = function(id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; };
-                    set('profileUsername', d.username);
-                    set('profileFirstName', d.first_name);
-                    set('profileLastName', d.last_name);
-                    set('profileEmail', d.email);
-                    set('profileCompany', d.company);
-                    set('profileDepartment', d.department);
-                }).catch(function() {});
-        };
-
-        window.closeProfileSettings = function closeProfileSettings() {
-            var m = document.getElementById('profileSettingsModal');
-            if (m) m.classList.remove('open');
-        };
-
-        window.saveProfileSettings = function saveProfileSettings() {
-            var msg = document.getElementById('profileMsg');
-            if (!msg) return;
-            msg.textContent = '';
-            msg.className = 'profile-msg';
-            var newPw = document.getElementById('profileNewPw').value;
-            var confirmPw = document.getElementById('profileConfirmPw').value;
-            if (newPw && newPw !== confirmPw) {
-                msg.textContent = 'New passwords do not match.';
-                msg.classList.add('error');
-                return;
-            }
-            if (newPw && newPw.length < 8) {
-                msg.textContent = 'New password must be at least 8 characters.';
-                msg.classList.add('error');
-                return;
-            }
-            var body = {
-                first_name: document.getElementById('profileFirstName').value,
-                last_name: document.getElementById('profileLastName').value,
-                email: document.getElementById('profileEmail').value,
-                company: document.getElementById('profileCompany').value,
-                department: document.getElementById('profileDepartment').value
-            };
-            if (newPw) {
-                body.current_password = document.getElementById('profileCurrentPw').value;
-                body.new_password = newPw;
-            }
-            var btn = document.getElementById('profileSaveBtn');
-            if (!btn) return;
-            btn.disabled = true;
-            btn.textContent = 'Saving...';
-            fetch('/api/user/profile', {
-                method: 'PUT',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                btn.disabled = false;
-                btn.textContent = 'Save Changes';
-                if (d.success) {
-                    msg.textContent = 'Profile updated successfully.';
-                    msg.classList.add('success');
-                    document.getElementById('profileCurrentPw').value = '';
-                    document.getElementById('profileNewPw').value = '';
-                    document.getElementById('profileConfirmPw').value = '';
-                } else {
-                    msg.textContent = d.error || 'Update failed.';
-                    msg.classList.add('error');
-                }
-            })
-            .catch(function() {
-                btn.disabled = false;
-                btn.textContent = 'Save Changes';
-                msg.textContent = 'Network error. Please try again.';
-                msg.classList.add('error');
-            });
-        };
-
-        // ============================================================================
-        // PROFILE PICTURE UPLOAD
-        // ============================================================================
-
-        window.openAvatarUpload = function openAvatarUpload() {
-            var m = document.getElementById('avatarUploadModal');
-            if (m) m.classList.add('open');
-            updateAvatarPreview();
-        };
-        
-        window.closeAvatarUpload = function closeAvatarUpload() {
-            var m = document.getElementById('avatarUploadModal');
-            if (m) m.classList.remove('open');
-        };
-        
-        function updateAvatarPreview() {
-            const preview = document.getElementById('avatarPreview');
-            const currentPic = '{{ profile_picture }}';
-            if (currentPic) {
-                preview.innerHTML = `<img src="${currentPic}" alt="Current avatar">`;
-            } else {
-                preview.innerHTML = `<span class="avatar-preview-initials">{{ username[:2] }}</span>`;
-            }
-        }
-        
-        window.triggerAvatarUpload = function triggerAvatarUpload() {
-            var inp = document.getElementById('avatarFileInput');
-            if (inp) inp.click();
-        };
-        
-        window.handleAvatarUpload = async function handleAvatarUpload(input) {
-            if (!input.files || !input.files[0]) return;
-            
-            const file = input.files[0];
-            
-            // Check file size (500KB max)
-            if (file.size > 500 * 1024) {
-                alert('File too large. Maximum size is 500KB.');
-                return;
-            }
-            
-            // Preview the image
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('avatarPreview').innerHTML = `<img src="${e.target.result}" alt="Preview">`;
-            };
-            reader.readAsDataURL(file);
-            
-            // Upload to server
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            try {
-                const response = await fetch('/api/profile-picture', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Update the header avatar
-                    const headerAvatar = document.querySelector('.user-avatar');
-                    headerAvatar.innerHTML = `<img src="${data.profile_picture}" alt="Profile">`;
-                    alert('Profile picture updated!');
-                    closeAvatarUpload();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (e) {
-                alert('Upload failed: ' + e.message);
-            }
-        };
-        
-        window.removeAvatar = async function removeAvatar() {
-            if (!confirm('Remove your profile picture?')) return;
-            
-            try {
-                const response = await fetch('/api/profile-picture', {
-                    method: 'DELETE',
-                    credentials: 'same-origin'
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Update the header avatar to initials
-                    const headerAvatar = document.querySelector('.user-avatar');
-                    headerAvatar.innerHTML = `<span class="user-avatar-initials">{{ username[:2] }}</span>`;
-                    updateAvatarPreview();
-                    alert('Profile picture removed.');
-                    closeAvatarUpload();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (e) {
-                alert('Failed to remove: ' + e.message);
-            }
-        };
         
         // ============================================================================
         // TEAM CHAT WIDGET
