@@ -2572,6 +2572,16 @@
                         </div>
                     </div>
 
+                    <!-- Flywheel Conversion Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasFlywheelConversionAccess">
+                                <span style="font-weight: 600;">🔄 FLYWHEEL IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- LLMO IQ Access -->
                     <div class="dashboard-access-item">
                         <div class="dashboard-access-header">
@@ -2716,6 +2726,10 @@
                                     <label class="checkbox-group">
                                         <input type="checkbox" id="moduleSFLFConversion" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>🔄 SF-LF Conversion</span>
+                                    </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleFlywheelConversion" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
+                                        <span>🔄 Flywheel Conversion</span>
                                     </label>
                                 </div>
                                 <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
@@ -6646,6 +6660,7 @@
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
             document.getElementById('hasSFConversionAccess').checked = false;
+            document.getElementById('hasFlywheelConversionAccess').checked = false;
             document.getElementById('hasTicketSalesIQAccess').checked = true;
             document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('getsHedgeFundIQEmails').checked = false;
@@ -6769,6 +6784,7 @@
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
             document.getElementById('hasSFConversionAccess').checked = user.has_sf_conversion_access === true; // Default false
+            document.getElementById('hasFlywheelConversionAccess').checked = user.has_flywheel_conversion_access === true; // Default false
             document.getElementById('hasTicketSalesIQAccess').checked = user.has_ticket_sales_iq_access !== false; // Default true
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('getsHedgeFundIQEmails').checked = user.gets_hedge_fund_iq_emails === true; // Default false
@@ -8026,6 +8042,7 @@
             if (document.getElementById('moduleWatchTime').checked) modules.push('watch_time');
             if (document.getElementById('moduleTicketSalesTracker')?.checked || document.getElementById('hasTicketSalesTrackerRun')?.checked) modules.push('ticket_sales_tracker');
             if (document.getElementById('moduleSFLFConversion')?.checked) modules.push('sf_lf_conversion');
+            if (document.getElementById('moduleFlywheelConversion')?.checked) modules.push('flywheel_conversion');
             return modules;
         }
 
@@ -8066,6 +8083,10 @@
                     case 'sf_lf_conversion':
                         const sflf = document.getElementById('moduleSFLFConversion');
                         if (sflf) sflf.checked = true;
+                        break;
+                    case 'flywheel_conversion':
+                        const fw = document.getElementById('moduleFlywheelConversion');
+                        if (fw) fw.checked = true;
                         break;
                 }
             });
@@ -8613,6 +8634,7 @@
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
                 has_sf_conversion_access: document.getElementById('hasSFConversionAccess').checked,
+                has_flywheel_conversion_access: document.getElementById('hasFlywheelConversionAccess').checked,
                 has_ticket_sales_iq_access: document.getElementById('hasTicketSalesIQAccess').checked,
                 has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
                 gets_hedge_fund_iq_emails: document.getElementById('getsHedgeFundIQEmails').checked,

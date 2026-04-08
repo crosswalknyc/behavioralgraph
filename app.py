@@ -2760,6 +2760,8 @@ def create_user():
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
             'has_llmo_iq_access': req_data.get('has_llmo_iq_access', cd.get('has_llmo_iq_access', False) if cd else False),
             'has_talent_fit_access': req_data.get('has_talent_fit_access', cd.get('has_talent_fit_access', False) if cd else False),
+            'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
+            'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -2883,6 +2885,10 @@ def update_user(username):
             user['has_llmo_iq_access'] = bool(req_data['has_llmo_iq_access'])
         if 'has_talent_fit_access' in req_data:
             user['has_talent_fit_access'] = bool(req_data['has_talent_fit_access'])
+        if 'has_sf_conversion_access' in req_data:
+            user['has_sf_conversion_access'] = bool(req_data['has_sf_conversion_access'])
+        if 'has_flywheel_conversion_access' in req_data:
+            user['has_flywheel_conversion_access'] = bool(req_data['has_flywheel_conversion_access'])
         if 'auto_access_new' in req_data:
             user['auto_access_new'] = req_data['auto_access_new']
         if 'collab_team' in req_data:
