@@ -2936,17 +2936,20 @@ def update_user(username):
 @app.route('/api/admin/users/<username>/add-credits', methods=['POST'])
 @requires_admin
 def add_user_credits(username):
-    """Add credits to a user and record attribution (what the credits were for). Admin only.
+    """Add or deduct credits and record attribution. Admin only.
 
-    Personal-credit users: increments ``user['credits']`` (None is treated as 0).
-
-    Company pool users (not on personal override): increases the shared company
-    ``credit_pool`` so the allocation is actually spendable from the pool.
+    * ``deduct: false`` (default): grant credits — personal balance += amount, or
+      company ``credit_pool`` total += amount for pool users.
+    * ``deduct: true``: charge credits — personal balance -= amount, or
+      company ``credit_pool_used`` += amount for pool users (uses shared pool).
     """
     try:
         req = request.get_json() or {}
         credits = req.get('credits')
-        reason = (req.get('reason') or '').strip() or 'Credits added by admin'
+        deduct = bool(req.get('deduct'))
+        reason = (req.get('reason') or '').strip() or (
+            'Credits deducted by admin' if deduct else 'Credits added by admin'
+        )
         if credits is None:
             return jsonify({'success': False, 'error': 'credits is required'}), 400
         try:
@@ -2961,8 +2964,6 @@ def add_user_credits(username):
             return jsonify({'success': False, 'error': 'User not found'})
         user = data['users'][username]
         bal = _numeric_credits_balance(user)
-        if bal == -1:
-            return jsonify({'success': False, 'error': 'User has unlimited credits; cannot add'})
 
         added_by = (get_current_user() or {}).get('username') or 'admin'
         added_at = datetime.now().isoformat()
@@ -2971,12 +2972,64 @@ def add_user_credits(username):
         pool = _get_company_pool(data, company)
         use_pool = pool is not None and user.get('credit_source') != 'personal'
 
+        if deduct:
+            if bal == -1 and not use_pool:
+                return jsonify({'success': False, 'error': 'User has unlimited personal credits; cannot deduct'})
+            if use_pool:
+                pt = pool.get('credit_pool')
+                if pt is None:
+                    pt = 0
+                pu = pool.get('credit_pool_used')
+                if pu is None:
+                    pu = 0
+                if pt != -1:
+                    remaining = pt - pu
+                    if remaining < credits:
+                        return jsonify({
+                            'success': False,
+                            'error': f'Insufficient pool credits (remaining {remaining}, need {credits})'
+                        }), 400
+                pool['credit_pool_used'] = pu + credits
+                if pt == -1:
+                    resp_balance = -1
+                else:
+                    resp_balance = max(pool['credit_pool'] - pool['credit_pool_used'], 0)
+            else:
+                if bal < credits:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Insufficient credits (balance {bal}, need {credits})'
+                    }), 400
+                user['credits'] = bal - credits
+                resp_balance = user['credits']
+
+            history = user.setdefault('credit_attribution_history', [])
+            history.insert(0, {
+                'added_at': added_at,
+                'credits_deducted': credits,
+                'type': 'deduction',
+                'reason': reason,
+                'added_by': added_by
+            })
+            user['credit_attribution_history'] = history[:500]
+            save_users(data)
+            return jsonify({
+                'success': True,
+                'message': f'Deducted {credits} credits for {username}',
+                'credits': resp_balance,
+                'credit_source': 'pool' if use_pool else 'personal',
+                'deduct': True
+            })
+
+        # Grant credits
+        if bal == -1:
+            return jsonify({'success': False, 'error': 'User has unlimited credits; cannot add'})
+
         if use_pool:
             pt = pool.get('credit_pool')
             if pt is None:
                 pt = 0
             if pt == -1:
-                # Unlimited pool — record attribution only; nothing to add
                 resp_balance = -1
             else:
                 pool['credit_pool'] = pt + credits
@@ -3001,7 +3054,8 @@ def add_user_credits(username):
             'success': True,
             'message': f'Added {credits} credits to {username}',
             'credits': resp_balance,
-            'credit_source': 'pool' if use_pool else 'personal'
+            'credit_source': 'pool' if use_pool else 'personal',
+            'deduct': False
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})

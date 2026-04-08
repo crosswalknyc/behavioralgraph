@@ -2374,12 +2374,14 @@
                         <small style="color: var(--text-secondary); font-size: 0.7rem;">Set to -1 or check Unlimited for no limit</small>
                     </div>
                     <div id="addCreditsInModalWrap" class="form-group" style="display: none;">
-                        <label>Add credits to balance (with reason)</label>
+                        <label>Add or deduct credits (with reason)</label>
                         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                             <input type="number" id="modalAddCreditsAmount" min="1" value="10" style="width: 70px; padding: 0.4rem;">
-                            <input type="text" id="modalAddCreditsReason" placeholder="What for (e.g. Q1 allocation)" style="flex: 1; min-width: 140px; padding: 0.4rem;">
-                            <button type="button" class="btn btn-small btn-primary" onclick="addCreditsFromModal()">Add credits</button>
+                            <input type="text" id="modalAddCreditsReason" placeholder="What for (e.g. THE BETTER SISTER)" style="flex: 1; min-width: 140px; padding: 0.4rem;">
+                            <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalDeductCredits"> <span>Deduct (charge)</span></label>
+                            <button type="button" class="btn btn-small btn-primary" onclick="addCreditsFromModal()">Apply</button>
                         </div>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.35rem;">Grant adds to balance / pool total. Deduct removes from the user&rsquo;s balance or company pool (same as usage).</small>
                     </div>
                 </div>
 
@@ -7117,33 +7119,37 @@
                         </div>
                     </div>
                     <div class="activity-section">
-                        <h4>➕ Credits Added (Attributions)</h4>
-                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Credits attributed to this user and what they were for.</p>
+                        <h4>➕ Credits added / deducted (attributions)</h4>
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Grants and charges recorded for this user.</p>
                         <div class="recent-activity-list">
                             ${(user.credit_attribution_history && user.credit_attribution_history.length > 0) ? user.credit_attribution_history.slice(0, 100).map(entry => {
                                 const dateStr = entry.added_at ? formatDateTimePST(entry.added_at) : '';
-                                const reason = entry.reason || 'Credits added';
-                                const n = entry.credits_added != null ? entry.credits_added : 0;
+                                const reason = entry.reason || 'Credits change';
+                                const isDed = entry.type === 'deduction' || (entry.credits_deducted != null && entry.credits_deducted > 0);
+                                const n = isDed ? (entry.credits_deducted != null ? entry.credits_deducted : 0) : (entry.credits_added != null ? entry.credits_added : 0);
+                                const sign = isDed ? '−' : '+';
                                 const by = entry.added_by ? ` by ${entry.added_by}` : '';
-                                return `<div class="activity-item"><span>${reason} — +${n} credit(s)${by}</span><span class="time">${dateStr}</span></div>`;
-                            }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No credits added yet</div>'}
+                                return `<div class="activity-item"><span>${reason} — ${sign}${n} credit(s)${by}</span><span class="time">${dateStr}</span></div>`;
+                            }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No attributions yet</div>'}
                         </div>
                         ${user.credits !== -1 ? `
                         <div style="margin-top: 1.25rem; padding: 1rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color);">
-                            <h5 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">Add credits to this user</h5>
+                            <h5 style="margin: 0 0 0.75rem 0; font-size: 0.95rem;">Add or deduct credits</h5>
                             <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end;">
                                 <div>
                                     <label style="display: block; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Amount</label>
                                     <input type="number" id="addCreditsAmount" min="1" value="10" style="width: 80px; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
                                 </div>
                                 <div style="flex: 1; min-width: 180px;">
-                                    <label style="display: block; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">What these credits are for</label>
-                                    <input type="text" id="addCreditsReason" placeholder="e.g. Q1 allocation, bonus credits" style="width: 100%; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
+                                    <label style="display: block; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Reason (e.g. show / project)</label>
+                                    <input type="text" id="addCreditsReason" placeholder="e.g. THE BETTER SISTER" style="width: 100%; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
                                 </div>
-                                <button type="button" class="btn btn-primary" onclick="addCreditsToUser('${username}')">Add credits</button>
+                                <label class="checkbox-group" style="margin: 0 0 0.25rem 0; align-self: center;"><input type="checkbox" id="addCreditsDeduct"> <span>Deduct (charge)</span></label>
+                                <button type="button" class="btn btn-primary" onclick="addCreditsToUser('${username}')">Apply</button>
                             </div>
+                            <p style="font-size: 0.7rem; color: var(--text-secondary); margin: 0.5rem 0 0 0;">Check <strong>Deduct</strong> to remove credits from this user&rsquo;s balance or the company pool.</p>
                         </div>
-                        ` : '<p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">User has unlimited credits; no need to add.</p>'}
+                        ` : '<p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1rem;">User has unlimited personal credits; add/deduct from Edit User if they use a company pool.</p>'}
                     </div>
                 </div>
 
@@ -7284,9 +7290,11 @@
         async function addCreditsToUser(username) {
             const amountEl = document.getElementById('addCreditsAmount');
             const reasonEl = document.getElementById('addCreditsReason');
+            const deductEl = document.getElementById('addCreditsDeduct');
             if (!amountEl || !reasonEl) return;
             const credits = parseInt(amountEl.value, 10);
-            const reason = (reasonEl.value || '').trim() || 'Credits added by admin';
+            const deduct = !!(deductEl && deductEl.checked);
+            const reason = (reasonEl.value || '').trim() || (deduct ? 'Credits deducted by admin' : 'Credits added by admin');
             if (isNaN(credits) || credits < 1) {
                 if (typeof showToast === 'function') showToast('Enter a valid positive number of credits', true);
                 return;
@@ -7296,17 +7304,23 @@
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ credits, reason })
+                    body: JSON.stringify({ credits, reason, deduct })
                 });
-                const data = await response.json();
-                if (data.success) {
-                    if (typeof showToast === 'function') showToast(`Added ${credits} credits. New balance: ${data.credits}`);
+                const data = await response.json().catch(() => ({}));
+                if (response.ok && data.success) {
+                    const balLabel = data.credit_source === 'pool' ? 'Pool remaining' : 'New balance';
+                    const bal = data.credits === -1 ? '∞' : data.credits;
+                    if (typeof showToast === 'function') {
+                        showToast(deduct
+                            ? `Deducted ${credits} credits. ${balLabel}: ${bal}`
+                            : `Added ${credits} credits. ${balLabel}: ${bal}`);
+                    }
                     showUserDetails(username);
                 } else {
-                    if (typeof showToast === 'function') showToast(data.error || 'Failed to add credits', true);
+                    if (typeof showToast === 'function') showToast(data.error || 'Failed to update credits', true);
                 }
             } catch (e) {
-                if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not add credits'), true);
+                if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not update credits'), true);
             }
         }
 
@@ -7315,9 +7329,11 @@
             if (!username) return;
             const amountEl = document.getElementById('modalAddCreditsAmount');
             const reasonEl = document.getElementById('modalAddCreditsReason');
+            const deductEl = document.getElementById('modalDeductCredits');
             if (!amountEl || !reasonEl) return;
             const credits = parseInt(amountEl.value, 10);
-            const reason = (reasonEl.value || '').trim() || 'Credits added by admin';
+            const deduct = !!(deductEl && deductEl.checked);
+            const reason = (reasonEl.value || '').trim() || (deduct ? 'Credits deducted by admin' : 'Credits added by admin');
             if (isNaN(credits) || credits < 1) {
                 if (typeof showToast === 'function') showToast('Enter a valid positive number of credits', true);
                 return;
@@ -7327,18 +7343,28 @@
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ credits, reason })
+                    body: JSON.stringify({ credits, reason, deduct })
                 });
-                const data = await response.json();
-                if (data.success) {
-                    if (typeof showToast === 'function') showToast(`Added ${credits} credits. New balance: ${data.credits}`);
-                    document.getElementById('newCredits').value = data.credits;
-                    if (allUsers && allUsers[username]) allUsers[username].credits = data.credits;
+                const data = await response.json().catch(() => ({}));
+                if (response.ok && data.success) {
+                    const balLabel = data.credit_source === 'pool' ? 'Pool remaining' : 'New balance';
+                    const bal = data.credits === -1 ? '∞' : data.credits;
+                    if (typeof showToast === 'function') {
+                        showToast(deduct
+                            ? `Deducted ${credits} credits. ${balLabel}: ${bal}`
+                            : `Added ${credits} credits. ${balLabel}: ${bal}`);
+                    }
+                    if (data.credit_source !== 'pool' && document.getElementById('newCredits')) {
+                        document.getElementById('newCredits').value = data.credits === -1 ? '0' : data.credits;
+                    }
+                    if (allUsers && allUsers[username] && data.credit_source !== 'pool') {
+                        allUsers[username].credits = data.credits;
+                    }
                 } else {
-                    if (typeof showToast === 'function') showToast(data.error || 'Failed to add credits', true);
+                    if (typeof showToast === 'function') showToast(data.error || 'Failed to update credits', true);
                 }
             } catch (e) {
-                if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not add credits'), true);
+                if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not update credits'), true);
             }
         }
 
