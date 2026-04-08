@@ -3003,6 +3003,18 @@ def add_user_credits(username):
                 user['credits'] = bal - credits
                 resp_balance = user['credits']
 
+            # Same as consume_credit: total used + usage log (visible under "Credits used")
+            user['credits_used'] = user.get('credits_used', 0) + credits
+            usage_history = user.setdefault('credit_usage_history', [])
+            usage_history.insert(0, {
+                'used_at': added_at,
+                'description': reason,
+                'job_id': '',
+                'pull_type': 'Admin charge',
+                'credits_used': credits
+            })
+            user['credit_usage_history'] = usage_history[:500]
+
             history = user.setdefault('credit_attribution_history', [])
             history.insert(0, {
                 'added_at': added_at,
