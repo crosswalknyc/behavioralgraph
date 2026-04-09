@@ -15261,6 +15261,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # AGE hard gate: never allow "OTHER" row; rebase AGE to 100.
     df_final = enforce_no_age_other_and_rebase(df_final)
 
+    # Pipeline sanity gate: prevent catastrophic sample/BP regressions.
+    df_final = enforce_pipeline_sanity_guards(df_final, is_genpop=is_genpop, brand_category=brand_category)
+
     # Final math pass: BP × sample_size → Original Raw; within-category Category Share;
     # then US Gen Pop from raw (same as edit_sample_size.py)
     df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
@@ -27399,6 +27402,91 @@ def ensure_bp_driven_metric_alignment(df: pd.DataFrame) -> pd.DataFrame:
             )
         out = reconcile_final_output_from_bp_and_sample_size(out)
         out = add_us_gen_pop_projection(out)
+    return out
+
+
+def enforce_pipeline_sanity_guards(df: pd.DataFrame, is_genpop: bool = False, brand_category: str = None) -> pd.DataFrame:
+    """
+    Guardrail for catastrophic numeric regressions.
+
+    - For non-GenPop runs, enforce a minimum practical sample size floor.
+    - Clamp non-metadata Brand Penetration rows to valid range [0.0001, 99.9999].
+    - Recompute raw/category-share/projection after corrections.
+    """
+    if df is None or df.empty:
+        return df
+    if 'Column' not in df.columns:
+        return df
+    if 'Brand Penetration (Row)' not in df.columns:
+        return df
+
+    out = df.copy()
+    bp_col = 'Brand Penetration (Row)'
+    pct_col = 'Category Share' if 'Category Share' in out.columns else (
+        'Percentage' if 'Percentage' in out.columns else None)
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in out.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in out.columns else None
+
+    if pct_col is None or raw_col is None:
+        return out
+
+    def _to_float(x, default=0.0):
+        try:
+            return float(str(x).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return default
+
+    def _to_int(x, default=0):
+        try:
+            return int(round(float(str(x).replace(',', '').replace('%', '').strip())))
+        except Exception:
+            return default
+
+    cat_keys = out['Column'].astype(str).str.upper().str.strip()
+    meta = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
+
+    # 1) Sample-size sanity (non-GenPop only)
+    if not is_genpop:
+        ss_mask = cat_keys == 'SAMPLE SIZE'
+        if ss_mask.any():
+            sidx = out[ss_mask].index[0]
+            sample_size = _to_int(out.at[sidx, raw_col], 0)
+            if sample_size <= 0:
+                sample_size = _to_int(out.at[sidx, pct_col], 0)
+            if sample_size < 1000:
+                estimated = estimate_sample_size_for_unknown_brand(brand_category or '', None)
+                sample_size = max(10_000, estimated)
+                out.at[sidx, raw_col] = str(sample_size)
+                out.at[sidx, pct_col] = str(sample_size)
+                if proj_col:
+                    out.at[sidx, proj_col] = str(int(round((sample_size / 10_000_000) * 329_900_000)))
+                bi_mask = cat_keys == 'BRAND INPUT'
+                if bi_mask.any():
+                    bidx = out[bi_mask].index[0]
+                    out.at[bidx, raw_col] = str(sample_size)
+                    if proj_col:
+                        out.at[bidx, proj_col] = str(int(round((sample_size / 10_000_000) * 329_900_000)))
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"🛡️ Sample-size sanity guard: raised SAMPLE SIZE to {sample_size:,}")
+
+    # 2) BP sanity clamp for non-metadata rows
+    clamped = 0
+    for i in out.index:
+        c = str(out.at[i, 'Column']).strip().upper()
+        if c in meta:
+            continue
+        v = _to_float(out.at[i, bp_col], 0.0)
+        nv = max(0.0001, min(99.9999, v))
+        if abs(nv - v) > 1e-9:
+            out.at[i, bp_col] = f"{nv:.4f}"
+            clamped += 1
+
+    if clamped and not SILENCE_VERBOSE_OUTPUT:
+        print(f"🛡️ BP sanity guard: clamped {clamped} out-of-range BP value(s)")
+
+    # 3) Recompute dependent metrics to keep alignment strict
+    out = reconcile_final_output_from_bp_and_sample_size(out)
+    out = add_us_gen_pop_projection(out)
     return out
 
 
