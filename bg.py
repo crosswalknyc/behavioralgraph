@@ -13048,7 +13048,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                             multiplier = 0.995
             except Exception:
                 pass
-        final_sample_size = max(1, int(round(base_ref * multiplier)))
+        final_sample_size = max(10_000, int(round(base_ref * multiplier)))
         final_sample_size = (final_sample_size // 10) * 10
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"📊 Rerun: using reference sample size {final_sample_size:,} (ref={base_ref:,}, multiplier={multiplier})")
