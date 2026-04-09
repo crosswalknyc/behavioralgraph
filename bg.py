@@ -6957,21 +6957,26 @@ Current total: {current_total:.2f}% (should be 100%)
    - Atlanta Hawks → Atlanta 10-15%, nearby Southern markets elevated
    - In-N-Out → California markets dominate, minimal elsewhere
 
-2. **Ethnic/Cultural Audiences**: Match known population distributions.
+2. **US BASE ASSUMPTION (MANDATORY)**: This profile is built from a US gen-pop
+   audience base of ~10 million people. Treat this as US-first behavior.
+   Non-US publications/platforms can appear but should rarely lead unless the
+   subject itself is explicitly international/UK-first.
+
+3. **Ethnic/Cultural Audiences**: Match known population distributions.
    - Black audience → Atlanta, DC, Houston, Memphis, New Orleans, Detroit elevated
    - Hispanic audience → LA, Houston, Miami, San Antonio, Phoenix elevated
    - Asian audience → SF Bay Area, LA, NYC, Seattle elevated
 
-3. **Age/Lifestyle Patterns**:
+4. **Age/Lifestyle Patterns**:
    - Young professionals → NYC, LA, SF, Seattle, Denver, Austin elevated
    - Retirees → Phoenix, Tampa, Miami, Sarasota elevated
    - Families → Suburban metros across all regions
 
-4. **Income Patterns**:
+5. **Income Patterns**:
    - Luxury brands → NYC, SF, LA, DC, Boston elevated
    - Value brands → More evenly distributed with middle-America strength
 
-5. **National Brands**: Should roughly follow US population distribution:
+6. **National Brands**: Should roughly follow US population distribution:
    - NYC ~6%, LA ~4.5%, Chicago ~3%, Dallas ~2.5%, Houston ~2.3%, etc.
    - Adjust based on brand's specific customer profile
 
@@ -10785,6 +10790,63 @@ def enforce_input_brand_100(df_behavior, input_brands):
         except:
             pass
     
+    import re
+    import urllib.parse
+
+    def _domain_core(value: str) -> str:
+        """
+        Extract the core domain label from URL/domain-like text.
+        Examples:
+          google.com -> google
+          https://www.instagram.com/reel/... -> instagram
+          m.youtube.com -> youtube
+        """
+        s = str(value or '').strip().lower()
+        if not s:
+            return ''
+        # Add a scheme for robust urlparse on plain domains.
+        if '://' not in s and re.match(r'^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}', s):
+            s = f"https://{s}"
+        try:
+            host = urllib.parse.urlparse(s).hostname or ''
+        except Exception:
+            host = ''
+        if not host:
+            return ''
+        labels = [x for x in host.split('.') if x]
+        if not labels:
+            return ''
+        # Strip common non-brand subdomains
+        while labels and labels[0] in {'www', 'm', 'mobile', 'amp'}:
+            labels.pop(0)
+        if not labels:
+            return ''
+        return labels[0]
+
+    def _compact_token(value: str) -> str:
+        """
+        Canonical compact matcher token:
+        - URL decode
+        - strip common domain suffixes if present
+        - remove non-alphanumeric characters
+        """
+        s = str(value or '').strip().lower()
+        if not s:
+            return ''
+        try:
+            s = urllib.parse.unquote(s)
+        except Exception:
+            pass
+        s = re.sub(r'^(https?://)', '', s)
+        s = s.split('?', 1)[0].split('#', 1)[0]
+        # If a slash path exists, keep only host-ish prefix for domain strings.
+        if '/' in s and ' ' not in s:
+            s = s.split('/', 1)[0]
+        # Strip common TLD endings for direct domain inputs.
+        s = re.sub(r'\.(com|org|net|io|co|ai|app|tv|gg|edu|gov|mil|biz|info|us|co\.uk|uk)$', '', s)
+        s = re.sub(r'[^a-z0-9]+', '', s)
+        return s
+
     for input_brand in input_brands:
         # Generate all possible variations of the input brand
         brand_variations = generate_brand_variations(input_brand)
@@ -10792,9 +10854,14 @@ def enforce_input_brand_100(df_behavior, input_brands):
         # Also add the normalized version
         normalized_brand = normalize_demo_value(input_brand)
         brand_variations.append(normalized_brand)
+        # Add domain-derived core token for .com/.org/.net inputs
+        domain_core = _domain_core(input_brand)
+        if domain_core:
+            brand_variations.append(domain_core)
         
         # Create a comprehensive set of variations for matching
         all_variations = set()
+        compact_variations = set()
         for variation in brand_variations:
             # Add the variation as-is
             all_variations.add(variation.lower().strip())
@@ -10806,6 +10873,10 @@ def enforce_input_brand_100(df_behavior, input_brands):
             # Add common URL patterns (excluding dashes - user doesn't want dash variations)
             all_variations.add(variation.lower().replace(' ', '_'))
             all_variations.add(variation.lower().replace(' ', '.'))
+            # Compact canonical token for robust matching
+            cvar = _compact_token(variation)
+            if cvar and len(cvar) >= 3:
+                compact_variations.add(cvar)
         
         # Check if original input_brand contains a dash
         input_brand_has_dash = '-' in input_brand
@@ -10816,6 +10887,8 @@ def enforce_input_brand_100(df_behavior, input_brands):
             value = str(row['Value']).strip()
             value_lower = value.lower()
             value_no_spaces = value_lower.replace(' ', '')
+            value_compact = _compact_token(value)
+            value_domain_core = _domain_core(value)
             
             # Check if this value matches any of our variations
             # Match if the value contains the variation or vice versa (case-insensitive)
@@ -10835,6 +10908,13 @@ def enforce_input_brand_100(df_behavior, input_brands):
                     variation_no_spaces == value_no_spaces_no_dash):
                     is_match = True
                     break
+
+            # URL/domain-aware compact matching (google.com -> GOOGLE)
+            if (not is_match) and compact_variations:
+                if value_compact in compact_variations:
+                    is_match = True
+                elif value_domain_core and value_domain_core in compact_variations:
+                    is_match = True
             
             if is_match:
                 old_pct = float(row[pct_col])
@@ -14641,20 +14721,24 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     f"10. STREAMING: For a Netflix show audience, Netflix=100% "
                     f"is correct. Other streamers: Hulu ~45%, Amazon ~35%, "
                     f"Disney+ ~25%. ESPN should be 25-40% not 50%+.\n"
-                    f"11. SEARCH/AI + SOCIAL: Apply rules 8–10 and the DEEP CHECK "
+                    f"11. US BASE ASSUMPTION: This profile is modeled from a ~10M US gen-pop audience. "
+                    f"US outlets/platforms should generally dominate. International-only outlets "
+                    f"(e.g., UK-first publications) can appear but should rarely be #1 unless the "
+                    f"subject is explicitly international/UK-focused.\n"
+                    f"12. SEARCH/AI + SOCIAL: Apply rules 8–10 and the DEEP CHECK "
                     f"sections above with extra scrutiny — these categories are often "
                     f"inflated by clickstream. ChatGPT and Reddit are frequently too high; "
                     f"Google should dominate search/AI.\n"
-                    f"12. WHERE THEY SHOP: If this category is in the batch, apply the "
+                    f"13. WHERE THEY SHOP: If this category is in the batch, apply the "
                     f"DEEP CHECK for retail literally — **Etsy/eBay cannot be ~90%**; "
                     f"Amazon should lead. Missing this is a common failure mode.\n"
-                    f"13. Avoid synthetic templating: do not return a ladder of cloned values "
+                    f"14. Avoid synthetic templating: do not return a ladder of cloned values "
                     f"(e.g., many 25.0000/30.0000 style repeats). Use realistic spread that reflects "
                     f"true differences in audience affinity.\n"
-                    f"14. For Black hip-hop online fanbases, keep outputs culturally plausible across "
+                    f"15. For Black hip-hop online fanbases, keep outputs culturally plausible across "
                     f"BETTING, MEDIA, QSR, WHERE THEY DINE, and WHERE THEY SHOP; avoid generic daytime-TV "
                     f"or obscure-niche leaders without a clear reason.\n"
-                    f"15. Demographic conditioning is mandatory: if the profile skews differently "
+                    f"16. Demographic conditioning is mandatory: if the profile skews differently "
                     f"(e.g., female + Hispanic/Latino), the category leaders/rank order must shift "
                     f"accordingly. Never force a male-hip-hop pattern onto a different audience mix.\n\n"
                     f"For EACH item that needs correction, provide the "
@@ -14745,6 +14829,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             brands=brands,
         )
         df_final = enforce_behavioral_bp_uniqueness(df_final)
+        # LOCATION can be edited by AI/final guards after the first canonical pass.
+        # Re-enforce exact 210 DMAs + unique 4dp BPs at the very end.
+        df_final = enforce_exact_210_dmas(df_final)
 
     # Re-run formatting to ensure 4 decimal places after final review
     for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
@@ -15090,6 +15177,36 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                             print(f"   ✅ HARD FIX MEDIA: {_mn} {_mcur:.1f}% → 8.0000%")
                         break
 
+        # ─── 4b2. MEDIA: US context guard against BBC-leading outputs ────
+        _id_blob = " ".join(
+            [str(project_name or ""), str(brand_category or "")]
+            + [str(_b) for _b in (brands or [])]
+        ).upper()
+        _uk_context = any(_tok in _id_blob for _tok in [' UK ', ' BRIT', ' BRITISH', ' LONDON ', ' ENGLAND ', ' BBC'])
+        if not _uk_context:
+            _med_mask = df_final['Column'].str.upper().str.strip() == 'MEDIA'
+            if _med_mask.any():
+                _bbc_idx = None
+                _anchor_idx = None
+                _anchor_bp = 0.0
+                _anchor_tokens = (
+                    'TODAY', 'YAHOO NEWS', 'USA TODAY', 'CNN', 'ABC NEWS', 'CBS NEWS',
+                    'FOX NEWS', 'GOOGLE NEWS', 'WASHINGTON POST', 'NEW YORK TIMES'
+                )
+                for _mi in df_final[_med_mask].index:
+                    _mn = str(df_final.at[_mi, 'Value']).strip().upper()
+                    if _bbc_idx is None and ('BRITISH BROADCASTING CORPORATION' in _mn or _mn == 'BBC'):
+                        _bbc_idx = _mi
+                    if _anchor_idx is None and any(_tok in _mn for _tok in _anchor_tokens):
+                        _anchor_idx = _mi
+                        _anchor_bp = _read_bp(_mi)
+                if _bbc_idx is not None:
+                    _bbc_bp = _read_bp(_bbc_idx)
+                    _bbc_target = max(12.0, min(18.5, (_anchor_bp - 0.4) if _anchor_bp > 0 else 18.5))
+                    if _bbc_bp > _bbc_target:
+                        _write_bp(_bbc_idx, _bbc_target)
+                        print(f"   ✅ HARD FIX MEDIA: BBC {_bbc_bp:.1f}% → {_bbc_target:.4f}% (US plausibility)")
+
         # ─── 4c. WHERE THEY DINE: niche leader cap ───────────────────────
         _dine_mask = df_final['Column'].str.upper().str.strip() == 'WHERE THEY DINE'
         if _dine_mask.any():
@@ -15140,6 +15257,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if not is_genpop:
         df_final, _mpb_n = ai_review_most_purchased_brands_vs_genpop(
             df_final, project_name, brands, brand_category, is_genpop)
+
+    # AGE hard gate: never allow "OTHER" row; rebase AGE to 100.
+    df_final = enforce_no_age_other_and_rebase(df_final)
 
     # Final math pass: BP × sample_size → Original Raw; within-category Category Share;
     # then US Gen Pop from raw (same as edit_sample_size.py)
@@ -15207,9 +15327,23 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if _str_col in df_final.columns:
             df_final[_str_col] = df_final[_str_col].astype(str)
 
+    # Final anti-rounding pass: prevent x.0000 templated percentages.
+    df_final = enforce_no_perfect_trailing_zeros(df_final)
+    for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
+        if _fmt_col in df_final.columns:
+            df_final[_fmt_col] = df_final[_fmt_col].map(
+                lambda _v: f"{float(str(_v).replace(',', '').replace('%', '')):.4f}"
+                if str(_v).strip() != '' else _v
+            )
+
+    # Final text cleanup (mojibake/smart punctuation + canonical AGE labels).
+    df_final = normalize_output_text_values(df_final)
+
     # Last save hook: same math as edit_sample_size.py (BP→raw→category share→genpop)
     # so post-format / Excel churn cannot leave raws, CS, or projections out of sync.
     df_final = finalize_output_metrics_like_edit_sample_size(df_final)
+    # Absolute final invariant gate: if BP/raw/share drift appears, auto-reconcile.
+    df_final = ensure_bp_driven_metric_alignment(df_final)
     for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
         if _fmt_col not in df_final.columns:
             continue
@@ -23196,6 +23330,92 @@ def enforce_exact_210_dmas(df):
         mx = vals.idxmax()
         vals[mx] = round(float(vals[mx]) + drift, 4)
 
+    # Organic LOCATION de-templating:
+    # 1) jitter all DMAs with small deterministic row-specific noise
+    # 2) break exact duplicate values
+    # 3) reduce repeated 4-digit suffix clusters (e.g., many *.0001 / *.9999)
+    # while preserving exactly 100.0000 total via anchor compensation.
+    base_vals = {name: round(float(v), 4) for name, v in vals.items()}
+    working = dict(base_vals)
+
+    # 1) Small deterministic jitter for every DMA (prevents rigid decimal patterns).
+    total_delta = 0.0
+    for dma_name in sorted(working.keys()):
+        old = round(working[dma_name], 4)
+        if old <= 0:
+            continue
+        # 0.0001..0.0049, deterministic per DMA
+        mag = ((abs(hash(f"loc-organic-mag|{dma_name}")) % 49) + 1) / 10000.0
+        sign = 1.0 if (abs(hash(f"loc-organic-sign|{dma_name}")) % 2) else -1.0
+        if old <= mag + 0.0001:
+            sign = 1.0
+        new = round(max(0.0001, min(99.9999, old + sign * mag)), 4)
+        working[dma_name] = new
+        total_delta = round(total_delta + (new - old), 4)
+
+    # Compensation anchor: largest DMA after jitter.
+    anchor_name = max(working.keys(), key=lambda n: working[n])
+    working[anchor_name] = round(max(0.0001, working[anchor_name] - total_delta), 4)
+
+    # 2) Break exact duplicate 4dp values.
+    compensation = 0.0
+    dup_map = {}
+    for n, v in working.items():
+        dup_map.setdefault(round(v, 4), []).append(n)
+    for _v, names in dup_map.items():
+        names = sorted(names)
+        if len(names) <= 1:
+            continue
+        for pos, dma_name in enumerate(names[1:], start=1):
+            old = round(working[dma_name], 4)
+            delta = ((abs(hash(f"loc-dedup|{dma_name}|{pos}")) % 71) + 1) / 10000.0
+            sign = 1.0 if (abs(hash(f"loc-dedup-sign|{dma_name}|{pos}")) % 2) else -1.0
+            if old <= delta + 0.0001:
+                sign = 1.0
+            new = round(max(0.0001, min(99.9999, old + sign * delta)), 4)
+            if new == old:
+                new = round(min(99.9999, old + 0.0001), 4)
+            working[dma_name] = new
+            compensation = round(compensation + (new - old), 4)
+
+    if abs(compensation) > 0:
+        working[anchor_name] = round(max(0.0001, working[anchor_name] - compensation), 4)
+
+    # 3) Reduce repeated decimal suffixes by making suffixes unique where needed.
+    suffix_owner = {}
+    suffix_comp = 0.0
+    for dma_name in sorted(working.keys(), key=lambda n: (-working[n], n)):
+        old = round(working[dma_name], 4)
+        s_old = f"{old:.4f}".split('.')[-1]
+        if s_old not in suffix_owner:
+            suffix_owner[s_old] = dma_name
+            continue
+        placed = False
+        for attempt in range(1, 80):
+            delta = ((abs(hash(f"loc-suffix|{dma_name}|{attempt}")) % 97) + 1) / 10000.0
+            sign = 1.0 if (abs(hash(f"loc-suffix-sign|{dma_name}|{attempt}")) % 2) else -1.0
+            if old <= delta + 0.0001:
+                sign = 1.0
+            cand = round(max(0.0001, min(99.9999, old + sign * delta)), 4)
+            s_cand = f"{cand:.4f}".split('.')[-1]
+            if s_cand not in suffix_owner:
+                working[dma_name] = cand
+                suffix_owner[s_cand] = dma_name
+                suffix_comp = round(suffix_comp + (cand - old), 4)
+                placed = True
+                break
+        if not placed:
+            suffix_owner[s_old] = dma_name
+
+    if abs(suffix_comp) > 0:
+        working[anchor_name] = round(max(0.0001, working[anchor_name] - suffix_comp), 4)
+
+    vals = pd.Series(working, dtype=float).round(4)
+    drift = round(100.0 - float(vals.sum()), 4)
+    if abs(drift) > 0:
+        mx = vals.idxmax()
+        vals[mx] = round(float(vals[mx]) + drift, 4)
+
     # Sample size for raw/projection recalc
     sample_size = 132040
     if raw_col:
@@ -23397,6 +23617,98 @@ def enforce_black_audience_dma_guard(df):
 
     return out
 
+
+def enforce_no_age_other_and_rebase(df):
+    """
+    Hard AGE guard:
+    - Remove any AGE row where Value is "OTHER" (or starts with OTHER / ANOTHER).
+    - Renormalize AGE to exactly 100.0000 using BP as source of truth.
+    """
+    import pandas as pd
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    out = df.copy()
+    age_mask = out['Column'].astype(str).str.upper().str.strip() == 'AGE'
+    if not age_mask.any():
+        return out
+
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in out.columns else None
+    cs_col = 'Category Share' if 'Category Share' in out.columns else None
+    pct_col = 'Percentage' if 'Percentage' in out.columns else None
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in out.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in out.columns else None
+    MULT = 329_900_000 / 10_000_000
+
+    def _to_num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return 0.0
+
+    def _is_other_age(v):
+        s = str(v).strip().upper()
+        return s == 'OTHER' or s.startswith('OTHER ') or s.startswith('ANOTHER')
+
+    age_df = out[age_mask].copy()
+    drop_idx = [i for i in age_df.index if _is_other_age(age_df.at[i, 'Value'])]
+    removed = len(drop_idx)
+    if removed == 0:
+        return out
+
+    keep_age = age_df.drop(index=drop_idx)
+    if keep_age.empty:
+        return out
+
+    source_col = bp_col or cs_col or pct_col
+    if not source_col:
+        out = out.drop(index=drop_idx).reset_index(drop=True)
+        return out
+
+    vals = keep_age[source_col].map(_to_num).astype(float)
+    vals[vals < 0] = 0.0
+    total = float(vals.sum())
+    if total <= 0:
+        vals[:] = 100.0 / len(vals)
+    else:
+        vals = (vals / total) * 100.0
+    vals = vals.round(4)
+    drift = round(100.0 - float(vals.sum()), 4)
+    if abs(drift) > 0:
+        mx = vals.idxmax()
+        vals.loc[mx] = round(float(vals.loc[mx]) + drift, 4)
+
+    for i in keep_age.index:
+        s = f"{float(vals.loc[i]):.4f}"
+        if bp_col:
+            out.at[i, bp_col] = s
+        if cs_col:
+            out.at[i, cs_col] = s
+        if pct_col:
+            out.at[i, pct_col] = s
+
+    sample_size = 132040
+    if raw_col:
+        ss_mask = out['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any():
+            try:
+                sample_size = max(1, int(float(str(out.loc[ss_mask, raw_col].iloc[0]).replace(',', ''))))
+            except Exception:
+                pass
+        for i in keep_age.index:
+            bp = float(vals.loc[i])
+            raw_num = max(1, int(round((bp / 100.0) * sample_size)))
+            out.at[i, raw_col] = str(raw_num)
+            if proj_col:
+                out.at[i, proj_col] = str(int(round(raw_num * MULT)))
+
+    out = out.drop(index=drop_idx).reset_index(drop=True)
+    if not SILENCE_VERBOSE_OUTPUT:
+        print(f"🧱 AGE guard: removed {removed} OTHER row(s), rebased AGE to 100.0000")
+    return out
+
+
 def enforce_behavioral_category_plausibility(df, brand_category=None, project_name=None, brands=None):
     """
     Deterministic post-AI behavioral guardrails for obvious US plausibility misses.
@@ -23520,6 +23832,29 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
         if today_idx is not None and _bp(today_idx) > 8.0:
             _write_bp(today_idx, 8.0)
             fixes += 1
+
+    # 2b) MEDIA: For US audiences, BBC should not lead mainstream US publications.
+    # Allow exceptions only when project/brand clearly signals UK/international focus.
+    identity_blob = " ".join(
+        [str(project_name or ""), str(brand_category or "")]
+        + [str(b) for b in (brands or [])]
+    ).upper()
+    is_uk_context = any(tok in identity_blob for tok in [' UK ', ' BRIT', ' BRITISH', ' LONDON ', ' ENGLAND ', ' BBC'])
+    if not is_uk_context:
+        bbc_idx = _find_idx('MEDIA', ['BRITISH BROADCASTING CORPORATION', 'BBC'])
+        if bbc_idx is not None:
+            us_anchor_tokens = [
+                'TODAY', 'YAHOO NEWS', 'USA TODAY', 'CNN', 'ABC NEWS', 'CBS NEWS',
+                'FOX NEWS', 'GOOGLE NEWS', 'WASHINGTON POST', 'NEW YORK TIMES'
+            ]
+            anchor_idx = _find_idx('MEDIA', us_anchor_tokens)
+            bbc_bp = _bp(bbc_idx)
+            anchor_bp = _bp(anchor_idx) if anchor_idx is not None else 0.0
+            # In US gen-pop based audiences, BBC can be present but should not dominate.
+            target = max(12.0, min(18.5, (anchor_bp - 0.4) if anchor_bp > 0 else 18.5))
+            if bbc_bp > target:
+                _write_bp(bbc_idx, target)
+                fixes += 1
 
     # 3) WHERE THEY DINE: if top item is unknown/niche and too high, cap it
     mainstream_dine_tokens = [
@@ -26973,6 +27308,100 @@ def finalize_output_metrics_like_edit_sample_size(df: pd.DataFrame) -> pd.DataFr
     return df
 
 
+def ensure_bp_driven_metric_alignment(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Final safety gate for BP-driven consistency.
+
+    Verifies that:
+    - Original Raw Numbers == round((BP / 100) * sample_size)
+    - Category Share == row_raw / category_raw_sum * 100 (4dp)
+
+    If drift is detected, auto-runs the canonical reconcile + projection pass.
+    """
+    if df is None or df.empty:
+        return df
+    required = {'Column', 'Brand Penetration (Row)', 'Original Raw Numbers'}
+    if not required.issubset(df.columns):
+        return df
+    pct_col = 'Category Share' if 'Category Share' in df.columns else (
+        'Percentage' if 'Percentage' in df.columns else None)
+    if pct_col is None:
+        return df
+
+    def _to_float(x, default=0.0):
+        try:
+            return float(str(x).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return default
+
+    def _to_int(x, default=0):
+        try:
+            return int(round(float(str(x).replace(',', '').replace('%', '').strip())))
+        except Exception:
+            return default
+
+    # Resolve sample size exactly like reconcile path
+    sample_size = 0
+    ss_mask = df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        sidx = df[ss_mask].index[0]
+        sample_size = _to_int(df.at[sidx, 'Original Raw Numbers'], 0)
+        if sample_size <= 0:
+            sample_size = _to_int(df.at[sidx, pct_col], 0)
+    if sample_size <= 0:
+        bi_mask = df['Column'].astype(str).str.upper().str.strip() == 'BRAND INPUT'
+        if bi_mask.any():
+            sample_size = _to_int(df.loc[bi_mask, 'Original Raw Numbers'].iloc[0], 0)
+    if sample_size <= 0:
+        return df
+
+    skip = {
+        'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'
+    }
+    out = df.copy()
+    cat_keys = out['Column'].astype(str).str.upper().str.strip()
+    raw_mismatch = 0
+    cs_mismatch = 0
+
+    # Validate raw from BP
+    for idx in out.index:
+        cat = str(out.at[idx, 'Column']).strip().upper()
+        if cat in skip:
+            continue
+        bp = _to_float(out.at[idx, 'Brand Penetration (Row)'], 0.0)
+        expected_raw = int(round((bp / 100.0) * sample_size))
+        actual_raw = _to_int(out.at[idx, 'Original Raw Numbers'], 0)
+        if expected_raw != actual_raw:
+            raw_mismatch += 1
+
+    # Validate category share from raw
+    for cat in cat_keys.unique():
+        if cat in skip:
+            continue
+        idxs = list(out[cat_keys == cat].index)
+        if not idxs:
+            continue
+        cat_sum = sum(_to_int(out.at[i, 'Original Raw Numbers'], 0) for i in idxs)
+        if cat_sum <= 0:
+            continue
+        for i in idxs:
+            expected_cs = round((_to_int(out.at[i, 'Original Raw Numbers'], 0) / cat_sum) * 100.0, 4)
+            actual_cs = round(_to_float(out.at[i, pct_col], 0.0), 4)
+            if expected_cs != actual_cs:
+                cs_mismatch += 1
+
+    if raw_mismatch or cs_mismatch:
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(
+                f"🔁 Final alignment guard: detected drift "
+                f"(raw mismatches={raw_mismatch}, share mismatches={cs_mismatch}) "
+                f"→ re-running reconcile"
+            )
+        out = reconcile_final_output_from_bp_and_sample_size(out)
+        out = add_us_gen_pop_projection(out)
+    return out
+
+
 def ai_review_most_purchased_brands_vs_genpop(
         df: pd.DataFrame,
         project_name: str,
@@ -27213,6 +27642,81 @@ def reconcile_final_output_from_bp_and_sample_size(df: pd.DataFrame) -> pd.DataF
             raw_num = _parse_int(df.at[idx, 'Original Raw Numbers'])
             share = round((raw_num / category_sum) * 100.0, 4)
             df.at[idx, pct_col] = f"{share:.4f}"
+
+        # De-template repeated decimal tails (e.g., many *.0098) inside a category.
+        # Keep category sum at exactly 100.0000 via anchor compensation.
+        try:
+            cur_vals = {}
+            for idx in valid:
+                try:
+                    cur_vals[idx] = float(str(df.at[idx, pct_col]).replace(',', '').replace('%', '').strip())
+                except (ValueError, TypeError):
+                    cur_vals[idx] = 0.0
+
+            # 1) Break exact duplicate 4dp values (keep first; jitter rest)
+            dup_groups = {}
+            for idx in valid:
+                v4 = round(cur_vals.get(idx, 0.0), 4)
+                dup_groups.setdefault(v4, []).append(idx)
+
+            # 2) Break repeated decimal suffixes across different whole/integer parts
+            #    (e.g., 3.0098, 7.0098, 12.0098).
+            suffix_groups = {}
+            for idx in valid:
+                s = f"{round(cur_vals.get(idx, 0.0), 4):.4f}"
+                suf = s.split('.')[-1]
+                suffix_groups.setdefault(suf, []).append(idx)
+
+            to_adjust = []
+            for _v, members in dup_groups.items():
+                if len(members) > 1:
+                    to_adjust.extend(members[1:])
+            for _suf, members in suffix_groups.items():
+                if len(members) >= 3:
+                    to_adjust.extend(members[1:])
+
+            # Preserve stable order and deduplicate
+            seen_adj = set()
+            ordered_adjust = []
+            for idx in to_adjust:
+                if idx in seen_adj:
+                    continue
+                seen_adj.add(idx)
+                ordered_adjust.append(idx)
+
+            if ordered_adjust:
+                compensation = 0.0
+                adjusted = set()
+                for pos, idx in enumerate(ordered_adjust, start=1):
+                    old_v = round(cur_vals.get(idx, 0.0), 4)
+                    if old_v <= 0:
+                        continue
+                    delta = ((abs(hash(f"cs-tail-jitter|{cu}|{idx}|{pos}")) % 87) + 1) / 10000.0
+                    sign = 1.0 if (abs(hash(f"cs-tail-sign|{cu}|{idx}|{pos}")) % 2) else -1.0
+                    if old_v <= (delta + 0.0001):
+                        sign = 1.0
+                    new_v = round(max(0.0001, min(99.9999, old_v + sign * delta)), 4)
+                    if new_v == old_v:
+                        new_v = round(min(99.9999, old_v + 0.0001), 4)
+                    cur_vals[idx] = new_v
+                    compensation = round(compensation + (new_v - old_v), 4)
+                    adjusted.add(idx)
+
+                # Offset drift on the largest non-adjusted row if possible.
+                candidates = [idx for idx in valid if idx not in adjusted and cur_vals.get(idx, 0.0) > 0]
+                if not candidates:
+                    candidates = [idx for idx in valid if cur_vals.get(idx, 0.0) > 0]
+                if candidates:
+                    anchor = max(candidates, key=lambda _i: cur_vals.get(_i, 0.0))
+                    cur_vals[anchor] = round(max(0.0001, min(99.9999, cur_vals[anchor] - compensation)), 4)
+                    drift = round(100.0 - sum(round(cur_vals.get(i, 0.0), 4) for i in valid), 4)
+                    if abs(drift) > 0:
+                        cur_vals[anchor] = round(max(0.0001, min(99.9999, cur_vals[anchor] + drift)), 4)
+
+                for idx in valid:
+                    df.at[idx, pct_col] = f"{round(cur_vals.get(idx, 0.0), 4):.4f}"
+        except Exception:
+            pass
         cats_updated += 1
 
     print(f"   🔗 Reconciled output metrics: sample_size={sample_size:,}, "
@@ -27722,6 +28226,62 @@ def ensure_percentage_four_decimals(df):
     df['Percentage'] = s.map(lambda x: f"{float(x):.4f}")
     return df
 
+
+def normalize_output_text_values(df):
+    """
+    Final text hygiene:
+    - remove mojibake / smart-punctuation artifacts from Value labels
+    - standardize AGE bucket labels to canonical ASCII output
+    """
+    import re
+    if 'Value' not in df.columns or 'Column' not in df.columns:
+        return df
+
+    out = df.copy()
+    replacements = {
+        '‚Äì': '-',
+        'â€“': '-',
+        '–': '-',
+        '—': '-',
+        'â€”': '-',
+        '‑': '-',
+        '‚Äô': "'",
+        'â€™': "'",
+        '’': "'",
+        'Â': '',
+    }
+
+    def _clean(s):
+        text = str(s)
+        for bad, good in replacements.items():
+            text = text.replace(bad, good)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+
+    def _canonical_age_label(s):
+        t = _clean(s).upper()
+        t = re.sub(r'\s*-\s*', '-', t)
+        age_map = {
+            '17 AND UNDER': '17 AND UNDER',
+            '17-UNDER': '17 AND UNDER',
+            'UNDER 17': '17 AND UNDER',
+            'UNDER17': '17 AND UNDER',
+            '18-24': '18-24',
+            '25-34': '25-34',
+            '35-44': '35-44',
+            '45-54': '45-54',
+            '55-64': '55-64',
+            '65+': '65 OR OLDER',
+            '65 OR OLDER': '65 OR OLDER',
+        }
+        return age_map.get(t, _clean(s))
+
+    value_series = out['Value'].map(_clean)
+    age_mask = out['Column'].astype(str).str.upper().str.strip() == 'AGE'
+    value_series.loc[age_mask] = value_series.loc[age_mask].map(_canonical_age_label)
+    out['Value'] = value_series
+    return out
+
 def enforce_max_four_decimals_across_columns(df):
     """
     Ensure numeric-like fields are formatted with at most 4 decimal places.
@@ -27755,6 +28315,178 @@ def enforce_max_four_decimals_across_columns(df):
                     formatted.append(f"{num:.4f}")
         df[col] = formatted
     return df
+
+
+def enforce_no_perfect_trailing_zeros(df):
+    """
+    Final anti-templating formatter (all non-metadata categories):
+    - Avoid exact x.0000 style values.
+    - Break exact duplicate 4dp values within each category.
+    - Reduce repeated 4-digit decimal suffix clustering for organic look.
+    - Keep each category total stable via anchor compensation.
+    """
+    import pandas as pd
+
+    if 'Column' not in df.columns:
+        return df
+
+    out = df.copy()
+    target_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in out.columns else None
+    if not target_col:
+        if 'Category Share' in out.columns:
+            target_col = 'Category Share'
+        elif 'Percentage' in out.columns:
+            target_col = 'Percentage'
+        else:
+            return out
+
+    # Only mutate the selected target metric. Derived metrics are recalculated
+    # downstream from BP (same contract as edit_sample_size.py).
+    sync_cols = [target_col]
+    meta_cols = {
+        'INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'
+    }
+
+    def _to_num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return 0.0
+
+    def _is_perfect_4dp(v):
+        # True when value ends with .0000 at 4-decimal precision.
+        return f"{float(v):.4f}".endswith('.0000')
+
+    touched = 0
+    cat_keys = out['Column'].astype(str).str.upper().str.strip()
+    for cat in cat_keys.unique():
+        if cat in meta_cols:
+            continue
+        mask = cat_keys == cat
+        idxs = list(out[mask].index)
+        if not idxs:
+            continue
+
+        vals = {i: round(_to_num(out.at[i, target_col]), 4) for i in idxs}
+
+        # Build de-templating targets:
+        # 1) perfect *.0000 values
+        # 2) exact duplicate values (all but first)
+        # 3) repeated suffixes (all but first)
+        # 4) tidy/templated suffixes often produced by small-step nudges
+        tidy_suffixes = {'0000', '0001', '9999', '5000', '2500', '7500', '0098'}
+        perfect = [i for i in idxs if _is_perfect_4dp(vals[i]) and vals[i] >= 0]
+
+        duplicate_value_targets = []
+        dup_groups = {}
+        for i in idxs:
+            dup_groups.setdefault(vals[i], []).append(i)
+        for _v, members in dup_groups.items():
+            if len(members) > 1:
+                duplicate_value_targets.extend(members[1:])
+
+        repeated_suffix_targets = []
+        suffix_groups = {}
+        for i in idxs:
+            suf = f"{vals[i]:.4f}".split('.')[-1]
+            suffix_groups.setdefault(suf, []).append(i)
+        for _suf, members in suffix_groups.items():
+            if len(members) > 1:
+                repeated_suffix_targets.extend(members[1:])
+
+        tidy_suffix_targets = []
+        for i in idxs:
+            suf = f"{vals[i]:.4f}".split('.')[-1]
+            if suf in tidy_suffixes:
+                tidy_suffix_targets.append(i)
+
+        to_adjust = []
+        seen = set()
+        for i in (perfect + duplicate_value_targets + repeated_suffix_targets + tidy_suffix_targets):
+            if i in seen:
+                continue
+            seen.add(i)
+            to_adjust.append(i)
+
+        if not to_adjust:
+            continue
+
+        original_total = round(sum(vals[i] for i in idxs), 4)
+        compensation = 0.0
+        adjusted = set()
+        for pos, i in enumerate(to_adjust):
+            old = round(vals[i], 4)
+            # Do not disturb intentional near-100 rows.
+            if old >= 99.99:
+                continue
+            # Deterministic 0.0001..0.0097 spread for organic decimals.
+            delta = ((abs(hash(f"deround4|{cat}|{i}|{pos}")) % 97) + 1) / 10000.0
+            sign = 1.0 if (abs(hash(f"deround4sign|{cat}|{i}|{pos}")) % 2) else -1.0
+            if vals[i] <= delta + 0.0001:
+                sign = 1.0
+            new = round(max(0.0001, min(99.9999, old + sign * delta)), 4)
+            if new == old:
+                new = round(min(99.9999, old + 0.0001), 4)
+            vals[i] = new
+            compensation = round(compensation + (new - old), 4)
+            adjusted.add(i)
+            touched += 1
+
+        # Offset drift from largest non-adjusted row (or largest row overall).
+        candidates = [i for i in idxs if i not in adjusted] or idxs
+        anchor = max(candidates, key=lambda i: vals[i])
+        vals[anchor] = round(max(0.0001, vals[anchor] - compensation), 4)
+
+        # Suffix de-cluster pass: prefer unique suffixes within each category.
+        suffix_owner = {}
+        suffix_comp = 0.0
+        for i in sorted(idxs, key=lambda k: (-vals[k], k)):
+            old = round(vals[i], 4)
+            if old >= 99.99:
+                suf = f"{old:.4f}".split('.')[-1]
+                suffix_owner.setdefault(suf, i)
+                continue
+            s_old = f"{old:.4f}".split('.')[-1]
+            if s_old not in suffix_owner and s_old not in tidy_suffixes:
+                suffix_owner[s_old] = i
+                continue
+
+            placed = False
+            for attempt in range(1, 80):
+                delta = ((abs(hash(f"suffix-reassign|{cat}|{i}|{attempt}")) % 97) + 1) / 10000.0
+                sign = 1.0 if (abs(hash(f"suffix-reassign-sign|{cat}|{i}|{attempt}")) % 2) else -1.0
+                if old <= delta + 0.0001:
+                    sign = 1.0
+                cand = round(max(0.0001, min(99.9999, old + sign * delta)), 4)
+                s_cand = f"{cand:.4f}".split('.')[-1]
+                if s_cand not in suffix_owner and s_cand not in tidy_suffixes:
+                    vals[i] = cand
+                    suffix_owner[s_cand] = i
+                    suffix_comp = round(suffix_comp + (cand - old), 4)
+                    placed = True
+                    touched += 1
+                    break
+            if not placed:
+                suffix_owner.setdefault(s_old, i)
+
+        if abs(suffix_comp) > 0:
+            vals[anchor] = round(max(0.0001, vals[anchor] - suffix_comp), 4)
+
+        # Final drift correction at 4dp precision.
+        new_total = round(sum(vals[i] for i in idxs), 4)
+        drift = round(original_total - new_total, 4)
+        if abs(drift) > 0:
+            vals[anchor] = round(max(0.0001, vals[anchor] + drift), 4)
+
+        # Write back and synchronize percentage-like columns.
+        for i in idxs:
+            s = f"{vals[i]:.4f}"
+            for c in sync_cols:
+                out.at[i, c] = s
+
+    if touched and not SILENCE_VERBOSE_OUTPUT:
+        print(f"🎚️ Anti-rounding guard: de-rounded {touched} value(s) ending in .0000")
+    return out
 
 def cap_original_raw_numbers_to_sample_size(df):
     """

@@ -41071,25 +41071,13 @@
                     return true;
                 });
                 
-                // Mark items that don't exist in gen pop (can't index against them) but still show them
-                // Previously this filtered them out, but users expect to see all items from their CSV
+                // Show only selected-profile rows. Gen Pop is enrichment only.
+                // If a profile row has no same-category Gen Pop match, render GP/Index as N/A.
                 const isCurrentGenPop = currentS3Key?.toUpperCase().includes('GEN_POP') || currentS3Key?.toUpperCase().includes('GENPOP');
-                
-                // Build a set of ALL Gen Pop names from ALL categories
-                // This ensures items are matched even if they appear in different/related categories
-                const gpNameSet = new Set();
-                if (genPopBaselineData?.behavioral) {
-                    Object.values(genPopBaselineData.behavioral).forEach(gpItems => {
-                        if (Array.isArray(gpItems)) {
-                            gpItems.forEach(gp => gpNameSet.add((gp.name || '').toUpperCase().trim()));
-                        }
-                    });
-                }
-                
-                // Mark each item with whether it has a gen pop match (for index display)
+                // Mark each item with whether it has a same-category Gen Pop match.
+                // Do NOT infer matches from other categories.
                 dedupedItems.forEach(item => {
-                    const itemName = (item.name || '').toUpperCase().trim();
-                    item._hasGenPopMatch = isCurrentGenPop || gpNameSet.size === 0 || gpNameSet.has(itemName);
+                    item._hasGenPopMatch = isCurrentGenPop || ((item.genPopPct ?? 0) > 0);
                 });
                 // Show ALL items (don't filter) - Gen Pop and Index will show "N/A" for items without gen pop match
                 const filteredItems = dedupedItems;

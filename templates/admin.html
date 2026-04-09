@@ -1448,6 +1448,24 @@
                     <div class="stat-value" id="gmailConnected">--</div>
                 </div>
             </div>
+
+            <!-- Gen Pop Cache Refresh -->
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <h2>📊 Gen Pop Cache</h2>
+                </div>
+                <div style="padding: 1rem; background: var(--bg-input); border-radius: 8px;">
+                    <p style="margin: 0 0 0.75rem 0; color: var(--text-secondary); font-size: 0.85rem;">
+                        Forces server workers to reload the canonical Gen Pop baseline from S3 for profile indexing.
+                    </p>
+                    <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                        <button id="refreshGenPopCacheBtn" class="btn btn-secondary" onclick="refreshGenPopCache()">
+                            ♻️ Refresh Gen Pop Cache
+                        </button>
+                        <span id="genPopCacheRefreshStatus" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+                    </div>
+                </div>
+            </div>
             
             <!-- Gmail Integration -->
             <div class="card" style="margin-top: 1.5rem;">
@@ -6074,6 +6092,31 @@
                 }
             } catch (e) {
                 showToast('Error: ' + e.message, true);
+            }
+        }
+
+        async function refreshGenPopCache() {
+            const btn = document.getElementById('refreshGenPopCacheBtn');
+            const statusEl = document.getElementById('genPopCacheRefreshStatus');
+            if (btn) btn.disabled = true;
+            if (statusEl) statusEl.textContent = 'Refreshing...';
+            try {
+                const response = await fetch('/api/admin/genpop-cache/refresh', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to refresh Gen Pop cache');
+                }
+                const msg = `Refreshed (${data.old_rows || 0} → ${data.new_rows || 0} rows)`;
+                if (statusEl) statusEl.textContent = msg;
+                showToast(`✅ ${msg}`);
+            } catch (e) {
+                if (statusEl) statusEl.textContent = 'Refresh failed';
+                showToast('❌ ' + e.message, true);
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
         

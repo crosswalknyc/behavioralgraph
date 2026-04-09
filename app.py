@@ -2430,6 +2430,39 @@ def ai_cache_clear():
         'cleared': cleared
     })
 
+
+@app.route('/api/admin/genpop-cache/refresh', methods=['POST'])
+@requires_admin
+def refresh_genpop_cache():
+    """Force-refresh in-memory Gen Pop baseline cache from canonical S3 file."""
+    try:
+        import bg as _bg
+
+        had_cache = getattr(_bg, '_genpop_df_cache', None) is not None
+        old_rows = len(_bg._genpop_df_cache) if had_cache and hasattr(_bg._genpop_df_cache, '__len__') else 0
+
+        # Clear in-memory cache and reload from S3 immediately.
+        _bg._genpop_df_cache = None
+        fresh = _bg._load_genpop_csv()
+        if fresh is None:
+            return jsonify({
+                'success': False,
+                'error': 'Could not reload Gen Pop from S3'
+            }), 500
+
+        return jsonify({
+            'success': True,
+            'message': 'Gen Pop cache refreshed',
+            'had_cache': bool(had_cache),
+            'old_rows': int(old_rows),
+            'new_rows': int(len(fresh))
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/admin/gmail/status')
 @requires_admin
 def gmail_status():
