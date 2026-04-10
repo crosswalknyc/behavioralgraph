@@ -15393,6 +15393,25 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if _str_col in df_final.columns:
             df_final[_str_col] = df_final[_str_col].astype(str)
 
+    # Absolute pre-save lock (non-GenPop): if the input brand appears in any category
+    # (e.g., SOCIAL MEDIA), force it to exactly 100.0000 in final output.
+    if not is_genpop and brands:
+        df_final = enforce_input_brand_100(df_final, brands)
+        df_final = finalize_output_metrics_like_edit_sample_size(df_final)
+        df_final = ensure_bp_driven_metric_alignment(df_final)
+        for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
+            if _fmt_col in df_final.columns:
+                df_final[_fmt_col] = df_final[_fmt_col].map(
+                    lambda _v: f"{float(str(_v).replace(',', '').replace('%', '')):.4f}"
+                    if str(_v).strip() != '' else _v
+                )
+        for _fmt_col in ['Original Raw Numbers', 'US Gen Pop Projection']:
+            if _fmt_col in df_final.columns:
+                df_final[_fmt_col] = df_final[_fmt_col].map(
+                    lambda _v: str(int(round(float(str(_v).replace(',', '')))))
+                    if str(_v).strip() != '' else _v
+                )
+
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
