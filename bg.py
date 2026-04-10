@@ -6141,6 +6141,65 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
     if bp_col not in df.columns:
         return df
 
+    bc_upper = (brand_category or '').upper()
+
+    def _write_demo_distribution(cat_upper, pct_by_idx):
+        """Apply a percentage distribution (0-100) to a demographic category."""
+        if not pct_by_idx:
+            return
+        cm = df['Column'].str.upper().str.strip() == cat_upper
+        if not cm.any():
+            return
+        # Resolve category total BP mass.
+        cat_total_bp = 0.0
+        cat_indices = list(df[cm].index)
+        for _ix in cat_indices:
+            try:
+                cat_total_bp += float(str(df.at[_ix, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                pass
+        if cat_total_bp <= 0:
+            return
+
+        sample_raw_local = 1
+        ss_mask_local = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask_local.any():
+            try:
+                sample_raw_local = max(1, int(float(
+                    str(df.loc[ss_mask_local, raw_col].iloc[0]).replace(',', '')
+                )))
+            except (ValueError, TypeError):
+                sample_raw_local = 1
+
+        # Normalize incoming percentages and apply.
+        norm_total = sum(max(0.0, float(v)) for v in pct_by_idx.values())
+        if norm_total <= 0:
+            return
+        norm_pct = {k: (max(0.0, float(v)) / norm_total) * 100.0 for k, v in pct_by_idx.items()}
+
+        for _ix, _pct in norm_pct.items():
+            if _ix not in cat_indices:
+                continue
+            new_bp = (_pct / 100.0) * cat_total_bp
+            df.at[_ix, bp_col] = f'{new_bp:.4f}%'
+            new_raw = round(sample_raw_local * new_bp / 100.0)
+            df.at[_ix, raw_col] = str(new_raw)
+            df.at[_ix, proj_col] = str(int(round(new_raw * MULT)))
+
+        new_total_bp = 0.0
+        for _ix in cat_indices:
+            try:
+                new_total_bp += float(str(df.at[_ix, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                pass
+        if new_total_bp > 0:
+            for _ix in cat_indices:
+                try:
+                    _bp_v = float(str(df.at[_ix, bp_col]).replace('%', '').replace(',', ''))
+                    df.at[_ix, cs_col] = f"{(_bp_v / new_total_bp) * 100.0:.4f}%"
+                except (ValueError, TypeError):
+                    continue
+
     # ── CATASTROPHIC FAILURE DETECTION ──
     # Detect when AI reviews completely failed and demographics are obviously broken
     df = _detect_and_fix_catastrophic_demographics(df, subject_clean, brand_category)
@@ -6170,8 +6229,10 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
             expected_lgbtq = _gpt_lgbtq_lookup(subject_clean, brand_category)
             # Allow up to 1.5x the expected value before clamping
             max_lgbtq = min(expected_lgbtq * 1.5, 95.0)
+            min_lgbtq = max(3.0, expected_lgbtq * 0.6)
 
-            if yes_pct > max_lgbtq:
+            has_yes_no_schema = ('YES' in shares) or ('NO' in shares)
+            if has_yes_no_schema and yes_pct > max_lgbtq:
                 sample_raw = 0
                 ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
                 if ss_mask.any():
@@ -6214,6 +6275,148 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
                         df.at[ix, cs_col] = f"{bp_v / new_total * 100.0:.4f}%"
 
                 print(f"   🔧 LGBTQ+ calibration: {subject_clean} YES {yes_pct:.0f}%→{target_yes:.0f}% (expected: {expected_lgbtq:.0f}%)")
+            elif has_yes_no_schema and yes_pct < min_lgbtq:
+                # If the model underestimates LGBTQ+ share relative to expected affinity,
+                # nudge upward rather than allowing collapse toward 0.
+                sample_raw = 0
+                ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+                if ss_mask.any():
+                    try:
+                        sample_raw = max(1, int(float(
+                            str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+                        )))
+                    except (ValueError, TypeError):
+                        sample_raw = 1
+
+                target_yes = min_lgbtq
+                pns_pct = shares.get('PREFER NOT TO SAY', 0)
+                target_pns = min(5.0, pns_pct)
+                target_no = max(0.0, 100.0 - target_yes - target_pns)
+
+                new_shares = {}
+                for val, bp, idx in so_items:
+                    if val == 'YES':
+                        new_shares[idx] = target_yes
+                    elif val == 'NO':
+                        new_shares[idx] = target_no
+                    elif val == 'PREFER NOT TO SAY':
+                        new_shares[idx] = target_pns
+                    else:
+                        # Keep any rare auxiliary labels but heavily down-weight.
+                        new_shares[idx] = min(shares.get(val, 0.0), 1.0)
+
+                # Rebalance to 100
+                total_s = sum(new_shares.values())
+                if total_s > 0:
+                    new_shares = {k: v / total_s * 100.0 for k, v in new_shares.items()}
+
+                for idx, pct in new_shares.items():
+                    new_bp = pct * total_bp / 100.0
+                    df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                    new_raw = round(sample_raw * new_bp / 100.0)
+                    df.at[idx, raw_col] = str(new_raw)
+                    df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+
+                all_idx = [idx for _, _, idx in so_items]
+                new_total = sum(
+                    float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    for ix in all_idx
+                )
+                if new_total > 0:
+                    for ix in all_idx:
+                        bp_v = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                        df.at[ix, cs_col] = f"{bp_v / new_total * 100.0:.4f}%"
+
+                print(f"   🔧 LGBTQ+ uplift: {subject_clean} YES {yes_pct:.1f}%→{target_yes:.1f}% (expected: {expected_lgbtq:.1f}%)")
+            elif not has_yes_no_schema:
+                # Multi-label schema (e.g. STRAIGHT/HETERO + GAY/BI/PAN/ASEXUAL/OTHER).
+                # Treat all non-straight, non-PNS labels as LGBTQ+.
+                sample_raw = 1
+                ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+                if ss_mask.any():
+                    try:
+                        sample_raw = max(1, int(float(
+                            str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', '')
+                        )))
+                    except (ValueError, TypeError):
+                        sample_raw = 1
+
+                straight_keys = []
+                pns_keys = []
+                lgbt_keys = []
+                for _v in shares.keys():
+                    _vu = _v.upper().strip()
+                    if 'PREFER NOT TO SAY' in _vu:
+                        pns_keys.append(_v)
+                    elif any(tok in _vu for tok in ['STRAIGHT', 'HETERO', ' NOT LGBTQ', 'NON-LGBTQ']) or _vu == 'NO':
+                        straight_keys.append(_v)
+                    else:
+                        lgbt_keys.append(_v)
+
+                if lgbt_keys:
+                    current_lgbt = sum(shares.get(k, 0.0) for k in lgbt_keys)
+                    if current_lgbt > max_lgbtq or current_lgbt < min_lgbtq:
+                        target_lgbt = max(min_lgbtq, min(max_lgbtq, expected_lgbtq))
+                        if current_lgbt > max_lgbtq:
+                            target_lgbt = max_lgbtq
+                        if current_lgbt < min_lgbtq:
+                            target_lgbt = min_lgbtq
+
+                        pns_total = sum(shares.get(k, 0.0) for k in pns_keys)
+                        target_pns = min(5.0, pns_total)
+                        target_straight_total = max(0.0, 100.0 - target_lgbt - target_pns)
+
+                        new_shares_by_val = {}
+                        # Keep PNS compact.
+                        for k in pns_keys:
+                            new_shares_by_val[k] = target_pns / max(len(pns_keys), 1)
+
+                        # Distribute LGBTQ proportionally across existing LGBTQ labels.
+                        cur_lgbt_total = sum(shares.get(k, 0.0) for k in lgbt_keys)
+                        for k in lgbt_keys:
+                            base = shares.get(k, 0.0)
+                            weight = (base / cur_lgbt_total) if cur_lgbt_total > 0 else (1.0 / len(lgbt_keys))
+                            new_shares_by_val[k] = target_lgbt * weight
+
+                        # Allocate remaining to straight/no labels.
+                        if straight_keys:
+                            cur_straight_total = sum(shares.get(k, 0.0) for k in straight_keys)
+                            for k in straight_keys:
+                                base = shares.get(k, 0.0)
+                                weight = (base / cur_straight_total) if cur_straight_total > 0 else (1.0 / len(straight_keys))
+                                new_shares_by_val[k] = target_straight_total * weight
+                        else:
+                            # No explicit straight label; rebalance across all non-PNS keys.
+                            non_pns = [k for k in shares.keys() if k not in pns_keys]
+                            cur_non_pns_total = sum(shares.get(k, 0.0) for k in non_pns)
+                            for k in non_pns:
+                                base = shares.get(k, 0.0)
+                                weight = (base / cur_non_pns_total) if cur_non_pns_total > 0 else (1.0 / len(non_pns))
+                                new_shares_by_val[k] = (100.0 - target_pns) * weight
+
+                        # Write back using total_bp mass.
+                        for val, bp, idx in so_items:
+                            pct = max(0.0, float(new_shares_by_val.get(val, 0.0)))
+                            new_bp = pct * total_bp / 100.0
+                            df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                            new_raw = round(sample_raw * new_bp / 100.0)
+                            df.at[idx, raw_col] = str(new_raw)
+                            df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+
+                        all_idx = [idx for _, _, idx in so_items]
+                        new_total = sum(
+                            float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                            for ix in all_idx
+                        )
+                        if new_total > 0:
+                            for ix in all_idx:
+                                bp_v = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                                df.at[ix, cs_col] = f"{bp_v / new_total * 100.0:.4f}%"
+
+                        print(
+                            f"   🔧 LGBTQ+ schema calibration: {subject_clean} "
+                            f"{current_lgbt:.1f}%→{target_lgbt:.1f}% (expected: {expected_lgbtq:.1f}%)"
+                        )
 
     # ── ETHNICITY sanity check ──
     eth_mask = df['Column'].str.upper().str.strip() == 'ETHNICITY'
@@ -6285,6 +6488,101 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
                         df.at[ix, cs_col] = f"{bp_v / new_total * 100.0:.4f}%"
 
                 print(f"   🔧 Ethnicity fix: {subject_clean} OTHER was {other_pct:.0f}%, WHITE was {white_pct:.0f}%")
+
+            # Additional anti-collapse guard: prevent near-zero major US cohorts.
+            # This avoids unrealistic outputs like Hispanic/Latino ~0% for broad US audiences.
+            def _pick_idx(_contains):
+                for _v, _, _ix in eth_items:
+                    _vu = _v.upper()
+                    if any(tok in _vu for tok in _contains):
+                        return _ix
+                return None
+
+            idx_white = _pick_idx(['WHITE'])
+            idx_hisp = _pick_idx(['HISPANIC', 'LATINO', 'LATINX'])
+            idx_black = _pick_idx(['BLACK', 'AFRICAN AMERICAN'])
+            idx_asian = _pick_idx(['ASIAN'])
+
+            shares_by_idx = {idx: (bp / total_bp * 100.0) for _, bp, idx in eth_items}
+            mainstream = any(k in bc_upper for k in ['MUSICIAN', 'BAND', 'SOCIAL MEDIA', 'APP', 'PLATFORM', 'MEDIA', 'BROADCAST', 'CABLE', 'SEARCH'])
+            floor_hisp = 6.0 if mainstream else 3.0
+            floor_black = 4.0 if mainstream else 2.5
+            floor_asian = 2.0 if mainstream else 1.0
+
+            needed = 0.0
+            if idx_hisp is not None and shares_by_idx.get(idx_hisp, 0.0) < floor_hisp:
+                needed += (floor_hisp - shares_by_idx.get(idx_hisp, 0.0))
+            if idx_black is not None and shares_by_idx.get(idx_black, 0.0) < floor_black:
+                needed += (floor_black - shares_by_idx.get(idx_black, 0.0))
+            if idx_asian is not None and shares_by_idx.get(idx_asian, 0.0) < floor_asian:
+                needed += (floor_asian - shares_by_idx.get(idx_asian, 0.0))
+
+            if needed > 0.0:
+                donor_idx = idx_white
+                if donor_idx is None:
+                    donor_idx = max(shares_by_idx, key=lambda x: shares_by_idx.get(x, 0.0))
+                donor_share = shares_by_idx.get(donor_idx, 0.0)
+                take = min(needed, max(0.0, donor_share - 25.0))
+                if take > 0:
+                    if idx_hisp is not None and shares_by_idx.get(idx_hisp, 0.0) < floor_hisp:
+                        delta = min(take, floor_hisp - shares_by_idx[idx_hisp])
+                        shares_by_idx[idx_hisp] += delta
+                        shares_by_idx[donor_idx] -= delta
+                        take -= delta
+                    if idx_black is not None and shares_by_idx.get(idx_black, 0.0) < floor_black and take > 0:
+                        delta = min(take, floor_black - shares_by_idx[idx_black])
+                        shares_by_idx[idx_black] += delta
+                        shares_by_idx[donor_idx] -= delta
+                        take -= delta
+                    if idx_asian is not None and shares_by_idx.get(idx_asian, 0.0) < floor_asian and take > 0:
+                        delta = min(take, floor_asian - shares_by_idx[idx_asian])
+                        shares_by_idx[idx_asian] += delta
+                        shares_by_idx[donor_idx] -= delta
+                        take -= delta
+
+                    _write_demo_distribution('ETHNICITY', shares_by_idx)
+                    print(f"   🔧 Ethnicity anti-collapse: raised core cohort floors for {subject_clean}")
+
+    # ── INCOME anti-collapse guard ──
+    inc_mask = df['Column'].str.upper().str.strip() == 'INCOME'
+    if inc_mask.any():
+        inc_items = []
+        for idx, row in df[inc_mask].iterrows():
+            val = str(row.get('Value', '')).strip().upper()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            inc_items.append((val, bp, idx))
+        inc_total = sum(bp for _, bp, _ in inc_items)
+        if inc_total > 0:
+            inc_shares = {idx: (bp / inc_total * 100.0) for _, bp, idx in inc_items}
+            max_share = max(inc_shares.values()) if inc_shares else 0.0
+            tiny_bins = sum(1 for v in inc_shares.values() if v < 1.0)
+            if max_share > 60.0 or tiny_bins >= 3:
+                benchmark_by_value = {
+                    '$25,000 - $49,999': 22.0,
+                    '$50,000 - $74,999': 22.0,
+                    '$75,000 - $99,999': 18.0,
+                    '$100,000 - $149,999': 17.0,
+                    '$150,000 - $249,999': 13.0,
+                    '$250,000 OR MORE': 8.0,
+                }
+                blended = {}
+                for val, _, idx in inc_items:
+                    canon = val.upper().replace(' ', '')
+                    target = None
+                    for k, v in benchmark_by_value.items():
+                        if canon == k.upper().replace(' ', ''):
+                            target = v
+                            break
+                    if target is None:
+                        target = 100.0 / max(len(inc_items), 1)
+                    cur = inc_shares.get(idx, 0.0)
+                    blended[idx] = 0.55 * cur + 0.45 * target
+
+                _write_demo_distribution('INCOME', blended)
+                print(f"   🔧 Income anti-collapse: rebalanced implausible tails for {subject_clean}")
 
     # ── Cap "Prefer Not to Say" at 5% across all demographic categories ──
     PNS_CAP = 5.0
@@ -6793,6 +7091,285 @@ Each corrected category sums to 100. JSON only, no markdown."""
 
     except Exception as e:
         print(f"⚠️  Universal demographic review error ({bc_upper}): {e}")
+        return _enforce_all_demographics(df, subject_clean, brand_category)
+
+
+def ai_research_first_demographic_audit(df, brand_category, project_name, brands):
+    """Final research-first demographic audit.
+
+    Goal:
+    - Keep Snowflake-derived demographics when they are plausible.
+    - Adjust only values that conflict with web-sourced evidence.
+    - Return 4dp percentages that sum to 100 per demographic category.
+    """
+    client = _get_openai_client()
+    if not client:
+        return df
+
+    import json as _json
+
+    DEMO_CATS = [
+        'AGE', 'GENDER', 'ETHNICITY', 'EDUCATION',
+        'INCOME', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP'
+    ]
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    MULT = 329_900_000 / 10_000_000
+
+    if bp_col not in df.columns:
+        return df
+
+    df = df.copy()
+    subject_clean = extract_profile_subject_from_df(df, project_name, brands)
+    web_research = _research_brand_demographics(client, subject_clean, brand_category)
+    research_block = web_research if web_research else "No web summary available."
+
+    sample_raw = 1
+    ss_mask = df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+    if ss_mask.any():
+        try:
+            sample_raw = max(1, int(float(str(df.loc[ss_mask, raw_col].iloc[0]).replace(',', ''))))
+        except (ValueError, TypeError):
+            sample_raw = 1
+
+    current = {}
+    indices = {}
+    for cat in DEMO_CATS:
+        cm = df['Column'].str.upper().str.strip() == cat
+        if not cm.any():
+            continue
+        rows = []
+        total_bp = 0.0
+        for idx, row in df[cm].iterrows():
+            val = str(row.get('Value', '')).strip()
+            try:
+                bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                bp = 0.0
+            rows.append((idx, val, bp))
+            total_bp += bp
+        if total_bp <= 0:
+            continue
+        shares = {val: round((bp / total_bp) * 100.0, 4) for _, val, bp in rows}
+        current[cat] = shares
+        indices[cat] = rows
+
+    if not current:
+        return df
+
+    prompt = f"""You are a senior US audience-demographics researcher.
+
+Task:
+Review the CURRENT demographic distributions for "{subject_clean}" ({brand_category}) against web research.
+Only adjust values that are implausible. If a value is plausible, keep it close.
+
+Rules:
+- US context only.
+- Minimize edits: keep Snowflake values when plausible.
+- Do NOT blindly overwrite with stereotypes.
+- For each corrected category, output all existing labels from CURRENT exactly as given.
+- Every corrected category must sum to exactly 100.0000.
+- Use 4 decimal precision.
+- Avoid overly perfect/rounded patterns when possible.
+- No markdown; JSON only.
+
+WEB_RESEARCH:
+{research_block}
+
+CURRENT_DISTRIBUTIONS:
+{_json.dumps(current)}
+
+Return exactly:
+{{
+  "status": "OK" | "FIX",
+  "notes": "short reason",
+  "corrections": {{
+    "AGE": {{"label": 12.3456, "...": 0.0000}},
+    "GENDER": {{"label": 12.3456}},
+    "ETHNICITY": {{"label": 12.3456}},
+    "EDUCATION": {{"label": 12.3456}},
+    "INCOME": {{"label": 12.3456}},
+    "SEXUAL_ORIENTATION": {{"label": 12.3456}},
+    "PARENTAL_STATUS": {{"label": 12.3456}},
+    "RELATIONSHIP": {{"label": 12.3456}}
+  }}
+}}
+
+If no meaningful fixes are needed, return status=OK with empty corrections.
+"""
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.0,
+            max_tokens=2800
+        )
+        text = resp.choices[0].message.content.strip()
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        depth = 0
+        end = 0
+        for i, c in enumerate(text):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end > 0:
+            text = text[:end]
+
+        result = _json.loads(text)
+        if result.get('status') != 'FIX':
+            print(f"🧠 Research-first demographic audit: OK — {result.get('notes', '')[:90]}")
+            return _enforce_all_demographics(df, subject_clean, brand_category)
+
+        def _apply_ai_corrections(corr_obj):
+            _changes = 0
+            for cat_name, new_shares in (corr_obj or {}).items():
+                cat_upper = str(cat_name).upper().strip()
+                if cat_upper not in indices or not isinstance(new_shares, dict):
+                    continue
+                rows = indices[cat_upper]
+                total_bp = sum(bp for _, _, bp in rows)
+                if total_bp <= 0:
+                    continue
+                label_to_idx = {val.upper(): idx for idx, val, _ in rows}
+                cleaned = {}
+                for label, pct in new_shares.items():
+                    lk = str(label).strip().upper()
+                    if lk not in label_to_idx:
+                        continue
+                    try:
+                        cleaned[lk] = max(0.0, float(pct))
+                    except (ValueError, TypeError):
+                        continue
+                if not cleaned:
+                    continue
+                # Minimal-edit default: keep untouched labels at their current value.
+                for _, val, _ in rows:
+                    vk = val.upper().strip()
+                    if vk not in cleaned:
+                        cleaned[vk] = current.get(cat_upper, {}).get(val, 0.0)
+
+                csum = sum(cleaned.values())
+                if csum <= 0:
+                    continue
+                cleaned = {k: (v / csum) * 100.0 for k, v in cleaned.items()}
+
+                for _, val, _ in rows:
+                    vk = val.upper().strip()
+                    idx = label_to_idx[vk]
+                    pct = cleaned.get(vk, 0.0)
+                    new_bp = (pct / 100.0) * total_bp
+                    df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                    new_raw = round(sample_raw * new_bp / 100.0)
+                    df.at[idx, raw_col] = str(new_raw)
+                    df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+                    _changes += 1
+
+                all_idx = [idx for idx, _, _ in rows]
+                new_total = sum(
+                    float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                    for ix in all_idx
+                )
+                if new_total > 0:
+                    for ix in all_idx:
+                        bp_v = float(str(df.at[ix, bp_col]).replace('%', '').replace(',', ''))
+                        df.at[ix, cs_col] = f"{bp_v / new_total * 100.0:.4f}%"
+            return _changes
+
+        corr = result.get('corrections', {}) or {}
+        changes = _apply_ai_corrections(corr)
+
+        # Second AI pass: self-check the post-fix demographics for remaining implausibilities.
+        post_current = {}
+        for cat in DEMO_CATS:
+            cm = df['Column'].str.upper().str.strip() == cat
+            if not cm.any():
+                continue
+            rows = []
+            total_bp = 0.0
+            for _, row in df[cm].iterrows():
+                val = str(row.get('Value', '')).strip()
+                try:
+                    bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    bp = 0.0
+                rows.append((val, bp))
+                total_bp += bp
+            if total_bp > 0:
+                post_current[cat] = {val: round((bp / total_bp) * 100.0, 4) for val, bp in rows}
+
+        self_check_prompt = f"""You are a US demographics quality-control reviewer.
+You are auditing a previously corrected demographic profile for "{subject_clean}" ({brand_category}).
+
+Use web research context and logic to catch any remaining implausible values.
+If current values are plausible, return OK. If not, return FIX with minimal corrections.
+
+Rules:
+- Keep plausible values; only change what is clearly off.
+- Use the exact existing labels.
+- Every corrected category must sum to 100.0000.
+- Use 4 decimal precision and avoid perfect round-number patterns when possible.
+- JSON only.
+
+WEB_RESEARCH:
+{research_block}
+
+CURRENT_POST_FIX_DISTRIBUTIONS:
+{_json.dumps(post_current)}
+
+Return:
+{{
+  "status":"OK"|"FIX",
+  "notes":"short reason",
+  "corrections":{{"CATEGORY":{{"label":12.3456}}}}
+}}
+"""
+        try:
+            _sc = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': self_check_prompt}],
+                temperature=0.0,
+                max_tokens=1800
+            )
+            sc_text = _sc.choices[0].message.content.strip()
+            if sc_text.startswith('```'):
+                sc_text = sc_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+            depth = 0
+            end = 0
+            for i, c in enumerate(sc_text):
+                if c == '{':
+                    depth += 1
+                elif c == '}':
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if end > 0:
+                sc_text = sc_text[:end]
+            sc_result = _json.loads(sc_text)
+            if sc_result.get('status') == 'FIX':
+                sc_changes = _apply_ai_corrections(sc_result.get('corrections', {}) or {})
+                if sc_changes:
+                    changes += sc_changes
+                    print(f"🧠 Demographic self-check pass: FIXED {sc_changes} values")
+                else:
+                    print("🧠 Demographic self-check pass: no actionable label matches")
+            else:
+                print(f"🧠 Demographic self-check pass: OK — {sc_result.get('notes', '')[:90]}")
+        except Exception as _e_sc:
+            print(f"⚠️ Demographic self-check pass error: {_e_sc}")
+
+        print(f"🧠 Research-first demographic audit: FIXED {changes} values")
+        return _enforce_all_demographics(df, subject_clean, brand_category)
+    except Exception as e:
+        print(f"⚠️ Research-first demographic audit error: {e}")
         return _enforce_all_demographics(df, subject_clean, brand_category)
 
 
@@ -14263,6 +14840,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
         # Universal catch-all: handles ANY category not covered above
         df_final = ai_universal_demographic_review(df_final, brand_category, project_name, brands)
+        # Final demographics audit: research-first, minimal-edit correction pass.
+        df_final = ai_research_first_demographic_audit(df_final, brand_category, project_name, brands)
 
         # Location/DMA review: ensures geographic distribution makes sense for this audience
         # and that all location Brand Penetration values sum to exactly 100%
