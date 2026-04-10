@@ -7777,13 +7777,11 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             print(f"   ⚠️ Pass B error (batch {batch_num}): {e}")
             continue
 
-    # ──── PASS B2: INTEREST PERSONA-DEEP REVIEW (research-first) ────
-    # Dedicated INTEREST pass to enforce persona realism using external research.
-    # This is intentionally stricter than generic behavioral spot checks because
-    # INTEREST rows are one of the highest-trust signals in the dashboard.
+    # ──── PASS B2: INTEREST row-by-row GPT review (no deterministic caps) ────
+    # ChatGPT (gpt-4o) decides which values to lower, raise, or keep based on
+    # persona + research + Gen Pop direction, in batches that cover all INTEREST rows.
     interest_cats = [c for c in categories_data.keys() if c in {'INTEREST', 'INTERESTS'}]
     if interest_cats:
-        # Refresh lookup from latest df after Pass A/B edits.
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
@@ -7797,58 +7795,44 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     cur_cs = cs_orig
                 all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
 
-        interest_lines = []
-        total_interest_items = 0
-        for icat in interest_cats:
-            cat_items = []
-            for (cat, item_u), (name, bp, cs, idx) in all_item_lookup.items():
-                if cat != icat:
-                    continue
-                gp_bp = gp_bp_lookup.get((cat, item_u), 0)
-                if gp_bp > 0:
-                    idx_int = int(round((bp / gp_bp) * 100))
-                    idx_meta = f" [GenPop: {gp_bp:.2f}%, INDEX: {idx_int}]"
-                else:
-                    idx_meta = " [GenPop: N/A, INDEX: N/A]"
-                cat_items.append((name, bp, idx_meta))
-            cat_items.sort(key=lambda x: -x[1])
-            # Review deeper breadth than generic pass so persona alignment is explicit.
-            cat_items = cat_items[:140]
-            total_interest_items += len(cat_items)
-            interest_lines.append(
-                f"{icat}:\n" + "\n".join([f"  {n}: {b:.4f}% BP{m}" for n, b, m in cat_items])
-            )
+        # Build full INTEREST item list and review in batches so every row is assessed.
+        interest_items = []
+        for (cat, item_u), (name, bp, cs, idx) in all_item_lookup.items():
+            if cat not in {'INTEREST', 'INTERESTS'}:
+                continue
+            gp_bp = gp_bp_lookup.get((cat, item_u), 0.0)
+            if gp_bp > 0:
+                idx_int = int(round((bp / gp_bp) * 100))
+                idx_meta = f" [GenPop: {gp_bp:.2f}%, INDEX: {idx_int}]"
+            else:
+                idx_meta = " [GenPop: N/A, INDEX: N/A]"
+            interest_items.append((cat, name, bp, idx_meta))
 
-        if total_interest_items > 0:
+        interest_items.sort(key=lambda x: -x[2])
+        batches = [interest_items[i:i + 120] for i in range(0, len(interest_items), 120)]
+        b2_total = 0
+        for bnum, batch in enumerate(batches, 1):
+            lines = [f"  {cat} | {name}: {bp:.4f}% BP{meta}" for cat, name, bp, meta in batch]
             interest_prompt = (
                 f"You are a US audience strategist doing a FINAL PERSONA-ACCURACY CHECK "
-                f"for the INTEREST category of a behavioral profile.\n\n"
+                f"for INTEREST rows in a behavioral profile.\n\n"
                 f"{audience_context}\n"
-                f"=== INTEREST DATA (deep review) ===\n"
-                + "\n\n".join(interest_lines) +
-                f"\n\n=== STRICT METHOD (REQUIRED) ===\n"
-                f"1) Use the WEB RESEARCH + demographic context above to infer WHO this audience is.\n"
-                f"2) Determine core interest themes this audience should over-index on.\n"
-                f"3) For each listed INTEREST item, evaluate whether its current direction "
-                f"(over/under vs Gen Pop) matches that persona.\n"
-                f"4) Correct only clear mismatches, but be decisive where wrong top interests "
-                f"would make the profile feel inauthentic.\n\n"
-                f"=== ADJUSTMENT GUIDANCE ===\n"
-                f"- Poor-fit / off-persona interests near the top: factor 0.45-0.85\n"
-                f"- Strong persona-fit interests that are underweighted: factor 1.10-1.80\n"
-                f"- Neutral/mass interests: leave near current level (no adjustment needed)\n"
-                f"- Apply theme realism across ALL interests: niche themes can over-index when "
-                f"the profile identity supports them (e.g., anime-first brands), but should not "
-                f"dominate broad audiences without clear persona evidence.\n"
-                f"- Keep corrections realistic and avoid flattening everything.\n\n"
+                f"=== INTEREST ROWS (batch {bnum}/{len(batches)}) ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== REQUIRED ROW-BY-ROW DECISION ===\n"
+                f"For EACH row, decide one of: KEEP, LOWER, or RAISE based on persona fit.\n"
+                f"Only include LOWER/RAISE rows in adjustments; KEEP rows are omitted.\n"
+                f"- LOWER when value is implausibly high for this persona\n"
+                f"- RAISE when value is implausibly low for this persona\n"
+                f"- KEEP when value is directionally and magnitude-wise believable\n\n"
+                f"Use research + demographics + index direction. Avoid blanket dampening.\n"
                 f"Return ONLY valid JSON:\n"
-                f'If no changes: {{"status":"OK","notes":"why interests already match persona"}}\n'
-                f'If changes: {{"status":"FIX","notes":"persona mismatch summary",'
+                f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
+                f'If changes: {{"status":"FIX","notes":"summary",'
                 f'"adjustments":[{{"category":"INTEREST","item":"ITEM","factor":0.70,'
-                f'"reason":"brief persona-based rationale"}},...]}}\n'
-                f"factor must stay in 0.15 to 4.0 range. JSON only."
+                f'"reason":"brief persona rationale"}},...]}}\n'
+                f"factor range: 0.15 to 4.0. JSON only."
             )
-
             try:
                 resp = client.chat.completions.create(
                     model='gpt-4o',
@@ -7858,14 +7842,15 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 )
                 result = _parse_ai_json(resp.choices[0].message.content.strip())
                 if result.get('status') == 'FIX' and 'adjustments' in result:
-                    # Apply a bounded number of interest edits to avoid over-correcting.
-                    bounded = result['adjustments'][:120]
-                    applied, _ = _apply_adjustments(bounded, all_item_lookup, '[INTEREST]')
-                    print(f"   🎯 Pass B2 INTEREST: {applied} persona-driven corrections")
+                    applied, _ = _apply_adjustments(result['adjustments'][:200], all_item_lookup, '[INTEREST]')
+                    b2_total += applied
+                    print(f"   🎯 Pass B2 INTEREST batch {bnum}/{len(batches)}: {applied} corrections")
                 else:
-                    print("   🎯 Pass B2 INTEREST: already persona-aligned")
+                    print(f"   🎯 Pass B2 INTEREST batch {bnum}/{len(batches)}: all rows OK")
             except Exception as e:
-                print(f"   ⚠️ Pass B2 INTEREST error: {e}")
+                print(f"   ⚠️ Pass B2 INTEREST error (batch {bnum}): {e}")
+        if b2_total:
+            print(f"   🎯 Pass B2 INTEREST total: {b2_total} corrections")
 
     # ──── PASS C: CATEGORY-LEVEL DEMOGRAPHIC ALIGNMENT ────
     # Detect entire categories where participation bias causes most items
@@ -24020,112 +24005,6 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 if abs(new_v - cur) >= 0.15:
                     _write_bp(idx, new_v)
                     fixes += 1
-
-    # 6) INTEREST: adaptive realism guard across all interests.
-    # Uses profile identity + Gen Pop direction to avoid implausible dominance of
-    # niche interests while preserving legitimately high niche affinity (e.g., Crunchyroll/anime).
-    identity_blob = " ".join(
-        [str(project_name or ""), str(brand_category or "")]
-        + [str(b) for b in (brands or [])]
-    ).upper()
-    if _cat_rows('INTEREST'):
-        broad_social_profile = (
-            (('APP/PLATFORM' in identity_blob) or ('SOCIAL MEDIA' in identity_blob))
-            and any(tok in identity_blob for tok in [
-                'INSTAGRAM', 'FACEBOOK', 'TIKTOK', 'YOUTUBE', 'SNAPCHAT', 'PINTEREST', 'TWITTER', 'X/TWITTER'
-            ])
-        )
-        # Lightweight Gen Pop map for INTEREST rows.
-        gp_interest = {}
-        try:
-            gp_df = _load_genpop_csv()
-            if gp_df is not None and len(gp_df.columns) >= 3:
-                c0, c1, c2 = gp_df.columns[:3]
-                gm = gp_df[c0].astype(str).str.upper().str.strip() == 'INTEREST'
-                for _, r in gp_df[gm].iterrows():
-                    try:
-                        gp_interest[str(r[c1]).strip().upper()] = float(r[c2])
-                    except Exception:
-                        continue
-        except Exception:
-            gp_interest = {}
-
-        # Identity themes where niche interests are expected to run high.
-        theme_tokens = {
-            'ANIME': ['ANIME', 'MANGA', 'CRUNCHYROLL', 'FUNIMATION', 'OTAKU'],
-            'MANGA': ['ANIME', 'MANGA', 'CRUNCHYROLL', 'FUNIMATION', 'OTAKU'],
-            'COSPLAY': ['ANIME', 'MANGA', 'COSPLAY', 'CRUNCHYROLL', 'OTAKU', 'COMIC CON'],
-            'K-POP': ['K-POP', 'KPOP', 'KOREAN POP', 'BTS', 'BLACKPINK'],
-            'ESPORTS': ['ESPORTS', 'E-SPORTS', 'TWITCH', 'GAMING'],
-            'GAMING': ['GAMING', 'GAMES', 'TWITCH', 'XBOX', 'PLAYSTATION', 'STEAM'],
-        }
-
-        def _profile_supports_interest(v_up: str) -> bool:
-            # Direct lexical overlap always counts as support.
-            if any(tok in identity_blob for tok in [v_up, v_up.replace('&', 'AND')]):
-                return True
-            for key, toks in theme_tokens.items():
-                if key in v_up and any(t in identity_blob for t in toks):
-                    return True
-            return False
-
-        for idx, val, cur in _cat_rows('INTEREST'):
-            v_up = str(val).upper().strip()
-            gp_bp = gp_interest.get(v_up, 0.0)
-            idx_ratio = (cur / gp_bp) if gp_bp > 0 else None
-            supported = _profile_supports_interest(v_up)
-
-            # Rule A: extreme mass-level values need identity support.
-            if cur >= 45.0 and not supported:
-                # Keep high interests possible, but prevent implausible "half of all users" style spikes.
-                target = max(10.0, min(34.0, (gp_bp * 1.75) if gp_bp > 0 else 34.0))
-                if target < cur - 0.1:
-                    _write_bp(idx, target)
-                    fixes += 1
-                    continue
-
-            # Rule A2: for broad social-platform audiences, only compress unsupported
-            # niche / low-genpop interests (not all high interests).
-            if broad_social_profile and (not supported):
-                niche_tokens = [
-                    'ANIME', 'MANGA', 'COSPLAY', 'OTAKU', 'VTUBER', 'J-POP', 'K-POP', 'KPOP',
-                    'ESPORT', 'FANTASY SPORTS', 'COMIC', 'CARTOON', 'ANIMATION'
-                ]
-                looks_niche = any(t in v_up for t in niche_tokens)
-                low_genpop = (gp_bp > 0 and gp_bp < 15.0)
-                if (looks_niche or low_genpop) and cur >= 24.0:
-                    target = max(6.0, min(22.0, (gp_bp * 1.35) if gp_bp > 0 else 22.0))
-                    if target < cur - 0.1:
-                        _write_bp(idx, target)
-                        fixes += 1
-                        continue
-
-            # Rule B: very high index without support gets trimmed toward realistic over-index.
-            if (idx_ratio is not None) and (idx_ratio > 2.4) and (cur >= 18.0) and (not supported):
-                target = max(8.0, min(cur, gp_bp * 1.85))
-                if target < cur - 0.1:
-                    _write_bp(idx, target)
-                    fixes += 1
-                    continue
-
-            # Rule C: if profile clearly supports a theme but it's oddly suppressed, modest uplift.
-            if supported and (idx_ratio is not None) and (idx_ratio < 0.75) and (cur < 35.0):
-                target = min(45.0, max(cur * 1.15, gp_bp * 0.95))
-                if target > cur + 0.1:
-                    _write_bp(idx, target)
-                    fixes += 1
-
-        # Rule D: broad social-platform profiles should show platform-core interests
-        # at meaningful prevalence (do not let generic damping flatten these).
-        if broad_social_profile:
-            social_idx = _find_idx('INTEREST', ['SOCIAL MEDIA'])
-            if social_idx is not None and _bp(social_idx) < 35.0:
-                _write_bp(social_idx, 35.0)
-                fixes += 1
-            photo_idx = _find_idx('INTEREST', ['PHOTOGRAPHY', 'CONTENT CREATION', 'INFLUENCER STYLE'])
-            if photo_idx is not None and _bp(photo_idx) < 26.0:
-                _write_bp(photo_idx, 26.0)
-                fixes += 1
 
     if not SILENCE_VERBOSE_OUTPUT and fixes:
         print(f"🛡️ Behavioral plausibility guard: {fixes} deterministic correction(s)")
