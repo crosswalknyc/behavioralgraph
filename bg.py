@@ -7777,6 +7777,93 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             print(f"   ⚠️ Pass B error (batch {batch_num}): {e}")
             continue
 
+    # ──── PASS B2: INTEREST PERSONA-DEEP REVIEW (research-first) ────
+    # Dedicated INTEREST pass to enforce persona realism using external research.
+    # This is intentionally stricter than generic behavioral spot checks because
+    # INTEREST rows are one of the highest-trust signals in the dashboard.
+    interest_cats = [c for c in categories_data.keys() if c in {'INTEREST', 'INTERESTS'}]
+    if interest_cats:
+        # Refresh lookup from latest df after Pass A/B edits.
+        all_item_lookup.clear()
+        for cat, items in categories_data.items():
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = cs_orig
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        interest_lines = []
+        total_interest_items = 0
+        for icat in interest_cats:
+            cat_items = []
+            for (cat, item_u), (name, bp, cs, idx) in all_item_lookup.items():
+                if cat != icat:
+                    continue
+                gp_bp = gp_bp_lookup.get((cat, item_u), 0)
+                if gp_bp > 0:
+                    idx_int = int(round((bp / gp_bp) * 100))
+                    idx_meta = f" [GenPop: {gp_bp:.2f}%, INDEX: {idx_int}]"
+                else:
+                    idx_meta = " [GenPop: N/A, INDEX: N/A]"
+                cat_items.append((name, bp, idx_meta))
+            cat_items.sort(key=lambda x: -x[1])
+            # Review deeper breadth than generic pass so persona alignment is explicit.
+            cat_items = cat_items[:140]
+            total_interest_items += len(cat_items)
+            interest_lines.append(
+                f"{icat}:\n" + "\n".join([f"  {n}: {b:.4f}% BP{m}" for n, b, m in cat_items])
+            )
+
+        if total_interest_items > 0:
+            interest_prompt = (
+                f"You are a US audience strategist doing a FINAL PERSONA-ACCURACY CHECK "
+                f"for the INTEREST category of a behavioral profile.\n\n"
+                f"{audience_context}\n"
+                f"=== INTEREST DATA (deep review) ===\n"
+                + "\n\n".join(interest_lines) +
+                f"\n\n=== STRICT METHOD (REQUIRED) ===\n"
+                f"1) Use the WEB RESEARCH + demographic context above to infer WHO this audience is.\n"
+                f"2) Determine core interest themes this audience should over-index on.\n"
+                f"3) For each listed INTEREST item, evaluate whether its current direction "
+                f"(over/under vs Gen Pop) matches that persona.\n"
+                f"4) Correct only clear mismatches, but be decisive where wrong top interests "
+                f"would make the profile feel inauthentic.\n\n"
+                f"=== ADJUSTMENT GUIDANCE ===\n"
+                f"- Poor-fit / off-persona interests near the top: factor 0.45-0.85\n"
+                f"- Strong persona-fit interests that are underweighted: factor 1.10-1.80\n"
+                f"- Neutral/mass interests: leave near current level (no adjustment needed)\n"
+                f"- Keep corrections realistic and avoid flattening everything.\n\n"
+                f"Return ONLY valid JSON:\n"
+                f'If no changes: {{"status":"OK","notes":"why interests already match persona"}}\n'
+                f'If changes: {{"status":"FIX","notes":"persona mismatch summary",'
+                f'"adjustments":[{{"category":"INTEREST","item":"ITEM","factor":0.70,'
+                f'"reason":"brief persona-based rationale"}},...]}}\n'
+                f"factor must stay in 0.15 to 4.0 range. JSON only."
+            )
+
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': interest_prompt}],
+                    temperature=0.1,
+                    max_tokens=4000
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    # Apply a bounded number of interest edits to avoid over-correcting.
+                    bounded = result['adjustments'][:120]
+                    applied, _ = _apply_adjustments(bounded, all_item_lookup, '[INTEREST]')
+                    print(f"   🎯 Pass B2 INTEREST: {applied} persona-driven corrections")
+                else:
+                    print("   🎯 Pass B2 INTEREST: already persona-aligned")
+            except Exception as e:
+                print(f"   ⚠️ Pass B2 INTEREST error: {e}")
+
     # ──── PASS C: CATEGORY-LEVEL DEMOGRAPHIC ALIGNMENT ────
     # Detect entire categories where participation bias causes most items
     # to over-index despite the audience demographics pointing the other
