@@ -8429,6 +8429,106 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         if b2_total:
             print(f"   🎯 Pass B2 INTEREST total: {b2_total} corrections")
 
+    # ──── PASS B3: AMUSEMENT PARKS geographic realism review ────
+    # Catch cases where small regional parks rank above national destination parks
+    # without geographic support in the profile's LOCATION mix.
+    amusement_cats = [c for c in categories_data.keys() if c in {'AMUSEMENT PARKS', 'THEME PARKS'}]
+    if amusement_cats:
+        # Refresh lookup so this pass uses current post-B values.
+        all_item_lookup.clear()
+        for cat, items in categories_data.items():
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = cs_orig
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        loc_context = []
+        try:
+            loc_mask_ctx = df['Column'].str.upper().str.strip() == 'LOCATION'
+            if loc_mask_ctx.any():
+                loc_rows = []
+                for _, row in df[loc_mask_ctx].iterrows():
+                    dma = str(row.get('Value', '')).strip()
+                    try:
+                        lbp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        lbp = 0.0
+                    if dma and lbp > 0:
+                        loc_rows.append((dma, lbp))
+                loc_rows.sort(key=lambda x: -x[1])
+                loc_context = [f"  {d}: {p:.2f}% BP" for d, p in loc_rows[:30]]
+        except Exception:
+            loc_context = []
+
+        for cat in amusement_cats:
+            # Rebuild fresh item list for this category from current df values.
+            cat_items = []
+            for name, _, _, idx in categories_data.get(cat, []):
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = 0.0
+                if cur_bp <= 0:
+                    continue
+                gp_bp = gp_bp_lookup.get((cat, name.strip().upper()), 0.0)
+                cat_items.append((name, cur_bp, gp_bp))
+            if len(cat_items) < 6:
+                continue
+            cat_items.sort(key=lambda x: -x[1])
+            top_items = cat_items[:80]
+
+            lines = []
+            for name, bp, gp_bp in top_items:
+                if gp_bp > 0:
+                    idx_val = int(round((bp / gp_bp) * 100))
+                    lines.append(f"  {name}: {bp:.2f}% BP [GenPop: {gp_bp:.2f}%, INDEX: {idx_val}]")
+                else:
+                    lines.append(f"  {name}: {bp:.2f}% BP [GenPop: N/A]")
+
+            amuse_prompt = (
+                f"You are a US audience realism reviewer doing a FINAL sanity pass for {cat}.\n\n"
+                f"{audience_context}\n"
+                f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n\n"
+                f"=== TOP LOCATION CONTEXT (profile) ===\n"
+                + ("\n".join(loc_context) if loc_context else "No location context available.") +
+                f"\n\n=== {cat} ITEMS ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== TASK ===\n"
+                f"Ensure park rankings are geographically and behaviorally plausible.\n"
+                f"- National destination parks (Disney/Universal-class) should generally outrank tiny regional venues,\n"
+                f"  unless location context strongly supports a regional park.\n"
+                f"- If a regional park's home region has very low audience share, that park should not lead this category.\n"
+                f"- Keep true regional affinity when location evidence supports it.\n"
+                f"- Only adjust clear mismatches.\n\n"
+                f"Return ONLY valid JSON:\n"
+                f'If OK: {{"status":"OK","notes":"reason"}}\n'
+                f'If fixes needed: {{"status":"FIX","notes":"summary",'
+                f'"adjustments":[{{"category":"{cat}","item":"ITEM","factor":0.70,"reason":"brief"}}]}}\n'
+                f"factor range: 0.15 to 4.0. JSON only."
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': amuse_prompt}],
+                    temperature=0.1,
+                    max_tokens=3500
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    applied, _ = _apply_adjustments(result['adjustments'], all_item_lookup, '[AMUSE]')
+                    if applied > 0:
+                        print(f"   🎢 Pass B3 {cat}: {applied} geography-consistency corrections")
+                else:
+                    print(f"   🎢 Pass B3 {cat}: OK — {result.get('notes', '')[:80]}")
+            except Exception as e:
+                print(f"   ⚠️ Pass B3 error ({cat}): {e}")
+
     # ──── PASS C: CATEGORY-LEVEL DEMOGRAPHIC ALIGNMENT ────
     # Detect entire categories where participation bias causes most items
     # to over-index despite the audience demographics pointing the other
@@ -8619,7 +8719,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         'BEAUTY/WELLNESS', 'GAMES', 'TECHNOLOGY/DEVICE', 'SEARCH ENGINE/AI',
         'BROADCAST/CABLE', 'APP/PLATFORM USAGE', 'MEDIA', 'APPAREL/FOOTWEAR',
         'DIGITAL BANKING', 'WHERE THEY SHOP', 'INTEREST', 'CPG',
-        'FRANCHISE', 'HOME/OUTDOOR', 'BETTING',
+        'FRANCHISE', 'HOME/OUTDOOR', 'BETTING', 'AMUSEMENT PARKS',
     ]
     # Refresh item lookup with current values
     all_item_lookup.clear()
