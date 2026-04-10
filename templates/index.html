@@ -35011,7 +35011,7 @@
                     result.demographicsProjection.age[value] = usProjection;
                     if (rawNumbers > 0) result.demographicsAgeRaw[value] = rawNumbers;
                 }
-                if (category === 'GENDER' && value && !['OTHER', 'PREFER NOT TO SAY'].includes(value.toUpperCase().trim())) {
+                if (category === 'GENDER' && value) {
                     result.demographics.gender[value] = pct;
                     result.demographicsIndex.gender[value] = index;
                     result.demographicsGenPop.gender[value] = genPopPct;
@@ -35144,7 +35144,8 @@
 
             normalizeAgeBucketsForDashboard(result);
             normalizeIncomeBucketsForDashboard(result);
-            stripPreferNotToSay(result);
+            // Keep demographics exactly as provided in the CSV (including
+            // "Prefer Not to Say"/"Other" rows) so charts match source data.
 
             // Deduplicate behavioral items: keep highest-pct entry per name within each category
             Object.keys(result.behavioral).forEach(cat => {
@@ -35163,24 +35164,8 @@
                 result.behavioral[cat].sort((a, b) => b.pct - a.pct);
             });
 
-            // Rebase demographics percentages to 100% after filtering out excluded values
-            ['gender', 'age', 'income', 'ethnicity', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'].forEach(demoKey => {
-                const bucket = result.demographics[demoKey];
-                if (!bucket || typeof bucket !== 'object') return;
-                const total = Object.values(bucket).reduce((s, v) => s + (v || 0), 0);
-                if (total > 0 && Math.abs(total - 100) > 0.5) {
-                    const scale = 100 / total;
-                    const gpBucket = result.demographicsGenPop?.[demoKey] || {};
-                    const idxBucket = result.demographicsIndex?.[demoKey];
-                    for (const k of Object.keys(bucket)) {
-                        bucket[k] = Math.round(bucket[k] * scale * 100) / 100;
-                        const gp = gpBucket[k] || 0;
-                        if (idxBucket && gp > 0) {
-                            idxBucket[k] = Math.round((bucket[k] / gp) * 100);
-                        }
-                    }
-                }
-            });
+            // Do not rebase demographic percentages in the dashboard parser.
+            // The CSV already contains finalized percentages that should be rendered as-is.
 
             return result;
         }
