@@ -15335,6 +15335,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     # AGE hard gate: never allow "OTHER" row; rebase AGE to 100.
     df_final = enforce_no_age_other_and_rebase(df_final)
+    # INCOME hard gate: keep only approved final-output income buckets.
+    df_final = enforce_income_buckets_whitelist(df_final)
 
     # Pipeline sanity gate: prevent catastrophic sample/BP regressions.
     df_final = enforce_pipeline_sanity_guards(df_final, is_genpop=is_genpop, brand_category=brand_category)
@@ -27421,6 +27423,138 @@ def finalize_output_metrics_like_edit_sample_size(df: pd.DataFrame) -> pd.DataFr
     df = reconcile_final_output_from_bp_and_sample_size(df)
     df = add_us_gen_pop_projection(df)
     return df
+
+
+def enforce_income_buckets_whitelist(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Restrict INCOME rows to approved final-output buckets only, aggregating any
+    non-standard income ranges into the nearest allowed bucket.
+    """
+    if df is None or df.empty:
+        return df
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    out = df.copy()
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in out.columns else None
+    cs_col = 'Category Share' if 'Category Share' in out.columns else (
+        'Percentage' if 'Percentage' in out.columns else None
+    )
+    pct_col = 'Percentage' if 'Percentage' in out.columns else cs_col
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in out.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in out.columns else None
+    MULT = 329_900_000 / 10_000_000
+
+    if not bp_col or not cs_col:
+        return out
+
+    def _to_num(v, default=0.0):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return default
+
+    def _to_int(v, default=0):
+        try:
+            return int(round(float(str(v).replace(',', '').replace('%', '').strip())))
+        except Exception:
+            return default
+
+    allowed = [
+        '$25,000 - $49,999',
+        '$50,000 - $74,999',
+        '$75,000 - $99,999',
+        '$100,000 - $149,999',
+        '$150,000 - $249,999',
+        '$250,000 OR MORE',
+    ]
+
+    def _parse_money_range(v: str):
+        s = str(v or '').upper().replace(',', '').strip()
+        s = s.replace('K', '000')
+        nums = [int(x) for x in re.findall(r'\d+', s)]
+        if ('UNDER' in s or '<' in s) and nums:
+            hi = nums[0]
+            return 0, max(0, hi - 1)
+        if ('OR MORE' in s or '+' in s or 'AND OVER' in s) and nums:
+            lo = nums[0]
+            return lo, None
+        if len(nums) >= 2:
+            lo, hi = min(nums[0], nums[1]), max(nums[0], nums[1])
+            return lo, hi
+        if len(nums) == 1:
+            n = nums[0]
+            return n, n
+        return None, None
+
+    def _canon_income(v: str) -> str:
+        lo, hi = _parse_money_range(v)
+        if lo is None:
+            return '$25,000 - $49,999'
+        if hi is None:
+            return '$250,000 OR MORE' if lo >= 250000 else '$150,000 - $249,999'
+        mid = (lo + hi) / 2.0
+        if mid >= 250000:
+            return '$250,000 OR MORE'
+        if mid >= 150000:
+            return '$150,000 - $249,999'
+        if mid >= 100000:
+            return '$100,000 - $149,999'
+        if mid >= 75000:
+            return '$75,000 - $99,999'
+        if mid >= 50000:
+            return '$50,000 - $74,999'
+        # Includes under-$25k/low bins by user-request bucket policy.
+        return '$25,000 - $49,999'
+
+    income_mask = out['Column'].astype(str).str.upper().str.strip() == 'INCOME'
+    if not income_mask.any():
+        return out
+
+    sample_size = 0
+    ss_mask = out['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+    if raw_col and ss_mask.any():
+        sample_size = _to_int(out.loc[ss_mask, raw_col].iloc[0], 0)
+    if sample_size <= 0 and cs_col and ss_mask.any():
+        sample_size = _to_int(out.loc[ss_mask, cs_col].iloc[0], 0)
+
+    income_rows = out[income_mask].copy()
+    template = income_rows.iloc[0].to_dict()
+    bucket_raw = {k: 0 for k in allowed}
+
+    for _, row in income_rows.iterrows():
+        bucket = _canon_income(row.get('Value', ''))
+        raw = _to_int(row.get(raw_col, 0), 0) if raw_col else 0
+        if raw <= 0 and sample_size > 0:
+            raw = max(0, int(round((_to_num(row.get(bp_col, 0), 0.0) / 100.0) * sample_size)))
+        bucket_raw[bucket] += max(0, raw)
+
+    total_raw = sum(bucket_raw.values())
+    if total_raw <= 0:
+        return out
+
+    out = out[~income_mask].copy()
+    rebuilt = []
+    for bucket in allowed:
+        r = bucket_raw[bucket]
+        if r <= 0:
+            continue
+        pct = round((r / total_raw) * 100.0, 4)
+        row = dict(template)
+        row['Column'] = 'INCOME'
+        row['Value'] = bucket
+        row[bp_col] = f"{pct:.4f}"
+        row[cs_col] = f"{pct:.4f}"
+        if pct_col in row:
+            row[pct_col] = f"{pct:.4f}"
+        if raw_col:
+            row[raw_col] = str(int(r))
+        if proj_col:
+            row[proj_col] = str(int(round(int(r) * MULT)))
+        rebuilt.append(row)
+
+    out = pd.concat([out, pd.DataFrame(rebuilt)], ignore_index=True)
+    return out
 
 
 def ensure_bp_driven_metric_alignment(df: pd.DataFrame) -> pd.DataFrame:
