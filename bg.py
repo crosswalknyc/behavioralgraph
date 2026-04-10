@@ -15442,6 +15442,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         )
         df_final = finalize_output_metrics_like_edit_sample_size(df_final)
         df_final = ensure_bp_driven_metric_alignment(df_final)
+        # Final post-AI/noise consistency lock: same Value => same BP/raw/projection
+        # across categories (Category Share remains category-relative).
+        df_final = enforce_value_consistency_across_categories(df_final)
+        df_final = finalize_output_metrics_like_edit_sample_size(df_final)
+        df_final = ensure_bp_driven_metric_alignment(df_final)
     for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
         if _fmt_col not in df_final.columns:
             continue
@@ -18654,6 +18659,121 @@ def enforce_cross_category_brand_consistency(df):
             df.at[idx, 'Original Raw Numbers'] = str(applied_raw)
 
     return df
+
+def enforce_value_consistency_across_categories(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Final hard gate: for repeated behavioral/entity values that appear in multiple
+    categories, enforce one shared BP/raw/projection so late AI/noise passes cannot
+    leave split values (e.g. same brand with different BP by category).
+
+    NOTE: Category Share is intentionally not forced identical because it is
+    category-relative by design and is recomputed downstream.
+    """
+    if df is None or df.empty or 'Value' not in df.columns or 'Column' not in df.columns:
+        return df
+
+    # Exclude metadata + demographics from cross-category behavioral consistency.
+    excluded_cols = {
+        'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND INPUT', 'INPUT_METADATA',
+        'PURCHASE SHARE', 'BRAND PENETRATION', 'AGE', 'GENDER', 'ETHNICITY',
+        'INCOME', 'EDUCATION', 'RELATIONSHIP', 'PARENTAL_STATUS',
+        'SEXUAL_ORIENTATION', 'OCCUPATION', 'LOCATION',
+    }
+
+    def _to_num(v, default=np.nan):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return default
+
+    # Resolve final sample size for raw-number rebuilding.
+    sample_size = None
+    try:
+        ss_mask = df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any():
+            for _c in ('Original Raw Numbers', 'Category Share', 'Percentage'):
+                if _c not in df.columns:
+                    continue
+                _v = _to_num(df.loc[ss_mask, _c].iloc[0], default=np.nan)
+                if pd.notna(_v) and _v > 1000:
+                    sample_size = int(round(_v))
+                    break
+    except Exception:
+        sample_size = None
+
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else 'Percentage'
+    if bp_col not in df.columns:
+        return df
+
+    # Group non-excluded rows by normalized Value key.
+    work = df.copy()
+    work['_consistency_key'] = work['Value'].astype(str).str.strip().str.upper()
+    work['_consistency_col'] = work['Column'].astype(str).str.strip().str.upper()
+    eligible = work[
+        (~work['_consistency_col'].isin(excluded_cols))
+        & (work['_consistency_key'] != '')
+        & (work['_consistency_key'] != 'NAN')
+    ]
+    if eligible.empty:
+        return df
+
+    for _, idxs in eligible.groupby('_consistency_key').groups.items():
+        idx_list = list(idxs)
+        if len(idx_list) < 2:
+            continue
+
+        # Canonical source rule:
+        # 1) If value exists in MOST PURCHASED BRANDS, that row is authoritative.
+        # 2) Otherwise, fall back to the highest BP among duplicates.
+        mpb_idxs = [i for i in idx_list if str(work.at[i, 'Column']).strip().upper() == 'MOST PURCHASED BRANDS']
+        canonical_bp = np.nan
+        canonical_raw = np.nan
+        canonical_proj = np.nan
+        if mpb_idxs:
+            src_idx = mpb_idxs[0]
+            canonical_bp = _to_num(work.at[src_idx, bp_col], default=np.nan)
+            if 'Original Raw Numbers' in work.columns:
+                canonical_raw = _to_num(work.at[src_idx, 'Original Raw Numbers'], default=np.nan)
+            if 'US Gen Pop Projection' in work.columns:
+                canonical_proj = _to_num(work.at[src_idx, 'US Gen Pop Projection'], default=np.nan)
+        else:
+            canonical_bp = np.nanmax([_to_num(work.at[i, bp_col], default=np.nan) for i in idx_list])
+            if np.isfinite(canonical_bp) and sample_size and 'Original Raw Numbers' in work.columns:
+                canonical_raw = int(round((canonical_bp / 100.0) * sample_size))
+                canonical_raw = max(1, min(int(canonical_raw), sample_size))
+                if 'US Gen Pop Projection' in work.columns:
+                    canonical_proj = int(round((canonical_raw / 10_000_000.0) * 329_900_000.0))
+
+        if not np.isfinite(canonical_bp):
+            continue
+        canonical_bp = max(0.0001, min(99.9999, float(canonical_bp)))
+        canonical_bp_str = f"{canonical_bp:.4f}"
+
+        for i in idx_list:
+            if 'Brand Penetration (Row)' in work.columns:
+                work.at[i, 'Brand Penetration (Row)'] = canonical_bp_str
+            if 'Percentage' in work.columns:
+                work.at[i, 'Percentage'] = canonical_bp_str
+
+            if 'Original Raw Numbers' in work.columns:
+                if np.isfinite(canonical_raw):
+                    work.at[i, 'Original Raw Numbers'] = str(int(round(canonical_raw)))
+                elif sample_size:
+                    raw_num = int(round((canonical_bp / 100.0) * sample_size))
+                    raw_num = max(1, min(raw_num, sample_size))
+                    work.at[i, 'Original Raw Numbers'] = str(raw_num)
+                    canonical_raw = raw_num
+
+            if 'US Gen Pop Projection' in work.columns:
+                if np.isfinite(canonical_proj):
+                    work.at[i, 'US Gen Pop Projection'] = str(int(round(canonical_proj)))
+                elif np.isfinite(canonical_raw):
+                    proj = int(round((float(canonical_raw) / 10_000_000.0) * 329_900_000.0))
+                    work.at[i, 'US Gen Pop Projection'] = str(proj)
+                    canonical_proj = proj
+
+    work = work.drop(columns=['_consistency_key', '_consistency_col'], errors='ignore')
+    return work
 
 def set_brand_input_raw_to_sample_size(df, is_genpop=False):
     """Set ALL instances of the input brand's Original Raw Numbers equal to SAMPLE SIZE and Percentage to 100%.
