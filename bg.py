@@ -15444,6 +15444,17 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = finalize_output_metrics_like_edit_sample_size(df_final)
     # Absolute final invariant gate: if BP/raw/share drift appears, auto-reconcile.
     df_final = ensure_bp_driven_metric_alignment(df_final)
+    # Final behavioral realism re-check at save boundary so late passes cannot
+    # leave implausible INTEREST spikes (or similar plausibility misses).
+    if not is_genpop:
+        df_final = enforce_behavioral_category_plausibility(
+            df_final,
+            brand_category=brand_category,
+            project_name=project_name,
+            brands=brands,
+        )
+        df_final = finalize_output_metrics_like_edit_sample_size(df_final)
+        df_final = ensure_bp_driven_metric_alignment(df_final)
     for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
         if _fmt_col not in df_final.columns:
             continue
@@ -24018,6 +24029,12 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
         + [str(b) for b in (brands or [])]
     ).upper()
     if _cat_rows('INTEREST'):
+        broad_social_profile = (
+            (('APP/PLATFORM' in identity_blob) or ('SOCIAL MEDIA' in identity_blob))
+            and any(tok in identity_blob for tok in [
+                'INSTAGRAM', 'FACEBOOK', 'TIKTOK', 'YOUTUBE', 'SNAPCHAT', 'PINTEREST', 'TWITTER', 'X/TWITTER'
+            ])
+        )
         # Lightweight Gen Pop map for INTEREST rows.
         gp_interest = {}
         try:
@@ -24062,6 +24079,15 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
             if cur >= 45.0 and not supported:
                 # Keep high interests possible, but prevent implausible "half of all users" style spikes.
                 target = max(10.0, min(34.0, (gp_bp * 1.75) if gp_bp > 0 else 34.0))
+                if target < cur - 0.1:
+                    _write_bp(idx, target)
+                    fixes += 1
+                    continue
+
+            # Rule A2: for broad social-platform audiences, niche interests should
+            # not sit at mass-level prevalence without clear profile support.
+            if broad_social_profile and (cur >= 30.0) and (not supported):
+                target = max(6.0, min(22.0, (gp_bp * 1.35) if gp_bp > 0 else 22.0))
                 if target < cur - 0.1:
                     _write_bp(idx, target)
                     fixes += 1
