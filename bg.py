@@ -24084,14 +24084,21 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                     fixes += 1
                     continue
 
-            # Rule A2: for broad social-platform audiences, niche interests should
-            # not sit at mass-level prevalence without clear profile support.
-            if broad_social_profile and (cur >= 30.0) and (not supported):
-                target = max(6.0, min(22.0, (gp_bp * 1.35) if gp_bp > 0 else 22.0))
-                if target < cur - 0.1:
-                    _write_bp(idx, target)
-                    fixes += 1
-                    continue
+            # Rule A2: for broad social-platform audiences, only compress unsupported
+            # niche / low-genpop interests (not all high interests).
+            if broad_social_profile and (not supported):
+                niche_tokens = [
+                    'ANIME', 'MANGA', 'COSPLAY', 'OTAKU', 'VTUBER', 'J-POP', 'K-POP', 'KPOP',
+                    'ESPORT', 'FANTASY SPORTS', 'COMIC', 'CARTOON', 'ANIMATION'
+                ]
+                looks_niche = any(t in v_up for t in niche_tokens)
+                low_genpop = (gp_bp > 0 and gp_bp < 15.0)
+                if (looks_niche or low_genpop) and cur >= 24.0:
+                    target = max(6.0, min(22.0, (gp_bp * 1.35) if gp_bp > 0 else 22.0))
+                    if target < cur - 0.1:
+                        _write_bp(idx, target)
+                        fixes += 1
+                        continue
 
             # Rule B: very high index without support gets trimmed toward realistic over-index.
             if (idx_ratio is not None) and (idx_ratio > 2.4) and (cur >= 18.0) and (not supported):
@@ -24107,6 +24114,18 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 if target > cur + 0.1:
                     _write_bp(idx, target)
                     fixes += 1
+
+        # Rule D: broad social-platform profiles should show platform-core interests
+        # at meaningful prevalence (do not let generic damping flatten these).
+        if broad_social_profile:
+            social_idx = _find_idx('INTEREST', ['SOCIAL MEDIA'])
+            if social_idx is not None and _bp(social_idx) < 35.0:
+                _write_bp(social_idx, 35.0)
+                fixes += 1
+            photo_idx = _find_idx('INTEREST', ['PHOTOGRAPHY', 'CONTENT CREATION', 'INFLUENCER STYLE'])
+            if photo_idx is not None and _bp(photo_idx) < 26.0:
+                _write_bp(photo_idx, 26.0)
+                fixes += 1
 
     if not SILENCE_VERBOSE_OUTPUT and fixes:
         print(f"🛡️ Behavioral plausibility guard: {fixes} deterministic correction(s)")
