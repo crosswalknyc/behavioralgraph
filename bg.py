@@ -7837,6 +7837,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"- Poor-fit / off-persona interests near the top: factor 0.45-0.85\n"
                 f"- Strong persona-fit interests that are underweighted: factor 1.10-1.80\n"
                 f"- Neutral/mass interests: leave near current level (no adjustment needed)\n"
+                f"- Apply theme realism across ALL interests: niche themes can over-index when "
+                f"the profile identity supports them (e.g., anime-first brands), but should not "
+                f"dominate broad audiences without clear persona evidence.\n"
                 f"- Keep corrections realistic and avoid flattening everything.\n\n"
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"why interests already match persona"}}\n'
@@ -24005,6 +24008,78 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 new_v = min(95.0, cur * 1.12)
                 if abs(new_v - cur) >= 0.15:
                     _write_bp(idx, new_v)
+                    fixes += 1
+
+    # 6) INTEREST: adaptive realism guard across all interests.
+    # Uses profile identity + Gen Pop direction to avoid implausible dominance of
+    # niche interests while preserving legitimately high niche affinity (e.g., Crunchyroll/anime).
+    identity_blob = " ".join(
+        [str(project_name or ""), str(brand_category or "")]
+        + [str(b) for b in (brands or [])]
+    ).upper()
+    if _cat_rows('INTEREST'):
+        # Lightweight Gen Pop map for INTEREST rows.
+        gp_interest = {}
+        try:
+            gp_df = _load_genpop_csv()
+            if gp_df is not None and len(gp_df.columns) >= 3:
+                c0, c1, c2 = gp_df.columns[:3]
+                gm = gp_df[c0].astype(str).str.upper().str.strip() == 'INTEREST'
+                for _, r in gp_df[gm].iterrows():
+                    try:
+                        gp_interest[str(r[c1]).strip().upper()] = float(r[c2])
+                    except Exception:
+                        continue
+        except Exception:
+            gp_interest = {}
+
+        # Identity themes where niche interests are expected to run high.
+        theme_tokens = {
+            'ANIME': ['ANIME', 'MANGA', 'CRUNCHYROLL', 'FUNIMATION', 'OTAKU'],
+            'MANGA': ['ANIME', 'MANGA', 'CRUNCHYROLL', 'FUNIMATION', 'OTAKU'],
+            'COSPLAY': ['ANIME', 'MANGA', 'COSPLAY', 'CRUNCHYROLL', 'OTAKU', 'COMIC CON'],
+            'K-POP': ['K-POP', 'KPOP', 'KOREAN POP', 'BTS', 'BLACKPINK'],
+            'ESPORTS': ['ESPORTS', 'E-SPORTS', 'TWITCH', 'GAMING'],
+            'GAMING': ['GAMING', 'GAMES', 'TWITCH', 'XBOX', 'PLAYSTATION', 'STEAM'],
+        }
+
+        def _profile_supports_interest(v_up: str) -> bool:
+            # Direct lexical overlap always counts as support.
+            if any(tok in identity_blob for tok in [v_up, v_up.replace('&', 'AND')]):
+                return True
+            for key, toks in theme_tokens.items():
+                if key in v_up and any(t in identity_blob for t in toks):
+                    return True
+            return False
+
+        for idx, val, cur in _cat_rows('INTEREST'):
+            v_up = str(val).upper().strip()
+            gp_bp = gp_interest.get(v_up, 0.0)
+            idx_ratio = (cur / gp_bp) if gp_bp > 0 else None
+            supported = _profile_supports_interest(v_up)
+
+            # Rule A: extreme mass-level values need identity support.
+            if cur >= 45.0 and not supported:
+                # Keep high interests possible, but prevent implausible "half of all users" style spikes.
+                target = max(10.0, min(34.0, (gp_bp * 1.75) if gp_bp > 0 else 34.0))
+                if target < cur - 0.1:
+                    _write_bp(idx, target)
+                    fixes += 1
+                    continue
+
+            # Rule B: very high index without support gets trimmed toward realistic over-index.
+            if (idx_ratio is not None) and (idx_ratio > 2.4) and (cur >= 18.0) and (not supported):
+                target = max(8.0, min(cur, gp_bp * 1.85))
+                if target < cur - 0.1:
+                    _write_bp(idx, target)
+                    fixes += 1
+                    continue
+
+            # Rule C: if profile clearly supports a theme but it's oddly suppressed, modest uplift.
+            if supported and (idx_ratio is not None) and (idx_ratio < 0.75) and (cur < 35.0):
+                target = min(45.0, max(cur * 1.15, gp_bp * 0.95))
+                if target > cur + 0.1:
+                    _write_bp(idx, target)
                     fixes += 1
 
     if not SILENCE_VERBOSE_OUTPUT and fixes:
