@@ -15273,6 +15273,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
     df_final = add_us_gen_pop_projection(df_final)
 
+    # Absolute last brand lock (non-GenPop): ensure input brand stays 100.0000
+    # after all late sanity/noise/reconciliation passes.
+    if not is_genpop and brands:
+        df_final = enforce_input_brand_100(df_final, brands)
+        df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
+        df_final = add_us_gen_pop_projection(df_final)
+
     # Reorder columns
     column_order = ['Column', 'Value', 'Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers', 'US Gen Pop Projection']
     existing_columns = [col for col in column_order if col in df_final.columns]
