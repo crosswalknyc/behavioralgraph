@@ -7216,6 +7216,10 @@ Rules:
 - Every corrected category must sum to exactly 100.0000.
 - Use 4 decimal precision.
 - Avoid overly perfect/rounded patterns when possible.
+- ETHNICITY must represent fanbase COMPOSITION (share of total fans by group),
+  not affinity-within-group rates.
+- Evaluate plausibility across ALL ethnicity labels present in the file.
+- Do not collapse any major ethnicity label to near-zero without explicit evidence.
 - For mainstream US artists/platforms, do not set LGBTQ-majority or near-zero Hispanic
   unless there is strong explicit evidence in research.
 - For mass-market pop artists (like Taylor Swift-class), under-17 audience should not be
@@ -7416,6 +7420,142 @@ Return:
                 print(f"🧠 Demographic self-check pass: OK — {sc_result.get('notes', '')[:90]}")
         except Exception as _e_sc:
             print(f"⚠️ Demographic self-check pass error: {_e_sc}")
+
+        # Third AI pass: ethnicity-only composition audit across ALL groups.
+        try:
+            # Build CURRENT ETHNICITY from latest in-memory df (after prior passes).
+            post_eth = {}
+            _eth_mask_now = df['Column'].str.upper().str.strip() == 'ETHNICITY'
+            if _eth_mask_now.any():
+                _eth_rows = []
+                _eth_total = 0.0
+                for _, _r in df[_eth_mask_now].iterrows():
+                    _v = str(_r.get('Value', '')).strip()
+                    try:
+                        _bp = float(str(_r.get(bp_col, 0)).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        _bp = 0.0
+                    _eth_rows.append((_v, _bp))
+                    _eth_total += _bp
+                if _eth_total > 0:
+                    post_eth = {v: round((bp / _eth_total) * 100.0, 4) for v, bp in _eth_rows}
+
+            if post_eth:
+                # Build a soft US prior mapped to the labels present in the file.
+                def _eth_prior_for_label(lbl_upper: str) -> float:
+                    if any(t in lbl_upper for t in ('HISPANIC', 'LATINO', 'LATINX')):
+                        return 19.0
+                    if 'WHITE' in lbl_upper:
+                        return 58.0
+                    if any(t in lbl_upper for t in ('BLACK', 'AFRICAN AMERICAN')):
+                        return 13.0
+                    if 'ASIAN' in lbl_upper:
+                        return 6.0
+                    return 4.0
+
+                prior_raw = {k: _eth_prior_for_label(str(k).upper().strip()) for k in post_eth.keys()}
+                prior_total = sum(prior_raw.values())
+                prior_eth = {k: (v / prior_total) * 100.0 for k, v in prior_raw.items()} if prior_total > 0 else post_eth.copy()
+
+                eth_prompt = f"""You are a US audience-demographics ethnicity specialist.
+
+Audit ETHNICITY for "{subject_clean}" ({brand_category}) using web research.
+
+CRITICAL:
+- Return COMPOSITION of the total fanbase by ethnicity (not affinity-within-group).
+- Evaluate ALL labels in CURRENT_ETHNICITY.
+- Keep plausible values; fix only implausible ones.
+- Do not force any major present label near zero without explicit evidence.
+- Sum must equal 100.0000.
+- Use exactly the existing labels.
+- JSON only.
+- Also return confidence_overall (0.0-1.0) reflecting certainty of your composition estimate.
+
+WEB_RESEARCH:
+{research_block}
+
+CURRENT_ETHNICITY:
+{_json.dumps(post_eth)}
+
+Return exactly:
+{{
+  "status":"OK"|"FIX",
+  "notes":"short reason",
+  "confidence_overall":0.0,
+  "corrections":{{
+    "ETHNICITY":{{"label":12.3456}}
+  }}
+}}
+"""
+                _eth = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': eth_prompt}],
+                    temperature=0.0,
+                    max_tokens=1200
+                )
+                eth_text = _eth.choices[0].message.content.strip()
+                if eth_text.startswith('```'):
+                    eth_text = eth_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+                depth = 0
+                end = 0
+                for i, c in enumerate(eth_text):
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end = i + 1
+                            break
+                if end > 0:
+                    eth_text = eth_text[:end]
+                eth_result = _json.loads(eth_text)
+
+                if eth_result.get('status') == 'FIX':
+                    corr = eth_result.get('corrections', {}) or {}
+                    ai_eth = corr.get('ETHNICITY', {}) if isinstance(corr, dict) else {}
+                    # Keep only current labels + coerce to numeric.
+                    ai_eth_clean = {}
+                    for k in post_eth.keys():
+                        try:
+                            ai_eth_clean[k] = max(0.0, float(ai_eth.get(k, post_eth.get(k, 0.0))))
+                        except (ValueError, TypeError):
+                            ai_eth_clean[k] = float(post_eth.get(k, 0.0))
+                    ai_total = sum(ai_eth_clean.values())
+                    if ai_total > 0:
+                        ai_eth_clean = {k: (v / ai_total) * 100.0 for k, v in ai_eth_clean.items()}
+                    else:
+                        ai_eth_clean = post_eth.copy()
+
+                    try:
+                        conf = float(eth_result.get('confidence_overall', 0.7))
+                    except (ValueError, TypeError):
+                        conf = 0.7
+                    # Keep confidence bounded so weak/ambiguous web evidence
+                    # cannot fully override either AI or baseline.
+                    conf = max(0.35, min(0.90, conf))
+
+                    # Confidence-weighted blend:
+                    # - AI estimate (primary)
+                    # - soft prior (US composition mapped to present labels)
+                    # - current Snowflake composition (inertia)
+                    blended = {}
+                    for k in post_eth.keys():
+                        baseline_mix = 0.65 * float(prior_eth.get(k, 0.0)) + 0.35 * float(post_eth.get(k, 0.0))
+                        blended[k] = conf * float(ai_eth_clean.get(k, 0.0)) + (1.0 - conf) * baseline_mix
+                    btot = sum(blended.values())
+                    if btot > 0:
+                        blended = {k: (v / btot) * 100.0 for k, v in blended.items()}
+
+                    eth_changes = _apply_ai_corrections({'ETHNICITY': blended})
+                    if eth_changes:
+                        changes += eth_changes
+                        print(f"🧠 Ethnicity composition pass: FIXED {eth_changes} values (confidence={conf:.2f})")
+                    else:
+                        print("🧠 Ethnicity composition pass: no actionable label matches")
+                else:
+                    print(f"🧠 Ethnicity composition pass: OK — {eth_result.get('notes', '')[:90]}")
+        except Exception as _e_eth:
+            print(f"⚠️ Ethnicity composition pass error: {_e_eth}")
 
         print(f"🧠 Research-first demographic audit: FIXED {changes} values")
         return _finalize_demographics_math_only(df)
