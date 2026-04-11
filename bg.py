@@ -7224,6 +7224,8 @@ Rules:
   unless there is strong explicit evidence in research.
 - For mass-market pop artists (like Taylor Swift-class), under-17 audience should not be
   forced to ~0 when youth fandom is present.
+- Do NOT return templated/equalized partitions (e.g., 20/20/20/20/20 or 30/30/30/10)
+  unless explicit research evidence justifies near-equality.
 - No markdown; JSON only.
 
 WEB_RESEARCH:
@@ -7371,6 +7373,7 @@ Rules:
   - LGBTQ+ majority without strong explicit evidence
   - Hispanic/Latino near-zero for national audiences
   - under-17 near-zero for youth-appeal pop artist fandom
+- Avoid synthetic equalized distributions across multiple labels unless evidence is explicit.
 - JSON only.
 
 WEB_RESEARCH:
@@ -7556,6 +7559,425 @@ Return exactly:
                     print(f"🧠 Ethnicity composition pass: OK — {eth_result.get('notes', '')[:90]}")
         except Exception as _e_eth:
             print(f"⚠️ Ethnicity composition pass error: {_e_eth}")
+
+        # Fourth AI pass: anti-template demographic guard.
+        # If multiple categories look unnaturally equalized, ask AI to rebuild with
+        # realistic variance grounded in research and current signal.
+        try:
+            def _category_distribution(_cat):
+                _cm = df['Column'].str.upper().str.strip() == _cat
+                if not _cm.any():
+                    return {}
+                _vals = []
+                _tot = 0.0
+                for _, _r in df[_cm].iterrows():
+                    _label = str(_r.get('Value', '')).strip()
+                    try:
+                        _bp = float(str(_r.get(bp_col, 0)).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        _bp = 0.0
+                    _vals.append((_label, _bp))
+                    _tot += _bp
+                if _tot <= 0:
+                    return {}
+                return {k: round((v / _tot) * 100.0, 4) for k, v in _vals}
+
+            _cats_for_template = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION']
+            _post = {c: _category_distribution(c) for c in _cats_for_template if _category_distribution(c)}
+
+            def _looks_template(dist):
+                if not dist or len(dist) < 4:
+                    return False
+                vals = [float(v) for v in dist.values()]
+                mx, mn = max(vals), min(vals)
+                if (mx - mn) < 2.5:
+                    return True
+                # Also catch repeated coarse buckets (10/20/30 style)
+                coarse = sum(1 for v in vals if abs(v - round(v)) < 0.02)
+                return coarse >= max(4, int(len(vals) * 0.75))
+
+            flagged = [c for c, d in _post.items() if _looks_template(d)]
+            if len(flagged) >= 2:
+                template_prompt = f"""You are a US demographics quality-control expert.
+
+The current demographics for "{subject_clean}" ({brand_category}) look synthetically equalized in these categories:
+{_json.dumps(flagged)}
+
+You must de-template them using web research + persona fit while preserving plausible current signal.
+
+Rules:
+- Do NOT output equal splits unless explicit evidence supports it.
+- Keep plausible values; only correct categories that look templated/implausible.
+- Use exact existing labels.
+- Each corrected category must sum to 100.0000 with 4 decimals.
+- JSON only.
+
+WEB_RESEARCH:
+{research_block}
+
+CURRENT_DISTRIBUTIONS:
+{_json.dumps(_post)}
+
+Return:
+{{
+  "status":"OK"|"FIX",
+  "notes":"short reason",
+  "corrections":{{"CATEGORY":{{"label":12.3456}}}}
+}}
+"""
+                _tp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': template_prompt}],
+                    temperature=0.0,
+                    max_tokens=1800
+                )
+                t_text = _tp.choices[0].message.content.strip()
+                if t_text.startswith('```'):
+                    t_text = t_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+                depth = 0
+                end = 0
+                for i, c in enumerate(t_text):
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end = i + 1
+                            break
+                if end > 0:
+                    t_text = t_text[:end]
+                t_result = _json.loads(t_text)
+                if t_result.get('status') == 'FIX':
+                    t_changes = _apply_ai_corrections(t_result.get('corrections', {}) or {})
+                    if t_changes:
+                        changes += t_changes
+                        print(f"🧠 Anti-template pass: FIXED {t_changes} values across {len(flagged)} categories")
+                else:
+                    print(f"🧠 Anti-template pass: OK — {t_result.get('notes', '')[:90]}")
+        except Exception as _e_tmp:
+            print(f"⚠️ Anti-template pass error: {_e_tmp}")
+
+        # Fifth AI pass: identity-schema consistency for GENDER + SEXUAL_ORIENTATION.
+        # Purpose: prevent implausible label explosions (e.g. massive TRANS/NB or
+        # LGBTQ-majority for mainstream audiences) while keeping AI as decision-maker.
+        try:
+            def _dist_for_cat(_cat):
+                _cm = df['Column'].str.upper().str.strip() == _cat
+                if not _cm.any():
+                    return {}
+                _rows = []
+                _tot = 0.0
+                for _, _r in df[_cm].iterrows():
+                    _lbl = str(_r.get('Value', '')).strip()
+                    try:
+                        _bp = float(str(_r.get(bp_col, 0)).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        _bp = 0.0
+                    _rows.append((_lbl, _bp))
+                    _tot += _bp
+                if _tot <= 0:
+                    return {}
+                return {k: round((v / _tot) * 100.0, 4) for k, v in _rows}
+
+            id_current = {}
+            for _cat in ('GENDER', 'SEXUAL_ORIENTATION'):
+                _d = _dist_for_cat(_cat)
+                if _d:
+                    id_current[_cat] = _d
+
+            if id_current:
+                _profile_text = " ".join([
+                    str(subject_clean or ''),
+                    str(project_name or ''),
+                    str(brand_category or ''),
+                    " ".join([str(b) for b in (brands or [])])
+                ]).upper()
+                _is_lgbtq_focused_profile = any(tok in _profile_text for tok in [
+                    'LGBT', 'LGBTQ', 'PRIDE', 'QUEER', 'DRAG'
+                ])
+
+                def _gender_prior(lbl_u: str) -> float:
+                    if 'FEMALE' == lbl_u or lbl_u.endswith(' FEMALE'):
+                        return 50.0
+                    if 'MALE' == lbl_u or lbl_u.endswith(' MALE'):
+                        return 48.5
+                    if 'NON-BINARY' in lbl_u or 'NON BINARY' in lbl_u:
+                        return 1.0
+                    if 'PREFER NOT TO SAY' in lbl_u:
+                        return 0.5
+                    if 'ANOTHER' in lbl_u or 'OTHER' in lbl_u:
+                        return 0.5
+                    return 0.5
+
+                def _so_prior(lbl_u: str) -> float:
+                    if 'STRAIGHT' in lbl_u or 'HETERO' in lbl_u:
+                        return 85.0
+                    if 'GAY' in lbl_u or 'LESBIAN' in lbl_u:
+                        return 7.0
+                    if 'BISEXUAL' in lbl_u or lbl_u.strip() == 'BI':
+                        return 4.0
+                    if 'ASEXUAL' in lbl_u:
+                        return 1.0
+                    if 'PREFER NOT TO SAY' in lbl_u:
+                        return 2.0
+                    if 'ANOTHER' in lbl_u or 'OTHER' in lbl_u:
+                        return 1.0
+                    return 1.0
+
+                id_prompt = f"""You are a US demographics identity-schema quality reviewer.
+
+Audit these two categories for "{subject_clean}" ({brand_category}):
+- GENDER
+- SEXUAL_ORIENTATION
+
+Goals:
+- Keep plausible current values when reasonable.
+- Correct only values that are clearly implausible for the audience and research context.
+- Use existing labels exactly.
+- Return fanbase composition percentages summing to 100.0000 per category.
+
+Critical:
+- Avoid synthetic template splits.
+- For mainstream audiences, do not output extreme over-allocation to niche labels
+  without explicit strong evidence in research.
+- This is composition of audience, not affinity-within-group.
+- Return confidence_overall (0.0-1.0).
+- Set confidence_overall > 0.6 ONLY if you have explicit quantitative evidence
+  in the research text for these exact identity distributions; otherwise <= 0.6.
+
+WEB_RESEARCH:
+{research_block}
+
+CURRENT_IDENTITY_DISTRIBUTIONS:
+{_json.dumps(id_current)}
+
+Return:
+{{
+  "status":"OK"|"FIX",
+  "notes":"short reason",
+  "confidence_overall":0.0,
+  "corrections":{{
+    "GENDER":{{"label":12.3456}},
+    "SEXUAL_ORIENTATION":{{"label":12.3456}}
+  }}
+}}
+JSON only.
+"""
+                _id = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': id_prompt}],
+                    temperature=0.0,
+                    max_tokens=1800
+                )
+                id_text = _id.choices[0].message.content.strip()
+                if id_text.startswith('```'):
+                    id_text = id_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+                depth = 0
+                end = 0
+                for i, c in enumerate(id_text):
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end = i + 1
+                            break
+                if end > 0:
+                    id_text = id_text[:end]
+                id_result = _json.loads(id_text)
+                if id_result.get('status') == 'FIX':
+                    corr = id_result.get('corrections', {}) or {}
+                    try:
+                        id_conf = float(id_result.get('confidence_overall', 0.7))
+                    except (ValueError, TypeError):
+                        id_conf = 0.7
+                    # Evidence-gated: identity categories are noisy in web snippets.
+                    # Keep AI influential but prevent runaway niche-label dominance.
+                    id_conf = max(0.20, min(0.60, id_conf))
+
+                    # If research text does not explicitly support strong identity-skew,
+                    # reduce confidence so prior/current dominate.
+                    _rb = (research_block or "").upper()
+                    _has_identity_terms = any(tok in _rb for tok in [
+                        'LGBTQ', 'GAY', 'LESBIAN', 'NON-BINARY', 'NON BINARY', 'TRANS', 'QUEER'
+                    ])
+                    _has_quant_tokens = any(tok in _rb for tok in ['%', 'PERCENT', 'OUT OF'])
+                    _has_identity_evidence = bool(_has_identity_terms and _has_quant_tokens)
+                    if not _has_identity_evidence:
+                        id_conf = min(id_conf, 0.35)
+
+                    blended_corr = {}
+                    for _cat in ('GENDER', 'SEXUAL_ORIENTATION'):
+                        cur = id_current.get(_cat, {})
+                        if not cur:
+                            continue
+                        ai = corr.get(_cat, {}) if isinstance(corr, dict) else {}
+                        ai_clean = {}
+                        for k in cur.keys():
+                            try:
+                                ai_clean[k] = max(0.0, float(ai.get(k, cur.get(k, 0.0))))
+                            except (ValueError, TypeError):
+                                ai_clean[k] = float(cur.get(k, 0.0))
+                        ai_total = sum(ai_clean.values())
+                        if ai_total > 0:
+                            ai_clean = {k: (v / ai_total) * 100.0 for k, v in ai_clean.items()}
+                        else:
+                            ai_clean = cur.copy()
+
+                        prior_raw = {}
+                        for k in cur.keys():
+                            ku = str(k).upper().strip()
+                            prior_raw[k] = _gender_prior(ku) if _cat == 'GENDER' else _so_prior(ku)
+                        p_tot = sum(prior_raw.values())
+                        prior = {k: (v / p_tot) * 100.0 for k, v in prior_raw.items()} if p_tot > 0 else cur.copy()
+
+                        blended = {}
+                        for k in cur.keys():
+                            baseline_mix = 0.80 * float(prior.get(k, 0.0)) + 0.20 * float(cur.get(k, 0.0))
+                            blended[k] = id_conf * float(ai_clean.get(k, 0.0)) + (1.0 - id_conf) * baseline_mix
+                        b_tot = sum(blended.values())
+                        if b_tot > 0:
+                            blended = {k: (v / b_tot) * 100.0 for k, v in blended.items()}
+
+                        # Final schema constraints when evidence is weak:
+                        # keep niche identity labels from dominating mainstream outputs.
+                        if (not _has_identity_evidence) or (not _is_lgbtq_focused_profile):
+                            if _cat == 'GENDER':
+                                # Cap combined non-binary/trans labels softly.
+                                niche_keys = [k for k in blended.keys() if any(t in str(k).upper() for t in ['TRANS', 'NON-BINARY', 'NON BINARY'])]
+                                niche_total = sum(blended.get(k, 0.0) for k in niche_keys)
+                                niche_cap = 10.0
+                                if niche_total > niche_cap and niche_total > 0:
+                                    scale = niche_cap / niche_total
+                                    reduced = 0.0
+                                    for k in niche_keys:
+                                        old = blended.get(k, 0.0)
+                                        new = old * scale
+                                        blended[k] = new
+                                        reduced += (old - new)
+                                    # redistribute reduction to primary MALE/FEMALE labels
+                                    primary = [k for k in blended.keys() if str(k).upper().strip() in ('MALE', 'FEMALE')]
+                                    p_total = sum(blended.get(k, 0.0) for k in primary)
+                                    if p_total > 0:
+                                        for k in primary:
+                                            blended[k] = blended.get(k, 0.0) + reduced * (blended.get(k, 0.0) / p_total)
+                            elif _cat == 'SEXUAL_ORIENTATION':
+                                # Cap non-straight combined share unless explicit evidence.
+                                straight_keys = [k for k in blended.keys() if any(t in str(k).upper() for t in ['STRAIGHT', 'HETERO'])]
+                                non_straight_keys = [k for k in blended.keys() if k not in straight_keys and 'PREFER NOT TO SAY' not in str(k).upper()]
+                                non_straight_total = sum(blended.get(k, 0.0) for k in non_straight_keys)
+                                ns_cap = 22.0
+                                if non_straight_total > ns_cap and non_straight_total > 0:
+                                    scale = ns_cap / non_straight_total
+                                    reduced = 0.0
+                                    for k in non_straight_keys:
+                                        old = blended.get(k, 0.0)
+                                        new = old * scale
+                                        blended[k] = new
+                                        reduced += (old - new)
+                                    if straight_keys:
+                                        s_total = sum(blended.get(k, 0.0) for k in straight_keys)
+                                        if s_total > 0:
+                                            for k in straight_keys:
+                                                blended[k] = blended.get(k, 0.0) + reduced * (blended.get(k, 0.0) / s_total)
+                        blended_corr[_cat] = blended
+
+                    if blended_corr:
+                        id_changes = _apply_ai_corrections(blended_corr)
+                        if id_changes:
+                            changes += id_changes
+                            print(f"🧠 Identity-schema pass: FIXED {id_changes} values (confidence={id_conf:.2f})")
+                        else:
+                            print("🧠 Identity-schema pass: no actionable label matches")
+                else:
+                    print(f"🧠 Identity-schema pass: OK — {id_result.get('notes', '')[:90]}")
+        except Exception as _e_id:
+            print(f"⚠️ Identity-schema pass error: {_e_id}")
+
+        # Sixth pass (deterministic): hard anti-template validator.
+        # If any demographic category still looks synthetic/equalized, repair it by
+        # blending back toward the original Snowflake shape before final math.
+        try:
+            def _dist_now(_cat):
+                _cm = df['Column'].str.upper().str.strip() == _cat
+                if not _cm.any():
+                    return {}
+                _rows = []
+                _tot = 0.0
+                for _, _r in df[_cm].iterrows():
+                    _lbl = str(_r.get('Value', '')).strip()
+                    try:
+                        _bp = float(str(_r.get(bp_col, 0)).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        _bp = 0.0
+                    _rows.append((_lbl, _bp))
+                    _tot += _bp
+                if _tot <= 0:
+                    return {}
+                return {k: round((v / _tot) * 100.0, 4) for k, v in _rows}
+
+            def _looks_templated_strict(_dist):
+                if not _dist or len(_dist) < 4:
+                    return False
+                _vals = [float(v) for v in _dist.values()]
+                _mx = max(_vals)
+                _mn = min(_vals)
+                _mean = sum(_vals) / max(1, len(_vals))
+                _std = float(np.std(_vals)) if len(_vals) > 1 else 0.0
+                _near_mean = sum(1 for _v in _vals if abs(_v - _mean) <= 1.5)
+                _coarse = sum(1 for _v in _vals if abs(_v - round(_v)) < 0.02)
+                _ratio = (_mx / _mn) if _mn > 0 else 999.0
+
+                # Multiple independent signatures for synthetic equalization.
+                if (_mx - _mn) <= 4.0 and _std <= 2.2:
+                    return True
+                if _near_mean >= max(4, int(len(_vals) * 0.75)):
+                    return True
+                if _coarse >= max(4, int(len(_vals) * 0.75)):
+                    return True
+                if _ratio < 1.35:
+                    return True
+                return False
+
+            repaired = {}
+            templated_cats = []
+            _qc_cats = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS']
+            for _cat in _qc_cats:
+                _now = _dist_now(_cat)
+                if not _now:
+                    continue
+                if not _looks_templated_strict(_now):
+                    continue
+
+                templated_cats.append(_cat)
+                _base = current.get(_cat, {}) or {}
+
+                # If we have original Snowflake shape for this category, anchor to it.
+                # Otherwise keep current but inject variance.
+                _mix_to_base = 0.78 if _cat in {'AGE', 'ETHNICITY', 'INCOME'} else 0.72
+                _fixed = {}
+                for _lbl in _now.keys():
+                    _now_v = float(_now.get(_lbl, 0.0))
+                    _base_v = float(_base.get(_lbl, _now_v))
+                    _v = (_mix_to_base * _base_v) + ((1.0 - _mix_to_base) * _now_v)
+
+                    # Tiny deterministic jitter to avoid flat/robotic ties.
+                    _seed = f"{subject_clean}|{_cat}|{_lbl}"
+                    _j = ((sum(ord(ch) for ch in _seed) % 17) - 8) / 1000.0  # [-0.008, 0.008]
+                    _fixed[_lbl] = max(0.0, _v + _j)
+
+                _ft = sum(_fixed.values())
+                if _ft > 0:
+                    _fixed = {k: (v / _ft) * 100.0 for k, v in _fixed.items()}
+                    repaired[_cat] = _fixed
+
+            if repaired:
+                q_changes = _apply_ai_corrections(repaired)
+                if q_changes:
+                    changes += q_changes
+                    print(f"🛡️ Deterministic anti-template guard repaired {q_changes} values across {len(templated_cats)} categories: {', '.join(templated_cats)}")
+        except Exception as _e_qc:
+            print(f"⚠️ Deterministic anti-template guard error: {_e_qc}")
 
         print(f"🧠 Research-first demographic audit: FIXED {changes} values")
         return _finalize_demographics_math_only(df)
@@ -15113,7 +15535,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # The old gpt-4o-mini pass had thin context and could cause gen-pop artifacts
     # (e.g. boosting Hanes for audiences that wouldn't over-index on it).
 
-    if not is_genpop and brand_category:
+    if not is_genpop:
         # Single authoritative demographic path:
         # research-first AI correction + AI self-check (inside this function).
         df_final = ai_research_first_demographic_audit(df_final, brand_category, project_name, brands)
@@ -15131,7 +15553,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Reviews the ENTIRE profile: locations/DMA, all behavioral categories,
     # and cross-category coherence. Ensures everything passes the gut check
     # for who this audience actually is.
-    if not is_genpop and brand_category:
+    if not is_genpop:
         print("🔍 Running comprehensive final gut check (demographics + locations + behavioral)...")
         df_final = ai_final_gut_check(df_final, brand_category, project_name, brands)
 
