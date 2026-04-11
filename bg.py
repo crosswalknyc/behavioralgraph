@@ -7917,9 +7917,10 @@ JSON only.
                 return {k: round((v / _tot) * 100.0, 4) for k, v in _rows}
 
             def _looks_templated_strict(_dist):
-                if not _dist or len(_dist) < 4:
+                if not _dist or len(_dist) < 3:
                     return False
                 _vals = [float(v) for v in _dist.values()]
+                _n = len(_vals)
                 _mx = max(_vals)
                 _mn = min(_vals)
                 _mean = sum(_vals) / max(1, len(_vals))
@@ -7927,21 +7928,71 @@ JSON only.
                 _near_mean = sum(1 for _v in _vals if abs(_v - _mean) <= 1.5)
                 _coarse = sum(1 for _v in _vals if abs(_v - round(_v)) < 0.02)
                 _ratio = (_mx / _mn) if _mn > 0 else 999.0
+                _uniq_1d = len({round(_v, 1) for _v in _vals})
 
                 # Multiple independent signatures for synthetic equalization.
                 if (_mx - _mn) <= 4.0 and _std <= 2.2:
                     return True
-                if _near_mean >= max(4, int(len(_vals) * 0.75)):
+                if _near_mean >= max(3, int(len(_vals) * 0.75)):
                     return True
-                if _coarse >= max(4, int(len(_vals) * 0.75)):
+                if _coarse >= max(3, int(len(_vals) * 0.75)):
                     return True
                 if _ratio < 1.35:
+                    return True
+                # Catch repeated pattern templates (e.g. 27/27/27/9/9).
+                if _n >= 5 and _uniq_1d <= 3:
+                    return True
+                # Catch tri-split templates (e.g. 33.3/33.3/33.3).
+                if _n == 3 and _std <= 1.2 and (_mx - _mn) <= 2.0:
                     return True
                 return False
 
             repaired = {}
             templated_cats = []
             _qc_cats = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS']
+
+            def _label_prior_pct(_cat, _lbl):
+                _lu = str(_lbl).upper().strip()
+                if _cat == 'EDUCATION':
+                    if 'HIGH SCHOOL' in _lu:
+                        return 36.0
+                    if "BACHELOR" in _lu:
+                        return 34.0
+                    if 'GRADUATE' in _lu or 'PROFESSIONAL' in _lu:
+                        return 30.0
+                if _cat == 'INCOME':
+                    if '$25,000 - $49,999' in _lu:
+                        return 16.0
+                    if '$50,000 - $74,999' in _lu:
+                        return 24.0
+                    if '$75,000 - $99,999' in _lu:
+                        return 22.0
+                    if '$100,000 - $149,999' in _lu:
+                        return 22.0
+                    if '$150,000 - $249,999' in _lu:
+                        return 11.0
+                    if '$250,000 OR MORE' in _lu:
+                        return 5.0
+                if _cat == 'RELATIONSHIP':
+                    if 'MARRIED' in _lu:
+                        return 37.0
+                    if 'SINGLE' in _lu:
+                        return 33.0
+                    if 'IN A RELATIONSHIP' in _lu:
+                        return 22.0
+                    if 'DIVORCED' in _lu or 'SEPARATED' in _lu:
+                        return 7.0
+                    if 'PREFER NOT TO SAY' in _lu:
+                        return 1.0
+                if _cat == 'PARENTAL_STATUS':
+                    if 'HAS CHILDREN' in _lu:
+                        return 42.0
+                    if 'NO CHILDREN' in _lu:
+                        return 50.0
+                    if 'PREFER NOT TO SAY' in _lu:
+                        return 8.0
+                return 1.0
+
             for _cat in _qc_cats:
                 _now = _dist_now(_cat)
                 if not _now:
@@ -7951,15 +8002,26 @@ JSON only.
 
                 templated_cats.append(_cat)
                 _base = current.get(_cat, {}) or {}
+                _base_is_templated = _looks_templated_strict(_base)
 
                 # If we have original Snowflake shape for this category, anchor to it.
                 # Otherwise keep current but inject variance.
                 _mix_to_base = 0.78 if _cat in {'AGE', 'ETHNICITY', 'INCOME'} else 0.72
                 _fixed = {}
+                if _base_is_templated:
+                    _prior_raw = {k: _label_prior_pct(_cat, k) for k in _now.keys()}
+                    _pt = sum(_prior_raw.values())
+                    _prior = {k: (v / _pt) * 100.0 for k, v in _prior_raw.items()} if _pt > 0 else _now.copy()
+                else:
+                    _prior = None
                 for _lbl in _now.keys():
                     _now_v = float(_now.get(_lbl, 0.0))
                     _base_v = float(_base.get(_lbl, _now_v))
-                    _v = (_mix_to_base * _base_v) + ((1.0 - _mix_to_base) * _now_v)
+                    if _prior is not None:
+                        # Escape templated-base trap: favor category priors + current signal.
+                        _v = (0.70 * float(_prior.get(_lbl, _now_v))) + (0.30 * _now_v)
+                    else:
+                        _v = (_mix_to_base * _base_v) + ((1.0 - _mix_to_base) * _now_v)
 
                     # Tiny deterministic jitter to avoid flat/robotic ties.
                     _seed = f"{subject_clean}|{_cat}|{_lbl}"
