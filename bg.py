@@ -7159,6 +7159,49 @@ def ai_research_first_demographic_audit(df, brand_category, project_name, brands
     if not current:
         return df
 
+    def _finalize_demographics_math_only(_df):
+        """Math-only normalization: keep AI intent, enforce totals/metrics consistency."""
+        _df = _df.copy()
+        _demo_cats = {
+            'AGE', 'GENDER', 'ETHNICITY', 'EDUCATION', 'INCOME',
+            'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'RELATIONSHIP', 'OCCUPATION'
+        }
+        _ss = 1
+        _ss_mask = _df['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
+        if _ss_mask.any():
+            try:
+                _ss = max(1, int(float(str(_df.loc[_ss_mask, raw_col].iloc[0]).replace(',', ''))))
+            except (ValueError, TypeError):
+                _ss = 1
+
+        for _cat in _demo_cats:
+            _cm = _df['Column'].str.upper().str.strip() == _cat
+            if not _cm.any():
+                continue
+            _idxs = list(_df[_cm].index)
+            _vals = []
+            for _ix in _idxs:
+                try:
+                    _v = float(str(_df.at[_ix, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    _v = 0.0
+                _vals.append(max(0.0, _v))
+            _tot = sum(_vals)
+            if _tot <= 0:
+                continue
+            _norm = [(_v / _tot) * 100.0 for _v in _vals]
+            for _ix, _pct in zip(_idxs, _norm):
+                _bp = f"{_pct:.4f}%"
+                _df.at[_ix, bp_col] = _bp
+                _df.at[_ix, cs_col] = _bp
+                if 'Percentage' in _df.columns:
+                    _df.at[_ix, 'Percentage'] = _bp
+                _raw = max(1, int(round((_pct / 100.0) * _ss)))
+                _df.at[_ix, raw_col] = str(_raw)
+                if proj_col in _df.columns:
+                    _df.at[_ix, proj_col] = str(int(round(_raw * MULT)))
+        return _df
+
     prompt = f"""You are a senior US audience-demographics researcher.
 
 Task:
@@ -7173,6 +7216,10 @@ Rules:
 - Every corrected category must sum to exactly 100.0000.
 - Use 4 decimal precision.
 - Avoid overly perfect/rounded patterns when possible.
+- For mainstream US artists/platforms, do not set LGBTQ-majority or near-zero Hispanic
+  unless there is strong explicit evidence in research.
+- For mass-market pop artists (like Taylor Swift-class), under-17 audience should not be
+  forced to ~0 when youth fandom is present.
 - No markdown; JSON only.
 
 WEB_RESEARCH:
@@ -7226,7 +7273,7 @@ If no meaningful fixes are needed, return status=OK with empty corrections.
         result = _json.loads(text)
         if result.get('status') != 'FIX':
             print(f"🧠 Research-first demographic audit: OK — {result.get('notes', '')[:90]}")
-            return _enforce_all_demographics(df, subject_clean, brand_category)
+            return _finalize_demographics_math_only(df)
 
         def _apply_ai_corrections(corr_obj):
             _changes = 0
@@ -7316,6 +7363,10 @@ Rules:
 - Use the exact existing labels.
 - Every corrected category must sum to 100.0000.
 - Use 4 decimal precision and avoid perfect round-number patterns when possible.
+- For mainstream US audiences, avoid implausible extremes:
+  - LGBTQ+ majority without strong explicit evidence
+  - Hispanic/Latino near-zero for national audiences
+  - under-17 near-zero for youth-appeal pop artist fandom
 - JSON only.
 
 WEB_RESEARCH:
@@ -7367,10 +7418,10 @@ Return:
             print(f"⚠️ Demographic self-check pass error: {_e_sc}")
 
         print(f"🧠 Research-first demographic audit: FIXED {changes} values")
-        return _enforce_all_demographics(df, subject_clean, brand_category)
+        return _finalize_demographics_math_only(df)
     except Exception as e:
         print(f"⚠️ Research-first demographic audit error: {e}")
-        return _enforce_all_demographics(df, subject_clean, brand_category)
+        return _finalize_demographics_math_only(df)
 
 
 # ─── LOCATION / DMA REVIEW AGENT ─────────────────────────────────────
@@ -14870,7 +14921,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         _archetype = get_brand_archetype(project_name, brands, brand_category)
         print(f"   Archetype: gender={_archetype['gender_skew']}, age={_archetype['age_skew']}, "
               f"behav_high={_archetype['behavioral_high'][:3]}, behav_low={_archetype['behavioral_low'][:3]}")
-        df_final = validate_demographics(df_final, _archetype, final_sample_size)
+        # Demographics are now AI-led via research-first audit + self-check later in
+        # the pipeline. Keep archetype for behavioral context only.
+        # df_final = validate_demographics(df_final, _archetype, final_sample_size)
         # validate_behavioral_gut_check DISABLED — it was the 2nd gen-pop tether
         # using a thin archetype (gpt-4o-mini, "predominantly male, age 18-34").
         # The AI gut check (ai_final_gut_check) handles this with full context:
@@ -14921,26 +14974,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # (e.g. boosting Hanes for audiences that wouldn't over-index on it).
 
     if not is_genpop and brand_category:
-        # Category-specific demographic review (persona-guided, adjust existing rows)
-        df_final = ai_actor_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_creator_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_athlete_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_host_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_musician_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_politics_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_creative_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_series_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_podcast_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_app_platform_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_broadcast_cable_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_media_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_movie_theater_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_search_engine_ai_demographic_review(df_final, brand_category, project_name, brands)
-        df_final = ai_social_media_demographic_review(df_final, brand_category, project_name, brands)
-
-        # Universal catch-all: handles ANY category not covered above
-        df_final = ai_universal_demographic_review(df_final, brand_category, project_name, brands)
-        # Final demographics audit: research-first, minimal-edit correction pass.
+        # Single authoritative demographic path:
+        # research-first AI correction + AI self-check (inside this function).
         df_final = ai_research_first_demographic_audit(df_final, brand_category, project_name, brands)
 
         # Location/DMA review: ensures geographic distribution makes sense for this audience
@@ -14949,62 +14984,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     # Gender distribution: from panel + demographic AI agents only (no archetype overwrite).
 
-    # ── Cap PREFER NOT TO SAY at 10% across ALL demographic categories ──
-    # Raw survey data often has high PNTS rates; redistribute excess to top items.
-    if not is_genpop:
-        _PNTS_MAX = 10.0
-        _DEMO_CATS_PNTS = {'AGE', 'EDUCATION', 'ETHNICITY', 'INCOME', 'RELATIONSHIP',
-                           'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
-        _bp_pnts = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
-        _cs_pnts = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
-        _pnts_fixes = 0
-        for _dcat in _DEMO_CATS_PNTS:
-            _dm = df_final['Column'].str.upper().str.strip() == _dcat
-            if not _dm.any():
-                continue
-            _pnts_idx = None
-            _pnts_val = 0
-            _other_items = []
-            for _didx in df_final[_dm].index:
-                _dval = str(df_final.at[_didx, 'Value']).strip().upper()
-                try:
-                    _dpct = float(str(df_final.at[_didx, _cs_pnts]).replace(',', '').replace('%', ''))
-                except (ValueError, TypeError):
-                    _dpct = 0
-                if 'PREFER NOT TO SAY' in _dval:
-                    _pnts_idx = _didx
-                    _pnts_val = _dpct
-                else:
-                    _other_items.append((_didx, _dpct))
-            if _pnts_idx is not None and _pnts_val > _PNTS_MAX:
-                _excess = _pnts_val - _PNTS_MAX
-                _other_total = sum(p for _, p in _other_items)
-                for _oidx, _opct in _other_items:
-                    if _other_total > 0:
-                        _boost = _excess * (_opct / _other_total)
-                    else:
-                        _boost = _excess / max(1, len(_other_items))
-                    _new_pct = round(_opct + _boost, 4)
-                    if _bp_pnts:
-                        df_final.at[_oidx, _bp_pnts] = f"{_new_pct:.4f}"
-                    df_final.at[_oidx, _cs_pnts] = f"{_new_pct:.4f}"
-                    if 'Percentage' in df_final.columns:
-                        df_final.at[_oidx, 'Percentage'] = f"{_new_pct:.4f}"
-                _new_pnts = round(_PNTS_MAX, 4)
-                if _bp_pnts:
-                    df_final.at[_pnts_idx, _bp_pnts] = f"{_new_pnts:.4f}"
-                df_final.at[_pnts_idx, _cs_pnts] = f"{_new_pnts:.4f}"
-                if 'Percentage' in df_final.columns:
-                    df_final.at[_pnts_idx, 'Percentage'] = f"{_new_pnts:.4f}"
-                _pnts_fixes += 1
-                print(f"   🔧 {_dcat}: PREFER NOT TO SAY {_pnts_val:.1f}%→{_PNTS_MAX}%, "
-                      f"excess {_excess:.1f}% redistributed")
-        if _pnts_fixes:
-            print(f"   🔧 Capped PREFER NOT TO SAY in {_pnts_fixes} demographic categories")
-
-    # ── Census ceiling on final projections ─────────────────────────────
-    if not is_genpop:
-        df_final = cap_demographic_projections(df_final)
+    # Additional deterministic demographic clamps are disabled here so the
+    # research-first AI demographic path remains the primary decision-maker.
 
     # ── COMPREHENSIVE FINAL GUT CHECK (GPT-4o + web research) ─────────
     # Reviews the ENTIRE profile: locations/DMA, all behavioral categories,
@@ -15018,8 +14999,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Ensure all demographic categories have representation (no missing age groups,
     # genders, income levels, etc.). Adds missing values with small noise (0.01-0.05%)
     # and renormalizes each category to sum to 100%.
-    print("🔍 Ensuring demographic completeness (all groups represented)...")
-    df_final = ensure_all_demographic_values(df_final, sample_size=final_sample_size)
+    # NOTE: Skip synthetic demographic "completeness" fill-in to avoid
+    # overriding AI-reviewed distributions with template-like defaults.
 
     # ── Post-gut-check: recalculate BP from raw numbers ──────────────────
     df_final = add_brand_penetration_column_using_final_raw(df_final)
