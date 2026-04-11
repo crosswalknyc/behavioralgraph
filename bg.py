@@ -8806,7 +8806,14 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
             new_proj = int(round(new_raw * MULT))
 
-            df.at[row_idx, bp_col] = new_bp
+            cur_bp_cell = df.at[row_idx, bp_col]
+            if isinstance(cur_bp_cell, str):
+                if '%' in cur_bp_cell:
+                    df.at[row_idx, bp_col] = f"{new_bp:.4f}%"
+                else:
+                    df.at[row_idx, bp_col] = f"{new_bp:.4f}"
+            else:
+                df.at[row_idx, bp_col] = new_bp
             df.at[row_idx, raw_col] = str(new_raw)
             if proj_col in df.columns:
                 df.at[row_idx, proj_col] = str(new_proj)
@@ -9103,6 +9110,89 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 print(f"   ⚠️ Pass B2 INTEREST error (batch {bnum}): {e}")
         if b2_total:
             print(f"   🎯 Pass B2 INTEREST total: {b2_total} corrections")
+
+    # ──── PASS B2B: MOST PURCHASED BRANDS row-by-row digital-engagement realism ────
+    # AI reviews ALL rows in this category with a digital-engagement lens.
+    # Goal: avoid implausible niche/frequency outcomes for the persona.
+    mpb_cats = [c for c in categories_data.keys() if c == 'MOST PURCHASED BRANDS']
+    if mpb_cats:
+        all_item_lookup.clear()
+        for cat, items in categories_data.items():
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = cs_orig
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        mpb_items = []
+        for (cat, item_u), (name, bp, cs, idx) in all_item_lookup.items():
+            if cat != 'MOST PURCHASED BRANDS':
+                continue
+            gp_bp = gp_bp_lookup.get((cat, item_u), 0.0)
+            if gp_bp > 0:
+                idx_int = int(round((bp / gp_bp) * 100))
+                idx_meta = f" [GenPop: {gp_bp:.2f}%, INDEX: {idx_int}]"
+            else:
+                idx_meta = " [GenPop: N/A, INDEX: N/A]"
+            mpb_items.append((cat, name, bp, idx_meta))
+
+        mpb_items.sort(key=lambda x: -x[2])
+        mpb_batches = [mpb_items[i:i + 120] for i in range(0, len(mpb_items), 120)]
+        b2b_total = 0
+        for bnum, batch in enumerate(mpb_batches, 1):
+            lines = [f"  {cat} | {name}: {bp:.4f}% BP{meta}" for cat, name, bp, meta in batch]
+            mpb_prompt = (
+                f"You are a US audience strategist doing a FINAL PERSONA-ACCURACY CHECK "
+                f"for MOST PURCHASED BRANDS rows in a behavioral profile.\n\n"
+                f"{audience_context}\n"
+                f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n\n"
+                f"=== MOST PURCHASED BRANDS ROWS (batch {bnum}/{len(mpb_batches)}) ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== REQUIRED ROW-BY-ROW DECISION ===\n"
+                f"For EACH row, decide one of: KEEP, LOWER, or RAISE based on persona fit.\n"
+                f"Only include LOWER/RAISE rows in adjustments; KEEP rows are omitted.\n"
+                f"- LOWER when value is implausibly high for this persona\n"
+                f"- RAISE when value is implausibly low for this persona\n"
+                f"- KEEP when value is directionally and magnitude-wise believable\n\n"
+                f"Digital-engagement lens (critical):\n"
+                f"- This profile reflects DIGITAL behavior, not just offline ownership.\n"
+                f"- Brands likely to be researched, followed, discussed, reviewed, compared, "
+                f"or clicked online can plausibly be higher.\n"
+                f"- Commodity/offline-heavy purchases (e.g., basic staples) usually should not "
+                f"appear as strong over-index leaders unless persona evidence is explicit.\n"
+                f"- Niche lifestyle/streetwear/luxury labels should only over-index strongly when "
+                f"the persona has clear cultural fit.\n\n"
+                f"Use research + demographics + index direction. Avoid blanket dampening.\n"
+                f"Return ONLY valid JSON:\n"
+                f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
+                f'If changes: {{"status":"FIX","notes":"summary",'
+                f'"adjustments":[{{"category":"MOST PURCHASED BRANDS","item":"ITEM","factor":0.70,'
+                f'"reason":"brief persona rationale"}},...]}}\n'
+                f"factor range: 0.15 to 4.0. JSON only."
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': mpb_prompt}],
+                    temperature=0.1,
+                    max_tokens=4000
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    applied, _ = _apply_adjustments(result['adjustments'][:250], all_item_lookup, '[MPB]')
+                    b2b_total += applied
+                    print(f"   🛍️ Pass B2B MOST PURCHASED BRANDS batch {bnum}/{len(mpb_batches)}: {applied} corrections")
+                else:
+                    print(f"   🛍️ Pass B2B MOST PURCHASED BRANDS batch {bnum}/{len(mpb_batches)}: all rows OK")
+            except Exception as e:
+                print(f"   ⚠️ Pass B2B MOST PURCHASED BRANDS error (batch {bnum}): {e}")
+        if b2b_total:
+            print(f"   🛍️ Pass B2B MOST PURCHASED BRANDS total: {b2b_total} corrections")
 
     # ──── PASS B3: AMUSEMENT PARKS geographic realism review ────
     # Catch cases where small regional parks rank above national destination parks
