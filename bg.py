@@ -597,6 +597,7 @@ def _research_and_build_profile(client, subject_name, brand_category):
     }
     """
     import json as _json
+    import gc as _gc
     
     if not client or not subject_name:
         return None
@@ -8565,6 +8566,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     audience_context = audience_context + streaming_search_mandate
 
     total_adjustments = 0
+    # Memory guards for large profiles in production.
+    MAX_PASS_A_OUTLIERS = 800
+    PASS_A_BATCH_SIZE = 50
+    MIN_BP_FOR_HEAVY_REVIEW = 0.05
 
     # ── Extract audience demographic skew for category-level alignment ──
     cs_col_demo = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
@@ -8855,6 +8860,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     outliers = []
     for cat, items in categories_data.items():
         for name, bp, cs, idx in items:
+            if bp < MIN_BP_FOR_HEAVY_REVIEW:
+                continue
             gp_bp = gp_bp_lookup.get((cat, name.upper()), 0)
             if gp_bp <= 0:
                 continue
@@ -8863,8 +8870,13 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 outliers.append((cat, name, bp, gp_bp, index_val, idx))
 
     if outliers:
+        # Prioritize most extreme swings and cap total workload to avoid OOM.
+        outliers.sort(key=lambda t: max(t[4], (1.0 / t[4]) if t[4] > 0 else 999.0), reverse=True)
+        if len(outliers) > MAX_PASS_A_OUTLIERS:
+            print(f"   ⚙️ Pass A cap: trimming outliers {len(outliers)} → {MAX_PASS_A_OUTLIERS}")
+            outliers = outliers[:MAX_PASS_A_OUTLIERS]
         print(f"   📊 Pass A: {len(outliers)} items with extreme indices (>160 or <50)")
-        outlier_batches = [outliers[i:i+80] for i in range(0, len(outliers), 80)]
+        outlier_batches = [outliers[i:i+PASS_A_BATCH_SIZE] for i in range(0, len(outliers), PASS_A_BATCH_SIZE)]
         for ob_num, ob in enumerate(outlier_batches, 1):
             lines = []
             for cat, name, bp, gp_bp, idx_val, _ in ob:
@@ -8908,12 +8920,18 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 )
                 result = _parse_ai_json(resp.choices[0].message.content.strip())
                 if result.get('status') == 'FIX' and 'adjustments' in result:
-                    applied, _ = _apply_adjustments(result['adjustments'], all_item_lookup, '[OUTLIER]')
+                    applied, _ = _apply_adjustments(result['adjustments'][:200], all_item_lookup, '[OUTLIER]')
                     print(f"   📊 Pass A batch {ob_num}: {applied} outlier corrections")
                 else:
                     print(f"   📊 Pass A batch {ob_num}: all outliers OK")
             except Exception as e:
                 print(f"   ⚠️ Pass A error (batch {ob_num}): {e}")
+            # Release batch objects aggressively in long runs.
+            lines = None
+            outlier_prompt = None
+            result = None
+            if ob_num % 5 == 0:
+                _gc.collect()
     else:
         print(f"   📊 Pass A: no extreme outliers found")
 
@@ -9327,6 +9345,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
                 except (ValueError, TypeError):
                     cur_bp = bp_orig
+                if cur_bp < MIN_BP_FOR_HEAVY_REVIEW:
+                    continue
                 gp_bp = gp_bp_lookup.get((cat, name.strip().upper()), 0)
                 if gp_bp > 0 and cur_bp > 0:
                     total_with_gp += 1
