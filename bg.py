@@ -598,6 +598,7 @@ def _research_and_build_profile(client, subject_name, brand_category):
     """
     import json as _json
     import gc as _gc
+    import time as _time
     
     if not client or not subject_name:
         return None
@@ -8570,6 +8571,19 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     MAX_PASS_A_OUTLIERS = 800
     PASS_A_BATCH_SIZE = 50
     MIN_BP_FOR_HEAVY_REVIEW = 0.05
+    MAX_GUTCHECK_SECONDS = int(os.getenv("FINAL_GUT_CHECK_MAX_SECONDS", "420"))
+    OPENAI_CALL_TIMEOUT_SEC = int(os.getenv("OPENAI_GUTCHECK_TIMEOUT_SEC", "70"))
+    gutcheck_started_at = _time.time()
+
+    def _budget_exhausted(phase_label: str) -> bool:
+        elapsed = _time.time() - gutcheck_started_at
+        if elapsed > MAX_GUTCHECK_SECONDS:
+            print(
+                f"   ⏱️ Final gut-check budget reached at {phase_label} "
+                f"({elapsed:.1f}s > {MAX_GUTCHECK_SECONDS}s). Skipping remaining passes."
+            )
+            return True
+        return False
 
     # ── Extract audience demographic skew for category-level alignment ──
     cs_col_demo = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
@@ -8666,7 +8680,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': loc_prompt}],
                     temperature=0.1,
-                    max_tokens=1500
+                    max_tokens=1500,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
                 )
                 text = resp.choices[0].message.content.strip()
                 if text.startswith('```'):
@@ -8869,7 +8884,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             if index_val > 1.60 or index_val < 0.50:
                 outliers.append((cat, name, bp, gp_bp, index_val, idx))
 
-    if outliers:
+    if outliers and not _budget_exhausted("Pass A start"):
         # Prioritize most extreme swings and cap total workload to avoid OOM.
         outliers.sort(key=lambda t: max(t[4], (1.0 / t[4]) if t[4] > 0 else 999.0), reverse=True)
         if len(outliers) > MAX_PASS_A_OUTLIERS:
@@ -8878,6 +8893,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         print(f"   📊 Pass A: {len(outliers)} items with extreme indices (>160 or <50)")
         outlier_batches = [outliers[i:i+PASS_A_BATCH_SIZE] for i in range(0, len(outliers), PASS_A_BATCH_SIZE)]
         for ob_num, ob in enumerate(outlier_batches, 1):
+            if _budget_exhausted(f"Pass A batch {ob_num}"):
+                break
             lines = []
             for cat, name, bp, gp_bp, idx_val, _ in ob:
                 lines.append(f"  {cat} | {name}: {bp:.1f}% BP (GenPop: {gp_bp:.1f}%, index: {idx_val:.2f}x)")
@@ -8916,7 +8933,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': outlier_prompt}],
                     temperature=0.1,
-                    max_tokens=4000
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
                 )
                 result = _parse_ai_json(resp.choices[0].message.content.strip())
                 if result.get('status') == 'FIX' and 'adjustments' in result:
@@ -8966,6 +8984,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         spot_batches.append(current_batch)
 
     for batch_num, batch in enumerate(spot_batches, 1):
+        if _budget_exhausted(f"Pass B batch {batch_num}"):
+            break
         items_text = []
         for cat, items in batch.items():
             lines = []
@@ -9042,7 +9062,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 model='gpt-4o',
                 messages=[{'role': 'user', 'content': spot_prompt}],
                 temperature=0.15,
-                max_tokens=4000
+                max_tokens=4000,
+                timeout=OPENAI_CALL_TIMEOUT_SEC,
             )
             result = _parse_ai_json(resp.choices[0].message.content.strip())
             if result.get('status') == 'FIX' and 'adjustments' in result:
@@ -9058,7 +9079,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # ChatGPT (gpt-4o) decides which values to lower, raise, or keep based on
     # persona + research + Gen Pop direction, in batches that cover all INTEREST rows.
     interest_cats = [c for c in categories_data.keys() if c in {'INTEREST', 'INTERESTS'}]
-    if interest_cats:
+    if interest_cats and not _budget_exhausted("Pass B2 start"):
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
@@ -9089,6 +9110,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         batches = [interest_items[i:i + 120] for i in range(0, len(interest_items), 120)]
         b2_total = 0
         for bnum, batch in enumerate(batches, 1):
+            if _budget_exhausted(f"Pass B2 batch {bnum}"):
+                break
             lines = [f"  {cat} | {name}: {bp:.4f}% BP{meta}" for cat, name, bp, meta in batch]
             interest_prompt = (
                 f"You are a US audience strategist doing a FINAL PERSONA-ACCURACY CHECK "
@@ -9115,7 +9138,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': interest_prompt}],
                     temperature=0.1,
-                    max_tokens=4000
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
                 )
                 result = _parse_ai_json(resp.choices[0].message.content.strip())
                 if result.get('status') == 'FIX' and 'adjustments' in result:
@@ -9133,7 +9157,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # AI reviews ALL rows in this category with a digital-engagement lens.
     # Goal: avoid implausible niche/frequency outcomes for the persona.
     mpb_cats = [c for c in categories_data.keys() if c == 'MOST PURCHASED BRANDS']
-    if mpb_cats:
+    if mpb_cats and not _budget_exhausted("Pass B2B start"):
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
@@ -9163,6 +9187,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         mpb_batches = [mpb_items[i:i + 120] for i in range(0, len(mpb_items), 120)]
         b2b_total = 0
         for bnum, batch in enumerate(mpb_batches, 1):
+            if _budget_exhausted(f"Pass B2B batch {bnum}"):
+                break
             lines = [f"  {cat} | {name}: {bp:.4f}% BP{meta}" for cat, name, bp, meta in batch]
             mpb_prompt = (
                 f"You are a US audience strategist doing a FINAL PERSONA-ACCURACY CHECK "
@@ -9198,7 +9224,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': mpb_prompt}],
                     temperature=0.1,
-                    max_tokens=4000
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
                 )
                 result = _parse_ai_json(resp.choices[0].message.content.strip())
                 if result.get('status') == 'FIX' and 'adjustments' in result:
@@ -9216,7 +9243,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # Catch cases where small regional parks rank above national destination parks
     # without geographic support in the profile's LOCATION mix.
     amusement_cats = [c for c in categories_data.keys() if c in {'AMUSEMENT PARKS', 'THEME PARKS'}]
-    if amusement_cats:
+    if amusement_cats and not _budget_exhausted("Pass B3 start"):
         # Refresh lookup so this pass uses current post-B values.
         all_item_lookup.clear()
         for cat, items in categories_data.items():
@@ -9250,6 +9277,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             loc_context = []
 
         for cat in amusement_cats:
+            if _budget_exhausted(f"Pass B3 category {cat}"):
+                break
             # Rebuild fresh item list for this category from current df values.
             cat_items = []
             for name, _, _, idx in categories_data.get(cat, []):
@@ -9300,7 +9329,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': amuse_prompt}],
                     temperature=0.1,
-                    max_tokens=3500
+                    max_tokens=3500,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
                 )
                 result = _parse_ai_json(resp.choices[0].message.content.strip())
                 if result.get('status') == 'FIX' and 'adjustments' in result:
@@ -9318,7 +9348,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # direction.  E.g. BEAUTY/WELLNESS 90% over-indexing for a 60% male
     # audience.  Send the FULL category (not just top 25) to the AI.
     pass_c_adjustments = 0
-    if male_pct > 0 or female_pct > 0:
+    if (male_pct > 0 or female_pct > 0) and not _budget_exhausted("Pass C start"):
         # Refresh item lookup with current df values after Pass A+B
         all_item_lookup.clear()
         for cat, items in categories_data.items():
@@ -9404,7 +9434,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': triage_prompt}],
                     temperature=0.0,
-                    max_tokens=500
+                    max_tokens=500,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
                 )
                 triage_text = triage_resp.choices[0].message.content.strip()
                 triage_text = triage_text.replace('```json', '').replace('```', '').strip()
@@ -9418,6 +9449,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 print(f"   ⚠️ Pass C triage error: {e}")
 
         for cat in sorted(cats_to_correct):
+            if _budget_exhausted(f"Pass C category {cat}"):
+                break
             if cat not in flagged_cats:
                 continue
             over_count, total_with_gp, over_pct, cat_items_with_index = flagged_cats[cat]
@@ -9482,7 +9515,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': cat_prompt}],
                     temperature=0.1,
-                    max_tokens=12000
+                    max_tokens=12000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
                 )
                 result = _parse_ai_json(resp.choices[0].message.content.strip())
                 if result.get('status') == 'FIX' and 'adjustments' in result:
@@ -9521,6 +9555,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
 
     for cat in RANK_CATEGORIES:
+        if _budget_exhausted(f"Pass D category {cat}"):
+            break
         if cat not in categories_data:
             continue
         items = categories_data[cat]
@@ -9598,7 +9634,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 model='gpt-4o',
                 messages=[{'role': 'user', 'content': rank_prompt}],
                 temperature=0.2,
-                max_tokens=4000
+                max_tokens=4000,
+                timeout=OPENAI_CALL_TIMEOUT_SEC,
             )
             result = _parse_ai_json(resp.choices[0].message.content.strip())
             if result.get('status') == 'FIX' and 'adjustments' in result:
@@ -9633,13 +9670,17 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 (name, cur_bp, idx))
 
     total_unmatched = sum(len(v) for v in unmatched_items_by_cat.values())
-    if total_unmatched > 0:
+    if total_unmatched > 0 and not _budget_exhausted("Pass E start"):
         print(f"   🎯 Pass E: {total_unmatched} items without GenPop benchmark "
               f"across {len(unmatched_items_by_cat)} categories — AI persona valuation")
 
         BATCH_MAX = 60
         for cat, cat_items in unmatched_items_by_cat.items():
+            if _budget_exhausted(f"Pass E category {cat}"):
+                break
             for batch_start in range(0, len(cat_items), BATCH_MAX):
+                if _budget_exhausted(f"Pass E category {cat} batch {batch_start // BATCH_MAX + 1}"):
+                    break
                 batch = cat_items[batch_start:batch_start + BATCH_MAX]
                 item_lines = []
                 for name, cur_bp, _ in batch:
@@ -9696,7 +9737,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                         model='gpt-4o',
                         messages=[{'role': 'user', 'content': unmatched_prompt}],
                         temperature=0.3,
-                        max_tokens=6000
+                        max_tokens=6000,
+                        timeout=OPENAI_CALL_TIMEOUT_SEC,
                     )
                     result = _parse_ai_json(resp.choices[0].message.content.strip())
                     ai_items = result.get('items', [])
