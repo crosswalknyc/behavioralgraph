@@ -599,6 +599,8 @@ def _research_and_build_profile(client, subject_name, brand_category):
     import json as _json
     import gc as _gc
     import time as _time
+    import gc as _gc
+    import time as _time
     
     if not client or not subject_name:
         return None
@@ -2742,7 +2744,14 @@ def final_behavioral_sanity_check(df, archetype=None):
                 try:
                     raw = int(float(str(df.at[cidx, raw_col]).replace(',', '')))
                     new_cs = round((raw / total_raw) * 100.0, 4)
-                    df.at[cidx, cs_col] = new_cs
+                    cur_cs_cell = df.at[cidx, cs_col]
+                    if isinstance(cur_cs_cell, str):
+                        if '%' in cur_cs_cell:
+                            df.at[cidx, cs_col] = f"{new_cs:.4f}%"
+                        else:
+                            df.at[cidx, cs_col] = f"{new_cs:.4f}"
+                    else:
+                        df.at[cidx, cs_col] = new_cs
                 except (ValueError, TypeError):
                     pass
 
@@ -8494,6 +8503,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         return df
 
     import json as _json
+    import gc as _gc
+    import time as _time
 
     bp_col = 'Brand Penetration (Row)'
     cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
@@ -9832,7 +9843,14 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         for idx, cat, old_bp in entries:
             if abs(old_bp - avg_bp) < 0.01:
                 continue
-            df.at[idx, bp_col] = avg_bp
+            cur_bp_cell = df.at[idx, bp_col]
+            if isinstance(cur_bp_cell, str):
+                if '%' in cur_bp_cell:
+                    df.at[idx, bp_col] = f"{avg_bp:.4f}%"
+                else:
+                    df.at[idx, bp_col] = f"{avg_bp:.4f}"
+            else:
+                df.at[idx, bp_col] = avg_bp
             new_raw = max(1, int(round(avg_bp / 100.0 * sample_size)))
             df.at[idx, raw_col] = str(new_raw)
             if proj_col in df.columns:
@@ -9858,7 +9876,14 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     try:
                         raw = int(float(str(df.at[cidx, raw_col]).replace(',', '')))
                         new_cs = round((raw / total_raw) * 100.0, 4)
-                        df.at[cidx, cs_col] = new_cs
+                        cur_cs_cell = df.at[cidx, cs_col]
+                        if isinstance(cur_cs_cell, str):
+                            if '%' in cur_cs_cell:
+                                df.at[cidx, cs_col] = f"{new_cs:.4f}%"
+                            else:
+                                df.at[cidx, cs_col] = f"{new_cs:.4f}"
+                        else:
+                            df.at[cidx, cs_col] = new_cs
                     except (ValueError, TypeError):
                         pass
         print(f"   🔗 Cross-category harmonization: {harmonized} values aligned")
