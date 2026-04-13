@@ -7216,12 +7216,13 @@ def ai_research_first_demographic_audit(df, brand_category, project_name, brands
     prompt = f"""You are a senior US audience-demographics researcher.
 
 Task:
-Review the CURRENT demographic distributions for "{subject_clean}" ({brand_category}) against web research.
-Only adjust values that are implausible. If a value is plausible, keep it close.
+Research and evaluate the CURRENT demographic distributions for "{subject_clean}" ({brand_category}) against web research.
+You must evaluate ALL present demographic categories (age, ethnicity, gender, income, education,
+relationship, parental status, sexual orientation) and return a complete persona-aligned output.
 
 Rules:
 - US context only.
-- Minimize edits: keep Snowflake values when plausible.
+- Keep plausible Snowflake signal when it is evidence-consistent.
 - Do NOT blindly overwrite with stereotypes.
 - For each corrected category, output all existing labels from CURRENT exactly as given.
 - Every corrected category must sum to exactly 100.0000.
@@ -7237,6 +7238,7 @@ Rules:
   forced to ~0 when youth fandom is present.
 - Do NOT return templated/equalized partitions (e.g., 20/20/20/20/20 or 30/30/30/10)
   unless explicit research evidence justifies near-equality.
+- If any category looks templated/equalized, actively de-template it.
 - No markdown; JSON only.
 
 WEB_RESEARCH:
@@ -7261,7 +7263,7 @@ Return exactly:
   }}
 }}
 
-If no meaningful fixes are needed, return status=OK with empty corrections.
+Return status=FIX with corrections for each present category you reviewed.
 """
 
     try:
@@ -7289,8 +7291,9 @@ If no meaningful fixes are needed, return status=OK with empty corrections.
 
         result = _json.loads(text)
         if result.get('status') != 'FIX':
-            print(f"🧠 Research-first demographic audit: OK — {result.get('notes', '')[:90]}")
-            return _finalize_demographics_math_only(df)
+            # Do not exit early: downstream self-check + anti-template passes
+            # must still run even when the first pass returns OK.
+            print(f"🧠 Research-first demographic audit: OK (continuing deeper passes) — {result.get('notes', '')[:90]}")
 
         def _apply_ai_corrections(corr_obj):
             _changes = 0
@@ -7435,7 +7438,98 @@ Return:
         except Exception as _e_sc:
             print(f"⚠️ Demographic self-check pass error: {_e_sc}")
 
-        # Third AI pass: ethnicity-only composition audit across ALL groups.
+        # Third AI pass: full-category persona rebuild.
+        # Force a research-backed distribution for ALL present demo categories so
+        # the demographics agent (not only deterministic logic) owns final shape.
+        try:
+            post_all = {}
+            for _cat in DEMO_CATS:
+                _cm = df['Column'].str.upper().str.strip() == _cat
+                if not _cm.any():
+                    continue
+                _rows = []
+                _total = 0.0
+                for _, _r in df[_cm].iterrows():
+                    _v = str(_r.get('Value', '')).strip()
+                    try:
+                        _bp = float(str(_r.get(bp_col, 0)).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        _bp = 0.0
+                    _rows.append((_v, _bp))
+                    _total += _bp
+                if _total > 0:
+                    post_all[_cat] = {v: round((bp / _total) * 100.0, 4) for v, bp in _rows}
+
+            if post_all:
+                rebuild_prompt = f"""You are a senior US audience demographic strategist.
+
+Rebuild ALL categories below for "{subject_clean}" ({brand_category}) using web research + persona fit.
+Do not leave synthetic/equalized patterns in place.
+
+Rules:
+- Use exact existing labels per category.
+- Output a full distribution for each listed category.
+- Each category must sum to 100.0000.
+- Use 4 decimals.
+- Keep cross-category coherence (age/parental/relationship/education/income should make sense together).
+- Do not use generic equalized templates.
+- JSON only.
+
+WEB_RESEARCH:
+{research_block}
+
+CURRENT_ALL_DEMOGRAPHICS:
+{_json.dumps(post_all)}
+
+Return:
+{{
+  "status":"FIX",
+  "notes":"short reason",
+  "corrections":{{
+    "AGE":{{"label":12.3456}},
+    "GENDER":{{"label":12.3456}},
+    "ETHNICITY":{{"label":12.3456}},
+    "EDUCATION":{{"label":12.3456}},
+    "INCOME":{{"label":12.3456}},
+    "SEXUAL_ORIENTATION":{{"label":12.3456}},
+    "PARENTAL_STATUS":{{"label":12.3456}},
+    "RELATIONSHIP":{{"label":12.3456}}
+  }}
+}}
+"""
+                _rb = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': rebuild_prompt}],
+                    temperature=0.0,
+                    max_tokens=2200
+                )
+                rb_text = _rb.choices[0].message.content.strip()
+                if rb_text.startswith('```'):
+                    rb_text = rb_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+                depth = 0
+                end = 0
+                for i, c in enumerate(rb_text):
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end = i + 1
+                            break
+                if end > 0:
+                    rb_text = rb_text[:end]
+                rb_result = _json.loads(rb_text)
+                rb_corr = rb_result.get('corrections', {}) or {}
+                rb_changes = _apply_ai_corrections(rb_corr)
+                if rb_changes:
+                    changes += rb_changes
+                    print(f"🧠 Full-category persona rebuild pass: FIXED {rb_changes} values")
+                else:
+                    print("🧠 Full-category persona rebuild pass: no actionable label matches")
+        except Exception as _e_rb:
+            print(f"⚠️ Full-category persona rebuild pass error: {_e_rb}")
+
+        # Fourth AI pass: ethnicity-only composition audit across ALL groups.
         try:
             # Build CURRENT ETHNICITY from latest in-memory df (after prior passes).
             post_eth = {}
@@ -7964,6 +8058,62 @@ JSON only.
 
             def _label_prior_pct(_cat, _lbl):
                 _lu = str(_lbl).upper().strip()
+                if _cat == 'AGE':
+                    if '17' in _lu and 'UNDER' in _lu:
+                        return 20.0
+                    if '18-24' in _lu or ('18' in _lu and '24' in _lu):
+                        return 10.0
+                    if '25-34' in _lu or ('25' in _lu and '34' in _lu):
+                        return 14.0
+                    if '35-44' in _lu or ('35' in _lu and '44' in _lu):
+                        return 13.0
+                    if '45-54' in _lu or ('45' in _lu and '54' in _lu):
+                        return 12.0
+                    if '55-64' in _lu or ('55' in _lu and '64' in _lu):
+                        return 12.0
+                    if '65' in _lu:
+                        return 19.0
+                if _cat == 'ETHNICITY':
+                    if 'WHITE' in _lu:
+                        return 58.0
+                    if 'BLACK' in _lu and 'AFRICAN' in _lu:
+                        return 12.0
+                    if 'HISPANIC' in _lu or 'LATINO' in _lu:
+                        return 19.0
+                    if 'ASIAN' in _lu:
+                        return 7.0
+                    if 'NATIVE AMERICAN' in _lu or 'ALASKA NATIVE' in _lu:
+                        return 1.0
+                    if 'ANOTHER RACE' in _lu or 'OTHER' in _lu:
+                        return 3.0
+                if _cat == 'GENDER':
+                    if _lu == 'MALE':
+                        return 49.0
+                    if _lu == 'FEMALE':
+                        return 49.0
+                    if 'NON-BINARY' in _lu:
+                        return 1.3
+                    if 'TRANS MALE' in _lu:
+                        return 0.4
+                    if 'TRANS FEMALE' in _lu:
+                        return 0.3
+                    if 'PREFER NOT TO SAY' in _lu:
+                        return 0.0
+                if _cat == 'SEXUAL_ORIENTATION':
+                    if 'STRAIGHT' in _lu or 'HETERO' in _lu:
+                        return 84.0
+                    if 'GAY' in _lu or 'LESBIAN' in _lu:
+                        return 5.5
+                    if 'BISEXUAL' in _lu:
+                        return 6.0
+                    if 'PANSEXUAL' in _lu:
+                        return 1.5
+                    if 'ASEXUAL' in _lu:
+                        return 1.0
+                    if 'ANOTHER SEXUAL ORIENTATION' in _lu or _lu == 'OTHER':
+                        return 1.0
+                    if 'PREFER NOT TO SAY' in _lu:
+                        return 1.0
                 if _cat == 'EDUCATION':
                     if 'HIGH SCHOOL' in _lu:
                         return 36.0
@@ -9131,6 +9281,11 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"=== INTEREST ROWS (batch {bnum}/{len(batches)}) ===\n"
                 + "\n".join(lines) +
                 f"\n\n=== REQUIRED ROW-BY-ROW DECISION ===\n"
+                f"Research-first mandate:\n"
+                f"- Use the web research/persona context as the primary source of truth.\n"
+                f"- Do not preserve a row just because it exists in panel data if it clearly conflicts\n"
+                f"  with who this audience is.\n"
+                f"- Avoid synthetic inflation where many unrelated interests are all very high.\n\n"
                 f"For EACH row, decide one of: KEEP, LOWER, or RAISE based on persona fit.\n"
                 f"Only include LOWER/RAISE rows in adjustments; KEEP rows are omitted.\n"
                 f"- LOWER when value is implausibly high for this persona\n"
@@ -9142,13 +9297,13 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f'If changes: {{"status":"FIX","notes":"summary",'
                 f'"adjustments":[{{"category":"INTEREST","item":"ITEM","factor":0.70,'
                 f'"reason":"brief persona rationale"}},...]}}\n'
-                f"factor range: 0.15 to 4.0. JSON only."
+                f"factor range: 0.35 to 2.20. JSON only."
             )
             try:
                 resp = client.chat.completions.create(
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': interest_prompt}],
-                    temperature=0.1,
+                    temperature=0.0,
                     max_tokens=4000,
                     timeout=OPENAI_CALL_TIMEOUT_SEC,
                 )
@@ -9163,6 +9318,88 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 print(f"   ⚠️ Pass B2 INTEREST error (batch {bnum}): {e}")
         if b2_total:
             print(f"   🎯 Pass B2 INTEREST total: {b2_total} corrections")
+
+    # ──── PASS B2C: WHERE THEY SHOP row-by-row research-first review ────
+    # This category was frequently over-clamped by deterministic ranges.
+    # Make AI research/persona review the primary decision-maker row-by-row.
+    shop_cats = [c for c in categories_data.keys() if c == 'WHERE THEY SHOP']
+    if shop_cats and not _budget_exhausted("Pass B2C start"):
+        all_item_lookup.clear()
+        for cat, items in categories_data.items():
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = cs_orig
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        shop_items = []
+        for (cat, item_u), (name, bp, cs, idx) in all_item_lookup.items():
+            if cat != 'WHERE THEY SHOP':
+                continue
+            gp_bp = gp_bp_lookup.get((cat, item_u), 0.0)
+            if gp_bp > 0:
+                idx_int = int(round((bp / gp_bp) * 100))
+                idx_meta = f" [GenPop: {gp_bp:.2f}%, INDEX: {idx_int}]"
+            else:
+                idx_meta = " [GenPop: N/A, INDEX: N/A]"
+            shop_items.append((cat, name, bp, idx_meta))
+
+        shop_items.sort(key=lambda x: -x[2])
+        shop_batches = [shop_items[i:i + 120] for i in range(0, len(shop_items), 120)]
+        b2c_total = 0
+        for bnum, batch in enumerate(shop_batches, 1):
+            if _budget_exhausted(f"Pass B2C batch {bnum}"):
+                break
+            lines = [f"  {cat} | {name}: {bp:.4f}% BP{meta}" for cat, name, bp, meta in batch]
+            shop_prompt = (
+                f"You are a US audience strategist doing a FINAL PERSONA-ACCURACY CHECK "
+                f"for WHERE THEY SHOP rows in a behavioral profile.\n\n"
+                f"{audience_context}\n"
+                f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n\n"
+                f"=== WHERE THEY SHOP ROWS (batch {bnum}/{len(shop_batches)}) ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== REQUIRED ROW-BY-ROW DECISION (RESEARCH-FIRST) ===\n"
+                f"Research-first mandate:\n"
+                f"- Use web research + persona fit as primary truth.\n"
+                f"- Do not preserve inflated rows simply because they are common in panel data.\n"
+                f"- Keep category shape coherent: broad mass retailers can be high, but niche or poor-fit "
+                f"retailers should not dominate without explicit persona evidence.\n\n"
+                f"For EACH row, decide one of: KEEP, LOWER, or RAISE based on persona fit.\n"
+                f"Only include LOWER/RAISE rows in adjustments; KEEP rows are omitted.\n"
+                f"- LOWER when value is implausibly high for this persona\n"
+                f"- RAISE when value is implausibly low for this persona\n"
+                f"- KEEP when value is directionally and magnitude-wise believable\n\n"
+                f"Return ONLY valid JSON:\n"
+                f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
+                f'If changes: {{"status":"FIX","notes":"summary",'
+                f'"adjustments":[{{"category":"WHERE THEY SHOP","item":"ITEM","factor":0.80,'
+                f'"reason":"brief persona rationale"}},...]}}\n'
+                f"factor range: 0.35 to 2.20. JSON only."
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': shop_prompt}],
+                    temperature=0.0,
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    applied, _ = _apply_adjustments(result['adjustments'][:200], all_item_lookup, '[SHOP]')
+                    b2c_total += applied
+                    print(f"   🛒 Pass B2C WHERE THEY SHOP batch {bnum}/{len(shop_batches)}: {applied} corrections")
+                else:
+                    print(f"   🛒 Pass B2C WHERE THEY SHOP batch {bnum}/{len(shop_batches)}: all rows OK")
+            except Exception as e:
+                print(f"   ⚠️ Pass B2C WHERE THEY SHOP error (batch {bnum}): {e}")
+        if b2c_total:
+            print(f"   🛒 Pass B2C WHERE THEY SHOP total: {b2c_total} corrections")
 
     # ──── PASS B2B: MOST PURCHASED BRANDS row-by-row digital-engagement realism ────
     # AI reviews ALL rows in this category with a digital-engagement lens.
@@ -11579,10 +11816,11 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
 def safe_float_convert(value):
     """Safely convert any value to float, handling decimal.Decimal and other types"""
     try:
+        if isinstance(value, str):
+            value = value.replace('%', '').replace(',', '').strip()
         if hasattr(value, '__float__'):
             return float(value)
-        else:
-            return float(pd.to_numeric(value, errors='coerce'))
+        return float(pd.to_numeric(value, errors='coerce'))
     except (ValueError, TypeError):
         return 0.0
 
@@ -12522,24 +12760,50 @@ def enforce_input_brand_100(df_behavior, input_brands):
             
             if is_match:
                 old_pct = float(row[pct_col])
-                df_behavior.loc[idx, pct_col] = 100.0
+                _cur_pct = df_behavior.loc[idx, pct_col]
+                if isinstance(_cur_pct, str):
+                    if '%' in _cur_pct:
+                        df_behavior.loc[idx, pct_col] = "100.0000%"
+                    else:
+                        df_behavior.loc[idx, pct_col] = "100.0000"
+                else:
+                    df_behavior.loc[idx, pct_col] = 100.0
                 
                 # Update Original Raw Numbers to sample size for 100% input brands
                 if sample_size is not None:
                     if 'Original Raw Numbers' in df_behavior.columns:
-                        df_behavior.loc[idx, 'Original Raw Numbers'] = str(sample_size)
+                        _cur_raw = df_behavior.loc[idx, 'Original Raw Numbers']
+                        if isinstance(_cur_raw, str):
+                            df_behavior.loc[idx, 'Original Raw Numbers'] = str(sample_size)
+                        else:
+                            df_behavior.loc[idx, 'Original Raw Numbers'] = float(sample_size)
                     
                 if 'Original Raw Numbers (Database)' in df_behavior.columns:
-                        df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
+                        _cur_raw_db = df_behavior.loc[idx, 'Original Raw Numbers (Database)']
+                        if isinstance(_cur_raw_db, str):
+                            df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
+                        else:
+                            df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = float(sample_size)
                 
                 # Also update Brand Penetration to 100.0 if it exists
                 if 'Brand Penetration (Row)' in df_behavior.columns:
-                    df_behavior.loc[idx, 'Brand Penetration (Row)'] = 100.0
+                    _cur_bp = df_behavior.loc[idx, 'Brand Penetration (Row)']
+                    if isinstance(_cur_bp, str):
+                        if '%' in _cur_bp:
+                            df_behavior.loc[idx, 'Brand Penetration (Row)'] = "100.0000%"
+                        else:
+                            df_behavior.loc[idx, 'Brand Penetration (Row)'] = "100.0000"
+                    else:
+                        df_behavior.loc[idx, 'Brand Penetration (Row)'] = 100.0
                 
                 # Update US Gen Pop Projection if it exists
                 if 'US Gen Pop Projection' in df_behavior.columns:
                     us_projection = (sample_size / 10_000_000) * 329_900_000
-                    df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
+                    _cur_proj = df_behavior.loc[idx, 'US Gen Pop Projection']
+                    if isinstance(_cur_proj, str):
+                        df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
+                    else:
+                        df_behavior.loc[idx, 'US Gen Pop Projection'] = float(int(round(us_projection)))
                 
                 brands_set_to_100 += 1
                 matches_found = True
@@ -14465,9 +14729,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print("🔧 Enforcing final demographic minimums...")
         def enforce_final_demographic_minimums(df_demo_data):
             """Final enforcement of minimum demographic values without breaking ±6% rule"""
+            def _pct_num(v):
+                return pd.to_numeric(
+                    str(v).replace('%', '').replace(',', '').strip(),
+                    errors='coerce'
+                )
             # First pass: ensure no zeros or negative values
             for idx, row in df_demo_data.iterrows():
-                current_pct = pd.to_numeric(row['Percentage'], errors='coerce')
+                current_pct = _pct_num(row['Percentage'])
                 if pd.isna(current_pct) or current_pct <= 0:
                     df_demo_data.loc[idx, 'Percentage'] = 0.01
             
@@ -14478,15 +14747,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     continue
                 
                 category_data = df_demo_data[category_mask].copy()
+                category_data['__pct_num'] = category_data['Percentage'].map(_pct_num)
                 
                 # Check for any zeros in this category
-                zero_mask = category_data['Percentage'] <= 0
+                zero_mask = category_data['__pct_num'].fillna(0) <= 0
                 if zero_mask.any():
                     
                     # Find the highest non-zero value in this category
-                    non_zero_values = category_data[category_data['Percentage'] > 0]['Percentage']
+                    non_zero_values = category_data[category_data['__pct_num'] > 0]['__pct_num']
                     if len(non_zero_values) > 0:
-                        max_value = non_zero_values.max()
+                        max_value = float(non_zero_values.max())
                         # Set zeros to a small cascade from the highest value
                         for i, (idx, row) in enumerate(category_data[zero_mask].iterrows()):
                             # Create a small cascade: 0.5%, 0.3%, 0.2%, 0.1%...
@@ -14502,12 +14772,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             for category in df_demo_data['Column'].unique():
                 category_mask = df_demo_data['Column'] == category
                 if category_mask.any():
-                    category_total = df_demo_data.loc[category_mask, 'Percentage'].astype(float).sum()
+                    category_vals = df_demo_data.loc[category_mask, 'Percentage'].map(_pct_num).fillna(0.0)
+                    category_total = float(category_vals.sum())
                     # Only renormalize if significantly off from 100%
-                    if abs(category_total - 100.0) > 5.0:
-                        df_demo_data.loc[category_mask, 'Percentage'] = (
-                            df_demo_data.loc[category_mask, 'Percentage'] / category_total * 100.0
-                        )
+                    if category_total > 0 and abs(category_total - 100.0) > 5.0:
+                        df_demo_data.loc[category_mask, 'Percentage'] = (category_vals / category_total * 100.0).values
             
             
             return df_demo_data
@@ -15224,9 +15493,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Always enforce minimum demographic values for GenPop (regardless of previous run)
         def enforce_final_demographic_minimums_genpop(df_demo_data):
             """Final enforcement of minimum demographic values for GenPop without breaking ±6% rule"""
+            def _pct_num(v):
+                return pd.to_numeric(
+                    str(v).replace('%', '').replace(',', '').strip(),
+                    errors='coerce'
+                )
             # First pass: ensure no zeros or negative values
             for idx, row in df_demo_data.iterrows():
-                current_pct = pd.to_numeric(row['Percentage'], errors='coerce')
+                current_pct = _pct_num(row['Percentage'])
                 if pd.isna(current_pct) or current_pct <= 0:
                     df_demo_data.loc[idx, 'Percentage'] = 0.01
             
@@ -15237,15 +15511,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     continue
                 
                 category_data = df_demo_data[category_mask].copy()
+                category_data['__pct_num'] = category_data['Percentage'].map(_pct_num)
                 
                 # Check for any zeros in this category
-                zero_mask = category_data['Percentage'] <= 0
+                zero_mask = category_data['__pct_num'].fillna(0) <= 0
                 if zero_mask.any():
                     
                     # Find the highest non-zero value in this category
-                    non_zero_values = category_data[category_data['Percentage'] > 0]['Percentage']
+                    non_zero_values = category_data[category_data['__pct_num'] > 0]['__pct_num']
                     if len(non_zero_values) > 0:
-                        max_value = non_zero_values.max()
+                        max_value = float(non_zero_values.max())
                         # Set zeros to a small cascade from the highest value
                         for i, (idx, row) in enumerate(category_data[zero_mask].iterrows()):
                             # Create a small cascade: 0.5%, 0.3%, 0.2%, 0.1%...
@@ -15261,12 +15536,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             for category in df_demo_data['Column'].unique():
                 category_mask = df_demo_data['Column'] == category
                 if category_mask.any():
-                    category_total = df_demo_data.loc[category_mask, 'Percentage'].astype(float).sum()
+                    category_vals = df_demo_data.loc[category_mask, 'Percentage'].map(_pct_num).fillna(0.0)
+                    category_total = float(category_vals.sum())
                     # Only renormalize if significantly off from 100%
-                    if abs(category_total - 100.0) > 5.0:
-                        df_demo_data.loc[category_mask, 'Percentage'] = (
-                            df_demo_data.loc[category_mask, 'Percentage'] / category_total * 100.0
-                        )
+                    if category_total > 0 and abs(category_total - 100.0) > 5.0:
+                        df_demo_data.loc[category_mask, 'Percentage'] = (category_vals / category_total * 100.0).values
             
             
             return df_demo_data
@@ -16000,7 +16274,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Step 1: Research the subject to build an informed persona
     # Step 2: Review ONE category at a time, item by item
     # Step 3: Correct anything that doesn't pass the sniff test
-    if not is_genpop and brand_category:
+    _enable_final_comprehensive_review = str(
+        os.getenv("ENABLE_FINAL_COMPREHENSIVE_REVIEW", "0")
+    ).strip().lower() in ("1", "true", "yes", "on")
+    if not is_genpop and brand_category and _enable_final_comprehensive_review:
         _client_final = _get_openai_client()
         if _client_final:
             _bp_cf = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
@@ -16352,6 +16629,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                                 pass
 
             print(f"🔬 FINAL REVIEW complete: {_final_adj} corrections applied")
+    elif not is_genpop and brand_category:
+        print("🔬 FINAL REVIEW skipped: ENABLE_FINAL_COMPREHENSIVE_REVIEW=0 "
+              "(using persona-aware gut-check + deterministic math guards only)")
 
     # Deterministic geographic guardrails AFTER all AI passes.
     # Ensures clearly Black-skewing audiences cannot underweight core Black DMAs
@@ -16539,6 +16819,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # ─── 2. SOCIAL MEDIA: enforce realistic rank order / ranges ──
         _sm_mask = df_final['Column'].str.upper().str.strip() == 'SOCIAL MEDIA'
         if _sm_mask.any():
+            _profile_text = " ".join([
+                str(project_name or ''),
+                str(brand_category or ''),
+                " ".join([str(b) for b in (brands or [])]),
+            ]).upper()
+            _is_music_profile = any(_t in _profile_text for _t in ['MUSICIAN', 'BAND', 'POP', 'SINGER', 'ARTIST'])
+            _is_young_profile = (young_pct >= 35.0)
+            _young_music_shape = bool(_is_music_profile and _is_young_profile)
+
             _sm_items = {}
             for _si in df_final[_sm_mask].index:
                 _sn = str(df_final.at[_si, 'Value']).strip().upper()
@@ -16562,6 +16851,23 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 'ONLYFANS': (3.0, 7.0),
                 'REDDIT': (12.0, 32.0),
             }
+            # Persona-aware ranges: young music audiences can legitimately over-index
+            # on TikTok/Instagram/Snapchat and do not need to be pulled down to
+            # generic mass-market caps.
+            if _young_music_shape:
+                _sm_targets.update({
+                    'YOUTUBE': (72.0, 92.0),
+                    'INSTAGRAM': (58.0, 78.0),
+                    'TIKTOK': (55.0, 80.0),
+                    'SNAPCHAT': (22.0, 42.0),
+                    'DISCORD': (16.0, 36.0),
+                    'TWITCH': (12.0, 30.0),
+                    'FACEBOOK': (22.0, 45.0),
+                    'X': (18.0, 38.0),
+                    'PINTEREST': (12.0, 30.0),
+                    'LINKEDIN': (5.0, 20.0),
+                    'REDDIT': (10.0, 34.0),
+                })
             for _pname, (_plow, _phi) in _sm_targets.items():
                 if _pname in _sm_items:
                     _idx, _cur = _sm_items[_pname]
@@ -16611,7 +16917,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     _write_bp(_ei, _enew)
                     print(f"   ✅ HARD FIX {_se_cat}: {_ev} {_ecur:.1f}% → {_enew:.4f}%")
 
-        # ─── 2c. WHERE THEY SHOP: cap inflated marketplaces (final agent often misses Etsy/eBay)
+        # ─── 2c. WHERE THEY SHOP deterministic fallback (optional safety only)
+        _enable_wts_hard_fix = str(os.getenv("ENABLE_WTS_HARD_FIX", "0")).strip().lower() in ("1", "true", "yes", "on")
         def _retail_shop_target_range(_rv):
             _u = str(_rv).strip().upper()
             if _u == 'AMAZON' or (_u.startswith('AMAZON') and 'PRIME VIDEO' not in _u):
@@ -16640,19 +16947,20 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 return (10.0, 40.0)
             return None
 
-        _wts_mask = df_final['Column'].str.upper().str.strip() == 'WHERE THEY SHOP'
-        if _wts_mask.any():
-            for _wi in df_final[_wts_mask].index:
-                _wv = str(df_final.at[_wi, 'Value']).strip()
-                _tr = _retail_shop_target_range(_wv)
-                if _tr is None:
-                    continue
-                _wlow, _whigh = _tr
-                _wbp = _read_bp(_wi)
-                if _wbp < _wlow or _wbp > _whigh:
-                    _wnew = round(random.uniform(_wlow, _whigh), 4)
-                    _write_bp(_wi, _wnew)
-                    print(f"   ✅ HARD FIX WHERE THEY SHOP: {_wv} {_wbp:.1f}% → {_wnew:.4f}%")
+        if _enable_wts_hard_fix:
+            _wts_mask = df_final['Column'].str.upper().str.strip() == 'WHERE THEY SHOP'
+            if _wts_mask.any():
+                for _wi in df_final[_wts_mask].index:
+                    _wv = str(df_final.at[_wi, 'Value']).strip()
+                    _tr = _retail_shop_target_range(_wv)
+                    if _tr is None:
+                        continue
+                    _wlow, _whigh = _tr
+                    _wbp = _read_bp(_wi)
+                    if _wbp < _wlow or _wbp > _whigh:
+                        _wnew = round(random.uniform(_wlow, _whigh), 4)
+                        _write_bp(_wi, _wnew)
+                        print(f"   ✅ HARD FIX WHERE THEY SHOP: {_wv} {_wbp:.1f}% → {_wnew:.4f}%")
 
         # ─── 3. VENUE: physical attendance venues capped at 10% ──────
         _ven_mask = df_final['Column'].str.upper().str.strip() == 'VENUE'
@@ -17502,8 +17810,16 @@ def add_brand_penetration_column(df: pd.DataFrame) -> pd.DataFrame:
         except Exception:
             raw_num = 0.0
         pct = 0.0 if final_sample_size <= 0 else (raw_num / final_sample_size) * 100.0
-        # Format to 4 decimals to match output
-        df.at[idx, col_name] = float(f"{pct:.4f}")
+        # Keep dtype stable (string-backed vs numeric-backed columns).
+        pct = round(pct, 4)
+        cur_cell = df.at[idx, col_name]
+        if isinstance(cur_cell, str):
+            if '%' in cur_cell:
+                df.at[idx, col_name] = f"{pct:.4f}%"
+            else:
+                df.at[idx, col_name] = f"{pct:.4f}"
+        else:
+            df.at[idx, col_name] = pct
 
     return df
 
@@ -17549,8 +17865,15 @@ def add_brand_penetration_column_using_final_raw(df: pd.DataFrame) -> pd.DataFra
         except Exception:
             raw_num = 0.0
         pct = 0.0 if final_sample_size <= 0 else (raw_num / final_sample_size) * 100.0
-        pct = min(pct, 100.0)
-        df.at[idx, col_name] = float(f"{pct:.4f}")
+        pct = round(min(pct, 100.0), 4)
+        cur_cell = df.at[idx, col_name]
+        if isinstance(cur_cell, str):
+            if '%' in cur_cell:
+                df.at[idx, col_name] = f"{pct:.4f}%"
+            else:
+                df.at[idx, col_name] = f"{pct:.4f}"
+        else:
+            df.at[idx, col_name] = pct
 
     return df
 
@@ -17731,14 +18054,19 @@ def set_demographic_original_raws_from_percentage(df: pd.DataFrame) -> pd.DataFr
     if 'Original Raw Numbers' not in df.columns:
         df['Original Raw Numbers'] = ''
 
+    def _to_pct(v):
+        try:
+            return float(str(v).replace('%', '').replace(',', '').strip())
+        except Exception:
+            return 0.0
+
     for idx, row in df.iterrows():
         col = str(row.get('Column', '')).upper()
         if col not in demo_cols:
             continue
-        try:
-            pct = float(row.get('Percentage', 0))
-        except Exception:
-            pct = 0.0
+        pct = _to_pct(row.get('Percentage', 0))
+        if pct <= 0 and 'Category Share' in df.columns:
+            pct = _to_pct(row.get('Category Share', 0))
         est = int(round((pct / 100.0) * total_universe_size))
         df.at[idx, 'Original Raw Numbers'] = str(est)
 
@@ -19753,8 +20081,15 @@ def enforce_parental_status_sum_to_100(df: pd.DataFrame) -> pd.DataFrame:
         for idx in category_indices:
             raw_num = raw_numbers[idx]
             new_category_share = (raw_num / total_raw) * 100.0
-            # Always 4-decimal strings so CSV/Excel never shows bare integers (25 vs 25.0000)
-            df.at[idx, pct_col] = f"{round(new_category_share, 4):.4f}"
+            new_category_share = round(new_category_share, 4)
+            cur_pct_cell = df.at[idx, pct_col]
+            if isinstance(cur_pct_cell, str):
+                if '%' in cur_pct_cell:
+                    df.at[idx, pct_col] = f"{new_category_share:.4f}%"
+                else:
+                    df.at[idx, pct_col] = f"{new_category_share:.4f}"
+            else:
+                df.at[idx, pct_col] = new_category_share
         
         # Recalculate Brand Penetration (Row)
         if 'Brand Penetration (Row)' in df.columns:
@@ -19764,13 +20099,29 @@ def enforce_parental_status_sum_to_100(df: pd.DataFrame) -> pd.DataFrame:
                 for idx in category_indices:
                     raw_num = raw_numbers[idx]
                     new_brand_penetration = (raw_num / total_raw) * 100.0
-                    df.at[idx, 'Brand Penetration (Row)'] = f"{round(new_brand_penetration, 4):.4f}"
+                    new_brand_penetration = round(new_brand_penetration, 4)
+                    cur_bp_cell = df.at[idx, 'Brand Penetration (Row)']
+                    if isinstance(cur_bp_cell, str):
+                        if '%' in cur_bp_cell:
+                            df.at[idx, 'Brand Penetration (Row)'] = f"{new_brand_penetration:.4f}%"
+                        else:
+                            df.at[idx, 'Brand Penetration (Row)'] = f"{new_brand_penetration:.4f}"
+                    else:
+                        df.at[idx, 'Brand Penetration (Row)'] = new_brand_penetration
             elif sample_size and sample_size > 0:
                 # For non-demographic categories, use sample size
                 for idx in category_indices:
                     raw_num = raw_numbers[idx]
                     new_brand_penetration = (raw_num / sample_size) * 100.0
-                    df.at[idx, 'Brand Penetration (Row)'] = f"{round(new_brand_penetration, 4):.4f}"
+                    new_brand_penetration = round(new_brand_penetration, 4)
+                    cur_bp_cell = df.at[idx, 'Brand Penetration (Row)']
+                    if isinstance(cur_bp_cell, str):
+                        if '%' in cur_bp_cell:
+                            df.at[idx, 'Brand Penetration (Row)'] = f"{new_brand_penetration:.4f}%"
+                        else:
+                            df.at[idx, 'Brand Penetration (Row)'] = f"{new_brand_penetration:.4f}"
+                    else:
+                        df.at[idx, 'Brand Penetration (Row)'] = new_brand_penetration
         
         categories_processed += 1
     
@@ -20303,12 +20654,31 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False):
             gpp = int(round((sample_size / 10_000_000) * 329_900_000))
             for idx in matches:
                 if 'Original Raw Numbers (Database)' in df.columns:
-                    df.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
+                    _cur_raw_db = df.loc[idx, 'Original Raw Numbers (Database)']
+                    if isinstance(_cur_raw_db, str):
+                        df.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
+                    else:
+                        df.loc[idx, 'Original Raw Numbers (Database)'] = float(sample_size)
                 if 'Original Raw Numbers' in df.columns:
-                    df.loc[idx, 'Original Raw Numbers'] = str(sample_size)
+                    _cur_raw = df.loc[idx, 'Original Raw Numbers']
+                    if isinstance(_cur_raw, str):
+                        df.loc[idx, 'Original Raw Numbers'] = str(sample_size)
+                    else:
+                        df.loc[idx, 'Original Raw Numbers'] = float(sample_size)
                 if 'US Gen Pop Projection' in df.columns:
-                    df.loc[idx, 'US Gen Pop Projection'] = str(gpp)
-                df.loc[idx, 'Percentage'] = 100.0
+                    _cur_proj = df.loc[idx, 'US Gen Pop Projection']
+                    if isinstance(_cur_proj, str):
+                        df.loc[idx, 'US Gen Pop Projection'] = str(gpp)
+                    else:
+                        df.loc[idx, 'US Gen Pop Projection'] = float(gpp)
+                _cur_pct = df.loc[idx, 'Percentage']
+                if isinstance(_cur_pct, str):
+                    if '%' in _cur_pct:
+                        df.loc[idx, 'Percentage'] = "100.0000%"
+                    else:
+                        df.loc[idx, 'Percentage'] = "100.0000"
+                else:
+                    df.loc[idx, 'Percentage'] = 100.0
     
             total_instances += len(matches)
             if not SILENCE_VERBOSE_OUTPUT:
@@ -26358,8 +26728,15 @@ def add_social_media_noise_and_jitter(df):
                         # Add noise: ±1% additional variation
                         noise_factor = np.random.uniform(0.99, 1.01)
                         
-                        new_value = current_value * jitter_factor * noise_factor
-                        df.at[idx, 'Percentage'] = round(new_value, 4)
+                        new_value = round(current_value * jitter_factor * noise_factor, 4)
+                        cur_pct_cell = df.at[idx, 'Percentage']
+                        if isinstance(cur_pct_cell, str):
+                            if '%' in cur_pct_cell:
+                                df.at[idx, 'Percentage'] = f"{new_value:.4f}%"
+                            else:
+                                df.at[idx, 'Percentage'] = f"{new_value:.4f}"
+                        else:
+                            df.at[idx, 'Percentage'] = new_value
                         if not SILENCE_VERBOSE_OUTPUT:
                             print(f"  🎲 {category}|{value}: Added jitter and noise: {current_value:.4f}% → {new_value:.4f}%")
                         break
@@ -28467,30 +28844,25 @@ def add_original_raw_numbers_sorted_view(df):
     descending. This does NOT change the original DB column and does not move rows.
     It is solely for presentation/export while preserving cross-category equality.
     
-    EXCLUDES demographics categories which should not have raw numbers.
+    Keeps demographic raw numbers unchanged; sorting logic is behavioral-only.
     """
     import pandas as pd
 
     db_col = 'Original Raw Numbers (Database)'
+    src_col = 'Original Raw Numbers' if 'Original Raw Numbers' in df.columns else db_col
     view_col = 'Original Raw Numbers (Sorted View)'
-    if db_col not in df.columns:
+    if src_col not in df.columns:
         return df
 
     # Initialize the view column with existing values (as strings)
-    df[view_col] = df[db_col].astype(str)
+    df[view_col] = df[src_col].astype(str)
     
-    # Define demographic categories that should NOT have raw numbers
+    # Categories to skip for sorting (do not reshuffle row meaning)
     demographic_categories = {
         'GENDER', 'AGE', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
         'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'LOCATION', 'OCCUPATION',
         'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'
     }
-
-    # Clear raw numbers for demographic categories
-    for category in demographic_categories:
-        mask = df['Column'].str.upper() == category.upper()
-        if mask.any():
-            df.loc[mask, view_col] = ''
 
     # For behavioral categories only, sort the numeric values descending
     for category in df['Column'].unique():
@@ -28500,7 +28872,7 @@ def add_original_raw_numbers_sorted_view(df):
         mask = df['Column'] == category
         if not mask.any():
             continue
-        series = df.loc[mask, db_col].astype(str)
+        series = df.loc[mask, src_col].astype(str)
         numeric_vals = pd.to_numeric(series.str.replace(',', ''), errors='coerce')
 
         numeric_idx = numeric_vals.dropna().index.tolist()
@@ -28522,7 +28894,7 @@ def finalize_original_raw_numbers_for_output(df):
     - Drop 'Original Raw Numbers (Database)'
     - Ensure 'Original Raw Numbers' never equals sample size unless BRAND INPUT
     - Ensure all values are unique within each category by adding tiny noise if needed
-    - EXCLUDES demographics categories which should remain empty
+    - Preserves demographic raw numbers computed earlier in the pipeline
     """
     import pandas as pd
     import numpy as np
@@ -28545,19 +28917,6 @@ def finalize_original_raw_numbers_for_output(df):
     # Drop DB column if present
     if db_col in df.columns:
         df = df.drop(columns=[db_col])
-
-    # Define demographic categories that should NOT have raw numbers
-    demographic_categories = {
-        'GENDER', 'AGE', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
-        'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'LOCATION', 'OCCUPATION',
-        'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'
-    }
-
-    # Ensure demographic categories have empty raw numbers
-    for category in demographic_categories:
-        mask = df['Column'].str.upper() == category.upper()
-        if mask.any():
-            df.loc[mask, final_col] = ''
 
     # Resolve sample size from Original Raw Numbers or Category Share
     # (NOT Percentage, which holds the sampling rate e.g. 99.99%)
