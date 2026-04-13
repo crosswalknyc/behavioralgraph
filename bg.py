@@ -8743,11 +8743,15 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     MAX_PASS_A_OUTLIERS = 800
     PASS_A_BATCH_SIZE = 50
     MIN_BP_FOR_HEAVY_REVIEW = 0.05
-    MAX_GUTCHECK_SECONDS = int(os.getenv("FINAL_GUT_CHECK_MAX_SECONDS", "420"))
+    MAX_GUTCHECK_SECONDS = int(os.getenv("FINAL_GUT_CHECK_MAX_SECONDS", "0"))
     OPENAI_CALL_TIMEOUT_SEC = int(os.getenv("OPENAI_GUTCHECK_TIMEOUT_SEC", "70"))
+    PASS_D_PARALLEL_WORKERS = max(1, int(os.getenv("FINAL_GUT_CHECK_PASS_D_WORKERS", "4")))
+    import concurrent.futures as _futures
     gutcheck_started_at = _time.time()
 
     def _budget_exhausted(phase_label: str) -> bool:
+        if MAX_GUTCHECK_SECONDS <= 0:
+            return False
         elapsed = _time.time() - gutcheck_started_at
         if elapsed > MAX_GUTCHECK_SECONDS:
             print(
@@ -8976,7 +8980,6 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             try:
                 a_cat = str(adj.get('category', '')).strip().upper()
                 a_item = str(adj.get('item', '')).strip().upper()
-                factor = float(adj.get('factor', 1.0))
                 reason = adj.get('reason', '')
             except (AttributeError, TypeError, ValueError):
                 continue
@@ -8991,8 +8994,30 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 continue
 
             name, cur_bp, cur_cs, row_idx = matched
-            factor = max(0.15, min(4.0, factor))
-            new_bp = round(cur_bp * factor, 4)
+            # Support either multiplicative factor OR absolute target_bp.
+            # target_bp takes precedence so AI can move values to where they should be,
+            # rather than only nudging by capped factors.
+            target_bp = None
+            try:
+                if adj.get('target_bp', None) is not None and str(adj.get('target_bp')).strip() != '':
+                    target_bp = float(str(adj.get('target_bp')).replace('%', '').replace(',', '').strip())
+            except (ValueError, TypeError):
+                target_bp = None
+
+            factor = None
+            try:
+                if adj.get('factor', None) is not None and str(adj.get('factor')).strip() != '':
+                    factor = float(adj.get('factor'))
+            except (ValueError, TypeError):
+                factor = None
+
+            if target_bp is not None:
+                new_bp = round(target_bp, 4)
+            else:
+                if factor is None:
+                    factor = 1.0
+                factor = max(0.10, min(8.0, factor))
+                new_bp = round(cur_bp * factor, 4)
             new_bp = max(0.01, min(new_bp, 95.0))
 
             new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
@@ -9010,7 +9035,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             if proj_col in df.columns:
                 df.at[row_idx, proj_col] = str(new_proj)
 
-            arrow = '↓' if factor < 1 else '↑'
+            arrow = '↓' if new_bp < cur_bp else '↑'
             print(f"   🔍 {label} {a_cat} {arrow} {name}: {cur_bp:.1f}%→{new_bp:.1f}% — {reason}")
             applied += 1
             total_adjustments += 1
@@ -9096,8 +9121,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f'If all items pass: {{"status":"OK","notes":"reason"}}\n'
                 f'If corrections needed: {{"status":"FIX","notes":"summary",'
                 f'"adjustments":[{{"category":"CAT","item":"ITEM",'
-                f'"factor":0.6,"reason":"brief"}},...]}}\n'
-                f"factor: multiplier on current BP. Stay in 0.15 to 4.0 range.\n"
+                f'"factor":0.6,"target_bp":12.5,"reason":"brief"}},...]}}\n'
+                f"Use factor and/or target_bp (absolute BP). Keep BP within realistic bounds.\n"
                 f"JSON only, no markdown."
             )
             try:
@@ -9139,7 +9164,13 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     spot_batches = []
     current_batch = {}
     current_items = 0
+    pass_b_skip_cats = {
+        'INTEREST', 'INTERESTS', 'WHERE THEY SHOP', 'MOST PURCHASED BRANDS',
+        'APP/PLATFORM USAGE', 'SOCIAL MEDIA', 'SEARCH ENGINE/AI', 'SEARCH ENGINE'
+    }
     for cat, items in sorted(categories_data.items()):
+        if cat in pass_b_skip_cats:
+            continue
         refreshed = []
         for name, _, _, idx in items:
             cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
@@ -9221,8 +9252,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f'If everything passes: {{"status":"OK","notes":"reason"}}\n'
             f'If corrections needed: {{"status":"FIX","notes":"summary",'
             f'"adjustments":[{{"category":"CAT","item":"ITEM",'
-            f'"factor":0.6,"reason":"brief"}},...]}}\n'
-            f"factor: multiplier on current BP. Stay in 0.15 to 4.0 range.\n"
+            f'"factor":0.6,"target_bp":12.5,"reason":"brief"}},...]}}\n'
+            f"Use factor and/or target_bp (absolute BP). Keep BP within realistic bounds.\n"
             f"JSON only, no markdown."
         )
 
@@ -9298,6 +9329,17 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"- Infer life-stage from the actual profile demographics and research context, then evaluate fit.\n"
                 f"- Lower only rows that conflict with this specific profile persona; do not apply any generic "
                 f"demographic template.\n\n"
+                f"Life-stage plausibility rule (strict):\n"
+                f"- For young/non-parenting audience shapes, interests such as parenting, household-finance planning,\n"
+                f"  and job-search/career transition should generally be mid/low unless explicit profile evidence\n"
+                f"  strongly supports them.\n"
+                f"- Core entertainment/digital-social interests should not be outranked by weak-fit life-stage rows\n"
+                f"  without explicit evidence.\n\n"
+                f"Relative-order sanity (strict):\n"
+                f"- For youth pop profiles, rows like JOB SEARCH / TRAVELING WITH KIDS / mortgages-style life-stage rows\n"
+                f"  should not sit above core fandom/digital interests (e.g., pop music, social media, streaming,\n"
+                f"  fashion/beauty) unless explicit profile evidence supports that ordering.\n"
+                f"- If a weak-fit life-stage row is currently above core youth-interest anchors, LOWER it decisively.\n\n"
                 f"For EACH row, decide one of: KEEP, LOWER, or RAISE based on persona fit.\n"
                 f"Only include LOWER/RAISE rows in adjustments; KEEP rows are omitted.\n"
                 f"- LOWER when value is implausibly high for this persona\n"
@@ -9307,7 +9349,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
                 f'If changes: {{"status":"FIX","notes":"summary",'
-                f'"adjustments":[{{"category":"INTEREST","item":"ITEM","factor":0.70,'
+                f'"adjustments":[{{"category":"INTEREST","item":"ITEM","factor":0.70,"target_bp":12.5,'
                 f'"reason":"brief persona rationale"}},...]}}\n'
                 f"factor range: 0.35 to 2.20. JSON only."
             )
@@ -9389,7 +9431,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
                 f'If changes: {{"status":"FIX","notes":"summary",'
-                f'"adjustments":[{{"category":"WHERE THEY SHOP","item":"ITEM","factor":0.80,'
+                f'"adjustments":[{{"category":"WHERE THEY SHOP","item":"ITEM","factor":0.80,"target_bp":12.5,'
                 f'"reason":"brief persona rationale"}},...]}}\n'
                 f"factor range: 0.35 to 2.20. JSON only."
             )
@@ -9475,11 +9517,16 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"- Build ranking from this profile's persona only (demographics + research + behavior).\n"
                 f"- Do not apply canned archetypes; if a brand ranks high, there must be explicit persona evidence.\n"
                 f"- Preserve mainstream anchors when justified, but move weak-fit brands down when they dominate.\n\n"
+                f"Youth-audience ranking sanity:\n"
+                f"- For young pop audiences, teen/gen-z fashion/beauty and digitally-native brands should generally\n"
+                f"  outrank older-skew legacy housewares/classic brands unless explicit evidence contradicts this.\n"
+                f"- If legacy/older-skew brands dominate the top ranks without evidence, LOWER them and promote\n"
+                f"  stronger youth-fit alternatives.\n\n"
                 f"Use research + demographics + index direction. Avoid blanket dampening.\n"
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
                 f'If changes: {{"status":"FIX","notes":"summary",'
-                f'"adjustments":[{{"category":"MOST PURCHASED BRANDS","item":"ITEM","factor":0.70,'
+                f'"adjustments":[{{"category":"MOST PURCHASED BRANDS","item":"ITEM","factor":0.70,"target_bp":12.5,'
                 f'"reason":"brief persona rationale"}},...]}}\n'
                 f"factor range: 0.35 to 2.20. JSON only."
             )
@@ -9557,12 +9604,16 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"persona fit rather than generic panel artifacts.\n"
                 f"5) This is digital-engagement behavior; ranking should reflect what this cohort actually follows, shops, "
                 f"and engages with online.\n\n"
+                f"6) For youth pop profiles, weak-fit life-stage interests (job search, parenting/kids, mortgages-style)\n"
+                f"   should not outrank core youth digital/fandom interests without explicit evidence.\n"
+                f"7) For MOST PURCHASED BRANDS, teen/gen-z brands should generally outrank older-skew legacy brands\n"
+                f"   unless profile evidence supports the legacy dominance.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
                 f"Only include LOWER/RAISE rows in adjustments.\n"
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
                 f'If changes: {{"status":"FIX","notes":"summary",'
-                f'"adjustments":[{{"category":"INTEREST or MOST PURCHASED BRANDS","item":"ITEM","factor":0.80,'
+                f'"adjustments":[{{"category":"INTEREST or MOST PURCHASED BRANDS","item":"ITEM","factor":0.80,"target_bp":12.5,'
                 f'"reason":"brief persona rationale"}},...]}}\n'
                 f"factor range: 0.30 to 2.00. JSON only."
             )
@@ -9585,6 +9636,249 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 print(f"   ⚠️ Pass B2D COHORT error (batch {bnum}): {e}")
         if b2d_total:
             print(f"   🧬 Pass B2D COHORT total: {b2d_total} corrections")
+
+    # ──── PASS B2E: APP/PLATFORM USAGE row-by-row plausibility review ────
+    # Prevent niche/productivity/finance apps from dominating young digital-fandom
+    # profiles without strong profile evidence.
+    app_cats = [c for c in categories_data.keys() if c == 'APP/PLATFORM USAGE']
+    if app_cats and not _budget_exhausted("Pass B2E start"):
+        all_item_lookup.clear()
+        for cat, items in categories_data.items():
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = cs_orig
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        app_items = []
+        for (cat, item_u), (name, bp, cs, idx) in all_item_lookup.items():
+            if cat != 'APP/PLATFORM USAGE':
+                continue
+            gp_bp = gp_bp_lookup.get((cat, item_u), 0.0)
+            if gp_bp > 0:
+                idx_int = int(round((bp / gp_bp) * 100))
+                idx_meta = f" [GenPop: {gp_bp:.2f}%, INDEX: {idx_int}]"
+            else:
+                idx_meta = " [GenPop: N/A, INDEX: N/A]"
+            app_items.append((cat, name, bp, idx_meta))
+
+        app_items.sort(key=lambda x: -x[2])
+        app_batches = [app_items[i:i + 120] for i in range(0, len(app_items), 120)]
+        b2e_total = 0
+        for bnum, batch in enumerate(app_batches, 1):
+            if _budget_exhausted(f"Pass B2E batch {bnum}"):
+                break
+            lines = [f"  {cat} | {name}: {bp:.4f}% BP{meta}" for cat, name, bp, meta in batch]
+            app_prompt = (
+                f"You are a US audience strategist doing a FINAL PERSONA-ACCURACY CHECK "
+                f"for APP/PLATFORM USAGE rows in a behavioral profile.\n\n"
+                f"{audience_context}\n"
+                f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n\n"
+                f"=== APP/PLATFORM USAGE ROWS (batch {bnum}/{len(app_batches)}) ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== REQUIRED PLAUSIBILITY RULES ===\n"
+                f"1) Use this profile's evidence + research context only.\n"
+                f"2) Keep mainstream, broad-use apps plausibly high when evidence supports it.\n"
+                f"3) Niche/utility/finance/professional apps should not outrank broad youth-digital platforms "
+                f"without explicit profile evidence.\n"
+                f"4) Avoid platform inflation where many unrelated apps are all top-tier.\n\n"
+                f"5) For young entertainment/social personas, finance/credit and logistics/workflow tools "
+                f"(e.g., Credit Karma, USPS/FedEx, Slack, Grammarly, Craigslist) should generally remain "
+                f"below core consumer/digital-life utilities unless explicit evidence supports dominance.\n\n"
+                f"For EACH row, decide KEEP / LOWER / RAISE.\n"
+                f"Only include LOWER/RAISE rows in adjustments.\n"
+                f"Return ONLY valid JSON:\n"
+                f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
+                f'If changes: {{"status":"FIX","notes":"summary",'
+                f'"adjustments":[{{"category":"APP/PLATFORM USAGE","item":"ITEM","factor":0.80,"target_bp":12.5,'
+                f'"reason":"brief persona rationale"}},...]}}\n'
+                f"factor range: 0.35 to 2.00. JSON only."
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': app_prompt}],
+                    temperature=0.0,
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    applied, _ = _apply_adjustments(result['adjustments'][:220], all_item_lookup, '[APP]')
+                    b2e_total += applied
+                    print(f"   📱 Pass B2E APP/PLATFORM batch {bnum}/{len(app_batches)}: {applied} corrections")
+                else:
+                    print(f"   📱 Pass B2E APP/PLATFORM batch {bnum}/{len(app_batches)}: all rows OK")
+            except Exception as e:
+                print(f"   ⚠️ Pass B2E APP/PLATFORM error (batch {bnum}): {e}")
+        if b2e_total:
+            print(f"   📱 Pass B2E APP/PLATFORM total: {b2e_total} corrections")
+
+    # ──── PASS B2G: SOCIAL MEDIA + SEARCH ENGINE/AI hard persona coherence (AI-only) ────
+    # Dedicated row-by-row pass for two categories that frequently drift into implausible
+    # rank order when treated inside generic spot-check batches.
+    ss_cats = [c for c in categories_data.keys() if c in {'SOCIAL MEDIA', 'SEARCH ENGINE/AI', 'SEARCH ENGINE'}]
+    if ss_cats and not _budget_exhausted("Pass B2G start"):
+        all_item_lookup.clear()
+        for cat, items in categories_data.items():
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = cs_orig
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        ss_items = []
+        for (cat, item_u), (name, bp, cs, idx) in all_item_lookup.items():
+            if cat not in {'SOCIAL MEDIA', 'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
+                continue
+            gp_bp = gp_bp_lookup.get((cat, item_u), 0.0)
+            if gp_bp > 0:
+                idx_int = int(round((bp / gp_bp) * 100))
+                idx_meta = f" [GenPop: {gp_bp:.2f}%, INDEX: {idx_int}]"
+            else:
+                idx_meta = " [GenPop: N/A, INDEX: N/A]"
+            ss_items.append((cat, name, bp, idx_meta))
+
+        ss_items.sort(key=lambda x: (x[0], -x[2]))
+        ss_batches = [ss_items[i:i + 140] for i in range(0, len(ss_items), 140)]
+        b2g_total = 0
+        for bnum, batch in enumerate(ss_batches, 1):
+            if _budget_exhausted(f"Pass B2G batch {bnum}"):
+                break
+            lines = [f"  {cat} | {name}: {bp:.4f}% BP{meta}" for cat, name, bp, meta in batch]
+            ss_prompt = (
+                f"You are a US audience strategist doing a FINAL PERSONA-ACCURACY CHECK "
+                f"for SOCIAL MEDIA and SEARCH ENGINE/AI rows.\n\n"
+                f"{audience_context}\n"
+                f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n"
+                f"YOUTH SIGNAL: ~{young_pct:.1f}% in younger brackets.\n\n"
+                f"=== ROWS (batch {bnum}/{len(ss_batches)}) ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== REQUIRED COHERENCE RULES ===\n"
+                f"1) Use persona + demographics + research first (no canned templates).\n"
+                f"2) SOCIAL MEDIA: ensure rank/magnitude realism for a US digital audience. "
+                f"For young profiles, TikTok and YouTube should generally not sit below Instagram without strong evidence.\n"
+                f"3) SOCIAL MEDIA: niche platforms (Patreon, Discord, Letterboxd, Tumblr, Bluesky) should not outrank "
+                f"mainstream mass-reach platforms unless explicit evidence strongly supports it.\n"
+                f"4) SEARCH ENGINE/AI: Google should be the dominant #1 search engine for mainstream US audiences. "
+                f"Quora/Perplexity/AI tools may be meaningful but should not outrank Google without explicit evidence.\n"
+                f"5) Avoid blanket boosts/cuts; make row-level corrections with plausible absolute targets.\n\n"
+                f"For EACH row, decide KEEP / LOWER / RAISE.\n"
+                f"Only include LOWER/RAISE rows in adjustments.\n"
+                f"Return ONLY valid JSON:\n"
+                f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
+                f'If changes: {{"status":"FIX","notes":"summary",'
+                f'"adjustments":[{{"category":"SOCIAL MEDIA or SEARCH ENGINE/AI","item":"ITEM","factor":0.80,'
+                f'"target_bp":12.5,"reason":"brief persona rationale"}}]}}\n'
+                f"factor range: 0.25 to 2.50. JSON only."
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': ss_prompt}],
+                    temperature=0.0,
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    applied, _ = _apply_adjustments(result['adjustments'][:220], all_item_lookup, '[SOC/SEARCH]')
+                    b2g_total += applied
+                    print(f"   🌐 Pass B2G SOCIAL+SEARCH batch {bnum}/{len(ss_batches)}: {applied} corrections")
+                else:
+                    print(f"   🌐 Pass B2G SOCIAL+SEARCH batch {bnum}/{len(ss_batches)}: all rows OK")
+            except Exception as e:
+                print(f"   ⚠️ Pass B2G SOCIAL+SEARCH error (batch {bnum}): {e}")
+        if b2g_total:
+            print(f"   🌐 Pass B2G SOCIAL+SEARCH total: {b2g_total} corrections")
+
+    # ──── PASS B2F: AUTOMOBILE row-by-row life-stage plausibility review ────
+    auto_cats = [c for c in categories_data.keys() if c == 'AUTOMOBILE']
+    if auto_cats and not _budget_exhausted("Pass B2F start"):
+        all_item_lookup.clear()
+        for cat, items in categories_data.items():
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = cs_orig
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        auto_items = []
+        for (cat, item_u), (name, bp, cs, idx) in all_item_lookup.items():
+            if cat != 'AUTOMOBILE':
+                continue
+            gp_bp = gp_bp_lookup.get((cat, item_u), 0.0)
+            if gp_bp > 0:
+                idx_int = int(round((bp / gp_bp) * 100))
+                idx_meta = f" [GenPop: {gp_bp:.2f}%, INDEX: {idx_int}]"
+            else:
+                idx_meta = " [GenPop: N/A, INDEX: N/A]"
+            auto_items.append((cat, name, bp, idx_meta))
+
+        auto_items.sort(key=lambda x: -x[2])
+        auto_batches = [auto_items[i:i + 120] for i in range(0, len(auto_items), 120)]
+        b2f_total = 0
+        for bnum, batch in enumerate(auto_batches, 1):
+            if _budget_exhausted(f"Pass B2F batch {bnum}"):
+                break
+            lines = [f"  {cat} | {name}: {bp:.4f}% BP{meta}" for cat, name, bp, meta in batch]
+            auto_prompt = (
+                f"You are a US audience strategist doing a FINAL PERSONA-ACCURACY CHECK "
+                f"for AUTOMOBILE rows in a behavioral profile.\n\n"
+                f"{audience_context}\n"
+                f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n\n"
+                f"=== AUTOMOBILE ROWS (batch {bnum}/{len(auto_batches)}) ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== REQUIRED PLAUSIBILITY RULES ===\n"
+                f"1) Use this profile's demographics + behavior + research only.\n"
+                f"2) For younger audiences, avoid broad auto-brand inflation where many brands are all high.\n"
+                f"3) Keep realistic distribution shape: mainstream brands can lead, but magnitudes should remain believable.\n"
+                f"4) Lower values that look like panel over-lift rather than persona-fit.\n\n"
+                f"5) For non-auto-centric entertainment personas, avoid broad inflation where many auto rows cluster\n"
+                f"   at very high penetration without explicit profile evidence.\n\n"
+                f"For EACH row, decide KEEP / LOWER / RAISE.\n"
+                f"Only include LOWER/RAISE rows in adjustments.\n"
+                f"Return ONLY valid JSON:\n"
+                f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
+                f'If changes: {{"status":"FIX","notes":"summary",'
+                f'"adjustments":[{{"category":"AUTOMOBILE","item":"ITEM","factor":0.80,"target_bp":12.5,'
+                f'"reason":"brief persona rationale"}},...]}}\n'
+                f"factor range: 0.35 to 1.60. JSON only."
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': auto_prompt}],
+                    temperature=0.0,
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    applied, _ = _apply_adjustments(result['adjustments'][:220], all_item_lookup, '[AUTO]')
+                    b2f_total += applied
+                    print(f"   🚗 Pass B2F AUTOMOBILE batch {bnum}/{len(auto_batches)}: {applied} corrections")
+                else:
+                    print(f"   🚗 Pass B2F AUTOMOBILE batch {bnum}/{len(auto_batches)}: all rows OK")
+            except Exception as e:
+                print(f"   ⚠️ Pass B2F AUTOMOBILE error (batch {bnum}): {e}")
+        if b2f_total:
+            print(f"   🚗 Pass B2F AUTOMOBILE total: {b2f_total} corrections")
 
     # ──── PASS B3: AMUSEMENT PARKS geographic realism review ────
     # Catch cases where small regional parks rank above national destination parks
@@ -9668,8 +9962,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"Return ONLY valid JSON:\n"
                 f'If OK: {{"status":"OK","notes":"reason"}}\n'
                 f'If fixes needed: {{"status":"FIX","notes":"summary",'
-                f'"adjustments":[{{"category":"{cat}","item":"ITEM","factor":0.70,"reason":"brief"}}]}}\n'
-                f"factor range: 0.15 to 4.0. JSON only."
+                f'"adjustments":[{{"category":"{cat}","item":"ITEM","factor":0.70,"target_bp":12.5,"reason":"brief"}}]}}\n'
+                f"Use factor and/or target_bp (absolute BP). JSON only."
             )
             try:
                 resp = client.chat.completions.create(
@@ -9840,7 +10134,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"Return ONLY valid JSON:\n"
                 f'{{"status":"FIX","notes":"summary",'
                 f'"adjustments":[{{"category":"{cat}","item":"ITEM",'
-                f'"factor":0.85,"reason":"brief"}},...]}}\n'
+                f'"factor":0.85,"target_bp":12.5,"reason":"brief"}},...]}}\n'
                 f"JSON only, no markdown."
             )
 
@@ -9891,13 +10185,13 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 cur_cs = cs_orig
             all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
 
+    pass_d_requests = []
     for cat in RANK_CATEGORIES:
         if _budget_exhausted(f"Pass D category {cat}"):
             break
         if cat not in categories_data:
             continue
         items = categories_data[cat]
-        # Get current BPs and Gen Pop BPs for top 40 by current BP
         cat_ranked = []
         for name, bp_orig, cs_orig, idx in items:
             try:
@@ -9959,31 +10253,65 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"3. Niche-but-relevant items should punch above their weight only when "
             f"the profile-specific persona evidence supports it.\n"
             f"4. Mass-market items that everyone uses (Google, YouTube, "
-            f"Netflix) stay near the top — don't over-adjust those.\n\n"
+            f"Netflix) stay near the top — don't over-adjust those.\n"
+            f"5. Do not let secondary/niche apps or life-stage-mismatch items outrank "
+            f"core youth-digital anchors without explicit evidence.\n"
+            f"6. SOCIAL MEDIA sanity: Snapchat should not outrank YouTube/Instagram "
+            f"for broad young audiences unless profile-specific evidence is explicit.\n\n"
             f"Return ONLY valid JSON:\n"
             f'{{"status":"FIX","notes":"summary",'
             f'"adjustments":[{{"category":"{cat}","item":"ITEM",'
-            f'"factor":1.25,"reason":"brief"}},...]}}\n'
+            f'"factor":1.25,"target_bp":12.5,"reason":"brief"}},...]}}\n'
             f"Only include items that need adjustment. JSON only, no markdown."
         )
+        pass_d_requests.append((cat, rank_prompt))
 
-        try:
-            resp = client.chat.completions.create(
-                model='gpt-4o',
-                messages=[{'role': 'user', 'content': rank_prompt}],
-                temperature=0.2,
-                max_tokens=4000,
-                timeout=OPENAI_CALL_TIMEOUT_SEC,
-            )
-            result = _parse_ai_json(resp.choices[0].message.content.strip())
-            if result.get('status') == 'FIX' and 'adjustments' in result:
-                applied, _ = _apply_adjustments(
-                    result['adjustments'], all_item_lookup, '[RANK]')
-                pass_d_adjustments += applied
-                if applied > 0:
-                    print(f"   🔀 Pass D: {cat} — {applied} rank adjustments")
-        except Exception as e:
-            print(f"   ⚠️ Pass D error ({cat}): {e}")
+    pass_d_results = []
+    if len(pass_d_requests) > 1 and PASS_D_PARALLEL_WORKERS > 1:
+        workers = min(PASS_D_PARALLEL_WORKERS, len(pass_d_requests))
+        print(f"   🔀 Pass D parallel: {len(pass_d_requests)} categories, {workers} workers")
+        with _futures.ThreadPoolExecutor(max_workers=workers) as ex:
+            future_to_cat = {
+                ex.submit(
+                    client.chat.completions.create,
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': prompt}],
+                    temperature=0.2,
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
+                ): cat
+                for cat, prompt in pass_d_requests
+            }
+            for future in _futures.as_completed(future_to_cat):
+                cat = future_to_cat[future]
+                try:
+                    resp = future.result()
+                    result = _parse_ai_json(resp.choices[0].message.content.strip())
+                    pass_d_results.append((cat, result))
+                except Exception as e:
+                    print(f"   ⚠️ Pass D error ({cat}): {e}")
+    else:
+        for cat, rank_prompt in pass_d_requests:
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': rank_prompt}],
+                    temperature=0.2,
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                pass_d_results.append((cat, result))
+            except Exception as e:
+                print(f"   ⚠️ Pass D error ({cat}): {e}")
+
+    for cat, result in pass_d_results:
+        if result.get('status') == 'FIX' and 'adjustments' in result:
+            applied, _ = _apply_adjustments(
+                result['adjustments'], all_item_lookup, '[RANK]')
+            pass_d_adjustments += applied
+            if applied > 0:
+                print(f"   🔀 Pass D: {cat} — {applied} rank adjustments")
 
     # ──── PASS E: AI PERSONA-BASED VALUATION FOR UNMATCHED ITEMS ────
     # Items with no Gen Pop benchmark were capped at UNMATCHED_CEILING by
@@ -10063,6 +10391,13 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     f"category should be HIGH.\n"
                     f"6. Be realistic — even highly relevant items rarely "
                     f"exceed 75% for a niche audience.\n\n"
+                    f"=== STRICT EVIDENCE GATING (MANDATORY) ===\n"
+                    f"- Use profile evidence + research context only. If explicit evidence is weak/absent,\n"
+                    f"  default to conservative values.\n"
+                    f"- TALENT/ACTOR/ATHLETE-style rows: only set >12% when there is clear direct relevance\n"
+                    f"  to this subject's audience; otherwise keep in a low range.\n"
+                    f"- Do NOT inflate unfamiliar names simply because they are in the file.\n"
+                    f"- For weak-fit or uncertain rows, prefer low values rather than broad inflation.\n\n"
                     f"Return ONLY valid JSON:\n"
                     f'{{"items":[{{"item":"ITEM_NAME","bp":42.5,'
                     f'"reason":"brief explanation"}},...]}}\n'
@@ -10102,7 +10437,14 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                             new_bp = round(new_bp, 4)
                             new_raw = max(1, int(round(new_bp / 100.0 * sample_raw)))
                             new_proj = int(round(new_raw * MULT))
-                            df.at[idx, bp_col] = new_bp
+                            cur_bp_cell = df.at[idx, bp_col]
+                            if isinstance(cur_bp_cell, str):
+                                if '%' in cur_bp_cell:
+                                    df.at[idx, bp_col] = f"{new_bp:.4f}%"
+                                else:
+                                    df.at[idx, bp_col] = f"{new_bp:.4f}"
+                            else:
+                                df.at[idx, bp_col] = new_bp
                             df.at[idx, raw_col] = str(new_raw)
                             if proj_col in df.columns:
                                 df.at[idx, proj_col] = str(new_proj)
@@ -10138,9 +10480,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     pass
 
     # ──── FINAL: CROSS-CATEGORY HARMONIZATION ────
-    # The same brand (e.g. NBC, Adidas) can appear in multiple categories.
-    # After all passes, their BP values may differ.  Harmonize so every
-    # occurrence of the same item name has the same BP, using the average.
+    # Keep the same value consistent across categories by promoting all
+    # occurrences to the highest observed BP for that value.
     MULT = 329_900_000 / 10_000_000
     val_occurrences = {}
     for idx, row in df.iterrows():
@@ -10165,19 +10506,19 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         bps = [bp for _, _, bp in entries]
         if max(bps) - min(bps) < 0.01:
             continue
-        avg_bp = round(sum(bps) / len(bps), 4)
+        max_bp = round(max(bps), 4)
         for idx, cat, old_bp in entries:
-            if abs(old_bp - avg_bp) < 0.01:
+            if abs(old_bp - max_bp) < 0.01:
                 continue
             cur_bp_cell = df.at[idx, bp_col]
             if isinstance(cur_bp_cell, str):
                 if '%' in cur_bp_cell:
-                    df.at[idx, bp_col] = f"{avg_bp:.4f}%"
+                    df.at[idx, bp_col] = f"{max_bp:.4f}%"
                 else:
-                    df.at[idx, bp_col] = f"{avg_bp:.4f}"
+                    df.at[idx, bp_col] = f"{max_bp:.4f}"
             else:
-                df.at[idx, bp_col] = avg_bp
-            new_raw = max(1, int(round(avg_bp / 100.0 * sample_size)))
+                df.at[idx, bp_col] = max_bp
+            new_raw = max(1, int(round(max_bp / 100.0 * sample_size)))
             df.at[idx, raw_col] = str(new_raw)
             if proj_col in df.columns:
                 df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
@@ -13381,6 +13722,514 @@ def boost_netflix_3x_rob_lowe(df, project_name):
     
     return df
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# 3-STEP AGENT PIPELINE
+# ═══════════════════════════════════════════════════════════════════════
+
+_DEMO_CATEGORIES = [
+    'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+    'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+]
+
+_BEHAVIORAL_SKIP = {
+    'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
+    'BRAND CATEGORY', 'PURCHASE SHARE', 'BRAND PENETRATION',
+}
+
+_DEMO_SET = set(_DEMO_CATEGORIES) | {'LOCATION'}
+
+
+def persona_research_agent(subject: str, brand_category: str | None = None) -> dict:
+    """Step 1 — single gpt-4o-search-preview call.
+
+    Researches *subject* online and returns a PersonaDoc dict:
+        demographics  – dict[category_name, list[{bucket, percentage}]]
+        location      – list[{dma, percentage}] (top 15-20 DMAs)
+        persona_summary – 3-5 sentence audience description
+        category_guidance – dict[category_name, str]  (1-2 sentence hints)
+    """
+    import json as _json
+    client = _get_openai_client()
+    if client is None:
+        raise RuntimeError("OpenAI client unavailable — set OPENAI_API_KEY")
+
+    cat_label = brand_category or "general entertainment"
+
+    prompt = f"""You are a senior audience-research analyst.  Research **{subject}** ({cat_label}) using real, current online data (fan demographics surveys, social-media analytics, press coverage, industry reports).
+
+Return ONLY a single valid JSON object — no markdown, no commentary.
+
+{{
+  "persona_summary": "<3-5 sentence description of the audience — lifestyle, interests, values, median age, skew>",
+  "demographics": {{
+    "AGE": {{
+      "17 AND UNDER": <percent>,
+      "18-24": <percent>,
+      "25-34": <percent>,
+      "35-44": <percent>,
+      "45-54": <percent>,
+      "55-64": <percent>,
+      "65 OR OLDER": <percent>
+    }},
+    "GENDER": {{
+      "MALE": <percent>,
+      "FEMALE": <percent>,
+      "TRANS MALE": <percent>,
+      "TRANS FEMALE": <percent>,
+      "NON-BINARY": <percent>,
+      "PREFER NOT TO SAY": <percent>
+    }},
+    "ETHNICITY": {{
+      "WHITE": <percent>,
+      "BLACK OR AFRICAN AMERICAN": <percent>,
+      "HISPANIC OR LATINO": <percent>,
+      "ASIAN": <percent>,
+      "NATIVE AMERICAN / ALASKA NATIVE": <percent>,
+      "ANOTHER RACE/ETHNICITY": <percent>
+    }},
+    "INCOME": {{
+      "UNDER $25,000": <percent>,
+      "$25,000-$49,999": <percent>,
+      "$50,000-$74,999": <percent>,
+      "$75,000-$99,999": <percent>,
+      "$100,000-$149,999": <percent>,
+      "$150,000-$249,999": <percent>,
+      "$250,000 OR MORE": <percent>
+    }},
+    "EDUCATION": {{
+      "LESS THAN HIGH SCHOOL": <percent>,
+      "HIGH SCHOOL GRADUATE": <percent>,
+      "SOME COLLEGE": <percent>,
+      "ASSOCIATE DEGREE": <percent>,
+      "BACHELOR'S DEGREE": <percent>,
+      "GRADUATE DEGREE": <percent>
+    }},
+    "RELATIONSHIP": {{
+      "SINGLE": <percent>,
+      "MARRIED": <percent>,
+      "IN A RELATIONSHIP": <percent>,
+      "DIVORCED": <percent>,
+      "WIDOWED": <percent>,
+      "PREFER NOT TO SAY": <percent>
+    }},
+    "SEXUAL_ORIENTATION": {{
+      "STRAIGHT / HETEROSEXUAL": <percent>,
+      "GAY OR LESBIAN": <percent>,
+      "ANOTHER SEXUAL ORIENTATION": <percent>,
+      "PREFER NOT TO SAY": <percent>
+    }},
+    "PARENTAL_STATUS": {{
+      "YES": <percent>,
+      "NO": <percent>
+    }},
+    "OCCUPATION": {{
+      "EMPLOYED FULL-TIME": <percent>,
+      "EMPLOYED PART-TIME": <percent>,
+      "SELF-EMPLOYED": <percent>,
+      "STUDENT": <percent>,
+      "HOMEMAKER": <percent>,
+      "RETIRED": <percent>,
+      "UNEMPLOYED": <percent>,
+      "PREFER NOT TO SAY": <percent>
+    }}
+  }},
+  "location": [
+    {{"dma": "<DMA name, e.g. NEW YORK>", "percentage": <percent>}},
+    ...top 15-20 DMAs with highest affinity; remainder auto-distributed
+  ],
+  "category_guidance": {{
+    "SOCIAL MEDIA": "<1-2 sentence guidance, e.g. TikTok-dominant young female audience…>",
+    "SEARCH ENGINE/AI": "<…>",
+    "INTEREST": "<…>",
+    "APP/PLATFORM USAGE": "<…>",
+    "STREAMING/PLATFORM": "<…>",
+    "STREAMING/MUSIC": "<…>",
+    "BROADCAST/CABLE": "<…>",
+    "MOST PURCHASED BRANDS": "<…>",
+    "MOST PURCHASED CATEGORIES": "<…>",
+    "WHERE THEY SHOP": "<…>",
+    "WHERE THEY DINE": "<…>",
+    "QSR": "<…>",
+    "WORKOUT FACILITY": "<…>",
+    "TRAVEL": "<…>",
+    "INSURANCE": "<…>",
+    "BANKING": "<…>",
+    "CREDIT PROVIDER": "<…>",
+    "TELECOM": "<…>",
+    "TECHNOLOGY/DEVICE": "<…>",
+    "AUTOMOBILE": "<…>"
+  }}
+}}
+
+RULES:
+- Each demographic category MUST sum to exactly 100.
+- Use realistic decimals (e.g. 23.7, not 24).
+- Trans population ≈ 0.5-1% of US; Native American ≈ 1%; LGBTQ+ ≈ 7% (higher only if brand has known affinity).
+- "Prefer Not to Say" 1-3% max in any category.
+- Location percentages should sum to ≤ 100; remainder is auto-spread to the other 190+ DMAs.
+- category_guidance: cover every major behavioral category. Be specific about which items should rank high vs low for THIS audience.
+"""
+
+    print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
+    text = ''
+    # Attempt 1: gpt-4o-search-preview (has web search)
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-search-preview',
+            web_search_options={"search_context_size": "high"},
+            messages=[{'role': 'user', 'content': prompt}],
+            max_tokens=4096,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        if text:
+            print(f"   📡 search-preview returned {len(text)} chars")
+    except Exception as e:
+        print(f"   ⚠️ gpt-4o-search-preview failed ({e})")
+
+    # Attempt 2: gpt-4o fallback if search-preview gave nothing usable
+    if not text or '{' not in text:
+        print(f"   🔄 Falling back to gpt-4o …")
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            max_tokens=4096,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        print(f"   📡 gpt-4o returned {len(text)} chars")
+
+    # Robust JSON extraction: strip markdown fences, find outermost { … }
+    if text.startswith('```'):
+        text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+    start_idx = text.find('{')
+    end_idx = text.rfind('}')
+    if start_idx < 0 or end_idx <= start_idx:
+        raise RuntimeError(f"Persona agent returned no parseable JSON. First 500 chars: {text[:500]}")
+    text = text[start_idx:end_idx + 1]
+
+    persona_doc = _json.loads(text)
+
+    # Validate and normalise each demographic bucket to sum to exactly 100
+    demos = persona_doc.get('demographics', {})
+    for cat, buckets in demos.items():
+        if not isinstance(buckets, dict):
+            continue
+        total = sum(float(v) for v in buckets.values() if v is not None)
+        if total <= 0:
+            continue
+        factor = 100.0 / total
+        for k in buckets:
+            buckets[k] = round(float(buckets[k]) * factor, 4)
+
+    print(f"   ✅ Persona doc built — summary length {len(persona_doc.get('persona_summary', ''))} chars, "
+          f"{len(persona_doc.get('location', []))} DMAs, "
+          f"{len(persona_doc.get('category_guidance', {}))} category hints")
+    return persona_doc
+
+
+def _run_single_category_agent(category: str, values: list[str],
+                                persona_doc: dict, subject: str) -> list[dict]:
+    """Worker for Step 2 — one gpt-4o call per category.
+
+    Returns list of {value, bp, reason}.
+    """
+    import json as _json
+    client = _get_openai_client()
+    if client is None:
+        return []
+
+    guidance = persona_doc.get('category_guidance', {}).get(category, '')
+    summary = persona_doc.get('persona_summary', '')
+    demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
+                     if k in ('AGE', 'GENDER', 'ETHNICITY')}
+
+    values_list = '\n'.join(f"  - {v}" for v in values)
+
+    prompt = f"""You are setting Brand Penetration (BP) values for the **{category}** category of a consumer profile for **{subject}**.
+
+Brand Penetration = the % of THIS specific audience that uses, engages with, or purchases each item. This is NOT a general popularity score — it must reflect the realistic overlap between this persona and each item.
+
+PERSONA:
+{summary}
+
+KEY DEMOGRAPHICS:
+{_json.dumps(demo_snapshot, indent=2)}
+
+CATEGORY GUIDANCE:
+{guidance}
+
+Below are the items in this category (from the panel). For each one, set a realistic BP percentage.
+
+ITEMS:
+{values_list}
+
+Return ONLY a JSON array — no markdown, no commentary:
+[
+  {{"value": "<ITEM NAME — exact spelling from list above>", "bp": <number>, "reason": "<one sentence>"}},
+  …
+]
+
+CRITICAL RULES — READ CAREFULLY:
+1. REALISTIC SCALE: Even the most popular item in any category rarely exceeds 85% BP for a niche audience. Most items should be 1-40%. Only truly universal items (Google, YouTube, Amazon, Netflix for a digital audience) can reach 60-85%.
+2. FOUR DECIMAL PLACES: Every BP value MUST have 4 decimal places of precision, e.g. 37.2148, 12.8034, 63.4291, 4.7082, 22.1467. This simulates real survey data. Never return a value with fewer than 4 decimal digits.
+3. SPREAD DISTRIBUTION: Most items (60-70%) should be in the 1-25% range. Only 3-5 items per category should exceed 50%. Many niche items should be under 5%.
+4. RANK ORDER MUST MAKE SENSE: For a young female pop-star audience, TikTok > Facebook; Google > Quora; Netflix > ESPN; Amazon > Etsy.
+5. INTEREST CATEGORY REALISM: "Interest" does NOT mean 80%+. Having interest in "FOOTWEAR" might be 25% for this audience (the subset who are sneaker/shoe enthusiasts), not 80%. Having interest in "MUSIC" for a pop star audience might be 72%, not 90%.
+6. LOW-AFFINITY ITEMS: Items unrelated to the persona (e.g. HEAVY MACHINERY, GOLF, BETTING for a young female pop audience) should be 0.5-5%.
+7. DIGITAL PANEL CONTEXT: This data comes from a DIGITAL behavioral panel (online/app clickstream). For MOST PURCHASED BRANDS and CPG categories, traditional grocery/supermarket CPG brands (Coca-Cola, Oreo, Doritos, Tide, Hershey's, M&Ms, etc.) should be LOW (2-15%) because people rarely purchase those online — they buy them in physical stores. Digital-native brands, DTC brands, fashion, beauty, and tech brands should rank higher since those are actually purchased online.
+8. Every item from the list MUST appear in your output.
+"""
+
+    token_budget = max(4096, len(values) * 80)
+    token_budget = min(token_budget, 16384)
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.0,
+            max_tokens=token_budget,
+        )
+        text = resp.choices[0].message.content.strip()
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        start = text.find('[')
+        end = text.rfind(']') + 1
+        if start >= 0 and end > start:
+            text = text[start:end]
+        try:
+            result = _json.loads(text)
+        except _json.JSONDecodeError:
+            # Truncated JSON: find last complete object and close the array
+            last_brace = text.rfind('}')
+            if last_brace > 0:
+                text = text[:last_brace + 1] + ']'
+                if not text.startswith('['):
+                    text = '[' + text
+                result = _json.loads(text)
+            else:
+                raise
+        if isinstance(result, list):
+            return result
+    except Exception as e:
+        print(f"   ⚠️ Category agent [{category}] failed: {e}")
+    return []
+
+
+def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
+                              subject: str, brands: list[str] | None = None) -> pd.DataFrame:
+    """Step 2 — run one gpt-4o agent per behavioral category in parallel.
+
+    Each agent receives the persona doc + the list of values from Snowflake for
+    its category, and returns a BP for every row.  Demographics and Location are
+    written directly from the persona_doc (Step 1 output), not via category agents.
+    """
+    import concurrent.futures as _futures
+
+    df = df.copy()
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
+    pct_col = 'Category Share' if 'Category Share' in df.columns else (
+        'Percentage' if 'Percentage' in df.columns else None)
+    if bp_col is None and pct_col:
+        df['Brand Penetration (Row)'] = df[pct_col]
+        bp_col = 'Brand Penetration (Row)'
+    if bp_col is None:
+        print("   ⚠️ No BP or Percentage column — skipping category agents")
+        return df
+
+    # --- A) Write demographics from persona_doc --------------------------
+    import re as _re
+
+    _EXPECTED_INCOME_BRACKETS = [
+        'UNDER $25,000',
+        '$25,000-$49,999',
+        '$50,000-$74,999',
+        '$75,000-$99,999',
+        '$100,000-$149,999',
+        '$150,000-$249,999',
+        '$250,000 OR MORE',
+    ]
+
+    def _norm_bracket(s: str) -> str:
+        """Normalize an income bracket for comparison: uppercase, collapse whitespace around hyphens, strip."""
+        s = s.strip().upper()
+        s = _re.sub(r'\s*-\s*', '-', s)
+        s = _re.sub(r'\s+', ' ', s)
+        return s
+
+    demos = persona_doc.get('demographics', {})
+
+    # Inject missing INCOME rows before writing persona values
+    if 'INCOME' in demos and isinstance(demos['INCOME'], dict):
+        income_mask = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
+        existing_normed = {_norm_bracket(str(v)) for v in df.loc[income_mask, 'Value']}
+        template_row = df.loc[income_mask].iloc[0].to_dict() if income_mask.any() else None
+        for bracket in _EXPECTED_INCOME_BRACKETS:
+            if _norm_bracket(bracket) not in existing_normed and template_row is not None:
+                new_row = template_row.copy()
+                new_row['Value'] = bracket
+                new_row[bp_col] = 0.0
+                if pct_col and pct_col in df.columns:
+                    new_row[pct_col] = 0.0
+                for col in ['Original Raw Numbers', 'US Gen Pop Projection']:
+                    if col in new_row:
+                        new_row[col] = 0
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                print(f"   📌 Injected missing INCOME bracket: {bracket}")
+
+        # Also normalise existing Value text so it matches expected format
+        income_mask = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
+        for idx in df[income_mask].index:
+            raw_val = str(df.at[idx, 'Value']).strip()
+            normed = _norm_bracket(raw_val)
+            for expected in _EXPECTED_INCOME_BRACKETS:
+                if _norm_bracket(expected) == normed:
+                    df.at[idx, 'Value'] = expected
+                    break
+
+    for cat, buckets in demos.items():
+        if not isinstance(buckets, dict):
+            continue
+        cat_mask = df['Column'].astype(str).str.strip().str.upper() == cat.upper()
+        for idx in df[cat_mask].index:
+            val_u = _norm_bracket(str(df.at[idx, 'Value']))
+            for bk, pct in buckets.items():
+                if _norm_bracket(bk) == val_u:
+                    df.at[idx, bp_col] = round(float(pct), 4)
+                    if pct_col and pct_col in df.columns:
+                        df.at[idx, pct_col] = round(float(pct), 4)
+                    break
+
+    # --- B) Write location from persona_doc ------------------------------
+    loc_entries = persona_doc.get('location', [])
+    if loc_entries:
+        loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
+        loc_lookup = {e['dma'].strip().upper(): float(e['percentage'])
+                      for e in loc_entries if isinstance(e, dict) and 'dma' in e}
+        assigned_total = 0.0
+        unmatched_indices = []
+        for idx in df[loc_mask].index:
+            val_u = str(df.at[idx, 'Value']).strip().upper()
+            matched = False
+            for dma_key, pct in loc_lookup.items():
+                if dma_key in val_u or val_u in dma_key:
+                    df.at[idx, bp_col] = round(pct, 4)
+                    if pct_col and pct_col in df.columns:
+                        df.at[idx, pct_col] = round(pct, 4)
+                    assigned_total += pct
+                    matched = True
+                    break
+            if not matched:
+                unmatched_indices.append(idx)
+        # Spread remainder across unmatched DMAs
+        remainder = max(0.0, 100.0 - assigned_total)
+        if unmatched_indices and remainder > 0:
+            per_dma = round(remainder / len(unmatched_indices), 4)
+            for idx in unmatched_indices:
+                df.at[idx, bp_col] = per_dma
+                if pct_col and pct_col in df.columns:
+                    df.at[idx, pct_col] = per_dma
+
+    # --- C) Collect behavioral categories and dispatch agents -------------
+    all_cats = df['Column'].astype(str).str.strip().str.upper().unique()
+    behavioral_cats = [c for c in all_cats
+                       if c not in _BEHAVIORAL_SKIP and c not in _DEMO_SET]
+
+    category_values: dict[str, tuple[list[str], list[int]]] = {}
+    for cat in behavioral_cats:
+        mask = df['Column'].astype(str).str.strip().str.upper() == cat
+        vals = df.loc[mask, 'Value'].astype(str).str.strip().str.upper().tolist()
+        idxs = df[mask].index.tolist()
+        if vals:
+            category_values[cat] = (vals, idxs)
+
+    print(f"🤖 Step 2: Launching {len(category_values)} parallel category agents …")
+    results_map: dict[str, list[dict]] = {}
+    with _futures.ThreadPoolExecutor(max_workers=12) as pool:
+        future_to_cat = {
+            pool.submit(_run_single_category_agent, cat, vals, persona_doc, subject): cat
+            for cat, (vals, _) in category_values.items()
+        }
+        for fut in _futures.as_completed(future_to_cat):
+            cat = future_to_cat[fut]
+            try:
+                results_map[cat] = fut.result()
+            except Exception as e:
+                print(f"   ⚠️ Agent [{cat}] raised: {e}")
+                results_map[cat] = []
+
+    # --- D) Write agent BP values back into DataFrame --------------------
+    def _add_4dp_noise(val: float) -> float:
+        """Ensure value has 4 meaningful decimal digits (no trailing zeros)."""
+        v = round(val, 4)
+        s = f"{v:.4f}"
+        # If fewer than 4 non-zero trailing decimals, add micro-noise
+        frac = s.split('.')[1] if '.' in s else '0000'
+        if frac.endswith('000') or frac.endswith('00') or frac.endswith('0'):
+            noise = random.uniform(0.0001, 0.0099)
+            v = v + noise if v < 99.99 else v - noise
+            v = round(max(0.0001, min(99.9999, v)), 4)
+        return v
+
+    rows_written = 0
+    for cat, (vals, idxs) in category_values.items():
+        agent_result = results_map.get(cat, [])
+        if not agent_result:
+            continue
+        bp_lookup = {}
+        for entry in agent_result:
+            if isinstance(entry, dict) and 'value' in entry and 'bp' in entry:
+                bp_lookup[str(entry['value']).strip().upper()] = float(entry['bp'])
+        for idx in idxs:
+            val_u = str(df.at[idx, 'Value']).strip().upper()
+            if val_u in bp_lookup:
+                new_bp = max(0.0001, min(99.9999, bp_lookup[val_u]))
+                df.at[idx, bp_col] = _add_4dp_noise(new_bp)
+                rows_written += 1
+
+    print(f"   ✅ Wrote BP for {rows_written} behavioral rows across {len(results_map)} categories")
+    return df
+
+
+def agent_pipeline_final_sanity_check(df: pd.DataFrame,
+                                       brands: list[str] | None = None) -> pd.DataFrame:
+    """Step 3 — deterministic sanity check.
+
+    Only two overrides plus math reconciliation:
+      1. Brand input locked to 100%
+      2. Same Value = highest BP across categories
+      3. BP → raw → Category Share → US Gen Pop Projection
+      4. Micro-noise to avoid .0000 endings
+    """
+    df = df.copy()
+
+    # 1. Brand input = 100%
+    if brands:
+        df = enforce_input_brand_100(df, brands)
+
+    # 2. Cross-category value consistency (highest BP wins)
+    df = enforce_value_consistency_across_categories(df)
+
+    # 3. Math reconciliation
+    df = reconcile_final_output_from_bp_and_sample_size(df)
+    df = add_us_gen_pop_projection(df)
+
+    # 4. Micro-noise
+    df = perturb_brand_penetration_avoid_dot_0000(df)
+    df = reconcile_final_output_from_bp_and_sample_size(df)
+    df = add_us_gen_pop_projection(df)
+
+    # Re-lock brand after noise
+    if brands:
+        df = enforce_input_brand_100(df, brands)
+        df = reconcile_final_output_from_bp_and_sample_size(df)
+        df = add_us_gen_pop_projection(df)
+
+    print("   ✅ Step 3: Sanity check complete (brand lock + consistency + reconciliation)")
+    return df
+
+
 def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, behavior_start, behavior_end, filters, skew_settings, is_genpop, purchasers_only=False, previous_file_path=None, brand_category=None, is_listener_watcher=False, output_dir=None, geo_zip_codes=None, geo_dma=None):
     from datetime import datetime
     import time
@@ -16074,669 +16923,80 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = rename_streaming_max_to_hbo_max_upper(df_final)
     df_final = cleanup_streaming_platforms(df_final)
 
-    # ── ANCHOR TO GEN POP (calibrate raw clickstream to consumer scale) ─
-    print("🎯 Anchoring all values to Gen Pop baseline...")
-    df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
+    # ══════════════════════════════════════════════════════════════════
+    # 3-STEP AGENT PIPELINE (non-genpop) vs. ANCHOR PATH (genpop)
+    # ══════════════════════════════════════════════════════════════════
+    if is_genpop:
+        # ── GenPop: anchor to gen pop baseline (unchanged) ──────────────
+        print("🎯 Anchoring all values to Gen Pop baseline...")
+        df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
+        df_final = enforce_cross_category_brand_consistency(df_final)
+        df_final = sort_categories_by_percentage(df_final)
+        df_final = add_brand_penetration_column_using_final_raw(df_final)
+        df_final = add_us_gen_pop_projection(df_final)
+        for col in ['Unique Purchase Confirmations', 'Raw Numbers',
+                     'Actual Unique UID Count (DB)', 'Original Raw Numbers (Database)']:
+            if col in df_final.columns:
+                df_final = df_final.drop(columns=[col])
+        df_final = deduplicate_values_within_category(df_final)
+        df_final = ensure_percentage_four_decimals(df_final)
+        df_final = enforce_max_four_decimals_across_columns(df_final)
+        df_final = enforce_exact_210_dmas(df_final)
+        df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
+        df_final = add_brand_penetration_column_using_final_raw(df_final)
+        df_final = add_us_gen_pop_projection(df_final)
+    else:
+        # ── Non-GenPop: 3-Step Agent Pipeline ───────────────────────────
+        # Drop intermediate columns before agent pipeline
+        for col in ['Unique Purchase Confirmations', 'Raw Numbers',
+                     'Actual Unique UID Count (DB)', 'Original Raw Numbers (Database)']:
+            if col in df_final.columns:
+                df_final = df_final.drop(columns=[col])
 
-    # ── AI-powered validation (demographics + behavioral gut-check) ────
-    _archetype = None
-    if not is_genpop:
-        print("🧠 Building audience archetype for validation...")
-        _archetype = get_brand_archetype(project_name, brands, brand_category)
-        print(f"   Archetype: gender={_archetype['gender_skew']}, age={_archetype['age_skew']}, "
-              f"behav_high={_archetype['behavioral_high'][:3]}, behav_low={_archetype['behavioral_low'][:3]}")
-        # Demographics are now AI-led via research-first audit + self-check later in
-        # the pipeline. Keep archetype for behavioral context only.
-        # df_final = validate_demographics(df_final, _archetype, final_sample_size)
-        # validate_behavioral_gut_check DISABLED — it was the 2nd gen-pop tether
-        # using a thin archetype (gpt-4o-mini, "predominantly male, age 18-34").
-        # The AI gut check (ai_final_gut_check) handles this with full context:
-        # GPT-4o, web research, gen pop baselines, all categories.
+        # Ensure BP column exists
+        bp_col_name = 'Brand Penetration (Row)'
+        pct_col_name = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
+        if bp_col_name not in df_final.columns and pct_col_name in df_final.columns:
+            df_final[bp_col_name] = df_final[pct_col_name]
+        if 'Original Raw Numbers' not in df_final.columns:
+            df_final['Original Raw Numbers'] = 0
 
-    # ── Post-anchor consistency and formatting ─────────────────────────
-    df_final = enforce_cross_category_brand_consistency(df_final)
-
-    if not is_genpop:
-        df_final = enforce_input_brand_100(df_final, brands)
-
-    df_final = enforce_parental_status_sum_to_100(df_final)
-
-    df_final = sort_categories_by_percentage(df_final)
-
-    df_final = add_brand_penetration_column_using_final_raw(df_final)
-    df_final = add_us_gen_pop_projection(df_final)
-
-    # Drop intermediate columns
-    for col in ['Unique Purchase Confirmations', 'Raw Numbers', 'Actual Unique UID Count (DB)', 'Original Raw Numbers (Database)']:
-        if col in df_final.columns:
-            df_final = df_final.drop(columns=[col])
-
-    df_final = deduplicate_values_within_category(df_final)
-    df_final = ensure_percentage_four_decimals(df_final)
-    df_final = enforce_max_four_decimals_across_columns(df_final)
-    df_final = enforce_exact_210_dmas(df_final)
-
-    df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
-    df_final = add_brand_penetration_column_using_final_raw(df_final)
-    df_final = add_us_gen_pop_projection(df_final)
-
-    # ── FINAL SANITY CHECK (absolute last behavioral gate) ──────────────
-    # Runs AFTER all formatting, consistency, and BP recalculation steps.
-    # Compares every behavioral row's FINAL BP against Gen Pop and corrects
-    # anything unreasonable, then recalculates CS/raw/projection.
-    # final_behavioral_sanity_check DISABLED — it was the 3rd gen-pop tether,
-    # clamping every behavioral row to gen-pop bounds AGAIN after anchor_to_genpop
-    # already did it. This triple-clamping crushed the original Snowflake signal
-    # and caused gen-pop artifacts (Hanes at top for every audience). The AI gut
-    # check (ai_final_gut_check) now serves as the single authoritative behavioral
-    # reviewer with full audience context, web research, and gen pop comparison.
-
-    # ── Legacy item-level AI review DISABLED ─────────────────────────────
-    # Superseded by ai_final_gut_check() which runs after demographic agents
-    # with full context (GPT-4o, web research, gen pop baselines, all categories).
-    # The old gpt-4o-mini pass had thin context and could cause gen-pop artifacts
-    # (e.g. boosting Hanes for audiences that wouldn't over-index on it).
-
-    if not is_genpop:
-        # Single authoritative demographic path:
-        # research-first AI correction + AI self-check (inside this function).
-        df_final = ai_research_first_demographic_audit(df_final, brand_category, project_name, brands)
-
-        # Location/DMA review: ensures geographic distribution makes sense for this audience
-        # and that all location Brand Penetration values sum to exactly 100%
-        df_final = ai_location_review(df_final, brand_category, project_name, brands)
-
-    # Gender distribution: from panel + demographic AI agents only (no archetype overwrite).
-
-    # Additional deterministic demographic clamps are disabled here so the
-    # research-first AI demographic path remains the primary decision-maker.
-
-    # ── COMPREHENSIVE FINAL GUT CHECK (GPT-4o + web research) ─────────
-    # Reviews the ENTIRE profile: locations/DMA, all behavioral categories,
-    # and cross-category coherence. Ensures everything passes the gut check
-    # for who this audience actually is.
-    if not is_genpop:
-        print("🔍 Running comprehensive final gut check (demographics + locations + behavioral)...")
-        df_final = ai_final_gut_check(df_final, brand_category, project_name, brands)
-
-    # ── DEMOGRAPHIC COMPLETENESS CHECK ─────────────────────────────────
-    # Ensure all demographic categories have representation (no missing age groups,
-    # genders, income levels, etc.). Adds missing values with small noise (0.01-0.05%)
-    # and renormalizes each category to sum to 100%.
-    # NOTE: Skip synthetic demographic "completeness" fill-in to avoid
-    # overriding AI-reviewed distributions with template-like defaults.
-
-    # ── Post-gut-check: recalculate BP from raw numbers ──────────────────
-    df_final = add_brand_penetration_column_using_final_raw(df_final)
-
-    # ── Mathematical safety: BP cannot exceed 95% (100% only for BRAND INPUT / platform) ──
-    _bp_col_final = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
-    _cs_col_final = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
-    if _bp_col_final:
-        _bc_uf_safe = (brand_category or '').strip().upper()
-        _ALLOW_FULL = {'BRAND INPUT', 'SAMPLE SIZE'}
-        if _bc_uf_safe:
-            _ALLOW_FULL.add(_bc_uf_safe)
-        _pn_uf = (platform_name or '').strip().upper() if 'platform_name' in dir() else ''
-        _ss_safe = 1
-        _ss_mask_safe = df_final['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
-        if _ss_mask_safe.any():
-            try:
-                _ss_safe = max(1, int(float(str(df_final.loc[_ss_mask_safe, 'Original Raw Numbers'].iloc[0]).replace(',', ''))))
-            except Exception:
-                pass
-        _MULT_S = 329_900_000 / 10_000_000
-        _capped_count = 0
-        for _idx, _row in df_final.iterrows():
-            _cat = str(_row.get('Column', '')).strip().upper()
-            if _cat in _ALLOW_FULL:
-                continue
-            _val = str(_row.get('Value', '')).strip().upper()
-            if _pn_uf and _val == _pn_uf and _cat != 'BRAND INPUT':
-                continue
-            try:
-                _bp_v = float(str(_row.get(_bp_col_final, 0)).replace(',', '').replace('%', ''))
-            except (ValueError, TypeError):
-                continue
-            if _bp_v > 95.0:
-                _new = 95.0
-                _nr = max(1, int(round(_new / 100.0 * _ss_safe)))
-                _np = int(round(_nr * _MULT_S))
-                df_final.at[_idx, _bp_col_final] = f"{_new:.4f}"
-                df_final.at[_idx, 'Original Raw Numbers'] = str(_nr)
-                df_final.at[_idx, _cs_col_final] = f"{_new:.4f}"
-                if 'US Gen Pop Projection' in df_final.columns:
-                    df_final.at[_idx, 'US Gen Pop Projection'] = str(_np)
-                _capped_count += 1
-        if _capped_count:
-            print(f"   ⚠️ Safety cap: {_capped_count} items exceeded 95% — capped to 95% before AI review")
-
-    # ── AI-driven evaluation of outlier BP values ──────
-    if _bp_col_final and not is_genpop:
-        _ss_final = 1
-        _ss_mask_f = df_final['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
-        if _ss_mask_f.any():
-            try:
-                _ss_final = max(1, int(float(str(df_final.loc[_ss_mask_f, 'Original Raw Numbers'].iloc[0]).replace(',', ''))))
-            except Exception:
-                pass
-        _bc_upper = (brand_category or '').strip().upper()
-        _SKIP_EVAL = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'}
-        if _bc_upper:
-            _SKIP_EVAL.add(_bc_upper)
-        _DEMO = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
-                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION'}
-
-        _gp_ref = _load_genpop_csv()
-        _gp_bp_map = {}
-        if _gp_ref is not None:
-            _gp_col_c = _gp_ref.columns[0]
-            _gp_col_v = _gp_ref.columns[1]
-            _gp_col_bp = _gp_ref.columns[2]
-            for _, _gpr in _gp_ref.iterrows():
-                _gc = str(_gpr[_gp_col_c]).strip().upper()
-                _gv = str(_gpr[_gp_col_v]).strip().upper()
-                try:
-                    _gp_bp_map[(_gc, _gv)] = float(_gpr[_gp_col_bp])
-                except (ValueError, TypeError):
-                    pass
-
-        # Strip stray % signs first
-        for _idx, _row in df_final.iterrows():
-            if isinstance(_row.get(_bp_col_final), str) and '%' in str(_row.get(_bp_col_final, '')):
-                try:
-                    _clean = float(str(_row[_bp_col_final]).replace(',', '').replace('%', ''))
-                    df_final.at[_idx, _bp_col_final] = _clean
-                except (ValueError, TypeError):
-                    pass
-
-        # Collect items that look suspiciously high or low for AI evaluation
-        _HIGH_THRESHOLD = 75.0
-        _flagged_items = []
-        _MULT = 329_900_000 / 10_000_000
-        _subject_clean = extract_profile_subject_from_df(df_final, project_name, brands)
-
-        for _idx, _row in df_final.iterrows():
-            _cat = str(_row.get('Column', '')).strip().upper()
-            if _cat in _SKIP_EVAL or _cat in _DEMO:
-                continue
-            _val = str(_row.get('Value', '')).strip().upper()
-            try:
-                _bp_v = float(str(_row.get(_bp_col_final, 0)).replace(',', '').replace('%', ''))
-            except (ValueError, TypeError):
-                continue
-            _gp_bp = _gp_bp_map.get((_cat, _val), 0)
-            if _bp_v >= _HIGH_THRESHOLD:
-                _flagged_items.append((_idx, _cat, _val, _bp_v, _gp_bp))
-
-        if _flagged_items:
-            print(f"   🧠 AI evaluation: {len(_flagged_items)} items above {_HIGH_THRESHOLD}% — "
-                  f"sending to persona agent for review")
-            _client = _get_openai_client()
-            if _client:
-                _profile_summary = _build_profile_summary(df_final)
-                _bc = (brand_category or '').strip()
-                _BATCH = 40
-                _ai_adjustments = 0
-                for _b_start in range(0, len(_flagged_items), _BATCH):
-                    _batch = _flagged_items[_b_start:_b_start + _BATCH]
-                    _item_lines = []
-                    for _, _cat, _val, _bp_v, _gp_bp in _batch:
-                        gp_note = f" (GenPop: {_gp_bp:.1f}%)" if _gp_bp > 0 else " (no GenPop data)"
-                        _item_lines.append(
-                            f"  - {_cat} | {_val}: {_bp_v:.2f}% BP{gp_note}")
-
-                    _eval_prompt = (
-                        f"You are a consumer research analyst finalizing an audience "
-                        f"profile for \"{_subject_clean}\" ({_bc}).\n\n"
-                        f"AUDIENCE PROFILE SUMMARY:\n{_profile_summary}\n\n"
-                        f"The following items have VERY HIGH brand penetration values "
-                        f"(above {_HIGH_THRESHOLD}%). Your job is to determine if each "
-                        f"value is REALISTIC for this specific audience, or if it "
-                        f"should be adjusted.\n\n"
-                        f"Items to evaluate:\n"
-                        + "\n".join(_item_lines) +
-                        f"\n\n=== EVALUATION CRITERIA ===\n"
-                        f"1. 99.99% means virtually EVERYONE in the audience engages "
-                        f"with this item. This is almost NEVER true — even the most "
-                        f"popular items rarely exceed 90% for a niche audience.\n"
-                        f"2. Values above 90% should only be for truly UNIVERSAL items "
-                        f"for this audience (e.g. YouTube for any internet audience).\n"
-                        f"3. Items that are the CORE subject should be high but "
-                        f"realistic — not 99.99%. Even fans don't ALL follow every "
-                        f"specific talent/team.\n"
-                        f"4. If GenPop is provided, consider: how much higher than "
-                        f"GenPop is realistic? 1.5x GenPop is common, 2x is very "
-                        f"high, 3x+ is usually unrealistic.\n"
-                        f"5. If an item IS correctly high, keep it — don't lower "
-                        f"everything artificially.\n\n"
-                        f"For EACH item, return a realistic BP% value:\n"
-                        f"Return ONLY valid JSON:\n"
-                        f'{{"items":[{{"category":"CAT","item":"ITEM",'
-                        f'"bp":72.5,"reason":"brief"}},...]}}\n'
-                        f"Include ALL {len(_batch)} items. JSON only, no markdown."
-                    )
-
+        # Resolve sample size for raw-number math
+        _ss_agent = 0
+        _ss_m = df_final['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if _ss_m.any():
+            for _try_col in ('Original Raw Numbers', pct_col_name):
+                if _try_col in df_final.columns:
                     try:
-                        _resp = _client.chat.completions.create(
-                            model='gpt-4o',
-                            messages=[{'role': 'user', 'content': _eval_prompt}],
-                            temperature=0.2,
-                            max_tokens=6000
-                        )
-                        _result = _parse_ai_json_response(_resp.choices[0].message.content.strip())
-                        _ai_items = _result.get('items', [])
-                        for _ai_item in _ai_items:
-                            try:
-                                _ai_cat = str(_ai_item.get('category', '')).strip().upper()
-                                _ai_name = str(_ai_item.get('item', '')).strip().upper()
-                                _ai_bp = float(_ai_item.get('bp', 0))
-                                _ai_reason = _ai_item.get('reason', '')
-                            except (ValueError, TypeError):
-                                continue
-                            _ai_bp = max(0.5, min(_ai_bp, 95.0))
-                            for _f_idx, _f_cat, _f_val, _f_old_bp, _ in _batch:
-                                if _f_cat == _ai_cat and (_f_val == _ai_name or
-                                        _ai_name in _f_val or _f_val in _ai_name):
-                                    if abs(_ai_bp - _f_old_bp) > 0.5:
-                                        _new_raw = max(1, int(round(_ai_bp / 100.0 * _ss_final)))
-                                        _new_proj = int(round(_new_raw * _MULT))
-                                        df_final.at[_f_idx, _bp_col_final] = f"{_ai_bp:.4f}"
-                                        df_final.at[_f_idx, 'Original Raw Numbers'] = str(_new_raw)
-                                        df_final.at[_f_idx, _cs_col_final] = f"{_ai_bp:.4f}"
-                                        if 'US Gen Pop Projection' in df_final.columns:
-                                            df_final.at[_f_idx, 'US Gen Pop Projection'] = str(_new_proj)
-                                        arrow = '↓' if _ai_bp < _f_old_bp else '↑'
-                                        print(f"   🧠 {_f_cat} {arrow} {_f_val}: "
-                                              f"{_f_old_bp:.1f}%→{_ai_bp:.1f}% — {_ai_reason}")
-                                        _ai_adjustments += 1
-                                    break
-                    except Exception as _e:
-                        print(f"   ⚠️ AI evaluation error: {_e}")
+                        _sv = float(str(df_final.loc[_ss_m, _try_col].iloc[0]).replace(',', '').replace('%', ''))
+                        if _sv > 1000:
+                            _ss_agent = int(round(_sv))
+                            break
+                    except Exception:
+                        pass
 
-                print(f"   🧠 AI evaluation complete: {_ai_adjustments} items adjusted")
+        # Step 1: Persona Research Agent
+        _subject_name = extract_profile_subject_from_df(df_final, project_name, brands)
+        print(f"\n{'='*60}")
+        print(f"  3-STEP AGENT PIPELINE for '{_subject_name}'")
+        print(f"{'='*60}")
+        _persona_doc = persona_research_agent(_subject_name, brand_category)
 
-    # ── Final GPP recalc: ensures every row's US Gen Pop Projection = (Raw / 10M) * 329.9M
-    df_final = add_us_gen_pop_projection(df_final)
+        # Step 2: Parallel Category Agents
+        df_final = parallel_category_agents(df_final, _persona_doc, _subject_name, brands)
 
-    # ── FINAL COMPREHENSIVE AI REVIEW (GPT-4o) ──────────────────────────
-    # Step 1: Research the subject to build an informed persona
-    # Step 2: Review ONE category at a time, item by item
-    # Step 3: Correct anything that doesn't pass the sniff test
-    _enable_final_comprehensive_review = str(
-        os.getenv("ENABLE_FINAL_COMPREHENSIVE_REVIEW", "0")
-    ).strip().lower() in ("1", "true", "yes", "on")
-    if not is_genpop and brand_category and _enable_final_comprehensive_review:
-        _client_final = _get_openai_client()
-        if _client_final:
-            _bp_cf = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
-            _cs_cf = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
-            _raw_cf = 'Original Raw Numbers'
-            _proj_cf = 'US Gen Pop Projection'
-            _MULT_F = 329_900_000 / 10_000_000
+        # Step 3: Final Sanity Check
+        print("🔒 Step 3: Final sanity check …")
+        df_final = agent_pipeline_final_sanity_check(df_final, brands)
 
-            _ss_f = 1
-            _ss_mf = df_final['Column'].str.upper().str.strip() == 'SAMPLE SIZE'
-            if _ss_mf.any():
-                try:
-                    _ss_f = max(1, int(float(str(df_final.loc[_ss_mf, _raw_cf].iloc[0]).replace(',', ''))))
-                except Exception:
-                    pass
-
-            _subject_cf = extract_profile_subject_from_df(
-                df_final, project_name, brands)
-            _bc_f = (brand_category or '').strip()
-            _profile_f = _build_profile_summary(df_final)
-
-            # Step 1: Have the AI research the subject and build a persona
-            print(f"🔬 FINAL REVIEW Step 1: Researching \"{_subject_cf}\" persona...")
-            _persona_research = ""
-            try:
-                _persona_resp = _client_final.chat.completions.create(
-                    model='gpt-4o',
-                    messages=[{'role': 'user', 'content': (
-                        f"Profile subject (from file/metadata): \"{_subject_cf}\". "
-                        f"Category: \"{_bc_f}\".\n\n"
-                        f"=== AUDIENCE DEMOGRAPHICS FROM THIS PROFILE FILE ===\n"
-                        f"{_profile_f}\n\n"
-                        f"Research who \"{_subject_cf}\" is and who engages with them. "
-                        f"When you describe demographics, **align with the file snapshot "
-                        f"above** where it exists; do not invent a different gender/age "
-                        f"split than the file unless you explain a clear conflict.\n\n"
-                        f"Include:\n"
-                        f"1. What is \"{_subject_cf}\"? (show, team, brand, talent, etc.)\n"
-                        f"2. Core demographics consistent with the file (use the percentages above)\n"
-                        f"3. Lifestyle and interests\n"
-                        f"4. Brands they would and WOULD NOT use\n"
-                        f"5. Social media platforms they prefer\n"
-                        f"6. Sports, entertainment, technology preferences\n"
-                        f"7. What would be WRONG for this persona vs the behavioral data "
-                        f"(use file demographics, not assumptions)\n\n"
-                        f"Be specific. This will validate an audience profile CSV."
-                    )}],
-                    temperature=0.2,
-                    max_tokens=2000
-                )
-                _persona_research = _persona_resp.choices[0].message.content.strip()
-                print(f"   📋 Persona research complete ({len(_persona_research)} chars)")
-            except Exception as _e:
-                print(f"   ⚠️ Persona research error: {_e}")
-
-            _SKIP_FINAL = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN',
-                           'CASUAL FAN', 'BRAND CATEGORY'}
-            _DEMO_FINAL = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
-                           'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
-                           'OCCUPATION', 'LOCATION'}
-            _bc_uf = _bc_f.strip().upper()
-            if _bc_uf:
-                _SKIP_FINAL.add(_bc_uf)
-
-            _cats_to_review = {}
-            for _idx_f, _row_f in df_final.iterrows():
-                _cat_f = str(_row_f.get('Column', '')).strip().upper()
-                if _cat_f in _SKIP_FINAL or _cat_f in _DEMO_FINAL:
-                    continue
-                _val_f = str(_row_f.get('Value', '')).strip()
-                try:
-                    _bp_f = float(str(_row_f.get(_bp_cf, 0)).replace(',', '').replace('%', ''))
-                except (ValueError, TypeError):
-                    continue
-                _cats_to_review.setdefault(_cat_f, []).append(
-                    (_val_f, _bp_f, _idx_f))
-
-            _total_items = sum(len(v) for v in _cats_to_review.values())
-            print(f"🔬 FINAL REVIEW Step 2: {_total_items} items across "
-                  f"{len(_cats_to_review)} categories")
-
-            # Dynamic gender hint from THIS profile (avoid hardcoded "~66% male" misleading AI)
-            _male_pct_r = _female_pct_r = None
-            if _bp_cf:
-                _gm_r = df_final['Column'].str.upper().str.strip() == 'GENDER'
-                for _gix in df_final[_gm_r].index:
-                    _gvu = str(df_final.at[_gix, 'Value']).strip().upper()
-                    try:
-                        _gbp = float(str(df_final.at[_gix, _bp_cf]).replace(',', '').replace('%', ''))
-                    except (ValueError, TypeError):
-                        continue
-                    if _gvu == 'MALE' or (_gvu.startswith('MALE') and 'FEMALE' not in _gvu and 'TRANS' not in _gvu):
-                        _male_pct_r = _gbp
-                    elif _gvu == 'FEMALE' or _gvu.startswith('FEMALE'):
-                        _female_pct_r = _gbp
-            if _male_pct_r is not None and _female_pct_r is not None:
-                if _male_pct_r > _female_pct_r + 5.0:
-                    _rule3_gender = (
-                        f"3. GENDER / RETAIL (from this file): MALE ~{_male_pct_r:.1f}%, "
-                        f"FEMALE ~{_female_pct_r:.1f}% — skews male. Use this as context only; "
-                        f"retail/beauty values must be justified by full profile persona evidence, "
-                        f"not by static gender assumptions.\n"
-                    )
-                elif _female_pct_r > _male_pct_r + 5.0:
-                    _rule3_gender = (
-                        f"3. GENDER / RETAIL (from this file): FEMALE ~{_female_pct_r:.1f}%, "
-                        f"MALE ~{_male_pct_r:.1f}% — skews female. Use this as context only; "
-                        f"retail niches should be evaluated against full persona evidence.\n"
-                    )
-                else:
-                    _rule3_gender = (
-                        f"3. GENDER / RETAIL (from this file): ~BALANCED (M ~{_male_pct_r:.1f}%, "
-                        f"F ~{_female_pct_r:.1f}%). Do NOT assume a male-heavy audience. "
-                        f"**Etsy, eBay, and other niche marketplaces must NEVER dominate "
-                        f"WHERE THEY SHOP above Amazon/Walmart/Target** — values like 90%+ Etsy "
-                        f"are almost always clickstream inflation; correct them sharply. "
-                        f"Women's-only brand rules apply only where demographics skew female.\n"
-                    )
-            else:
-                _rule3_gender = (
-                    "3. GENDER / RETAIL: Use AUDIENCE DEMOGRAPHICS above. Do not assume ~66% male. "
-                    "If gender is balanced, flag impossible marketplace dominance (e.g. Etsy 90%+).\n"
-                )
-
-            _final_adj = 0
-
-            # Step 2: Review ONE category at a time
-            for _rc, _rc_items in _cats_to_review.items():
-                _items_sorted = sorted(_rc_items, key=lambda x: -x[1])
-                _batch_lines = []
-                _batch_items = []
-                for _rank, (_vn, _vbp, _vidx) in enumerate(_items_sorted, 1):
-                    _batch_lines.append(f"  #{_rank}: {_vn} — {_vbp:.2f}%")
-                    _batch_items.append((_rc, _vn, _vbp, _vidx))
-
-                _rc_upper = str(_rc).strip().upper()
-                _category_deep_check = ""
-                if _rc_upper == 'SOCIAL MEDIA':
-                    _category_deep_check = (
-                        "\n=== DEEP CHECK: SOCIAL MEDIA (read every row) ===\n"
-                        "Validate each platform against US adult norms (Pew/Comscore-style reach). "
-                        "YouTube and Facebook should be among the highest; X/Twitter is not "
-                        "universal (~25–45% typical). Twitch, Discord, Patreon are niches vs "
-                        "YouTube — they must not massively outrank YouTube/Facebook unless the "
-                        "persona is explicitly creators/gamers only. If any value looks like raw "
-                        "clickstream inflation, correct it.\n"
-                    )
-                elif _rc_upper == 'MOST PURCHASED BRANDS':
-                    _category_deep_check = (
-                        "\n=== DEEP CHECK: MOST PURCHASED BRANDS (every row) ===\n"
-                        "Treat each brand independently. Compare implied lift vs US Gen Pop when "
-                        "the baseline is obvious: women's skincare, prestige beauty, and women's "
-                        "luxury fashion (e.g. La Roche-Posay, Tory Burch) must NOT massively "
-                        "over-index on male-skewing or sports/entertainment audiences. "
-                        "If profile BP is far above Gen Pop without a strong persona reason, "
-                        "lower it. Mass retailers and sports/athletic brands may index higher.\n"
-                    )
-                elif _rc_upper in ('SEARCH ENGINE/AI', 'SEARCH ENGINE'):
-                    _category_deep_check = (
-                        "\n=== DEEP CHECK: SEARCH / AI (read every row) ===\n"
-                        "Google must be #1 with very high BP (typically ~70–92% among people who search). "
-                        "ChatGPT / OpenAI-style assistants: popular but NOT used by most US adults daily — "
-                        "BP above ~50% is usually wrong for a general Netflix/show audience; target "
-                        "roughly ~18–45% unless the persona is explicitly AI/tech-first. "
-                        "Reddit is forums with loyal users but limited mass reach — expect ~12–35%, "
-                        "almost never above ~45%. Bing, Yahoo, DuckDuckGo sit well below Google. "
-                        "Perplexity, DeepSeek, Copilot: moderate; none should exceed Google. "
-                        "Fix rank order and magnitudes until they pass a researcher sniff test.\n"
-                    )
-                elif _rc_upper == 'WHERE THEY SHOP':
-                    _category_deep_check = (
-                        "\n=== DEEP CHECK: WHERE THEY SHOP (every row — agent often misses this) ===\n"
-                        "This category is prone to **massive clickstream inflation**. "
-                        "**Amazon** should usually be #1 or very top among retailers (often ~45–80% BP). "
-                        "**Walmart** and **Target** should be high but typically **below** Amazon. "
-                        "**Etsy** is a niche handmade/vintage marketplace — for general film/TV/celebrity "
-                        "audiences it is almost never above ~25–40% BP and **must never** exceed Amazon; "
-                        "**90%+ Etsy is always wrong**. **eBay** is moderate (~15–45%), not above Amazon. "
-                        "**Best Buy, Costco, Macy's** sit in a believable mid tier. "
-                        "Review **every line**; lower any marketplace above 90% unless it is truly "
-                        "universal (essentially never for Etsy/eBay).\n"
-                    )
-                elif _rc_upper == 'BETTING':
-                    _category_deep_check = (
-                        "\n=== DEEP CHECK: BETTING (US audience realism) ===\n"
-                        "For US mainstream audiences, **DraftKings and FanDuel** are usually top-tier. "
-                        "**Bet365** can be present but should not lead DK/FD for a broad US digital fanbase. "
-                        "If Bet365 outranks both DK and FD, correct rank order and magnitudes.\n"
-                    )
-                elif _rc_upper == 'MEDIA':
-                    _category_deep_check = (
-                        "\n=== DEEP CHECK: MEDIA (persona fit over generic panel noise) ===\n"
-                        "For male-skewing, younger hip-hop/music audiences, mainstream daytime TV signals "
-                        "(e.g. TODAY / TODAY SHOW) should not dominate the category. Prioritize music, sports, "
-                        "and culturally aligned media properties over generic daytime/news inflation.\n"
-                    )
-                elif _rc_upper == 'WHERE THEY DINE':
-                    _category_deep_check = (
-                        "\n=== DEEP CHECK: WHERE THEY DINE (brand familiarity + plausibility) ===\n"
-                        "Unknown or ultra-niche restaurants should not be the #1 row unless there is a clear "
-                        "regional/persona reason. Nationally recognizable chains should generally occupy the top tier.\n"
-                    )
-                elif _rc_upper == 'QSR':
-                    _category_deep_check = (
-                        "\n=== DEEP CHECK: QSR (male/younger fanbase) ===\n"
-                        "For younger male online music/sports-adjacent audiences, sports-viewing QSR brands "
-                        "(e.g. Buffalo Wild Wings) should be meaningfully represented, not buried at the bottom.\n"
-                    )
-
-                _review_prompt = (
-                    f"You are a senior consumer research analyst doing the FINAL "
-                    f"quality check on an audience profile.\n\n"
-                    f"=== SUBJECT ===\n"
-                    f"\"{_subject_cf}\" — {_bc_f}\n\n"
-                    f"=== PERSONA RESEARCH ===\n"
-                    f"{_persona_research[:3000]}\n\n"
-                    f"=== AUDIENCE DEMOGRAPHICS ===\n"
-                    f"{_profile_f}\n\n"
-                    f"=== CATEGORY: {_rc} ({len(_items_sorted)} items) ===\n"
-                    f"Brand Penetration = % of this audience that engages "
-                    f"with each item:\n"
-                    + "\n".join(_batch_lines) +
-                    _category_deep_check +
-                    f"\n\n=== RULES (STRICT) ===\n"
-                    f"1. MAXIMUM BP is 90%. Even YouTube (the most popular "
-                    f"platform) is only ~84% in the US general population. "
-                    f"For a niche audience like \"{_subject_cf}\", the very "
-                    f"top items might reach 85% but NEVER above 90%.\n"
-                    f"2. Most items should be 5-40%. Only truly universal "
-                    f"items (Google, YouTube, Netflix) should be 60%+.\n"
-                    + _rule3_gender +
-                    f"4. PERSONA CHECK: Does this item make sense for someone "
-                    f"who watches/follows \"{_subject_cf}\"? Items core to "
-                    f"the persona should be elevated. Irrelevant items should "
-                    f"not be artificially high.\n"
-                    f"5. RANK ORDER: Does the rank order make sense? "
-                    f"DraftKings should beat Bet365 for a US audience. "
-                    f"YouTube should beat most social platforms. Nike should "
-                    f"beat niche luxury brands.\n"
-                    f"6. LUXURY/NICHE brands (Christian Louboutin, Fendi, "
-                    f"Rag & Bone, Acne Studios) should generally be under "
-                    f"5% unless the persona specifically skews luxury.\n"
-                    f"7. CHILDREN'S items (Roblox, Minecraft) should be "
-                    f"moderate (10-25%) not dominant for an adult audience.\n"
-                    f"8. SOCIAL MEDIA reality check: YouTube MUST be #1 or #2 "
-                    f"(~80-85%). Facebook MUST be in top 5 (~35-50%). "
-                    f"X/Twitter should be 30-45% not 80%+. Instagram ~55-65%. "
-                    f"TikTok ~50-65%. These are real US usage rates.\n"
-                    f"9. VENUE/EVENTS: Physical attendance venues should be "
-                    f"LOW (under 10%). Most fans watch on TV, not in person. "
-                    f"Even iconic venues like stadiums should be 2-8%.\n"
-                    f"10. STREAMING: For a Netflix show audience, Netflix=100% "
-                    f"is correct. Other streamers: Hulu ~45%, Amazon ~35%, "
-                    f"Disney+ ~25%. ESPN should be 25-40% not 50%+.\n"
-                    f"11. US BASE ASSUMPTION: This profile is modeled from a ~10M US gen-pop audience. "
-                    f"US outlets/platforms should generally dominate. International-only outlets "
-                    f"(e.g., UK-first publications) can appear but should rarely be #1 unless the "
-                    f"subject is explicitly international/UK-focused.\n"
-                    f"12. SEARCH/AI + SOCIAL: Apply rules 8–10 and the DEEP CHECK "
-                    f"sections above with extra scrutiny — these categories are often "
-                    f"inflated by clickstream. ChatGPT and Reddit are frequently too high; "
-                    f"Google should dominate search/AI.\n"
-                    f"13. WHERE THEY SHOP: If this category is in the batch, apply the "
-                    f"DEEP CHECK for retail literally — **Etsy/eBay cannot be ~90%**; "
-                    f"Amazon should lead. Missing this is a common failure mode.\n"
-                    f"14. Avoid synthetic templating: do not return a ladder of cloned values "
-                    f"(e.g., many 25.0000/30.0000 style repeats). Use realistic spread that reflects "
-                    f"true differences in audience affinity.\n"
-                    f"15. For Black hip-hop online fanbases, keep outputs culturally plausible across "
-                    f"BETTING, MEDIA, QSR, WHERE THEY DINE, and WHERE THEY SHOP; avoid generic daytime-TV "
-                    f"or obscure-niche leaders without a clear reason.\n"
-                    f"16. Demographic conditioning is mandatory: if the profile skews differently "
-                    f"(e.g., female + Hispanic/Latino), the category leaders/rank order must shift "
-                    f"accordingly. Never force a male-hip-hop pattern onto a different audience mix.\n\n"
-                    f"For EACH item that needs correction, provide the "
-                    f"realistic BP value. Leave correct items alone.\n\n"
-                    f"Return ONLY valid JSON:\n"
-                    f'{{"corrections":[{{"item":"ITEM",'
-                    f'"correct_bp":25.0,'
-                    f'"reason":"brief"}},...]}}\n'
-                    f'If all items look correct: {{"corrections":[]}}\n'
-                    f"JSON only, no markdown."
-                )
-
-                try:
-                    _r_resp = _client_final.chat.completions.create(
-                        model='gpt-4o',
-                        messages=[{'role': 'user', 'content': _review_prompt}],
-                        temperature=0.15,
-                        max_tokens=8000
-                    )
-                    _r_result = _parse_ai_json_response(_r_resp.choices[0].message.content.strip())
-                    _corrections = _r_result.get('corrections', [])
-                    for _corr in _corrections:
-                        try:
-                            _ci = str(_corr.get('item', '')).strip().upper()
-                            _cnew = float(_corr.get('correct_bp', 0))
-                            _creason = _corr.get('reason', '')
-                        except (ValueError, TypeError):
-                            continue
-                        _cnew = max(0.1, min(_cnew, 90.0))
-                        _matched_f = None
-                        for _rc2, _vn2, _vbp2, _vidx2 in _batch_items:
-                            if (_vn2.strip().upper() == _ci or
-                                    _ci in _vn2.strip().upper() or
-                                    _vn2.strip().upper() in _ci):
-                                _matched_f = (_rc2, _vn2, _vbp2, _vidx2)
-                                break
-                        if _matched_f and abs(_cnew - _matched_f[2]) > 0.5:
-                            _, _mn, _mold, _midx = _matched_f
-                            _cnew = round(_cnew, 4)
-                            _nr = max(1, int(round(_cnew / 100.0 * _ss_f)))
-                            _np = int(round(_nr * _MULT_F))
-                            df_final.at[_midx, _bp_cf] = f"{_cnew:.4f}"
-                            df_final.at[_midx, _raw_cf] = str(_nr)
-                            df_final.at[_midx, _cs_cf] = f"{_cnew:.4f}"
-                            if _proj_cf in df_final.columns:
-                                df_final.at[_midx, _proj_cf] = str(_np)
-                            _arr = '↓' if _cnew < _mold else '↑'
-                            print(f"   🔬 {_rc} {_arr} {_mn}: "
-                                  f"{_mold:.1f}%→{_cnew:.1f}% — {_creason}")
-                            _final_adj += 1
-                except Exception as _e:
-                    print(f"   ⚠️ Final review error ({_rc}): {_e}")
-
-            # Recalculate Category Share after corrections
-            if _final_adj > 0:
-                for _fcat in df_final['Column'].str.upper().str.strip().unique():
-                    if _fcat in _DEMO_FINAL or _fcat in _SKIP_FINAL:
-                        continue
-                    _fcm = df_final['Column'].str.upper().str.strip() == _fcat
-                    if not _fcm.any():
-                        continue
-                    _ftotal = 0
-                    for _fcidx in df_final[_fcm].index:
-                        try:
-                            _ftotal += int(float(str(df_final.at[_fcidx, _raw_cf]).replace(',', '')))
-                        except (ValueError, TypeError):
-                            pass
-                    if _ftotal > 0:
-                        for _fcidx in df_final[_fcm].index:
-                            try:
-                                _fraw = int(float(str(df_final.at[_fcidx, _raw_cf]).replace(',', '')))
-                                _fcs = round((_fraw / _ftotal) * 100.0, 4)
-                                df_final.at[_fcidx, _cs_cf] = f"{_fcs:.4f}"
-                            except (ValueError, TypeError):
-                                pass
-
-            print(f"🔬 FINAL REVIEW complete: {_final_adj} corrections applied")
-    elif not is_genpop and brand_category:
-        print("🔬 FINAL REVIEW skipped: ENABLE_FINAL_COMPREHENSIVE_REVIEW=0 "
-              "(using persona-aware gut-check + deterministic math guards only)")
-
-    # Deterministic geographic guardrails AFTER all AI passes.
-    # Ensures clearly Black-skewing audiences cannot underweight core Black DMAs
-    # due to an LLM returning "OK" on location.
-    if not is_genpop:
-        df_final = enforce_black_audience_dma_guard(df_final)
-        df_final = enforce_behavioral_category_plausibility(
-            df_final,
-            brand_category=brand_category,
-            project_name=project_name,
-            brands=brands,
-        )
-        df_final = enforce_behavioral_bp_uniqueness(df_final)
-        # LOCATION can be edited by AI/final guards after the first canonical pass.
-        # Re-enforce exact 210 DMAs + unique 4dp BPs at the very end.
+        # Ensure 210 DMAs present
         df_final = enforce_exact_210_dmas(df_final)
 
-    # Re-run formatting to ensure 4 decimal places after final review
+        print(f"{'='*60}")
+        print(f"  3-STEP AGENT PIPELINE COMPLETE")
+        print(f"{'='*60}\n")
+
+    # ── Common post-pipeline formatting ─────────────────────────────────
     for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
         if _fmt_col not in df_final.columns:
             continue
@@ -16795,10 +17055,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if 'Percentage' in df_final.columns:
         df_final = df_final.rename(columns={'Percentage': 'Category Share'})
     
-    # Final enforcement (already handled by anchor chain above, just a safety net)
+    # Final required override: keep input brand at 100%.
     if not is_genpop:
         df_final = enforce_input_brand_100(df_final, brands)
-    df_final = enforce_parental_status_sum_to_100(df_final)
     
     # Remove dash variants from output (keep only non-dash versions)
     # This allows dash variants to be found during parsing, but only non-dash appears in output
@@ -16831,385 +17090,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = pd.concat([df_final, loc_row], ignore_index=True)
         print(f"📍 Geographic profile: set LOCATION to '{dma_display}' at 100%")
 
-    # ══════════════════════════════════════════════════════════════════
-    # FINAL HARD ENFORCEMENT: Mathematical guarantees that override AI
-    # These run LAST (after all AI passes) to catch anything AI missed
-    # ══════════════════════════════════════════════════════════════════
-    if not is_genpop:
-        _bp_col_fe = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
-        _cs_col_fe = 'Category Share' if 'Category Share' in df_final.columns else 'Percentage'
-
-        def _read_bp(idx):
-            col = _bp_col_fe or _cs_col_fe
-            try:
-                return float(str(df_final.at[idx, col]).replace(',', '').replace('%', ''))
-            except (ValueError, TypeError):
-                return 0.0
-
-        def _write_bp(idx, val):
-            v = f"{val:.4f}"
-            if _bp_col_fe:
-                df_final.at[idx, _bp_col_fe] = v
-            df_final.at[idx, _cs_col_fe] = v
-            if 'Percentage' in df_final.columns:
-                df_final.at[idx, 'Percentage'] = v
-
-        # Demographic skew snapshot for persona-sensitive hard checks.
-        male_pct = 0.0
-        young_pct = 0.0
-        black_pct = 0.0
-        _gmask_he = df_final['Column'].str.upper().str.strip() == 'GENDER'
-        for _gix in df_final[_gmask_he].index:
-            _gv = str(df_final.at[_gix, 'Value']).strip().upper()
-            _gb = _read_bp(_gix)
-            if _gv in ('MALE', 'TRANS MALE'):
-                male_pct += _gb
-        _amask_he = df_final['Column'].str.upper().str.strip() == 'AGE'
-        for _aix in df_final[_amask_he].index:
-            _av = str(df_final.at[_aix, 'Value']).strip().upper()
-            _ab = _read_bp(_aix)
-            if any(_k in _av for _k in ('18-24', '25-34', '18 -', '25 -', 'GEN Z', 'MILLENNIAL')):
-                young_pct += _ab
-        _emask_he = df_final['Column'].str.upper().str.strip() == 'ETHNICITY'
-        for _eix in df_final[_emask_he].index:
-            _ev = str(df_final.at[_eix, 'Value']).strip().upper()
-            if 'BLACK' in _ev and 'AFRICAN' in _ev:
-                black_pct += _read_bp(_eix)
-
-        # ─── 1. PREFER NOT TO SAY: ≤10% in ALL demo categories ──────
-        _PNTS_CAP = 10.0
-        _demo_cats_final = {'AGE', 'EDUCATION', 'ETHNICITY', 'INCOME', 'RELATIONSHIP',
-                            'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'GENDER'}
-        for _dc in _demo_cats_final:
-            _mask = df_final['Column'].str.upper().str.strip() == _dc
-            if not _mask.any():
-                continue
-            _pnts_rows = []
-            _other_rows = []
-            for _ri in df_final[_mask].index:
-                _rv = str(df_final.at[_ri, 'Value']).strip().upper()
-                _rbp = _read_bp(_ri)
-                if 'PREFER NOT TO SAY' in _rv:
-                    _pnts_rows.append((_ri, _rbp))
-                else:
-                    _other_rows.append((_ri, _rbp))
-            for _pi, _pv in _pnts_rows:
-                if _pv > _PNTS_CAP:
-                    _excess = _pv - _PNTS_CAP
-                    _ot = sum(v for _, v in _other_rows)
-                    for _oi, _ov in _other_rows:
-                        _boost = _excess * (_ov / _ot) if _ot > 0 else _excess / max(1, len(_other_rows))
-                        _write_bp(_oi, round(_ov + _boost, 4))
-                    _write_bp(_pi, _PNTS_CAP)
-                    print(f"   ✅ HARD FIX {_dc}: PREFER NOT TO SAY {_pv:.1f}% → {_PNTS_CAP}%")
-
-        # ─── 2. SOCIAL MEDIA: enforce realistic rank order / ranges ──
-        _sm_mask = df_final['Column'].str.upper().str.strip() == 'SOCIAL MEDIA'
-        if _sm_mask.any():
-            _profile_text = " ".join([
-                str(project_name or ''),
-                str(brand_category or ''),
-                " ".join([str(b) for b in (brands or [])]),
-            ]).upper()
-            _is_music_profile = any(_t in _profile_text for _t in ['MUSICIAN', 'BAND', 'POP', 'SINGER', 'ARTIST'])
-            _is_young_profile = (young_pct >= 35.0)
-            _young_music_shape = bool(_is_music_profile and _is_young_profile)
-
-            _sm_items = {}
-            for _si in df_final[_sm_mask].index:
-                _sn = str(df_final.at[_si, 'Value']).strip().upper()
-                _sm_items[_sn] = (_si, _read_bp(_si))
-            _sm_targets = {
-                'YOUTUBE': (78.0, 85.0),
-                'FACEBOOK': (38.0, 48.0),
-                'INSTAGRAM': (55.0, 65.0),
-                'TIKTOK': (48.0, 58.0),
-                'X': (28.0, 42.0),
-                'SNAPCHAT': (18.0, 28.0),
-                'LINKEDIN': (15.0, 25.0),
-                'PINTEREST': (12.0, 22.0),
-                'DISCORD': (18.0, 30.0),
-                'TWITCH': (15.0, 28.0),
-                'THREADS': (5.0, 12.0),
-                'TUMBLR': (3.0, 8.0),
-                'BLUESKY': (2.0, 6.0),
-                'PATREON': (4.0, 10.0),
-                'LETTERBOXD': (2.0, 5.0),
-                'ONLYFANS': (3.0, 7.0),
-                'REDDIT': (12.0, 32.0),
-            }
-            # Persona-aware ranges: young music audiences can legitimately over-index
-            # on TikTok/Instagram/Snapchat and do not need to be pulled down to
-            # generic mass-market caps.
-            if _young_music_shape:
-                _sm_targets.update({
-                    'YOUTUBE': (72.0, 92.0),
-                    'INSTAGRAM': (58.0, 78.0),
-                    'TIKTOK': (55.0, 80.0),
-                    'SNAPCHAT': (22.0, 42.0),
-                    'DISCORD': (16.0, 36.0),
-                    'TWITCH': (12.0, 30.0),
-                    'FACEBOOK': (22.0, 45.0),
-                    'X': (18.0, 38.0),
-                    'PINTEREST': (12.0, 30.0),
-                    'LINKEDIN': (5.0, 20.0),
-                    'REDDIT': (10.0, 34.0),
-                })
-            for _pname, (_plow, _phi) in _sm_targets.items():
-                if _pname in _sm_items:
-                    _idx, _cur = _sm_items[_pname]
-                    if _cur < _plow or _cur > _phi:
-                        _new = round(random.uniform(_plow, _phi), 4)
-                        _write_bp(_idx, _new)
-                        print(f"   ✅ HARD FIX SOCIAL MEDIA: {_pname} {_cur:.1f}% → {_new:.4f}%")
-
-        # ─── 2b. SEARCH ENGINE/AI: Google #1; ChatGPT & Reddit not mass-universal ─
-        def _search_ai_target_range(_v):
-            _u = str(_v).strip().upper()
-            if 'GOOGLE' in _u and 'DUCK' not in _u:
-                return (70.0, 92.0)
-            if 'BING' in _u:
-                return (8.0, 22.0)
-            if 'YAHOO' in _u:
-                return (5.0, 16.0)
-            if 'DUCKDUCK' in _u or 'DUCK DUCK' in _u:
-                return (3.0, 12.0)
-            if 'CHATGPT' in _u or 'CHAT GPT' in _u:
-                return (18.0, 45.0)
-            if 'OPENAI' in _u:
-                return (18.0, 48.0)
-            if 'REDDIT' in _u:
-                return (12.0, 32.0)
-            if 'PERPLEXITY' in _u:
-                return (4.0, 14.0)
-            if 'DEEPSEEK' in _u:
-                return (2.0, 10.0)
-            if 'COPILOT' in _u:
-                return (12.0, 35.0)
-            return None
-
-        for _se_cat in ('SEARCH ENGINE/AI', 'SEARCH ENGINE'):
-            _se_mask = df_final['Column'].str.upper().str.strip() == _se_cat
-            if not _se_mask.any():
-                continue
-            for _ei in df_final[_se_mask].index:
-                _ev = str(df_final.at[_ei, 'Value']).strip()
-                _tr = _search_ai_target_range(_ev)
-                if _tr is None:
-                    continue
-                _elow, _ehigh = _tr
-                _ecur = _read_bp(_ei)
-                if _ecur < _elow or _ecur > _ehigh:
-                    _enew = round(random.uniform(_elow, _ehigh), 4)
-                    _write_bp(_ei, _enew)
-                    print(f"   ✅ HARD FIX {_se_cat}: {_ev} {_ecur:.1f}% → {_enew:.4f}%")
-
-        # ─── 2c. WHERE THEY SHOP deterministic fallback (optional safety only)
-        _enable_wts_hard_fix = str(os.getenv("ENABLE_WTS_HARD_FIX", "0")).strip().lower() in ("1", "true", "yes", "on")
-        def _retail_shop_target_range(_rv):
-            _u = str(_rv).strip().upper()
-            if _u == 'AMAZON' or (_u.startswith('AMAZON') and 'PRIME VIDEO' not in _u):
-                return (40.0, 80.0)
-            if 'WALMART' in _u:
-                return (25.0, 68.0)
-            if 'TARGET' in _u:
-                return (25.0, 62.0)
-            if 'COSTCO' in _u:
-                return (15.0, 50.0)
-            if 'BEST BUY' in _u or 'BESTBUY' in _u:
-                return (20.0, 55.0)
-            if 'ETSY' in _u:
-                return (5.0, 38.0)
-            if 'EBAY' in _u:
-                return (10.0, 45.0)
-            if 'WAYFAIR' in _u:
-                return (6.0, 35.0)
-            if 'MACY' in _u:
-                return (10.0, 42.0)
-            if 'NORDSTROM' in _u:
-                return (6.0, 32.0)
-            if 'HOME DEPOT' in _u or 'HOMEDEPOT' in _u:
-                return (12.0, 45.0)
-            if 'LOWES' in _u or "LOWE'S" in _u:
-                return (10.0, 40.0)
-            return None
-
-        if _enable_wts_hard_fix:
-            _wts_mask = df_final['Column'].str.upper().str.strip() == 'WHERE THEY SHOP'
-            if _wts_mask.any():
-                for _wi in df_final[_wts_mask].index:
-                    _wv = str(df_final.at[_wi, 'Value']).strip()
-                    _tr = _retail_shop_target_range(_wv)
-                    if _tr is None:
-                        continue
-                    _wlow, _whigh = _tr
-                    _wbp = _read_bp(_wi)
-                    if _wbp < _wlow or _wbp > _whigh:
-                        _wnew = round(random.uniform(_wlow, _whigh), 4)
-                        _write_bp(_wi, _wnew)
-                        print(f"   ✅ HARD FIX WHERE THEY SHOP: {_wv} {_wbp:.1f}% → {_wnew:.4f}%")
-
-        # ─── 3. VENUE: physical attendance venues capped at 10% ──────
-        _ven_mask = df_final['Column'].str.upper().str.strip() == 'VENUE'
-        if _ven_mask.any():
-            _VEN_CAP = 10.0
-            for _vi in df_final[_ven_mask].index:
-                _vbp = _read_bp(_vi)
-                _vn = str(df_final.at[_vi, 'Value']).strip()
-                if _vbp > _VEN_CAP:
-                    _new_vbp = round(random.uniform(2.0, _VEN_CAP), 4)
-                    _write_bp(_vi, _new_vbp)
-                    print(f"   ✅ HARD FIX VENUE: {_vn} {_vbp:.1f}% → {_new_vbp:.4f}%")
-
-        # ─── 4. BETTING: US sports-betting order checks (audience-conditional) ─
-        _bet_mask = df_final['Column'].str.upper().str.strip() == 'BETTING'
-        _sports_betting_shape = (male_pct >= 52.0) or (young_pct >= 45.0) or (black_pct >= 25.0 and male_pct >= 45.0)
-        if _bet_mask.any() and _sports_betting_shape:
-            _dk_idx = _b365_idx = None
-            _fd_idx = None
-            _dk_bp = _b365_bp = 0
-            _fd_bp = 0
-            for _bi in df_final[_bet_mask].index:
-                _bn = str(df_final.at[_bi, 'Value']).strip().upper()
-                if 'DRAFTKINGS' in _bn:
-                    _dk_idx = _bi
-                    _dk_bp = _read_bp(_bi)
-                elif 'FANDUEL' in _bn or 'FAN DUEL' in _bn:
-                    _fd_idx = _bi
-                    _fd_bp = _read_bp(_bi)
-                elif 'BET365' in _bn:
-                    _b365_idx = _bi
-                    _b365_bp = _read_bp(_bi)
-            if _dk_idx is not None and _b365_idx is not None and _b365_bp >= _dk_bp:
-                _dk_new = round(max(_dk_bp, _b365_bp + 3.0), 4)
-                _b365_new = round(min(_b365_bp, _dk_bp - 3.0), 4)
-                _write_bp(_dk_idx, _dk_new)
-                _write_bp(_b365_idx, max(1.0, _b365_new))
-                print(f"   ✅ HARD FIX BETTING: DraftKings {_dk_bp:.1f}→{_dk_new:.4f}, "
-                      f"Bet365 {_b365_bp:.1f}→{_b365_new:.4f}")
-            if _fd_idx is not None and _b365_idx is not None and _b365_bp >= _fd_bp:
-                _fd_new = round(max(_fd_bp, _b365_bp + 2.0), 4)
-                _b365_new2 = round(min(_read_bp(_b365_idx), _fd_new - 2.0), 4)
-                _write_bp(_fd_idx, _fd_new)
-                _write_bp(_b365_idx, max(1.0, _b365_new2))
-                print(f"   ✅ HARD FIX BETTING: FanDuel {_fd_bp:.1f}→{_fd_new:.4f}, "
-                      f"Bet365→{_b365_new2:.4f}")
-
-        # ─── 4b. MEDIA: cap TODAY dominance for younger/male skew ───────
-        if (male_pct >= 55.0 and young_pct >= 40.0) or (black_pct >= 25.0):
-            _med_mask = df_final['Column'].str.upper().str.strip() == 'MEDIA'
-            if _med_mask.any():
-                for _mi in df_final[_med_mask].index:
-                    _mn = str(df_final.at[_mi, 'Value']).strip().upper()
-                    if _mn in ('TODAY', 'TODAY SHOW', 'THE TODAY SHOW'):
-                        _mcur = _read_bp(_mi)
-                        if _mcur > 8.0:
-                            _write_bp(_mi, 8.0)
-                            print(f"   ✅ HARD FIX MEDIA: {_mn} {_mcur:.1f}% → 8.0000%")
-                        break
-
-        # ─── 4b2. MEDIA: US context guard against BBC-leading outputs ────
-        _id_blob = " ".join(
-            [str(project_name or ""), str(brand_category or "")]
-            + [str(_b) for _b in (brands or [])]
-        ).upper()
-        _uk_context = any(_tok in _id_blob for _tok in [' UK ', ' BRIT', ' BRITISH', ' LONDON ', ' ENGLAND ', ' BBC'])
-        if not _uk_context:
-            _med_mask = df_final['Column'].str.upper().str.strip() == 'MEDIA'
-            if _med_mask.any():
-                _bbc_idx = None
-                _anchor_idx = None
-                _anchor_bp = 0.0
-                _anchor_tokens = (
-                    'TODAY', 'YAHOO NEWS', 'USA TODAY', 'CNN', 'ABC NEWS', 'CBS NEWS',
-                    'FOX NEWS', 'GOOGLE NEWS', 'WASHINGTON POST', 'NEW YORK TIMES'
-                )
-                for _mi in df_final[_med_mask].index:
-                    _mn = str(df_final.at[_mi, 'Value']).strip().upper()
-                    if _bbc_idx is None and ('BRITISH BROADCASTING CORPORATION' in _mn or _mn == 'BBC'):
-                        _bbc_idx = _mi
-                    if _anchor_idx is None and any(_tok in _mn for _tok in _anchor_tokens):
-                        _anchor_idx = _mi
-                        _anchor_bp = _read_bp(_mi)
-                if _bbc_idx is not None:
-                    _bbc_bp = _read_bp(_bbc_idx)
-                    _bbc_target = max(12.0, min(18.5, (_anchor_bp - 0.4) if _anchor_bp > 0 else 18.5))
-                    if _bbc_bp > _bbc_target:
-                        _write_bp(_bbc_idx, _bbc_target)
-                        print(f"   ✅ HARD FIX MEDIA: BBC {_bbc_bp:.1f}% → {_bbc_target:.4f}% (US plausibility)")
-
-        # ─── 4c. WHERE THEY DINE: niche leader cap ───────────────────────
-        _dine_mask = df_final['Column'].str.upper().str.strip() == 'WHERE THEY DINE'
-        if _dine_mask.any():
-            _dine_idx = list(df_final[_dine_mask].index)
-            if _dine_idx:
-                _top_i = max(_dine_idx, key=lambda _i: _read_bp(_i))
-                _top_name = str(df_final.at[_top_i, 'Value']).strip().upper()
-                _top_bp = _read_bp(_top_i)
-                _mainstream = (
-                    'APPLEBEE' in _top_name or 'CHILI' in _top_name or
-                    'OLIVE GARDEN' in _top_name or 'TEXAS ROADHOUSE' in _top_name or
-                    'CHEESECAKE FACTORY' in _top_name or 'IHOP' in _top_name or
-                    'RED LOBSTER' in _top_name or 'RED ROBIN' in _top_name or
-                    'LONGHORN' in _top_name or 'BUFFALO WILD WINGS' in _top_name
-                )
-                if (not _mainstream) and _top_bp >= 8.0:
-                    _write_bp(_top_i, 3.5)
-                    print(f"   ✅ HARD FIX WHERE THEY DINE: niche top '{_top_name}' {_top_bp:.1f}% → 3.5000%")
-
-        # ─── 4d. QSR: ensure Buffalo Wild Wings not buried ───────────────
-        if (male_pct >= 55.0 and young_pct >= 40.0) or (black_pct >= 25.0):
-            _qsr_mask = df_final['Column'].str.upper().str.strip() == 'QSR'
-            if _qsr_mask.any():
-                for _qi in df_final[_qsr_mask].index:
-                    _qn = str(df_final.at[_qi, 'Value']).strip().upper()
-                    if 'BUFFALO WILD WINGS' in _qn or _qn == 'BWW':
-                        _qcur = _read_bp(_qi)
-                        if _qcur < 6.5:
-                            _write_bp(_qi, 7.5)
-                            print(f"   ✅ HARD FIX QSR: {_qn} {_qcur:.1f}% → 7.5000%")
-                        break
-
-        # ─── 5. EVENTS: cap at 15% (most people don't attend events) ─
-        _ev_mask = df_final['Column'].str.upper().str.strip() == 'EVENTS'
-        if _ev_mask.any():
-            _EV_CAP = 15.0
-            for _ei in df_final[_ev_mask].index:
-                _ev_n = str(df_final.at[_ei, 'Value']).strip()
-                _ev_bp = _read_bp(_ei)
-                if _ev_bp > _EV_CAP:
-                    _new_ev = round(random.uniform(3.0, _EV_CAP), 4)
-                    _write_bp(_ei, _new_ev)
-                    print(f"   ✅ HARD FIX EVENTS: {_ev_n} {_ev_bp:.1f}% → {_new_ev:.4f}%")
-
-        print("   ✅ Final hard enforcement pass complete")
-
-    # Dedicated MOST PURCHASED BRANDS pass: row-by-row vs Gen Pop + persona (GPT-4o)
-    if not is_genpop:
-        df_final, _mpb_n = ai_review_most_purchased_brands_vs_genpop(
-            df_final, project_name, brands, brand_category, is_genpop)
-
-    # AGE hard gate: never allow "OTHER" row; rebase AGE to 100.
-    df_final = enforce_no_age_other_and_rebase(df_final)
-    # INCOME hard gate: keep only approved final-output income buckets.
-    df_final = enforce_income_buckets_whitelist(df_final)
-
-    # Pipeline sanity gate: prevent catastrophic sample/BP regressions.
-    df_final = enforce_pipeline_sanity_guards(df_final, is_genpop=is_genpop, brand_category=brand_category)
-
-    # Final math pass: BP × sample_size → Original Raw; within-category Category Share;
-    # then US Gen Pop from raw (same as edit_sample_size.py)
-    df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
-    df_final = add_us_gen_pop_projection(df_final)
-    # Micro-variation so BP never ends in .0000; re-reconcile so raws / CS / genpop match
-    df_final = perturb_brand_penetration_avoid_dot_0000(df_final)
-    df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
-    df_final = add_us_gen_pop_projection(df_final)
-
-    # Absolute last brand lock (non-GenPop): ensure input brand stays 100.0000
-    # after all late sanity/noise/reconciliation passes.
-    if not is_genpop and brands:
-        df_final = enforce_input_brand_100(df_final, brands)
+    # Post-ordering reconciliation (already done inside agent_pipeline_final_sanity_check
+    # for non-genpop; genpop still needs the standard reconciliation path).
+    if is_genpop:
+        df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
+        df_final = add_us_gen_pop_projection(df_final)
+        df_final = perturb_brand_penetration_avoid_dot_0000(df_final)
         df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
         df_final = add_us_gen_pop_projection(df_final)
 
@@ -17282,27 +17168,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Final text cleanup (mojibake/smart punctuation + canonical AGE labels).
     df_final = normalize_output_text_values(df_final)
 
-    # Last save hook: same math as edit_sample_size.py (BP→raw→category share→genpop)
-    # so post-format / Excel churn cannot leave raws, CS, or projections out of sync.
+    # Last math reconciliation so raws/CS/projection stay in sync.
     df_final = finalize_output_metrics_like_edit_sample_size(df_final)
-    # Absolute final invariant gate: if BP/raw/share drift appears, auto-reconcile.
     df_final = ensure_bp_driven_metric_alignment(df_final)
-    # Final behavioral realism re-check at save boundary so late passes cannot
-    # leave implausible INTEREST spikes (or similar plausibility misses).
-    if not is_genpop:
-        df_final = enforce_behavioral_category_plausibility(
-            df_final,
-            brand_category=brand_category,
-            project_name=project_name,
-            brands=brands,
-        )
-        df_final = finalize_output_metrics_like_edit_sample_size(df_final)
-        df_final = ensure_bp_driven_metric_alignment(df_final)
-        # Final post-AI/noise consistency lock: same Value => same BP/raw/projection
-        # across categories (Category Share remains category-relative).
-        df_final = enforce_value_consistency_across_categories(df_final)
-        df_final = finalize_output_metrics_like_edit_sample_size(df_final)
-        df_final = ensure_bp_driven_metric_alignment(df_final)
+
+    # 4dp formatting pass (all numeric columns)
+    _DEMO_COLS_4DP = {
+        'AGE', 'EDUCATION', 'ETHNICITY', 'GENDER', 'INCOME', 'RELATIONSHIP',
+        'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+    }
     for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
         if _fmt_col not in df_final.columns:
             continue
@@ -17342,12 +17216,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if _str_col in df_final.columns:
             df_final[_str_col] = df_final[_str_col].astype(str)
 
-    # Absolute pre-save lock (non-GenPop): if the input brand appears in any category
-    # (e.g., SOCIAL MEDIA), force it to exactly 100.0000 in final output.
+    # Absolute pre-save lock (non-GenPop): brand input at 100%
     if not is_genpop and brands:
         df_final = enforce_input_brand_100(df_final, brands)
         df_final = finalize_output_metrics_like_edit_sample_size(df_final)
-        df_final = ensure_bp_driven_metric_alignment(df_final)
         for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
             if _fmt_col in df_final.columns:
                 df_final[_fmt_col] = df_final[_fmt_col].map(
@@ -20584,7 +20456,7 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame) -> pd.DataFram
         'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND INPUT', 'INPUT_METADATA',
         'PURCHASE SHARE', 'BRAND PENETRATION', 'AGE', 'GENDER', 'ETHNICITY',
         'INCOME', 'EDUCATION', 'RELATIONSHIP', 'PARENTAL_STATUS',
-        'SEXUAL_ORIENTATION', 'OCCUPATION', 'LOCATION', 'INTEREST', 'INTERESTS',
+        'SEXUAL_ORIENTATION', 'OCCUPATION', 'LOCATION',
     }
 
     def _to_num(v, default=np.nan):
@@ -20629,27 +20501,15 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame) -> pd.DataFram
         if len(idx_list) < 2:
             continue
 
-        # Canonical source rule:
-        # 1) If value exists in MOST PURCHASED BRANDS, that row is authoritative.
-        # 2) Otherwise, fall back to the highest BP among duplicates.
-        mpb_idxs = [i for i in idx_list if str(work.at[i, 'Column']).strip().upper() == 'MOST PURCHASED BRANDS']
-        canonical_bp = np.nan
+        # Canonical source rule: always use the highest BP seen across categories.
+        canonical_bp = np.nanmax([_to_num(work.at[i, bp_col], default=np.nan) for i in idx_list])
         canonical_raw = np.nan
         canonical_proj = np.nan
-        if mpb_idxs:
-            src_idx = mpb_idxs[0]
-            canonical_bp = _to_num(work.at[src_idx, bp_col], default=np.nan)
-            if 'Original Raw Numbers' in work.columns:
-                canonical_raw = _to_num(work.at[src_idx, 'Original Raw Numbers'], default=np.nan)
+        if np.isfinite(canonical_bp) and sample_size and 'Original Raw Numbers' in work.columns:
+            canonical_raw = int(round((canonical_bp / 100.0) * sample_size))
+            canonical_raw = max(1, min(int(canonical_raw), sample_size))
             if 'US Gen Pop Projection' in work.columns:
-                canonical_proj = _to_num(work.at[src_idx, 'US Gen Pop Projection'], default=np.nan)
-        else:
-            canonical_bp = np.nanmax([_to_num(work.at[i, bp_col], default=np.nan) for i in idx_list])
-            if np.isfinite(canonical_bp) and sample_size and 'Original Raw Numbers' in work.columns:
-                canonical_raw = int(round((canonical_bp / 100.0) * sample_size))
-                canonical_raw = max(1, min(int(canonical_raw), sample_size))
-                if 'US Gen Pop Projection' in work.columns:
-                    canonical_proj = int(round((canonical_raw / 10_000_000.0) * 329_900_000.0))
+                canonical_proj = int(round((canonical_raw / 10_000_000.0) * 329_900_000.0))
 
         if not np.isfinite(canonical_bp):
             continue
