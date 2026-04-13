@@ -25468,10 +25468,203 @@ SOT_GENPOP_AGE_PCT = {
     '17 and Under': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6,
     '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1,
 }
-SOT_AVG_MINUTES = {
+SOT_AVG_MINUTES_BASELINE = {
     'Streaming Video': 52, 'Streaming Music': 26, 'Games': 8,
     'Betting': 12, 'Social Media': 6, 'vMVPD/FAST': 48,
 }
+SOT_WEIGHTS_S3_PREFIX = 'share-of-time-weights/'
+SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
+
+
+def _sot_quarter_from_dates(start_date, end_date):
+    """Return YYYY-QN for the midpoint of a date range."""
+    from datetime import datetime, timedelta
+    s = datetime.strptime(start_date, '%Y-%m-%d')
+    e = datetime.strptime(end_date, '%Y-%m-%d')
+    mid = s + (e - s) / 2
+    q = (mid.month - 1) // 3 + 1
+    return f"{mid.year}-Q{q}"
+
+
+def _sot_age_hash(age_brackets):
+    """Deterministic key fragment from sorted age brackets."""
+    return '_'.join(sorted(age_brackets)).replace(' ', '-').replace('+', 'plus')
+
+
+def _sot_cache_key(age_brackets, quarter):
+    return f"{SOT_WEIGHTS_S3_PREFIX}{_sot_age_hash(age_brackets)}/{quarter}.json"
+
+
+def _sot_load_cached_weights(age_brackets, quarter):
+    """Try to load cached GPT weights from S3. Returns dict or None."""
+    try:
+        if not s3_client:
+            return None
+        key = _sot_cache_key(age_brackets, quarter)
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        data = json.loads(obj['Body'].read().decode('utf-8'))
+        weights = {}
+        for cat in SOT_CATEGORIES:
+            entry = data.get('weights', {}).get(cat, {})
+            avg = entry.get('avg_min')
+            if isinstance(avg, (int, float)) and 1 <= avg <= 120:
+                weights[cat] = entry
+        if len(weights) == len(SOT_CATEGORIES):
+            print(f"[SOT] Cache hit: {key}")
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def _sot_load_cohort_history(age_brackets):
+    """Fetch all cached quarter entries for a cohort (for trend context)."""
+    history = []
+    try:
+        if not s3_client:
+            return history
+        prefix = f"{SOT_WEIGHTS_S3_PREFIX}{_sot_age_hash(age_brackets)}/"
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for item in page.get('Contents', []):
+                try:
+                    obj = s3_client.get_object(Bucket=S3_BUCKET, Key=item['Key'])
+                    entry = json.loads(obj['Body'].read().decode('utf-8'))
+                    history.append(entry)
+                except Exception:
+                    pass
+        history.sort(key=lambda h: h.get('quarter', ''))
+    except Exception as e:
+        print(f"[SOT] History load error: {e}")
+    return history
+
+
+def _sot_save_weights_to_s3(age_brackets, quarter, payload):
+    """Persist GPT-generated weights to S3."""
+    try:
+        if not s3_client:
+            return
+        key = _sot_cache_key(age_brackets, quarter)
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(payload, indent=2).encode('utf-8'),
+            ContentType='application/json',
+        )
+        print(f"[SOT] Saved weights to S3: {key}")
+    except Exception as e:
+        print(f"[SOT] S3 save error: {e}")
+
+
+def _sot_generate_weights_via_gpt(age_brackets, quarter, history):
+    """Call GPT-4o to generate cohort/date-aware avg minutes per interaction.
+    Returns full payload dict or None on failure."""
+    client = get_openai_client()
+    if not client:
+        print("[SOT] OpenAI client unavailable, using baseline weights")
+        return None
+
+    history_text = ""
+    if history:
+        lines = []
+        for h in history[-8:]:
+            q = h.get('quarter', '?')
+            w = h.get('weights', {})
+            parts = [f"{cat}: {w[cat]['avg_min']}min" for cat in SOT_CATEGORIES if cat in w]
+            lines.append(f"  {q}: {', '.join(parts)}")
+        history_text = "Historical weights for this cohort (use for trend continuity):\n" + "\n".join(lines)
+
+    baseline_text = ", ".join(f"{c}: {v}min" for c, v in SOT_AVG_MINUTES_BASELINE.items())
+
+    user_prompt = f"""Estimate the average minutes per account interaction for each media category below.
+
+Cohort age brackets: {', '.join(sorted(age_brackets))}
+Time period: {quarter}
+
+Categories: {', '.join(SOT_CATEGORIES)}
+
+Industry baseline (all-ages, all-time average): {baseline_text}
+
+{history_text}
+
+Instructions:
+- Adjust the baseline for THIS specific cohort and time period.
+- Younger cohorts (under 34) spend more time on social media and games, less on vMVPD/FAST.
+- Older cohorts (55+) spend more on streaming video and vMVPD/FAST, less on games.
+- Model seasonal effects: Q4 = holiday streaming bump; Q1 = post-holiday dip; Q3 = summer outdoor dip in streaming.
+- Model year-over-year trends: social media session lengths growing ~5-8%/year; streaming video stable; vMVPD/FAST growing ~3-5%/year; games stable; betting growing ~4%/year during seasons.
+- If historical data is provided, maintain consistency — don't jump wildly between quarters.
+- Each value must be between 1 and 120 minutes.
+
+Respond with ONLY valid JSON (no markdown, no explanation outside the JSON):
+{{
+  "weights": {{
+    "Streaming Video": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
+    "Streaming Music": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
+    "Games": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
+    "Betting": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
+    "Social Media": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
+    "vMVPD/FAST": {{"avg_min": <number>, "rationale": "<1 sentence>"}}
+  }},
+  "trend_context": "<1-2 sentences summarizing how this quarter compares to prior data>"
+}}"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a media consumption research analyst. You produce precise JSON estimates of average session duration per media category, customized to demographic cohorts and calendar quarters. Always respond with valid JSON only."},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=600,
+            temperature=0.4,
+        )
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        result = json.loads(raw)
+        weights = result.get('weights', {})
+        for cat in SOT_CATEGORIES:
+            if cat not in weights or not isinstance(weights[cat].get('avg_min'), (int, float)):
+                print(f"[SOT] GPT missing/invalid category: {cat}")
+                return None
+            weights[cat]['avg_min'] = max(1, min(120, round(weights[cat]['avg_min'])))
+
+        from datetime import datetime as _dt
+        payload = {
+            'age_brackets': sorted(age_brackets),
+            'quarter': quarter,
+            'generated_at': _dt.utcnow().isoformat() + 'Z',
+            'weights': weights,
+            'trend_context': result.get('trend_context', ''),
+            'model': 'gpt-4o',
+            'tokens_used': response.usage.total_tokens if response.usage else 0,
+        }
+        print(f"[SOT] GPT weights generated for {quarter}, cohort={sorted(age_brackets)}")
+        return payload
+
+    except Exception as e:
+        print(f"[SOT] GPT generation failed: {e}")
+        return None
+
+
+def _sot_get_weights(age_brackets, start_date, end_date):
+    """Resolve time weights: cached > GPT-generated > static baseline.
+    Returns (weights_dict {cat: avg_min}, full_payload_or_None, source_str)."""
+    quarter = _sot_quarter_from_dates(start_date, end_date)
+
+    cached = _sot_load_cached_weights(age_brackets, quarter)
+    if cached:
+        w = {cat: cached['weights'][cat]['avg_min'] for cat in SOT_CATEGORIES}
+        return w, cached, 'cached'
+
+    history = _sot_load_cohort_history(age_brackets)
+    gpt_payload = _sot_generate_weights_via_gpt(age_brackets, quarter, history)
+    if gpt_payload:
+        _sot_save_weights_to_s3(age_brackets, quarter, gpt_payload)
+        w = {cat: gpt_payload['weights'][cat]['avg_min'] for cat in SOT_CATEGORIES}
+        return w, gpt_payload, 'generated'
+
+    return dict(SOT_AVG_MINUTES_BASELINE), None, 'baseline'
 
 
 @app.route('/api/share-of-time/analyze', methods=['POST'])
@@ -25592,6 +25785,17 @@ def share_of_time_analyze():
 
         total_projected_users = sum(v['capped'] for v in projected_users_by_age.values())
 
+        # --- Resolve time weights (cache > GPT > baseline) ---
+        time_weights, weights_payload, weights_source = _sot_get_weights(age_brackets, start_date, end_date)
+        weights_quarter = _sot_quarter_from_dates(start_date, end_date)
+        weight_rationales = {}
+        trend_context = ''
+        if weights_payload:
+            for cat in SOT_CATEGORIES:
+                entry = weights_payload.get('weights', {}).get(cat, {})
+                weight_rationales[cat] = entry.get('rationale', '')
+            trend_context = weights_payload.get('trend_context', '')
+
         # --- Apply cap ratios to interactions per age/category/brand ---
         categories = {}
         total_weighted_interactions = 0
@@ -25611,7 +25815,7 @@ def share_of_time_analyze():
         # --- Apply time weights and calculate share ---
         total_est_minutes = 0
         for cat_name, c in categories.items():
-            weight = SOT_AVG_MINUTES.get(cat_name, 6)
+            weight = time_weights.get(cat_name, 6)
             c['est_minutes'] = c['adj_clicks'] * weight
             total_est_minutes += c['est_minutes']
             for bn, bv in c['brands'].items():
@@ -25621,11 +25825,11 @@ def share_of_time_analyze():
         projection_mult = SOT_US_POPULATION / SOT_PANEL_SIZE
 
         result_categories = []
-        for cat_name in ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']:
+        for cat_name in SOT_CATEGORIES:
             if cat_name not in categories:
                 continue
             c = categories[cat_name]
-            weight = SOT_AVG_MINUTES[cat_name]
+            weight = time_weights.get(cat_name, 6)
             time_share = round(100.0 * c['est_minutes'] / total_est_minutes, 2) if total_est_minutes else 0
             proj_minutes = int(round(c['est_minutes'] * projection_mult))
             proj_hours = round(proj_minutes / 60)
@@ -25648,6 +25852,7 @@ def share_of_time_analyze():
                 'est_minutes': int(round(c['est_minutes'])),
                 'projected_hours': proj_hours,
                 'avg_min_per_interaction': weight,
+                'rationale': weight_rationales.get(cat_name, ''),
                 'share_pct': time_share,
                 'brands': brands_out,
             })
@@ -25666,7 +25871,10 @@ def share_of_time_analyze():
                 'end_date': end_date,
                 'age_brackets': age_brackets,
                 'age_group_detail': projected_users_by_age,
-                'avg_minutes_per_interaction': SOT_AVG_MINUTES,
+                'avg_minutes_per_interaction': time_weights,
+                'weights_source': weights_source,
+                'weights_quarter': weights_quarter,
+                'trend_context': trend_context,
                 'categories': result_categories,
             }
         })

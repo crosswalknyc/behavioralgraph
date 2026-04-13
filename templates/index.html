@@ -15975,6 +15975,7 @@
                 <div class="sot-charts-row">
                     <div class="sot-chart-card">
                         <h3 class="sot-chart-title">Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(weighted by avg. session duration)</span></h3>
+                        <div id="sotWeightsBadge" style="display:none;margin-top:4px;font-size:0.7rem;padding:3px 10px;border-radius:12px;background:rgba(78,205,196,0.12);color:var(--accent-cyan);display:inline-block;"></div>
                         <div style="position:relative;height:320px;"><canvas id="sotDoughnutChart"></canvas></div>
                     </div>
                     <div class="sot-chart-card">
@@ -23411,6 +23412,19 @@
             document.getElementById('sotKpiHours').textContent = (data.total_projected_hours || 0) >= 1000000 ? ((data.total_projected_hours / 1000000).toFixed(1) + 'M') : (data.total_projected_hours || 0).toLocaleString();
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
 
+            var badge = document.getElementById('sotWeightsBadge');
+            if (data.weights_source && data.weights_source !== 'baseline') {
+                var srcLabel = data.weights_source === 'cached' ? 'AI-cached' : 'AI-generated';
+                badge.textContent = '⚡ Weights: ' + srcLabel + ' for ' + (data.weights_quarter || '') + ' · ' + (data.age_brackets || []).join(', ');
+                badge.style.display = 'inline-block';
+                if (data.trend_context) badge.title = data.trend_context;
+            } else {
+                badge.textContent = '📊 Weights: Industry baseline';
+                badge.style.display = 'inline-block';
+                badge.style.background = 'rgba(255,165,0,0.12)';
+                badge.style.color = 'var(--accent-orange)';
+            }
+
             var cats = data.categories;
             var labels = cats.map(function(c) { return c.name; });
             var shares = cats.map(function(c) { return c.share_pct; });
@@ -23454,10 +23468,15 @@
                 var col = _sotCatColors[c.name] || '#888';
                 var projHrs = (c.projected_hours || 0);
                 var projLabel = projHrs >= 1000000 ? (projHrs / 1000000).toFixed(1) + 'M hrs' : projHrs.toLocaleString() + ' hrs';
+                var rationaleHtml = '';
+                if (c.rationale) {
+                    rationaleHtml = '<div class="sot-cat-rationale" style="font-size:0.65rem;color:var(--text-secondary);margin-top:4px;line-height:1.35;font-style:italic;">💡 ' + c.rationale + '</div>';
+                }
                 cardsHtml += '<div class="sot-cat-card" data-idx="' + i + '" onclick="sotDrillDown(' + i + ')" style="border-left:3px solid ' + col + ';">' +
                     '<div class="sot-cat-name">' + c.name + '</div>' +
                     '<div class="sot-cat-pct" style="color:' + col + ';">' + c.share_pct.toFixed(1) + '%</div>' +
-                    '<div class="sot-cat-clicks">' + projLabel + ' US proj. &middot; ' + c.avg_min_per_interaction + ' min/click</div>' +
+                    '<div class="sot-cat-clicks">' + projLabel + ' US proj. &middot; ' + c.avg_min_per_interaction + ' avg min/acct</div>' +
+                    rationaleHtml +
                 '</div>';
             });
             document.getElementById('sotCatCards').innerHTML = cardsHtml;
