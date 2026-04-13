@@ -8708,6 +8708,17 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         f'{web_research[:4000] if web_research else "No research available"}\n'
     )
 
+    profile_persona_inference_rules = (
+        "\n\n=== PROFILE-SPECIFIC PERSONA INFERENCE RULES (MANDATORY) ===\n"
+        "Use ONLY this profile's own evidence to drive adjustments:\n"
+        "1) Infer persona from the file's demographics + behavioral context + web research for this exact subject.\n"
+        "2) Do NOT apply canned archetypes, static demographic stereotypes, or generic audience templates.\n"
+        "3) Any LOWER/RAISE decision must be justified by profile-specific evidence in this run.\n"
+        "4) If evidence is ambiguous, prefer minimal change (KEEP) rather than template-based correction.\n"
+        "5) Keep cross-category coherence to the inferred persona from this profile, not to a pre-defined cohort.\n"
+    )
+    audience_context = audience_context + profile_persona_inference_rules
+
     # Special mandate for final ChatGPT agent (all passes that inject audience_context)
     streaming_search_mandate = (
         "\n\n=== ⚠️ MANDATORY — FINAL AGENT: SEARCH ENGINE/AI & STREAMING/PLATFORM ===\n"
@@ -9184,11 +9195,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"CRITICAL — DEMOGRAPHIC DIRECTION (from THIS profile file only):\n"
             f"- Male-identified share (MALE+TRANS MALE in file): ~{male_pct:.0f}%. "
             f"Female-identified (FEMALE+TRANS FEMALE): ~{female_pct:.0f}%.\n"
-            f"- If male-identified leads female by ≥10 points: female-skewing brands "
-            f"(beauty, women's fashion, Pinterest-class) should tend to UNDER-index; "
-            f"fix clear mismatches even at INDEX ~100–110.\n"
-            f"- If female-identified leads male by ≥10 points: male-skewing brands "
-            f"(e.g. some sports betting, barstool-class) should tend to UNDER-index.\n"
+            f"- Use these demographic shares as context signals, not hard rules.\n"
+            f"- Only adjust gender-linked categories when the profile evidence supports it.\n"
             f"- If within ~10 points: gender is **balanced in the file** — do NOT assume "
             f"a heavy male or female skew; only fix items that clearly mismatch the persona.\n"
             f"- Youth: file shows ~{young_pct:.0f}% in younger brackets (18–34 style rows). "
@@ -9286,6 +9294,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"- Do not preserve a row just because it exists in panel data if it clearly conflicts\n"
                 f"  with who this audience is.\n"
                 f"- Avoid synthetic inflation where many unrelated interests are all very high.\n\n"
+                f"Persona-coherence sanity (important):\n"
+                f"- Infer life-stage from the actual profile demographics and research context, then evaluate fit.\n"
+                f"- Lower only rows that conflict with this specific profile persona; do not apply any generic "
+                f"demographic template.\n\n"
                 f"For EACH row, decide one of: KEEP, LOWER, or RAISE based on persona fit.\n"
                 f"Only include LOWER/RAISE rows in adjustments; KEEP rows are omitted.\n"
                 f"- LOWER when value is implausibly high for this persona\n"
@@ -9459,19 +9471,23 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"appear as strong over-index leaders unless persona evidence is explicit.\n"
                 f"- Niche lifestyle/streetwear/luxury labels should only over-index strongly when "
                 f"the persona has clear cultural fit.\n\n"
+                f"Persona-rank sanity:\n"
+                f"- Build ranking from this profile's persona only (demographics + research + behavior).\n"
+                f"- Do not apply canned archetypes; if a brand ranks high, there must be explicit persona evidence.\n"
+                f"- Preserve mainstream anchors when justified, but move weak-fit brands down when they dominate.\n\n"
                 f"Use research + demographics + index direction. Avoid blanket dampening.\n"
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
                 f'If changes: {{"status":"FIX","notes":"summary",'
                 f'"adjustments":[{{"category":"MOST PURCHASED BRANDS","item":"ITEM","factor":0.70,'
                 f'"reason":"brief persona rationale"}},...]}}\n'
-                f"factor range: 0.15 to 4.0. JSON only."
+                f"factor range: 0.35 to 2.20. JSON only."
             )
             try:
                 resp = client.chat.completions.create(
                     model='gpt-4o',
                     messages=[{'role': 'user', 'content': mpb_prompt}],
-                    temperature=0.1,
+                    temperature=0.0,
                     max_tokens=4000,
                     timeout=OPENAI_CALL_TIMEOUT_SEC,
                 )
@@ -9486,6 +9502,89 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 print(f"   ⚠️ Pass B2B MOST PURCHASED BRANDS error (batch {bnum}): {e}")
         if b2b_total:
             print(f"   🛍️ Pass B2B MOST PURCHASED BRANDS total: {b2b_total} corrections")
+
+    # ──── PASS B2D: Cohort coherence pass for INTEREST + MOST PURCHASED BRANDS ────
+    # Extra research-first pass to enforce profile-specific coherence.
+    # Focuses on mismatches where generic panel artifacts overtake persona signal.
+    cohort_cats = [c for c in categories_data.keys() if c in {'INTEREST', 'INTERESTS', 'MOST PURCHASED BRANDS'}]
+    if cohort_cats and not _budget_exhausted("Pass B2D start"):
+        all_item_lookup.clear()
+        for cat, items in categories_data.items():
+            for name, bp_orig, cs_orig, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp_orig
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = cs_orig
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        cohort_items = []
+        for (cat, item_u), (name, bp, cs, idx) in all_item_lookup.items():
+            if cat not in {'INTEREST', 'INTERESTS', 'MOST PURCHASED BRANDS'}:
+                continue
+            gp_bp = gp_bp_lookup.get((cat, item_u), 0.0)
+            if gp_bp > 0:
+                idx_int = int(round((bp / gp_bp) * 100))
+                idx_meta = f" [GenPop: {gp_bp:.2f}%, INDEX: {idx_int}]"
+            else:
+                idx_meta = " [GenPop: N/A, INDEX: N/A]"
+            cohort_items.append((cat, name, bp, idx_meta))
+
+        # Keep prompt payload manageable while covering top-ranked items.
+        cohort_items.sort(key=lambda x: (x[0], -x[2]))
+        batches = [cohort_items[i:i + 140] for i in range(0, len(cohort_items), 140)]
+        b2d_total = 0
+        for bnum, batch in enumerate(batches, 1):
+            if _budget_exhausted(f"Pass B2D batch {bnum}"):
+                break
+            lines = [f"  {cat} | {name}: {bp:.4f}% BP{meta}" for cat, name, bp, meta in batch]
+            cohort_prompt = (
+                f"You are a US audience strategist doing a FINAL COHORT-COHERENCE CHECK "
+                f"for INTEREST and MOST PURCHASED BRANDS.\n\n"
+                f"{audience_context}\n"
+                f"DEMOGRAPHIC SKEW: {demo_skew_summary}\n\n"
+                f"=== ROWS (batch {bnum}/{len(batches)}) ===\n"
+                + "\n".join(lines) +
+                f"\n\n=== REQUIRED RESEARCH-FIRST COHERENCE RULES ===\n"
+                f"1) Build the audience as a real person from demographics + research first.\n"
+                f"2) Infer life-stage and purchase context from this profile's own demographics + research.\n"
+                f"   Avoid life-stage inflation when not supported by this specific profile signal.\n"
+                f"3) In MOST PURCHASED BRANDS, prevent generic performance/utility dominance unless explicit persona evidence exists.\n"
+                f"4) Keep realistic mainstream anchors, but top-rank order must reflect "
+                f"persona fit rather than generic panel artifacts.\n"
+                f"5) This is digital-engagement behavior; ranking should reflect what this cohort actually follows, shops, "
+                f"and engages with online.\n\n"
+                f"For EACH row, decide KEEP / LOWER / RAISE.\n"
+                f"Only include LOWER/RAISE rows in adjustments.\n"
+                f"Return ONLY valid JSON:\n"
+                f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
+                f'If changes: {{"status":"FIX","notes":"summary",'
+                f'"adjustments":[{{"category":"INTEREST or MOST PURCHASED BRANDS","item":"ITEM","factor":0.80,'
+                f'"reason":"brief persona rationale"}},...]}}\n'
+                f"factor range: 0.30 to 2.00. JSON only."
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': cohort_prompt}],
+                    temperature=0.0,
+                    max_tokens=4000,
+                    timeout=OPENAI_CALL_TIMEOUT_SEC,
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
+                if result.get('status') == 'FIX' and 'adjustments' in result:
+                    applied, _ = _apply_adjustments(result['adjustments'][:220], all_item_lookup, '[COHORT]')
+                    b2d_total += applied
+                    print(f"   🧬 Pass B2D COHORT batch {bnum}/{len(batches)}: {applied} corrections")
+                else:
+                    print(f"   🧬 Pass B2D COHORT batch {bnum}/{len(batches)}: all rows OK")
+            except Exception as e:
+                print(f"   ⚠️ Pass B2D COHORT error (batch {bnum}): {e}")
+        if b2d_total:
+            print(f"   🧬 Pass B2D COHORT total: {b2d_total} corrections")
 
     # ──── PASS B3: AMUSEMENT PARKS geographic realism review ────
     # Catch cases where small regional parks rank above national destination parks
@@ -9723,30 +9822,20 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"For EACH item in this category, classify it based on the "
                 f"audience demographics ({demo_skew_summary}) and the persona "
                 f"of someone who engages with \"{subject_clean}\":\n\n"
-                f"A) DEMOGRAPHIC MISMATCH — brand skews opposite to this audience "
-                f"(e.g. makeup/cosmetics for a male audience, men's grooming for "
-                f"a female audience). These MUST under-index → factor 0.70-0.90\n\n"
-                f"B) GENDER-NEUTRAL / MASS-MARKET — used equally by all genders "
-                f"(e.g. CeraVe, Pantene, sunscreen). Keep near current level or "
-                f"slight reduction → factor 0.90-1.00\n\n"
-                f"C) DEMOGRAPHIC MATCH — brand matches this audience's demo "
-                f"(e.g. Dollar Shave Club for male audience, Sephora for female "
-                f"audience). Can stay at or above parity → factor 1.00-1.10\n\n"
-                f"Apply this thinking to ALL items in MOST PURCHASED BRANDS too — "
-                f"brands like Free People, Victoria's Secret, Lululemon are "
-                f"female-skewing even when they appear in a non-beauty category.\n\n"
+                f"A) PERSONA MISMATCH — item conflicts with this specific profile persona. "
+                f"These should under-index → factor 0.70-0.90\n\n"
+                f"B) PERSONA-NEUTRAL / MASS-MARKET — broadly used items with weak persona signal. "
+                f"Keep near current level or slight reduction → factor 0.90-1.00\n\n"
+                f"C) PERSONA MATCH — item has clear fit for this profile persona. "
+                f"Can stay at or above parity → factor 1.00-1.10\n\n"
+                f"Apply this framework using only this profile's demographics + research + behavior context.\n\n"
                 f"=== {cat} ({len(cat_items_sorted)} items) ===\n"
                 + "\n".join(lines) +
                 f"\n\n=== RULES ===\n"
                 f"1. Return a factor for EVERY item. No item should pass without "
                 f"classification.\n"
-                f"2. Makeup brands (MAC, NYX, Fenty Beauty, CoverGirl, Revlon, "
-                f"Urban Decay, Too Faced, Benefit, etc.) are female-skewing.\n"
-                f"3. Skincare CAN be gender-neutral (CeraVe, Neutrogena) or "
-                f"female-skewing (Glossier, Rare Beauty). Use judgment.\n"
-                f"4. Male grooming (Dollar Shave Club, Manscaped, Old Spice, "
-                f"Harry's, Gillette) should match a male audience.\n"
-                f"5. The goal: correct participation bias so the category's "
+                f"2. Do not use static gender/age stereotypes; infer fit from this profile's evidence.\n"
+                f"3. The goal: correct participation bias so the category's "
                 f"over/under distribution realistically reflects this audience.\n\n"
                 f"Return ONLY valid JSON:\n"
                 f'{{"status":"FIX","notes":"summary",'
@@ -9782,10 +9871,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # factors that create meaningful ordering changes.
     pass_d_adjustments = 0
     RANK_CATEGORIES = [
-        'SOCIAL MEDIA', 'STREAMING/PLATFORM', 'MOST PURCHASED BRANDS',
+        'SOCIAL MEDIA', 'STREAMING/PLATFORM',
         'BEAUTY/WELLNESS', 'GAMES', 'TECHNOLOGY/DEVICE', 'SEARCH ENGINE/AI',
         'BROADCAST/CABLE', 'APP/PLATFORM USAGE', 'MEDIA', 'APPAREL/FOOTWEAR',
-        'DIGITAL BANKING', 'WHERE THEY SHOP', 'INTEREST', 'CPG',
+        'DIGITAL BANKING', 'CPG',
         'FRANCHISE', 'HOME/OUTDOOR', 'BETTING', 'AMUSEMENT PARKS',
     ]
     # Refresh item lookup with current values
@@ -9865,9 +9954,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             f"=== RULES ===\n"
             f"1. The persona's interests should drive ranking, not just "
             f"demographics.\n"
-            f"2. A Fandom/gaming audience should have Discord, Reddit, Twitch "
-            f"ranked much higher than the general population.\n"
-            f"3. Niche-but-relevant items should punch above their weight.\n"
+            f"2. Rank boosts/drops must come from this profile's evidence only "
+            f"(demographics + behaviors + research context), not canned assumptions.\n"
+            f"3. Niche-but-relevant items should punch above their weight only when "
+            f"the profile-specific persona evidence supports it.\n"
             f"4. Mass-market items that everyone uses (Google, YouTube, "
             f"Netflix) stay near the top — don't over-adjust those.\n\n"
             f"Return ONLY valid JSON:\n"
@@ -9956,19 +10046,18 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     f"- Is it RELEVANT but not central? (e.g. sports betting "
                     f"for a racing audience → 20-40%)\n"
                     f"- Is it NEUTRAL? (e.g. common brand → 8-18%)\n"
-                    f"- Is it MISALIGNED with the persona? (e.g. a heavily "
-                    f"female brand for a male audience → 2-8%)\n"
+                    f"- Is it MISALIGNED with this specific profile persona "
+                    f"(based on demographics + research + behavior context) → 2-8%\n"
                     f"- Is it ultra-niche/luxury? (e.g. Acne Studios for a "
                     f"mass audience → 1-5%)\n\n"
                     f"=== RULES ===\n"
                     f"1. EVERY item must get a value — do not skip any.\n"
                     f"2. Values should vary widely (1% to 75%) — NOT cluster "
                     f"around one number.\n"
-                    f"3. Gender matters: if the audience is {male_pct:.0f}% "
-                    f"male, female-skewing brands (makeup, women's fashion) "
-                    f"should be LOW.\n"
-                    f"4. Age matters: if {young_pct:.0f}% are under 35, "
-                    f"skew toward younger platforms/brands.\n"
+                    f"3. Use demographic cues as evidence, not a fixed template; "
+                    f"only lower or raise where profile-specific fit is clear.\n"
+                    f"4. Use age/life-stage in this file to shape relevance, but "
+                    f"avoid generic age stereotypes.\n"
                     f"5. The subject \"{subject_clean}\" is in the "
                     f"\"{bc}\" category — items related to that "
                     f"category should be HIGH.\n"
@@ -16377,17 +16466,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 if _male_pct_r > _female_pct_r + 5.0:
                     _rule3_gender = (
                         f"3. GENDER / RETAIL (from this file): MALE ~{_male_pct_r:.1f}%, "
-                        f"FEMALE ~{_female_pct_r:.1f}% — skews male. Women's beauty, women's "
-                        f"fashion, and **female-skewing marketplaces (Etsy, many Poshmark-type "
-                        f"signals)** must NOT have stratospheric BP (e.g. never 80–95% Etsy) "
-                        f"unless you explicitly justify from persona; usually cap Etsy-like "
-                        f"channels well under Gen-mass-retailer levels.\n"
+                        f"FEMALE ~{_female_pct_r:.1f}% — skews male. Use this as context only; "
+                        f"retail/beauty values must be justified by full profile persona evidence, "
+                        f"not by static gender assumptions.\n"
                     )
                 elif _female_pct_r > _male_pct_r + 5.0:
                     _rule3_gender = (
                         f"3. GENDER / RETAIL (from this file): FEMALE ~{_female_pct_r:.1f}%, "
-                        f"MALE ~{_male_pct_r:.1f}% — skews female. Hyper-masculine-only niches "
-                        f"should stay moderate; mass retail OK.\n"
+                        f"MALE ~{_male_pct_r:.1f}% — skews female. Use this as context only; "
+                        f"retail niches should be evaluated against full persona evidence.\n"
                     )
                 else:
                     _rule3_gender = (
@@ -20355,6 +20442,10 @@ def enforce_cross_category_brand_consistency(df):
     brand_highest_percentages = {}
     brand_highest_original_raw = {}
 
+    # Keep INTEREST independent: thematic signals should not be overwritten
+    # by maxima from unrelated categories sharing the same token.
+    skip_consistency_categories = {'INTEREST', 'INTERESTS'}
+
     # First pass: collect maxima
     for _, row in df.iterrows():
         brand_name = str(row.get('Value', '')).strip()
@@ -20365,6 +20456,8 @@ def enforce_cross_category_brand_consistency(df):
         if category.upper() in ['PURCHASE SHARE', 'BRAND PENETRATION']:
             continue
         if category.upper() == 'BRAND INPUT':
+            continue
+        if category.upper() in skip_consistency_categories:
             continue
 
         normalized_brand = brand_name.lower().strip()
@@ -20436,6 +20529,8 @@ def enforce_cross_category_brand_consistency(df):
             continue
         if category.upper() == 'BRAND INPUT':
             continue
+        if category.upper() in skip_consistency_categories:
+            continue
         # Skip brand input values so they keep 100% from enforce_input_brand_100
         if is_brand_input_value(brand_name, brand_input_names):
             continue
@@ -20489,7 +20584,7 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame) -> pd.DataFram
         'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN', 'BRAND INPUT', 'INPUT_METADATA',
         'PURCHASE SHARE', 'BRAND PENETRATION', 'AGE', 'GENDER', 'ETHNICITY',
         'INCOME', 'EDUCATION', 'RELATIONSHIP', 'PARENTAL_STATUS',
-        'SEXUAL_ORIENTATION', 'OCCUPATION', 'LOCATION',
+        'SEXUAL_ORIENTATION', 'OCCUPATION', 'LOCATION', 'INTEREST', 'INTERESTS',
     }
 
     def _to_num(v, default=np.nan):
