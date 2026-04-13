@@ -13794,7 +13794,8 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "$50,000-$74,999": <percent>,
       "$75,000-$99,999": <percent>,
       "$100,000-$149,999": <percent>,
-      "$150,000 OR MORE": <percent>
+      "$150,000-$249,999": <percent>,
+      "$250,000 OR MORE": <percent>
     }},
     "EDUCATION": {{
       "LESS THAN HIGH SCHOOL": <percent>,
@@ -14038,15 +14039,63 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         return df
 
     # --- A) Write demographics from persona_doc --------------------------
+    import re as _re
+
+    _EXPECTED_INCOME_BRACKETS = [
+        'UNDER $25,000',
+        '$25,000-$49,999',
+        '$50,000-$74,999',
+        '$75,000-$99,999',
+        '$100,000-$149,999',
+        '$150,000-$249,999',
+        '$250,000 OR MORE',
+    ]
+
+    def _norm_bracket(s: str) -> str:
+        """Normalize an income bracket for comparison: uppercase, collapse whitespace around hyphens, strip."""
+        s = s.strip().upper()
+        s = _re.sub(r'\s*-\s*', '-', s)
+        s = _re.sub(r'\s+', ' ', s)
+        return s
+
     demos = persona_doc.get('demographics', {})
+
+    # Inject missing INCOME rows before writing persona values
+    if 'INCOME' in demos and isinstance(demos['INCOME'], dict):
+        income_mask = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
+        existing_normed = {_norm_bracket(str(v)) for v in df.loc[income_mask, 'Value']}
+        template_row = df.loc[income_mask].iloc[0].to_dict() if income_mask.any() else None
+        for bracket in _EXPECTED_INCOME_BRACKETS:
+            if _norm_bracket(bracket) not in existing_normed and template_row is not None:
+                new_row = template_row.copy()
+                new_row['Value'] = bracket
+                new_row[bp_col] = 0.0
+                if pct_col and pct_col in df.columns:
+                    new_row[pct_col] = 0.0
+                for col in ['Original Raw Numbers', 'US Gen Pop Projection']:
+                    if col in new_row:
+                        new_row[col] = 0
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                print(f"   📌 Injected missing INCOME bracket: {bracket}")
+
+        # Also normalise existing Value text so it matches expected format
+        income_mask = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
+        for idx in df[income_mask].index:
+            raw_val = str(df.at[idx, 'Value']).strip()
+            normed = _norm_bracket(raw_val)
+            for expected in _EXPECTED_INCOME_BRACKETS:
+                if _norm_bracket(expected) == normed:
+                    df.at[idx, 'Value'] = expected
+                    break
+
     for cat, buckets in demos.items():
         if not isinstance(buckets, dict):
             continue
         cat_mask = df['Column'].astype(str).str.strip().str.upper() == cat.upper()
         for idx in df[cat_mask].index:
-            val_u = str(df.at[idx, 'Value']).strip().upper()
+            val_u = _norm_bracket(str(df.at[idx, 'Value']))
             for bk, pct in buckets.items():
-                if bk.strip().upper() == val_u:
+                if _norm_bracket(bk) == val_u:
                     df.at[idx, bp_col] = round(float(pct), 4)
                     if pct_col and pct_col in df.columns:
                         df.at[idx, pct_col] = round(float(pct), 4)
