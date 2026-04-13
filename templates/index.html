@@ -15954,17 +15954,21 @@
                 </div>
             </div>
             <div id="sotResultsArea" style="display:none;">
-                <div class="sot-kpi-grid">
+                <div class="sot-kpi-grid" style="grid-template-columns:repeat(4,1fr);">
                     <div class="sot-kpi">
-                        <div class="sot-kpi-label">Matched Participants</div>
+                        <div class="sot-kpi-label">Sample Participants</div>
                         <div class="sot-kpi-value" id="sotKpiUsers" style="color:var(--accent-lime);">—</div>
                     </div>
                     <div class="sot-kpi">
-                        <div class="sot-kpi-label">Est. Total Hours</div>
+                        <div class="sot-kpi-label">US Projection</div>
+                        <div class="sot-kpi-value" id="sotKpiProjUsers" style="color:#a855f7;">—</div>
+                    </div>
+                    <div class="sot-kpi">
+                        <div class="sot-kpi-label">Projected US Hours</div>
                         <div class="sot-kpi-value" id="sotKpiHours" style="color:var(--accent-cyan);">—</div>
                     </div>
                     <div class="sot-kpi">
-                        <div class="sot-kpi-label">Total Interactions</div>
+                        <div class="sot-kpi-label">Adj. Interactions</div>
                         <div class="sot-kpi-value" id="sotKpiInteractions" style="color:var(--accent-orange);">—</div>
                     </div>
                 </div>
@@ -23402,8 +23406,9 @@
         function sotRenderResults(data) {
             document.getElementById('sotResultsArea').style.display = 'block';
             document.getElementById('sotKpiUsers').textContent = data.matched_users.toLocaleString();
-            var estHours = Math.round(data.total_est_minutes / 60);
-            document.getElementById('sotKpiHours').textContent = estHours.toLocaleString();
+            var projUsers = data.projected_us_users || 0;
+            document.getElementById('sotKpiProjUsers').textContent = projUsers >= 1000000 ? (projUsers / 1000000).toFixed(1) + 'M' : projUsers.toLocaleString();
+            document.getElementById('sotKpiHours').textContent = (data.total_projected_hours || 0) >= 1000000 ? ((data.total_projected_hours / 1000000).toFixed(1) + 'M') : (data.total_projected_hours || 0).toLocaleString();
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
 
             var cats = data.categories;
@@ -23447,11 +23452,12 @@
             var cardsHtml = '';
             cats.forEach(function(c, i) {
                 var col = _sotCatColors[c.name] || '#888';
-                var estHrs = Math.round(c.est_minutes / 60).toLocaleString();
+                var projHrs = (c.projected_hours || 0);
+                var projLabel = projHrs >= 1000000 ? (projHrs / 1000000).toFixed(1) + 'M hrs' : projHrs.toLocaleString() + ' hrs';
                 cardsHtml += '<div class="sot-cat-card" data-idx="' + i + '" onclick="sotDrillDown(' + i + ')" style="border-left:3px solid ' + col + ';">' +
                     '<div class="sot-cat-name">' + c.name + '</div>' +
                     '<div class="sot-cat-pct" style="color:' + col + ';">' + c.share_pct.toFixed(1) + '%</div>' +
-                    '<div class="sot-cat-clicks">' + estHrs + ' est. hrs &middot; ' + c.clicks.toLocaleString() + ' clicks &times; ' + c.avg_min_per_interaction + ' min</div>' +
+                    '<div class="sot-cat-clicks">' + projLabel + ' US proj. &middot; ' + c.avg_min_per_interaction + ' min/click</div>' +
                 '</div>';
             });
             document.getElementById('sotCatCards').innerHTML = cardsHtml;
@@ -23494,7 +23500,7 @@
                     },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var hrs = Math.round(b.est_minutes / 60).toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + hrs + ' est. hrs from ' + b.clicks.toLocaleString() + ' clicks)'; } } }
+                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs)'; } } }
                     }
                 }
             });

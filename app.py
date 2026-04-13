@@ -25462,10 +25462,22 @@ SHARE_OF_TIME_CATEGORY_SQL = """
     QUALIFY ROW_NUMBER() OVER (PARTITION BY LOWER(BRAND) ORDER BY SECTION) = 1
 """
 
+SOT_US_POPULATION = 329_900_000
+SOT_PANEL_SIZE = 10_000_000
+SOT_GENPOP_AGE_PCT = {
+    '17 and Under': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6,
+    '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1,
+}
+SOT_AVG_MINUTES = {
+    'Streaming Video': 52, 'Streaming Music': 26, 'Games': 8,
+    'Betting': 12, 'Social Media': 6, 'vMVPD/FAST': 48,
+}
+
+
 @app.route('/api/share-of-time/analyze', methods=['POST'])
 @requires_auth
 def share_of_time_analyze():
-    """Run Share of Time analysis: category + brand share across date/age filters."""
+    """Run Share of Time analysis with census-capped age groups projected to US gen pop."""
     try:
         data = request.get_json() or {}
         start_date = (data.get('start_date') or '').strip()
@@ -25482,7 +25494,7 @@ def share_of_time_analyze():
         if not date_re.match(start_date) or not date_re.match(end_date):
             return jsonify({'success': False, 'error': 'Dates must be YYYY-MM-DD'}), 400
 
-        valid_ages = {'17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older'}
+        valid_ages = set(SOT_GENPOP_AGE_PCT.keys())
         age_brackets = [a for a in age_brackets if a in valid_ages]
         if not age_brackets:
             return jsonify({'success': False, 'error': 'No valid age brackets selected'}), 400
@@ -25507,38 +25519,34 @@ def share_of_time_analyze():
             cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
             cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
 
+            # Query 1: interactions broken down by age group, category, brand
             cur.execute(f"""
-                WITH category_map AS ({SHARE_OF_TIME_CATEGORY_SQL}),
-                all_clicks AS (
-                    SELECT
-                        c.COMMON_NAME,
-                        cm.share_category,
-                        COUNT(*) as clicks
-                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
-                    INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
-                    LEFT JOIN category_map cm ON LOWER(c.COMMON_NAME) = cm.brand_lower
-                    WHERE c.DELIVERED >= '{start_date}'::DATE
-                      AND c.DELIVERED <= '{end_date}'::DATE
-                      AND c.COMMON_NAME IS NOT NULL
-                      AND c.COMMON_NAME != ''
-                      AND d.AGE IN ({age_in})
-                    GROUP BY c.COMMON_NAME, cm.share_category
-                )
+                WITH category_map AS ({SHARE_OF_TIME_CATEGORY_SQL})
                 SELECT
-                    COALESCE(share_category, 'Other') as category,
-                    COMMON_NAME,
-                    clicks,
-                    SUM(clicks) OVER () as total_all_clicks
-                FROM all_clicks
-                WHERE share_category IS NOT NULL
-                ORDER BY category, clicks DESC
+                    d.AGE,
+                    cm.share_category,
+                    c.COMMON_NAME,
+                    COUNT(*) as clicks
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
+                LEFT JOIN category_map cm ON LOWER(c.COMMON_NAME) = cm.brand_lower
+                WHERE c.DELIVERED >= '{start_date}'::DATE
+                  AND c.DELIVERED <= '{end_date}'::DATE
+                  AND c.COMMON_NAME IS NOT NULL
+                  AND c.COMMON_NAME != ''
+                  AND d.AGE IN ({age_in})
+                  AND cm.share_category IS NOT NULL
+                GROUP BY d.AGE, cm.share_category, c.COMMON_NAME
+                ORDER BY cm.share_category, clicks DESC
             """)
             rows = cur.fetchall()
 
+            # Query 2: UID counts per age bracket + totals
             cur.execute(f"""
                 SELECT
-                    COUNT(DISTINCT c.UID) as matched_users,
-                    COUNT(*) as total_interactions
+                    d.AGE,
+                    COUNT(DISTINCT c.UID) as uid_count,
+                    COUNT(*) as interaction_count
                 FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
                 INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
                 WHERE c.DELIVERED >= '{start_date}'::DATE
@@ -25546,75 +25554,119 @@ def share_of_time_analyze():
                   AND c.COMMON_NAME IS NOT NULL
                   AND c.COMMON_NAME != ''
                   AND d.AGE IN ({age_in})
+                GROUP BY d.AGE
             """)
-            totals_row = cur.fetchone()
-            matched_users = totals_row[0] if totals_row else 0
-            total_interactions = totals_row[1] if totals_row else 0
-
+            age_rows = cur.fetchall()
             cur.close()
         finally:
             conn.close()
 
-        AVG_MINUTES_PER_INTERACTION = {
-            'Streaming Video': 52,
-            'Streaming Music': 26,
-            'Games': 8,
-            'Betting': 12,
-            'Social Media': 6,
-            'vMVPD/FAST': 48,
-        }
+        # --- Census-cap age groups (same logic as bg.py) ---
+        age_uids = {}
+        total_sample_uids = 0
+        total_sample_interactions = 0
+        for age_val, uid_cnt, int_cnt in age_rows:
+            age_uids[age_val] = {'uids': uid_cnt, 'interactions': int_cnt}
+            total_sample_uids += uid_cnt
+            total_sample_interactions += int_cnt
 
+        age_cap_ratios = {}
+        projected_users_by_age = {}
+        for age_val in age_brackets:
+            info = age_uids.get(age_val, {'uids': 0, 'interactions': 0})
+            raw_uids = info['uids']
+            projected = (raw_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
+            gp_pct = SOT_GENPOP_AGE_PCT.get(age_val, 10.0)
+            census_cap = (gp_pct / 100.0) * SOT_US_POPULATION
+            capped = min(projected, census_cap * 0.999)
+            ratio = (capped / projected) if projected > 0 else 1.0
+            age_cap_ratios[age_val] = ratio
+            projected_users_by_age[age_val] = {
+                'sample_uids': raw_uids,
+                'projected': int(round(projected)),
+                'census_cap': int(round(census_cap)),
+                'capped': int(round(capped)),
+                'ratio': round(ratio, 4),
+                'genpop_pct': gp_pct,
+            }
+
+        total_projected_users = sum(v['capped'] for v in projected_users_by_age.values())
+
+        # --- Apply cap ratios to interactions per age/category/brand ---
         categories = {}
-        for cat, brand, clicks, total_all in rows:
-            if cat not in categories:
-                categories[cat] = {'name': cat, 'clicks': 0, 'brands': []}
-            categories[cat]['clicks'] += clicks
-            categories[cat]['brands'].append({
-                'name': brand, 'clicks': int(clicks)
-            })
+        total_weighted_interactions = 0
+        for age_val, share_cat, brand, clicks in rows:
+            ratio = age_cap_ratios.get(age_val, 1.0)
+            adj_clicks = clicks * ratio
+            if share_cat not in categories:
+                categories[share_cat] = {'name': share_cat, 'clicks': 0, 'adj_clicks': 0.0, 'brands': {}}
+            categories[share_cat]['clicks'] += clicks
+            categories[share_cat]['adj_clicks'] += adj_clicks
+            if brand not in categories[share_cat]['brands']:
+                categories[share_cat]['brands'][brand] = {'clicks': 0, 'adj_clicks': 0.0}
+            categories[share_cat]['brands'][brand]['clicks'] += clicks
+            categories[share_cat]['brands'][brand]['adj_clicks'] += adj_clicks
+            total_weighted_interactions += adj_clicks
 
+        # --- Apply time weights and calculate share ---
         total_est_minutes = 0
         for cat_name, c in categories.items():
-            weight = AVG_MINUTES_PER_INTERACTION.get(cat_name, 6)
-            c['est_minutes'] = c['clicks'] * weight
+            weight = SOT_AVG_MINUTES.get(cat_name, 6)
+            c['est_minutes'] = c['adj_clicks'] * weight
             total_est_minutes += c['est_minutes']
-            for b in c['brands']:
-                b['est_minutes'] = b['clicks'] * weight
+            for bn, bv in c['brands'].items():
+                bv['est_minutes'] = bv['adj_clicks'] * weight
+
+        # --- Project to US gen pop scale ---
+        projection_mult = SOT_US_POPULATION / SOT_PANEL_SIZE
 
         result_categories = []
         for cat_name in ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']:
-            if cat_name in categories:
-                c = categories[cat_name]
-                weight = AVG_MINUTES_PER_INTERACTION[cat_name]
-                time_share = round(100.0 * c['est_minutes'] / total_est_minutes, 2) if total_est_minutes else 0
-                brands_out = []
-                for b in c['brands'][:50]:
-                    brands_out.append({
-                        'name': b['name'],
-                        'clicks': b['clicks'],
-                        'est_minutes': b['est_minutes'],
-                        'category_share_pct': round(100.0 * b['est_minutes'] / c['est_minutes'], 2) if c['est_minutes'] else 0,
-                        'overall_share_pct': round(100.0 * b['est_minutes'] / total_est_minutes, 4) if total_est_minutes else 0,
-                    })
-                result_categories.append({
-                    'name': cat_name,
-                    'clicks': int(c['clicks']),
-                    'est_minutes': int(c['est_minutes']),
-                    'avg_min_per_interaction': weight,
-                    'share_pct': time_share,
-                    'brands': brands_out,
+            if cat_name not in categories:
+                continue
+            c = categories[cat_name]
+            weight = SOT_AVG_MINUTES[cat_name]
+            time_share = round(100.0 * c['est_minutes'] / total_est_minutes, 2) if total_est_minutes else 0
+            proj_minutes = int(round(c['est_minutes'] * projection_mult))
+            proj_hours = round(proj_minutes / 60)
+
+            brand_list = sorted(c['brands'].items(), key=lambda x: x[1]['est_minutes'], reverse=True)
+            brands_out = []
+            for bn, bv in brand_list[:50]:
+                b_proj_min = int(round(bv['est_minutes'] * projection_mult))
+                brands_out.append({
+                    'name': bn,
+                    'clicks': int(round(bv['adj_clicks'])),
+                    'est_minutes': int(round(bv['est_minutes'])),
+                    'projected_hours': round(b_proj_min / 60),
+                    'category_share_pct': round(100.0 * bv['est_minutes'] / c['est_minutes'], 2) if c['est_minutes'] else 0,
+                    'overall_share_pct': round(100.0 * bv['est_minutes'] / total_est_minutes, 4) if total_est_minutes else 0,
                 })
+            result_categories.append({
+                'name': cat_name,
+                'clicks': int(round(c['adj_clicks'])),
+                'est_minutes': int(round(c['est_minutes'])),
+                'projected_hours': proj_hours,
+                'avg_min_per_interaction': weight,
+                'share_pct': time_share,
+                'brands': brands_out,
+            })
+
+        total_proj_hours = round(total_est_minutes * projection_mult / 60)
 
         return jsonify({
             'success': True,
             'data': {
-                'total_interactions': int(total_interactions),
-                'total_est_minutes': int(total_est_minutes),
-                'matched_users': int(matched_users),
+                'total_interactions': int(round(total_weighted_interactions)),
+                'total_est_minutes': int(round(total_est_minutes)),
+                'total_projected_hours': total_proj_hours,
+                'matched_users': total_sample_uids,
+                'projected_us_users': total_projected_users,
                 'start_date': start_date,
                 'end_date': end_date,
                 'age_brackets': age_brackets,
-                'avg_minutes_per_interaction': AVG_MINUTES_PER_INTERACTION,
+                'age_group_detail': projected_users_by_age,
+                'avg_minutes_per_interaction': SOT_AVG_MINUTES,
                 'categories': result_categories,
             }
         })
