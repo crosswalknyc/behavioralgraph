@@ -13871,26 +13871,43 @@ RULES:
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
+    text = ''
+    # Attempt 1: gpt-4o-search-preview (has web search)
     try:
         resp = client.chat.completions.create(
             model='gpt-4o-search-preview',
             web_search_options={"search_context_size": "high"},
             messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.2,
             max_tokens=4096,
         )
-        text = resp.choices[0].message.content.strip()
+        text = (resp.choices[0].message.content or '').strip()
+        if text:
+            print(f"   📡 search-preview returned {len(text)} chars")
     except Exception as e:
-        print(f"   ⚠️ gpt-4o-search-preview failed ({e}), falling back to gpt-4o")
+        print(f"   ⚠️ gpt-4o-search-preview failed ({e})")
+
+    # Attempt 2: gpt-4o fallback if search-preview gave nothing usable
+    if not text or '{' not in text:
+        print(f"   🔄 Falling back to gpt-4o …")
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
             temperature=0.2,
             max_tokens=4096,
         )
-        text = resp.choices[0].message.content.strip()
+        text = (resp.choices[0].message.content or '').strip()
+        print(f"   📡 gpt-4o returned {len(text)} chars")
 
-    persona_doc = _parse_ai_json_response(text)
+    # Robust JSON extraction: strip markdown fences, find outermost { … }
+    if text.startswith('```'):
+        text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+    start_idx = text.find('{')
+    end_idx = text.rfind('}')
+    if start_idx < 0 or end_idx <= start_idx:
+        raise RuntimeError(f"Persona agent returned no parseable JSON. First 500 chars: {text[:500]}")
+    text = text[start_idx:end_idx + 1]
+
+    persona_doc = _json.loads(text)
 
     # Validate and normalise each demographic bucket to sum to exactly 100
     demos = persona_doc.get('demographics', {})
@@ -13959,12 +13976,15 @@ RULES:
 - Every item from the list MUST appear in your output.
 """
 
+    token_budget = max(4096, len(values) * 80)
+    token_budget = min(token_budget, 16384)
+
     try:
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
             temperature=0.0,
-            max_tokens=4096,
+            max_tokens=token_budget,
         )
         text = resp.choices[0].message.content.strip()
         if text.startswith('```'):
@@ -13973,7 +13993,18 @@ RULES:
         end = text.rfind(']') + 1
         if start >= 0 and end > start:
             text = text[start:end]
-        result = _json.loads(text)
+        try:
+            result = _json.loads(text)
+        except _json.JSONDecodeError:
+            # Truncated JSON: find last complete object and close the array
+            last_brace = text.rfind('}')
+            if last_brace > 0:
+                text = text[:last_brace + 1] + ']'
+                if not text.startswith('['):
+                    text = '[' + text
+                result = _json.loads(text)
+            else:
+                raise
         if isinstance(result, list):
             return result
     except Exception as e:

@@ -5515,6 +5515,7 @@ def compute_product_access_flags(user, role):
             'has_llmo_iq_access': True,
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
+            'has_share_of_time_access': True,
         }
     u = user or {}
     return {
@@ -5538,6 +5539,7 @@ def compute_product_access_flags(user, role):
         'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
         'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
+        'has_share_of_time_access': bool(u.get('has_share_of_time_access', True)),
     }
 
 
@@ -5613,6 +5615,7 @@ def index():
     has_llmo_iq = _acc['has_llmo_iq_access']
     has_talent_fit = _acc.get('has_talent_fit_access', False)
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
+    has_share_of_time = _acc.get('has_share_of_time_access', True)
     
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -5663,6 +5666,7 @@ def index():
                            has_llmo_iq_access=has_llmo_iq,
                            has_talent_fit_access=has_talent_fit,
                            has_flywheel_conversion_access=has_flywheel_conversion,
+                           has_share_of_time_access=has_share_of_time,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -25432,6 +25436,169 @@ def run_watch_time(job_id):
         error_msg = f"Error running watch time IQ: {str(e)}\n{traceback.format_exc()}"
         print(error_msg)
         update_job_status(job_id, status='failed', error=error_msg)
+
+
+# ============================================================================
+# SHARE OF TIME IQ
+# ============================================================================
+
+SHARE_OF_TIME_CATEGORY_SQL = """
+    SELECT LOWER(BRAND) as brand_lower,
+           CASE
+               WHEN SECTION LIKE 'Streaming/Platform%' THEN 'Streaming Video'
+               WHEN SECTION LIKE 'Streaming/Music%' THEN 'Streaming Music'
+               WHEN SECTION LIKE 'Games%' THEN 'Games'
+               WHEN SECTION = 'Betting' THEN 'Betting'
+               WHEN SECTION = 'Social Media' THEN 'Social Media'
+               WHEN SECTION LIKE 'Virtual MVPD%' THEN 'vMVPD/FAST'
+           END AS share_category
+    FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING
+    WHERE SECTION LIKE 'Streaming/Platform%'
+       OR SECTION LIKE 'Streaming/Music%'
+       OR SECTION LIKE 'Games%'
+       OR SECTION = 'Betting'
+       OR SECTION = 'Social Media'
+       OR SECTION LIKE 'Virtual MVPD%%'
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY LOWER(BRAND) ORDER BY SECTION) = 1
+"""
+
+@app.route('/api/share-of-time/analyze', methods=['POST'])
+@requires_auth
+def share_of_time_analyze():
+    """Run Share of Time analysis: category + brand share across date/age filters."""
+    try:
+        data = request.get_json() or {}
+        start_date = (data.get('start_date') or '').strip()
+        end_date = (data.get('end_date') or '').strip()
+        age_brackets = data.get('age_brackets') or []
+
+        if not start_date or not end_date:
+            return jsonify({'success': False, 'error': 'start_date and end_date required'}), 400
+        if not age_brackets:
+            return jsonify({'success': False, 'error': 'At least one age bracket required'}), 400
+
+        import re
+        date_re = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+        if not date_re.match(start_date) or not date_re.match(end_date):
+            return jsonify({'success': False, 'error': 'Dates must be YYYY-MM-DD'}), 400
+
+        valid_ages = {'17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older'}
+        age_brackets = [a for a in age_brackets if a in valid_ages]
+        if not age_brackets:
+            return jsonify({'success': False, 'error': 'No valid age brackets selected'}), 400
+
+        age_in = ",".join(f"'{a}'" for a in age_brackets)
+
+        import snowflake.connector as _sot_sf
+        conn = _sot_sf.connect(
+            user=os.environ.get('SNOWFLAKE_USER', ''),
+            password=os.environ.get('SNOWFLAKE_PASSWORD', ''),
+            account=os.environ.get('SNOWFLAKE_ACCOUNT', 'qsodrkt-hgb46445'),
+            role=os.environ.get('SNOWFLAKE_ROLE', 'ACCOUNTADMIN'),
+            warehouse='SHAREOFTIME',
+            database='PROCESSEDCLICKSTREAM',
+            schema='PUBLIC',
+            insecure_mode=True,
+            session_parameters={'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT': 'JSON'},
+        )
+
+        try:
+            cur = conn.cursor()
+            cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
+            cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
+
+            cur.execute(f"""
+                WITH category_map AS ({SHARE_OF_TIME_CATEGORY_SQL}),
+                all_clicks AS (
+                    SELECT
+                        c.COMMON_NAME,
+                        cm.share_category,
+                        COUNT(*) as clicks
+                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                    INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
+                    LEFT JOIN category_map cm ON LOWER(c.COMMON_NAME) = cm.brand_lower
+                    WHERE c.DELIVERED >= '{start_date}'::DATE
+                      AND c.DELIVERED <= '{end_date}'::DATE
+                      AND c.COMMON_NAME IS NOT NULL
+                      AND c.COMMON_NAME != ''
+                      AND d.AGE IN ({age_in})
+                    GROUP BY c.COMMON_NAME, cm.share_category
+                )
+                SELECT
+                    COALESCE(share_category, 'Other') as category,
+                    COMMON_NAME,
+                    clicks,
+                    SUM(clicks) OVER () as total_all_clicks
+                FROM all_clicks
+                WHERE share_category IS NOT NULL
+                ORDER BY category, clicks DESC
+            """)
+            rows = cur.fetchall()
+
+            cur.execute(f"""
+                SELECT
+                    COUNT(DISTINCT c.UID) as matched_users,
+                    COUNT(*) as total_interactions
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
+                WHERE c.DELIVERED >= '{start_date}'::DATE
+                  AND c.DELIVERED <= '{end_date}'::DATE
+                  AND c.COMMON_NAME IS NOT NULL
+                  AND c.COMMON_NAME != ''
+                  AND d.AGE IN ({age_in})
+            """)
+            totals_row = cur.fetchone()
+            matched_users = totals_row[0] if totals_row else 0
+            total_interactions = totals_row[1] if totals_row else 0
+
+            cur.close()
+        finally:
+            conn.close()
+
+        categories = {}
+        grand_total = 0
+        for cat, brand, clicks, total_all in rows:
+            grand_total = total_all
+            if cat not in categories:
+                categories[cat] = {'name': cat, 'clicks': 0, 'brands': []}
+            categories[cat]['clicks'] += clicks
+            categories[cat]['brands'].append({
+                'name': brand, 'clicks': int(clicks)
+            })
+
+        result_categories = []
+        for cat_name in ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']:
+            if cat_name in categories:
+                c = categories[cat_name]
+                cat_share = round(100.0 * c['clicks'] / total_interactions, 2) if total_interactions else 0
+                brands_out = []
+                for b in c['brands'][:50]:
+                    brands_out.append({
+                        'name': b['name'],
+                        'clicks': b['clicks'],
+                        'category_share_pct': round(100.0 * b['clicks'] / c['clicks'], 2) if c['clicks'] else 0,
+                        'overall_share_pct': round(100.0 * b['clicks'] / total_interactions, 4) if total_interactions else 0,
+                    })
+                result_categories.append({
+                    'name': cat_name, 'clicks': int(c['clicks']),
+                    'share_pct': cat_share, 'brands': brands_out,
+                })
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_interactions': int(total_interactions),
+                'matched_users': int(matched_users),
+                'start_date': start_date,
+                'end_date': end_date,
+                'age_brackets': age_brackets,
+                'categories': result_categories,
+            }
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
 
 
 # ============================================================================
