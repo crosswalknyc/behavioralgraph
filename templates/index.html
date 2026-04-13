@@ -775,6 +775,38 @@
         #ticketSalesTrackerView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #roasIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
         #ecommerceIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
+        #shareOfTimeIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
+        #shareOfTimeIQView .sot-form-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+        #shareOfTimeIQView .sot-form-row { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+        #shareOfTimeIQView .sot-field { display: flex; flex-direction: column; gap: 0.3rem; }
+        #shareOfTimeIQView .sot-field label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+        #shareOfTimeIQView .sot-field input[type="date"] { padding: 0.45rem 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem; }
+        #shareOfTimeIQView .sot-age-grid { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        #shareOfTimeIQView .sot-age-chip { display: flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.65rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 20px; cursor: pointer; font-size: 0.8rem; color: var(--text-secondary); transition: all 0.15s; user-select: none; }
+        #shareOfTimeIQView .sot-age-chip:hover { border-color: var(--accent-cyan); }
+        #shareOfTimeIQView .sot-age-chip.active { background: rgba(0,210,255,0.15); border-color: var(--accent-cyan); color: var(--text-primary); }
+        #shareOfTimeIQView .sot-age-chip input { display: none; }
+        #shareOfTimeIQView .sot-run-btn { padding: 0.5rem 1.5rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime)); border: none; border-radius: 8px; color: #000; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: opacity 0.2s; white-space: nowrap; }
+        #shareOfTimeIQView .sot-run-btn:hover { opacity: 0.85; }
+        #shareOfTimeIQView .sot-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        #shareOfTimeIQView .sot-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+        #shareOfTimeIQView .sot-kpi { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center; }
+        #shareOfTimeIQView .sot-kpi-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+        #shareOfTimeIQView .sot-kpi-value { font-size: 1.6rem; font-weight: 700; margin-top: 4px; }
+        #shareOfTimeIQView .sot-charts-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 0.75rem; margin-bottom: 1rem; }
+        #shareOfTimeIQView .sot-chart-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; }
+        #shareOfTimeIQView .sot-chart-title { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 600; }
+        #shareOfTimeIQView .sot-cat-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 1rem; }
+        #shareOfTimeIQView .sot-cat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.85rem; cursor: pointer; transition: border-color 0.2s, transform 0.15s; }
+        #shareOfTimeIQView .sot-cat-card:hover { border-color: var(--accent-cyan); transform: translateY(-1px); }
+        #shareOfTimeIQView .sot-cat-card.active { border-color: var(--accent-lime); box-shadow: 0 0 12px rgba(0,255,128,0.1); }
+        #shareOfTimeIQView .sot-cat-name { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+        #shareOfTimeIQView .sot-cat-pct { font-size: 1.35rem; font-weight: 700; }
+        #shareOfTimeIQView .sot-cat-clicks { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; }
+        #shareOfTimeIQView .sot-drill-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; min-height: 300px; }
+        #shareOfTimeIQView .sot-loading { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.9rem; }
+        #shareOfTimeIQView .sot-loading .spinner { width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: sotSpin 0.6s linear infinite; margin-right: 0.6rem; }
+        @keyframes sotSpin { to { transform: rotate(360deg); } }
         #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #llmoIQView .llmo-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
         #llmoIQView .llmo-table { width: 100%; font-size: 0.85rem; border-collapse: collapse; }
@@ -12149,6 +12181,7 @@
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
+                            <option value="shareOfTimeIQ" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
                             <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
@@ -15888,6 +15921,82 @@
             </div>
         </div><!-- End ecommerceIQView -->
 
+        <!-- SHARE OF TIME IQ VIEW -->
+        <div id="shareOfTimeIQView">
+            <div class="sot-form-panel">
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+                    <span style="font-size:1.5rem;">⏱️</span>
+                    <h2 style="margin:0;font-size:1.2rem;">Share of Time</h2>
+                    <span style="color:var(--text-secondary);font-size:0.8rem;">Analyze how time is distributed across entertainment categories</span>
+                </div>
+                <div class="sot-form-row">
+                    <div class="sot-field">
+                        <label>Start Date</label>
+                        <input type="date" id="sotStartDate">
+                    </div>
+                    <div class="sot-field">
+                        <label>End Date</label>
+                        <input type="date" id="sotEndDate">
+                    </div>
+                    <div class="sot-field" style="flex:1;">
+                        <label>Age Range</label>
+                        <div class="sot-age-grid" id="sotAgeGrid">
+                            <label class="sot-age-chip active"><input type="checkbox" value="17 and Under" checked>Under 18</label>
+                            <label class="sot-age-chip active"><input type="checkbox" value="18-24" checked>18-24</label>
+                            <label class="sot-age-chip active"><input type="checkbox" value="25-34" checked>25-34</label>
+                            <label class="sot-age-chip active"><input type="checkbox" value="35-44" checked>35-44</label>
+                            <label class="sot-age-chip active"><input type="checkbox" value="45-54" checked>45-54</label>
+                            <label class="sot-age-chip active"><input type="checkbox" value="55-64" checked>55-64</label>
+                            <label class="sot-age-chip active"><input type="checkbox" value="65 or Older" checked>65+</label>
+                        </div>
+                    </div>
+                    <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()">Run Analysis</button>
+                </div>
+            </div>
+            <div id="sotResultsArea" style="display:none;">
+                <div class="sot-kpi-grid">
+                    <div class="sot-kpi">
+                        <div class="sot-kpi-label">Matched Participants</div>
+                        <div class="sot-kpi-value" id="sotKpiUsers" style="color:var(--accent-lime);">—</div>
+                    </div>
+                    <div class="sot-kpi">
+                        <div class="sot-kpi-label">Total Interactions</div>
+                        <div class="sot-kpi-value" id="sotKpiInteractions" style="color:var(--accent-cyan);">—</div>
+                    </div>
+                    <div class="sot-kpi">
+                        <div class="sot-kpi-label">Categories Tracked</div>
+                        <div class="sot-kpi-value" id="sotKpiCategories" style="color:var(--accent-orange);">—</div>
+                    </div>
+                </div>
+                <div class="sot-charts-row">
+                    <div class="sot-chart-card">
+                        <h3 class="sot-chart-title">Share of Time by Category</h3>
+                        <div style="position:relative;height:320px;"><canvas id="sotDoughnutChart"></canvas></div>
+                    </div>
+                    <div class="sot-chart-card">
+                        <h3 class="sot-chart-title">Category Comparison</h3>
+                        <div style="position:relative;height:320px;"><canvas id="sotBarChart"></canvas></div>
+                    </div>
+                </div>
+                <h3 style="font-size:0.95rem;margin-bottom:0.5rem;color:var(--text-secondary);">Click a category to drill down into individual brands</h3>
+                <div class="sot-cat-cards" id="sotCatCards"></div>
+                <div class="sot-drill-card" id="sotDrillCard" style="display:none;">
+                    <h3 class="sot-chart-title" id="sotDrillTitle">Brand Breakdown</h3>
+                    <div style="position:relative;min-height:280px;"><canvas id="sotDrillChart"></canvas></div>
+                </div>
+            </div>
+            <div id="sotLoadingArea" style="display:none;">
+                <div class="sot-loading"><div class="spinner"></div>Running Share of Time analysis&hellip; this may take a moment with large date ranges.</div>
+            </div>
+            <div id="sotEmptyState" class="dashboard-empty-state">
+                <div class="empty-state-content">
+                    <div class="empty-state-icon">⏱️</div>
+                    <h2>Share of Time</h2>
+                    <p>Select a date range and age brackets above, then click <strong>Run Analysis</strong> to see how time is distributed across Streaming Video, Streaming Music, Games, Betting, Social Media, and vMVPD/FAST.</p>
+                </div>
+            </div>
+        </div><!-- End shareOfTimeIQView -->
+
         <!-- FLYWHEEL CONVERSION VIEW -->
         <div id="flywheelConversionView" style="display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden;">
             <div class="dashboard-layout" style="height: 100%; min-height: 0;">
@@ -18195,7 +18304,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -18232,6 +18341,7 @@
                 hedgeFundIQ: showHedgeFundIQ,
                 roasIQ: showRoasIQ,
                 ecommerceIQ: showEcommerceIQ,
+                shareOfTimeIQ: showShareOfTimeIQ,
                 flywheelConversion: showFlywheelConversionDashboard,
                 dashboard: showDashboardView,
                 workspace: function() {
@@ -18264,12 +18374,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'roasIQView', 'ecommerceIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -18288,6 +18398,7 @@
                 hedgeFundIQ: 'Hedge Fund IQ: View hedge fund and institutional engagement and exposure.',
                 roasIQ: 'ROAS IQ: Analyze return on ad spend by channel, source, and campaign attribution.',
                 ecommerceIQ: 'E-Commerce IQ: Explore purchase funnel activity across retailers and product pages.',
+                shareOfTimeIQ: 'Share of Time: Analyze how audience time is distributed across streaming, music, games, betting, social media, and vMVPD/FAST.',
                 flywheelConversion: 'Flywheel Conversion: Track user journeys through your conversion funnel and measure drop-off at each touchpoint.',
                 workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
@@ -18312,7 +18423,8 @@
                         ['ticketSalesTracker', !!d.has_ticket_sales_tracker_access],
                         ['hedgeFundIQ', !!d.has_hedge_fund_iq_access],
                         ['roasIQ', !!d.has_roas_iq_access],
-                        ['ecommerceIQ', !!d.has_ecommerce_iq_access]
+                        ['ecommerceIQ', !!d.has_ecommerce_iq_access],
+                        ['shareOfTimeIQ', d.has_share_of_time_access !== false]
                     ];
                     pairs.forEach(function (pv) {
                         var opt = viewDropdown.querySelector('option[value="' + pv[0] + '"]');
@@ -23215,6 +23327,177 @@
             _ecomIQTable(pdps.length > 10 ? pdps.slice(-10).reverse() : [], 'ecomIQBottomPdp');
             _ecomIQTable(carts.slice(0,10), 'ecomIQCart');
             _ecomIQTable(purchases.slice(0,10), 'ecomIQPurchase');
+        }
+
+        // ===================== SHARE OF TIME IQ =====================
+        var _sotDoughnutInst = null, _sotBarInst = null, _sotDrillInst = null;
+        var _sotData = null;
+        var _sotCatColors = {
+            'Streaming Video': '#6366f1',
+            'Streaming Music': '#22d3ee',
+            'Games': '#f59e0b',
+            'Betting': '#ef4444',
+            'Social Media': '#a855f7',
+            'vMVPD/FAST': '#10b981'
+        };
+
+        (function() {
+            var chips = document.querySelectorAll('#sotAgeGrid .sot-age-chip');
+            chips.forEach(function(chip) {
+                chip.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var cb = chip.querySelector('input');
+                    cb.checked = !cb.checked;
+                    chip.classList.toggle('active', cb.checked);
+                });
+            });
+        })();
+
+        window.showShareOfTimeIQ = function() {
+            var dd = document.getElementById('viewNavDropdown');
+            var opt = dd?.querySelector('option[value="shareOfTimeIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('shareOfTimeIQ');
+            if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
+            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','sfConversionView','flywheelConversionView','talentFitIQView'].forEach(function(id) {
+                var el = document.getElementById(id); if (el) el.style.display = 'none';
+            });
+            if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
+            var sv = document.getElementById('shareOfTimeIQView'); if (sv) sv.style.display = 'flex';
+        };
+
+        function sotRunAnalysis() {
+            var start = document.getElementById('sotStartDate')?.value;
+            var end = document.getElementById('sotEndDate')?.value;
+            if (!start || !end) { alert('Please select both start and end dates.'); return; }
+            var checks = document.querySelectorAll('#sotAgeGrid input:checked');
+            var ages = [];
+            checks.forEach(function(c) { ages.push(c.value); });
+            if (!ages.length) { alert('Please select at least one age bracket.'); return; }
+
+            var btn = document.getElementById('sotRunBtn');
+            btn.disabled = true; btn.textContent = 'Running…';
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            document.getElementById('sotLoadingArea').style.display = 'block';
+
+            fetch('/api/share-of-time/analyze', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ start_date: start, end_date: end, age_brackets: ages })
+            }).then(function(r) { return r.json(); }).then(function(resp) {
+                btn.disabled = false; btn.textContent = 'Run Analysis';
+                document.getElementById('sotLoadingArea').style.display = 'none';
+                if (!resp.success) { alert('Error: ' + (resp.error || 'Unknown')); document.getElementById('sotEmptyState').style.display = 'flex'; return; }
+                _sotData = resp.data;
+                sotRenderResults(_sotData);
+            }).catch(function(err) {
+                btn.disabled = false; btn.textContent = 'Run Analysis';
+                document.getElementById('sotLoadingArea').style.display = 'none';
+                document.getElementById('sotEmptyState').style.display = 'flex';
+                alert('Request failed: ' + err);
+            });
+        }
+
+        function sotRenderResults(data) {
+            document.getElementById('sotResultsArea').style.display = 'block';
+            document.getElementById('sotKpiUsers').textContent = data.matched_users.toLocaleString();
+            document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
+            document.getElementById('sotKpiCategories').textContent = data.categories.length;
+
+            var cats = data.categories;
+            var labels = cats.map(function(c) { return c.name; });
+            var shares = cats.map(function(c) { return c.share_pct; });
+            var colors = cats.map(function(c) { return _sotCatColors[c.name] || '#888'; });
+
+            if (_sotDoughnutInst) _sotDoughnutInst.destroy();
+            var dCtx = document.getElementById('sotDoughnutChart');
+            if (dCtx && typeof Chart !== 'undefined') {
+                _sotDoughnutInst = new Chart(dCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: { labels: labels, datasets: [{ data: shares, backgroundColor: colors, borderWidth: 0, hoverOffset: 8 }] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, cutout: '52%',
+                        plugins: {
+                            legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, font: { size: 12 }, color: '#e8e8e8' } },
+                            tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed.toFixed(2) + '%'; } } },
+                            datalabels: { color: '#fff', font: { weight: '700', size: 13 }, formatter: function(v) { return v >= 2 ? v.toFixed(1) + '%' : ''; } }
+                        },
+                        onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
+                    }
+                });
+            }
+
+            if (_sotBarInst) _sotBarInst.destroy();
+            var bCtx = document.getElementById('sotBarChart');
+            if (bCtx && typeof Chart !== 'undefined') {
+                _sotBarInst = new Chart(bCtx.getContext('2d'), {
+                    type: 'bar',
+                    data: { labels: labels, datasets: [{ label: 'Share %', data: shares, backgroundColor: colors, borderWidth: 0, borderRadius: 5, barPercentage: 0.65 }] },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } },
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.x.toFixed(2) + '% of time'; } } } },
+                        onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
+                    }
+                });
+            }
+
+            var cardsHtml = '';
+            cats.forEach(function(c, i) {
+                var col = _sotCatColors[c.name] || '#888';
+                cardsHtml += '<div class="sot-cat-card" data-idx="' + i + '" onclick="sotDrillDown(' + i + ')" style="border-left:3px solid ' + col + ';">' +
+                    '<div class="sot-cat-name">' + c.name + '</div>' +
+                    '<div class="sot-cat-pct" style="color:' + col + ';">' + c.share_pct.toFixed(1) + '%</div>' +
+                    '<div class="sot-cat-clicks">' + c.clicks.toLocaleString() + ' interactions</div>' +
+                '</div>';
+            });
+            document.getElementById('sotCatCards').innerHTML = cardsHtml;
+            document.getElementById('sotDrillCard').style.display = 'none';
+        }
+
+        function sotDrillDown(catIdx) {
+            if (!_sotData) return;
+            var cat = _sotData.categories[catIdx];
+            if (!cat) return;
+
+            document.querySelectorAll('.sot-cat-card').forEach(function(c) { c.classList.remove('active'); });
+            var active = document.querySelector('.sot-cat-card[data-idx="' + catIdx + '"]');
+            if (active) active.classList.add('active');
+
+            document.getElementById('sotDrillCard').style.display = 'block';
+            document.getElementById('sotDrillTitle').textContent = cat.name + ' — Brand Breakdown';
+
+            var brands = cat.brands.slice(0, 25);
+            var bLabels = brands.map(function(b) { return b.name; });
+            var bShares = brands.map(function(b) { return b.category_share_pct; });
+            var col = _sotCatColors[cat.name] || '#888';
+            var bgColors = brands.map(function(b, i) {
+                var opacity = 1 - (i * 0.025);
+                return col.replace(')', ', ' + opacity + ')').replace('rgb', 'rgba').replace('#', '');
+            });
+            bgColors = brands.map(function(b, i) { return col; });
+
+            if (_sotDrillInst) _sotDrillInst.destroy();
+            var canvas = document.getElementById('sotDrillChart');
+            canvas.parentElement.style.height = Math.max(280, brands.length * 26) + 'px';
+            _sotDrillInst = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: { labels: bLabels, datasets: [{ label: 'Category Share %', data: bShares, backgroundColor: col + 'cc', borderWidth: 0, borderRadius: 4, barPercentage: 0.7 }] },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } },
+                        y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + b.clicks.toLocaleString() + ' interactions)'; } } }
+                    }
+                }
+            });
+
+            document.getElementById('sotDrillCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
         // ===================== FLYWHEEL CONVERSION =====================
