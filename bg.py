@@ -13947,6 +13947,8 @@ def _run_single_category_agent(category: str, values: list[str],
 
     prompt = f"""You are setting Brand Penetration (BP) values for the **{category}** category of a consumer profile for **{subject}**.
 
+Brand Penetration = the % of THIS specific audience that uses, engages with, or purchases each item. This is NOT a general popularity score — it must reflect the realistic overlap between this persona and each item.
+
 PERSONA:
 {summary}
 
@@ -13956,24 +13958,25 @@ KEY DEMOGRAPHICS:
 CATEGORY GUIDANCE:
 {guidance}
 
-Below are the items in this category (from the panel). For each one, decide what percentage of this audience uses / engages with / purchases that item. Return a BP between 0.01 and 99.99.  Think carefully about EACH item in the context of this persona.
+Below are the items in this category (from the panel). For each one, set a realistic BP percentage.
 
 ITEMS:
 {values_list}
 
 Return ONLY a JSON array — no markdown, no commentary:
 [
-  {{"value": "<ITEM NAME — exact spelling from list above>", "bp": <number 0.01-99.99>, "reason": "<one sentence>"}},
+  {{"value": "<ITEM NAME — exact spelling from list above>", "bp": <number>, "reason": "<one sentence>"}},
   …
 ]
 
-RULES:
-- The MOST popular items for this audience should have the highest BP (50-90+).
-- Niche or irrelevant items should be low (0.5-10).
-- Items moderately relevant to this persona: 10-50.
-- Rankings must make intuitive sense: e.g. for a young pop-star audience, TikTok > Facebook; Google > Quora.
-- Do NOT default to flat/uniform values — create meaningful spread.
-- Every item from the list MUST appear in your output.
+CRITICAL RULES — READ CAREFULLY:
+1. REALISTIC SCALE: Even the most popular item in any category rarely exceeds 85% BP for a niche audience. Most items should be 1-40%. Only truly universal items (Google, YouTube, Amazon, Netflix for a digital audience) can reach 60-85%.
+2. NO ROUND NUMBERS: Never use neat multiples of 5 or 10 (e.g. 50.0, 75.0, 30.0). Use realistic decimals like 37.2, 12.8, 63.4, 4.7, 22.1. Every value should look like real survey data, not templated.
+3. SPREAD DISTRIBUTION: Most items (60-70%) should be in the 1-25% range. Only 3-5 items per category should exceed 50%. Many niche items should be under 5%.
+4. RANK ORDER MUST MAKE SENSE: For a young female pop-star audience, TikTok > Facebook; Google > Quora; Netflix > ESPN; Amazon > Etsy.
+5. INTEREST CATEGORY REALISM: "Interest" does NOT mean 80%+. Having interest in "FOOTWEAR" might be 25% for this audience (the subset who are sneaker/shoe enthusiasts), not 80%. Having interest in "MUSIC" for a pop star audience might be 72%, not 90%.
+6. LOW-AFFINITY ITEMS: Items unrelated to the persona (e.g. HEAVY MACHINERY, GOLF, BETTING for a young female pop audience) should be 0.5-5%.
+7. Every item from the list MUST appear in your output.
 """
 
     token_budget = max(4096, len(values) * 80)
