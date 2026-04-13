@@ -25555,10 +25555,17 @@ def share_of_time_analyze():
         finally:
             conn.close()
 
+        AVG_MINUTES_PER_INTERACTION = {
+            'Streaming Video': 52,
+            'Streaming Music': 26,
+            'Games': 8,
+            'Betting': 12,
+            'Social Media': 6,
+            'vMVPD/FAST': 48,
+        }
+
         categories = {}
-        grand_total = 0
         for cat, brand, clicks, total_all in rows:
-            grand_total = total_all
             if cat not in categories:
                 categories[cat] = {'name': cat, 'clicks': 0, 'brands': []}
             categories[cat]['clicks'] += clicks
@@ -25566,32 +25573,48 @@ def share_of_time_analyze():
                 'name': brand, 'clicks': int(clicks)
             })
 
+        total_est_minutes = 0
+        for cat_name, c in categories.items():
+            weight = AVG_MINUTES_PER_INTERACTION.get(cat_name, 6)
+            c['est_minutes'] = c['clicks'] * weight
+            total_est_minutes += c['est_minutes']
+            for b in c['brands']:
+                b['est_minutes'] = b['clicks'] * weight
+
         result_categories = []
         for cat_name in ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']:
             if cat_name in categories:
                 c = categories[cat_name]
-                cat_share = round(100.0 * c['clicks'] / total_interactions, 2) if total_interactions else 0
+                weight = AVG_MINUTES_PER_INTERACTION[cat_name]
+                time_share = round(100.0 * c['est_minutes'] / total_est_minutes, 2) if total_est_minutes else 0
                 brands_out = []
                 for b in c['brands'][:50]:
                     brands_out.append({
                         'name': b['name'],
                         'clicks': b['clicks'],
-                        'category_share_pct': round(100.0 * b['clicks'] / c['clicks'], 2) if c['clicks'] else 0,
-                        'overall_share_pct': round(100.0 * b['clicks'] / total_interactions, 4) if total_interactions else 0,
+                        'est_minutes': b['est_minutes'],
+                        'category_share_pct': round(100.0 * b['est_minutes'] / c['est_minutes'], 2) if c['est_minutes'] else 0,
+                        'overall_share_pct': round(100.0 * b['est_minutes'] / total_est_minutes, 4) if total_est_minutes else 0,
                     })
                 result_categories.append({
-                    'name': cat_name, 'clicks': int(c['clicks']),
-                    'share_pct': cat_share, 'brands': brands_out,
+                    'name': cat_name,
+                    'clicks': int(c['clicks']),
+                    'est_minutes': int(c['est_minutes']),
+                    'avg_min_per_interaction': weight,
+                    'share_pct': time_share,
+                    'brands': brands_out,
                 })
 
         return jsonify({
             'success': True,
             'data': {
                 'total_interactions': int(total_interactions),
+                'total_est_minutes': int(total_est_minutes),
                 'matched_users': int(matched_users),
                 'start_date': start_date,
                 'end_date': end_date,
                 'age_brackets': age_brackets,
+                'avg_minutes_per_interaction': AVG_MINUTES_PER_INTERACTION,
                 'categories': result_categories,
             }
         })

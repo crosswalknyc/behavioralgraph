@@ -15960,17 +15960,17 @@
                         <div class="sot-kpi-value" id="sotKpiUsers" style="color:var(--accent-lime);">—</div>
                     </div>
                     <div class="sot-kpi">
-                        <div class="sot-kpi-label">Total Interactions</div>
-                        <div class="sot-kpi-value" id="sotKpiInteractions" style="color:var(--accent-cyan);">—</div>
+                        <div class="sot-kpi-label">Est. Total Hours</div>
+                        <div class="sot-kpi-value" id="sotKpiHours" style="color:var(--accent-cyan);">—</div>
                     </div>
                     <div class="sot-kpi">
-                        <div class="sot-kpi-label">Categories Tracked</div>
-                        <div class="sot-kpi-value" id="sotKpiCategories" style="color:var(--accent-orange);">—</div>
+                        <div class="sot-kpi-label">Total Interactions</div>
+                        <div class="sot-kpi-value" id="sotKpiInteractions" style="color:var(--accent-orange);">—</div>
                     </div>
                 </div>
                 <div class="sot-charts-row">
                     <div class="sot-chart-card">
-                        <h3 class="sot-chart-title">Share of Time by Category</h3>
+                        <h3 class="sot-chart-title">Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(weighted by avg. session duration)</span></h3>
                         <div style="position:relative;height:320px;"><canvas id="sotDoughnutChart"></canvas></div>
                     </div>
                     <div class="sot-chart-card">
@@ -23402,8 +23402,9 @@
         function sotRenderResults(data) {
             document.getElementById('sotResultsArea').style.display = 'block';
             document.getElementById('sotKpiUsers').textContent = data.matched_users.toLocaleString();
+            var estHours = Math.round(data.total_est_minutes / 60);
+            document.getElementById('sotKpiHours').textContent = estHours.toLocaleString();
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
-            document.getElementById('sotKpiCategories').textContent = data.categories.length;
 
             var cats = data.categories;
             var labels = cats.map(function(c) { return c.name; });
@@ -23446,10 +23447,11 @@
             var cardsHtml = '';
             cats.forEach(function(c, i) {
                 var col = _sotCatColors[c.name] || '#888';
+                var estHrs = Math.round(c.est_minutes / 60).toLocaleString();
                 cardsHtml += '<div class="sot-cat-card" data-idx="' + i + '" onclick="sotDrillDown(' + i + ')" style="border-left:3px solid ' + col + ';">' +
                     '<div class="sot-cat-name">' + c.name + '</div>' +
                     '<div class="sot-cat-pct" style="color:' + col + ';">' + c.share_pct.toFixed(1) + '%</div>' +
-                    '<div class="sot-cat-clicks">' + c.clicks.toLocaleString() + ' interactions</div>' +
+                    '<div class="sot-cat-clicks">' + estHrs + ' est. hrs &middot; ' + c.clicks.toLocaleString() + ' clicks &times; ' + c.avg_min_per_interaction + ' min</div>' +
                 '</div>';
             });
             document.getElementById('sotCatCards').innerHTML = cardsHtml;
@@ -23492,7 +23494,7 @@
                     },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + b.clicks.toLocaleString() + ' interactions)'; } } }
+                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var hrs = Math.round(b.est_minutes / 60).toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + hrs + ' est. hrs from ' + b.clicks.toLocaleString() + ' clicks)'; } } }
                     }
                 }
             });
