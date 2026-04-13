@@ -13971,12 +13971,13 @@ Return ONLY a JSON array — no markdown, no commentary:
 
 CRITICAL RULES — READ CAREFULLY:
 1. REALISTIC SCALE: Even the most popular item in any category rarely exceeds 85% BP for a niche audience. Most items should be 1-40%. Only truly universal items (Google, YouTube, Amazon, Netflix for a digital audience) can reach 60-85%.
-2. NO ROUND NUMBERS: Never use neat multiples of 5 or 10 (e.g. 50.0, 75.0, 30.0). Use realistic decimals like 37.2, 12.8, 63.4, 4.7, 22.1. Every value should look like real survey data, not templated.
+2. FOUR DECIMAL PLACES: Every BP value MUST have 4 decimal places of precision, e.g. 37.2148, 12.8034, 63.4291, 4.7082, 22.1467. This simulates real survey data. Never return a value with fewer than 4 decimal digits.
 3. SPREAD DISTRIBUTION: Most items (60-70%) should be in the 1-25% range. Only 3-5 items per category should exceed 50%. Many niche items should be under 5%.
 4. RANK ORDER MUST MAKE SENSE: For a young female pop-star audience, TikTok > Facebook; Google > Quora; Netflix > ESPN; Amazon > Etsy.
 5. INTEREST CATEGORY REALISM: "Interest" does NOT mean 80%+. Having interest in "FOOTWEAR" might be 25% for this audience (the subset who are sneaker/shoe enthusiasts), not 80%. Having interest in "MUSIC" for a pop star audience might be 72%, not 90%.
 6. LOW-AFFINITY ITEMS: Items unrelated to the persona (e.g. HEAVY MACHINERY, GOLF, BETTING for a young female pop audience) should be 0.5-5%.
-7. Every item from the list MUST appear in your output.
+7. DIGITAL PANEL CONTEXT: This data comes from a DIGITAL behavioral panel (online/app clickstream). For MOST PURCHASED BRANDS and CPG categories, traditional grocery/supermarket CPG brands (Coca-Cola, Oreo, Doritos, Tide, Hershey's, M&Ms, etc.) should be LOW (2-15%) because people rarely purchase those online — they buy them in physical stores. Digital-native brands, DTC brands, fashion, beauty, and tech brands should rank higher since those are actually purchased online.
+8. Every item from the list MUST appear in your output.
 """
 
     token_budget = max(4096, len(values) * 80)
@@ -14110,6 +14111,18 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 results_map[cat] = []
 
     # --- D) Write agent BP values back into DataFrame --------------------
+    def _add_4dp_noise(val: float) -> float:
+        """Ensure value has 4 meaningful decimal digits (no trailing zeros)."""
+        v = round(val, 4)
+        s = f"{v:.4f}"
+        # If fewer than 4 non-zero trailing decimals, add micro-noise
+        frac = s.split('.')[1] if '.' in s else '0000'
+        if frac.endswith('000') or frac.endswith('00') or frac.endswith('0'):
+            noise = random.uniform(0.0001, 0.0099)
+            v = v + noise if v < 99.99 else v - noise
+            v = round(max(0.0001, min(99.9999, v)), 4)
+        return v
+
     rows_written = 0
     for cat, (vals, idxs) in category_values.items():
         agent_result = results_map.get(cat, [])
@@ -14123,7 +14136,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             val_u = str(df.at[idx, 'Value']).strip().upper()
             if val_u in bp_lookup:
                 new_bp = max(0.0001, min(99.9999, bp_lookup[val_u]))
-                df.at[idx, bp_col] = round(new_bp, 4)
+                df.at[idx, bp_col] = _add_4dp_noise(new_bp)
                 rows_written += 1
 
     print(f"   ✅ Wrote BP for {rows_written} behavioral rows across {len(results_map)} categories")
