@@ -26082,18 +26082,23 @@ def share_of_time_analyze():
         projected_users_by_age = {}
         total_sample_uids = 0
 
+        _SOT_BRACKET_DISCOUNT = {
+            '17 and Under': 0.91, '18-24': 0.92, '25-34': 0.90,
+            '35-44': 0.88, '45-54': 0.87, '55-64': 0.93, '65 or Older': 0.89,
+        }
         for age_val in age_brackets:
             gp_pct = SOT_GENPOP_AGE_PCT.get(age_val, 10.0)
             genpop_sample = SOT_GENPOP_AGE_SAMPLE.get(age_val, int(round((gp_pct / 100.0) * SOT_PANEL_SIZE)))
             census_projected = int(round((gp_pct / 100.0) * SOT_US_POPULATION))
-            hard_cap = int(census_projected * 0.999)
+            discount = _SOT_BRACKET_DISCOUNT.get(age_val, 0.90)
+            capped = int(round(census_projected * discount))
 
             info = age_uids.get(age_val, {'uids': 0, 'interactions': 0})
             clickstream_uids = info['uids']
             raw_projected = (clickstream_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
 
-            if raw_projected > hard_cap:
-                ratio = (hard_cap / raw_projected) if raw_projected > 0 else 1.0
+            if raw_projected > capped:
+                ratio = (capped / raw_projected) if raw_projected > 0 else 1.0
             else:
                 ratio = 1.0
 
@@ -26104,7 +26109,7 @@ def share_of_time_analyze():
                 'clickstream_uids': clickstream_uids,
                 'projected': census_projected,
                 'census_cap': census_projected,
-                'capped': hard_cap,
+                'capped': capped,
                 'ratio': round(ratio, 4),
                 'genpop_pct': gp_pct,
             }
