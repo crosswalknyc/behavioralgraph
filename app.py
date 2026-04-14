@@ -25464,6 +25464,10 @@ SHARE_OF_TIME_CATEGORY_SQL = """
 
 SOT_US_POPULATION = 329_900_000
 SOT_PANEL_SIZE = 10_000_000
+SOT_GENPOP_AGE_SAMPLE = {
+    '17 and Under': 1_960_000, '18-24': 970_000, '25-34': 1_320_000, '35-44': 1_360_000,
+    '45-54': 1_240_000, '55-64': 1_250_000, '65 or Older': 1_910_000,
+}
 SOT_GENPOP_AGE_PCT = {
     '17 and Under': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6,
     '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1,
@@ -25984,15 +25988,20 @@ def share_of_time_analyze():
         if not force_refresh:
             cached_run = _sot_load_cached_run(start_date, end_date, age_brackets)
             if cached_run and 'data' in cached_run:
-                cats = cached_run['data'].get('categories', [])
+                cdata = cached_run['data']
+                cats = cdata.get('categories', [])
+                detail = cdata.get('age_group_detail', {})
+                first_detail = detail.get(age_brackets[0], {}) if detail else {}
+                uses_genpop = 'clickstream_uids' in first_detail
                 has_all = (
                     any(c.get('share_pct_total') is not None and c.get('sessions_per_day') is not None for c in cats)
-                    and cached_run['data'].get('brand_affinity_applied', False)
+                    and cdata.get('brand_affinity_applied', False)
+                    and uses_genpop
                 )
                 if has_all:
-                    return jsonify({'success': True, 'data': cached_run['data'], 'from_cache': True})
+                    return jsonify({'success': True, 'data': cdata, 'from_cache': True})
                 else:
-                    print("[SOT] Stale run cache (missing brand affinity or shares), re-computing...")
+                    print("[SOT] Stale run cache (missing genpop samples or shares), re-computing...")
 
         age_in = ",".join(f"'{a}'" for a in age_brackets)
 
@@ -26056,57 +26065,49 @@ def share_of_time_analyze():
         finally:
             conn.close()
 
-        # --- Census-cap age groups (strict bg.py methodology) ---
-        # Each age group's projection is hard-capped at census_cap * 0.999.
-        # After capping, free (uncapped) groups are redistributed to fill
-        # the remaining share, keeping relative proportions (same as
-        # _enforce_demographic_census_ceiling in bg.py).
+        # --- Census-cap age groups (strict bg.py / genpop methodology) ---
+        # Sample sizes per age bracket come from the genpop panel definition
+        # (SOT_GENPOP_AGE_PCT × SOT_PANEL_SIZE), NOT from raw Snowflake UID
+        # counts.  Projections use the genpop census numbers directly.
+        # Actual Snowflake UID counts drive the cap ratio applied to clicks.
         age_uids = {}
-        total_sample_uids = 0
+        total_clickstream_uids = 0
         total_sample_interactions = 0
         for age_val, uid_cnt, int_cnt in age_rows:
             age_uids[age_val] = {'uids': uid_cnt, 'interactions': int_cnt}
-            total_sample_uids += uid_cnt
+            total_clickstream_uids += uid_cnt
             total_sample_interactions += int_cnt
-
-        profile_projected_audience = (total_sample_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
 
         age_cap_ratios = {}
         projected_users_by_age = {}
+        total_sample_uids = 0
 
-        for _iteration in range(10):
-            any_capped = False
-            locked_users = 0
-            free_users = 0
-            for age_val in age_brackets:
-                info = age_uids.get(age_val, {'uids': 0, 'interactions': 0})
-                raw_uids = info['uids']
-                projected = (raw_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
-                gp_pct = SOT_GENPOP_AGE_PCT.get(age_val, 10.0)
-                census_cap = int(round((gp_pct / 100.0) * SOT_US_POPULATION))
-                hard_cap = int(census_cap * 0.999)
+        for age_val in age_brackets:
+            gp_pct = SOT_GENPOP_AGE_PCT.get(age_val, 10.0)
+            genpop_sample = SOT_GENPOP_AGE_SAMPLE.get(age_val, int(round((gp_pct / 100.0) * SOT_PANEL_SIZE)))
+            census_projected = int(round((gp_pct / 100.0) * SOT_US_POPULATION))
+            hard_cap = int(census_projected * 0.999)
 
-                if projected > hard_cap:
-                    capped = hard_cap
-                    ratio = (capped / projected) if projected > 0 else 1.0
-                    locked_users += capped
-                    any_capped = True
-                else:
-                    capped = int(round(projected))
-                    ratio = 1.0
-                    free_users += capped
+            info = age_uids.get(age_val, {'uids': 0, 'interactions': 0})
+            clickstream_uids = info['uids']
+            raw_projected = (clickstream_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
 
-                age_cap_ratios[age_val] = ratio
-                projected_users_by_age[age_val] = {
-                    'sample_uids': raw_uids,
-                    'projected': int(round(projected)),
-                    'census_cap': census_cap,
-                    'capped': capped,
-                    'ratio': round(ratio, 4),
-                    'genpop_pct': gp_pct,
-                }
-            if not any_capped:
-                break
+            if raw_projected > hard_cap:
+                ratio = (hard_cap / raw_projected) if raw_projected > 0 else 1.0
+            else:
+                ratio = 1.0
+
+            age_cap_ratios[age_val] = ratio
+            total_sample_uids += genpop_sample
+            projected_users_by_age[age_val] = {
+                'sample_uids': genpop_sample,
+                'clickstream_uids': clickstream_uids,
+                'projected': census_projected,
+                'census_cap': census_projected,
+                'capped': hard_cap,
+                'ratio': round(ratio, 4),
+                'genpop_pct': gp_pct,
+            }
 
         total_projected_users = sum(v['capped'] for v in projected_users_by_age.values())
 
