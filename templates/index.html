@@ -23769,65 +23769,150 @@
             sotRenderTabs();
         }
 
+        var _sotCompareCharts = [];
+
+        function _sotDestroyCompareCharts() {
+            _sotCompareCharts.forEach(function(c) { try { c.destroy(); } catch(e) {} });
+            _sotCompareCharts = [];
+        }
+
+        function _sotTabHue(i) { return [200, 280, 40, 150, 340, 60][i % 6]; }
+
         function sotRenderCompare() {
+            _sotDestroyCompareCharts();
             var area = document.getElementById('sotCompareArea');
             var gran = _sotGranularity;
             var shareKey = _sotShareKey(gran);
             var tabs = _sotOpenTabs;
-            var ncols = Math.min(tabs.length, 4);
+            if (!tabs.length) { area.innerHTML = ''; return; }
+
+            var catNames = [];
+            tabs.forEach(function(t) {
+                (t.data.categories || []).forEach(function(c) {
+                    if (catNames.indexOf(c.name) === -1) catNames.push(c.name);
+                });
+            });
+
             var html = '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:1rem;">' +
                 '<button class="sot-gran-btn' + (gran==='session'?' active':'') + '" onclick="sotSetCompareGran(\'session\')">Per Session</button>' +
                 '<button class="sot-gran-btn' + (gran==='daily'?' active':'') + '" onclick="sotSetCompareGran(\'daily\')">Per Day</button>' +
                 '<button class="sot-gran-btn' + (gran==='total'?' active':'') + '" onclick="sotSetCompareGran(\'total\')">Total Time Frame</button>' +
             '</div>';
-            html += '<div class="sot-compare-grid" style="grid-template-columns:repeat(' + ncols + ',1fr);">';
-            tabs.forEach(function(t) {
-                var d = t.data;
-                var cats = d.categories || [];
-                var label = _sotTabLabel(d);
-                html += '<div class="sot-compare-col"><h4>' + label + '</h4>';
-                html += '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:0.5rem;">' +
-                    (d.projected_us_users ? (d.projected_us_users >= 1e6 ? (d.projected_us_users/1e6).toFixed(1)+'M' : d.projected_us_users.toLocaleString()) + ' US proj.' : '') +
-                    ' &middot; ' + (d.matched_users||0).toLocaleString() + ' sample</div>';
-                cats.forEach(function(c) {
-                    var pct = (c[shareKey] || 0);
-                    var col = _sotCatColors[c.name] || '#888';
-                    var timeInfo = _sotTimeLabel(c, gran, d.num_days);
-                    html += '<div class="sot-compare-row"><span>' + c.name + '</span><span style="font-weight:700;color:' + col + ';">' + pct.toFixed(1) + '%</span></div>' +
-                        '<div class="sot-compare-bar" style="width:' + Math.max(pct, 0.5) + '%;background:' + col + ';"></div>' +
-                        '<div style="font-size:0.62rem;color:var(--text-secondary);margin-bottom:6px;">' + timeInfo + '</div>';
-                });
-                html += '</div>';
-            });
-            html += '</div>';
-            html += '<div style="margin-top:0.5rem;"><canvas id="sotCompareChart" height="' + (60 + tabs.length * 35) + '"></canvas></div>';
-            area.innerHTML = html;
-            sotRenderCompareChart(tabs, shareKey);
-        }
 
-        function sotRenderCompareChart(tabs, shareKey) {
-            var canvas = document.getElementById('sotCompareChart');
-            if (!canvas || typeof Chart === 'undefined') return;
-            var catNames = (tabs[0] && tabs[0].data.categories) ? tabs[0].data.categories.map(function(c){return c.name;}) : [];
-            var datasets = [];
-            tabs.forEach(function(t, i) {
-                var label = _sotTabLabel(t.data);
-                var d = t.data.categories || [];
-                var vals = catNames.map(function(cn) { var found = d.find(function(c){return c.name===cn;}); return found ? (found[shareKey]||0) : 0; });
-                var hue = [200, 280, 40, 150, 340, 60][i % 6];
-                datasets.push({ label: label, data: vals, backgroundColor: 'hsla('+hue+',70%,60%,0.7)', borderWidth: 0, borderRadius: 4, barPercentage: 0.7 });
-            });
-            new Chart(canvas.getContext('2d'), {
-                type: 'bar',
-                plugins: [ChartDataLabels],
-                data: { labels: catNames, datasets: datasets },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#e8e8e8', font: { size: 11 } } }, y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v){return v+'%';} } } },
-                    plugins: { legend: { labels: { color: '#e8e8e8', font: { size: 11 } } },
-                        datalabels: { color: '#fff', font: { weight: '700', size: 10 }, anchor: 'end', align: 'end', formatter: function(v){ return v >= 1 ? v.toFixed(1)+'%' : ''; } }
+            html += '<div class="sot-chart-card" style="margin-bottom:1rem;">' +
+                '<h3 class="sot-chart-title">Overall Share of Time by Category</h3>' +
+                '<div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div>' +
+            '</div>';
+
+            catNames.forEach(function(catName) {
+                var allBrands = {};
+                tabs.forEach(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
+                    if (cat && cat.brands) {
+                        cat.brands.forEach(function(b) {
+                            if (!allBrands[b.name]) allBrands[b.name] = true;
+                        });
                     }
-                }
+                });
+                var brandNames = Object.keys(allBrands).slice(0, 20);
+                var chartH = Math.max(250, brandNames.length * 28 + 60);
+                var col = _sotCatColors[catName] || '#888';
+                html += '<div class="sot-chart-card" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">' +
+                    '<h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3>' +
+                    '<div style="position:relative;height:' + chartH + 'px;"><canvas id="sotCmpCat_' + catName.replace(/[^a-zA-Z]/g, '') + '"></canvas></div>' +
+                '</div>';
+            });
+
+            area.innerHTML = html;
+
+            var mainCanvas = document.getElementById('sotCmpMain');
+            if (mainCanvas && typeof Chart !== 'undefined') {
+                var mainDS = [];
+                tabs.forEach(function(t, i) {
+                    var label = _sotTabLabel(t.data);
+                    var cats = t.data.categories || [];
+                    var vals = catNames.map(function(cn) {
+                        var found = cats.find(function(c) { return c.name === cn; });
+                        return found ? (found[shareKey] || 0) : 0;
+                    });
+                    mainDS.push({
+                        label: label, data: vals,
+                        backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
+                        borderWidth: 0, borderRadius: 4, barPercentage: 0.7
+                    });
+                });
+                var mainChart = new Chart(mainCanvas.getContext('2d'), {
+                    type: 'bar', plugins: [ChartDataLabels],
+                    data: { labels: catNames, datasets: mainDS },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v) { return v + '%'; } } },
+                            y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12, weight: '600' } } }
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 16, usePointStyle: true } },
+                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '%'; } } },
+                            datalabels: { anchor: 'end', align: 'start', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
+                        }
+                    }
+                });
+                _sotCompareCharts.push(mainChart);
+            }
+
+            catNames.forEach(function(catName) {
+                var canvasId = 'sotCmpCat_' + catName.replace(/[^a-zA-Z]/g, '');
+                var canvas = document.getElementById(canvasId);
+                if (!canvas || typeof Chart === 'undefined') return;
+
+                var allBrands = {};
+                tabs.forEach(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
+                    if (cat && cat.brands) {
+                        cat.brands.forEach(function(b) {
+                            if (!allBrands[b.name]) allBrands[b.name] = 0;
+                            allBrands[b.name] = Math.max(allBrands[b.name], b.category_share_pct || 0);
+                        });
+                    }
+                });
+                var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
+
+                var catDS = [];
+                tabs.forEach(function(t, i) {
+                    var label = _sotTabLabel(t.data);
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
+                    var brandMap = {};
+                    if (cat && cat.brands) cat.brands.forEach(function(b) { brandMap[b.name] = b; });
+                    var vals = brandNames.map(function(bn) {
+                        var b = brandMap[bn];
+                        return b ? (b.category_share_pct || 0) : 0;
+                    });
+                    catDS.push({
+                        label: label, data: vals,
+                        backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
+                        borderWidth: 0, borderRadius: 3, barPercentage: 0.75
+                    });
+                });
+
+                var catChart = new Chart(canvas.getContext('2d'), {
+                    type: 'bar', plugins: [ChartDataLabels],
+                    data: { labels: brandNames, datasets: catDS },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v) { return v + '%'; } } },
+                            y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 10 }, padding: 12, usePointStyle: true } },
+                            tooltip: { callbacks: { label: function(ctx) {
+                                return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName;
+                            } } },
+                            datalabels: { anchor: 'end', align: 'start', offset: 3, color: '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
+                        }
+                    }
+                });
+                _sotCompareCharts.push(catChart);
             });
         }
 
