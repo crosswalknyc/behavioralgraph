@@ -23745,8 +23745,16 @@
             bar.style.display = 'flex';
             compareBtn.disabled = _sotOpenTabs.length < 2;
             var html = '';
+            if (_sotCompareMode) {
+                html += '<div class="profile-tab active" style="cursor:default;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6;"><span class="profile-tab-name">Comparing ' + _sotOpenTabs.length + ' Runs</span></div>';
+            }
             _sotOpenTabs.forEach(function(t, i) {
-                var cls = 'profile-tab' + (i === _sotActiveTabIdx && !_sotCompareMode ? ' active' : '');
+                var cls = 'profile-tab';
+                if (_sotCompareMode) {
+                    cls += ' active';
+                } else if (i === _sotActiveTabIdx) {
+                    cls += ' active';
+                }
                 var label = _sotTabLabel(t.data);
                 html += '<div class="' + cls + '" onclick="sotSwitchTab(' + i + ')">' +
                     '<span class="profile-tab-name">' + label + '</span>' +
