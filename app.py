@@ -26049,6 +26049,8 @@ def share_of_time_analyze():
                     'category_share_pct': round(100.0 * bv['est_minutes'] / c['est_minutes'], 2) if c['est_minutes'] else 0,
                     'overall_share_pct': round(100.0 * bv['est_minutes'] / total_est_minutes, 4) if total_est_minutes else 0,
                 })
+            min_total = min_per_day * num_days
+
             result_categories.append({
                 'name': cat_name,
                 'clicks': int(round(c['adj_clicks'])),
@@ -26059,6 +26061,7 @@ def share_of_time_analyze():
                 'min_per_day': round(min_per_day, 1),
                 'min_per_week': round(min_per_week, 1),
                 'min_per_month': round(min_per_month, 1),
+                'min_total': round(min_total, 1),
                 'rationale': weight_rationales.get(cat_name, ''),
                 'share_pct_session': time_share_session,
                 'share_pct_daily': time_share_daily,

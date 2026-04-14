@@ -23447,14 +23447,15 @@
 
         function _sotShareKey(gran) {
             if (gran === 'session') return 'share_pct_session';
-            if (gran === 'daily') return 'share_pct_daily';
-            return 'share_pct_session';
+            return 'share_pct_daily';
         }
 
-        function _sotTimeLabel(c, gran) {
+        function _sotTimeLabel(c, gran, numDays) {
             if (gran === 'session') return c.avg_min_per_session + ' min/session';
             if (gran === 'daily') return c.min_per_day + ' min/day (' + c.sessions_per_day + 'x ' + c.avg_min_per_session + ' min)';
-            return c.est_minutes.toLocaleString() + ' total min';
+            var totalMin = c.min_total || (c.min_per_day * (numDays || 1));
+            if (totalMin >= 60) return (totalMin / 60).toFixed(1) + ' hrs over ' + (numDays || '?') + ' days';
+            return totalMin.toFixed(0) + ' min over ' + (numDays || '?') + ' days';
         }
 
         function sotSetGranularity(gran) {
@@ -23499,7 +23500,7 @@
                             legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, font: { size: 12 }, color: '#e8e8e8' } },
                             tooltip: { callbacks: { label: function(ctx) {
                                 var cat = cats[ctx.dataIndex];
-                                return ctx.label + ': ' + ctx.parsed.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran);
+                                return ctx.label + ': ' + ctx.parsed.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
                             } } },
                             datalabels: { color: '#fff', font: { weight: '700', size: 13 }, formatter: function(v) { return v >= 2 ? v.toFixed(1) + '%' : ''; } }
                         },
@@ -23519,7 +23520,7 @@
                         scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } },
                         plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) {
                             var cat = cats[ctx.dataIndex];
-                            return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran);
+                            return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
                         } } } },
                         onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
                     }
@@ -23532,7 +23533,7 @@
                 var pct = (c[shareKey] || 0).toFixed(1);
                 var projHrs = (c.projected_hours || 0);
                 var projLabel = projHrs >= 1000000 ? (projHrs / 1000000).toFixed(1) + 'M hrs' : projHrs.toLocaleString() + ' hrs';
-                var timeInfo = _sotTimeLabel(c, gran);
+                var timeInfo = _sotTimeLabel(c, gran, data.num_days);
                 var rationaleHtml = '';
                 if (c.rationale) {
                     rationaleHtml = '<div class="sot-cat-rationale" style="font-size:0.65rem;color:var(--text-secondary);margin-top:4px;line-height:1.35;font-style:italic;">💡 ' + c.rationale + '</div>';
