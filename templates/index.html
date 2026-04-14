@@ -23411,18 +23411,6 @@
             document.getElementById('sotKpiHours').textContent = (data.total_projected_hours || 0) >= 1000000 ? ((data.total_projected_hours / 1000000).toFixed(1) + 'M') : (data.total_projected_hours || 0).toLocaleString();
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
 
-            var badge = document.getElementById('sotWeightsBadge');
-            if (data.weights_source && data.weights_source !== 'baseline') {
-                var srcLabel = data.weights_source === 'cached' ? 'AI-cached' : 'AI-generated';
-                badge.textContent = '⚡ Weights: ' + srcLabel + ' for ' + (data.weights_quarter || '') + ' · ' + (data.age_brackets || []).join(', ');
-                badge.style.display = 'inline-block';
-                if (data.trend_context) badge.title = data.trend_context;
-            } else {
-                badge.textContent = '📊 Weights: Industry baseline';
-                badge.style.display = 'inline-block';
-                badge.style.background = 'rgba(255,165,0,0.12)';
-                badge.style.color = 'var(--accent-orange)';
-            }
 
             var cats = data.categories;
             var labels = cats.map(function(c) { return c.name; });
