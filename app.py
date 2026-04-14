@@ -25746,6 +25746,127 @@ Respond with ONLY valid JSON (no markdown, no explanation outside the JSON):
         return None
 
 
+SOT_BRAND_AFFINITY_S3_PREFIX = 'share-of-time-brand-affinity/'
+
+
+def _sot_brand_affinity_key(age_brackets, quarter):
+    return f"{SOT_BRAND_AFFINITY_S3_PREFIX}{_sot_age_hash(age_brackets)}/{quarter}.json"
+
+
+def _sot_load_brand_affinity(age_brackets, quarter):
+    try:
+        if not s3_client:
+            return None
+        key = _sot_brand_affinity_key(age_brackets, quarter)
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
+def _sot_save_brand_affinity(age_brackets, quarter, payload):
+    try:
+        if not s3_client:
+            return
+        key = _sot_brand_affinity_key(age_brackets, quarter)
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(payload, indent=2).encode('utf-8'),
+            ContentType='application/json',
+        )
+        print(f"[SOT] Saved brand affinity to {key}")
+    except Exception as e:
+        print(f"[SOT] Failed to save brand affinity: {e}")
+
+
+def _sot_generate_brand_affinity(age_brackets, quarter, raw_brands_by_cat):
+    """Call GPT-4o to generate age-aware brand affinity multipliers.
+    raw_brands_by_cat: dict of {category: [{name, raw_pct}, ...]}
+    Returns dict {category: {brand: multiplier}} or None."""
+    client = get_openai_client()
+    if not client:
+        return None
+
+    brands_text = ""
+    for cat, brands in raw_brands_by_cat.items():
+        top = brands[:15]
+        lines = ", ".join(f"{b['name']} ({b['raw_pct']:.1f}%)" for b in top)
+        brands_text += f"\n{cat}: {lines}"
+
+    cohort_desc = ', '.join(sorted(age_brackets))
+    prompt = f"""You are a media consumption research analyst. Given the raw clickstream brand shares below (from a broad panel), adjust them to reflect realistic usage patterns for this specific demographic cohort.
+
+Cohort: {cohort_desc}
+Time period: {quarter}
+
+Raw brand shares (panel-wide, NOT yet adjusted for this cohort):
+{brands_text}
+
+Instructions:
+- Return a multiplier (0.3 to 3.0) for each brand that adjusts its share for THIS specific age cohort.
+- Multiplier > 1.0 means this cohort uses this brand MORE than average.
+- Multiplier < 1.0 means this cohort uses it LESS.
+- Key age patterns to model:
+  * Under-18: Heavy Roblox/Minecraft/Fortnite, high TikTok/Snapchat, high Disney+/YouTube Kids, low HBO Max/Paramount+, zero betting, low vMVPD.
+  * 18-24: High TikTok/Instagram/Snapchat, high Spotify, moderate Netflix/Hulu, high Kick/Twitch, growing betting.
+  * 25-34: Balanced streaming, high Spotify/Apple Music, moderate gaming (Steam/Epic), high social media, growing betting.
+  * 35-44: Peak Netflix/Hulu/Disney+, moderate Facebook/Instagram, lower TikTok, moderate gaming, growing vMVPD.
+  * 45-54: High Netflix/HBO Max, high Facebook, low TikTok/Snapchat, lower gaming, higher vMVPD/FAST.
+  * 55+: Highest Netflix/vMVPD/FAST, very high Facebook, very low TikTok/Snapchat/gaming, no betting.
+- Brands not listed should be omitted from the response.
+- The multipliers will be applied then renormalized, so exact values matter less than relative differences.
+
+Respond with ONLY valid JSON (no markdown):
+{{
+  "Streaming Video": {{"netflix": 1.0, "hulu": 0.9, ...}},
+  "Streaming Music": {{"spotify": 1.2, ...}},
+  "Games": {{"roblox": 2.5, ...}},
+  "Betting": {{"draftkings": 0.1, ...}},
+  "Social Media": {{"tiktok": 2.0, ...}},
+  "vMVPD/FAST": {{"pluto tv": 0.8, ...}}
+}}"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a media research analyst. Return only valid JSON with brand affinity multipliers."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1500,
+            temperature=0.3,
+        )
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        result = json.loads(raw)
+        for cat in result:
+            for brand in result[cat]:
+                val = result[cat][brand]
+                if isinstance(val, (int, float)):
+                    result[cat][brand] = max(0.1, min(5.0, float(val)))
+        print(f"[SOT] Generated brand affinity for {cohort_desc} / {quarter}")
+        return result
+    except Exception as e:
+        print(f"[SOT] Brand affinity GPT failed: {e}")
+        return None
+
+
+def _sot_get_brand_affinity(age_brackets, quarter, raw_brands_by_cat):
+    """Load cached or generate brand affinity multipliers."""
+    cached = _sot_load_brand_affinity(age_brackets, quarter)
+    if cached:
+        print(f"[SOT] Using cached brand affinity")
+        return cached
+
+    result = _sot_generate_brand_affinity(age_brackets, quarter, raw_brands_by_cat)
+    if result:
+        _sot_save_brand_affinity(age_brackets, quarter, result)
+        return result
+
+    return {}
+
+
 def _sot_get_weights(age_brackets, start_date, end_date):
     """Resolve time weights: cached > GPT-generated > static baseline.
     Returns (avg_min_dict, sessions_per_day_dict, full_payload_or_None, source_str)."""
@@ -25784,7 +25905,7 @@ def share_of_time_clear_cache():
     try:
         if not s3_client:
             return jsonify({'success': False, 'error': 'S3 not available'}), 500
-        for prefix in [SOT_WEIGHTS_S3_PREFIX, SOT_RUNS_S3_PREFIX]:
+        for prefix in [SOT_WEIGHTS_S3_PREFIX, SOT_RUNS_S3_PREFIX, SOT_BRAND_AFFINITY_S3_PREFIX]:
             paginator = s3_client.get_paginator('list_objects_v2')
             for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
                 for obj in page.get('Contents', []):
@@ -25843,16 +25964,14 @@ def share_of_time_analyze():
             cached_run = _sot_load_cached_run(start_date, end_date, age_brackets)
             if cached_run and 'data' in cached_run:
                 cats = cached_run['data'].get('categories', [])
-                has_all_shares = any(
-                    c.get('share_pct_daily') is not None
-                    and c.get('share_pct_total') is not None
-                    and c.get('sessions_per_day') is not None
-                    for c in cats
+                has_all = (
+                    any(c.get('share_pct_total') is not None and c.get('sessions_per_day') is not None for c in cats)
+                    and cached_run['data'].get('brand_affinity_applied', False)
                 )
-                if has_all_shares:
+                if has_all:
                     return jsonify({'success': True, 'data': cached_run['data'], 'from_cache': True})
                 else:
-                    print("[SOT] Stale run cache (missing 3-way shares), re-computing...")
+                    print("[SOT] Stale run cache (missing brand affinity or shares), re-computing...")
 
         age_in = ",".join(f"'{a}'" for a in age_brackets)
 
@@ -26014,6 +26133,36 @@ def share_of_time_analyze():
             for bn, bv in c['brands'].items():
                 bv['est_minutes'] = bv['adj_clicks'] * weight
 
+        # --- Apply brand affinity multipliers from GPT ---
+        raw_brands_by_cat = {}
+        for cat_name, c in categories.items():
+            cat_total = c['est_minutes'] if c['est_minutes'] > 0 else 1
+            top_brands = sorted(c['brands'].items(), key=lambda x: x[1]['est_minutes'], reverse=True)[:15]
+            raw_brands_by_cat[cat_name] = [
+                {'name': bn, 'raw_pct': round(100.0 * bv['est_minutes'] / cat_total, 2)}
+                for bn, bv in top_brands
+            ]
+
+        brand_affinity = _sot_get_brand_affinity(age_brackets, weights_quarter, raw_brands_by_cat)
+
+        if brand_affinity:
+            for cat_name, c in categories.items():
+                cat_mults = brand_affinity.get(cat_name, {})
+                if not cat_mults:
+                    continue
+                cat_mults_lower = {k.lower(): v for k, v in cat_mults.items()}
+                for bn, bv in c['brands'].items():
+                    mult = cat_mults_lower.get(bn.lower(), 1.0)
+                    bv['adj_clicks'] *= mult
+                    bv['est_minutes'] = bv['adj_clicks'] * time_weights.get(cat_name, 6)
+                new_cat_clicks = sum(bv['adj_clicks'] for bv in c['brands'].values())
+                new_cat_minutes = sum(bv['est_minutes'] for bv in c['brands'].values())
+                c['adj_clicks'] = new_cat_clicks
+                c['est_minutes'] = new_cat_minutes
+
+            total_est_minutes = sum(c['est_minutes'] for c in categories.values())
+            total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
+
         # --- Project to US gen pop scale ---
         projection_mult = SOT_US_POPULATION / SOT_PANEL_SIZE
 
@@ -26093,6 +26242,7 @@ def share_of_time_analyze():
             'weights_source': weights_source,
             'weights_quarter': weights_quarter,
             'trend_context': trend_context,
+            'brand_affinity_applied': bool(brand_affinity),
             'categories': result_categories,
         }
 
