@@ -15975,7 +15975,6 @@
                 <div class="sot-charts-row">
                     <div class="sot-chart-card">
                         <h3 class="sot-chart-title">Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(weighted by avg. session duration)</span></h3>
-                        <div id="sotWeightsBadge" style="display:none;margin-top:4px;font-size:0.7rem;padding:3px 10px;border-radius:12px;background:rgba(78,205,196,0.12);color:var(--accent-cyan);display:inline-block;"></div>
                         <div style="position:relative;height:320px;"><canvas id="sotDoughnutChart"></canvas></div>
                     </div>
                     <div class="sot-chart-card">
@@ -43315,14 +43314,8 @@
         // Derived arrays from DMA_MASTER
         const CANONICAL_DMAS = Object.keys(DMA_MASTER);
         
-        // DMAs to exclude from Profile IQ dashboard display (data quality issues)
-        const EXCLUDED_DMAS = new Set([
-            "Joplin Pittsburg KS",
-            "Augusta Aiken SC",
-            "Duluth Superior WI",
-            "Quincy Hannibal MO Keokuk IA",
-            "Yuma El Centro CA"
-        ]);
+        // DMAs to exclude from Profile IQ dashboard display
+        const EXCLUDED_DMAS = new Set([]);
 
         // State abbreviations for display formatting
         const _STATE_ABBREVS = new Set(['al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id','il','in','ia','ks','ky','la','me','md','ma','mi','mn','ms','mo','mt','ne','nv','nh','nj','nm','ny','nc','nd','oh','ok','or','pa','ri','sc','sd','tn','tx','ut','vt','va','wa','wv','wi','wy','dc']);
