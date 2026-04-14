@@ -12637,7 +12637,7 @@
                                 <div class="form-group" style="margin-bottom: 1rem;">
                                     <label>Select profile</label>
                                     <div style="position: relative;">
-                                        <input type="text" id="profileRerunSearch" placeholder="Type to search profiles..." style="width: 100%; padding: 0.5rem; padding-right: 2rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                        <input type="text" id="profileRerunSearch" placeholder="Type to search profiles..." autocomplete="off" data-1p-ignore="true" data-lpignore="true" style="width: 100%; padding: 0.5rem; padding-right: 2rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                                         <select id="profileRerunSelect" size="8" style="width: 100%; margin-top: 0.25rem; padding: 0.25rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); display: none;"></select>
                                         <div id="profileRerunDropdown" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); margin-top: 0.25rem; display: none;"></div>
                                     </div>
@@ -14407,7 +14407,7 @@
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" style="flex: 1;">
+                            <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" autocomplete="off" data-1p-ignore="true" data-lpignore="true" style="flex: 1;">
                             <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh profile list from S3 (new uploads will appear)" onclick="refreshDashboardProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                         </div>
                     </div>
@@ -15580,7 +15580,7 @@
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="text" id="subscriberProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search shows by name or category." onkeyup="filterSubscriberProfiles()" style="flex: 1;">
+                            <input type="text" id="subscriberProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search shows by name or category." onkeyup="filterSubscriberProfiles()" autocomplete="off" data-1p-ignore="true" data-lpignore="true" style="flex: 1;">
                             <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh show list from S3" onclick="refreshSubscriberProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                         </div>
                     </div>
