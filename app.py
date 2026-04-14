@@ -25809,6 +25809,8 @@ Time period: {quarter}
 Below are the raw brand shares from a broad, all-ages clickstream panel. These shares do NOT yet reflect age-specific preferences — they represent panel-wide averages. Your task is to return a multiplier for each brand that adjusts its share to reflect what this specific cohort would realistically show.
 {brands_text}
 
+CRITICAL: The raw clickstream data has known biases. Web-heavy platforms get inflated click counts vs. app-native platforms. Your multipliers must correct for BOTH age-specific preferences AND real-world market share. The final adjusted shares should be plausible if published in a research report.
+
 Your analysis should draw on your knowledge of:
 - Published media consumption research (Nielsen, Comscore, Pew Research, eMarketer, Sensor Tower, App Annie, Statista)
 - Platform demographics from investor reports and earnings calls (e.g., Roblox's 10-K shows ~50% of DAUs are under 13)
@@ -25816,12 +25818,20 @@ Your analysis should draw on your knowledge of:
 - Generational media habits: Gen Alpha/Z digital-native behaviors vs. Boomer linear-TV preferences
 - Seasonal and temporal patterns for {quarter} (e.g., school breaks affect youth gaming, NFL season affects sports betting)
 - Platform maturity cycles: emerging platforms skew young, mature platforms skew older
+- ACTUAL MARKET SHARE data for each category — use this to override clickstream biases:
+  * US Sports Betting: FanDuel (~38-40%), DraftKings (~28-32%), BetMGM (~10-12%), Caesars/ESPN BET (~5-8%), then others. bet365 is <3% of US handle despite heavy web traffic.
+  * US Streaming Video: Netflix (~22-25%), YouTube/YouTube TV (~20%), Amazon Prime (~12%), Disney+ (~10%), Hulu (~10%), HBO Max (~8%), then others.
+  * US Streaming Music: Spotify (~35%), Apple Music (~25%), Amazon Music (~15%), YouTube Music (~10%), then others.
+  * US Social Media by DAU: Facebook, Instagram, TikTok, Snapchat, X/Twitter, Reddit, Pinterest — relative share varies heavily by age.
+  * US vMVPD: YouTube TV (~35%), Hulu+Live (~15%), Sling (~10%), Fubo (~8%), Philo (~5%), then FAST services like Pluto TV, Tubi, Roku Channel.
 
 Multiplier guidelines:
 - Range: 0.05 to 5.0
 - 1.0 = this cohort uses the brand at the same rate as the general population
 - >1.0 = this cohort over-indexes on this brand (uses it MORE than average)
 - <1.0 = this cohort under-indexes (uses it LESS)
+- IMPORTANT: If a brand's raw clickstream share is wildly higher than its actual market share (e.g., bet365 at 46% when its real US share is ~2%), apply a strong DOWNWARD multiplier (0.05-0.2) to correct the clickstream bias, regardless of age group.
+- Conversely, if a major brand is under-represented in the raw data vs. reality, apply an UPWARD multiplier.
 - Use extreme values when warranted: a children's game should get 0.05-0.1 for a 65+ cohort; a youth platform should get 3.0-5.0 for an under-18 cohort
 - For brands with near-universal adoption across ages (e.g., Netflix, Google), multipliers should stay closer to 1.0
 - For age-polarized brands (e.g., Roblox, Facebook, AARP-associated services), use strong multipliers
