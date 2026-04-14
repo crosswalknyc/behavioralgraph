@@ -25794,47 +25794,58 @@ def _sot_generate_brand_affinity(age_brackets, quarter, raw_brands_by_cat):
         brands_text += f"\n{cat}: {lines}"
 
     cohort_desc = ', '.join(sorted(age_brackets))
-    prompt = f"""You are a media consumption research analyst. Given the raw clickstream brand shares below (from a broad panel), adjust them to reflect realistic usage patterns for this specific demographic cohort.
 
-Cohort: {cohort_desc}
+    if len(age_brackets) == 1:
+        cohort_context = f"This is a SINGLE age cohort: {age_brackets[0]}. Adjustments should strongly reflect this specific age group's known preferences."
+    else:
+        cohort_context = f"This is a COMBINED cohort spanning: {cohort_desc}. Produce a weighted-average adjustment that reflects the blended behavior of these age groups together."
+
+    prompt = f"""You are a senior media consumption research analyst at a top market research firm. Your job is to adjust raw clickstream brand shares to reflect realistic usage patterns for a specific demographic cohort.
+
+Demographic cohort: {cohort_desc}
 Time period: {quarter}
+{cohort_context}
 
-Raw brand shares (panel-wide, NOT yet adjusted for this cohort):
+Below are the raw brand shares from a broad, all-ages clickstream panel. These shares do NOT yet reflect age-specific preferences — they represent panel-wide averages. Your task is to return a multiplier for each brand that adjusts its share to reflect what this specific cohort would realistically show.
 {brands_text}
 
-Instructions:
-- Return a multiplier (0.3 to 3.0) for each brand that adjusts its share for THIS specific age cohort.
-- Multiplier > 1.0 means this cohort uses this brand MORE than average.
-- Multiplier < 1.0 means this cohort uses it LESS.
-- Key age patterns to model:
-  * Under-18: Heavy Roblox/Minecraft/Fortnite, high TikTok/Snapchat, high Disney+/YouTube Kids, low HBO Max/Paramount+, zero betting, low vMVPD.
-  * 18-24: High TikTok/Instagram/Snapchat, high Spotify, moderate Netflix/Hulu, high Kick/Twitch, growing betting.
-  * 25-34: Balanced streaming, high Spotify/Apple Music, moderate gaming (Steam/Epic), high social media, growing betting.
-  * 35-44: Peak Netflix/Hulu/Disney+, moderate Facebook/Instagram, lower TikTok, moderate gaming, growing vMVPD.
-  * 45-54: High Netflix/HBO Max, high Facebook, low TikTok/Snapchat, lower gaming, higher vMVPD/FAST.
-  * 55+: Highest Netflix/vMVPD/FAST, very high Facebook, very low TikTok/Snapchat/gaming, no betting.
-- Brands not listed should be omitted from the response.
-- The multipliers will be applied then renormalized, so exact values matter less than relative differences.
+Your analysis should draw on your knowledge of:
+- Published media consumption research (Nielsen, Comscore, Pew Research, eMarketer, Sensor Tower, App Annie, Statista)
+- Platform demographics from investor reports and earnings calls (e.g., Roblox's 10-K shows ~50% of DAUs are under 13)
+- Age-specific adoption curves for social platforms (e.g., TikTok penetration by age from Pew 2024-2025)
+- Generational media habits: Gen Alpha/Z digital-native behaviors vs. Boomer linear-TV preferences
+- Seasonal and temporal patterns for {quarter} (e.g., school breaks affect youth gaming, NFL season affects sports betting)
+- Platform maturity cycles: emerging platforms skew young, mature platforms skew older
 
-Respond with ONLY valid JSON (no markdown):
+Multiplier guidelines:
+- Range: 0.05 to 5.0
+- 1.0 = this cohort uses the brand at the same rate as the general population
+- >1.0 = this cohort over-indexes on this brand (uses it MORE than average)
+- <1.0 = this cohort under-indexes (uses it LESS)
+- Use extreme values when warranted: a children's game should get 0.05-0.1 for a 65+ cohort; a youth platform should get 3.0-5.0 for an under-18 cohort
+- For brands with near-universal adoption across ages (e.g., Netflix, Google), multipliers should stay closer to 1.0
+- For age-polarized brands (e.g., Roblox, Facebook, AARP-associated services), use strong multipliers
+- Only include brands that appear in the raw data above — do not add new ones
+
+Respond with ONLY valid JSON (no markdown, no explanation):
 {{
-  "Streaming Video": {{"netflix": 1.0, "hulu": 0.9, ...}},
-  "Streaming Music": {{"spotify": 1.2, ...}},
-  "Games": {{"roblox": 2.5, ...}},
-  "Betting": {{"draftkings": 0.1, ...}},
-  "Social Media": {{"tiktok": 2.0, ...}},
-  "vMVPD/FAST": {{"pluto tv": 0.8, ...}}
+  "Streaming Video": {{"brand_name": <multiplier>, ...}},
+  "Streaming Music": {{"brand_name": <multiplier>, ...}},
+  "Games": {{"brand_name": <multiplier>, ...}},
+  "Betting": {{"brand_name": <multiplier>, ...}},
+  "Social Media": {{"brand_name": <multiplier>, ...}},
+  "vMVPD/FAST": {{"brand_name": <multiplier>, ...}}
 }}"""
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a media research analyst. Return only valid JSON with brand affinity multipliers."},
+                {"role": "system", "content": "You are a senior media consumption research analyst. You have deep expertise in platform demographics, age-specific digital behavior, and media consumption data from Nielsen, Comscore, Pew, eMarketer, and platform earnings reports. Respond with only valid JSON."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=1500,
-            temperature=0.3,
+            max_tokens=2000,
+            temperature=0.35,
         )
         raw = response.choices[0].message.content.strip()
         if raw.startswith('```'):
