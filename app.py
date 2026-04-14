@@ -25843,11 +25843,16 @@ def share_of_time_analyze():
             cached_run = _sot_load_cached_run(start_date, end_date, age_brackets)
             if cached_run and 'data' in cached_run:
                 cats = cached_run['data'].get('categories', [])
-                has_daily = any(c.get('share_pct_daily') is not None and c.get('sessions_per_day') is not None for c in cats)
-                if has_daily:
+                has_all_shares = any(
+                    c.get('share_pct_daily') is not None
+                    and c.get('share_pct_total') is not None
+                    and c.get('sessions_per_day') is not None
+                    for c in cats
+                )
+                if has_all_shares:
                     return jsonify({'success': True, 'data': cached_run['data'], 'from_cache': True})
                 else:
-                    print("[SOT] Stale run cache (missing daily data), re-computing...")
+                    print("[SOT] Stale run cache (missing 3-way shares), re-computing...")
 
         age_in = ",".join(f"'{a}'" for a in age_brackets)
 
@@ -26014,9 +26019,10 @@ def share_of_time_analyze():
 
         # --- Build per-category results with all granularities ---
         # Three distinct share calculations:
-        #   session  = based on per-session duration (interaction-weighted from clickstream)
-        #   daily    = session_duration × sessions_per_day (frequency-weighted)
-        #   total    = interaction-weighted across full date range (same as session share)
+        #   session  = pure duration ratio: avg_min / sum(avg_min) — one session
+        #   daily    = duration × frequency: (avg_min × sessions/day) / total — one day
+        #   total    = clickstream-weighted: (adj_clicks × avg_min) / total — full date range
+        total_session_minutes = sum(time_weights.get(cn, 6) for cn in categories)
         total_daily_minutes = {cn: time_weights.get(cn, 6) * sessions_per_day.get(cn, 2.0) for cn in categories}
         total_daily_all = sum(total_daily_minutes.values())
 
@@ -26031,11 +26037,11 @@ def share_of_time_analyze():
             min_per_week = min_per_day * 7
             min_per_month = min_per_day * 30.44
 
-            time_share_session = round(100.0 * c['est_minutes'] / total_est_minutes, 2) if total_est_minutes else 0
+            time_share_session = round(100.0 * w_min / total_session_minutes, 2) if total_session_minutes else 0
+            time_share_daily = round(100.0 * min_per_day / total_daily_all, 2) if total_daily_all else 0
+            time_share_total = round(100.0 * c['est_minutes'] / total_est_minutes, 2) if total_est_minutes else 0
             proj_minutes = int(round(c['est_minutes'] * projection_mult))
             proj_hours = round(proj_minutes / 60)
-
-            time_share_daily = round(100.0 * min_per_day / total_daily_all, 2) if total_daily_all else 0
 
             brand_list = sorted(c['brands'].items(), key=lambda x: x[1]['est_minutes'], reverse=True)
             brands_out = []
@@ -26065,6 +26071,7 @@ def share_of_time_analyze():
                 'rationale': weight_rationales.get(cat_name, ''),
                 'share_pct_session': time_share_session,
                 'share_pct_daily': time_share_daily,
+                'share_pct_total': time_share_total,
                 'brands': brands_out,
             })
 

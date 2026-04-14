@@ -23447,7 +23447,8 @@
 
         function _sotShareKey(gran) {
             if (gran === 'session') return 'share_pct_session';
-            return 'share_pct_daily';
+            if (gran === 'daily') return 'share_pct_daily';
+            return 'share_pct_total';
         }
 
         function _sotTimeLabel(c, gran, numDays) {
