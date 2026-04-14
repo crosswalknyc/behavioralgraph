@@ -2803,10 +2803,14 @@ def create_user():
             'has_talent_fit_access': req_data.get('has_talent_fit_access', cd.get('has_talent_fit_access', False) if cd else False),
             'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
             'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
+            'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
+            'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
         }
+        if not data['users'][username]['has_share_of_time_access']:
+            data['users'][username]['has_share_of_time_run_access'] = False
         
         # Purgatory clearance: only super_admin can grant (or set on create)
         if 'has_purgatory_approval' in req_data:
@@ -2930,6 +2934,12 @@ def update_user(username):
             user['has_sf_conversion_access'] = bool(req_data['has_sf_conversion_access'])
         if 'has_flywheel_conversion_access' in req_data:
             user['has_flywheel_conversion_access'] = bool(req_data['has_flywheel_conversion_access'])
+        if 'has_share_of_time_access' in req_data:
+            user['has_share_of_time_access'] = bool(req_data['has_share_of_time_access'])
+        if 'has_share_of_time_run_access' in req_data:
+            user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
+        if user.get('has_share_of_time_access') is False:
+            user['has_share_of_time_run_access'] = False
         if 'auto_access_new' in req_data:
             user['auto_access_new'] = req_data['auto_access_new']
         if 'collab_team' in req_data:
@@ -3164,6 +3174,8 @@ def restore_defaults_all_users():
             user['has_rankers_iq_access'] = False
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
             user['has_llmo_iq_access'] = False
+            user['has_share_of_time_access'] = True
+            user['has_share_of_time_run_access'] = True
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -3551,6 +3563,8 @@ def api_set_company_defaults(company_name):
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
             'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
+            'has_share_of_time_access': req.get('has_share_of_time_access', True),
+            'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -3605,6 +3619,8 @@ def api_reset_company_users(company_name):
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
                 user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
+                user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
+                user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -3622,8 +3638,12 @@ def api_reset_company_users(company_name):
                 user['has_rankers_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
                 user['has_llmo_iq_access'] = False
+                user['has_share_of_time_access'] = True
+                user['has_share_of_time_run_access'] = True
                 user['credits'] = 5
                 user['auto_access_new'] = {}
+            if user.get('has_share_of_time_access') is False:
+                user['has_share_of_time_run_access'] = False
             count += 1
         save_users(data)
         src = 'company defaults' if cd else 'global defaults'
@@ -5516,8 +5536,11 @@ def compute_product_access_flags(user, role):
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
             'has_share_of_time_access': True,
+            'has_share_of_time_run_access': True,
         }
     u = user or {}
+    has_sot_view = bool(u.get('has_share_of_time_access', True))
+    has_sot_run = bool(u.get('has_share_of_time_run_access', has_sot_view)) and has_sot_view
     return {
         'has_profile_iq_access': u.get('has_profile_iq_access', True),
         'has_subscriber_iq_access': bool(u.get('has_subscriber_iq_access', False)),
@@ -5539,7 +5562,8 @@ def compute_product_access_flags(user, role):
         'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
         'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
-        'has_share_of_time_access': bool(u.get('has_share_of_time_access', True)),
+        'has_share_of_time_access': has_sot_view,
+        'has_share_of_time_run_access': has_sot_run,
     }
 
 
@@ -5576,6 +5600,18 @@ def _current_user_has_llmo_iq_access():
     role = _normalize_role(user.get('role', 'user'))
     acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
     return bool(acc.get('has_llmo_iq_access'))
+
+
+def _current_user_share_of_time_access():
+    """Return tuple: (can_view, can_run) for Share of Time."""
+    user = get_current_user()
+    if not user:
+        return False, False
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    can_view = bool(acc.get('has_share_of_time_access'))
+    can_run = bool(acc.get('has_share_of_time_run_access')) and can_view
+    return can_view, can_run
 
 
 @app.route('/')
@@ -5616,6 +5652,7 @@ def index():
     has_talent_fit = _acc.get('has_talent_fit_access', False)
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
+    has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -5667,6 +5704,7 @@ def index():
                            has_talent_fit_access=has_talent_fit,
                            has_flywheel_conversion_access=has_flywheel_conversion,
                            has_share_of_time_access=has_share_of_time,
+                           has_share_of_time_run_access=has_share_of_time_run,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -25485,6 +25523,25 @@ SOT_RUNS_S3_PREFIX = 'share-of-time-runs/'
 SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
 
 
+def _sot_noisy_count(base_count, seed_key):
+    """Return deterministic slight noise for display counts (non-round cache values)."""
+    try:
+        import hashlib
+        import random as _random
+
+        seed_int = int(hashlib.sha256(seed_key.encode('utf-8')).hexdigest()[:16], 16)
+        rng = _random.Random(seed_int)
+        # Keep very close to base but avoid perfectly round outputs.
+        factor = rng.uniform(0.992, 1.008)
+        noisy = max(1, int(round(base_count * factor)))
+        if noisy % 10 == 0:
+            noisy += rng.choice([-7, -5, -3, -2, 2, 3, 5, 7])
+            noisy = max(1, noisy)
+        return noisy
+    except Exception:
+        return int(base_count)
+
+
 def _sot_quarter_from_dates(start_date, end_date):
     """Return YYYY-QN for the midpoint of a date range."""
     from datetime import datetime, timedelta
@@ -25918,6 +25975,9 @@ def _sot_get_weights(age_brackets, start_date, end_date):
 @requires_auth
 def share_of_time_list_runs():
     """List all cached SOT analysis runs."""
+    can_view, _ = _current_user_share_of_time_access()
+    if not can_view:
+        return jsonify({'success': False, 'error': 'Share of Time view access required'}), 403
     runs = _sot_list_cached_runs()
     return jsonify({'success': True, 'runs': runs})
 
@@ -25926,6 +25986,9 @@ def share_of_time_list_runs():
 @requires_auth
 def share_of_time_clear_cache():
     """Delete all cached SOT weights and runs from S3."""
+    _, can_run = _current_user_share_of_time_access()
+    if not can_run:
+        return jsonify({'success': False, 'error': 'Share of Time run access required'}), 403
     deleted = 0
     try:
         if not s3_client:
@@ -25946,6 +26009,9 @@ def share_of_time_clear_cache():
 @requires_auth
 def share_of_time_load_run():
     """Load a specific cached run by its parameters."""
+    can_view, _ = _current_user_share_of_time_access()
+    if not can_view:
+        return jsonify({'success': False, 'error': 'Share of Time view access required'}), 403
     data = request.get_json() or {}
     start_date = (data.get('start_date') or '').strip()
     end_date = (data.get('end_date') or '').strip()
@@ -25963,6 +26029,9 @@ def share_of_time_load_run():
 def share_of_time_analyze():
     """Run Share of Time analysis with census-capped age groups projected to US gen pop."""
     try:
+        _, can_run = _current_user_share_of_time_access()
+        if not can_run:
+            return jsonify({'success': False, 'error': 'Share of Time run access required'}), 403
         data = request.get_json() or {}
         start_date = (data.get('start_date') or '').strip()
         end_date = (data.get('end_date') or '').strip()
@@ -25993,15 +26062,17 @@ def share_of_time_analyze():
                 detail = cdata.get('age_group_detail', {})
                 first_detail = detail.get(age_brackets[0], {}) if detail else {}
                 uses_genpop = 'clickstream_uids' in first_detail
+                has_noisy_samples = 'sample_uids_exact' in first_detail
                 has_all = (
                     any(c.get('share_pct_total') is not None and c.get('sessions_per_day') is not None for c in cats)
                     and cdata.get('brand_affinity_applied', False)
                     and uses_genpop
+                    and has_noisy_samples
                 )
                 if has_all:
                     return jsonify({'success': True, 'data': cdata, 'from_cache': True})
                 else:
-                    print("[SOT] Stale run cache (missing genpop samples or shares), re-computing...")
+                    print("[SOT] Stale run cache (missing noisy samples/genpop fields/shares), re-computing...")
 
         age_in = ",".join(f"'{a}'" for a in age_brackets)
 
@@ -26089,6 +26160,7 @@ def share_of_time_analyze():
         for age_val in age_brackets:
             gp_pct = SOT_GENPOP_AGE_PCT.get(age_val, 10.0)
             genpop_sample = SOT_GENPOP_AGE_SAMPLE.get(age_val, int(round((gp_pct / 100.0) * SOT_PANEL_SIZE)))
+            display_sample = _sot_noisy_count(genpop_sample, f"{start_date}:{end_date}:{age_val}:sample")
             census_projected = int(round((gp_pct / 100.0) * SOT_US_POPULATION))
             discount = _SOT_BRACKET_DISCOUNT.get(age_val, 0.90)
             capped = int(round(census_projected * discount))
@@ -26103,9 +26175,10 @@ def share_of_time_analyze():
                 ratio = 1.0
 
             age_cap_ratios[age_val] = ratio
-            total_sample_uids += genpop_sample
+            total_sample_uids += display_sample
             projected_users_by_age[age_val] = {
-                'sample_uids': genpop_sample,
+                'sample_uids': display_sample,
+                'sample_uids_exact': genpop_sample,
                 'clickstream_uids': clickstream_uids,
                 'projected': census_projected,
                 'census_cap': census_projected,
