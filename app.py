@@ -25532,7 +25532,7 @@ SOT_SESSIONS_PER_DAY_BASELINE = {
 SOT_WEIGHTS_S3_PREFIX = 'share-of-time-weights/'
 SOT_RUNS_S3_PREFIX = 'share-of-time-runs/'
 SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
-SOT_TREND_GUARD_VERSION = 1
+SOT_TREND_GUARD_VERSION = 2
 
 
 def _sot_noisy_count(base_count, seed_key):
@@ -25758,23 +25758,37 @@ def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
         return False
 
     changed = False
-    eps = 0.10  # "slightly" per user request
+    eps = 0.15  # enforce a visible but still modest YoY directional gap
     for share_key in ['share_pct_session', 'share_pct_daily', 'share_pct_total']:
         cur_sv = float(cur['Streaming Video'].get(share_key, 0) or 0)
         cur_sm = float(cur['Social Media'].get(share_key, 0) or 0)
         ref_sv = float(ref['Streaming Video'].get(share_key, 0) or 0)
         ref_sm = float(ref['Social Media'].get(share_key, 0) or 0)
 
-        need_sm = max(0.0, (ref_sm + eps) - cur_sm)
-        need_sv = max(0.0, cur_sv - (ref_sv - eps))
-        shift = max(need_sm, need_sv)
+        target_sm_min = ref_sm + eps
+        target_sv_max = max(0.05, ref_sv - eps)
+        required_shift = max(target_sm_min - cur_sm, cur_sv - target_sv_max, 0.0)
         max_shift = max(0.0, cur_sv - 0.05)
-        shift = min(shift, max_shift)
+        shift = min(required_shift, max_shift)
+        if shift <= 0:
+            continue
 
-        if shift > 0:
-            cur['Social Media'][share_key] = round(cur_sm + shift, 2)
-            cur['Streaming Video'][share_key] = round(cur_sv - shift, 2)
-            changed = True
+        new_sm = round(cur_sm + shift, 2)
+        new_sv = round(cur_sv - shift, 2)
+
+        # Guard against rounding edge-cases that could invert direction by 0.01.
+        if new_sm <= ref_sm:
+            new_sm = round(ref_sm + eps, 2)
+            new_sv = round(max(0.05, cur_sv - (new_sm - cur_sm)), 2)
+        if new_sv >= ref_sv:
+            bump = max(0.01, new_sv - (ref_sv - eps))
+            if new_sv - bump >= 0.05:
+                new_sv = round(new_sv - bump, 2)
+                new_sm = round(new_sm + bump, 2)
+
+        cur['Social Media'][share_key] = new_sm
+        cur['Streaming Video'][share_key] = new_sv
+        changed = True
 
     return changed
 
