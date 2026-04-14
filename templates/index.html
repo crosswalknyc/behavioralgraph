@@ -804,6 +804,10 @@
         #shareOfTimeIQView .sot-cat-pct { font-size: 1.35rem; font-weight: 700; }
         #shareOfTimeIQView .sot-cat-clicks { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; }
         #shareOfTimeIQView .sot-drill-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; min-height: 300px; }
+        #shareOfTimeIQView .sot-granularity-bar { display: flex; gap: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; margin-bottom: 1rem; width: fit-content; }
+        #shareOfTimeIQView .sot-gran-btn { padding: 0.4rem 1rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-secondary); transition: all 0.15s; white-space: nowrap; }
+        #shareOfTimeIQView .sot-gran-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+        #shareOfTimeIQView .sot-gran-btn.active { background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime)); color: #000; }
         #shareOfTimeIQView .sot-loading { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.9rem; }
         #shareOfTimeIQView .sot-loading .spinner { width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: sotSpin 0.6s linear infinite; margin-right: 0.6rem; }
         @keyframes sotSpin { to { transform: rotate(360deg); } }
@@ -15972,9 +15976,16 @@
                         <div class="sot-kpi-value" id="sotKpiInteractions" style="color:var(--accent-orange);">—</div>
                     </div>
                 </div>
+                <div class="sot-granularity-bar" id="sotGranBar">
+                    <button class="sot-gran-btn" data-gran="total" onclick="sotSetGranularity('total')">Total Time Frame</button>
+                    <button class="sot-gran-btn" data-gran="monthly" onclick="sotSetGranularity('monthly')">Per Month</button>
+                    <button class="sot-gran-btn" data-gran="weekly" onclick="sotSetGranularity('weekly')">Per Week</button>
+                    <button class="sot-gran-btn active" data-gran="daily" onclick="sotSetGranularity('daily')">Per Day</button>
+                    <button class="sot-gran-btn" data-gran="session" onclick="sotSetGranularity('session')">Per Session</button>
+                </div>
                 <div class="sot-charts-row">
                     <div class="sot-chart-card">
-                        <h3 class="sot-chart-title">Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(weighted by avg. session duration)</span></h3>
+                        <h3 class="sot-chart-title" id="sotDoughnutTitle">Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(per day)</span></h3>
                         <div style="position:relative;height:320px;"><canvas id="sotDoughnutChart"></canvas></div>
                     </div>
                     <div class="sot-chart-card">
@@ -23336,6 +23347,7 @@
         // ===================== SHARE OF TIME IQ =====================
         var _sotDoughnutInst = null, _sotBarInst = null, _sotDrillInst = null;
         var _sotData = null;
+        var _sotGranularity = 'daily';
         var _sotCatColors = {
             'Streaming Video': '#6366f1',
             'Streaming Music': '#22d3ee',
@@ -23403,6 +23415,33 @@
             });
         }
 
+        var _sotGranLabels = {
+            'total': 'Total Time Frame', 'monthly': 'Per Month', 'weekly': 'Per Week',
+            'daily': 'Per Day', 'session': 'Per Session'
+        };
+
+        function _sotShareKey(gran) {
+            if (gran === 'session') return 'share_pct_session';
+            if (gran === 'daily' || gran === 'weekly' || gran === 'monthly') return 'share_pct_daily';
+            return 'share_pct_total';
+        }
+
+        function _sotTimeLabel(c, gran) {
+            if (gran === 'session') return c.avg_min_per_session + ' min/session';
+            if (gran === 'daily') return c.min_per_day + ' min/day (' + c.sessions_per_day + ' sessions)';
+            if (gran === 'weekly') return c.min_per_week + ' min/wk';
+            if (gran === 'monthly') return c.min_per_month + ' min/mo';
+            return c.est_minutes.toLocaleString() + ' total min';
+        }
+
+        function sotSetGranularity(gran) {
+            _sotGranularity = gran;
+            document.querySelectorAll('#sotGranBar .sot-gran-btn').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-gran') === gran);
+            });
+            if (_sotData) sotRenderResults(_sotData);
+        }
+
         function sotRenderResults(data) {
             document.getElementById('sotResultsArea').style.display = 'block';
             document.getElementById('sotKpiUsers').textContent = data.matched_users.toLocaleString();
@@ -23411,11 +23450,18 @@
             document.getElementById('sotKpiHours').textContent = (data.total_projected_hours || 0) >= 1000000 ? ((data.total_projected_hours / 1000000).toFixed(1) + 'M') : (data.total_projected_hours || 0).toLocaleString();
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
 
-
+            var gran = _sotGranularity;
+            var shareKey = _sotShareKey(gran);
             var cats = data.categories;
             var labels = cats.map(function(c) { return c.name; });
-            var shares = cats.map(function(c) { return c.share_pct; });
+            var shares = cats.map(function(c) { return c[shareKey] || 0; });
             var colors = cats.map(function(c) { return _sotCatColors[c.name] || '#888'; });
+
+            var subtitleMap = {
+                'total': 'total across date range', 'monthly': 'per month', 'weekly': 'per week',
+                'daily': 'per day &middot; sessions &times; duration', 'session': 'per session'
+            };
+            document.getElementById('sotDoughnutTitle').innerHTML = 'Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(' + subtitleMap[gran] + ')</span>';
 
             if (_sotDoughnutInst) _sotDoughnutInst.destroy();
             var dCtx = document.getElementById('sotDoughnutChart');
@@ -23427,7 +23473,10 @@
                         responsive: true, maintainAspectRatio: false, cutout: '52%',
                         plugins: {
                             legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, font: { size: 12 }, color: '#e8e8e8' } },
-                            tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed.toFixed(2) + '%'; } } },
+                            tooltip: { callbacks: { label: function(ctx) {
+                                var cat = cats[ctx.dataIndex];
+                                return ctx.label + ': ' + ctx.parsed.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran);
+                            } } },
                             datalabels: { color: '#fff', font: { weight: '700', size: 13 }, formatter: function(v) { return v >= 2 ? v.toFixed(1) + '%' : ''; } }
                         },
                         onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
@@ -23444,7 +23493,10 @@
                     options: {
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                         scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } },
-                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.x.toFixed(2) + '% of time'; } } } },
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) {
+                            var cat = cats[ctx.dataIndex];
+                            return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran);
+                        } } } },
                         onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
                     }
                 });
@@ -23453,16 +23505,18 @@
             var cardsHtml = '';
             cats.forEach(function(c, i) {
                 var col = _sotCatColors[c.name] || '#888';
+                var pct = (c[shareKey] || 0).toFixed(1);
                 var projHrs = (c.projected_hours || 0);
                 var projLabel = projHrs >= 1000000 ? (projHrs / 1000000).toFixed(1) + 'M hrs' : projHrs.toLocaleString() + ' hrs';
+                var timeInfo = _sotTimeLabel(c, gran);
                 var rationaleHtml = '';
                 if (c.rationale) {
                     rationaleHtml = '<div class="sot-cat-rationale" style="font-size:0.65rem;color:var(--text-secondary);margin-top:4px;line-height:1.35;font-style:italic;">💡 ' + c.rationale + '</div>';
                 }
                 cardsHtml += '<div class="sot-cat-card" data-idx="' + i + '" onclick="sotDrillDown(' + i + ')" style="border-left:3px solid ' + col + ';">' +
                     '<div class="sot-cat-name">' + c.name + '</div>' +
-                    '<div class="sot-cat-pct" style="color:' + col + ';">' + c.share_pct.toFixed(1) + '%</div>' +
-                    '<div class="sot-cat-clicks">' + projLabel + ' US proj. &middot; ' + c.avg_min_per_interaction + ' avg min/session</div>' +
+                    '<div class="sot-cat-pct" style="color:' + col + ';">' + pct + '%</div>' +
+                    '<div class="sot-cat-clicks">' + projLabel + ' US proj. &middot; ' + timeInfo + '</div>' +
                     rationaleHtml +
                 '</div>';
             });
@@ -23486,11 +23540,6 @@
             var bLabels = brands.map(function(b) { return b.name; });
             var bShares = brands.map(function(b) { return b.category_share_pct; });
             var col = _sotCatColors[cat.name] || '#888';
-            var bgColors = brands.map(function(b, i) {
-                var opacity = 1 - (i * 0.025);
-                return col.replace(')', ', ' + opacity + ')').replace('rgb', 'rgba').replace('#', '');
-            });
-            bgColors = brands.map(function(b, i) { return col; });
 
             if (_sotDrillInst) _sotDrillInst.destroy();
             var canvas = document.getElementById('sotDrillChart');

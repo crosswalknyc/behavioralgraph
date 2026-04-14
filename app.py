@@ -25472,6 +25472,10 @@ SOT_AVG_MINUTES_BASELINE = {
     'Streaming Video': 52, 'Streaming Music': 26, 'Games': 28,
     'Betting': 12, 'Social Media': 14, 'vMVPD/FAST': 48,
 }
+SOT_SESSIONS_PER_DAY_BASELINE = {
+    'Streaming Video': 1.8, 'Streaming Music': 2.5, 'Games': 2.2,
+    'Betting': 1.5, 'Social Media': 8.0, 'vMVPD/FAST': 1.4,
+}
 SOT_WEIGHTS_S3_PREFIX = 'share-of-time-weights/'
 SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
 
@@ -25508,6 +25512,8 @@ def _sot_load_cached_weights(age_brackets, quarter):
             entry = data.get('weights', {}).get(cat, {})
             avg = entry.get('avg_min')
             if isinstance(avg, (int, float)) and 1 <= avg <= 120:
+                if 'sessions_per_day' not in entry:
+                    entry['sessions_per_day'] = SOT_SESSIONS_PER_DAY_BASELINE.get(cat, 2.0)
                 weights[cat] = entry
         if len(weights) == len(SOT_CATEGORIES):
             print(f"[SOT] Cache hit: {key}")
@@ -25569,13 +25575,17 @@ def _sot_generate_weights_via_gpt(age_brackets, quarter, history):
         for h in history[-8:]:
             q = h.get('quarter', '?')
             w = h.get('weights', {})
-            parts = [f"{cat}: {w[cat]['avg_min']}min" for cat in SOT_CATEGORIES if cat in w]
+            parts = []
+            for cat in SOT_CATEGORIES:
+                if cat in w:
+                    spd = w[cat].get('sessions_per_day', '?')
+                    parts.append(f"{cat}: {w[cat]['avg_min']}min x {spd}/day")
             lines.append(f"  {q}: {', '.join(parts)}")
         history_text = "Historical weights for this cohort (use for trend continuity):\n" + "\n".join(lines)
 
-    baseline_text = ", ".join(f"{c}: {v}min" for c, v in SOT_AVG_MINUTES_BASELINE.items())
+    baseline_text = ", ".join(f"{c}: {v}min/session x {SOT_SESSIONS_PER_DAY_BASELINE[c]}/day" for c, v in SOT_AVG_MINUTES_BASELINE.items())
 
-    user_prompt = f"""Estimate the average minutes per account interaction for each media category below.
+    user_prompt = f"""Estimate two values for each media category: (1) average minutes per session and (2) average sessions per day for a typical user in this cohort.
 
 Cohort age brackets: {', '.join(sorted(age_brackets))}
 Time period: {quarter}
@@ -25587,25 +25597,26 @@ Industry baseline (all-ages, all-time average): {baseline_text}
 {history_text}
 
 Instructions:
-- Adjust the baseline for THIS specific cohort and time period.
-- Under-18 cohorts spend significantly more time on games (30-45 min/session for mobile + console) and social media (15-25 min/session with TikTok, Snapchat, Instagram). They spend less on vMVPD/FAST and betting (near zero for minors).
-- 18-34 cohorts spend more time on social media and games than older adults, moderate streaming video.
-- 35-54 cohorts are balanced across categories with peak streaming video engagement.
-- 55+ cohorts spend more on streaming video and vMVPD/FAST, significantly less on games and social media.
-- Model seasonal effects: Q4 = holiday streaming bump + school break gaming spike; Q1 = post-holiday dip; Q3 = summer outdoor dip in streaming but gaming stays steady for youth.
-- Model year-over-year trends: social media session lengths growing ~5-8%/year; streaming video stable; vMVPD/FAST growing ~3-5%/year; games growing ~3%/year especially in younger cohorts; betting growing ~4%/year during seasons.
-- If historical data is provided, maintain consistency — don't jump wildly between quarters.
-- Each value must be between 1 and 120 minutes.
+- Adjust both session duration AND session frequency for THIS specific cohort and time period.
+- Session frequency matters enormously: social media may be short per visit but users check it 10-20+ times/day; streaming video is long per session but only 1-2 sessions/day.
+- Under-18 cohorts: games 30-45 min/session x 2-4 sessions/day; social media 10-20 min/session x 12-20 sessions/day; streaming video 40-55 min x 1-2/day; betting near zero; vMVPD/FAST low.
+- 18-34 cohorts: social media 10-18 min x 10-15/day; games 25-40 min x 1.5-3/day; streaming video 45-60 min x 1.5-2/day; streaming music 20-30 min x 2-4/day.
+- 35-54 cohorts: balanced, peak streaming video 50-65 min x 1.5-2/day; social media 8-14 min x 6-10/day; games 15-25 min x 1-2/day.
+- 55+ cohorts: streaming video 55-70 min x 1.5-2.5/day; vMVPD/FAST 45-60 min x 1.5-2/day; social media 5-10 min x 3-6/day; games 10-20 min x 0.5-1.5/day.
+- Model seasonal effects: Q4 = holiday streaming bump + school break gaming spike; Q1 = post-holiday dip; Q3 = summer less streaming, steady gaming for youth.
+- Model year-over-year trends: social media frequency growing ~5-8%/year; streaming video stable; vMVPD/FAST growing ~3-5%/year; games growing ~3%/year in younger cohorts; betting growing ~4%/year during seasons.
+- If historical data is provided, maintain consistency across quarters.
+- avg_min must be between 1 and 120. sessions_per_day must be between 0.1 and 30.
 
 Respond with ONLY valid JSON (no markdown, no explanation outside the JSON):
 {{
   "weights": {{
-    "Streaming Video": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
-    "Streaming Music": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
-    "Games": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
-    "Betting": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
-    "Social Media": {{"avg_min": <number>, "rationale": "<1 sentence>"}},
-    "vMVPD/FAST": {{"avg_min": <number>, "rationale": "<1 sentence>"}}
+    "Streaming Video": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "Streaming Music": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "Games": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "Betting": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "Social Media": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "vMVPD/FAST": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}}
   }},
   "trend_context": "<1-2 sentences summarizing how this quarter compares to prior data>"
 }}"""
@@ -25614,10 +25625,10 @@ Respond with ONLY valid JSON (no markdown, no explanation outside the JSON):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a media consumption research analyst. You produce precise JSON estimates of average session duration per media category, customized to demographic cohorts and calendar quarters. Always respond with valid JSON only."},
+                {"role": "system", "content": "You are a media consumption research analyst. You produce precise JSON estimates of average session duration AND daily session frequency per media category, customized to demographic cohorts and calendar quarters. Always respond with valid JSON only."},
                 {"role": "user", "content": user_prompt}
             ],
-            max_tokens=600,
+            max_tokens=900,
             temperature=0.4,
         )
         raw = response.choices[0].message.content.strip()
@@ -25626,10 +25637,18 @@ Respond with ONLY valid JSON (no markdown, no explanation outside the JSON):
         result = json.loads(raw)
         weights = result.get('weights', {})
         for cat in SOT_CATEGORIES:
-            if cat not in weights or not isinstance(weights[cat].get('avg_min'), (int, float)):
-                print(f"[SOT] GPT missing/invalid category: {cat}")
+            if cat not in weights:
+                print(f"[SOT] GPT missing category: {cat}")
+                return None
+            if not isinstance(weights[cat].get('avg_min'), (int, float)):
+                print(f"[SOT] GPT invalid avg_min for: {cat}")
                 return None
             weights[cat]['avg_min'] = max(1, min(120, round(weights[cat]['avg_min'])))
+            spd = weights[cat].get('sessions_per_day')
+            if isinstance(spd, (int, float)):
+                weights[cat]['sessions_per_day'] = round(max(0.1, min(30.0, float(spd))), 1)
+            else:
+                weights[cat]['sessions_per_day'] = SOT_SESSIONS_PER_DAY_BASELINE.get(cat, 2.0)
 
         from datetime import datetime as _dt
         payload = {
@@ -25651,22 +25670,24 @@ Respond with ONLY valid JSON (no markdown, no explanation outside the JSON):
 
 def _sot_get_weights(age_brackets, start_date, end_date):
     """Resolve time weights: cached > GPT-generated > static baseline.
-    Returns (weights_dict {cat: avg_min}, full_payload_or_None, source_str)."""
+    Returns (avg_min_dict, sessions_per_day_dict, full_payload_or_None, source_str)."""
     quarter = _sot_quarter_from_dates(start_date, end_date)
 
     cached = _sot_load_cached_weights(age_brackets, quarter)
     if cached:
-        w = {cat: cached['weights'][cat]['avg_min'] for cat in SOT_CATEGORIES}
-        return w, cached, 'cached'
+        am = {cat: cached['weights'][cat]['avg_min'] for cat in SOT_CATEGORIES}
+        spd = {cat: cached['weights'][cat].get('sessions_per_day', SOT_SESSIONS_PER_DAY_BASELINE.get(cat, 2.0)) for cat in SOT_CATEGORIES}
+        return am, spd, cached, 'cached'
 
     history = _sot_load_cohort_history(age_brackets)
     gpt_payload = _sot_generate_weights_via_gpt(age_brackets, quarter, history)
     if gpt_payload:
         _sot_save_weights_to_s3(age_brackets, quarter, gpt_payload)
-        w = {cat: gpt_payload['weights'][cat]['avg_min'] for cat in SOT_CATEGORIES}
-        return w, gpt_payload, 'generated'
+        am = {cat: gpt_payload['weights'][cat]['avg_min'] for cat in SOT_CATEGORIES}
+        spd = {cat: gpt_payload['weights'][cat].get('sessions_per_day', SOT_SESSIONS_PER_DAY_BASELINE.get(cat, 2.0)) for cat in SOT_CATEGORIES}
+        return am, spd, gpt_payload, 'generated'
 
-    return dict(SOT_AVG_MINUTES_BASELINE), None, 'baseline'
+    return dict(SOT_AVG_MINUTES_BASELINE), dict(SOT_SESSIONS_PER_DAY_BASELINE), None, 'baseline'
 
 
 @app.route('/api/share-of-time/analyze', methods=['POST'])
@@ -25788,7 +25809,7 @@ def share_of_time_analyze():
         total_projected_users = sum(v['capped'] for v in projected_users_by_age.values())
 
         # --- Resolve time weights (cache > GPT > baseline) ---
-        time_weights, weights_payload, weights_source = _sot_get_weights(age_brackets, start_date, end_date)
+        time_weights, sessions_per_day, weights_payload, weights_source = _sot_get_weights(age_brackets, start_date, end_date)
         weights_quarter = _sot_quarter_from_dates(start_date, end_date)
         weight_rationales = {}
         trend_context = ''
@@ -25797,6 +25818,14 @@ def share_of_time_analyze():
                 entry = weights_payload.get('weights', {}).get(cat, {})
                 weight_rationales[cat] = entry.get('rationale', '')
             trend_context = weights_payload.get('trend_context', '')
+
+        # --- Date range days for granularity math ---
+        from datetime import datetime as _dt
+        d_start = _dt.strptime(start_date, '%Y-%m-%d')
+        d_end = _dt.strptime(end_date, '%Y-%m-%d')
+        num_days = max(1, (d_end - d_start).days + 1)
+        num_weeks = num_days / 7.0
+        num_months = num_days / 30.44
 
         # --- Apply cap ratios to interactions per age/category/brand ---
         categories = {}
@@ -25814,7 +25843,7 @@ def share_of_time_analyze():
             categories[share_cat]['brands'][brand]['adj_clicks'] += adj_clicks
             total_weighted_interactions += adj_clicks
 
-        # --- Apply time weights and calculate share ---
+        # --- Compute per-session est_minutes (base layer) ---
         total_est_minutes = 0
         for cat_name, c in categories.items():
             weight = time_weights.get(cat_name, 6)
@@ -25826,15 +25855,32 @@ def share_of_time_analyze():
         # --- Project to US gen pop scale ---
         projection_mult = SOT_US_POPULATION / SOT_PANEL_SIZE
 
+        # --- Build per-category results with all granularities ---
         result_categories = []
         for cat_name in SOT_CATEGORIES:
             if cat_name not in categories:
                 continue
             c = categories[cat_name]
-            weight = time_weights.get(cat_name, 6)
-            time_share = round(100.0 * c['est_minutes'] / total_est_minutes, 2) if total_est_minutes else 0
+            w_min = time_weights.get(cat_name, 6)
+            spd = sessions_per_day.get(cat_name, 2.0)
+            min_per_day = w_min * spd
+            min_per_week = min_per_day * 7
+            min_per_month = min_per_day * 30.44
+
+            time_share_session = round(100.0 * c['est_minutes'] / total_est_minutes, 2) if total_est_minutes else 0
             proj_minutes = int(round(c['est_minutes'] * projection_mult))
             proj_hours = round(proj_minutes / 60)
+
+            # Daily-basis totals use session frequency × per-user counts
+            total_daily_minutes = {cn: time_weights.get(cn, 6) * sessions_per_day.get(cn, 2.0) for cn in categories}
+            total_daily_all = sum(total_daily_minutes.values())
+            time_share_daily = round(100.0 * min_per_day / total_daily_all, 2) if total_daily_all else 0
+            time_share_weekly = time_share_daily
+            time_share_monthly = time_share_daily
+
+            total_timeframe_min = c['est_minutes']
+            total_timeframe_all = total_est_minutes
+            time_share_total = round(100.0 * total_timeframe_min / total_timeframe_all, 2) if total_timeframe_all else 0
 
             brand_list = sorted(c['brands'].items(), key=lambda x: x[1]['est_minutes'], reverse=True)
             brands_out = []
@@ -25853,9 +25899,17 @@ def share_of_time_analyze():
                 'clicks': int(round(c['adj_clicks'])),
                 'est_minutes': int(round(c['est_minutes'])),
                 'projected_hours': proj_hours,
-                'avg_min_per_interaction': weight,
+                'avg_min_per_session': w_min,
+                'sessions_per_day': spd,
+                'min_per_day': round(min_per_day, 1),
+                'min_per_week': round(min_per_week, 1),
+                'min_per_month': round(min_per_month, 1),
                 'rationale': weight_rationales.get(cat_name, ''),
-                'share_pct': time_share,
+                'share_pct_session': time_share_session,
+                'share_pct_daily': time_share_daily,
+                'share_pct_weekly': time_share_weekly,
+                'share_pct_monthly': time_share_monthly,
+                'share_pct_total': time_share_total,
                 'brands': brands_out,
             })
 
@@ -25871,9 +25925,11 @@ def share_of_time_analyze():
                 'projected_us_users': total_projected_users,
                 'start_date': start_date,
                 'end_date': end_date,
+                'num_days': num_days,
                 'age_brackets': age_brackets,
                 'age_group_detail': projected_users_by_age,
-                'avg_minutes_per_interaction': time_weights,
+                'avg_minutes_per_session': time_weights,
+                'sessions_per_day': sessions_per_day,
                 'weights_source': weights_source,
                 'weights_quarter': weights_quarter,
                 'trend_context': trend_context,
