@@ -23861,9 +23861,12 @@
                 if (!canvas || typeof Chart === 'undefined') return;
 
                 var allBrands = {};
+                var tabCatShares = [];
                 tabs.forEach(function(t) {
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
-                    if (cat && cat.brands) {
+                    var catShare = cat ? (cat[shareKey] || 0) : 0;
+                    tabCatShares.push(catShare);
+                    if (cat && cat.brands && catShare >= 0.5) {
                         cat.brands.forEach(function(b) {
                             if (!allBrands[b.name]) allBrands[b.name] = 0;
                             allBrands[b.name] = Math.max(allBrands[b.name], b.category_share_pct || 0);
@@ -23871,13 +23874,15 @@
                     }
                 });
                 var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
+                if (!brandNames.length) return;
 
                 var catDS = [];
                 tabs.forEach(function(t, i) {
                     var label = _sotTabLabel(t.data);
+                    var negligible = tabCatShares[i] < 0.5;
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
                     var brandMap = {};
-                    if (cat && cat.brands) cat.brands.forEach(function(b) { brandMap[b.name] = b; });
+                    if (cat && cat.brands && !negligible) cat.brands.forEach(function(b) { brandMap[b.name] = b; });
                     var vals = brandNames.map(function(bn) {
                         var b = brandMap[bn];
                         return b ? (b.category_share_pct || 0) : 0;
@@ -23901,6 +23906,7 @@
                         plugins: {
                             legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 10 }, padding: 12, usePointStyle: true } },
                             tooltip: { callbacks: { label: function(ctx) {
+                                if (ctx.parsed.x === 0 && tabCatShares[ctx.datasetIndex] < 0.5) return ctx.dataset.label + ': N/A (category < 0.5% for this cohort)';
                                 return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName;
                             } } },
                             datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
