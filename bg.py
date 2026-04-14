@@ -13777,16 +13777,14 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "FEMALE": <percent>,
       "TRANS MALE": <percent>,
       "TRANS FEMALE": <percent>,
-      "NON-BINARY": <percent>,
-      "PREFER NOT TO SAY": <percent>
+      "NON-BINARY": <percent>
     }},
     "ETHNICITY": {{
       "WHITE": <percent>,
       "BLACK OR AFRICAN AMERICAN": <percent>,
       "HISPANIC OR LATINO": <percent>,
       "ASIAN": <percent>,
-      "NATIVE AMERICAN / ALASKA NATIVE": <percent>,
-      "ANOTHER RACE/ETHNICITY": <percent>
+      "NATIVE AMERICAN / ALASKA NATIVE": <percent>
     }},
     "INCOME": {{
       "UNDER $25,000": <percent>,
@@ -13864,9 +13862,9 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
 
 RULES:
 - Each demographic category MUST sum to exactly 100.
-- Use realistic decimals (e.g. 23.7, not 24).
+- Use realistic decimals with 4 decimal places (e.g. 23.7142, not 24 or 23.7).
 - Trans population ≈ 0.5-1% of US; Native American ≈ 1%; LGBTQ+ ≈ 7% (higher only if brand has known affinity).
-- "Prefer Not to Say" 1-3% max in any category.
+- Do NOT include "Prefer Not to Say" or "Other" in AGE, GENDER, ETHNICITY, or INCOME. Those categories must only contain the exact buckets listed above.
 - Location percentages should sum to ≤ 100; remainder is auto-spread to the other 190+ DMAs.
 - category_guidance: cover every major behavioral category. Be specific about which items should rank high vs low for THIS audience.
 """
@@ -14041,34 +14039,54 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # --- A) Write demographics from persona_doc --------------------------
     import re as _re
 
-    _EXPECTED_INCOME_BRACKETS = [
-        'UNDER $25,000',
-        '$25,000-$49,999',
-        '$50,000-$74,999',
-        '$75,000-$99,999',
-        '$100,000-$149,999',
-        '$150,000-$249,999',
-        '$250,000 OR MORE',
-    ]
+    _EXPECTED_DEMO_BUCKETS = {
+        'AGE': ['17 AND UNDER', '18-24', '25-34', '35-44', '45-54', '55-64', '65 OR OLDER'],
+        'GENDER': ['FEMALE', 'MALE', 'NON-BINARY', 'TRANS FEMALE', 'TRANS MALE'],
+        'ETHNICITY': ['WHITE', 'BLACK OR AFRICAN AMERICAN', 'HISPANIC OR LATINO', 'ASIAN',
+                       'NATIVE AMERICAN / ALASKA NATIVE'],
+        'INCOME': ['UNDER $25,000', '$25,000-$49,999', '$50,000-$74,999', '$75,000-$99,999',
+                   '$100,000-$149,999', '$150,000-$249,999', '$250,000 OR MORE'],
+        'EDUCATION': ['LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE', 'SOME COLLEGE',
+                      'ASSOCIATE DEGREE', "BACHELOR'S DEGREE", 'GRADUATE DEGREE'],
+        'RELATIONSHIP': ['SINGLE', 'MARRIED', 'IN A RELATIONSHIP', 'DIVORCED', 'WIDOWED', 'PREFER NOT TO SAY'],
+        'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'GAY OR LESBIAN',
+                               'ANOTHER SEXUAL ORIENTATION', 'PREFER NOT TO SAY'],
+        'PARENTAL_STATUS': ['NO CHILDREN', 'HAS CHILDREN', 'PREFER NOT TO SAY'],
+        'OCCUPATION': ['EMPLOYED FULL-TIME', 'EMPLOYED PART-TIME', 'SELF-EMPLOYED', 'STUDENT',
+                       'HOMEMAKER', 'RETIRED', 'UNEMPLOYED', 'PREFER NOT TO SAY'],
+    }
 
     def _norm_bracket(s: str) -> str:
-        """Normalize an income bracket for comparison: uppercase, collapse whitespace around hyphens, strip."""
+        """Normalize a demographic value for comparison."""
         s = s.strip().upper()
         s = _re.sub(r'\s*-\s*', '-', s)
         s = _re.sub(r'\s+', ' ', s)
         return s
 
+    def _demo_4dp_noise(val: float) -> float:
+        """Ensure demographic BP has 4 meaningful decimal digits."""
+        v = round(val, 4)
+        s = f"{v:.4f}"
+        frac = s.split('.')[1] if '.' in s else '0000'
+        if frac.endswith('000') or frac.endswith('00') or frac.endswith('0'):
+            noise = random.uniform(0.0001, 0.0099)
+            v = v + noise if v < 99.5 else v - noise
+            v = round(max(0.0001, min(99.9999, v)), 4)
+        return v
+
     demos = persona_doc.get('demographics', {})
 
-    # Inject missing INCOME rows before writing persona values
-    if 'INCOME' in demos and isinstance(demos['INCOME'], dict):
-        income_mask = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
-        existing_normed = {_norm_bracket(str(v)) for v in df.loc[income_mask, 'Value']}
-        template_row = df.loc[income_mask].iloc[0].to_dict() if income_mask.any() else None
-        for bracket in _EXPECTED_INCOME_BRACKETS:
-            if _norm_bracket(bracket) not in existing_normed and template_row is not None:
+    # Inject missing demographic rows for ALL categories before writing
+    for cat_name, expected_values in _EXPECTED_DEMO_BUCKETS.items():
+        if cat_name not in demos or not isinstance(demos.get(cat_name), dict):
+            continue
+        cat_mask = df['Column'].astype(str).str.strip().str.upper() == cat_name
+        existing_normed = {_norm_bracket(str(v)) for v in df.loc[cat_mask, 'Value']}
+        template_row = df.loc[cat_mask].iloc[0].to_dict() if cat_mask.any() else None
+        for expected_val in expected_values:
+            if _norm_bracket(expected_val) not in existing_normed and template_row is not None:
                 new_row = template_row.copy()
-                new_row['Value'] = bracket
+                new_row['Value'] = expected_val
                 new_row[bp_col] = 0.0
                 if pct_col and pct_col in df.columns:
                     new_row[pct_col] = 0.0
@@ -14076,18 +14094,33 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     if col in new_row:
                         new_row[col] = 0
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                print(f"   📌 Injected missing INCOME bracket: {bracket}")
+                print(f"   📌 Injected missing {cat_name} value: {expected_val}")
 
-        # Also normalise existing Value text so it matches expected format
-        income_mask = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
-        for idx in df[income_mask].index:
-            raw_val = str(df.at[idx, 'Value']).strip()
-            normed = _norm_bracket(raw_val)
-            for expected in _EXPECTED_INCOME_BRACKETS:
-                if _norm_bracket(expected) == normed:
-                    df.at[idx, 'Value'] = expected
-                    break
+    # Normalize INCOME Value text to expected format (strip spaces around hyphens)
+    income_mask = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
+    for idx in df[income_mask].index:
+        raw_val = str(df.at[idx, 'Value']).strip()
+        normed = _norm_bracket(raw_val)
+        for expected in _EXPECTED_DEMO_BUCKETS['INCOME']:
+            if _norm_bracket(expected) == normed:
+                df.at[idx, 'Value'] = expected
+                break
 
+    # Remove "Prefer Not to Say" / "Other" rows from AGE, GENDER, ETHNICITY, INCOME
+    _NO_PNTS_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME'}
+    _DROP_VALUES = {'PREFER NOT TO SAY', 'OTHER', 'ANOTHER RACE/ETHNICITY'}
+    drop_indices = []
+    for cat in _NO_PNTS_CATS:
+        cat_mask = df['Column'].astype(str).str.strip().str.upper() == cat
+        for idx in df[cat_mask].index:
+            val_u = str(df.at[idx, 'Value']).strip().upper()
+            if val_u in _DROP_VALUES:
+                drop_indices.append(idx)
+    if drop_indices:
+        print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/'Other' rows from AGE/GENDER/ETHNICITY/INCOME")
+        df = df.drop(drop_indices).reset_index(drop=True)
+
+    # Write persona_doc values to DataFrame with 4dp noise
     for cat, buckets in demos.items():
         if not isinstance(buckets, dict):
             continue
@@ -14096,9 +14129,10 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             val_u = _norm_bracket(str(df.at[idx, 'Value']))
             for bk, pct in buckets.items():
                 if _norm_bracket(bk) == val_u:
-                    df.at[idx, bp_col] = round(float(pct), 4)
+                    noisy_bp = _demo_4dp_noise(float(pct))
+                    df.at[idx, bp_col] = noisy_bp
                     if pct_col and pct_col in df.columns:
-                        df.at[idx, pct_col] = round(float(pct), 4)
+                        df.at[idx, pct_col] = noisy_bp
                     break
 
     # --- B) Write location from persona_doc ------------------------------
