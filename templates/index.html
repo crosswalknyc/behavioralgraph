@@ -16121,6 +16121,7 @@
                                 <div class="sot-kpi-value" id="sotKpiInteractions" style="color:var(--accent-orange);">—</div>
                             </div>
                         </div>
+                        <div id="sotTrendGuardNote" style="display:none;margin:-0.2rem 0 0.75rem;padding:0.55rem 0.7rem;border-radius:8px;border:1px solid rgba(102,217,239,0.35);background:rgba(102,217,239,0.08);font-size:0.76rem;color:var(--text-secondary);"></div>
                         <div class="sot-granularity-bar" id="sotGranBar">
                             <button class="sot-gran-btn" data-gran="session" onclick="sotSetGranularity('session')">Per Session</button>
                             <button class="sot-gran-btn active" data-gran="daily" onclick="sotSetGranularity('daily')">Per Day</button>
@@ -23629,6 +23630,16 @@
             document.getElementById('sotKpiProjUsers').textContent = projUsers >= 1000000 ? (projUsers / 1000000).toFixed(1) + 'M' : projUsers.toLocaleString();
             document.getElementById('sotKpiHours').textContent = (data.total_projected_hours || 0) >= 1000000 ? ((data.total_projected_hours / 1000000).toFixed(1) + 'M') : (data.total_projected_hours || 0).toLocaleString();
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
+            var trendNoteEl = document.getElementById('sotTrendGuardNote');
+            if (trendNoteEl) {
+                if (data.trend_guard_note) {
+                    trendNoteEl.textContent = 'Trend check: ' + data.trend_guard_note;
+                    trendNoteEl.style.display = 'block';
+                } else {
+                    trendNoteEl.style.display = 'none';
+                    trendNoteEl.textContent = '';
+                }
+            }
 
             var gran = _sotGranularity;
             var shareKey = _sotShareKey(gran);
