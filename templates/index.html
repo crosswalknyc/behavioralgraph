@@ -43494,33 +43494,54 @@
                 .replace(/\bst\.?$/g,'saint')
                 .replace(/[^a-z0-9]/g,'');
         }
-        
-        // Pre-build normalized lookup index for fast matching
+
+        // Strip 2-letter state abbreviations to handle CSV vs DMA_MASTER format differences
+        const _STATE_CODES = new Set(['al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id','il','in','ia','ks','ky','la','me','md','ma','mi','mn','ms','mo','mt','ne','nv','nh','nj','nm','ny','nc','nd','oh','ok','or','pa','ri','sc','sd','tn','tx','ut','vt','va','wa','wv','wi','wy','dc']);
+        function _dmaNormNoStates(s) {
+            const words = s.toLowerCase()
+                .replace(/\bft\.?\s/g,'fort ').replace(/\bst\.?\s/g,'saint ')
+                .replace(/\bft\.?$/g,'fort').replace(/\bst\.?$/g,'saint')
+                .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ')
+                .filter(w => !(w.length === 2 && _STATE_CODES.has(w)));
+            return words.join('');
+        }
+
+        // Pre-build normalized lookup indices for fast matching
         const _canonNorm = {};
         CANONICAL_DMAS.forEach(c => { _canonNorm[_dmaNorm(c)] = c; });
-        
+        const _canonNormNoStates = {};
+        CANONICAL_DMAS.forEach(c => {
+            const key = _dmaNormNoStates(c);
+            if (!_canonNormNoStates[key]) _canonNormNoStates[key] = c;
+        });
+
         // Match any raw DMA name to a canonical DMA_MASTER key
         function matchCanonicalDMA(rawName) {
             if (!rawName) return null;
-            
+
             // Direct match first
             if (DMA_MASTER[rawName]) return rawName;
-            
+
             // Normalized exact match
             const norm = _dmaNorm(rawName);
             if (_canonNorm[norm]) return _canonNorm[norm];
-            
-            // Fuzzy prefix match - use first two significant words
+
+            // State-stripped exact match (handles CSV "Paducah KY Cape..." vs key "Paducah Cape...")
+            const normNS = _dmaNormNoStates(rawName);
+            if (_canonNormNoStates[normNS]) return _canonNormNoStates[normNS];
+
+            // Fuzzy prefix match - strip state abbreviations from word list
             const words = rawName.toLowerCase()
                 .replace(/\bft\.?\s/g,'fort ').replace(/\bst\.?\s/g,'saint ')
                 .replace(/\bft\.?$/g,'fort').replace(/\bst\.?$/g,'saint')
-                .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ');
+                .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ')
+                .filter(w => !(w.length === 2 && _STATE_CODES.has(w)));
             const primary = words.slice(0, 2).filter(w => w.length > 1).join('');
-            
+
             let best = null, bestDiff = Infinity;
-            for (const [k, v] of Object.entries(_canonNorm)) {
-                if (k.startsWith(primary) || norm.startsWith(k.substring(0, Math.min(k.length, 8)))) {
-                    const diff = Math.abs(k.length - norm.length);
+            for (const [k, v] of Object.entries(_canonNormNoStates)) {
+                if (k.startsWith(primary) || normNS.startsWith(k.substring(0, Math.min(k.length, 8)))) {
+                    const diff = Math.abs(k.length - normNS.length);
                     if (diff < bestDiff) { bestDiff = diff; best = v; }
                 }
             }
