@@ -12306,7 +12306,7 @@
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="ecommerceIQ" {% if not has_ecommerce_iq_access %}disabled{% endif %}>🛒 E-Commerce IQ</option>
                             <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
-                            <option value="workspace">🗂️ Workspace</option>
+                            <option value="workspace" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
                             {% endif %}
@@ -16086,7 +16086,6 @@
                                 </div>
                             </div>
                             <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()">Run Analysis</button>
-                            <button type="button" class="sot-compare-btn" id="sotCompareBtn" onclick="sotToggleCompare()" disabled title="Open 2+ tabs to compare">Compare Open Tabs</button>
                         </div>
                     </div>
                     <div id="sotViewOnlyNotice" class="sot-form-panel" {% if has_share_of_time_run_access %}style="display:none;"{% endif %}>
@@ -16097,6 +16096,9 @@
                                 <div style="font-size:0.8rem;color:var(--text-secondary);">You can open and compare saved Share of Time runs, but you do not have run permissions.</div>
                             </div>
                         </div>
+                    </div>
+                    <div style="display:flex;justify-content:flex-end;align-items:center;margin:0.25rem 0 0.6rem;">
+                        <button type="button" class="sot-compare-btn" id="sotCompareBtn" onclick="sotToggleCompare()" disabled title="Open 2+ tabs to compare">Compare Open Tabs</button>
                     </div>
                     <div id="sotTabBar" class="profile-tabs-bar sot-tab-bar" style="display:none;"></div>
                     <div id="sotCompareArea" style="display:none;"></div>
@@ -18591,7 +18593,8 @@
                         ['hedgeFundIQ', !!d.has_hedge_fund_iq_access],
                         ['roasIQ', !!d.has_roas_iq_access],
                         ['ecommerceIQ', !!d.has_ecommerce_iq_access],
-                        ['shareOfTimeIQ', d.has_share_of_time_access !== false]
+                        ['shareOfTimeIQ', d.has_share_of_time_access !== false],
+                        ['workspace', d.has_workspace_access !== false]
                     ];
                     pairs.forEach(function (pv) {
                         var opt = viewDropdown.querySelector('option[value="' + pv[0] + '"]');
@@ -23798,6 +23801,18 @@
             return s === e ? s : (s + '-' + e);
         }
 
+        function _sotAgeDisplayLabel(ageBrackets) {
+            var ages = ageBrackets || [];
+            var all = ['17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older'];
+            if (ages.length === all.length) {
+                var set = {};
+                ages.forEach(function(a) { set[a] = true; });
+                var isAll = all.every(function(a) { return !!set[a]; });
+                if (isAll) return 'All Ages';
+            }
+            return ages.join(', ');
+        }
+
         function sotToggleRunYear(yearLabel) {
             _sotExpandedYears[yearLabel] = !_sotExpandedYears[yearLabel];
             sotRenderRunTree();
@@ -23866,7 +23881,7 @@
 
                     html += '<div class="sot-tree-children">';
                     g.runs.forEach(function(r) {
-                        var ages = (r.age_brackets || []).join(', ');
+                        var ages = _sotAgeDisplayLabel(r.age_brackets || []);
                         var users = r.matched_users ? r.matched_users.toLocaleString() + ' users' : '';
                         var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
                         var isOpen = openKeys.indexOf(rKey) !== -1;
