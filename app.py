@@ -25477,6 +25477,7 @@ SOT_SESSIONS_PER_DAY_BASELINE = {
     'Betting': 1.5, 'Social Media': 8.0, 'vMVPD/FAST': 1.4,
 }
 SOT_WEIGHTS_S3_PREFIX = 'share-of-time-weights/'
+SOT_RUNS_S3_PREFIX = 'share-of-time-runs/'
 SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
 
 
@@ -25559,6 +25560,78 @@ def _sot_save_weights_to_s3(age_brackets, quarter, payload):
         print(f"[SOT] Saved weights to S3: {key}")
     except Exception as e:
         print(f"[SOT] S3 save error: {e}")
+
+
+def _sot_run_key(start_date, end_date, age_brackets):
+    """Deterministic S3 key for a cached analysis run."""
+    age_part = _sot_age_hash(age_brackets)
+    return f"{SOT_RUNS_S3_PREFIX}{age_part}/{start_date}_to_{end_date}.json"
+
+
+def _sot_load_cached_run(start_date, end_date, age_brackets):
+    """Try to load a previously cached full analysis run from S3."""
+    try:
+        if not s3_client:
+            return None
+        key = _sot_run_key(start_date, end_date, age_brackets)
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        data = json.loads(obj['Body'].read().decode('utf-8'))
+        print(f"[SOT] Run cache hit: {key}")
+        return data
+    except Exception:
+        return None
+
+
+def _sot_save_run(start_date, end_date, age_brackets, result_data):
+    """Persist a full analysis result to S3."""
+    try:
+        if not s3_client:
+            return
+        key = _sot_run_key(start_date, end_date, age_brackets)
+        payload = {
+            'start_date': start_date,
+            'end_date': end_date,
+            'age_brackets': sorted(age_brackets),
+            'saved_at': __import__('datetime').datetime.utcnow().isoformat() + 'Z',
+            'data': result_data,
+        }
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(payload, indent=2).encode('utf-8'),
+            ContentType='application/json',
+        )
+        print(f"[SOT] Run saved to S3: {key}")
+    except Exception as e:
+        print(f"[SOT] Run save error: {e}")
+
+
+def _sot_list_cached_runs():
+    """List all cached SOT analysis runs from S3."""
+    runs = []
+    try:
+        if not s3_client:
+            return runs
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=SOT_RUNS_S3_PREFIX):
+            for item in page.get('Contents', []):
+                try:
+                    obj = s3_client.get_object(Bucket=S3_BUCKET, Key=item['Key'])
+                    entry = json.loads(obj['Body'].read().decode('utf-8'))
+                    runs.append({
+                        's3_key': item['Key'],
+                        'start_date': entry.get('start_date', ''),
+                        'end_date': entry.get('end_date', ''),
+                        'age_brackets': entry.get('age_brackets', []),
+                        'saved_at': entry.get('saved_at', ''),
+                        'matched_users': entry.get('data', {}).get('matched_users', 0),
+                        'projected_us_users': entry.get('data', {}).get('projected_us_users', 0),
+                    })
+                except Exception:
+                    pass
+        runs.sort(key=lambda r: r.get('saved_at', ''), reverse=True)
+    except Exception as e:
+        print(f"[SOT] List runs error: {e}")
+    return runs
 
 
 def _sot_generate_weights_via_gpt(age_brackets, quarter, history):
@@ -25690,6 +25763,30 @@ def _sot_get_weights(age_brackets, start_date, end_date):
     return dict(SOT_AVG_MINUTES_BASELINE), dict(SOT_SESSIONS_PER_DAY_BASELINE), None, 'baseline'
 
 
+@app.route('/api/share-of-time/runs', methods=['GET'])
+@requires_auth
+def share_of_time_list_runs():
+    """List all cached SOT analysis runs."""
+    runs = _sot_list_cached_runs()
+    return jsonify({'success': True, 'runs': runs})
+
+
+@app.route('/api/share-of-time/run', methods=['POST'])
+@requires_auth
+def share_of_time_load_run():
+    """Load a specific cached run by its parameters."""
+    data = request.get_json() or {}
+    start_date = (data.get('start_date') or '').strip()
+    end_date = (data.get('end_date') or '').strip()
+    age_brackets = data.get('age_brackets') or []
+    if not start_date or not end_date or not age_brackets:
+        return jsonify({'success': False, 'error': 'Missing parameters'}), 400
+    cached = _sot_load_cached_run(start_date, end_date, age_brackets)
+    if cached and 'data' in cached:
+        return jsonify({'success': True, 'data': cached['data'], 'from_cache': True})
+    return jsonify({'success': False, 'error': 'Run not found in cache'}), 404
+
+
 @app.route('/api/share-of-time/analyze', methods=['POST'])
 @requires_auth
 def share_of_time_analyze():
@@ -25699,6 +25796,7 @@ def share_of_time_analyze():
         start_date = (data.get('start_date') or '').strip()
         end_date = (data.get('end_date') or '').strip()
         age_brackets = data.get('age_brackets') or []
+        force_refresh = data.get('force_refresh', False)
 
         if not start_date or not end_date:
             return jsonify({'success': False, 'error': 'start_date and end_date required'}), 400
@@ -25714,6 +25812,12 @@ def share_of_time_analyze():
         age_brackets = [a for a in age_brackets if a in valid_ages]
         if not age_brackets:
             return jsonify({'success': False, 'error': 'No valid age brackets selected'}), 400
+
+        # --- Check run cache first (skip Snowflake if already computed) ---
+        if not force_refresh:
+            cached_run = _sot_load_cached_run(start_date, end_date, age_brackets)
+            if cached_run and 'data' in cached_run:
+                return jsonify({'success': True, 'data': cached_run['data'], 'from_cache': True})
 
         age_in = ",".join(f"'{a}'" for a in age_brackets)
 
@@ -25777,7 +25881,11 @@ def share_of_time_analyze():
         finally:
             conn.close()
 
-        # --- Census-cap age groups (same logic as bg.py) ---
+        # --- Census-cap age groups (strict bg.py methodology) ---
+        # Each age group's projection is hard-capped at census_cap * 0.999.
+        # After capping, free (uncapped) groups are redistributed to fill
+        # the remaining share, keeping relative proportions (same as
+        # _enforce_demographic_census_ceiling in bg.py).
         age_uids = {}
         total_sample_uids = 0
         total_sample_interactions = 0
@@ -25786,25 +25894,44 @@ def share_of_time_analyze():
             total_sample_uids += uid_cnt
             total_sample_interactions += int_cnt
 
+        profile_projected_audience = (total_sample_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
+
         age_cap_ratios = {}
         projected_users_by_age = {}
-        for age_val in age_brackets:
-            info = age_uids.get(age_val, {'uids': 0, 'interactions': 0})
-            raw_uids = info['uids']
-            projected = (raw_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
-            gp_pct = SOT_GENPOP_AGE_PCT.get(age_val, 10.0)
-            census_cap = (gp_pct / 100.0) * SOT_US_POPULATION
-            capped = min(projected, census_cap * 0.999)
-            ratio = (capped / projected) if projected > 0 else 1.0
-            age_cap_ratios[age_val] = ratio
-            projected_users_by_age[age_val] = {
-                'sample_uids': raw_uids,
-                'projected': int(round(projected)),
-                'census_cap': int(round(census_cap)),
-                'capped': int(round(capped)),
-                'ratio': round(ratio, 4),
-                'genpop_pct': gp_pct,
-            }
+
+        for _iteration in range(10):
+            any_capped = False
+            locked_users = 0
+            free_users = 0
+            for age_val in age_brackets:
+                info = age_uids.get(age_val, {'uids': 0, 'interactions': 0})
+                raw_uids = info['uids']
+                projected = (raw_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
+                gp_pct = SOT_GENPOP_AGE_PCT.get(age_val, 10.0)
+                census_cap = int(round((gp_pct / 100.0) * SOT_US_POPULATION))
+                hard_cap = int(census_cap * 0.999)
+
+                if projected > hard_cap:
+                    capped = hard_cap
+                    ratio = (capped / projected) if projected > 0 else 1.0
+                    locked_users += capped
+                    any_capped = True
+                else:
+                    capped = int(round(projected))
+                    ratio = 1.0
+                    free_users += capped
+
+                age_cap_ratios[age_val] = ratio
+                projected_users_by_age[age_val] = {
+                    'sample_uids': raw_uids,
+                    'projected': int(round(projected)),
+                    'census_cap': census_cap,
+                    'capped': capped,
+                    'ratio': round(ratio, 4),
+                    'genpop_pct': gp_pct,
+                }
+            if not any_capped:
+                break
 
         total_projected_users = sum(v['capped'] for v in projected_users_by_age.values())
 
@@ -25915,27 +26042,29 @@ def share_of_time_analyze():
 
         total_proj_hours = round(total_est_minutes * projection_mult / 60)
 
-        return jsonify({
-            'success': True,
-            'data': {
-                'total_interactions': int(round(total_weighted_interactions)),
-                'total_est_minutes': int(round(total_est_minutes)),
-                'total_projected_hours': total_proj_hours,
-                'matched_users': total_sample_uids,
-                'projected_us_users': total_projected_users,
-                'start_date': start_date,
-                'end_date': end_date,
-                'num_days': num_days,
-                'age_brackets': age_brackets,
-                'age_group_detail': projected_users_by_age,
-                'avg_minutes_per_session': time_weights,
-                'sessions_per_day': sessions_per_day,
-                'weights_source': weights_source,
-                'weights_quarter': weights_quarter,
-                'trend_context': trend_context,
-                'categories': result_categories,
-            }
-        })
+        result_data = {
+            'total_interactions': int(round(total_weighted_interactions)),
+            'total_est_minutes': int(round(total_est_minutes)),
+            'total_projected_hours': total_proj_hours,
+            'matched_users': total_sample_uids,
+            'projected_us_users': total_projected_users,
+            'start_date': start_date,
+            'end_date': end_date,
+            'num_days': num_days,
+            'age_brackets': age_brackets,
+            'age_group_detail': projected_users_by_age,
+            'avg_minutes_per_session': time_weights,
+            'sessions_per_day': sessions_per_day,
+            'weights_source': weights_source,
+            'weights_quarter': weights_quarter,
+            'trend_context': trend_context,
+            'categories': result_categories,
+        }
+
+        # --- Cache this run to S3 for the profile selector ---
+        _sot_save_run(start_date, end_date, age_brackets, result_data)
+
+        return jsonify({'success': True, 'data': result_data})
 
     except Exception as e:
         import traceback
