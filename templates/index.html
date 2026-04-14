@@ -15981,7 +15981,6 @@
                                 </div>
                             </div>
                             <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()">Run Analysis</button>
-                            <button type="button" class="sot-run-btn" id="sotFreshBtn" onclick="sotRunAnalysis(true)" style="background:linear-gradient(135deg,#f59e0b,#ef4444);font-size:0.75rem;padding:0.4rem 0.8rem;" title="Bypass cache and re-query Snowflake + GPT">Fresh Run</button>
                             <button type="button" class="sot-compare-btn" id="sotCompareBtn" onclick="sotToggleCompare()" disabled title="Open 2+ tabs to compare">Compare Open Tabs</button>
                         </div>
                     </div>
@@ -23532,7 +23531,7 @@
                 _sotBarInst = new Chart(bCtx.getContext('2d'), {
                     type: 'bar',
                     plugins: [ChartDataLabels],
-                    data: { labels: labels, datasets: [{ label: 'Share %', data: shares, backgroundColor: colors, borderWidth: 0, borderRadius: 5, barPercentage: 0.65 }] },
+                    data: { labels: labels, datasets: [{ label: 'Share %', data: shares, backgroundColor: colors, borderWidth: 0, borderRadius: 5, barPercentage: 0.85 }] },
                     options: {
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                         scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } },
@@ -23540,7 +23539,7 @@
                             var cat = cats[ctx.dataIndex];
                             return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
                         } } },
-                        datalabels: { anchor: 'end', align: 'start', offset: 6, color: '#fff', font: { weight: '700', size: 12 }, formatter: function(v) { return v >= 1.5 ? v.toFixed(1) + '%' : ''; } }
+                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 12 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         },
                         onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
                     }
@@ -23592,7 +23591,7 @@
             _sotDrillInst = new Chart(canvas.getContext('2d'), {
                 type: 'bar',
                 plugins: [ChartDataLabels],
-                data: { labels: bLabels, datasets: [{ label: 'Category Share %', data: bShares, backgroundColor: col + 'cc', borderWidth: 0, borderRadius: 4, barPercentage: 0.7 }] },
+                data: { labels: bLabels, datasets: [{ label: 'Category Share %', data: bShares, backgroundColor: col + 'cc', borderWidth: 0, borderRadius: 4, barPercentage: 0.85 }] },
                 options: {
                     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                     scales: {
@@ -23602,7 +23601,7 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs)'; } } },
-                        datalabels: { anchor: 'end', align: 'start', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
+                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                     }
                 }
             });
@@ -23833,7 +23832,7 @@
                     mainDS.push({
                         label: label, data: vals,
                         backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
-                        borderWidth: 0, borderRadius: 4, barPercentage: 0.7
+                        borderWidth: 0, borderRadius: 4, barPercentage: 0.9
                     });
                 });
                 var mainChart = new Chart(mainCanvas.getContext('2d'), {
@@ -23848,7 +23847,7 @@
                         plugins: {
                             legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 16, usePointStyle: true } },
                             tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '%'; } } },
-                            datalabels: { anchor: 'end', align: 'start', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
+                            datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         }
                     }
                 });
@@ -23885,7 +23884,7 @@
                     catDS.push({
                         label: label, data: vals,
                         backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
-                        borderWidth: 0, borderRadius: 3, barPercentage: 0.75
+                        borderWidth: 0, borderRadius: 3, barPercentage: 0.9
                     });
                 });
 
@@ -23903,7 +23902,7 @@
                             tooltip: { callbacks: { label: function(ctx) {
                                 return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName;
                             } } },
-                            datalabels: { anchor: 'end', align: 'start', offset: 3, color: '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
+                            datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         }
                     }
                 });
