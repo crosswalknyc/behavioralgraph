@@ -25509,16 +25509,21 @@ def _sot_load_cached_weights(age_brackets, quarter):
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
         weights = {}
+        has_native_spd = False
         for cat in SOT_CATEGORIES:
             entry = data.get('weights', {}).get(cat, {})
             avg = entry.get('avg_min')
             if isinstance(avg, (int, float)) and 1 <= avg <= 120:
-                if 'sessions_per_day' not in entry:
+                if 'sessions_per_day' in entry:
+                    has_native_spd = True
+                else:
                     entry['sessions_per_day'] = SOT_SESSIONS_PER_DAY_BASELINE.get(cat, 2.0)
                 weights[cat] = entry
-        if len(weights) == len(SOT_CATEGORIES):
+        if len(weights) == len(SOT_CATEGORIES) and has_native_spd:
             print(f"[SOT] Cache hit: {key}")
             return data
+        if not has_native_spd:
+            print(f"[SOT] Stale weight cache (no sessions_per_day), regenerating...")
     except Exception:
         pass
     return None
@@ -25817,7 +25822,12 @@ def share_of_time_analyze():
         if not force_refresh:
             cached_run = _sot_load_cached_run(start_date, end_date, age_brackets)
             if cached_run and 'data' in cached_run:
-                return jsonify({'success': True, 'data': cached_run['data'], 'from_cache': True})
+                cats = cached_run['data'].get('categories', [])
+                has_daily = any(c.get('share_pct_daily') is not None and c.get('sessions_per_day') is not None for c in cats)
+                if has_daily:
+                    return jsonify({'success': True, 'data': cached_run['data'], 'from_cache': True})
+                else:
+                    print("[SOT] Stale run cache (missing daily data), re-computing...")
 
         age_in = ",".join(f"'{a}'" for a in age_brackets)
 

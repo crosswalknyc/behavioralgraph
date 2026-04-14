@@ -15971,6 +15971,7 @@
                                 </div>
                             </div>
                             <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()">Run Analysis</button>
+                            <button type="button" class="sot-run-btn" id="sotFreshBtn" onclick="sotRunAnalysis(true)" style="background:linear-gradient(135deg,#f59e0b,#ef4444);font-size:0.75rem;padding:0.4rem 0.8rem;" title="Bypass cache and re-query Snowflake + GPT">Fresh Run</button>
                         </div>
                     </div>
                     <div id="sotResultsArea" style="display:none;">
@@ -23399,7 +23400,7 @@
             sotLoadRuns();
         };
 
-        function sotRunAnalysis() {
+        function sotRunAnalysis(forceRefresh) {
             var start = document.getElementById('sotStartDate')?.value;
             var end = document.getElementById('sotEndDate')?.value;
             if (!start || !end) { alert('Please select both start and end dates.'); return; }
@@ -23409,17 +23410,23 @@
             if (!ages.length) { alert('Please select at least one age bracket.'); return; }
 
             var btn = document.getElementById('sotRunBtn');
-            btn.disabled = true; btn.textContent = 'Running…';
+            var freshBtn = document.getElementById('sotFreshBtn');
+            btn.disabled = true; btn.textContent = 'Running\u2026';
+            if (freshBtn) freshBtn.disabled = true;
             document.getElementById('sotResultsArea').style.display = 'none';
             document.getElementById('sotEmptyState').style.display = 'none';
             document.getElementById('sotLoadingArea').style.display = 'block';
 
+            var payload = { start_date: start, end_date: end, age_brackets: ages };
+            if (forceRefresh) payload.force_refresh = true;
+
             fetch('/api/share-of-time/analyze', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ start_date: start, end_date: end, age_brackets: ages })
+                body: JSON.stringify(payload)
             }).then(function(r) { return r.json(); }).then(function(resp) {
                 btn.disabled = false; btn.textContent = 'Run Analysis';
+                if (freshBtn) freshBtn.disabled = false;
                 document.getElementById('sotLoadingArea').style.display = 'none';
                 if (!resp.success) { alert('Error: ' + (resp.error || 'Unknown')); document.getElementById('sotEmptyState').style.display = 'flex'; return; }
                 _sotData = resp.data;
@@ -23427,6 +23434,7 @@
                 sotLoadRuns();
             }).catch(function(err) {
                 btn.disabled = false; btn.textContent = 'Run Analysis';
+                if (freshBtn) freshBtn.disabled = false;
                 document.getElementById('sotLoadingArea').style.display = 'none';
                 document.getElementById('sotEmptyState').style.display = 'flex';
                 alert('Request failed: ' + err);
