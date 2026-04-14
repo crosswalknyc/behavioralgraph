@@ -5515,6 +5515,7 @@ def compute_product_access_flags(user, role):
             'has_llmo_iq_access': True,
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
+            'has_share_of_time_access': True,
         }
     u = user or {}
     return {
@@ -5538,6 +5539,7 @@ def compute_product_access_flags(user, role):
         'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
         'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
+        'has_share_of_time_access': bool(u.get('has_share_of_time_access', True)),
     }
 
 
@@ -5613,6 +5615,7 @@ def index():
     has_llmo_iq = _acc['has_llmo_iq_access']
     has_talent_fit = _acc.get('has_talent_fit_access', False)
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
+    has_share_of_time = _acc.get('has_share_of_time_access', True)
     
     # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -5663,6 +5666,7 @@ def index():
                            has_llmo_iq_access=has_llmo_iq,
                            has_talent_fit_access=has_talent_fit,
                            has_flywheel_conversion_access=has_flywheel_conversion,
+                           has_share_of_time_access=has_share_of_time,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -25432,6 +25436,845 @@ def run_watch_time(job_id):
         error_msg = f"Error running watch time IQ: {str(e)}\n{traceback.format_exc()}"
         print(error_msg)
         update_job_status(job_id, status='failed', error=error_msg)
+
+
+# ============================================================================
+# SHARE OF TIME IQ
+# ============================================================================
+
+SHARE_OF_TIME_CATEGORY_SQL = """
+    SELECT LOWER(BRAND) as brand_lower,
+           CASE
+               WHEN SECTION LIKE 'Streaming/Platform%' THEN 'Streaming Video'
+               WHEN SECTION LIKE 'Streaming/Music%' THEN 'Streaming Music'
+               WHEN SECTION LIKE 'Games%' THEN 'Games'
+               WHEN SECTION = 'Betting' THEN 'Betting'
+               WHEN SECTION = 'Social Media' THEN 'Social Media'
+               WHEN SECTION LIKE 'Virtual MVPD%' THEN 'vMVPD/FAST'
+           END AS share_category
+    FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING
+    WHERE SECTION LIKE 'Streaming/Platform%'
+       OR SECTION LIKE 'Streaming/Music%'
+       OR SECTION LIKE 'Games%'
+       OR SECTION = 'Betting'
+       OR SECTION = 'Social Media'
+       OR SECTION LIKE 'Virtual MVPD%%'
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY LOWER(BRAND) ORDER BY SECTION) = 1
+"""
+
+SOT_US_POPULATION = 329_900_000
+SOT_PANEL_SIZE = 10_000_000
+SOT_GENPOP_AGE_PCT = {
+    '17 and Under': 19.6, '18-24': 9.7, '25-34': 13.2, '35-44': 13.6,
+    '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1,
+}
+SOT_AVG_MINUTES_BASELINE = {
+    'Streaming Video': 52, 'Streaming Music': 26, 'Games': 28,
+    'Betting': 12, 'Social Media': 14, 'vMVPD/FAST': 48,
+}
+SOT_SESSIONS_PER_DAY_BASELINE = {
+    'Streaming Video': 1.8, 'Streaming Music': 2.5, 'Games': 2.2,
+    'Betting': 1.5, 'Social Media': 8.0, 'vMVPD/FAST': 1.4,
+}
+SOT_WEIGHTS_S3_PREFIX = 'share-of-time-weights/'
+SOT_RUNS_S3_PREFIX = 'share-of-time-runs/'
+SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
+
+
+def _sot_quarter_from_dates(start_date, end_date):
+    """Return YYYY-QN for the midpoint of a date range."""
+    from datetime import datetime, timedelta
+    s = datetime.strptime(start_date, '%Y-%m-%d')
+    e = datetime.strptime(end_date, '%Y-%m-%d')
+    mid = s + (e - s) / 2
+    q = (mid.month - 1) // 3 + 1
+    return f"{mid.year}-Q{q}"
+
+
+def _sot_age_hash(age_brackets):
+    """Deterministic key fragment from sorted age brackets."""
+    return '_'.join(sorted(age_brackets)).replace(' ', '-').replace('+', 'plus')
+
+
+def _sot_cache_key(age_brackets, quarter):
+    return f"{SOT_WEIGHTS_S3_PREFIX}{_sot_age_hash(age_brackets)}/{quarter}.json"
+
+
+def _sot_load_cached_weights(age_brackets, quarter):
+    """Try to load cached GPT weights from S3. Returns dict or None."""
+    try:
+        if not s3_client:
+            return None
+        key = _sot_cache_key(age_brackets, quarter)
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        data = json.loads(obj['Body'].read().decode('utf-8'))
+        weights = {}
+        has_native_spd = False
+        for cat in SOT_CATEGORIES:
+            entry = data.get('weights', {}).get(cat, {})
+            avg = entry.get('avg_min')
+            if isinstance(avg, (int, float)) and 1 <= avg <= 120:
+                if 'sessions_per_day' in entry:
+                    has_native_spd = True
+                else:
+                    entry['sessions_per_day'] = SOT_SESSIONS_PER_DAY_BASELINE.get(cat, 2.0)
+                weights[cat] = entry
+        if len(weights) == len(SOT_CATEGORIES) and has_native_spd:
+            print(f"[SOT] Cache hit: {key}")
+            return data
+        if not has_native_spd:
+            print(f"[SOT] Stale weight cache (no sessions_per_day), regenerating...")
+    except Exception:
+        pass
+    return None
+
+
+def _sot_load_cohort_history(age_brackets):
+    """Fetch all cached quarter entries for a cohort (for trend context)."""
+    history = []
+    try:
+        if not s3_client:
+            return history
+        prefix = f"{SOT_WEIGHTS_S3_PREFIX}{_sot_age_hash(age_brackets)}/"
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for item in page.get('Contents', []):
+                try:
+                    obj = s3_client.get_object(Bucket=S3_BUCKET, Key=item['Key'])
+                    entry = json.loads(obj['Body'].read().decode('utf-8'))
+                    history.append(entry)
+                except Exception:
+                    pass
+        history.sort(key=lambda h: h.get('quarter', ''))
+    except Exception as e:
+        print(f"[SOT] History load error: {e}")
+    return history
+
+
+def _sot_save_weights_to_s3(age_brackets, quarter, payload):
+    """Persist GPT-generated weights to S3."""
+    try:
+        if not s3_client:
+            return
+        key = _sot_cache_key(age_brackets, quarter)
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(payload, indent=2).encode('utf-8'),
+            ContentType='application/json',
+        )
+        print(f"[SOT] Saved weights to S3: {key}")
+    except Exception as e:
+        print(f"[SOT] S3 save error: {e}")
+
+
+def _sot_run_key(start_date, end_date, age_brackets):
+    """Deterministic S3 key for a cached analysis run."""
+    age_part = _sot_age_hash(age_brackets)
+    return f"{SOT_RUNS_S3_PREFIX}{age_part}/{start_date}_to_{end_date}.json"
+
+
+def _sot_load_cached_run(start_date, end_date, age_brackets):
+    """Try to load a previously cached full analysis run from S3."""
+    try:
+        if not s3_client:
+            return None
+        key = _sot_run_key(start_date, end_date, age_brackets)
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        data = json.loads(obj['Body'].read().decode('utf-8'))
+        print(f"[SOT] Run cache hit: {key}")
+        return data
+    except Exception:
+        return None
+
+
+def _sot_save_run(start_date, end_date, age_brackets, result_data):
+    """Persist a full analysis result to S3."""
+    try:
+        if not s3_client:
+            return
+        key = _sot_run_key(start_date, end_date, age_brackets)
+        payload = {
+            'start_date': start_date,
+            'end_date': end_date,
+            'age_brackets': sorted(age_brackets),
+            'saved_at': __import__('datetime').datetime.utcnow().isoformat() + 'Z',
+            'data': result_data,
+        }
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(payload, indent=2).encode('utf-8'),
+            ContentType='application/json',
+        )
+        print(f"[SOT] Run saved to S3: {key}")
+    except Exception as e:
+        print(f"[SOT] Run save error: {e}")
+
+
+def _sot_list_cached_runs():
+    """List all cached SOT analysis runs from S3."""
+    runs = []
+    try:
+        if not s3_client:
+            return runs
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=SOT_RUNS_S3_PREFIX):
+            for item in page.get('Contents', []):
+                try:
+                    obj = s3_client.get_object(Bucket=S3_BUCKET, Key=item['Key'])
+                    entry = json.loads(obj['Body'].read().decode('utf-8'))
+                    runs.append({
+                        's3_key': item['Key'],
+                        'start_date': entry.get('start_date', ''),
+                        'end_date': entry.get('end_date', ''),
+                        'age_brackets': entry.get('age_brackets', []),
+                        'saved_at': entry.get('saved_at', ''),
+                        'matched_users': entry.get('data', {}).get('matched_users', 0),
+                        'projected_us_users': entry.get('data', {}).get('projected_us_users', 0),
+                    })
+                except Exception:
+                    pass
+        runs.sort(key=lambda r: r.get('saved_at', ''), reverse=True)
+    except Exception as e:
+        print(f"[SOT] List runs error: {e}")
+    return runs
+
+
+def _sot_generate_weights_via_gpt(age_brackets, quarter, history):
+    """Call GPT-4o to generate cohort/date-aware avg minutes per interaction.
+    Returns full payload dict or None on failure."""
+    client = get_openai_client()
+    if not client:
+        print("[SOT] OpenAI client unavailable, using baseline weights")
+        return None
+
+    history_text = ""
+    if history:
+        lines = []
+        for h in history[-8:]:
+            q = h.get('quarter', '?')
+            w = h.get('weights', {})
+            parts = []
+            for cat in SOT_CATEGORIES:
+                if cat in w:
+                    spd = w[cat].get('sessions_per_day', '?')
+                    parts.append(f"{cat}: {w[cat]['avg_min']}min x {spd}/day")
+            lines.append(f"  {q}: {', '.join(parts)}")
+        history_text = "Historical weights for this cohort (use for trend continuity):\n" + "\n".join(lines)
+
+    baseline_text = ", ".join(f"{c}: {v}min/session x {SOT_SESSIONS_PER_DAY_BASELINE[c]}/day" for c, v in SOT_AVG_MINUTES_BASELINE.items())
+
+    user_prompt = f"""Estimate two values for each media category: (1) average minutes per session and (2) average sessions per day for a typical user in this cohort.
+
+Cohort age brackets: {', '.join(sorted(age_brackets))}
+Time period: {quarter}
+
+Categories: {', '.join(SOT_CATEGORIES)}
+
+Industry baseline (all-ages, all-time average): {baseline_text}
+
+{history_text}
+
+Instructions:
+- Adjust both session duration AND session frequency for THIS specific cohort and time period.
+- Session frequency matters enormously: social media may be short per visit but users check it 10-20+ times/day; streaming video is long per session but only 1-2 sessions/day.
+- Under-18 cohorts: games 30-45 min/session x 2-4 sessions/day; social media 10-20 min/session x 12-20 sessions/day; streaming video 40-55 min x 1-2/day; betting near zero; vMVPD/FAST low.
+- 18-34 cohorts: social media 10-18 min x 10-15/day; games 25-40 min x 1.5-3/day; streaming video 45-60 min x 1.5-2/day; streaming music 20-30 min x 2-4/day.
+- 35-54 cohorts: balanced, peak streaming video 50-65 min x 1.5-2/day; social media 8-14 min x 6-10/day; games 15-25 min x 1-2/day.
+- 55+ cohorts: streaming video 55-70 min x 1.5-2.5/day; vMVPD/FAST 45-60 min x 1.5-2/day; social media 5-10 min x 3-6/day; games 10-20 min x 0.5-1.5/day.
+- Model seasonal effects: Q4 = holiday streaming bump + school break gaming spike; Q1 = post-holiday dip; Q3 = summer less streaming, steady gaming for youth.
+- Model year-over-year trends: social media frequency growing ~5-8%/year; streaming video stable; vMVPD/FAST growing ~3-5%/year; games growing ~3%/year in younger cohorts; betting growing ~4%/year during seasons.
+- If historical data is provided, maintain consistency across quarters.
+- avg_min must be between 1 and 120. sessions_per_day must be between 0.1 and 30.
+
+Respond with ONLY valid JSON (no markdown, no explanation outside the JSON):
+{{
+  "weights": {{
+    "Streaming Video": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "Streaming Music": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "Games": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "Betting": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "Social Media": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}},
+    "vMVPD/FAST": {{"avg_min": <number>, "sessions_per_day": <number>, "rationale": "<1 sentence>"}}
+  }},
+  "trend_context": "<1-2 sentences summarizing how this quarter compares to prior data>"
+}}"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a media consumption research analyst. You produce precise JSON estimates of average session duration AND daily session frequency per media category, customized to demographic cohorts and calendar quarters. Always respond with valid JSON only."},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=900,
+            temperature=0.4,
+        )
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        result = json.loads(raw)
+        weights = result.get('weights', {})
+        for cat in SOT_CATEGORIES:
+            if cat not in weights:
+                print(f"[SOT] GPT missing category: {cat}")
+                return None
+            if not isinstance(weights[cat].get('avg_min'), (int, float)):
+                print(f"[SOT] GPT invalid avg_min for: {cat}")
+                return None
+            weights[cat]['avg_min'] = max(1, min(120, round(weights[cat]['avg_min'])))
+            spd = weights[cat].get('sessions_per_day')
+            if isinstance(spd, (int, float)):
+                weights[cat]['sessions_per_day'] = round(max(0.1, min(30.0, float(spd))), 1)
+            else:
+                weights[cat]['sessions_per_day'] = SOT_SESSIONS_PER_DAY_BASELINE.get(cat, 2.0)
+
+        from datetime import datetime as _dt
+        payload = {
+            'age_brackets': sorted(age_brackets),
+            'quarter': quarter,
+            'generated_at': _dt.utcnow().isoformat() + 'Z',
+            'weights': weights,
+            'trend_context': result.get('trend_context', ''),
+            'model': 'gpt-4o',
+            'tokens_used': response.usage.total_tokens if response.usage else 0,
+        }
+        print(f"[SOT] GPT weights generated for {quarter}, cohort={sorted(age_brackets)}")
+        return payload
+
+    except Exception as e:
+        print(f"[SOT] GPT generation failed: {e}")
+        return None
+
+
+SOT_BRAND_AFFINITY_S3_PREFIX = 'share-of-time-brand-affinity/'
+
+
+def _sot_brand_affinity_key(age_brackets, quarter):
+    return f"{SOT_BRAND_AFFINITY_S3_PREFIX}{_sot_age_hash(age_brackets)}/{quarter}.json"
+
+
+def _sot_load_brand_affinity(age_brackets, quarter):
+    try:
+        if not s3_client:
+            return None
+        key = _sot_brand_affinity_key(age_brackets, quarter)
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
+def _sot_save_brand_affinity(age_brackets, quarter, payload):
+    try:
+        if not s3_client:
+            return
+        key = _sot_brand_affinity_key(age_brackets, quarter)
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(payload, indent=2).encode('utf-8'),
+            ContentType='application/json',
+        )
+        print(f"[SOT] Saved brand affinity to {key}")
+    except Exception as e:
+        print(f"[SOT] Failed to save brand affinity: {e}")
+
+
+def _sot_generate_brand_affinity(age_brackets, quarter, raw_brands_by_cat):
+    """Call GPT-4o to generate age-aware brand affinity multipliers.
+    raw_brands_by_cat: dict of {category: [{name, raw_pct}, ...]}
+    Returns dict {category: {brand: multiplier}} or None."""
+    client = get_openai_client()
+    if not client:
+        return None
+
+    brands_text = ""
+    for cat, brands in raw_brands_by_cat.items():
+        top = brands[:15]
+        lines = ", ".join(f"{b['name']} ({b['raw_pct']:.1f}%)" for b in top)
+        brands_text += f"\n{cat}: {lines}"
+
+    cohort_desc = ', '.join(sorted(age_brackets))
+
+    if len(age_brackets) == 1:
+        cohort_context = f"This is a SINGLE age cohort: {age_brackets[0]}. Adjustments should strongly reflect this specific age group's known preferences."
+    else:
+        cohort_context = f"This is a COMBINED cohort spanning: {cohort_desc}. Produce a weighted-average adjustment that reflects the blended behavior of these age groups together."
+
+    prompt = f"""You are a senior media consumption research analyst at a top market research firm. Your job is to adjust raw clickstream brand shares to reflect realistic usage patterns for a specific demographic cohort.
+
+Demographic cohort: {cohort_desc}
+Time period: {quarter}
+{cohort_context}
+
+Below are the raw brand shares from a broad, all-ages clickstream panel. These shares do NOT yet reflect age-specific preferences — they represent panel-wide averages. Your task is to return a multiplier for each brand that adjusts its share to reflect what this specific cohort would realistically show.
+{brands_text}
+
+CRITICAL: The raw clickstream data has known biases. Web-heavy platforms get inflated click counts vs. app-native platforms. Your multipliers must correct for BOTH age-specific preferences AND real-world market share. The final adjusted shares should be plausible if published in a research report.
+
+Your analysis should draw on your knowledge of:
+- Published media consumption research (Nielsen, Comscore, Pew Research, eMarketer, Sensor Tower, App Annie, Statista)
+- Platform demographics from investor reports and earnings calls (e.g., Roblox's 10-K shows ~50% of DAUs are under 13)
+- Age-specific adoption curves for social platforms (e.g., TikTok penetration by age from Pew 2024-2025)
+- Generational media habits: Gen Alpha/Z digital-native behaviors vs. Boomer linear-TV preferences
+- Seasonal and temporal patterns for {quarter} (e.g., school breaks affect youth gaming, NFL season affects sports betting)
+- Platform maturity cycles: emerging platforms skew young, mature platforms skew older
+- ACTUAL MARKET SHARE data for each category — use this to override clickstream biases:
+  * US Sports Betting: FanDuel (~38-40%), DraftKings (~28-32%), BetMGM (~10-12%), Caesars/ESPN BET (~5-8%), then others. bet365 is <3% of US handle despite heavy web traffic.
+  * US Streaming Video: Netflix (~22-25%), YouTube/YouTube TV (~20%), Amazon Prime (~12%), Disney+ (~10%), Hulu (~10%), HBO Max (~8%), then others.
+  * US Streaming Music: Spotify (~35%), Apple Music (~25%), Amazon Music (~15%), YouTube Music (~10%), then others.
+  * US Social Media by DAU: Facebook, Instagram, TikTok, Snapchat, X/Twitter, Reddit, Pinterest — relative share varies heavily by age.
+  * US vMVPD: YouTube TV (~35%), Hulu+Live (~15%), Sling (~10%), Fubo (~8%), Philo (~5%), then FAST services like Pluto TV, Tubi, Roku Channel.
+
+Multiplier guidelines:
+- Range: 0.05 to 5.0
+- 1.0 = this cohort uses the brand at the same rate as the general population
+- >1.0 = this cohort over-indexes on this brand (uses it MORE than average)
+- <1.0 = this cohort under-indexes (uses it LESS)
+- IMPORTANT: If a brand's raw clickstream share is wildly higher than its actual market share (e.g., bet365 at 46% when its real US share is ~2%), apply a strong DOWNWARD multiplier (0.05-0.2) to correct the clickstream bias, regardless of age group.
+- Conversely, if a major brand is under-represented in the raw data vs. reality, apply an UPWARD multiplier.
+- Use extreme values when warranted: a children's game should get 0.05-0.1 for a 65+ cohort; a youth platform should get 3.0-5.0 for an under-18 cohort
+- For brands with near-universal adoption across ages (e.g., Netflix, Google), multipliers should stay closer to 1.0
+- For age-polarized brands (e.g., Roblox, Facebook, AARP-associated services), use strong multipliers
+- Only include brands that appear in the raw data above — do not add new ones
+
+Respond with ONLY valid JSON (no markdown, no explanation):
+{{
+  "Streaming Video": {{"brand_name": <multiplier>, ...}},
+  "Streaming Music": {{"brand_name": <multiplier>, ...}},
+  "Games": {{"brand_name": <multiplier>, ...}},
+  "Betting": {{"brand_name": <multiplier>, ...}},
+  "Social Media": {{"brand_name": <multiplier>, ...}},
+  "vMVPD/FAST": {{"brand_name": <multiplier>, ...}}
+}}"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a senior media consumption research analyst. You have deep expertise in platform demographics, age-specific digital behavior, and media consumption data from Nielsen, Comscore, Pew, eMarketer, and platform earnings reports. Respond with only valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=2000,
+            temperature=0.35,
+        )
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        result = json.loads(raw)
+        for cat in result:
+            for brand in result[cat]:
+                val = result[cat][brand]
+                if isinstance(val, (int, float)):
+                    result[cat][brand] = max(0.1, min(5.0, float(val)))
+        print(f"[SOT] Generated brand affinity for {cohort_desc} / {quarter}")
+        return result
+    except Exception as e:
+        print(f"[SOT] Brand affinity GPT failed: {e}")
+        return None
+
+
+def _sot_get_brand_affinity(age_brackets, quarter, raw_brands_by_cat):
+    """Load cached or generate brand affinity multipliers."""
+    cached = _sot_load_brand_affinity(age_brackets, quarter)
+    if cached:
+        print(f"[SOT] Using cached brand affinity")
+        return cached
+
+    result = _sot_generate_brand_affinity(age_brackets, quarter, raw_brands_by_cat)
+    if result:
+        _sot_save_brand_affinity(age_brackets, quarter, result)
+        return result
+
+    return {}
+
+
+def _sot_get_weights(age_brackets, start_date, end_date):
+    """Resolve time weights: cached > GPT-generated > static baseline.
+    Returns (avg_min_dict, sessions_per_day_dict, full_payload_or_None, source_str)."""
+    quarter = _sot_quarter_from_dates(start_date, end_date)
+
+    cached = _sot_load_cached_weights(age_brackets, quarter)
+    if cached:
+        am = {cat: cached['weights'][cat]['avg_min'] for cat in SOT_CATEGORIES}
+        spd = {cat: cached['weights'][cat].get('sessions_per_day', SOT_SESSIONS_PER_DAY_BASELINE.get(cat, 2.0)) for cat in SOT_CATEGORIES}
+        return am, spd, cached, 'cached'
+
+    history = _sot_load_cohort_history(age_brackets)
+    gpt_payload = _sot_generate_weights_via_gpt(age_brackets, quarter, history)
+    if gpt_payload:
+        _sot_save_weights_to_s3(age_brackets, quarter, gpt_payload)
+        am = {cat: gpt_payload['weights'][cat]['avg_min'] for cat in SOT_CATEGORIES}
+        spd = {cat: gpt_payload['weights'][cat].get('sessions_per_day', SOT_SESSIONS_PER_DAY_BASELINE.get(cat, 2.0)) for cat in SOT_CATEGORIES}
+        return am, spd, gpt_payload, 'generated'
+
+    return dict(SOT_AVG_MINUTES_BASELINE), dict(SOT_SESSIONS_PER_DAY_BASELINE), None, 'baseline'
+
+
+@app.route('/api/share-of-time/runs', methods=['GET'])
+@requires_auth
+def share_of_time_list_runs():
+    """List all cached SOT analysis runs."""
+    runs = _sot_list_cached_runs()
+    return jsonify({'success': True, 'runs': runs})
+
+
+@app.route('/api/share-of-time/clear-cache', methods=['POST'])
+@requires_auth
+def share_of_time_clear_cache():
+    """Delete all cached SOT weights and runs from S3."""
+    deleted = 0
+    try:
+        if not s3_client:
+            return jsonify({'success': False, 'error': 'S3 not available'}), 500
+        for prefix in [SOT_WEIGHTS_S3_PREFIX, SOT_RUNS_S3_PREFIX, SOT_BRAND_AFFINITY_S3_PREFIX]:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+                for obj in page.get('Contents', []):
+                    s3_client.delete_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    deleted += 1
+        print(f"[SOT] Cleared {deleted} cached files from S3")
+        return jsonify({'success': True, 'deleted': deleted})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/share-of-time/run', methods=['POST'])
+@requires_auth
+def share_of_time_load_run():
+    """Load a specific cached run by its parameters."""
+    data = request.get_json() or {}
+    start_date = (data.get('start_date') or '').strip()
+    end_date = (data.get('end_date') or '').strip()
+    age_brackets = data.get('age_brackets') or []
+    if not start_date or not end_date or not age_brackets:
+        return jsonify({'success': False, 'error': 'Missing parameters'}), 400
+    cached = _sot_load_cached_run(start_date, end_date, age_brackets)
+    if cached and 'data' in cached:
+        return jsonify({'success': True, 'data': cached['data'], 'from_cache': True})
+    return jsonify({'success': False, 'error': 'Run not found in cache'}), 404
+
+
+@app.route('/api/share-of-time/analyze', methods=['POST'])
+@requires_auth
+def share_of_time_analyze():
+    """Run Share of Time analysis with census-capped age groups projected to US gen pop."""
+    try:
+        data = request.get_json() or {}
+        start_date = (data.get('start_date') or '').strip()
+        end_date = (data.get('end_date') or '').strip()
+        age_brackets = data.get('age_brackets') or []
+        force_refresh = data.get('force_refresh', False)
+
+        if not start_date or not end_date:
+            return jsonify({'success': False, 'error': 'start_date and end_date required'}), 400
+        if not age_brackets:
+            return jsonify({'success': False, 'error': 'At least one age bracket required'}), 400
+
+        import re
+        date_re = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+        if not date_re.match(start_date) or not date_re.match(end_date):
+            return jsonify({'success': False, 'error': 'Dates must be YYYY-MM-DD'}), 400
+
+        valid_ages = set(SOT_GENPOP_AGE_PCT.keys())
+        age_brackets = [a for a in age_brackets if a in valid_ages]
+        if not age_brackets:
+            return jsonify({'success': False, 'error': 'No valid age brackets selected'}), 400
+
+        # --- Check run cache first (skip Snowflake if already computed) ---
+        if not force_refresh:
+            cached_run = _sot_load_cached_run(start_date, end_date, age_brackets)
+            if cached_run and 'data' in cached_run:
+                cats = cached_run['data'].get('categories', [])
+                has_all = (
+                    any(c.get('share_pct_total') is not None and c.get('sessions_per_day') is not None for c in cats)
+                    and cached_run['data'].get('brand_affinity_applied', False)
+                )
+                if has_all:
+                    return jsonify({'success': True, 'data': cached_run['data'], 'from_cache': True})
+                else:
+                    print("[SOT] Stale run cache (missing brand affinity or shares), re-computing...")
+
+        age_in = ",".join(f"'{a}'" for a in age_brackets)
+
+        import snowflake.connector as _sot_sf
+        conn = _sot_sf.connect(
+            user=os.environ.get('SNOWFLAKE_USER', ''),
+            password=os.environ.get('SNOWFLAKE_PASSWORD', ''),
+            account=os.environ.get('SNOWFLAKE_ACCOUNT', 'qsodrkt-hgb46445'),
+            role=os.environ.get('SNOWFLAKE_ROLE', 'ACCOUNTADMIN'),
+            warehouse='SHAREOFTIME',
+            database='PROCESSEDCLICKSTREAM',
+            schema='PUBLIC',
+            insecure_mode=True,
+            session_parameters={'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT': 'JSON'},
+        )
+
+        try:
+            cur = conn.cursor()
+            cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
+            cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
+
+            # Query 1: interactions broken down by age group, category, brand
+            cur.execute(f"""
+                WITH category_map AS ({SHARE_OF_TIME_CATEGORY_SQL})
+                SELECT
+                    d.AGE,
+                    cm.share_category,
+                    c.COMMON_NAME,
+                    COUNT(*) as clicks
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
+                LEFT JOIN category_map cm ON LOWER(c.COMMON_NAME) = cm.brand_lower
+                WHERE c.DELIVERED >= '{start_date}'::DATE
+                  AND c.DELIVERED <= '{end_date}'::DATE
+                  AND c.COMMON_NAME IS NOT NULL
+                  AND c.COMMON_NAME != ''
+                  AND d.AGE IN ({age_in})
+                  AND cm.share_category IS NOT NULL
+                GROUP BY d.AGE, cm.share_category, c.COMMON_NAME
+                ORDER BY cm.share_category, clicks DESC
+            """)
+            rows = cur.fetchall()
+
+            # Query 2: UID counts per age bracket + totals
+            cur.execute(f"""
+                SELECT
+                    d.AGE,
+                    COUNT(DISTINCT c.UID) as uid_count,
+                    COUNT(*) as interaction_count
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
+                WHERE c.DELIVERED >= '{start_date}'::DATE
+                  AND c.DELIVERED <= '{end_date}'::DATE
+                  AND c.COMMON_NAME IS NOT NULL
+                  AND c.COMMON_NAME != ''
+                  AND d.AGE IN ({age_in})
+                GROUP BY d.AGE
+            """)
+            age_rows = cur.fetchall()
+            cur.close()
+        finally:
+            conn.close()
+
+        # --- Census-cap age groups (strict bg.py methodology) ---
+        # Each age group's projection is hard-capped at census_cap * 0.999.
+        # After capping, free (uncapped) groups are redistributed to fill
+        # the remaining share, keeping relative proportions (same as
+        # _enforce_demographic_census_ceiling in bg.py).
+        age_uids = {}
+        total_sample_uids = 0
+        total_sample_interactions = 0
+        for age_val, uid_cnt, int_cnt in age_rows:
+            age_uids[age_val] = {'uids': uid_cnt, 'interactions': int_cnt}
+            total_sample_uids += uid_cnt
+            total_sample_interactions += int_cnt
+
+        profile_projected_audience = (total_sample_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
+
+        age_cap_ratios = {}
+        projected_users_by_age = {}
+
+        for _iteration in range(10):
+            any_capped = False
+            locked_users = 0
+            free_users = 0
+            for age_val in age_brackets:
+                info = age_uids.get(age_val, {'uids': 0, 'interactions': 0})
+                raw_uids = info['uids']
+                projected = (raw_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
+                gp_pct = SOT_GENPOP_AGE_PCT.get(age_val, 10.0)
+                census_cap = int(round((gp_pct / 100.0) * SOT_US_POPULATION))
+                hard_cap = int(census_cap * 0.999)
+
+                if projected > hard_cap:
+                    capped = hard_cap
+                    ratio = (capped / projected) if projected > 0 else 1.0
+                    locked_users += capped
+                    any_capped = True
+                else:
+                    capped = int(round(projected))
+                    ratio = 1.0
+                    free_users += capped
+
+                age_cap_ratios[age_val] = ratio
+                projected_users_by_age[age_val] = {
+                    'sample_uids': raw_uids,
+                    'projected': int(round(projected)),
+                    'census_cap': census_cap,
+                    'capped': capped,
+                    'ratio': round(ratio, 4),
+                    'genpop_pct': gp_pct,
+                }
+            if not any_capped:
+                break
+
+        total_projected_users = sum(v['capped'] for v in projected_users_by_age.values())
+
+        # --- Resolve time weights (cache > GPT > baseline) ---
+        time_weights, sessions_per_day, weights_payload, weights_source = _sot_get_weights(age_brackets, start_date, end_date)
+        weights_quarter = _sot_quarter_from_dates(start_date, end_date)
+        weight_rationales = {}
+        trend_context = ''
+        if weights_payload:
+            for cat in SOT_CATEGORIES:
+                entry = weights_payload.get('weights', {}).get(cat, {})
+                weight_rationales[cat] = entry.get('rationale', '')
+            trend_context = weights_payload.get('trend_context', '')
+
+        # --- Date range days for granularity math ---
+        from datetime import datetime as _dt
+        d_start = _dt.strptime(start_date, '%Y-%m-%d')
+        d_end = _dt.strptime(end_date, '%Y-%m-%d')
+        num_days = max(1, (d_end - d_start).days + 1)
+        num_weeks = num_days / 7.0
+        num_months = num_days / 30.44
+
+        # --- Apply cap ratios to interactions per age/category/brand ---
+        categories = {}
+        total_weighted_interactions = 0
+        for age_val, share_cat, brand, clicks in rows:
+            ratio = age_cap_ratios.get(age_val, 1.0)
+            adj_clicks = clicks * ratio
+            if share_cat not in categories:
+                categories[share_cat] = {'name': share_cat, 'clicks': 0, 'adj_clicks': 0.0, 'brands': {}}
+            categories[share_cat]['clicks'] += clicks
+            categories[share_cat]['adj_clicks'] += adj_clicks
+            if brand not in categories[share_cat]['brands']:
+                categories[share_cat]['brands'][brand] = {'clicks': 0, 'adj_clicks': 0.0}
+            categories[share_cat]['brands'][brand]['clicks'] += clicks
+            categories[share_cat]['brands'][brand]['adj_clicks'] += adj_clicks
+            total_weighted_interactions += adj_clicks
+
+        # --- Compute per-session est_minutes (base layer) ---
+        total_est_minutes = 0
+        for cat_name, c in categories.items():
+            weight = time_weights.get(cat_name, 6)
+            c['est_minutes'] = c['adj_clicks'] * weight
+            total_est_minutes += c['est_minutes']
+            for bn, bv in c['brands'].items():
+                bv['est_minutes'] = bv['adj_clicks'] * weight
+
+        # --- Apply brand affinity multipliers from GPT ---
+        raw_brands_by_cat = {}
+        for cat_name, c in categories.items():
+            cat_total = c['est_minutes'] if c['est_minutes'] > 0 else 1
+            top_brands = sorted(c['brands'].items(), key=lambda x: x[1]['est_minutes'], reverse=True)[:15]
+            raw_brands_by_cat[cat_name] = [
+                {'name': bn, 'raw_pct': round(100.0 * bv['est_minutes'] / cat_total, 2)}
+                for bn, bv in top_brands
+            ]
+
+        brand_affinity = _sot_get_brand_affinity(age_brackets, weights_quarter, raw_brands_by_cat)
+
+        if brand_affinity:
+            for cat_name, c in categories.items():
+                cat_mults = brand_affinity.get(cat_name, {})
+                if not cat_mults:
+                    continue
+                cat_mults_lower = {k.lower(): v for k, v in cat_mults.items()}
+                for bn, bv in c['brands'].items():
+                    mult = cat_mults_lower.get(bn.lower(), 1.0)
+                    bv['adj_clicks'] *= mult
+                    bv['est_minutes'] = bv['adj_clicks'] * time_weights.get(cat_name, 6)
+                new_cat_clicks = sum(bv['adj_clicks'] for bv in c['brands'].values())
+                new_cat_minutes = sum(bv['est_minutes'] for bv in c['brands'].values())
+                c['adj_clicks'] = new_cat_clicks
+                c['est_minutes'] = new_cat_minutes
+
+            total_est_minutes = sum(c['est_minutes'] for c in categories.values())
+            total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
+
+        # --- Project to US gen pop scale ---
+        projection_mult = SOT_US_POPULATION / SOT_PANEL_SIZE
+
+        # --- Build per-category results with all granularities ---
+        # Three distinct share calculations:
+        #   session  = pure duration ratio: avg_min / sum(avg_min) — one session
+        #   daily    = duration × frequency: (avg_min × sessions/day) / total — one day
+        #   total    = clickstream-weighted: (adj_clicks × avg_min) / total — full date range
+        total_session_minutes = sum(time_weights.get(cn, 6) for cn in categories)
+        total_daily_minutes = {cn: time_weights.get(cn, 6) * sessions_per_day.get(cn, 2.0) for cn in categories}
+        total_daily_all = sum(total_daily_minutes.values())
+
+        result_categories = []
+        for cat_name in SOT_CATEGORIES:
+            if cat_name not in categories:
+                continue
+            c = categories[cat_name]
+            w_min = time_weights.get(cat_name, 6)
+            spd = sessions_per_day.get(cat_name, 2.0)
+            min_per_day = w_min * spd
+            min_per_week = min_per_day * 7
+            min_per_month = min_per_day * 30.44
+
+            time_share_session = round(100.0 * w_min / total_session_minutes, 2) if total_session_minutes else 0
+            time_share_daily = round(100.0 * min_per_day / total_daily_all, 2) if total_daily_all else 0
+            time_share_total = round(100.0 * c['est_minutes'] / total_est_minutes, 2) if total_est_minutes else 0
+            proj_minutes = int(round(c['est_minutes'] * projection_mult))
+            proj_hours = round(proj_minutes / 60)
+
+            brand_list = sorted(c['brands'].items(), key=lambda x: x[1]['est_minutes'], reverse=True)
+            brands_out = []
+            for bn, bv in brand_list[:50]:
+                b_proj_min = int(round(bv['est_minutes'] * projection_mult))
+                brands_out.append({
+                    'name': bn,
+                    'clicks': int(round(bv['adj_clicks'])),
+                    'est_minutes': int(round(bv['est_minutes'])),
+                    'projected_hours': round(b_proj_min / 60),
+                    'category_share_pct': round(100.0 * bv['est_minutes'] / c['est_minutes'], 2) if c['est_minutes'] else 0,
+                    'overall_share_pct': round(100.0 * bv['est_minutes'] / total_est_minutes, 4) if total_est_minutes else 0,
+                })
+            min_total = min_per_day * num_days
+
+            result_categories.append({
+                'name': cat_name,
+                'clicks': int(round(c['adj_clicks'])),
+                'est_minutes': int(round(c['est_minutes'])),
+                'projected_hours': proj_hours,
+                'avg_min_per_session': w_min,
+                'sessions_per_day': spd,
+                'min_per_day': round(min_per_day, 1),
+                'min_per_week': round(min_per_week, 1),
+                'min_per_month': round(min_per_month, 1),
+                'min_total': round(min_total, 1),
+                'rationale': weight_rationales.get(cat_name, ''),
+                'share_pct_session': time_share_session,
+                'share_pct_daily': time_share_daily,
+                'share_pct_total': time_share_total,
+                'brands': brands_out,
+            })
+
+        total_proj_hours = round(total_est_minutes * projection_mult / 60)
+
+        result_data = {
+            'total_interactions': int(round(total_weighted_interactions)),
+            'total_est_minutes': int(round(total_est_minutes)),
+            'total_projected_hours': total_proj_hours,
+            'matched_users': total_sample_uids,
+            'projected_us_users': total_projected_users,
+            'start_date': start_date,
+            'end_date': end_date,
+            'num_days': num_days,
+            'age_brackets': age_brackets,
+            'age_group_detail': projected_users_by_age,
+            'avg_minutes_per_session': time_weights,
+            'sessions_per_day': sessions_per_day,
+            'weights_source': weights_source,
+            'weights_quarter': weights_quarter,
+            'trend_context': trend_context,
+            'brand_affinity_applied': bool(brand_affinity),
+            'categories': result_categories,
+        }
+
+        # --- Cache this run to S3 for the profile selector ---
+        _sot_save_run(start_date, end_date, age_brackets, result_data)
+
+        return jsonify({'success': True, 'data': result_data})
+
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
 
 
 # ============================================================================
