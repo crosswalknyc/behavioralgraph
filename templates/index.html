@@ -804,6 +804,10 @@
         #shareOfTimeIQView .sot-cat-pct { font-size: 1.35rem; font-weight: 700; }
         #shareOfTimeIQView .sot-cat-clicks { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; }
         #shareOfTimeIQView .sot-drill-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; min-height: 300px; }
+        #shareOfTimeIQView .sot-granularity-bar { display: flex; gap: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; margin-bottom: 1rem; width: fit-content; }
+        #shareOfTimeIQView .sot-gran-btn { padding: 0.4rem 1rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-secondary); transition: all 0.15s; white-space: nowrap; }
+        #shareOfTimeIQView .sot-gran-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+        #shareOfTimeIQView .sot-gran-btn.active { background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime)); color: #000; }
         #shareOfTimeIQView .sot-loading { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.9rem; }
         #shareOfTimeIQView .sot-loading .spinner { width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: sotSpin 0.6s linear infinite; margin-right: 0.6rem; }
         @keyframes sotSpin { to { transform: rotate(360deg); } }
@@ -15923,80 +15927,105 @@
 
         <!-- SHARE OF TIME IQ VIEW -->
         <div id="shareOfTimeIQView">
-            <div class="sot-form-panel">
-                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
-                    <span style="font-size:1.5rem;">⏱️</span>
-                    <h2 style="margin:0;font-size:1.2rem;">Share of Time</h2>
-                    <span style="color:var(--text-secondary);font-size:0.8rem;">Analyze how time is distributed across entertainment categories</span>
-                </div>
-                <div class="sot-form-row">
-                    <div class="sot-field">
-                        <label>Start Date</label>
-                        <input type="date" id="sotStartDate">
-                    </div>
-                    <div class="sot-field">
-                        <label>End Date</label>
-                        <input type="date" id="sotEndDate">
-                    </div>
-                    <div class="sot-field" style="flex:1;">
-                        <label>Age Range</label>
-                        <div class="sot-age-grid" id="sotAgeGrid">
-                            <label class="sot-age-chip active"><input type="checkbox" value="17 and Under" checked>Under 18</label>
-                            <label class="sot-age-chip active"><input type="checkbox" value="18-24" checked>18-24</label>
-                            <label class="sot-age-chip active"><input type="checkbox" value="25-34" checked>25-34</label>
-                            <label class="sot-age-chip active"><input type="checkbox" value="35-44" checked>35-44</label>
-                            <label class="sot-age-chip active"><input type="checkbox" value="45-54" checked>45-54</label>
-                            <label class="sot-age-chip active"><input type="checkbox" value="55-64" checked>55-64</label>
-                            <label class="sot-age-chip active"><input type="checkbox" value="65 or Older" checked>65+</label>
+            <div class="dashboard-layout" style="height:100%;min-height:0;">
+                <!-- Sidebar: cached runs -->
+                <div class="persistent-sidebar" id="sotSidebar">
+                    <div class="sidebar-header-section">
+                        <h3>Saved Runs</h3>
+                        <div style="display:flex;gap:0.25rem;align-items:center;">
+                            <input type="text" id="sotRunSearch" placeholder="Search runs..." class="sidebar-search" onkeyup="sotFilterRuns()" style="flex:1;">
+                            <button type="button" class="btn btn-small" onclick="sotRefreshRuns()" style="padding:0.35rem 0.5rem;min-width:auto;" title="Refresh from S3">&#8635;</button>
                         </div>
                     </div>
-                    <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()">Run Analysis</button>
-                </div>
-            </div>
-            <div id="sotResultsArea" style="display:none;">
-                <div class="sot-kpi-grid" style="grid-template-columns:repeat(4,1fr);">
-                    <div class="sot-kpi">
-                        <div class="sot-kpi-label">Sample Participants</div>
-                        <div class="sot-kpi-value" id="sotKpiUsers" style="color:var(--accent-lime);">—</div>
-                    </div>
-                    <div class="sot-kpi">
-                        <div class="sot-kpi-label">US Projection</div>
-                        <div class="sot-kpi-value" id="sotKpiProjUsers" style="color:#a855f7;">—</div>
-                    </div>
-                    <div class="sot-kpi">
-                        <div class="sot-kpi-label">Projected US Hours</div>
-                        <div class="sot-kpi-value" id="sotKpiHours" style="color:var(--accent-cyan);">—</div>
-                    </div>
-                    <div class="sot-kpi">
-                        <div class="sot-kpi-label">Adj. Interactions</div>
-                        <div class="sot-kpi-value" id="sotKpiInteractions" style="color:var(--accent-orange);">—</div>
+                    <div class="profile-select-tree" id="sotRunTree">
+                        <div style="padding:0.75rem;color:var(--text-secondary);font-size:0.8rem;">Loading runs...</div>
                     </div>
                 </div>
-                <div class="sot-charts-row">
-                    <div class="sot-chart-card">
-                        <h3 class="sot-chart-title">Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(weighted by avg. session duration)</span></h3>
-                        <div style="position:relative;height:320px;"><canvas id="sotDoughnutChart"></canvas></div>
+                <!-- Main content -->
+                <div class="dashboard-tab-content" style="flex:1;overflow-y:auto;padding:0 0.5rem;">
+                    <div class="sot-form-panel">
+                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+                            <span style="font-size:1.5rem;">⏱️</span>
+                            <h2 style="margin:0;font-size:1.2rem;">Share of Time</h2>
+                            <span style="color:var(--text-secondary);font-size:0.8rem;">Analyze how time is distributed across entertainment categories</span>
+                        </div>
+                        <div class="sot-form-row">
+                            <div class="sot-field">
+                                <label>Start Date</label>
+                                <input type="date" id="sotStartDate">
+                            </div>
+                            <div class="sot-field">
+                                <label>End Date</label>
+                                <input type="date" id="sotEndDate">
+                            </div>
+                            <div class="sot-field" style="flex:1;">
+                                <label>Age Range</label>
+                                <div class="sot-age-grid" id="sotAgeGrid">
+                                    <label class="sot-age-chip active"><input type="checkbox" value="17 and Under" checked>Under 18</label>
+                                    <label class="sot-age-chip active"><input type="checkbox" value="18-24" checked>18-24</label>
+                                    <label class="sot-age-chip active"><input type="checkbox" value="25-34" checked>25-34</label>
+                                    <label class="sot-age-chip active"><input type="checkbox" value="35-44" checked>35-44</label>
+                                    <label class="sot-age-chip active"><input type="checkbox" value="45-54" checked>45-54</label>
+                                    <label class="sot-age-chip active"><input type="checkbox" value="55-64" checked>55-64</label>
+                                    <label class="sot-age-chip active"><input type="checkbox" value="65 or Older" checked>65+</label>
+                                </div>
+                            </div>
+                            <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()">Run Analysis</button>
+                        </div>
                     </div>
-                    <div class="sot-chart-card">
-                        <h3 class="sot-chart-title">Category Comparison</h3>
-                        <div style="position:relative;height:320px;"><canvas id="sotBarChart"></canvas></div>
+                    <div id="sotResultsArea" style="display:none;">
+                        <div class="sot-kpi-grid" style="grid-template-columns:repeat(4,1fr);">
+                            <div class="sot-kpi">
+                                <div class="sot-kpi-label">Sample Participants</div>
+                                <div class="sot-kpi-value" id="sotKpiUsers" style="color:var(--accent-lime);">—</div>
+                            </div>
+                            <div class="sot-kpi">
+                                <div class="sot-kpi-label">US Projection</div>
+                                <div class="sot-kpi-value" id="sotKpiProjUsers" style="color:#a855f7;">—</div>
+                            </div>
+                            <div class="sot-kpi">
+                                <div class="sot-kpi-label">Projected US Hours</div>
+                                <div class="sot-kpi-value" id="sotKpiHours" style="color:var(--accent-cyan);">—</div>
+                            </div>
+                            <div class="sot-kpi">
+                                <div class="sot-kpi-label">Adj. Interactions</div>
+                                <div class="sot-kpi-value" id="sotKpiInteractions" style="color:var(--accent-orange);">—</div>
+                            </div>
+                        </div>
+                        <div class="sot-granularity-bar" id="sotGranBar">
+                            <button class="sot-gran-btn" data-gran="total" onclick="sotSetGranularity('total')">Total Time Frame</button>
+                            <button class="sot-gran-btn" data-gran="monthly" onclick="sotSetGranularity('monthly')">Per Month</button>
+                            <button class="sot-gran-btn" data-gran="weekly" onclick="sotSetGranularity('weekly')">Per Week</button>
+                            <button class="sot-gran-btn active" data-gran="daily" onclick="sotSetGranularity('daily')">Per Day</button>
+                            <button class="sot-gran-btn" data-gran="session" onclick="sotSetGranularity('session')">Per Session</button>
+                        </div>
+                        <div class="sot-charts-row">
+                            <div class="sot-chart-card">
+                                <h3 class="sot-chart-title" id="sotDoughnutTitle">Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(per day)</span></h3>
+                                <div style="position:relative;height:320px;"><canvas id="sotDoughnutChart"></canvas></div>
+                            </div>
+                            <div class="sot-chart-card">
+                                <h3 class="sot-chart-title">Category Comparison</h3>
+                                <div style="position:relative;height:320px;"><canvas id="sotBarChart"></canvas></div>
+                            </div>
+                        </div>
+                        <h3 style="font-size:0.95rem;margin-bottom:0.5rem;color:var(--text-secondary);">Click a category to drill down into individual brands</h3>
+                        <div class="sot-cat-cards" id="sotCatCards"></div>
+                        <div class="sot-drill-card" id="sotDrillCard" style="display:none;">
+                            <h3 class="sot-chart-title" id="sotDrillTitle">Brand Breakdown</h3>
+                            <div style="position:relative;min-height:280px;"><canvas id="sotDrillChart"></canvas></div>
+                        </div>
                     </div>
-                </div>
-                <h3 style="font-size:0.95rem;margin-bottom:0.5rem;color:var(--text-secondary);">Click a category to drill down into individual brands</h3>
-                <div class="sot-cat-cards" id="sotCatCards"></div>
-                <div class="sot-drill-card" id="sotDrillCard" style="display:none;">
-                    <h3 class="sot-chart-title" id="sotDrillTitle">Brand Breakdown</h3>
-                    <div style="position:relative;min-height:280px;"><canvas id="sotDrillChart"></canvas></div>
-                </div>
-            </div>
-            <div id="sotLoadingArea" style="display:none;">
-                <div class="sot-loading"><div class="spinner"></div>Running Share of Time analysis&hellip; this may take a moment with large date ranges.</div>
-            </div>
-            <div id="sotEmptyState" class="dashboard-empty-state">
-                <div class="empty-state-content">
-                    <div class="empty-state-icon">⏱️</div>
-                    <h2>Share of Time</h2>
-                    <p>Select a date range and age brackets above, then click <strong>Run Analysis</strong> to see how time is distributed across Streaming Video, Streaming Music, Games, Betting, Social Media, and vMVPD/FAST.</p>
+                    <div id="sotLoadingArea" style="display:none;">
+                        <div class="sot-loading"><div class="spinner"></div>Running Share of Time analysis&hellip; this may take a moment with large date ranges.</div>
+                    </div>
+                    <div id="sotEmptyState" class="dashboard-empty-state">
+                        <div class="empty-state-content">
+                            <div class="empty-state-icon">⏱️</div>
+                            <h2>Share of Time</h2>
+                            <p>Select a date range and age brackets above, then click <strong>Run Analysis</strong> to see how time is distributed across Streaming Video, Streaming Music, Games, Betting, Social Media, and vMVPD/FAST.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div><!-- End shareOfTimeIQView -->
@@ -23336,6 +23365,7 @@
         // ===================== SHARE OF TIME IQ =====================
         var _sotDoughnutInst = null, _sotBarInst = null, _sotDrillInst = null;
         var _sotData = null;
+        var _sotGranularity = 'daily';
         var _sotCatColors = {
             'Streaming Video': '#6366f1',
             'Streaming Music': '#22d3ee',
@@ -23368,6 +23398,7 @@
             });
             if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
             var sv = document.getElementById('shareOfTimeIQView'); if (sv) sv.style.display = 'flex';
+            sotLoadRuns();
         };
 
         function sotRunAnalysis() {
@@ -23395,12 +23426,40 @@
                 if (!resp.success) { alert('Error: ' + (resp.error || 'Unknown')); document.getElementById('sotEmptyState').style.display = 'flex'; return; }
                 _sotData = resp.data;
                 sotRenderResults(_sotData);
+                sotLoadRuns();
             }).catch(function(err) {
                 btn.disabled = false; btn.textContent = 'Run Analysis';
                 document.getElementById('sotLoadingArea').style.display = 'none';
                 document.getElementById('sotEmptyState').style.display = 'flex';
                 alert('Request failed: ' + err);
             });
+        }
+
+        var _sotGranLabels = {
+            'total': 'Total Time Frame', 'monthly': 'Per Month', 'weekly': 'Per Week',
+            'daily': 'Per Day', 'session': 'Per Session'
+        };
+
+        function _sotShareKey(gran) {
+            if (gran === 'session') return 'share_pct_session';
+            if (gran === 'daily' || gran === 'weekly' || gran === 'monthly') return 'share_pct_daily';
+            return 'share_pct_total';
+        }
+
+        function _sotTimeLabel(c, gran) {
+            if (gran === 'session') return c.avg_min_per_session + ' min/session';
+            if (gran === 'daily') return c.min_per_day + ' min/day (' + c.sessions_per_day + ' sessions)';
+            if (gran === 'weekly') return c.min_per_week + ' min/wk';
+            if (gran === 'monthly') return c.min_per_month + ' min/mo';
+            return c.est_minutes.toLocaleString() + ' total min';
+        }
+
+        function sotSetGranularity(gran) {
+            _sotGranularity = gran;
+            document.querySelectorAll('#sotGranBar .sot-gran-btn').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-gran') === gran);
+            });
+            if (_sotData) sotRenderResults(_sotData);
         }
 
         function sotRenderResults(data) {
@@ -23411,11 +23470,18 @@
             document.getElementById('sotKpiHours').textContent = (data.total_projected_hours || 0) >= 1000000 ? ((data.total_projected_hours / 1000000).toFixed(1) + 'M') : (data.total_projected_hours || 0).toLocaleString();
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
 
-
+            var gran = _sotGranularity;
+            var shareKey = _sotShareKey(gran);
             var cats = data.categories;
             var labels = cats.map(function(c) { return c.name; });
-            var shares = cats.map(function(c) { return c.share_pct; });
+            var shares = cats.map(function(c) { return c[shareKey] || 0; });
             var colors = cats.map(function(c) { return _sotCatColors[c.name] || '#888'; });
+
+            var subtitleMap = {
+                'total': 'total across date range', 'monthly': 'per month', 'weekly': 'per week',
+                'daily': 'per day &middot; sessions &times; duration', 'session': 'per session'
+            };
+            document.getElementById('sotDoughnutTitle').innerHTML = 'Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(' + subtitleMap[gran] + ')</span>';
 
             if (_sotDoughnutInst) _sotDoughnutInst.destroy();
             var dCtx = document.getElementById('sotDoughnutChart');
@@ -23427,7 +23493,10 @@
                         responsive: true, maintainAspectRatio: false, cutout: '52%',
                         plugins: {
                             legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, font: { size: 12 }, color: '#e8e8e8' } },
-                            tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.parsed.toFixed(2) + '%'; } } },
+                            tooltip: { callbacks: { label: function(ctx) {
+                                var cat = cats[ctx.dataIndex];
+                                return ctx.label + ': ' + ctx.parsed.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran);
+                            } } },
                             datalabels: { color: '#fff', font: { weight: '700', size: 13 }, formatter: function(v) { return v >= 2 ? v.toFixed(1) + '%' : ''; } }
                         },
                         onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
@@ -23444,7 +23513,10 @@
                     options: {
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                         scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } },
-                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return c.parsed.x.toFixed(2) + '% of time'; } } } },
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) {
+                            var cat = cats[ctx.dataIndex];
+                            return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran);
+                        } } } },
                         onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
                     }
                 });
@@ -23453,16 +23525,18 @@
             var cardsHtml = '';
             cats.forEach(function(c, i) {
                 var col = _sotCatColors[c.name] || '#888';
+                var pct = (c[shareKey] || 0).toFixed(1);
                 var projHrs = (c.projected_hours || 0);
                 var projLabel = projHrs >= 1000000 ? (projHrs / 1000000).toFixed(1) + 'M hrs' : projHrs.toLocaleString() + ' hrs';
+                var timeInfo = _sotTimeLabel(c, gran);
                 var rationaleHtml = '';
                 if (c.rationale) {
                     rationaleHtml = '<div class="sot-cat-rationale" style="font-size:0.65rem;color:var(--text-secondary);margin-top:4px;line-height:1.35;font-style:italic;">💡 ' + c.rationale + '</div>';
                 }
                 cardsHtml += '<div class="sot-cat-card" data-idx="' + i + '" onclick="sotDrillDown(' + i + ')" style="border-left:3px solid ' + col + ';">' +
                     '<div class="sot-cat-name">' + c.name + '</div>' +
-                    '<div class="sot-cat-pct" style="color:' + col + ';">' + c.share_pct.toFixed(1) + '%</div>' +
-                    '<div class="sot-cat-clicks">' + projLabel + ' US proj. &middot; ' + c.avg_min_per_interaction + ' avg min/acct</div>' +
+                    '<div class="sot-cat-pct" style="color:' + col + ';">' + pct + '%</div>' +
+                    '<div class="sot-cat-clicks">' + projLabel + ' US proj. &middot; ' + timeInfo + '</div>' +
                     rationaleHtml +
                 '</div>';
             });
@@ -23486,11 +23560,6 @@
             var bLabels = brands.map(function(b) { return b.name; });
             var bShares = brands.map(function(b) { return b.category_share_pct; });
             var col = _sotCatColors[cat.name] || '#888';
-            var bgColors = brands.map(function(b, i) {
-                var opacity = 1 - (i * 0.025);
-                return col.replace(')', ', ' + opacity + ')').replace('rgb', 'rgba').replace('#', '');
-            });
-            bgColors = brands.map(function(b, i) { return col; });
 
             if (_sotDrillInst) _sotDrillInst.destroy();
             var canvas = document.getElementById('sotDrillChart');
@@ -23512,6 +23581,101 @@
             });
 
             document.getElementById('sotDrillCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // --- SOT: Sidebar / Run Cache ---
+        var _sotCachedRuns = [];
+        var _sotSelectedRunKey = null;
+
+        function sotLoadRuns() {
+            fetch('/api/share-of-time/runs', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(resp) {
+                    if (resp.success) {
+                        _sotCachedRuns = resp.runs || [];
+                        sotRenderRunTree();
+                    }
+                }).catch(function() {
+                    document.getElementById('sotRunTree').innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.78rem;">Could not load runs.</div>';
+                });
+        }
+
+        function sotRefreshRuns() {
+            var tree = document.getElementById('sotRunTree');
+            tree.innerHTML = '<div style="padding:0.75rem;color:var(--accent-cyan);font-size:0.8rem;"><span class="spinner"></span> Refreshing...</div>';
+            sotLoadRuns();
+        }
+
+        function sotFilterRuns() { sotRenderRunTree(); }
+
+        function sotRenderRunTree() {
+            var tree = document.getElementById('sotRunTree');
+            var search = (document.getElementById('sotRunSearch').value || '').toLowerCase();
+            var runs = _sotCachedRuns;
+            if (search) {
+                runs = runs.filter(function(r) {
+                    var txt = (r.start_date + ' ' + r.end_date + ' ' + (r.age_brackets || []).join(' ')).toLowerCase();
+                    return txt.indexOf(search) !== -1;
+                });
+            }
+            if (!runs.length) {
+                tree.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.78rem;">No saved runs yet. Run an analysis to save it here.</div>';
+                return;
+            }
+            var html = '';
+            runs.forEach(function(r) {
+                var ages = (r.age_brackets || []).join(', ');
+                var label = r.start_date + ' to ' + r.end_date;
+                var sub = ages.length > 30 ? ages.substring(0, 28) + '...' : ages;
+                var users = r.matched_users ? r.matched_users.toLocaleString() + ' users' : '';
+                var isActive = _sotSelectedRunKey === r.s3_key;
+                var cls = 'profile-select-item' + (isActive ? ' active' : '');
+                html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
+                    '<div style="font-weight:600;font-size:0.78rem;">' + label + '</div>' +
+                    '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:2px;">' + sub + '</div>' +
+                    (users ? '<div style="font-size:0.65rem;color:var(--accent-lime);margin-top:1px;">' + users + '</div>' : '') +
+                '</div>';
+            });
+            tree.innerHTML = html;
+        }
+
+        function sotSelectRun(startDate, endDate, ageBrackets) {
+            document.getElementById('sotStartDate').value = startDate;
+            document.getElementById('sotEndDate').value = endDate;
+            document.querySelectorAll('#sotAgeGrid .sot-age-chip').forEach(function(chip) {
+                var cb = chip.querySelector('input[type="checkbox"]');
+                var val = cb.value;
+                var shouldCheck = ageBrackets.indexOf(val) !== -1;
+                cb.checked = shouldCheck;
+                chip.classList.toggle('active', shouldCheck);
+            });
+            _sotSelectedRunKey = 'share-of-time-runs/' + ageBrackets.slice().sort().join('_').replace(/ /g, '-').replace(/\+/g, 'plus') + '/' + startDate + '_to_' + endDate + '.json';
+            sotRenderRunTree();
+
+            var btn = document.getElementById('sotRunBtn');
+            btn.disabled = true; btn.textContent = 'Loading...';
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            document.getElementById('sotLoadingArea').style.display = 'block';
+
+            fetch('/api/share-of-time/run', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ start_date: startDate, end_date: endDate, age_brackets: ageBrackets })
+            }).then(function(r) { return r.json(); }).then(function(resp) {
+                btn.disabled = false; btn.textContent = 'Run Analysis';
+                document.getElementById('sotLoadingArea').style.display = 'none';
+                if (resp.success) {
+                    _sotData = resp.data;
+                    sotRenderResults(_sotData);
+                } else {
+                    sotRunAnalysis();
+                }
+            }).catch(function() {
+                btn.disabled = false; btn.textContent = 'Run Analysis';
+                document.getElementById('sotLoadingArea').style.display = 'none';
+                sotRunAnalysis();
+            });
         }
 
         // ===================== FLYWHEEL CONVERSION =====================
@@ -43330,33 +43494,54 @@
                 .replace(/\bst\.?$/g,'saint')
                 .replace(/[^a-z0-9]/g,'');
         }
-        
-        // Pre-build normalized lookup index for fast matching
+
+        // Strip 2-letter state abbreviations to handle CSV vs DMA_MASTER format differences
+        const _STATE_CODES = new Set(['al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id','il','in','ia','ks','ky','la','me','md','ma','mi','mn','ms','mo','mt','ne','nv','nh','nj','nm','ny','nc','nd','oh','ok','or','pa','ri','sc','sd','tn','tx','ut','vt','va','wa','wv','wi','wy','dc']);
+        function _dmaNormNoStates(s) {
+            const words = s.toLowerCase()
+                .replace(/\bft\.?\s/g,'fort ').replace(/\bst\.?\s/g,'saint ')
+                .replace(/\bft\.?$/g,'fort').replace(/\bst\.?$/g,'saint')
+                .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ')
+                .filter(w => !(w.length === 2 && _STATE_CODES.has(w)));
+            return words.join('');
+        }
+
+        // Pre-build normalized lookup indices for fast matching
         const _canonNorm = {};
         CANONICAL_DMAS.forEach(c => { _canonNorm[_dmaNorm(c)] = c; });
-        
+        const _canonNormNoStates = {};
+        CANONICAL_DMAS.forEach(c => {
+            const key = _dmaNormNoStates(c);
+            if (!_canonNormNoStates[key]) _canonNormNoStates[key] = c;
+        });
+
         // Match any raw DMA name to a canonical DMA_MASTER key
         function matchCanonicalDMA(rawName) {
             if (!rawName) return null;
-            
+
             // Direct match first
             if (DMA_MASTER[rawName]) return rawName;
-            
+
             // Normalized exact match
             const norm = _dmaNorm(rawName);
             if (_canonNorm[norm]) return _canonNorm[norm];
-            
-            // Fuzzy prefix match - use first two significant words
+
+            // State-stripped exact match (handles CSV "Paducah KY Cape..." vs key "Paducah Cape...")
+            const normNS = _dmaNormNoStates(rawName);
+            if (_canonNormNoStates[normNS]) return _canonNormNoStates[normNS];
+
+            // Fuzzy prefix match - strip state abbreviations from word list
             const words = rawName.toLowerCase()
                 .replace(/\bft\.?\s/g,'fort ').replace(/\bst\.?\s/g,'saint ')
                 .replace(/\bft\.?$/g,'fort').replace(/\bst\.?$/g,'saint')
-                .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ');
+                .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().split(' ')
+                .filter(w => !(w.length === 2 && _STATE_CODES.has(w)));
             const primary = words.slice(0, 2).filter(w => w.length > 1).join('');
-            
+
             let best = null, bestDiff = Infinity;
-            for (const [k, v] of Object.entries(_canonNorm)) {
-                if (k.startsWith(primary) || norm.startsWith(k.substring(0, Math.min(k.length, 8)))) {
-                    const diff = Math.abs(k.length - norm.length);
+            for (const [k, v] of Object.entries(_canonNormNoStates)) {
+                if (k.startsWith(primary) || normNS.startsWith(k.substring(0, Math.min(k.length, 8)))) {
+                    const diff = Math.abs(k.length - normNS.length);
                     if (diff < bestDiff) { bestDiff = diff; best = v; }
                 }
             }
