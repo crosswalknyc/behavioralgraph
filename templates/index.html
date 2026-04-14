@@ -15993,11 +15993,9 @@
                             </div>
                         </div>
                         <div class="sot-granularity-bar" id="sotGranBar">
-                            <button class="sot-gran-btn" data-gran="total" onclick="sotSetGranularity('total')">Total Time Frame</button>
-                            <button class="sot-gran-btn" data-gran="monthly" onclick="sotSetGranularity('monthly')">Per Month</button>
-                            <button class="sot-gran-btn" data-gran="weekly" onclick="sotSetGranularity('weekly')">Per Week</button>
-                            <button class="sot-gran-btn active" data-gran="daily" onclick="sotSetGranularity('daily')">Per Day</button>
                             <button class="sot-gran-btn" data-gran="session" onclick="sotSetGranularity('session')">Per Session</button>
+                            <button class="sot-gran-btn active" data-gran="daily" onclick="sotSetGranularity('daily')">Per Day</button>
+                            <button class="sot-gran-btn" data-gran="total" onclick="sotSetGranularity('total')">Total Time Frame</button>
                         </div>
                         <div class="sot-charts-row">
                             <div class="sot-chart-card">
@@ -23436,21 +23434,18 @@
         }
 
         var _sotGranLabels = {
-            'total': 'Total Time Frame', 'monthly': 'Per Month', 'weekly': 'Per Week',
-            'daily': 'Per Day', 'session': 'Per Session'
+            'session': 'Per Session', 'daily': 'Per Day', 'total': 'Total Time Frame'
         };
 
         function _sotShareKey(gran) {
             if (gran === 'session') return 'share_pct_session';
-            if (gran === 'daily' || gran === 'weekly' || gran === 'monthly') return 'share_pct_daily';
-            return 'share_pct_total';
+            if (gran === 'daily') return 'share_pct_daily';
+            return 'share_pct_session';
         }
 
         function _sotTimeLabel(c, gran) {
             if (gran === 'session') return c.avg_min_per_session + ' min/session';
-            if (gran === 'daily') return c.min_per_day + ' min/day (' + c.sessions_per_day + ' sessions)';
-            if (gran === 'weekly') return c.min_per_week + ' min/wk';
-            if (gran === 'monthly') return c.min_per_month + ' min/mo';
+            if (gran === 'daily') return c.min_per_day + ' min/day (' + c.sessions_per_day + 'x ' + c.avg_min_per_session + ' min)';
             return c.est_minutes.toLocaleString() + ' total min';
         }
 
@@ -23478,8 +23473,9 @@
             var colors = cats.map(function(c) { return _sotCatColors[c.name] || '#888'; });
 
             var subtitleMap = {
-                'total': 'total across date range', 'monthly': 'per month', 'weekly': 'per week',
-                'daily': 'per day &middot; sessions &times; duration', 'session': 'per session'
+                'session': 'per session &mdash; duration only',
+                'daily': 'per day &mdash; sessions &times; duration',
+                'total': 'total across date range'
             };
             document.getElementById('sotDoughnutTitle').innerHTML = 'Share of Time by Category <span style="font-weight:400;font-size:0.7rem;color:var(--text-secondary);">(' + subtitleMap[gran] + ')</span>';
 

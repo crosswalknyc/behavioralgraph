@@ -25983,6 +25983,13 @@ def share_of_time_analyze():
         projection_mult = SOT_US_POPULATION / SOT_PANEL_SIZE
 
         # --- Build per-category results with all granularities ---
+        # Three distinct share calculations:
+        #   session  = based on per-session duration (interaction-weighted from clickstream)
+        #   daily    = session_duration × sessions_per_day (frequency-weighted)
+        #   total    = interaction-weighted across full date range (same as session share)
+        total_daily_minutes = {cn: time_weights.get(cn, 6) * sessions_per_day.get(cn, 2.0) for cn in categories}
+        total_daily_all = sum(total_daily_minutes.values())
+
         result_categories = []
         for cat_name in SOT_CATEGORIES:
             if cat_name not in categories:
@@ -25998,16 +26005,7 @@ def share_of_time_analyze():
             proj_minutes = int(round(c['est_minutes'] * projection_mult))
             proj_hours = round(proj_minutes / 60)
 
-            # Daily-basis totals use session frequency × per-user counts
-            total_daily_minutes = {cn: time_weights.get(cn, 6) * sessions_per_day.get(cn, 2.0) for cn in categories}
-            total_daily_all = sum(total_daily_minutes.values())
             time_share_daily = round(100.0 * min_per_day / total_daily_all, 2) if total_daily_all else 0
-            time_share_weekly = time_share_daily
-            time_share_monthly = time_share_daily
-
-            total_timeframe_min = c['est_minutes']
-            total_timeframe_all = total_est_minutes
-            time_share_total = round(100.0 * total_timeframe_min / total_timeframe_all, 2) if total_timeframe_all else 0
 
             brand_list = sorted(c['brands'].items(), key=lambda x: x[1]['est_minutes'], reverse=True)
             brands_out = []
@@ -26034,9 +26032,6 @@ def share_of_time_analyze():
                 'rationale': weight_rationales.get(cat_name, ''),
                 'share_pct_session': time_share_session,
                 'share_pct_daily': time_share_daily,
-                'share_pct_weekly': time_share_weekly,
-                'share_pct_monthly': time_share_monthly,
-                'share_pct_total': time_share_total,
                 'brands': brands_out,
             })
 
