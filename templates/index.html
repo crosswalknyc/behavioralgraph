@@ -810,6 +810,16 @@
         #shareOfTimeIQView .sot-gran-btn.active { background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime)); color: #000; }
         #shareOfTimeIQView .sot-loading { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.9rem; }
         #shareOfTimeIQView .sot-loading .spinner { width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: sotSpin 0.6s linear infinite; margin-right: 0.6rem; }
+        #shareOfTimeIQView .sot-tab-bar { margin-bottom: 0.5rem; }
+        #shareOfTimeIQView .sot-compare-grid { display: grid; gap: 1rem; margin-bottom: 1rem; }
+        #shareOfTimeIQView .sot-compare-col { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; overflow: hidden; }
+        #shareOfTimeIQView .sot-compare-col h4 { font-size: 0.82rem; margin: 0 0 0.5rem; color: var(--accent-cyan); }
+        #shareOfTimeIQView .sot-compare-row { display: flex; justify-content: space-between; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.78rem; }
+        #shareOfTimeIQView .sot-compare-row:last-child { border-bottom: none; }
+        #shareOfTimeIQView .sot-compare-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
+        #shareOfTimeIQView .sot-compare-btn { padding: 0.4rem 1rem; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 8px; color: #fff; font-weight: 700; font-size: 0.78rem; cursor: pointer; transition: opacity 0.2s; white-space: nowrap; }
+        #shareOfTimeIQView .sot-compare-btn:hover { opacity: 0.85; }
+        #shareOfTimeIQView .sot-compare-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         @keyframes sotSpin { to { transform: rotate(360deg); } }
         #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #llmoIQView .llmo-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
@@ -12637,7 +12647,7 @@
                                 <div class="form-group" style="margin-bottom: 1rem;">
                                     <label>Select profile</label>
                                     <div style="position: relative;">
-                                        <input type="text" id="profileRerunSearch" placeholder="Type to search profiles..." autocomplete="off" data-1p-ignore="true" data-lpignore="true" style="width: 100%; padding: 0.5rem; padding-right: 2rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                        <input type="search" id="profileRerunSearch" placeholder="Type to search profiles..." autocomplete="new-password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="width: 100%; padding: 0.5rem; padding-right: 2rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                                         <select id="profileRerunSelect" size="8" style="width: 100%; margin-top: 0.25rem; padding: 0.25rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); display: none;"></select>
                                         <div id="profileRerunDropdown" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); margin-top: 0.25rem; display: none;"></div>
                                     </div>
@@ -14407,7 +14417,7 @@
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" autocomplete="off" data-1p-ignore="true" data-lpignore="true" style="flex: 1;">
+                            <input type="search" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" autocomplete="new-password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
                             <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh profile list from S3 (new uploads will appear)" onclick="refreshDashboardProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                         </div>
                     </div>
@@ -15580,7 +15590,7 @@
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="text" id="subscriberProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search shows by name or category." onkeyup="filterSubscriberProfiles()" autocomplete="off" data-1p-ignore="true" data-lpignore="true" style="flex: 1;">
+                            <input type="search" id="subscriberProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search shows by name or category." onkeyup="filterSubscriberProfiles()" autocomplete="new-password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
                             <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh show list from S3" onclick="refreshSubscriberProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                         </div>
                     </div>
@@ -15971,9 +15981,11 @@
                                 </div>
                             </div>
                             <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()">Run Analysis</button>
-                            <button type="button" class="sot-run-btn" id="sotFreshBtn" onclick="sotRunAnalysis(true)" style="background:linear-gradient(135deg,#f59e0b,#ef4444);font-size:0.75rem;padding:0.4rem 0.8rem;" title="Bypass cache and re-query Snowflake + GPT">Fresh Run</button>
+                            <button type="button" class="sot-compare-btn" id="sotCompareBtn" onclick="sotToggleCompare()" disabled title="Open 2+ tabs to compare">Compare Open Tabs</button>
                         </div>
                     </div>
+                    <div id="sotTabBar" class="profile-tabs-bar sot-tab-bar" style="display:none;"></div>
+                    <div id="sotCompareArea" style="display:none;"></div>
                     <div id="sotResultsArea" style="display:none;">
                         <div class="sot-kpi-grid" style="grid-template-columns:repeat(4,1fr);">
                             <div class="sot-kpi">
@@ -23414,6 +23426,7 @@
             btn.disabled = true; btn.textContent = 'Running\u2026';
             if (freshBtn) freshBtn.disabled = true;
             document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotCompareArea').style.display = 'none';
             document.getElementById('sotEmptyState').style.display = 'none';
             document.getElementById('sotLoadingArea').style.display = 'block';
 
@@ -23429,8 +23442,9 @@
                 if (freshBtn) freshBtn.disabled = false;
                 document.getElementById('sotLoadingArea').style.display = 'none';
                 if (!resp.success) { alert('Error: ' + (resp.error || 'Unknown')); document.getElementById('sotEmptyState').style.display = 'flex'; return; }
-                _sotData = resp.data;
-                sotRenderResults(_sotData);
+                document.getElementById('sotCompareArea').style.display = 'none';
+                _sotCompareMode = false;
+                sotOpenTab(resp.data);
                 sotLoadRuns();
             }).catch(function(err) {
                 btn.disabled = false; btn.textContent = 'Run Analysis';
@@ -23447,7 +23461,8 @@
 
         function _sotShareKey(gran) {
             if (gran === 'session') return 'share_pct_session';
-            return 'share_pct_daily';
+            if (gran === 'daily') return 'share_pct_daily';
+            return 'share_pct_total';
         }
 
         function _sotTimeLabel(c, gran, numDays) {
@@ -23493,6 +23508,7 @@
             if (dCtx && typeof Chart !== 'undefined') {
                 _sotDoughnutInst = new Chart(dCtx.getContext('2d'), {
                     type: 'doughnut',
+                    plugins: [ChartDataLabels],
                     data: { labels: labels, datasets: [{ data: shares, backgroundColor: colors, borderWidth: 0, hoverOffset: 8 }] },
                     options: {
                         responsive: true, maintainAspectRatio: false, cutout: '52%',
@@ -23514,14 +23530,17 @@
             if (bCtx && typeof Chart !== 'undefined') {
                 _sotBarInst = new Chart(bCtx.getContext('2d'), {
                     type: 'bar',
-                    data: { labels: labels, datasets: [{ label: 'Share %', data: shares, backgroundColor: colors, borderWidth: 0, borderRadius: 5, barPercentage: 0.65 }] },
+                    plugins: [ChartDataLabels],
+                    data: { labels: labels, datasets: [{ label: 'Share %', data: shares, backgroundColor: colors, borderWidth: 0, borderRadius: 5, barPercentage: 0.85 }] },
                     options: {
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                         scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } },
                         plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) {
                             var cat = cats[ctx.dataIndex];
                             return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
-                        } } } },
+                        } } },
+                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 12 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
+                        },
                         onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
                     }
                 });
@@ -23571,7 +23590,8 @@
             canvas.parentElement.style.height = Math.max(280, brands.length * 26) + 'px';
             _sotDrillInst = new Chart(canvas.getContext('2d'), {
                 type: 'bar',
-                data: { labels: bLabels, datasets: [{ label: 'Category Share %', data: bShares, backgroundColor: col + 'cc', borderWidth: 0, borderRadius: 4, barPercentage: 0.7 }] },
+                plugins: [ChartDataLabels],
+                data: { labels: bLabels, datasets: [{ label: 'Category Share %', data: bShares, backgroundColor: col + 'cc', borderWidth: 0, borderRadius: 4, barPercentage: 0.85 }] },
                 options: {
                     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                     scales: {
@@ -23580,7 +23600,8 @@
                     },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs)'; } } }
+                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs)'; } } },
+                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                     }
                 }
             });
@@ -23588,9 +23609,19 @@
             document.getElementById('sotDrillCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
-        // --- SOT: Sidebar / Run Cache ---
+        // --- SOT: Sidebar / Run Cache / Tabs / Compare ---
         var _sotCachedRuns = [];
         var _sotSelectedRunKey = null;
+        var _sotOpenTabs = [];
+        var _sotActiveTabIdx = -1;
+        var _sotCompareMode = false;
+
+        function _sotTabKey(d) { return d.start_date + '|' + d.end_date + '|' + (d.age_brackets||[]).slice().sort().join(','); }
+        function _sotTabLabel(d) {
+            var ages = (d.age_brackets || []);
+            var ageStr = ages.length > 2 ? ages[0] + ' +' + (ages.length-1) : ages.join(', ');
+            return d.start_date + ' to ' + d.end_date + ' · ' + ageStr;
+        }
 
         function sotLoadRuns() {
             fetch('/api/share-of-time/runs', { credentials: 'same-origin' })
@@ -23627,21 +23658,261 @@
                 tree.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.78rem;">No saved runs yet. Run an analysis to save it here.</div>';
                 return;
             }
+            var openKeys = _sotOpenTabs.map(function(t) { return _sotTabKey(t.data); });
             var html = '';
             runs.forEach(function(r) {
                 var ages = (r.age_brackets || []).join(', ');
                 var label = r.start_date + ' to ' + r.end_date;
                 var sub = ages.length > 30 ? ages.substring(0, 28) + '...' : ages;
                 var users = r.matched_users ? r.matched_users.toLocaleString() + ' users' : '';
+                var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
+                var isOpen = openKeys.indexOf(rKey) !== -1;
                 var isActive = _sotSelectedRunKey === r.s3_key;
                 var cls = 'profile-select-item' + (isActive ? ' active' : '');
+                var openBadge = isOpen ? '<span style="font-size:0.6rem;background:var(--accent-cyan);color:#000;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:700;">TAB</span>' : '';
                 html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
-                    '<div style="font-weight:600;font-size:0.78rem;">' + label + '</div>' +
+                    '<div style="font-weight:600;font-size:0.78rem;">' + label + openBadge + '</div>' +
                     '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:2px;">' + sub + '</div>' +
                     (users ? '<div style="font-size:0.65rem;color:var(--accent-lime);margin-top:1px;">' + users + '</div>' : '') +
                 '</div>';
             });
             tree.innerHTML = html;
+        }
+
+        function sotOpenTab(data) {
+            var key = _sotTabKey(data);
+            var existIdx = -1;
+            _sotOpenTabs.forEach(function(t, i) { if (_sotTabKey(t.data) === key) existIdx = i; });
+            if (existIdx >= 0) {
+                sotSwitchTab(existIdx);
+                return;
+            }
+            _sotOpenTabs.push({ data: data, key: key });
+            _sotActiveTabIdx = _sotOpenTabs.length - 1;
+            _sotCompareMode = false;
+            sotRenderTabs();
+            sotRenderRunTree();
+            _sotData = data;
+            sotRenderResults(data);
+        }
+
+        function sotCloseTab(idx, evt) {
+            if (evt) { evt.stopPropagation(); evt.preventDefault(); }
+            _sotOpenTabs.splice(idx, 1);
+            if (_sotOpenTabs.length === 0) {
+                _sotActiveTabIdx = -1;
+                _sotData = null;
+                document.getElementById('sotResultsArea').style.display = 'none';
+                document.getElementById('sotCompareArea').style.display = 'none';
+                document.getElementById('sotEmptyState').style.display = 'block';
+            } else {
+                if (_sotActiveTabIdx >= _sotOpenTabs.length) _sotActiveTabIdx = _sotOpenTabs.length - 1;
+                _sotData = _sotOpenTabs[_sotActiveTabIdx].data;
+                if (_sotCompareMode) { sotRenderCompare(); } else { sotRenderResults(_sotData); }
+            }
+            sotRenderTabs();
+            sotRenderRunTree();
+        }
+
+        function sotSwitchTab(idx) {
+            if (idx < 0 || idx >= _sotOpenTabs.length) return;
+            _sotActiveTabIdx = idx;
+            _sotCompareMode = false;
+            _sotData = _sotOpenTabs[idx].data;
+            document.getElementById('sotCompareArea').style.display = 'none';
+            document.getElementById('sotResultsArea').style.display = 'block';
+            sotRenderResults(_sotData);
+            sotRenderTabs();
+        }
+
+        function sotRenderTabs() {
+            var bar = document.getElementById('sotTabBar');
+            var compareBtn = document.getElementById('sotCompareBtn');
+            if (_sotOpenTabs.length === 0) {
+                bar.style.display = 'none';
+                compareBtn.disabled = true;
+                return;
+            }
+            bar.style.display = 'flex';
+            compareBtn.disabled = _sotOpenTabs.length < 2;
+            var html = '';
+            _sotOpenTabs.forEach(function(t, i) {
+                var cls = 'profile-tab' + (i === _sotActiveTabIdx && !_sotCompareMode ? ' active' : '');
+                var label = _sotTabLabel(t.data);
+                html += '<div class="' + cls + '" onclick="sotSwitchTab(' + i + ')">' +
+                    '<span class="profile-tab-name">' + label + '</span>' +
+                    '<button class="profile-tab-close" onclick="sotCloseTab(' + i + ', event)" title="Close tab">&times;</button>' +
+                '</div>';
+            });
+            bar.innerHTML = html;
+        }
+
+        function sotToggleCompare() {
+            if (_sotOpenTabs.length < 2) return;
+            _sotCompareMode = !_sotCompareMode;
+            if (_sotCompareMode) {
+                document.getElementById('sotResultsArea').style.display = 'none';
+                document.getElementById('sotEmptyState').style.display = 'none';
+                sotRenderCompare();
+                document.getElementById('sotCompareArea').style.display = 'block';
+                _sotActiveTabIdx = -1;
+            } else {
+                document.getElementById('sotCompareArea').style.display = 'none';
+                if (_sotOpenTabs.length) { sotSwitchTab(0); } else { document.getElementById('sotEmptyState').style.display = 'block'; }
+            }
+            sotRenderTabs();
+        }
+
+        var _sotCompareCharts = [];
+
+        function _sotDestroyCompareCharts() {
+            _sotCompareCharts.forEach(function(c) { try { c.destroy(); } catch(e) {} });
+            _sotCompareCharts = [];
+        }
+
+        function _sotTabHue(i) { return [200, 280, 40, 150, 340, 60][i % 6]; }
+
+        function sotRenderCompare() {
+            _sotDestroyCompareCharts();
+            var area = document.getElementById('sotCompareArea');
+            var gran = _sotGranularity;
+            var shareKey = _sotShareKey(gran);
+            var tabs = _sotOpenTabs;
+            if (!tabs.length) { area.innerHTML = ''; return; }
+
+            var catNames = [];
+            tabs.forEach(function(t) {
+                (t.data.categories || []).forEach(function(c) {
+                    if (catNames.indexOf(c.name) === -1) catNames.push(c.name);
+                });
+            });
+
+            var html = '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:1rem;">' +
+                '<button class="sot-gran-btn' + (gran==='session'?' active':'') + '" onclick="sotSetCompareGran(\'session\')">Per Session</button>' +
+                '<button class="sot-gran-btn' + (gran==='daily'?' active':'') + '" onclick="sotSetCompareGran(\'daily\')">Per Day</button>' +
+                '<button class="sot-gran-btn' + (gran==='total'?' active':'') + '" onclick="sotSetCompareGran(\'total\')">Total Time Frame</button>' +
+            '</div>';
+
+            html += '<div class="sot-chart-card" style="margin-bottom:1rem;">' +
+                '<h3 class="sot-chart-title">Overall Share of Time by Category</h3>' +
+                '<div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div>' +
+            '</div>';
+
+            catNames.forEach(function(catName) {
+                var allBrands = {};
+                tabs.forEach(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
+                    if (cat && cat.brands) {
+                        cat.brands.forEach(function(b) {
+                            if (!allBrands[b.name]) allBrands[b.name] = true;
+                        });
+                    }
+                });
+                var brandNames = Object.keys(allBrands).slice(0, 20);
+                var chartH = Math.max(250, brandNames.length * 28 + 60);
+                var col = _sotCatColors[catName] || '#888';
+                html += '<div class="sot-chart-card" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">' +
+                    '<h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3>' +
+                    '<div style="position:relative;height:' + chartH + 'px;"><canvas id="sotCmpCat_' + catName.replace(/[^a-zA-Z]/g, '') + '"></canvas></div>' +
+                '</div>';
+            });
+
+            area.innerHTML = html;
+
+            var mainCanvas = document.getElementById('sotCmpMain');
+            if (mainCanvas && typeof Chart !== 'undefined') {
+                var mainDS = [];
+                tabs.forEach(function(t, i) {
+                    var label = _sotTabLabel(t.data);
+                    var cats = t.data.categories || [];
+                    var vals = catNames.map(function(cn) {
+                        var found = cats.find(function(c) { return c.name === cn; });
+                        return found ? (found[shareKey] || 0) : 0;
+                    });
+                    mainDS.push({
+                        label: label, data: vals,
+                        backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
+                        borderWidth: 0, borderRadius: 4, barPercentage: 0.9
+                    });
+                });
+                var mainChart = new Chart(mainCanvas.getContext('2d'), {
+                    type: 'bar', plugins: [ChartDataLabels],
+                    data: { labels: catNames, datasets: mainDS },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v) { return v + '%'; } } },
+                            y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12, weight: '600' } } }
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 16, usePointStyle: true } },
+                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '%'; } } },
+                            datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
+                        }
+                    }
+                });
+                _sotCompareCharts.push(mainChart);
+            }
+
+            catNames.forEach(function(catName) {
+                var canvasId = 'sotCmpCat_' + catName.replace(/[^a-zA-Z]/g, '');
+                var canvas = document.getElementById(canvasId);
+                if (!canvas || typeof Chart === 'undefined') return;
+
+                var allBrands = {};
+                tabs.forEach(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
+                    if (cat && cat.brands) {
+                        cat.brands.forEach(function(b) {
+                            if (!allBrands[b.name]) allBrands[b.name] = 0;
+                            allBrands[b.name] = Math.max(allBrands[b.name], b.category_share_pct || 0);
+                        });
+                    }
+                });
+                var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
+
+                var catDS = [];
+                tabs.forEach(function(t, i) {
+                    var label = _sotTabLabel(t.data);
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
+                    var brandMap = {};
+                    if (cat && cat.brands) cat.brands.forEach(function(b) { brandMap[b.name] = b; });
+                    var vals = brandNames.map(function(bn) {
+                        var b = brandMap[bn];
+                        return b ? (b.category_share_pct || 0) : 0;
+                    });
+                    catDS.push({
+                        label: label, data: vals,
+                        backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
+                        borderWidth: 0, borderRadius: 3, barPercentage: 0.9
+                    });
+                });
+
+                var catChart = new Chart(canvas.getContext('2d'), {
+                    type: 'bar', plugins: [ChartDataLabels],
+                    data: { labels: brandNames, datasets: catDS },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v) { return v + '%'; } } },
+                            y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 10 }, padding: 12, usePointStyle: true } },
+                            tooltip: { callbacks: { label: function(ctx) {
+                                return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName;
+                            } } },
+                            datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
+                        }
+                    }
+                });
+                _sotCompareCharts.push(catChart);
+            });
+        }
+
+        function sotSetCompareGran(gran) {
+            _sotGranularity = gran;
+            sotRenderCompare();
         }
 
         function sotSelectRun(startDate, endDate, ageBrackets) {
@@ -23660,6 +23931,7 @@
             var btn = document.getElementById('sotRunBtn');
             btn.disabled = true; btn.textContent = 'Loading...';
             document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotCompareArea').style.display = 'none';
             document.getElementById('sotEmptyState').style.display = 'none';
             document.getElementById('sotLoadingArea').style.display = 'block';
 
@@ -23670,9 +23942,8 @@
             }).then(function(r) { return r.json(); }).then(function(resp) {
                 btn.disabled = false; btn.textContent = 'Run Analysis';
                 document.getElementById('sotLoadingArea').style.display = 'none';
-                if (resp.success) {
-                    _sotData = resp.data;
-                    sotRenderResults(_sotData);
+                if (resp.success && resp.data) {
+                    sotOpenTab(resp.data);
                 } else {
                     sotRunAnalysis();
                 }
