@@ -23514,6 +23514,7 @@
             if (dCtx && typeof Chart !== 'undefined') {
                 _sotDoughnutInst = new Chart(dCtx.getContext('2d'), {
                     type: 'doughnut',
+                    plugins: [ChartDataLabels],
                     data: { labels: labels, datasets: [{ data: shares, backgroundColor: colors, borderWidth: 0, hoverOffset: 8 }] },
                     options: {
                         responsive: true, maintainAspectRatio: false, cutout: '52%',
@@ -23535,6 +23536,7 @@
             if (bCtx && typeof Chart !== 'undefined') {
                 _sotBarInst = new Chart(bCtx.getContext('2d'), {
                     type: 'bar',
+                    plugins: [ChartDataLabels],
                     data: { labels: labels, datasets: [{ label: 'Share %', data: shares, backgroundColor: colors, borderWidth: 0, borderRadius: 5, barPercentage: 0.65 }] },
                     options: {
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
@@ -23594,6 +23596,7 @@
             canvas.parentElement.style.height = Math.max(280, brands.length * 26) + 'px';
             _sotDrillInst = new Chart(canvas.getContext('2d'), {
                 type: 'bar',
+                plugins: [ChartDataLabels],
                 data: { labels: bLabels, datasets: [{ label: 'Category Share %', data: bShares, backgroundColor: col + 'cc', borderWidth: 0, borderRadius: 4, barPercentage: 0.7 }] },
                 options: {
                     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
@@ -23603,7 +23606,8 @@
                     },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs)'; } } }
+                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs)'; } } },
+                        datalabels: { anchor: 'end', align: 'start', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
                     }
                 }
             });
@@ -23815,6 +23819,7 @@
             });
             new Chart(canvas.getContext('2d'), {
                 type: 'bar',
+                plugins: [ChartDataLabels],
                 data: { labels: catNames, datasets: datasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
