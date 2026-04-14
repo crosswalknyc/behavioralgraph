@@ -26175,7 +26175,6 @@ def share_of_time_analyze():
                 ratio = 1.0
 
             age_cap_ratios[age_val] = ratio
-            total_sample_uids += display_sample
             projected_users_by_age[age_val] = {
                 'sample_uids': display_sample,
                 'sample_uids_exact': genpop_sample,
@@ -26187,6 +26186,28 @@ def share_of_time_analyze():
                 'genpop_pct': gp_pct,
             }
 
+        # Hard-cap displayed sample size so total never exceeds panel size (10M).
+        total_display_sample = sum(v.get('sample_uids', 0) for v in projected_users_by_age.values())
+        if total_display_sample > SOT_PANEL_SIZE and projected_users_by_age:
+            overflow = total_display_sample - SOT_PANEL_SIZE
+            age_order = sorted(
+                projected_users_by_age.keys(),
+                key=lambda a: projected_users_by_age[a].get('sample_uids', 0),
+                reverse=True,
+            )
+            idx = 0
+            # Reduce largest buckets first, cycling until overflow is gone.
+            while overflow > 0 and age_order:
+                age_val = age_order[idx % len(age_order)]
+                cur = int(projected_users_by_age[age_val].get('sample_uids', 0))
+                if cur > 1:
+                    projected_users_by_age[age_val]['sample_uids'] = cur - 1
+                    overflow -= 1
+                idx += 1
+                if idx > (SOT_PANEL_SIZE * 2):
+                    break
+
+        total_sample_uids = sum(v.get('sample_uids', 0) for v in projected_users_by_age.values())
         total_projected_users = sum(v['capped'] for v in projected_users_by_age.values())
 
         # --- Resolve time weights (cache > GPT > baseline) ---
