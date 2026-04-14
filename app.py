@@ -2803,6 +2803,7 @@ def create_user():
             'has_talent_fit_access': req_data.get('has_talent_fit_access', cd.get('has_talent_fit_access', False) if cd else False),
             'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
             'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
+            'has_workspace_access': req_data.get('has_workspace_access', cd.get('has_workspace_access', True) if cd else True),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
             'collab_team': req_data.get('collab_team', []),
@@ -2934,6 +2935,8 @@ def update_user(username):
             user['has_sf_conversion_access'] = bool(req_data['has_sf_conversion_access'])
         if 'has_flywheel_conversion_access' in req_data:
             user['has_flywheel_conversion_access'] = bool(req_data['has_flywheel_conversion_access'])
+        if 'has_workspace_access' in req_data:
+            user['has_workspace_access'] = bool(req_data['has_workspace_access'])
         if 'has_share_of_time_access' in req_data:
             user['has_share_of_time_access'] = bool(req_data['has_share_of_time_access'])
         if 'has_share_of_time_run_access' in req_data:
@@ -3174,6 +3177,7 @@ def restore_defaults_all_users():
             user['has_rankers_iq_access'] = False
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
             user['has_llmo_iq_access'] = False
+            user['has_workspace_access'] = True
             user['has_share_of_time_access'] = True
             user['has_share_of_time_run_access'] = True
             count += 1
@@ -3563,6 +3567,7 @@ def api_set_company_defaults(company_name):
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
             'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
+            'has_workspace_access': req.get('has_workspace_access', True),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'credits': req.get('credits', 5),
@@ -3619,6 +3624,7 @@ def api_reset_company_users(company_name):
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
                 user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
+                user['has_workspace_access'] = cd.get('has_workspace_access', True)
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['credits'] = cd.get('credits', 5)
@@ -3638,6 +3644,7 @@ def api_reset_company_users(company_name):
                 user['has_rankers_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
                 user['has_llmo_iq_access'] = False
+                user['has_workspace_access'] = True
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
                 user['credits'] = 5
@@ -5535,6 +5542,7 @@ def compute_product_access_flags(user, role):
             'has_llmo_iq_access': True,
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
+            'has_workspace_access': True,
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
         }
@@ -5562,6 +5570,7 @@ def compute_product_access_flags(user, role):
         'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
         'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
+        'has_workspace_access': bool(u.get('has_workspace_access', True)),
         'has_share_of_time_access': has_sot_view,
         'has_share_of_time_run_access': has_sot_run,
     }
@@ -5651,6 +5660,7 @@ def index():
     has_llmo_iq = _acc['has_llmo_iq_access']
     has_talent_fit = _acc.get('has_talent_fit_access', False)
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
+    has_workspace = _acc.get('has_workspace_access', True)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     
@@ -5703,6 +5713,7 @@ def index():
                            has_llmo_iq_access=has_llmo_iq,
                            has_talent_fit_access=has_talent_fit,
                            has_flywheel_conversion_access=has_flywheel_conversion,
+                           has_workspace_access=has_workspace,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,

@@ -2124,6 +2124,9 @@
                                         <input type="checkbox" id="cdAnalysisIQ"> Analysis IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdWorkspace" checked> Workspace
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdRankersIQ"> Rankers IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
@@ -2608,6 +2611,16 @@
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasSubscriberIQAccess">
                                 <span style="font-weight: 600;">📊 SUBSCRIBER IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Workspace Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasWorkspaceAccess" checked>
+                                <span style="font-weight: 600;">🗂️ WORKSPACE</span>
                             </label>
                         </div>
                     </div>
@@ -3874,6 +3887,7 @@
                     document.getElementById('cdImpactIQ').checked = d.has_ticket_sales_iq_access !== false;
                     document.getElementById('cdShareOfTimeView').checked = d.has_share_of_time_access !== false;
                     document.getElementById('cdShareOfTimeRun').checked = d.has_share_of_time_run_access !== false;
+                    document.getElementById('cdWorkspace').checked = d.has_workspace_access !== false;
                     document.getElementById('cdHedgeFundIQ').checked = !!d.has_hedge_fund_iq_access;
                     document.getElementById('cdAnalysisIQ').checked = !!d.has_analysis_iq_access;
                     document.getElementById('cdRankersIQ').checked = !!d.has_rankers_iq_access;
@@ -3930,6 +3944,7 @@
                 has_ticket_sales_iq_access: document.getElementById('cdImpactIQ').checked,
                 has_share_of_time_access: document.getElementById('cdShareOfTimeView').checked,
                 has_share_of_time_run_access: document.getElementById('cdShareOfTimeRun').checked && document.getElementById('cdShareOfTimeView').checked,
+                has_workspace_access: document.getElementById('cdWorkspace').checked,
                 has_hedge_fund_iq_access: document.getElementById('cdHedgeFundIQ').checked,
                 has_analysis_iq_access: document.getElementById('cdAnalysisIQ').checked,
                 has_rankers_iq_access: document.getElementById('cdRankersIQ').checked,
@@ -6748,6 +6763,7 @@
             document.getElementById('allBehavioralCategories').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
+            document.getElementById('hasWorkspaceAccess').checked = true;
             document.getElementById('hasSFConversionAccess').checked = false;
             document.getElementById('hasFlywheelConversionAccess').checked = false;
             document.getElementById('hasTicketSalesIQAccess').checked = true;
@@ -6875,6 +6891,7 @@
             document.getElementById('allBehavioralCategories').checked = user.allowed_behavioral_categories?.includes('*') ?? true; // Default true
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
+            document.getElementById('hasWorkspaceAccess').checked = user.has_workspace_access !== false; // Default true
             document.getElementById('hasSFConversionAccess').checked = user.has_sf_conversion_access === true; // Default false
             document.getElementById('hasFlywheelConversionAccess').checked = user.has_flywheel_conversion_access === true; // Default false
             document.getElementById('hasTicketSalesIQAccess').checked = user.has_ticket_sales_iq_access !== false; // Default true
@@ -8760,6 +8777,7 @@
                     Array.from(document.querySelectorAll('#behavioralCategoryCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
+                has_workspace_access: document.getElementById('hasWorkspaceAccess').checked,
                 has_sf_conversion_access: document.getElementById('hasSFConversionAccess').checked,
                 has_flywheel_conversion_access: document.getElementById('hasFlywheelConversionAccess').checked,
                 has_ticket_sales_iq_access: document.getElementById('hasTicketSalesIQAccess').checked,
