@@ -53716,13 +53716,35 @@
                 filename = `${profileName}_Interests.csv`;
                 
             } else if (tabLabel === 'location') {
-                // Export location data
-                csvContent = `${profileName} - Location\n\n`;
                 const locations = currentDashboardData.locations || [];
-                
-                csvContent += `DMA,Audience %,Gen Pop %,Index\n`;
-                locations.forEach(loc => {
-                    csvContent += `"${normalizeDmaDisplay(loc.name)}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}\n`;
+                const state = locationSortState['all'];
+                let sorted = [...locations];
+                if (state.column === 'rank') {
+                    sorted.sort((a, b) => {
+                        const diff = (getDMARank(a.name) || 999) - (getDMARank(b.name) || 999);
+                        return state.direction === 'asc' ? diff : -diff;
+                    });
+                } else if (state.column === 'target' || state.column === 'percentage' || state.column === 'profilerank') {
+                    sorted.sort((a, b) => {
+                        const diff = b.pct - a.pct;
+                        return state.direction === 'asc' ? -diff : diff;
+                    });
+                } else if (state.column === 'index') {
+                    sorted.sort((a, b) => {
+                        const diff = b.index - a.index;
+                        return state.direction === 'asc' ? -diff : diff;
+                    });
+                } else if (state.column === 'genpop') {
+                    sorted.sort((a, b) => {
+                        const diff = (b.genPopPct ?? 0) - (a.genPopPct ?? 0);
+                        return state.direction === 'asc' ? -diff : diff;
+                    });
+                }
+                csvContent = `${profileName} - Location\n\n`;
+                csvContent += `DMA Rank,DMA,Audience %,Gen Pop %,Index\n`;
+                sorted.forEach(loc => {
+                    const rank = getDMARank(loc.name) || '';
+                    csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}\n`;
                 });
                 filename = `${profileName}_Location.csv`;
                 
