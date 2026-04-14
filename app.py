@@ -25532,6 +25532,7 @@ SOT_SESSIONS_PER_DAY_BASELINE = {
 SOT_WEIGHTS_S3_PREFIX = 'share-of-time-weights/'
 SOT_RUNS_S3_PREFIX = 'share-of-time-runs/'
 SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
+SOT_TREND_GUARD_VERSION = 1
 
 
 def _sot_noisy_count(base_count, seed_key):
@@ -25709,6 +25710,73 @@ def _sot_list_cached_runs():
     except Exception as e:
         print(f"[SOT] List runs error: {e}")
     return runs
+
+
+def _sot_find_yoy_reference_run(start_date, end_date, age_brackets):
+    """Find the most recent prior-year run for same age set and MM-DD window."""
+    try:
+        cur_start = __import__('datetime').datetime.strptime(start_date, '%Y-%m-%d')
+        cur_end = __import__('datetime').datetime.strptime(end_date, '%Y-%m-%d')
+    except Exception:
+        return None
+
+    target_age = sorted(age_brackets or [])
+    target_md = (cur_start.strftime('%m-%d'), cur_end.strftime('%m-%d'))
+
+    candidates = []
+    for r in _sot_list_cached_runs():
+        try:
+            if sorted(r.get('age_brackets') or []) != target_age:
+                continue
+            s = __import__('datetime').datetime.strptime(r.get('start_date', ''), '%Y-%m-%d')
+            e = __import__('datetime').datetime.strptime(r.get('end_date', ''), '%Y-%m-%d')
+            if s.year >= cur_start.year:
+                continue
+            if (s.strftime('%m-%d'), e.strftime('%m-%d')) != target_md:
+                continue
+            candidates.append((s.year, r))
+        except Exception:
+            continue
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    best = candidates[0][1]
+    return _sot_load_cached_run(best.get('start_date', ''), best.get('end_date', ''), best.get('age_brackets', []))
+
+
+def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
+    """Ensure Social Media nudges up YoY and Streaming Video nudges down YoY."""
+    if not result_categories or not reference_categories:
+        return False
+
+    cur = {c.get('name'): c for c in result_categories}
+    ref = {c.get('name'): c for c in reference_categories}
+    if 'Streaming Video' not in cur or 'Social Media' not in cur:
+        return False
+    if 'Streaming Video' not in ref or 'Social Media' not in ref:
+        return False
+
+    changed = False
+    eps = 0.10  # "slightly" per user request
+    for share_key in ['share_pct_session', 'share_pct_daily', 'share_pct_total']:
+        cur_sv = float(cur['Streaming Video'].get(share_key, 0) or 0)
+        cur_sm = float(cur['Social Media'].get(share_key, 0) or 0)
+        ref_sv = float(ref['Streaming Video'].get(share_key, 0) or 0)
+        ref_sm = float(ref['Social Media'].get(share_key, 0) or 0)
+
+        need_sm = max(0.0, (ref_sm + eps) - cur_sm)
+        need_sv = max(0.0, cur_sv - (ref_sv - eps))
+        shift = max(need_sm, need_sv)
+        max_shift = max(0.0, cur_sv - 0.05)
+        shift = min(shift, max_shift)
+
+        if shift > 0:
+            cur['Social Media'][share_key] = round(cur_sm + shift, 2)
+            cur['Streaming Video'][share_key] = round(cur_sv - shift, 2)
+            changed = True
+
+    return changed
 
 
 def _sot_generate_weights_via_gpt(age_brackets, quarter, history):
@@ -26079,11 +26147,12 @@ def share_of_time_analyze():
                     and cdata.get('brand_affinity_applied', False)
                     and uses_genpop
                     and has_noisy_samples
+                    and cdata.get('trend_guard_version', 0) >= SOT_TREND_GUARD_VERSION
                 )
                 if has_all:
                     return jsonify({'success': True, 'data': cdata, 'from_cache': True})
                 else:
-                    print("[SOT] Stale run cache (missing noisy samples/genpop fields/shares), re-computing...")
+                    print("[SOT] Stale run cache (missing noisy samples/genpop fields/shares/trend guard), re-computing...")
 
         age_in = ",".join(f"'{a}'" for a in age_brackets)
 
@@ -26358,6 +26427,18 @@ def share_of_time_analyze():
 
         total_proj_hours = round(total_est_minutes * projection_mult / 60)
 
+        # --- YoY trend guard for same age+MMDD pulls ---
+        trend_guard_applied = False
+        trend_guard_note = ''
+        ref_cached = _sot_find_yoy_reference_run(start_date, end_date, age_brackets)
+        if ref_cached and 'data' in ref_cached:
+            ref_cats = ref_cached['data'].get('categories', [])
+            trend_guard_applied = _sot_apply_yoy_trend_guard(result_categories, ref_cats)
+            if trend_guard_applied:
+                trend_guard_note = 'YoY trend guard applied: Social Media nudged up and Streaming Video nudged down versus prior-year pull for same dates/ages.'
+            else:
+                trend_guard_note = 'YoY trend guard check ran; no adjustment needed.'
+
         result_data = {
             'total_interactions': int(round(total_weighted_interactions)),
             'total_est_minutes': int(round(total_est_minutes)),
@@ -26374,6 +26455,9 @@ def share_of_time_analyze():
             'weights_source': weights_source,
             'weights_quarter': weights_quarter,
             'trend_context': trend_context,
+            'trend_guard_version': SOT_TREND_GUARD_VERSION,
+            'trend_guard_applied': trend_guard_applied,
+            'trend_guard_note': trend_guard_note,
             'brand_affinity_applied': bool(brand_affinity),
             'categories': result_categories,
         }
