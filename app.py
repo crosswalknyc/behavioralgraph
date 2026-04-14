@@ -25776,6 +25776,26 @@ def share_of_time_list_runs():
     return jsonify({'success': True, 'runs': runs})
 
 
+@app.route('/api/share-of-time/clear-cache', methods=['POST'])
+@requires_auth
+def share_of_time_clear_cache():
+    """Delete all cached SOT weights and runs from S3."""
+    deleted = 0
+    try:
+        if not s3_client:
+            return jsonify({'success': False, 'error': 'S3 not available'}), 500
+        for prefix in [SOT_WEIGHTS_S3_PREFIX, SOT_RUNS_S3_PREFIX]:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+                for obj in page.get('Contents', []):
+                    s3_client.delete_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    deleted += 1
+        print(f"[SOT] Cleared {deleted} cached files from S3")
+        return jsonify({'success': True, 'deleted': deleted})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/share-of-time/run', methods=['POST'])
 @requires_auth
 def share_of_time_load_run():
