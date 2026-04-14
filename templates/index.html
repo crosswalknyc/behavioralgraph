@@ -15971,6 +15971,7 @@
                                 </div>
                             </div>
                             <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()">Run Analysis</button>
+                            <button type="button" class="sot-run-btn" id="sotFreshBtn" onclick="sotRunAnalysis(true)" style="background:linear-gradient(135deg,#f59e0b,#ef4444);font-size:0.75rem;padding:0.4rem 0.8rem;" title="Bypass cache and re-query Snowflake + GPT">Fresh Run</button>
                         </div>
                     </div>
                     <div id="sotResultsArea" style="display:none;">
@@ -23399,7 +23400,7 @@
             sotLoadRuns();
         };
 
-        function sotRunAnalysis() {
+        function sotRunAnalysis(forceRefresh) {
             var start = document.getElementById('sotStartDate')?.value;
             var end = document.getElementById('sotEndDate')?.value;
             if (!start || !end) { alert('Please select both start and end dates.'); return; }
@@ -23409,17 +23410,23 @@
             if (!ages.length) { alert('Please select at least one age bracket.'); return; }
 
             var btn = document.getElementById('sotRunBtn');
-            btn.disabled = true; btn.textContent = 'Running…';
+            var freshBtn = document.getElementById('sotFreshBtn');
+            btn.disabled = true; btn.textContent = 'Running\u2026';
+            if (freshBtn) freshBtn.disabled = true;
             document.getElementById('sotResultsArea').style.display = 'none';
             document.getElementById('sotEmptyState').style.display = 'none';
             document.getElementById('sotLoadingArea').style.display = 'block';
 
+            var payload = { start_date: start, end_date: end, age_brackets: ages };
+            if (forceRefresh) payload.force_refresh = true;
+
             fetch('/api/share-of-time/analyze', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ start_date: start, end_date: end, age_brackets: ages })
+                body: JSON.stringify(payload)
             }).then(function(r) { return r.json(); }).then(function(resp) {
                 btn.disabled = false; btn.textContent = 'Run Analysis';
+                if (freshBtn) freshBtn.disabled = false;
                 document.getElementById('sotLoadingArea').style.display = 'none';
                 if (!resp.success) { alert('Error: ' + (resp.error || 'Unknown')); document.getElementById('sotEmptyState').style.display = 'flex'; return; }
                 _sotData = resp.data;
@@ -23427,6 +23434,7 @@
                 sotLoadRuns();
             }).catch(function(err) {
                 btn.disabled = false; btn.textContent = 'Run Analysis';
+                if (freshBtn) freshBtn.disabled = false;
                 document.getElementById('sotLoadingArea').style.display = 'none';
                 document.getElementById('sotEmptyState').style.display = 'flex';
                 alert('Request failed: ' + err);
@@ -23439,14 +23447,15 @@
 
         function _sotShareKey(gran) {
             if (gran === 'session') return 'share_pct_session';
-            if (gran === 'daily') return 'share_pct_daily';
-            return 'share_pct_session';
+            return 'share_pct_daily';
         }
 
-        function _sotTimeLabel(c, gran) {
+        function _sotTimeLabel(c, gran, numDays) {
             if (gran === 'session') return c.avg_min_per_session + ' min/session';
             if (gran === 'daily') return c.min_per_day + ' min/day (' + c.sessions_per_day + 'x ' + c.avg_min_per_session + ' min)';
-            return c.est_minutes.toLocaleString() + ' total min';
+            var totalMin = c.min_total || (c.min_per_day * (numDays || 1));
+            if (totalMin >= 60) return (totalMin / 60).toFixed(1) + ' hrs over ' + (numDays || '?') + ' days';
+            return totalMin.toFixed(0) + ' min over ' + (numDays || '?') + ' days';
         }
 
         function sotSetGranularity(gran) {
@@ -23491,7 +23500,7 @@
                             legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, font: { size: 12 }, color: '#e8e8e8' } },
                             tooltip: { callbacks: { label: function(ctx) {
                                 var cat = cats[ctx.dataIndex];
-                                return ctx.label + ': ' + ctx.parsed.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran);
+                                return ctx.label + ': ' + ctx.parsed.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
                             } } },
                             datalabels: { color: '#fff', font: { weight: '700', size: 13 }, formatter: function(v) { return v >= 2 ? v.toFixed(1) + '%' : ''; } }
                         },
@@ -23511,7 +23520,7 @@
                         scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } },
                         plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) {
                             var cat = cats[ctx.dataIndex];
-                            return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran);
+                            return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
                         } } } },
                         onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
                     }
@@ -23524,7 +23533,7 @@
                 var pct = (c[shareKey] || 0).toFixed(1);
                 var projHrs = (c.projected_hours || 0);
                 var projLabel = projHrs >= 1000000 ? (projHrs / 1000000).toFixed(1) + 'M hrs' : projHrs.toLocaleString() + ' hrs';
-                var timeInfo = _sotTimeLabel(c, gran);
+                var timeInfo = _sotTimeLabel(c, gran, data.num_days);
                 var rationaleHtml = '';
                 if (c.rationale) {
                     rationaleHtml = '<div class="sot-cat-rationale" style="font-size:0.65rem;color:var(--text-secondary);margin-top:4px;line-height:1.35;font-style:italic;">💡 ' + c.rationale + '</div>';
@@ -53707,13 +53716,35 @@
                 filename = `${profileName}_Interests.csv`;
                 
             } else if (tabLabel === 'location') {
-                // Export location data
-                csvContent = `${profileName} - Location\n\n`;
                 const locations = currentDashboardData.locations || [];
-                
-                csvContent += `DMA,Audience %,Gen Pop %,Index\n`;
-                locations.forEach(loc => {
-                    csvContent += `"${normalizeDmaDisplay(loc.name)}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}\n`;
+                const state = locationSortState['all'];
+                let sorted = [...locations];
+                if (state.column === 'rank') {
+                    sorted.sort((a, b) => {
+                        const diff = (getDMARank(a.name) || 999) - (getDMARank(b.name) || 999);
+                        return state.direction === 'asc' ? diff : -diff;
+                    });
+                } else if (state.column === 'target' || state.column === 'percentage' || state.column === 'profilerank') {
+                    sorted.sort((a, b) => {
+                        const diff = b.pct - a.pct;
+                        return state.direction === 'asc' ? -diff : diff;
+                    });
+                } else if (state.column === 'index') {
+                    sorted.sort((a, b) => {
+                        const diff = b.index - a.index;
+                        return state.direction === 'asc' ? -diff : diff;
+                    });
+                } else if (state.column === 'genpop') {
+                    sorted.sort((a, b) => {
+                        const diff = (b.genPopPct ?? 0) - (a.genPopPct ?? 0);
+                        return state.direction === 'asc' ? -diff : diff;
+                    });
+                }
+                csvContent = `${profileName} - Location\n\n`;
+                csvContent += `DMA Rank,DMA,Audience %,Gen Pop %,Index\n`;
+                sorted.forEach(loc => {
+                    const rank = getDMARank(loc.name) || '';
+                    csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}\n`;
                 });
                 filename = `${profileName}_Location.csv`;
                 
