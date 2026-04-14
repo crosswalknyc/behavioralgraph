@@ -23643,10 +23643,15 @@
 
             var gran = _sotGranularity;
             var shareKey = _sotShareKey(gran);
-            var cats = data.categories;
-            var labels = cats.map(function(c) { return c.name; });
-            var shares = cats.map(function(c) { return c[shareKey] || 0; });
-            var colors = cats.map(function(c) { return _sotCatColors[c.name] || '#888'; });
+            var cats = data.categories || [];
+            var sortedCats = cats.map(function(c, idx) {
+                return { c: c, idx: idx };
+            }).sort(function(a, b) {
+                return (b.c[shareKey] || 0) - (a.c[shareKey] || 0);
+            });
+            var labels = sortedCats.map(function(x) { return x.c.name; });
+            var shares = sortedCats.map(function(x) { return x.c[shareKey] || 0; });
+            var colors = sortedCats.map(function(x) { return _sotCatColors[x.c.name] || '#888'; });
 
             var subtitleMap = {
                 'session': 'per session &mdash; duration only',
@@ -23667,12 +23672,14 @@
                         plugins: {
                             legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, font: { size: 12 }, color: '#e8e8e8' } },
                             tooltip: { callbacks: { label: function(ctx) {
-                                var cat = cats[ctx.dataIndex];
+                                var cat = sortedCats[ctx.dataIndex].c;
                                 return ctx.label + ': ' + ctx.parsed.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
                             } } },
                             datalabels: { color: '#fff', font: { weight: '700', size: 13 }, formatter: function(v) { return v >= 2 ? v.toFixed(1) + '%' : ''; } }
                         },
-                        onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
+                        onClick: function(e, elements) {
+                            if (elements.length) sotDrillDown(sortedCats[elements[0].index].idx);
+                        }
                     }
                 });
             }
@@ -23688,18 +23695,22 @@
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                         scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } },
                         plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) {
-                            var cat = cats[ctx.dataIndex];
+                            var cat = sortedCats[ctx.dataIndex].c;
                             return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
                         } } },
                         datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 12 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         },
-                        onClick: function(e, elements) { if (elements.length) sotDrillDown(elements[0].index); }
+                        onClick: function(e, elements) {
+                            if (elements.length) sotDrillDown(sortedCats[elements[0].index].idx);
+                        }
                     }
                 });
             }
 
             var cardsHtml = '';
-            cats.forEach(function(c, i) {
+            sortedCats.forEach(function(item) {
+                var c = item.c;
+                var i = item.idx;
                 var col = _sotCatColors[c.name] || '#888';
                 var pct = (c[shareKey] || 0).toFixed(1);
                 var projHrs = (c.projected_hours || 0);
@@ -23732,7 +23743,9 @@
             document.getElementById('sotDrillCard').style.display = 'block';
             document.getElementById('sotDrillTitle').textContent = cat.name + ' — Brand Breakdown';
 
-            var brands = cat.brands.slice(0, 25);
+            var brands = (cat.brands || []).slice().sort(function(a, b) {
+                return (b.category_share_pct || 0) - (a.category_share_pct || 0);
+            }).slice(0, 25);
             var bLabels = brands.map(function(b) { return b.name; });
             var bShares = brands.map(function(b) { return b.category_share_pct; });
             var col = _sotCatColors[cat.name] || '#888';
@@ -23752,7 +23765,7 @@
                     },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs)'; } } },
+                        tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); var eu = (b.estimated_users || 0); var eul = eu >= 1000000 ? (eu/1e6).toFixed(1)+'M' : eu.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs; ~' + eul + ' users)'; } } },
                         datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                     }
                 }
@@ -24028,6 +24041,17 @@
                 (t.data.categories || []).forEach(function(c) {
                     if (catNames.indexOf(c.name) === -1) catNames.push(c.name);
                 });
+            });
+            catNames.sort(function(a, b) {
+                var aSum = 0;
+                var bSum = 0;
+                tabs.forEach(function(t) {
+                    var aCat = (t.data.categories || []).find(function(c) { return c.name === a; });
+                    var bCat = (t.data.categories || []).find(function(c) { return c.name === b; });
+                    aSum += aCat ? (aCat[shareKey] || 0) : 0;
+                    bSum += bCat ? (bCat[shareKey] || 0) : 0;
+                });
+                return bSum - aSum;
             });
 
             var html = '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:1rem;">' +

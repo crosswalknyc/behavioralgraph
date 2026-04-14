@@ -25533,6 +25533,17 @@ SOT_WEIGHTS_S3_PREFIX = 'share-of-time-weights/'
 SOT_RUNS_S3_PREFIX = 'share-of-time-runs/'
 SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
 SOT_TREND_GUARD_VERSION = 2
+SOT_BRAND_TARGET_VERSION = 2
+SOT_TIKTOK_TARGET_SHARE_BY_AGE_YEAR = {
+    # Target TikTok share within Social Media brand mix (%).
+    # Intentional YoY lift for cohorts explicitly requested by user.
+    '18-24': {2024: 11.2, 2025: 12.0, 2026: 12.8},
+    '25-34': {2024: 8.8, 2025: 9.5, 2026: 10.2},
+}
+SOT_TIKTOK_OVER_FACEBOOK_GAP_BY_AGE = {
+    '18-24': 0.75,
+    '25-34': 0.25,
+}
 
 
 def _sot_noisy_count(base_count, seed_key):
@@ -25793,6 +25804,139 @@ def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
     return changed
 
 
+def _sot_target_for_year(target_map, year):
+    if not target_map:
+        return None
+    if year in target_map:
+        return float(target_map[year])
+    years = sorted(target_map.keys())
+    if not years:
+        return None
+    if year <= years[0]:
+        return float(target_map[years[0]])
+    if year >= years[-1]:
+        return float(target_map[years[-1]])
+    lo = max(y for y in years if y <= year)
+    hi = min(y for y in years if y >= year)
+    if lo == hi:
+        return float(target_map[lo])
+    ratio = (year - lo) / float(hi - lo)
+    return float(target_map[lo]) + (float(target_map[hi]) - float(target_map[lo])) * ratio
+
+
+def _sot_norm_brand_token(name):
+    return ''.join(ch for ch in (name or '').strip().lower() if ch.isalnum())
+
+
+def _sot_apply_tiktok_age_year_guard(categories, start_date, age_brackets, projected_users_by_age):
+    """
+    Nudge TikTok social-brand share to age/year-aware target for 18-24 and 25-34 cohorts.
+    Applies before final result serialization so cached raw files carry corrected values.
+    """
+    social = categories.get('Social Media')
+    if not social or not social.get('brands'):
+        return False, ''
+
+    try:
+        year = int((start_date or '')[:4])
+    except Exception:
+        return False, ''
+
+    weighted_targets = []
+    weighted_gaps = []
+    for age in (age_brackets or []):
+        if age not in SOT_TIKTOK_TARGET_SHARE_BY_AGE_YEAR:
+            continue
+        t = _sot_target_for_year(SOT_TIKTOK_TARGET_SHARE_BY_AGE_YEAR.get(age, {}), year)
+        if t is None:
+            continue
+        age_row = (projected_users_by_age or {}).get(age, {})
+        w = float(age_row.get('capped') or age_row.get('sample_uids_exact') or age_row.get('sample_uids') or 1.0)
+        weighted_targets.append((t, max(w, 1.0)))
+        gap = float(SOT_TIKTOK_OVER_FACEBOOK_GAP_BY_AGE.get(age, 0.0))
+        weighted_gaps.append((gap, max(w, 1.0)))
+
+    if not weighted_targets:
+        return False, ''
+
+    target_pct = sum(t * w for t, w in weighted_targets) / sum(w for _, w in weighted_targets)
+    min_gap_pct = sum(g * w for g, w in weighted_gaps) / sum(w for _, w in weighted_gaps) if weighted_gaps else 0.0
+
+    brands = social.get('brands', {})
+    tiktok_key = None
+    facebook_key = None
+    for bn in brands.keys():
+        nrm = _sot_norm_brand_token(bn)
+        if nrm == 'tiktok':
+            tiktok_key = bn
+        elif nrm == 'facebook':
+            facebook_key = bn
+    if not tiktok_key:
+        return False, ''
+
+    cat_total = float(social.get('est_minutes') or 0.0)
+    if cat_total <= 0:
+        return False, ''
+
+    cur_tiktok_minutes = float(brands[tiktok_key].get('est_minutes') or 0.0)
+    cur_pct = 100.0 * cur_tiktok_minutes / cat_total
+    if facebook_key:
+        fb_minutes = float(brands[facebook_key].get('est_minutes') or 0.0)
+        fb_pct = 100.0 * fb_minutes / cat_total
+        target_pct = max(target_pct, fb_pct + min_gap_pct)
+    if abs(cur_pct - target_pct) < 0.05:
+        return False, ''
+
+    donor_key = None
+    donor_minutes = -1.0
+    for bn, bv in brands.items():
+        if bn == tiktok_key:
+            continue
+        mins = float(bv.get('est_minutes') or 0.0)
+        if mins > donor_minutes:
+            donor_minutes = mins
+            donor_key = bn
+    if not donor_key:
+        return False, ''
+
+    target_minutes = (target_pct / 100.0) * cat_total
+    delta = target_minutes - cur_tiktok_minutes
+    donor_cur = float(brands[donor_key].get('est_minutes') or 0.0)
+    if donor_cur - delta <= 0:
+        # Keep donor minimally positive; clamp adjustment.
+        delta = donor_cur - 0.01
+    if abs(delta) < 0.01:
+        return False, ''
+
+    def _adj_per_min(brand_row):
+        em = float(brand_row.get('est_minutes') or 0.0)
+        ac = float(brand_row.get('adj_clicks') or 0.0)
+        return (ac / em) if em > 0 else 0.0
+
+    tt_ratio = _adj_per_min(brands[tiktok_key])
+    donor_ratio = _adj_per_min(brands[donor_key])
+
+    new_tt_minutes = max(0.01, cur_tiktok_minutes + delta)
+    new_donor_minutes = max(0.01, donor_cur - delta)
+
+    brands[tiktok_key]['est_minutes'] = new_tt_minutes
+    brands[donor_key]['est_minutes'] = new_donor_minutes
+    if tt_ratio > 0:
+        brands[tiktok_key]['adj_clicks'] = new_tt_minutes * tt_ratio
+    if donor_ratio > 0:
+        brands[donor_key]['adj_clicks'] = new_donor_minutes * donor_ratio
+
+    social['adj_clicks'] = sum(float(bv.get('adj_clicks') or 0.0) for bv in brands.values())
+    social['est_minutes'] = sum(float(bv.get('est_minutes') or 0.0) for bv in brands.values())
+    categories['Social Media'] = social
+    note = f"TikTok age/year guard applied ({round(cur_pct,2)}% -> {round(target_pct,2)}%)."
+    if facebook_key:
+        new_fb_minutes = float(brands[facebook_key].get('est_minutes') or 0.0)
+        new_fb_pct = 100.0 * new_fb_minutes / max(social['est_minutes'], 0.01)
+        note += f" Facebook={round(new_fb_pct,2)}%."
+    return True, note
+
+
 def _sot_generate_weights_via_gpt(age_brackets, quarter, history):
     """Call GPT-4o to generate cohort/date-aware avg minutes per interaction.
     Returns full payload dict or None on failure."""
@@ -25989,6 +26133,7 @@ Multiplier guidelines:
 - Use extreme values when warranted: a children's game should get 0.05-0.1 for a 65+ cohort; a youth platform should get 3.0-5.0 for an under-18 cohort
 - For brands with near-universal adoption across ages (e.g., Netflix, Google), multipliers should stay closer to 1.0
 - For age-polarized brands (e.g., Roblox, Facebook, AARP-associated services), use strong multipliers
+- For 18-24 and 25-34 cohorts, keep TikTok directionally increasing YoY for comparable periods unless raw data provides very strong contradictory evidence
 - Only include brands that appear in the raw data above — do not add new ones
 
 Respond with ONLY valid JSON (no markdown, no explanation):
@@ -26162,11 +26307,12 @@ def share_of_time_analyze():
                     and uses_genpop
                     and has_noisy_samples
                     and cdata.get('trend_guard_version', 0) >= SOT_TREND_GUARD_VERSION
+                    and cdata.get('brand_target_version', 0) >= SOT_BRAND_TARGET_VERSION
                 )
                 if has_all:
                     return jsonify({'success': True, 'data': cdata, 'from_cache': True})
                 else:
-                    print("[SOT] Stale run cache (missing noisy samples/genpop fields/shares/trend guard), re-computing...")
+                    print("[SOT] Stale run cache (missing noisy samples/genpop fields/shares/trend or brand target guard), re-computing...")
 
         age_in = ",".join(f"'{a}'" for a in age_brackets)
 
@@ -26378,6 +26524,17 @@ def share_of_time_analyze():
             total_est_minutes = sum(c['est_minutes'] for c in categories.values())
             total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
 
+        # --- Age/year brand target guard (requested cohort-specific TikTok calibration) ---
+        brand_target_applied, brand_target_note = _sot_apply_tiktok_age_year_guard(
+            categories,
+            start_date,
+            age_brackets,
+            projected_users_by_age,
+        )
+        if brand_target_applied:
+            total_est_minutes = sum(c['est_minutes'] for c in categories.values())
+            total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
+
         # --- Project to US gen pop scale ---
         projection_mult = SOT_US_POPULATION / SOT_PANEL_SIZE
 
@@ -26418,6 +26575,7 @@ def share_of_time_analyze():
                     'projected_hours': round(b_proj_min / 60),
                     'category_share_pct': round(100.0 * bv['est_minutes'] / c['est_minutes'], 2) if c['est_minutes'] else 0,
                     'overall_share_pct': round(100.0 * bv['est_minutes'] / total_est_minutes, 4) if total_est_minutes else 0,
+                    'estimated_users': int(round(total_projected_users * (100.0 * bv['est_minutes'] / c['est_minutes']) / 100.0)) if c['est_minutes'] else 0,
                 })
             min_total = min_per_day * num_days
 
@@ -26472,6 +26630,9 @@ def share_of_time_analyze():
             'trend_guard_version': SOT_TREND_GUARD_VERSION,
             'trend_guard_applied': trend_guard_applied,
             'trend_guard_note': trend_guard_note,
+            'brand_target_version': SOT_BRAND_TARGET_VERSION,
+            'brand_target_applied': brand_target_applied,
+            'brand_target_note': brand_target_note,
             'brand_affinity_applied': bool(brand_affinity),
             'categories': result_categories,
         }
