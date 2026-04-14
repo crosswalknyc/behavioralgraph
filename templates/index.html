@@ -46254,15 +46254,43 @@
                 });
             } else if (type === 'location') {
                 const locations = currentDashboardData.locations || [];
-                csvContent = `${profileName} - ${category}\n`;
-                csvContent += `DMA,Audience %,Gen Pop %,Index\n`;
                 const filteredLocs = category.includes('Over') 
                     ? locations.filter(l => l.index >= 100) 
                     : category.includes('Under')
                     ? locations.filter(l => l.index < 100)
                     : locations;
-                filteredLocs.forEach(loc => {
-                    csvContent += `"${normalizeDmaDisplay(loc.name)}",${loc.pct.toFixed(4)}%,${loc.genPopPct?.toFixed(4) || 0}%,${loc.index}\n`;
+
+                const sortKey = category.includes('Over') ? 'top' : category.includes('Under') ? 'bottom' : 'all';
+                const state = locationSortState[sortKey];
+                let sorted = [...filteredLocs];
+
+                if (state.column === 'rank') {
+                    sorted.sort((a, b) => {
+                        const diff = (getDMARank(a.name) || 999) - (getDMARank(b.name) || 999);
+                        return state.direction === 'asc' ? diff : -diff;
+                    });
+                } else if (state.column === 'target' || state.column === 'percentage' || state.column === 'profilerank') {
+                    sorted.sort((a, b) => {
+                        const diff = b.pct - a.pct;
+                        return state.direction === 'asc' ? -diff : diff;
+                    });
+                } else if (state.column === 'index') {
+                    sorted.sort((a, b) => {
+                        const diff = b.index - a.index;
+                        return state.direction === 'asc' ? -diff : diff;
+                    });
+                } else if (state.column === 'genpop') {
+                    sorted.sort((a, b) => {
+                        const diff = (b.genPopPct ?? 0) - (a.genPopPct ?? 0);
+                        return state.direction === 'asc' ? -diff : diff;
+                    });
+                }
+
+                csvContent = `${profileName} - ${category}\n`;
+                csvContent += `DMA Rank,DMA,Audience %,Gen Pop %,Index\n`;
+                sorted.forEach(loc => {
+                    const rank = getDMARank(loc.name) || '';
+                    csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${loc.pct.toFixed(4)}%,${loc.genPopPct?.toFixed(4) || 0}%,${loc.index}\n`;
                 });
             } else if (type === 'interests') {
                 // Interests: same structure as page - object of name -> { pct, genPopPct, index }; use allInterestsData if populated (matches grid), else currentDashboardData.interests
