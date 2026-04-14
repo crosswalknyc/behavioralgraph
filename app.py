@@ -25469,8 +25469,8 @@ SOT_GENPOP_AGE_PCT = {
     '45-54': 12.4, '55-64': 12.5, '65 or Older': 19.1,
 }
 SOT_AVG_MINUTES_BASELINE = {
-    'Streaming Video': 52, 'Streaming Music': 26, 'Games': 8,
-    'Betting': 12, 'Social Media': 6, 'vMVPD/FAST': 48,
+    'Streaming Video': 52, 'Streaming Music': 26, 'Games': 28,
+    'Betting': 12, 'Social Media': 14, 'vMVPD/FAST': 48,
 }
 SOT_WEIGHTS_S3_PREFIX = 'share-of-time-weights/'
 SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
@@ -25588,10 +25588,12 @@ Industry baseline (all-ages, all-time average): {baseline_text}
 
 Instructions:
 - Adjust the baseline for THIS specific cohort and time period.
-- Younger cohorts (under 34) spend more time on social media and games, less on vMVPD/FAST.
-- Older cohorts (55+) spend more on streaming video and vMVPD/FAST, less on games.
-- Model seasonal effects: Q4 = holiday streaming bump; Q1 = post-holiday dip; Q3 = summer outdoor dip in streaming.
-- Model year-over-year trends: social media session lengths growing ~5-8%/year; streaming video stable; vMVPD/FAST growing ~3-5%/year; games stable; betting growing ~4%/year during seasons.
+- Under-18 cohorts spend significantly more time on games (30-45 min/session for mobile + console) and social media (15-25 min/session with TikTok, Snapchat, Instagram). They spend less on vMVPD/FAST and betting (near zero for minors).
+- 18-34 cohorts spend more time on social media and games than older adults, moderate streaming video.
+- 35-54 cohorts are balanced across categories with peak streaming video engagement.
+- 55+ cohorts spend more on streaming video and vMVPD/FAST, significantly less on games and social media.
+- Model seasonal effects: Q4 = holiday streaming bump + school break gaming spike; Q1 = post-holiday dip; Q3 = summer outdoor dip in streaming but gaming stays steady for youth.
+- Model year-over-year trends: social media session lengths growing ~5-8%/year; streaming video stable; vMVPD/FAST growing ~3-5%/year; games growing ~3%/year especially in younger cohorts; betting growing ~4%/year during seasons.
 - If historical data is provided, maintain consistency — don't jump wildly between quarters.
 - Each value must be between 1 and 120 minutes.
 
