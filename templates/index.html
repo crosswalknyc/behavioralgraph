@@ -810,12 +810,7 @@
         #shareOfTimeIQView .sot-gran-btn.active { background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime)); color: #000; }
         #shareOfTimeIQView .sot-loading { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.9rem; }
         #shareOfTimeIQView .sot-loading .spinner { width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: sotSpin 0.6s linear infinite; margin-right: 0.6rem; }
-        #shareOfTimeIQView .sot-tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--border-color); margin-bottom: 0.75rem; overflow-x: auto; }
-        #shareOfTimeIQView .sot-tab { display: flex; align-items: center; gap: 0.35rem; padding: 0.5rem 1rem; font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: all 0.15s; }
-        #shareOfTimeIQView .sot-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
-        #shareOfTimeIQView .sot-tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
-        #shareOfTimeIQView .sot-tab .sot-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; font-size: 11px; line-height: 1; cursor: pointer; color: var(--text-secondary); transition: all 0.15s; }
-        #shareOfTimeIQView .sot-tab .sot-tab-close:hover { background: rgba(239,68,68,0.3); color: #ef4444; }
+        #shareOfTimeIQView .sot-tab-bar { margin-bottom: 0.5rem; }
         #shareOfTimeIQView .sot-compare-grid { display: grid; gap: 1rem; margin-bottom: 1rem; }
         #shareOfTimeIQView .sot-compare-col { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; overflow: hidden; }
         #shareOfTimeIQView .sot-compare-col h4 { font-size: 0.82rem; margin: 0 0 0.5rem; color: var(--accent-cyan); }
@@ -15990,7 +15985,7 @@
                             <button type="button" class="sot-compare-btn" id="sotCompareBtn" onclick="sotToggleCompare()" disabled title="Open 2+ tabs to compare">Compare Open Tabs</button>
                         </div>
                     </div>
-                    <div id="sotTabBar" class="sot-tab-bar" style="display:none;"></div>
+                    <div id="sotTabBar" class="profile-tabs-bar sot-tab-bar" style="display:none;"></div>
                     <div id="sotCompareArea" style="display:none;"></div>
                     <div id="sotResultsArea" style="display:none;">
                         <div class="sot-kpi-grid" style="grid-template-columns:repeat(4,1fr);">
@@ -23743,11 +23738,11 @@
             compareBtn.disabled = _sotOpenTabs.length < 2;
             var html = '';
             _sotOpenTabs.forEach(function(t, i) {
-                var cls = 'sot-tab' + (i === _sotActiveTabIdx && !_sotCompareMode ? ' active' : '');
+                var cls = 'profile-tab' + (i === _sotActiveTabIdx && !_sotCompareMode ? ' active' : '');
                 var label = _sotTabLabel(t.data);
                 html += '<div class="' + cls + '" onclick="sotSwitchTab(' + i + ')">' +
-                    '<span>' + label + '</span>' +
-                    '<span class="sot-tab-close" onclick="sotCloseTab(' + i + ', event)">&times;</span>' +
+                    '<span class="profile-tab-name">' + label + '</span>' +
+                    '<button class="profile-tab-close" onclick="sotCloseTab(' + i + ', event)" title="Close tab">&times;</button>' +
                 '</div>';
             });
             bar.innerHTML = html;
