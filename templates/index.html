@@ -12648,7 +12648,7 @@
                                 <div class="form-group" style="margin-bottom: 1rem;">
                                     <label>Select profile</label>
                                     <div style="position: relative;">
-                                        <input type="search" id="profileRerunSearch" placeholder="Type to search profiles..." autocomplete="new-password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="width: 100%; padding: 0.5rem; padding-right: 2rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                        <input type="search" id="profileRerunSearch" placeholder="Type to search profiles..." onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="width: 100%; padding: 0.5rem; padding-right: 2rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                                         <select id="profileRerunSelect" size="8" style="width: 100%; margin-top: 0.25rem; padding: 0.25rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); display: none;"></select>
                                         <div id="profileRerunDropdown" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); margin-top: 0.25rem; display: none;"></div>
                                     </div>
@@ -14418,7 +14418,7 @@
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="search" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" autocomplete="new-password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
+                            <input type="search" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
                             <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh profile list from S3 (new uploads will appear)" onclick="refreshDashboardProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                         </div>
                     </div>
@@ -15591,7 +15591,7 @@
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="search" id="subscriberProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search shows by name or category." onkeyup="filterSubscriberProfiles()" autocomplete="new-password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
+                            <input type="search" id="subscriberProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search shows by name or category." onkeyup="filterSubscriberProfiles()" onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
                             <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh show list from S3" onclick="refreshSubscriberProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                         </div>
                     </div>
@@ -18328,6 +18328,14 @@
         document.addEventListener('DOMContentLoaded', async function() {
             // Apply live feature visibility immediately (View Numbers stays hidden until API says on)
             if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
+
+            // Clear any Chrome-autofilled values from profile search inputs
+            setTimeout(function() {
+                ['dashProfileSearchInput', 'subscriberProfileSearchInput', 'profileRerunSearch'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el && el.value) { el.value = ''; }
+                });
+            }, 100);
             
             const startDateInput = document.getElementById('start_date');
             const endDateInput = document.getElementById('end_date');
