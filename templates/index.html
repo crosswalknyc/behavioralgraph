@@ -811,6 +811,7 @@
         #shareOfTimeIQView .sot-loading { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.9rem; }
         #shareOfTimeIQView .sot-loading .spinner { width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: sotSpin 0.6s linear infinite; margin-right: 0.6rem; }
         #shareOfTimeIQView .sot-tab-bar { margin-bottom: 0.5rem; }
+        #shareOfTimeIQView .sot-tab-bar .profile-tab { max-width: none; }
         #shareOfTimeIQView .sot-compare-grid { display: grid; gap: 1rem; margin-bottom: 1rem; }
         #shareOfTimeIQView .sot-compare-col { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; overflow: hidden; }
         #shareOfTimeIQView .sot-compare-col h4 { font-size: 0.82rem; margin: 0 0 0.5rem; color: var(--accent-cyan); }
@@ -12647,7 +12648,7 @@
                                 <div class="form-group" style="margin-bottom: 1rem;">
                                     <label>Select profile</label>
                                     <div style="position: relative;">
-                                        <input type="search" id="profileRerunSearch" placeholder="Type to search profiles..." autocomplete="new-password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="width: 100%; padding: 0.5rem; padding-right: 2rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                        <input type="search" id="profileRerunSearch" placeholder="Type to search profiles..." onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="width: 100%; padding: 0.5rem; padding-right: 2rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                                         <select id="profileRerunSelect" size="8" style="width: 100%; margin-top: 0.25rem; padding: 0.25rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); display: none;"></select>
                                         <div id="profileRerunDropdown" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); margin-top: 0.25rem; display: none;"></div>
                                     </div>
@@ -14417,7 +14418,7 @@
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="search" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" autocomplete="new-password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
+                            <input type="search" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
                             <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh profile list from S3 (new uploads will appear)" onclick="refreshDashboardProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                         </div>
                     </div>
@@ -15590,7 +15591,7 @@
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="search" id="subscriberProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search shows by name or category." onkeyup="filterSubscriberProfiles()" autocomplete="new-password" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
+                            <input type="search" id="subscriberProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search shows by name or category." onkeyup="filterSubscriberProfiles()" onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="flex: 1;">
                             <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh show list from S3" onclick="refreshSubscriberProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                         </div>
                     </div>
@@ -18327,6 +18328,14 @@
         document.addEventListener('DOMContentLoaded', async function() {
             // Apply live feature visibility immediately (View Numbers stays hidden until API says on)
             if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
+
+            // Clear any Chrome-autofilled values from profile search inputs
+            setTimeout(function() {
+                ['dashProfileSearchInput', 'subscriberProfileSearchInput', 'profileRerunSearch'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el && el.value) { el.value = ''; }
+                });
+            }, 100);
             
             const startDateInput = document.getElementById('start_date');
             const endDateInput = document.getElementById('end_date');
@@ -23860,9 +23869,12 @@
                 if (!canvas || typeof Chart === 'undefined') return;
 
                 var allBrands = {};
+                var tabCatShares = [];
                 tabs.forEach(function(t) {
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
-                    if (cat && cat.brands) {
+                    var catShare = cat ? (cat[shareKey] || 0) : 0;
+                    tabCatShares.push(catShare);
+                    if (cat && cat.brands && catShare >= 0.5) {
                         cat.brands.forEach(function(b) {
                             if (!allBrands[b.name]) allBrands[b.name] = 0;
                             allBrands[b.name] = Math.max(allBrands[b.name], b.category_share_pct || 0);
@@ -23870,13 +23882,15 @@
                     }
                 });
                 var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
+                if (!brandNames.length) return;
 
                 var catDS = [];
                 tabs.forEach(function(t, i) {
                     var label = _sotTabLabel(t.data);
+                    var negligible = tabCatShares[i] < 0.5;
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
                     var brandMap = {};
-                    if (cat && cat.brands) cat.brands.forEach(function(b) { brandMap[b.name] = b; });
+                    if (cat && cat.brands && !negligible) cat.brands.forEach(function(b) { brandMap[b.name] = b; });
                     var vals = brandNames.map(function(bn) {
                         var b = brandMap[bn];
                         return b ? (b.category_share_pct || 0) : 0;
@@ -23900,6 +23914,7 @@
                         plugins: {
                             legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 10 }, padding: 12, usePointStyle: true } },
                             tooltip: { callbacks: { label: function(ctx) {
+                                if (ctx.parsed.x === 0 && tabCatShares[ctx.datasetIndex] < 0.5) return ctx.dataset.label + ': N/A (category < 0.5% for this cohort)';
                                 return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName;
                             } } },
                             datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
