@@ -810,15 +810,111 @@
         #shareOfTimeIQView .sot-gran-btn.active { background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime)); color: #000; }
         #shareOfTimeIQView .sot-loading { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.9rem; }
         #shareOfTimeIQView .sot-loading .spinner { width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: sotSpin 0.6s linear infinite; margin-right: 0.6rem; }
-        #shareOfTimeIQView .sot-tab-bar { margin-bottom: 0.5rem; }
-        #shareOfTimeIQView .sot-tab-bar .profile-tab { max-width: none; }
-        #shareOfTimeIQView #sotRunTree .profile-select-item {
+        #shareOfTimeIQView .sot-tab-bar {
+            margin-bottom: 0.65rem;
+            min-height: 2.25rem;
+            align-items: stretch;
+            position: sticky;
+            top: 0;
+            z-index: 8;
+            background: linear-gradient(180deg, rgba(10,25,41,0.98), rgba(10,25,41,0.92));
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding: 0.15rem 0.1rem 0.25rem;
+        }
+        #shareOfTimeIQView .sot-tab-bar .profile-tab {
+            max-width: none;
+            border-radius: 8px;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-run-item {
+            padding: 0.65rem 0.7rem;
+            margin-bottom: 0.45rem;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.02);
             white-space: normal;
             overflow: visible;
             text-overflow: unset;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-run-item:hover {
+            border-color: rgba(102, 217, 239, 0.45);
+            background: rgba(102, 217, 239, 0.08);
+        }
+        #shareOfTimeIQView #sotRunTree .sot-run-item.active {
+            border-color: rgba(102, 217, 239, 0.9);
+            background: rgba(102, 217, 239, 0.18);
+        }
+        #shareOfTimeIQView #sotRunTree .sot-run-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.45rem;
+            margin-bottom: 0.2rem;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-run-date {
+            font-weight: 700;
+            font-size: 0.94rem;
+            line-height: 1.2;
+            color: var(--text-primary);
+        }
+        #shareOfTimeIQView #sotRunTree .sot-run-meta {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.35rem 0.6rem;
+            align-items: start;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-run-ages {
+            font-size: 0.76rem;
+            color: var(--text-secondary);
             line-height: 1.25;
-            word-break: break-word;
-            overflow-wrap: anywhere;
+            overflow-wrap: break-word;
+            word-break: normal;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-run-users {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            text-align: right;
+            white-space: nowrap;
+            align-self: center;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-tree-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.42rem 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-primary);
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.02);
+            margin-bottom: 0.35rem;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-tree-row:hover {
+            background: rgba(102,217,239,0.08);
+            border-color: rgba(102,217,239,0.45);
+        }
+        #shareOfTimeIQView #sotRunTree .sot-tree-year {
+            font-weight: 700;
+            font-size: 0.86rem;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-tree-range {
+            font-weight: 600;
+            font-size: 0.78rem;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-tree-chevron {
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            min-width: 0.8rem;
+            text-align: center;
+        }
+        #shareOfTimeIQView #sotRunTree .sot-tree-children {
+            margin-left: 0.55rem;
+            padding-left: 0.55rem;
+            border-left: 1px dashed rgba(255,255,255,0.14);
+            margin-bottom: 0.45rem;
         }
         #shareOfTimeIQView .sot-compare-grid { display: grid; gap: 1rem; margin-bottom: 1rem; }
         #shareOfTimeIQView .sot-compare-col { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; overflow: hidden; }
@@ -23657,6 +23753,8 @@
         var _sotOpenTabs = [];
         var _sotActiveTabIdx = -1;
         var _sotCompareMode = false;
+        var _sotExpandedYears = {};
+        var _sotExpandedRanges = {};
 
         function _sotTabKey(d) { return d.start_date + '|' + d.end_date + '|' + (d.age_brackets||[]).slice().sort().join(','); }
         function _sotTabLabel(d) {
@@ -23686,6 +23784,30 @@
 
         function sotFilterRuns() { sotRenderRunTree(); }
 
+        function _sotFmtDateShort(isoDate) {
+            if (!isoDate || typeof isoDate !== 'string') return isoDate || '';
+            var p = isoDate.split('-');
+            if (p.length !== 3) return isoDate;
+            return p[1] + '-' + p[2] + '-' + p[0].slice(2);
+        }
+
+        function _sotYearLabel(run) {
+            var s = (run.start_date || '').slice(0, 4);
+            var e = (run.end_date || '').slice(0, 4);
+            if (!s) return 'Unknown';
+            return s === e ? s : (s + '-' + e);
+        }
+
+        function sotToggleRunYear(yearLabel) {
+            _sotExpandedYears[yearLabel] = !_sotExpandedYears[yearLabel];
+            sotRenderRunTree();
+        }
+
+        function sotToggleRunRange(rangeId) {
+            _sotExpandedRanges[rangeId] = !_sotExpandedRanges[rangeId];
+            sotRenderRunTree();
+        }
+
         function sotRenderRunTree() {
             var tree = document.getElementById('sotRunTree');
             var search = (document.getElementById('sotRunSearch').value || '').toLowerCase();
@@ -23701,22 +23823,67 @@
                 return;
             }
             var openKeys = _sotOpenTabs.map(function(t) { return _sotTabKey(t.data); });
-            var html = '';
+            var grouped = {};
             runs.forEach(function(r) {
-                var ages = (r.age_brackets || []).join(', ');
-                var label = r.start_date + ' to ' + r.end_date;
-                var sub = ages;
-                var users = r.matched_users ? r.matched_users.toLocaleString() + ' users' : '';
-                var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
-                var isOpen = openKeys.indexOf(rKey) !== -1;
-                var isActive = _sotSelectedRunKey === r.s3_key;
-                var cls = 'profile-select-item' + (isActive ? ' active' : '');
-                var openBadge = isOpen ? '<span style="font-size:0.6rem;background:var(--accent-cyan);color:#000;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:700;">TAB</span>' : '';
-                html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
-                    '<div style="font-weight:600;font-size:0.78rem;display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' + label + openBadge + '</div>' +
-                    '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:2px;">' + sub + '</div>' +
-                    (users ? '<div style="font-size:0.65rem;color:var(--accent-lime);margin-top:1px;">' + users + '</div>' : '') +
+                var y = _sotYearLabel(r);
+                if (!grouped[y]) grouped[y] = {};
+                var rk = (r.start_date || '') + '|' + (r.end_date || '');
+                if (!grouped[y][rk]) grouped[y][rk] = { start: r.start_date, end: r.end_date, runs: [] };
+                grouped[y][rk].runs.push(r);
+            });
+
+            var years = Object.keys(grouped).sort(function(a, b) {
+                var ay = parseInt((a.split('-')[0] || '0'), 10);
+                var by = parseInt((b.split('-')[0] || '0'), 10);
+                return by - ay;
+            });
+
+            var html = '';
+            years.forEach(function(year) {
+                var yearOpen = !!_sotExpandedYears[year];
+                var yearArg = year.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                html += '<div class="sot-tree-row" onclick="sotToggleRunYear(\'' + yearArg + '\')">' +
+                    '<div class="sot-tree-year">' + year + '</div>' +
+                    '<div class="sot-tree-chevron">' + (yearOpen ? '▼' : '▶') + '</div>' +
                 '</div>';
+                if (!yearOpen) return;
+
+                var ranges = Object.keys(grouped[year]).sort(function(a, b) {
+                    return (grouped[year][b].end || '').localeCompare(grouped[year][a].end || '');
+                });
+                html += '<div class="sot-tree-children">';
+                ranges.forEach(function(rangeKey) {
+                    var g = grouped[year][rangeKey];
+                    var rangeId = year + '||' + rangeKey;
+                    var rangeOpen = !!_sotExpandedRanges[rangeId];
+                    var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    var rangeLabel = _sotFmtDateShort(g.start) + ' - ' + _sotFmtDateShort(g.end);
+                    html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
+                        '<div class="sot-tree-range">' + rangeLabel + '</div>' +
+                        '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
+                    '</div>';
+                    if (!rangeOpen) return;
+
+                    html += '<div class="sot-tree-children">';
+                    g.runs.forEach(function(r) {
+                        var ages = (r.age_brackets || []).join(', ');
+                        var users = r.matched_users ? r.matched_users.toLocaleString() + ' users' : '';
+                        var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
+                        var isOpen = openKeys.indexOf(rKey) !== -1;
+                        var isActive = _sotSelectedRunKey === r.s3_key;
+                        var cls = 'profile-select-item sot-run-item' + (isActive ? ' active' : '');
+                        var openBadge = isOpen ? '<span style="font-size:0.62rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:0.04em;">TAB</span>' : '';
+                        html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
+                            '<div class="sot-run-top"><div class="sot-run-date">' + ages + '</div>' + openBadge + '</div>' +
+                            '<div class="sot-run-meta">' +
+                                '<div class="sot-run-ages"></div>' +
+                                (users ? '<div class="sot-run-users">' + users + '</div>' : '<div></div>') +
+                            '</div>' +
+                        '</div>';
+                    });
+                    html += '</div>';
+                });
+                html += '</div>';
             });
             tree.innerHTML = html;
         }
@@ -23772,11 +23939,11 @@
             var compareBtn = document.getElementById('sotCompareBtn');
             if (_sotOpenTabs.length === 0) {
                 bar.style.display = 'none';
-                compareBtn.disabled = true;
+                if (compareBtn) compareBtn.disabled = true;
                 return;
             }
             bar.style.display = 'flex';
-            compareBtn.disabled = _sotOpenTabs.length < 2;
+            if (compareBtn) compareBtn.disabled = _sotOpenTabs.length < 2;
             var html = '';
             if (_sotCompareMode) {
                 html += '<div class="profile-tab active" style="cursor:default;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6;"><span class="profile-tab-name">Comparing ' + _sotOpenTabs.length + ' Runs</span></div>';
