@@ -786,6 +786,10 @@
         #shareOfTimeIQView .sot-age-chip:hover { border-color: var(--accent-cyan); }
         #shareOfTimeIQView .sot-age-chip.active { background: rgba(0,210,255,0.15); border-color: var(--accent-cyan); color: var(--text-primary); }
         #shareOfTimeIQView .sot-age-chip input { display: none; }
+        .iq-sot-age-chip { display: flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.65rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 20px; cursor: pointer; font-size: 0.8rem; color: var(--text-secondary); transition: all 0.15s; user-select: none; }
+        .iq-sot-age-chip:hover { border-color: var(--accent-cyan); }
+        .iq-sot-age-chip.active { background: rgba(0,210,255,0.15); border-color: var(--accent-cyan); color: var(--text-primary); }
+        .iq-sot-age-chip input { display: none; }
         #shareOfTimeIQView .sot-run-btn { padding: 0.5rem 1.5rem; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime)); border: none; border-radius: 8px; color: #000; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: opacity 0.2s; white-space: nowrap; }
         #shareOfTimeIQView .sot-run-btn:hover { opacity: 0.85; }
         #shareOfTimeIQView .sot-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -12731,6 +12735,11 @@
                         🔄 Flywheel Conversion <span style="font-size: 0.7em; opacity: 0.9;">(25 credits)</span>
                     </button>
                     {% endif %}
+                    {% if has_share_of_time_access or role == 'super_admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('share-of-time')" id="customAnalysisTabShareOfTime">
+                        ⏱️ Share of Time
+                    </button>
+                    {% endif %}
                 </div>
             </div>
             
@@ -14309,6 +14318,42 @@
                             <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                                 <button type="button" class="btn" style="width: 100%; background: var(--accent-primary); color: white;" onclick="showFlywheelConversionDashboard()">📊 Open Flywheel Dashboard</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Share of Time Tab Content -->
+                <div id="customAnalysisTabContentShareOfTime" class="custom-analysis-tab-content">
+                    <div class="card" style="max-width: 900px;">
+                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+                            <span style="font-size:1.5rem;">⏱️</span>
+                            <div>
+                                <h2 style="margin:0;font-size:1.2rem;">Share of Time</h2>
+                                <span style="color:var(--text-secondary);font-size:0.8rem;">Analyze how time is distributed across entertainment categories</span>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:1rem;align-items:flex-end;flex-wrap:wrap;">
+                            <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                                <label style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Start Date</label>
+                                <input type="date" id="iqSotStartDate" style="padding:0.45rem 0.6rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:0.85rem;">
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                                <label style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">End Date</label>
+                                <input type="date" id="iqSotEndDate" style="padding:0.45rem 0.6rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:0.85rem;">
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:0.3rem;flex:1;">
+                                <label style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Age Range</label>
+                                <div id="iqSotAgeGrid" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="17 and Under" checked>Under 18</label>
+                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="18-24" checked>18-24</label>
+                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="25-34" checked>25-34</label>
+                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="35-44" checked>35-44</label>
+                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="45-54" checked>45-54</label>
+                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="55-64" checked>55-64</label>
+                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="65 or Older" checked>65+</label>
+                                </div>
+                            </div>
+                            <button type="button" id="iqSotRunBtn" onclick="iqSotRunAnalysis()" style="padding:0.5rem 1.5rem;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-lime));border:none;border-radius:8px;color:#000;font-weight:700;font-size:0.85rem;cursor:pointer;white-space:nowrap;">Run Analysis</button>
                         </div>
                     </div>
                 </div>
@@ -22539,7 +22584,8 @@
             const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater',
                            'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow',
                            'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker', 'customAnalysisTabSFLFConversion',
-                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabTalentFit', 'customAnalysisTabFlywheelConversion'];
+                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabTalentFit', 'customAnalysisTabFlywheelConversion',
+                           'customAnalysisTabShareOfTime'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -22551,7 +22597,8 @@
                                'customAnalysisTabContentCampaignROI', 'customAnalysisTabContentCrossShow',
                                'customAnalysisTabContentWatchTime', 'customAnalysisTabContentTicketSalesTracker',
                                'customAnalysisTabContentSFLFConversion', 'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ',
-                               'customAnalysisTabContentTalentFit', 'customAnalysisTabContentFlywheelConversion'];
+                               'customAnalysisTabContentTalentFit', 'customAnalysisTabContentFlywheelConversion',
+                               'customAnalysisTabContentShareOfTime'];
             contentIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -22652,6 +22699,11 @@
                 if (endDateEl && !endDateEl.value) {
                     endDateEl.value = new Date().toISOString().split('T')[0];
                 }
+            } else if (tabName === 'share-of-time') {
+                const tab = document.getElementById('customAnalysisTabShareOfTime');
+                const content = document.getElementById('customAnalysisTabContentShareOfTime');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
             }
         }
         
@@ -23549,6 +23601,46 @@
             sotApplyRunAccessVisibility();
             sotLoadRuns();
         };
+
+        // --- Analysis IQ: Share of Time tab ---
+        (function() {
+            var chips = document.querySelectorAll('#iqSotAgeGrid .iq-sot-age-chip');
+            chips.forEach(function(chip) {
+                chip.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var cb = chip.querySelector('input');
+                    cb.checked = !cb.checked;
+                    chip.classList.toggle('active', cb.checked);
+                });
+            });
+        })();
+
+        function iqSotRunAnalysis() {
+            var start = document.getElementById('iqSotStartDate')?.value;
+            var end = document.getElementById('iqSotEndDate')?.value;
+            if (!start || !end) { alert('Please select both start and end dates.'); return; }
+            var checks = document.querySelectorAll('#iqSotAgeGrid input:checked');
+            if (!checks.length) { alert('Please select at least one age bracket.'); return; }
+
+            var sotStart = document.getElementById('sotStartDate');
+            var sotEnd = document.getElementById('sotEndDate');
+            if (sotStart) sotStart.value = start;
+            if (sotEnd) sotEnd.value = end;
+
+            var sotChips = document.querySelectorAll('#sotAgeGrid .sot-age-chip');
+            var selectedAges = new Set();
+            checks.forEach(function(c) { selectedAges.add(c.value); });
+            sotChips.forEach(function(chip) {
+                var cb = chip.querySelector('input');
+                if (cb) {
+                    cb.checked = selectedAges.has(cb.value);
+                    chip.classList.toggle('active', cb.checked);
+                }
+            });
+
+            showShareOfTimeIQ();
+            sotRunAnalysis();
+        }
 
         function sotRunAnalysis(forceRefresh) {
             if (!window.hasShareOfTimeRunAccess) {
