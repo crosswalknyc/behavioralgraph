@@ -950,6 +950,48 @@
         #shareOfTimeIQView .sot-cmp-mover-cat { font-size: 0.62rem; color: var(--text-secondary); }
         #shareOfTimeIQView .sot-cmp-mover-vals { font-size: 0.72rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
         #shareOfTimeIQView .sot-cmp-section-title { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin: 0 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border-color); }
+
+        /* --- Interactive compare enhancements --- */
+        #shareOfTimeIQView .sot-cmp-cat-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin-bottom: 1.25rem; }
+        #shareOfTimeIQView .sot-cmp-cat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.7rem 0.8rem; cursor: pointer; transition: all 0.2s ease; position: relative; overflow: hidden; }
+        #shareOfTimeIQView .sot-cmp-cat-card:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+        #shareOfTimeIQView .sot-cmp-cat-card.active { border-color: rgba(255,255,255,0.3); box-shadow: 0 0 12px rgba(139,92,246,0.25); }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-name { font-size: 0.72rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-val { font-size: 1.15rem; font-weight: 800; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-sub { font-size: 0.6rem; color: var(--text-secondary); margin-top: 0.2rem; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-bar { position: absolute; bottom: 0; left: 0; height: 3px; border-radius: 0 0 10px 10px; transition: width 0.3s ease; }
+
+        #shareOfTimeIQView .sot-cmp-table th.sortable { cursor: pointer; user-select: none; transition: color 0.15s; }
+        #shareOfTimeIQView .sot-cmp-table th.sortable:hover { color: var(--accent-cyan); }
+        #shareOfTimeIQView .sot-cmp-table th .sort-arrow { font-size: 0.55rem; margin-left: 3px; opacity: 0.3; }
+        #shareOfTimeIQView .sot-cmp-table th.sort-active .sort-arrow { opacity: 1; color: var(--accent-cyan); }
+
+        #shareOfTimeIQView .sot-cmp-table tr.expandable { cursor: pointer; }
+        #shareOfTimeIQView .sot-cmp-table tr.expandable:hover td { background: rgba(255,255,255,0.03); }
+        #shareOfTimeIQView .sot-cmp-table tr.expandable .expand-chevron { display: inline-block; font-size: 0.55rem; margin-right: 4px; transition: transform 0.2s; color: var(--text-secondary); }
+        #shareOfTimeIQView .sot-cmp-table tr.expandable.expanded .expand-chevron { transform: rotate(90deg); }
+        #shareOfTimeIQView .sot-cmp-table tr.expand-row td { padding: 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        #shareOfTimeIQView .sot-cmp-table tr.expand-row .expand-inner { overflow: hidden; transition: max-height 0.3s ease, opacity 0.3s ease; max-height: 0; opacity: 0; }
+        #shareOfTimeIQView .sot-cmp-table tr.expand-row.open .expand-inner { max-height: 500px; opacity: 1; }
+        #shareOfTimeIQView .sot-cmp-expand-brands { padding: 0.4rem 0.6rem 0.6rem 1.6rem; }
+        #shareOfTimeIQView .sot-cmp-expand-brands table { width: 100%; font-size: 0.72rem; border-collapse: collapse; }
+        #shareOfTimeIQView .sot-cmp-expand-brands td { padding: 0.2rem 0.4rem; color: var(--text-secondary); }
+        #shareOfTimeIQView .sot-cmp-expand-brands td:first-child { color: var(--text-primary); font-weight: 600; }
+        #shareOfTimeIQView .sot-cmp-expand-brands td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+        [data-sot-cat].sot-cat-dim { opacity: 0.25; transition: opacity 0.2s; }
+        [data-sot-cat].sot-cat-glow { background: rgba(139,92,246,0.08) !important; transition: background 0.2s; }
+        #shareOfTimeIQView .sot-cmp-mover-row[data-sot-cat].sot-cat-glow { background: rgba(139,92,246,0.12); border-radius: 4px; }
+
+        #shareOfTimeIQView .sot-sparkline { display: inline-block; vertical-align: middle; margin-left: 5px; }
+        #shareOfTimeIQView .sot-sparkline svg { vertical-align: middle; }
+
+        #shareOfTimeIQView .sot-focus-bar { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+        #shareOfTimeIQView .sot-focus-btn { background: transparent; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.3rem 0.7rem; font-size: 0.68rem; color: var(--text-secondary); cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; transition: all 0.2s; }
+        #shareOfTimeIQView .sot-focus-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text-primary); }
+        #shareOfTimeIQView .sot-focus-btn.active { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.4); color: #c4b5fd; }
+        .sot-cmp-focus-hide { display: none !important; }
+
         @keyframes sotSpin { to { transform: rotate(360deg); } }
         #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #llmoIQView .llmo-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
@@ -23905,7 +23947,7 @@
         function _sotTabKey(d) { return d.start_date + '|' + d.end_date + '|' + (d.age_brackets||[]).slice().sort().join(','); }
         function _sotTabLabel(d) {
             var ages = (d.age_brackets || []);
-            var ageStr = ages.length > 2 ? ages[0] + ' +' + (ages.length-1) : ages.join(', ');
+            var ageStr = ages.length >= 7 ? 'All Ages' : ages.length > 2 ? ages[0] + ' +' + (ages.length-1) : ages.join(', ');
             var dateLabel = _sotQuarterLabel(d.start_date, d.end_date) || (_sotFmtDateShort(d.start_date) + ' \u2013 ' + _sotFmtDateShort(d.end_date));
             return dateLabel + ' · ' + ageStr;
         }
@@ -24193,6 +24235,24 @@
             return '<span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(diff).toFixed(1) + 'pp</span>';
         }
 
+        var _sotCmpFocusMode = false;
+
+        function _sotSparklineSVG(vals, color) {
+            if (!vals || vals.length < 3) return '';
+            var w = 36, h = 12, pad = 1;
+            var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+            var range = mx - mn || 1;
+            var pts = vals.map(function(v, i) {
+                var x = pad + (i / (vals.length - 1)) * (w - 2 * pad);
+                var y = pad + (1 - (v - mn) / range) * (h - 2 * pad);
+                return x.toFixed(1) + ',' + y.toFixed(1);
+            });
+            return '<span class="sot-sparkline"><svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+                '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<circle cx="' + pts[pts.length - 1].split(',')[0] + '" cy="' + pts[pts.length - 1].split(',')[1] + '" r="1.5" fill="' + color + '"/>' +
+                '</svg></span>';
+        }
+
         function sotRenderCompare() {
             _sotDestroyCompareCharts();
             var area = document.getElementById('sotCompareArea');
@@ -24222,14 +24282,27 @@
                 return bSum - aSum;
             });
 
+            var _catShareVals = {};
+            catNames.forEach(function(cn) {
+                _catShareVals[cn] = tabs.map(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    return cat ? (cat[shareKey] || 0) : 0;
+                });
+            });
+
             var html = '';
 
-            // --- Granularity toggle ---
-            html += '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:1rem;">' +
+            // --- Top bar: granularity + focus toggle ---
+            html += '<div class="sot-focus-bar">';
+            html += '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:0;">' +
                 '<button class="sot-gran-btn' + (gran==='session'?' active':'') + '" onclick="sotSetCompareGran(\'session\')">Per Session</button>' +
                 '<button class="sot-gran-btn' + (gran==='daily'?' active':'') + '" onclick="sotSetCompareGran(\'daily\')">Per Day</button>' +
                 '<button class="sot-gran-btn' + (gran==='total'?' active':'') + '" onclick="sotSetCompareGran(\'total\')">Total Time Frame</button>' +
             '</div>';
+            html += '<button class="sot-focus-btn' + (_sotCmpFocusMode ? ' active' : '') + '" onclick="sotToggleFocusMode()" title="Hide summary cards and show only detail tables">FOCUS</button>';
+            html += '</div>';
+
+            var focusHide = _sotCmpFocusMode ? ' sot-cmp-focus-hide' : '';
 
             // === SECTION 1: KPI Comparison Cards ===
             var kpiMetrics = [
@@ -24238,7 +24311,7 @@
                 { label: 'Projected US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
                 { label: 'Adj. Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
             ];
-            html += '<div class="sot-cmp-kpi-grid" style="grid-template-columns:repeat(' + tabs.length + ',1fr);">';
+            html += '<div class="sot-cmp-kpi-grid' + focusHide + '" id="sotCmpKpiSection" style="grid-template-columns:repeat(' + tabs.length + ',1fr);">';
             tabs.forEach(function(t, ti) {
                 var lbl = _sotTabLabel(t.data);
                 var hue = _sotTabHue(ti);
@@ -24253,6 +24326,24 @@
                     if (ti > 0) html += ' ' + _sotCmpDelta(val, baseVal);
                     html += '</div></div>';
                 });
+                html += '</div>';
+            });
+            html += '</div>';
+
+            // === SECTION 1b: Clickable Category Cards ===
+            html += '<div class="sot-cmp-cat-cards' + focusHide + '" id="sotCmpCatCards">';
+            catNames.forEach(function(cn) {
+                var vals = _catShareVals[cn];
+                var col = _sotCatColors[cn] || '#888';
+                var newestVal = vals[0] || 0;
+                var delta = tabs.length >= 2 ? vals[0] - vals[vals.length - 1] : 0;
+                var deltaHtml = tabs.length >= 2 ? _sotCmpDeltaPP(vals[0], vals[vals.length - 1]) : '';
+                var spark = tabs.length >= 3 ? _sotSparklineSVG(vals.slice().reverse(), col) : '';
+                var catId = cn.replace(/[^a-zA-Z]/g, '');
+                html += '<div class="sot-cmp-cat-card" data-sot-cat="' + cn + '" onclick="sotDrillCategory(\'' + catId + '\',this)">';
+                html += '<div class="ccard-name">' + cn + '</div>';
+                html += '<div class="ccard-val" style="color:' + col + ';">' + newestVal.toFixed(1) + '% ' + deltaHtml + ' ' + spark + '</div>';
+                html += '<div class="ccard-bar" style="width:' + Math.min(100, newestVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
                 html += '</div>';
             });
             html += '</div>';
@@ -24292,13 +24383,13 @@
                 var newestLabel = _sotTabLabel(newest);
                 var oldestLabel = _sotTabLabel(base);
 
-                html += '<div class="sot-cmp-movers">';
+                html += '<div class="sot-cmp-movers' + focusHide + '" id="sotCmpMoversSection">';
                 html += '<div class="sot-cmp-mover-card"><h4>Category Shifts</h4>';
                 html += '<div style="font-size:0.62rem;color:var(--text-secondary);margin-bottom:0.5rem;">' + newestLabel + ' vs ' + oldestLabel + '</div>';
                 catMovers.forEach(function(m) {
                     var cls = m.delta > 0 ? 'up' : m.delta < 0 ? 'down' : 'neutral';
                     var arrow = m.delta > 0 ? '▲' : m.delta < 0 ? '▼' : '–';
-                    html += '<div class="sot-cmp-mover-row">' +
+                    html += '<div class="sot-cmp-mover-row" data-sot-cat="' + m.name + '">' +
                         '<div class="sot-cmp-mover-name">' + m.name + '</div>' +
                         '<div class="sot-cmp-mover-vals">' + m.baseVal.toFixed(1) + '% → ' + m.lastVal.toFixed(1) + '%</div>' +
                         '<span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(m.delta).toFixed(1) + 'pp</span>' +
@@ -24315,7 +24406,7 @@
                     var cls = m.delta > 0 ? 'up' : 'down';
                     var arrow = m.delta > 0 ? '▲' : '▼';
                     var catCol = _sotCatColors[m.category] || '#888';
-                    html += '<div class="sot-cmp-mover-row">' +
+                    html += '<div class="sot-cmp-mover-row" data-sot-cat="' + m.category + '">' +
                         '<div style="flex:1;"><span class="sot-cmp-mover-name">' + m.name + '</span> <span class="sot-cmp-mover-cat" style="color:' + catCol + ';">' + m.category + '</span></div>' +
                         '<div class="sot-cmp-mover-vals">' + m.baseVal.toFixed(1) + '% → ' + m.lastVal.toFixed(1) + '%</div>' +
                         '<span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(m.delta).toFixed(1) + 'pp</span>' +
@@ -24330,36 +24421,67 @@
                 '<div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div>' +
             '</div>';
 
-            // === SECTION 3b: Category Detail Table ===
+            // === SECTION 3b: Category Detail Table (sortable + expandable) ===
+            var colCount = tabs.length + 1 + (tabs.length >= 2 ? 1 : 0);
             html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;overflow-x:auto;">';
             html += '<h3 class="sot-cmp-section-title">Category Detail</h3>';
-            html += '<table class="sot-cmp-table"><thead><tr><th>Category</th>';
+            html += '<table class="sot-cmp-table" id="sotCmpCatTable"><thead><tr>';
+            html += '<th class="sortable" data-sort-col="name" onclick="sotSortTable(\'sotCmpCatTable\',\'name\')">Category <span class="sort-arrow">▼</span></th>';
             tabs.forEach(function(t, ti) {
                 var short = _sotQuarterLabel(t.data.start_date, t.data.end_date) || (_sotFmtDateShort(t.data.start_date).replace(/, \d{4}$/, ''));
-                html += '<th class="num">' + short + '</th>';
+                html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'sotCmpCatTable\',\'v' + ti + '\')">' + short + ' <span class="sort-arrow">▼</span></th>';
             });
-            if (tabs.length >= 2) html += '<th class="num">Delta</th>';
+            if (tabs.length >= 2) html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'sotCmpCatTable\',\'delta\')">Delta <span class="sort-arrow">▼</span></th>';
             html += '</tr></thead><tbody>';
             catNames.forEach(function(cn) {
-                var vals = tabs.map(function(t) {
-                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
-                    return cat ? (cat[shareKey] || 0) : 0;
-                });
+                var vals = _catShareVals[cn];
                 var maxVal = Math.max.apply(null, vals.concat([1]));
                 var col = _sotCatColors[cn] || '#888';
                 var delta = tabs.length >= 2 ? vals[0] - vals[vals.length - 1] : 0;
                 var isHighlight = Math.abs(delta) >= 3;
-                html += '<tr' + (isHighlight ? ' class="highlight"' : '') + '>';
-                html += '<td style="font-weight:600;white-space:nowrap;"><span class="sot-cmp-mini-bar" style="width:' + Math.max(2, vals[0]/maxVal*40) + 'px;background:' + col + ';"></span>' + cn + '</td>';
+                var spark = tabs.length >= 3 ? _sotSparklineSVG(vals.slice().reverse(), col) : '';
+                html += '<tr class="expandable' + (isHighlight ? ' highlight' : '') + '" data-sot-cat="' + cn + '" data-sort-name="' + cn + '" data-sort-delta="' + Math.abs(delta).toFixed(4) + '"';
+                vals.forEach(function(v, vi) { html += ' data-sort-v' + vi + '="' + v.toFixed(4) + '"'; });
+                html += ' onclick="sotToggleExpandRow(this)">';
+                html += '<td style="font-weight:600;white-space:nowrap;"><span class="expand-chevron">▶</span><span class="sot-cmp-mini-bar" style="width:' + Math.max(2, vals[0]/maxVal*40) + 'px;background:' + col + ';"></span>' + cn + spark + '</td>';
                 vals.forEach(function(v) {
                     html += '<td class="num">' + v.toFixed(1) + '%</td>';
                 });
                 if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(vals[0], vals[vals.length-1]) + '</td>';
                 html += '</tr>';
+
+                // Expandable sub-row with top-5 brands inline
+                html += '<tr class="expand-row" data-expand-for="' + cn + '"><td colspan="' + colCount + '"><div class="expand-inner"><div class="sot-cmp-expand-brands">';
+                var catBrands = {};
+                tabs.forEach(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    if (cat && cat.brands) cat.brands.forEach(function(b) {
+                        if (!catBrands[b.name]) catBrands[b.name] = 0;
+                        catBrands[b.name] = Math.max(catBrands[b.name], b.category_share_pct || 0);
+                    });
+                });
+                var top5 = Object.keys(catBrands).sort(function(a, b) { return catBrands[b] - catBrands[a]; }).slice(0, 5);
+                html += '<table>';
+                top5.forEach(function(bn) {
+                    html += '<tr><td>' + bn + '</td>';
+                    tabs.forEach(function(t) {
+                        var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                        var b = cat && cat.brands ? cat.brands.find(function(x) { return x.name === bn; }) : null;
+                        var v = b ? (b.category_share_pct || 0) : 0;
+                        html += '<td class="num">' + v.toFixed(1) + '%</td>';
+                    });
+                    if (tabs.length >= 2) {
+                        var firstB = (function() { var cat = (tabs[0].data.categories || []).find(function(c) { return c.name === cn; }); var b = cat && cat.brands ? cat.brands.find(function(x) { return x.name === bn; }) : null; return b ? (b.category_share_pct || 0) : 0; })();
+                        var lastB = (function() { var cat = (tabs[tabs.length-1].data.categories || []).find(function(c) { return c.name === cn; }); var b = cat && cat.brands ? cat.brands.find(function(x) { return x.name === bn; }) : null; return b ? (b.category_share_pct || 0) : 0; })();
+                        html += '<td class="num">' + _sotCmpDeltaPP(firstB, lastB) + '</td>';
+                    }
+                    html += '</tr>';
+                });
+                html += '</table></div></div></td></tr>';
             });
             html += '</tbody></table></div>';
 
-            // === SECTION 4: Per-category brand charts + tables ===
+            // === SECTION 4: Per-category brand charts + sortable tables ===
             catNames.forEach(function(catName) {
                 var allBrands = {};
                 var tabCatShares = [];
@@ -24380,18 +24502,19 @@
                 var chartH = Math.max(250, brandNames.length * 28 + 60);
                 var col = _sotCatColors[catName] || '#888';
                 var catId = catName.replace(/[^a-zA-Z]/g, '');
-                html += '<div class="sot-chart-card" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">';
+                html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">';
                 html += '<h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3>';
                 html += '<div style="position:relative;height:' + chartH + 'px;"><canvas id="sotCmpCat_' + catId + '"></canvas></div>';
 
-                // Brand detail table
+                var brandTableId = 'sotCmpBrandTbl_' + catId;
                 html += '<div style="margin-top:0.75rem;overflow-x:auto;">';
-                html += '<table class="sot-cmp-table"><thead><tr><th>Brand</th>';
+                html += '<table class="sot-cmp-table" id="' + brandTableId + '"><thead><tr>';
+                html += '<th class="sortable" data-sort-col="name" onclick="sotSortTable(\'' + brandTableId + '\',\'name\')">Brand <span class="sort-arrow">▼</span></th>';
                 tabs.forEach(function(t, ti) {
                     var short = _sotQuarterLabel(t.data.start_date, t.data.end_date) || (_sotFmtDateShort(t.data.start_date).replace(/, \d{4}$/, ''));
-                    html += '<th class="num">' + short + '</th>';
+                    html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'' + brandTableId + '\',\'v' + ti + '\')">' + short + ' <span class="sort-arrow">▼</span></th>';
                 });
-                if (tabs.length >= 2) html += '<th class="num">Delta</th>';
+                if (tabs.length >= 2) html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'' + brandTableId + '\',\'delta\')">Delta <span class="sort-arrow">▼</span></th>';
                 html += '</tr></thead><tbody>';
 
                 var brandRows = brandNames.map(function(bn) {
@@ -24409,8 +24532,11 @@
 
                 brandRows.forEach(function(br) {
                     var isHighlight = Math.abs(br.delta) >= 3;
-                    html += '<tr' + (isHighlight ? ' class="highlight"' : '') + '>';
-                    html += '<td style="font-weight:600;white-space:nowrap;">' + br.name + '</td>';
+                    var spark = tabs.length >= 3 ? _sotSparklineSVG(br.vals.slice().reverse(), col) : '';
+                    html += '<tr' + (isHighlight ? ' class="highlight"' : '') + ' data-sort-name="' + br.name + '" data-sort-delta="' + Math.abs(br.delta).toFixed(4) + '"';
+                    br.vals.forEach(function(v, vi) { html += ' data-sort-v' + vi + '="' + v.toFixed(4) + '"'; });
+                    html += '>';
+                    html += '<td style="font-weight:600;white-space:nowrap;">' + br.name + spark + '</td>';
                     br.vals.forEach(function(v) {
                         html += '<td class="num">' + v.toFixed(1) + '%</td>';
                     });
@@ -24422,6 +24548,29 @@
             });
 
             area.innerHTML = html;
+
+            // --- Wire up hover-linked highlighting via event delegation ---
+            area.addEventListener('mouseover', function(e) {
+                var el = e.target.closest('[data-sot-cat]');
+                if (!el) return;
+                var cat = el.getAttribute('data-sot-cat');
+                area.querySelectorAll('[data-sot-cat]').forEach(function(node) {
+                    if (node.getAttribute('data-sot-cat') === cat) {
+                        node.classList.add('sot-cat-glow');
+                        node.classList.remove('sot-cat-dim');
+                    } else {
+                        node.classList.add('sot-cat-dim');
+                        node.classList.remove('sot-cat-glow');
+                    }
+                });
+            });
+            area.addEventListener('mouseout', function(e) {
+                var el = e.target.closest('[data-sot-cat]');
+                if (!el) return;
+                area.querySelectorAll('[data-sot-cat]').forEach(function(node) {
+                    node.classList.remove('sot-cat-glow', 'sot-cat-dim');
+                });
+            });
 
             // --- Render Charts ---
             var mainCanvas = document.getElementById('sotCmpMain');
@@ -24518,6 +24667,85 @@
                     }
                 });
                 _sotCompareCharts.push(catChart);
+            });
+        }
+
+        function sotDrillCategory(catId, cardEl) {
+            document.querySelectorAll('.sot-cmp-cat-card.active').forEach(function(c) { c.classList.remove('active'); });
+            cardEl.classList.add('active');
+            var section = document.getElementById('sotCmpBrandSection_' + catId);
+            if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function sotToggleExpandRow(tr) {
+            var cn = tr.getAttribute('data-sot-cat');
+            var expandRow = tr.parentElement.querySelector('tr.expand-row[data-expand-for="' + cn + '"]');
+            if (!expandRow) return;
+            var isOpen = tr.classList.contains('expanded');
+            tr.parentElement.querySelectorAll('tr.expandable').forEach(function(r) { r.classList.remove('expanded'); });
+            tr.parentElement.querySelectorAll('tr.expand-row').forEach(function(r) { r.classList.remove('open'); });
+            if (!isOpen) {
+                tr.classList.add('expanded');
+                expandRow.classList.add('open');
+            }
+        }
+
+        function sotSortTable(tableId, colKey) {
+            var table = document.getElementById(tableId);
+            if (!table) return;
+            var tbody = table.querySelector('tbody');
+            var ths = table.querySelectorAll('thead th');
+            var currentDir = 'desc';
+            ths.forEach(function(th) {
+                if (th.getAttribute('data-sort-col') === colKey && th.classList.contains('sort-active')) {
+                    currentDir = th.getAttribute('data-sort-dir') === 'desc' ? 'asc' : 'desc';
+                }
+                th.classList.remove('sort-active');
+                th.removeAttribute('data-sort-dir');
+            });
+            var activeTh = table.querySelector('th[data-sort-col="' + colKey + '"]');
+            if (activeTh) {
+                activeTh.classList.add('sort-active');
+                activeTh.setAttribute('data-sort-dir', currentDir);
+                var arrow = activeTh.querySelector('.sort-arrow');
+                if (arrow) arrow.textContent = currentDir === 'desc' ? '▼' : '▲';
+            }
+
+            var rows = [];
+            var expandRows = {};
+            tbody.querySelectorAll('tr').forEach(function(tr) {
+                if (tr.classList.contains('expand-row')) {
+                    expandRows[tr.getAttribute('data-expand-for')] = tr;
+                } else if (tr.hasAttribute('data-sort-' + colKey)) {
+                    rows.push(tr);
+                }
+            });
+
+            rows.sort(function(a, b) {
+                var av = a.getAttribute('data-sort-' + colKey) || '';
+                var bv = b.getAttribute('data-sort-' + colKey) || '';
+                var an = parseFloat(av), bn = parseFloat(bv);
+                if (!isNaN(an) && !isNaN(bn)) {
+                    return currentDir === 'desc' ? bn - an : an - bn;
+                }
+                return currentDir === 'desc' ? bv.localeCompare(av) : av.localeCompare(bv);
+            });
+
+            while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+            rows.forEach(function(tr) {
+                tbody.appendChild(tr);
+                var cn = tr.getAttribute('data-sot-cat') || tr.getAttribute('data-sort-name');
+                if (cn && expandRows[cn]) tbody.appendChild(expandRows[cn]);
+            });
+        }
+
+        function sotToggleFocusMode() {
+            _sotCmpFocusMode = !_sotCmpFocusMode;
+            var btn = document.querySelector('.sot-focus-btn');
+            if (btn) btn.classList.toggle('active', _sotCmpFocusMode);
+            ['sotCmpKpiSection', 'sotCmpMoversSection', 'sotCmpCatCards'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.classList.toggle('sot-cmp-focus-hide', _sotCmpFocusMode);
             });
         }
 
