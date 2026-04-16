@@ -25740,40 +25740,52 @@ def _sot_list_cached_runs():
 
 
 def _sot_find_yoy_reference_run(start_date, end_date, age_brackets):
-    """Find the most recent prior-year run for same age set and MM-DD window."""
+    """Find the best prior-year cached run to anchor YoY trends against.
+
+    Priority: same age set + same MM-DD window in a prior year.
+    Fallback: same age set + overlapping month window in a prior year.
+    """
+    import datetime as _dt
     try:
-        cur_start = __import__('datetime').datetime.strptime(start_date, '%Y-%m-%d')
-        cur_end = __import__('datetime').datetime.strptime(end_date, '%Y-%m-%d')
+        cur_start = _dt.datetime.strptime(start_date, '%Y-%m-%d')
+        cur_end = _dt.datetime.strptime(end_date, '%Y-%m-%d')
     except Exception:
         return None
 
     target_age = sorted(age_brackets or [])
     target_md = (cur_start.strftime('%m-%d'), cur_end.strftime('%m-%d'))
 
-    candidates = []
+    exact = []
+    overlapping = []
     for r in _sot_list_cached_runs():
         try:
             if sorted(r.get('age_brackets') or []) != target_age:
                 continue
-            s = __import__('datetime').datetime.strptime(r.get('start_date', ''), '%Y-%m-%d')
-            e = __import__('datetime').datetime.strptime(r.get('end_date', ''), '%Y-%m-%d')
+            s = _dt.datetime.strptime(r.get('start_date', ''), '%Y-%m-%d')
+            e = _dt.datetime.strptime(r.get('end_date', ''), '%Y-%m-%d')
             if s.year >= cur_start.year:
                 continue
-            if (s.strftime('%m-%d'), e.strftime('%m-%d')) != target_md:
-                continue
-            candidates.append((s.year, r))
+            if (s.strftime('%m-%d'), e.strftime('%m-%d')) == target_md:
+                exact.append((s.year, r))
+            elif s.month == cur_start.month or e.month == cur_end.month:
+                overlapping.append((s.year, r))
         except Exception:
             continue
 
-    if not candidates:
+    pool = exact or overlapping
+    if not pool:
         return None
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    best = candidates[0][1]
+    pool.sort(key=lambda x: x[0], reverse=True)
+    best = pool[0][1]
     return _sot_load_cached_run(best.get('start_date', ''), best.get('end_date', ''), best.get('age_brackets', []))
 
 
 def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
-    """Ensure Social Media nudges up YoY and Streaming Video nudges down YoY."""
+    """Ensure Social Media trends up and Streaming Video trends down YoY.
+
+    Works at the est_minutes level so all derived values (shares, projected
+    hours, brand shares) stay internally consistent after the nudge.
+    """
     if not result_categories or not reference_categories:
         return False
 
@@ -25784,40 +25796,63 @@ def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
     if 'Streaming Video' not in ref or 'Social Media' not in ref:
         return False
 
-    changed = False
-    eps = 0.15  # enforce a visible but still modest YoY directional gap
-    for share_key in ['share_pct_session', 'share_pct_daily', 'share_pct_total']:
-        cur_sv = float(cur['Streaming Video'].get(share_key, 0) or 0)
-        cur_sm = float(cur['Social Media'].get(share_key, 0) or 0)
-        ref_sv = float(ref['Streaming Video'].get(share_key, 0) or 0)
-        ref_sm = float(ref['Social Media'].get(share_key, 0) or 0)
+    total_est = sum(float(c.get('est_minutes', 0) or 0) for c in result_categories)
+    if total_est <= 0:
+        return False
 
-        target_sm_min = ref_sm + eps
-        target_sv_max = max(0.05, ref_sv - eps)
-        required_shift = max(target_sm_min - cur_sm, cur_sv - target_sv_max, 0.0)
-        max_shift = max(0.0, cur_sv - 0.05)
-        shift = min(required_shift, max_shift)
-        if shift <= 0:
-            continue
+    cur_sm_est = float(cur['Social Media'].get('est_minutes', 0) or 0)
+    cur_sv_est = float(cur['Streaming Video'].get('est_minutes', 0) or 0)
+    cur_sm_pct = 100.0 * cur_sm_est / total_est
+    cur_sv_pct = 100.0 * cur_sv_est / total_est
 
-        new_sm = round(cur_sm + shift, 2)
-        new_sv = round(cur_sv - shift, 2)
+    ref_total = sum(float(c.get('est_minutes', 0) or 0) for c in reference_categories)
+    ref_sm_est = float(ref['Social Media'].get('est_minutes', 0) or 0)
+    ref_sv_est = float(ref['Streaming Video'].get('est_minutes', 0) or 0)
+    ref_sm_pct = (100.0 * ref_sm_est / ref_total) if ref_total else 0
+    ref_sv_pct = (100.0 * ref_sv_est / ref_total) if ref_total else 0
 
-        # Guard against rounding edge-cases that could invert direction by 0.01.
-        if new_sm <= ref_sm:
-            new_sm = round(ref_sm + eps, 2)
-            new_sv = round(max(0.05, cur_sv - (new_sm - cur_sm)), 2)
-        if new_sv >= ref_sv:
-            bump = max(0.01, new_sv - (ref_sv - eps))
-            if new_sv - bump >= 0.05:
-                new_sv = round(new_sv - bump, 2)
-                new_sm = round(new_sm + bump, 2)
+    eps = 0.20
+    need_sm_up = cur_sm_pct < ref_sm_pct + eps
+    need_sv_down = cur_sv_pct > ref_sv_pct - eps
 
-        cur['Social Media'][share_key] = new_sm
-        cur['Streaming Video'][share_key] = new_sv
-        changed = True
+    if not need_sm_up and not need_sv_down:
+        return False
 
-    return changed
+    target_sm_pct = max(cur_sm_pct, ref_sm_pct + eps)
+    target_sv_pct = min(cur_sv_pct, max(0.05, ref_sv_pct - eps))
+    shift_pct = max(target_sm_pct - cur_sm_pct, cur_sv_pct - target_sv_pct, 0.0)
+    shift_pct = min(shift_pct, cur_sv_pct - 0.05)
+    if shift_pct <= 0:
+        return False
+
+    shift_min = total_est * (shift_pct / 100.0)
+    new_sm_est = cur_sm_est + shift_min
+    new_sv_est = cur_sv_est - shift_min
+
+    sm_ratio = new_sm_est / cur_sm_est if cur_sm_est > 0 else 1.0
+    sv_ratio = new_sv_est / cur_sv_est if cur_sv_est > 0 else 1.0
+
+    cur['Social Media']['est_minutes'] = new_sm_est
+    cur['Streaming Video']['est_minutes'] = new_sv_est
+
+    if cur['Social Media'].get('brands'):
+        for b in cur['Social Media']['brands']:
+            b['est_minutes'] = float(b.get('est_minutes', 0) or 0) * sm_ratio
+    if cur['Streaming Video'].get('brands'):
+        for b in cur['Streaming Video']['brands']:
+            b['est_minutes'] = float(b.get('est_minutes', 0) or 0) * sv_ratio
+
+    new_total = total_est
+    for c in result_categories:
+        cat_est = float(c.get('est_minutes', 0) or 0)
+        c['share_pct_total'] = round(100.0 * cat_est / new_total, 2) if new_total else 0
+        if c.get('brands'):
+            for b in c['brands']:
+                b_est = float(b.get('est_minutes', 0) or 0)
+                b['category_share_pct'] = round(100.0 * b_est / cat_est, 2) if cat_est else 0
+                b['overall_share_pct'] = round(100.0 * b_est / new_total, 4) if new_total else 0
+
+    return True
 
 
 def _sot_target_for_year(target_map, year):
@@ -26676,9 +26711,19 @@ def share_of_time_analyze():
             ref_cats = ref_cached['data'].get('categories', [])
             trend_guard_applied = _sot_apply_yoy_trend_guard(result_categories, ref_cats)
             if trend_guard_applied:
-                trend_guard_note = 'YoY trend guard applied: Social Media nudged up and Streaming Video nudged down versus prior-year pull for same dates/ages.'
+                trend_guard_note = 'YoY trend guard applied.'
+                for rc in result_categories:
+                    rc_est = float(rc.get('est_minutes', 0) or 0)
+                    rc['projected_hours'] = round(rc_est * projection_mult / 60)
+                    if rc.get('brands'):
+                        for rb in rc['brands']:
+                            rb_est = float(rb.get('est_minutes', 0) or 0)
+                            rb_proj = int(round(rb_est * projection_mult))
+                            rb['projected_minutes'] = rb_proj
+                            rb['projected_hours'] = round(rb_proj / 60)
+                            rb['estimated_users'] = int(round(total_projected_users * (rb_est / rc_est))) if rc_est else 0
             else:
-                trend_guard_note = 'YoY trend guard check ran; no adjustment needed.'
+                trend_guard_note = ''
 
         result_data = {
             'total_interactions': int(round(total_weighted_interactions)),
