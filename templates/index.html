@@ -23716,13 +23716,8 @@
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
             var trendNoteEl = document.getElementById('sotTrendGuardNote');
             if (trendNoteEl) {
-                if (data.trend_guard_note) {
-                    trendNoteEl.textContent = 'Trend check: ' + data.trend_guard_note;
-                    trendNoteEl.style.display = 'block';
-                } else {
-                    trendNoteEl.style.display = 'none';
-                    trendNoteEl.textContent = '';
-                }
+                trendNoteEl.style.display = 'none';
+                trendNoteEl.textContent = '';
             }
 
             var gran = _sotGranularity;
