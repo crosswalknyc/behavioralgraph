@@ -25547,7 +25547,9 @@ SOT_WEIGHTS_S3_PREFIX = 'share-of-time-weights/'
 SOT_RUNS_S3_PREFIX = 'share-of-time-runs/'
 SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Social Media', 'vMVPD/FAST']
 SOT_TREND_GUARD_VERSION = 2
-SOT_BRAND_TARGET_VERSION = 2
+SOT_BRAND_TARGET_VERSION = 3
+SOT_TIKTOK_BOOST = 3.0
+SOT_STREAMING_VIDEO_NON_NETFLIX_BOOST = 5.0
 SOT_TIKTOK_TARGET_SHARE_BY_AGE_YEAR = {
     # Target TikTok share within Social Media brand mix (%).
     # Intentional YoY lift for cohorts explicitly requested by user.
@@ -25949,6 +25951,48 @@ def _sot_apply_tiktok_age_year_guard(categories, start_date, age_brackets, proje
         new_fb_pct = 100.0 * new_fb_minutes / max(social['est_minutes'], 0.01)
         note += f" Facebook={round(new_fb_pct,2)}%."
     return True, note
+
+
+def _sot_apply_tiktok_boost(categories):
+    """Apply SOT_TIKTOK_BOOST multiplier to TikTok within Social Media."""
+    social = categories.get('Social Media')
+    if not social or not social.get('brands'):
+        return False
+    brands = social['brands']
+    tiktok_key = None
+    for bn in brands:
+        if _sot_norm_brand_token(bn) == 'tiktok':
+            tiktok_key = bn
+            break
+    if not tiktok_key:
+        return False
+    bv = brands[tiktok_key]
+    bv['est_minutes'] = float(bv.get('est_minutes') or 0.0) * SOT_TIKTOK_BOOST
+    bv['adj_clicks'] = float(bv.get('adj_clicks') or 0.0) * SOT_TIKTOK_BOOST
+    social['est_minutes'] = sum(float(v.get('est_minutes') or 0.0) for v in brands.values())
+    social['adj_clicks'] = sum(float(v.get('adj_clicks') or 0.0) for v in brands.values())
+    categories['Social Media'] = social
+    return True
+
+
+def _sot_apply_streaming_video_non_netflix_boost(categories):
+    """Apply SOT_STREAMING_VIDEO_NON_NETFLIX_BOOST to every Streaming Video platform except Netflix."""
+    sv = categories.get('Streaming Video')
+    if not sv or not sv.get('brands'):
+        return False
+    brands = sv['brands']
+    applied = False
+    for bn, bv in brands.items():
+        if _sot_norm_brand_token(bn) == 'netflix':
+            continue
+        bv['est_minutes'] = float(bv.get('est_minutes') or 0.0) * SOT_STREAMING_VIDEO_NON_NETFLIX_BOOST
+        bv['adj_clicks'] = float(bv.get('adj_clicks') or 0.0) * SOT_STREAMING_VIDEO_NON_NETFLIX_BOOST
+        applied = True
+    if applied:
+        sv['est_minutes'] = sum(float(v.get('est_minutes') or 0.0) for v in brands.values())
+        sv['adj_clicks'] = sum(float(v.get('adj_clicks') or 0.0) for v in brands.values())
+        categories['Streaming Video'] = sv
+    return applied
 
 
 def _sot_generate_weights_via_gpt(age_brackets, quarter, history):
@@ -26536,6 +26580,16 @@ def share_of_time_analyze():
                 c['adj_clicks'] = new_cat_clicks
                 c['est_minutes'] = new_cat_minutes
 
+            total_est_minutes = sum(c['est_minutes'] for c in categories.values())
+            total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
+
+        # --- TikTok 3x boost ---
+        if _sot_apply_tiktok_boost(categories):
+            total_est_minutes = sum(c['est_minutes'] for c in categories.values())
+            total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
+
+        # --- Streaming Video 5x boost (non-Netflix) ---
+        if _sot_apply_streaming_video_non_netflix_boost(categories):
             total_est_minutes = sum(c['est_minutes'] for c in categories.values())
             total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
 
