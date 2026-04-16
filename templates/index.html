@@ -16233,8 +16233,9 @@
                             </div>
                         </div>
                     </div>
-                    <div style="display:flex;justify-content:flex-end;align-items:center;margin:0.25rem 0 0.6rem;">
+                    <div style="display:flex;justify-content:flex-end;align-items:center;gap:0.5rem;margin:0.25rem 0 0.6rem;">
                         <button type="button" class="sot-compare-btn" id="sotCompareBtn" onclick="sotToggleCompare()" disabled title="Open 2+ tabs to compare">Compare Open Tabs</button>
+                        <button type="button" class="sot-compare-btn" id="sotCloseAllBtn" onclick="sotCloseAllTabs()" style="display:none;background:#991b1b;border-color:#dc2626;font-size:0.7rem;padding:0.4rem 0.8rem;" title="Close all open tabs">Close All</button>
                     </div>
                     <div id="sotTabBar" class="profile-tabs-bar sot-tab-bar" style="display:none;"></div>
                     <div id="sotCompareArea" style="display:none;"></div>
@@ -24372,9 +24373,8 @@
                     '<button class="profile-tab-close" onclick="sotCloseTab(' + i + ', event)" title="Close tab">&times;</button>' +
                 '</div>';
             });
-            if (_sotOpenTabs.length > 1) {
-                html += '<div class="profile-tab-close-all" onclick="sotCloseAllTabs()" title="Close all open tabs"><span>CLOSE ALL</span></div>';
-            }
+            var closeAllBtn = document.getElementById('sotCloseAllBtn');
+            if (closeAllBtn) closeAllBtn.style.display = _sotOpenTabs.length >= 1 ? '' : 'none';
             bar.innerHTML = html;
         }
 
