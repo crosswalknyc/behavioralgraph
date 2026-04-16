@@ -23985,6 +23985,8 @@
             return dateLabel + ' · ' + ageStr;
         }
 
+        var _sotHasAutoOpened = false;
+
         function sotLoadRuns() {
             fetch('/api/share-of-time/runs', { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
@@ -23992,10 +23994,76 @@
                     if (resp.success) {
                         _sotCachedRuns = resp.runs || [];
                         sotRenderRunTree();
+                        if (_sotOpenTabs.length === 0 && !_sotHasAutoOpened) {
+                            _sotHasAutoOpened = true;
+                            _sotAutoOpenLatestQuarter();
+                        }
                     }
                 }).catch(function() {
                     document.getElementById('sotRunTree').innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.78rem;">Could not load runs.</div>';
                 });
+        }
+
+        function _sotAutoOpenLatestQuarter() {
+            var quarterRuns = _sotCachedRuns.filter(function(r) {
+                return !!_sotQuarterLabel(r.start_date, r.end_date);
+            });
+            if (!quarterRuns.length) return;
+
+            quarterRuns.sort(function(a, b) {
+                return (b.start_date || '').localeCompare(a.start_date || '');
+            });
+            var latestStart = quarterRuns[0].start_date;
+            var latestEnd = quarterRuns[0].end_date;
+            var runsForQuarter = quarterRuns.filter(function(r) {
+                return r.start_date === latestStart && r.end_date === latestEnd;
+            });
+            if (!runsForQuarter.length) return;
+
+            var loaded = 0;
+            var total = runsForQuarter.length;
+            runsForQuarter.forEach(function(r) {
+                fetch('/api/share-of-time/run', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_date: r.start_date, end_date: r.end_date, age_brackets: r.age_brackets })
+                }).then(function(resp) { return resp.json(); }).then(function(resp) {
+                    if (resp.success && resp.data) {
+                        var key = _sotTabKey(resp.data);
+                        var exists = false;
+                        _sotOpenTabs.forEach(function(t) { if (_sotTabKey(t.data) === key) exists = true; });
+                        if (!exists) {
+                            _sotOpenTabs.push({ data: resp.data, key: key });
+                        }
+                    }
+                    loaded++;
+                    if (loaded === total) _sotFinishAutoOpen();
+                }).catch(function() {
+                    loaded++;
+                    if (loaded === total) _sotFinishAutoOpen();
+                });
+            });
+        }
+
+        function _sotFinishAutoOpen() {
+            if (_sotOpenTabs.length < 2) {
+                if (_sotOpenTabs.length === 1) {
+                    _sotActiveTabIdx = 0;
+                    _sotData = _sotOpenTabs[0].data;
+                    sotRenderTabs();
+                    sotRenderRunTree();
+                    sotRenderResults(_sotData);
+                }
+                return;
+            }
+            _sotCompareMode = true;
+            _sotActiveTabIdx = -1;
+            sotRenderTabs();
+            sotRenderRunTree();
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            sotRenderCompare();
+            document.getElementById('sotCompareArea').style.display = 'block';
         }
 
         function sotRefreshRuns() {
