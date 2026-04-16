@@ -24077,7 +24077,23 @@
                     '<button class="profile-tab-close" onclick="sotCloseTab(' + i + ', event)" title="Close tab">&times;</button>' +
                 '</div>';
             });
+            if (_sotOpenTabs.length > 1) {
+                html += '<div class="profile-tab-close-all" onclick="sotCloseAllTabs()" title="Close all open tabs"><span>CLOSE ALL</span></div>';
+            }
             bar.innerHTML = html;
+        }
+
+        function sotCloseAllTabs() {
+            _sotOpenTabs = [];
+            _sotActiveTabIdx = -1;
+            _sotCompareMode = false;
+            _sotData = null;
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotCompareArea').style.display = 'none';
+            var empty = document.getElementById('sotEmptyState');
+            if (empty) empty.style.display = 'block';
+            sotRenderTabs();
+            sotRenderRunTree();
         }
 
         function sotToggleCompare() {
