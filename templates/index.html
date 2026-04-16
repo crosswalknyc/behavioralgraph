@@ -24198,9 +24198,12 @@
             var area = document.getElementById('sotCompareArea');
             var gran = _sotGranularity;
             var shareKey = _sotShareKey(gran);
-            var tabs = _sotOpenTabs;
+            var tabs = _sotOpenTabs.slice().sort(function(a, b) {
+                return (b.data.start_date || '').localeCompare(a.data.start_date || '')
+                    || (b.data.end_date || '').localeCompare(a.data.end_date || '');
+            });
             if (!tabs.length) { area.innerHTML = ''; return; }
-            var base = tabs[0].data;
+            var base = tabs[tabs.length - 1].data;
 
             var catNames = [];
             tabs.forEach(function(t) {
@@ -24256,42 +24259,42 @@
 
             // === SECTION 2: Top Movers ===
             if (tabs.length >= 2) {
-                var last = tabs[tabs.length - 1].data;
+                var newest = tabs[0].data;
                 var catMovers = catNames.map(function(cn) {
-                    var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
-                    var lastCat = (last.categories || []).find(function(c) { return c.name === cn; });
-                    var bv = baseCat ? (baseCat[shareKey] || 0) : 0;
-                    var lv = lastCat ? (lastCat[shareKey] || 0) : 0;
-                    return { name: cn, baseVal: bv, lastVal: lv, delta: lv - bv };
+                    var oldCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                    var newCat = (newest.categories || []).find(function(c) { return c.name === cn; });
+                    var ov = oldCat ? (oldCat[shareKey] || 0) : 0;
+                    var nv = newCat ? (newCat[shareKey] || 0) : 0;
+                    return { name: cn, baseVal: ov, lastVal: nv, delta: nv - ov };
                 }).sort(function(a, b) { return Math.abs(b.delta) - Math.abs(a.delta); }).slice(0, 6);
 
                 var brandMovers = [];
                 catNames.forEach(function(cn) {
-                    var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
-                    var lastCat = (last.categories || []).find(function(c) { return c.name === cn; });
-                    var baseBrands = {}; var lastBrands = {};
-                    if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseBrands[b.name] = b; });
-                    if (lastCat && lastCat.brands) lastCat.brands.forEach(function(b) { lastBrands[b.name] = b; });
+                    var oldCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                    var newCat = (newest.categories || []).find(function(c) { return c.name === cn; });
+                    var oldBrands = {}; var newBrands = {};
+                    if (oldCat && oldCat.brands) oldCat.brands.forEach(function(b) { oldBrands[b.name] = b; });
+                    if (newCat && newCat.brands) newCat.brands.forEach(function(b) { newBrands[b.name] = b; });
                     var allB = {};
-                    Object.keys(baseBrands).forEach(function(k) { allB[k] = true; });
-                    Object.keys(lastBrands).forEach(function(k) { allB[k] = true; });
+                    Object.keys(oldBrands).forEach(function(k) { allB[k] = true; });
+                    Object.keys(newBrands).forEach(function(k) { allB[k] = true; });
                     Object.keys(allB).forEach(function(bn) {
-                        var bv = baseBrands[bn] ? (baseBrands[bn].category_share_pct || 0) : 0;
-                        var lv = lastBrands[bn] ? (lastBrands[bn].category_share_pct || 0) : 0;
-                        if (Math.abs(lv - bv) >= 0.5) {
-                            brandMovers.push({ name: bn, category: cn, baseVal: bv, lastVal: lv, delta: lv - bv });
+                        var ov = oldBrands[bn] ? (oldBrands[bn].category_share_pct || 0) : 0;
+                        var nv = newBrands[bn] ? (newBrands[bn].category_share_pct || 0) : 0;
+                        if (Math.abs(nv - ov) >= 0.5) {
+                            brandMovers.push({ name: bn, category: cn, baseVal: ov, lastVal: nv, delta: nv - ov });
                         }
                     });
                 });
                 brandMovers.sort(function(a, b) { return Math.abs(b.delta) - Math.abs(a.delta); });
                 brandMovers = brandMovers.slice(0, 10);
 
-                var baseLabel = _sotTabLabel(base);
-                var lastLabel = _sotTabLabel(last);
+                var newestLabel = _sotTabLabel(newest);
+                var oldestLabel = _sotTabLabel(base);
 
                 html += '<div class="sot-cmp-movers">';
                 html += '<div class="sot-cmp-mover-card"><h4>Category Shifts</h4>';
-                html += '<div style="font-size:0.62rem;color:var(--text-secondary);margin-bottom:0.5rem;">' + baseLabel + ' vs ' + lastLabel + '</div>';
+                html += '<div style="font-size:0.62rem;color:var(--text-secondary);margin-bottom:0.5rem;">' + newestLabel + ' vs ' + oldestLabel + '</div>';
                 catMovers.forEach(function(m) {
                     var cls = m.delta > 0 ? 'up' : m.delta < 0 ? 'down' : 'neutral';
                     var arrow = m.delta > 0 ? '▲' : m.delta < 0 ? '▼' : '–';
@@ -24344,14 +24347,14 @@
                 });
                 var maxVal = Math.max.apply(null, vals.concat([1]));
                 var col = _sotCatColors[cn] || '#888';
-                var delta = tabs.length >= 2 ? vals[vals.length - 1] - vals[0] : 0;
+                var delta = tabs.length >= 2 ? vals[0] - vals[vals.length - 1] : 0;
                 var isHighlight = Math.abs(delta) >= 3;
                 html += '<tr' + (isHighlight ? ' class="highlight"' : '') + '>';
                 html += '<td style="font-weight:600;white-space:nowrap;"><span class="sot-cmp-mini-bar" style="width:' + Math.max(2, vals[0]/maxVal*40) + 'px;background:' + col + ';"></span>' + cn + '</td>';
                 vals.forEach(function(v) {
                     html += '<td class="num">' + v.toFixed(1) + '%</td>';
                 });
-                if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(vals[vals.length-1], vals[0]) + '</td>';
+                if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(vals[0], vals[vals.length-1]) + '</td>';
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
@@ -24399,7 +24402,7 @@
                         var b = cat.brands.find(function(x) { return x.name === bn; });
                         return b ? (b.category_share_pct || 0) : 0;
                     });
-                    var delta = tabs.length >= 2 ? vals[vals.length-1] - vals[0] : 0;
+                    var delta = tabs.length >= 2 ? vals[0] - vals[vals.length-1] : 0;
                     return { name: bn, vals: vals, delta: delta };
                 });
                 brandRows.sort(function(a, b) { return Math.abs(b.delta) - Math.abs(a.delta); });
@@ -24411,7 +24414,7 @@
                     br.vals.forEach(function(v) {
                         html += '<td class="num">' + v.toFixed(1) + '%</td>';
                     });
-                    if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(br.vals[br.vals.length-1], br.vals[0]) + '</td>';
+                    if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(br.vals[0], br.vals[br.vals.length-1]) + '</td>';
                     html += '</tr>';
                 });
                 html += '</tbody></table></div>';

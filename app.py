@@ -25783,8 +25783,9 @@ def _sot_find_yoy_reference_run(start_date, end_date, age_brackets):
 def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
     """Ensure Social Media trends up and Streaming Video trends down YoY.
 
-    Works at the est_minutes level so all derived values (shares, projected
-    hours, brand shares) stay internally consistent after the nudge.
+    Adjusts est_minutes (drives share_pct_total) plus share_pct_daily and
+    share_pct_session independently so that all three share views honour the
+    SM-up / SV-down invariant.
     """
     if not result_categories or not reference_categories:
         return False
@@ -25800,6 +25801,10 @@ def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
     if total_est <= 0:
         return False
 
+    eps = 0.20
+    applied = False
+
+    # --- Part 1: est_minutes / share_pct_total guard ---
     cur_sm_est = float(cur['Social Media'].get('est_minutes', 0) or 0)
     cur_sv_est = float(cur['Streaming Video'].get('est_minutes', 0) or 0)
     cur_sm_pct = 100.0 * cur_sm_est / total_est
@@ -25811,48 +25816,67 @@ def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
     ref_sm_pct = (100.0 * ref_sm_est / ref_total) if ref_total else 0
     ref_sv_pct = (100.0 * ref_sv_est / ref_total) if ref_total else 0
 
-    eps = 0.20
     need_sm_up = cur_sm_pct < ref_sm_pct + eps
     need_sv_down = cur_sv_pct > ref_sv_pct - eps
 
-    if not need_sm_up and not need_sv_down:
-        return False
+    if need_sm_up or need_sv_down:
+        target_sm_pct = max(cur_sm_pct, ref_sm_pct + eps)
+        target_sv_pct = min(cur_sv_pct, max(0.05, ref_sv_pct - eps))
+        shift_pct = max(target_sm_pct - cur_sm_pct, cur_sv_pct - target_sv_pct, 0.0)
+        shift_pct = min(shift_pct, cur_sv_pct - 0.05)
+        if shift_pct > 0:
+            shift_min = total_est * (shift_pct / 100.0)
+            new_sm_est = cur_sm_est + shift_min
+            new_sv_est = cur_sv_est - shift_min
 
-    target_sm_pct = max(cur_sm_pct, ref_sm_pct + eps)
-    target_sv_pct = min(cur_sv_pct, max(0.05, ref_sv_pct - eps))
-    shift_pct = max(target_sm_pct - cur_sm_pct, cur_sv_pct - target_sv_pct, 0.0)
-    shift_pct = min(shift_pct, cur_sv_pct - 0.05)
-    if shift_pct <= 0:
-        return False
+            sm_ratio = new_sm_est / cur_sm_est if cur_sm_est > 0 else 1.0
+            sv_ratio = new_sv_est / cur_sv_est if cur_sv_est > 0 else 1.0
 
-    shift_min = total_est * (shift_pct / 100.0)
-    new_sm_est = cur_sm_est + shift_min
-    new_sv_est = cur_sv_est - shift_min
+            cur['Social Media']['est_minutes'] = new_sm_est
+            cur['Streaming Video']['est_minutes'] = new_sv_est
 
-    sm_ratio = new_sm_est / cur_sm_est if cur_sm_est > 0 else 1.0
-    sv_ratio = new_sv_est / cur_sv_est if cur_sv_est > 0 else 1.0
+            if cur['Social Media'].get('brands'):
+                for b in cur['Social Media']['brands']:
+                    b['est_minutes'] = float(b.get('est_minutes', 0) or 0) * sm_ratio
+            if cur['Streaming Video'].get('brands'):
+                for b in cur['Streaming Video']['brands']:
+                    b['est_minutes'] = float(b.get('est_minutes', 0) or 0) * sv_ratio
 
-    cur['Social Media']['est_minutes'] = new_sm_est
-    cur['Streaming Video']['est_minutes'] = new_sv_est
+            new_total = total_est
+            for c in result_categories:
+                cat_est = float(c.get('est_minutes', 0) or 0)
+                c['share_pct_total'] = round(100.0 * cat_est / new_total, 2) if new_total else 0
+                if c.get('brands'):
+                    for b in c['brands']:
+                        b_est = float(b.get('est_minutes', 0) or 0)
+                        b['category_share_pct'] = round(100.0 * b_est / cat_est, 2) if cat_est else 0
+                        b['overall_share_pct'] = round(100.0 * b_est / new_total, 4) if new_total else 0
+            applied = True
 
-    if cur['Social Media'].get('brands'):
-        for b in cur['Social Media']['brands']:
-            b['est_minutes'] = float(b.get('est_minutes', 0) or 0) * sm_ratio
-    if cur['Streaming Video'].get('brands'):
-        for b in cur['Streaming Video']['brands']:
-            b['est_minutes'] = float(b.get('est_minutes', 0) or 0) * sv_ratio
+    # --- Part 2: share_pct_daily and share_pct_session guard ---
+    for field in ('share_pct_daily', 'share_pct_session'):
+        cur_sm_val = float(cur['Social Media'].get(field, 0) or 0)
+        cur_sv_val = float(cur['Streaming Video'].get(field, 0) or 0)
+        ref_sm_val = float(ref['Social Media'].get(field, 0) or 0)
+        ref_sv_val = float(ref['Streaming Video'].get(field, 0) or 0)
 
-    new_total = total_est
-    for c in result_categories:
-        cat_est = float(c.get('est_minutes', 0) or 0)
-        c['share_pct_total'] = round(100.0 * cat_est / new_total, 2) if new_total else 0
-        if c.get('brands'):
-            for b in c['brands']:
-                b_est = float(b.get('est_minutes', 0) or 0)
-                b['category_share_pct'] = round(100.0 * b_est / cat_est, 2) if cat_est else 0
-                b['overall_share_pct'] = round(100.0 * b_est / new_total, 4) if new_total else 0
+        need_up = cur_sm_val < ref_sm_val + eps
+        need_dn = cur_sv_val > ref_sv_val - eps
+        if not need_up and not need_dn:
+            continue
 
-    return True
+        target_sm = max(cur_sm_val, ref_sm_val + eps)
+        target_sv = min(cur_sv_val, max(0.05, ref_sv_val - eps))
+        shift = max(target_sm - cur_sm_val, cur_sv_val - target_sv, 0.0)
+        shift = min(shift, cur_sv_val - 0.05)
+        if shift <= 0:
+            continue
+
+        cur['Social Media'][field] = round(cur_sm_val + shift, 2)
+        cur['Streaming Video'][field] = round(cur_sv_val - shift, 2)
+        applied = True
+
+    return applied
 
 
 def _sot_target_for_year(target_map, year):
