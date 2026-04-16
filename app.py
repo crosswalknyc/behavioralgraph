@@ -21891,31 +21891,27 @@ def run_sf_lf_conversion(job_id):
         # URL conversions should sum to overall conversion (for consistency)
         if results.get('individual_url_metrics'):
             total_url_views = sum(u['unique_views'] for u in results['individual_url_metrics'])
-            remaining_conversions = converted  # Total conversions to distribute
-            
+            remaining_conversions = converted
+
             print(f"[SF-LF] Redistributing {converted:,} conversions across {len(results['individual_url_metrics'])} URLs (total views: {total_url_views:,})")
-            
+
             for idx, url_m in enumerate(results['individual_url_metrics']):
                 if total_url_views > 0:
-                    # Distribute proportionally based on view share
                     url_view_share = url_m['unique_views'] / total_url_views
                     url_conv = int(round(converted * url_view_share))
-                    
-                    # Ensure at least 1 conversion for URLs with significant views, and sum matches total
+                    url_conv = min(url_conv, url_m['unique_views'])
                     if idx == len(results['individual_url_metrics']) - 1:
-                        # Last URL gets remaining to ensure sum matches exactly
-                        url_conv = remaining_conversions
+                        url_conv = min(remaining_conversions, url_m['unique_views'])
                     else:
                         remaining_conversions -= url_conv
                 else:
                     url_conv = 0
-                
+
                 url_m['converted_to_lf'] = url_conv
                 url_m['conversion_rate'] = round((url_conv / url_m['unique_views'] * 100), 8) if url_m['unique_views'] > 0 else 0.00000001
-            
-            # Verify sum
+
             url_conv_sum = sum(u['converted_to_lf'] for u in results['individual_url_metrics'])
-            print(f"[SF-LF] URL conversions redistributed: sum={url_conv_sum:,} (should equal {converted:,})")
+            print(f"[SF-LF] URL conversions redistributed: sum={url_conv_sum:,} (target={converted:,}, capped to unique views)")
         
         update_job_status(job_id, progress=70, message='Querying demographics of converted users...')
         print(f"[SF-LF] Step 3: Get demographics of converted users")
