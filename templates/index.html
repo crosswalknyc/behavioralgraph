@@ -23630,6 +23630,10 @@
                 }
             });
 
+            showAnalysisStatusModal();
+            updateAnalysisStatusModal({ display_name: 'Share of Time', message: 'Pulling data for ' + start + ' to ' + end + '…', progress: 10 });
+            window._sotIqModalActive = true;
+
             showShareOfTimeIQ();
             sotRunAnalysis();
         }
@@ -23659,6 +23663,10 @@
             var payload = { start_date: start, end_date: end, age_brackets: ages };
             if (forceRefresh) payload.force_refresh = true;
 
+            if (window._sotIqModalActive) {
+                updateAnalysisStatusModal({ display_name: 'Share of Time', message: 'Analyzing ' + start + ' to ' + end + '…', progress: 40 });
+            }
+
             fetch('/api/share-of-time/analyze', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
@@ -23667,7 +23675,17 @@
                 btn.disabled = false; btn.textContent = 'Run Analysis';
                 if (freshBtn) freshBtn.disabled = false;
                 document.getElementById('sotLoadingArea').style.display = 'none';
-                if (!resp.success) { alert('Error: ' + (resp.error || 'Unknown')); document.getElementById('sotEmptyState').style.display = 'flex'; return; }
+                if (!resp.success) {
+                    if (window._sotIqModalActive) { showAnalysisStatusModalError(resp.error || 'Unknown error'); window._sotIqModalActive = false; }
+                    else { alert('Error: ' + (resp.error || 'Unknown')); }
+                    document.getElementById('sotEmptyState').style.display = 'flex';
+                    return;
+                }
+                if (window._sotIqModalActive) {
+                    showAnalysisStatusModalComplete();
+                    window._sotIqModalActive = false;
+                    setTimeout(function() { closeAnalysisStatusModal(); }, 1200);
+                }
                 document.getElementById('sotCompareArea').style.display = 'none';
                 _sotCompareMode = false;
                 sotOpenTab(resp.data);
@@ -23677,7 +23695,8 @@
                 if (freshBtn) freshBtn.disabled = false;
                 document.getElementById('sotLoadingArea').style.display = 'none';
                 document.getElementById('sotEmptyState').style.display = 'flex';
-                alert('Request failed: ' + err);
+                if (window._sotIqModalActive) { showAnalysisStatusModalError('Request failed: ' + err); window._sotIqModalActive = false; }
+                else { alert('Request failed: ' + err); }
             });
         }
 
