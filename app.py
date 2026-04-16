@@ -26507,7 +26507,7 @@ def share_of_time_analyze():
                     break
 
         total_sample_uids = sum(v.get('sample_uids', 0) for v in projected_users_by_age.values())
-        total_projected_users = sum(v['capped'] for v in projected_users_by_age.values())
+        total_projected_users = us_pop
 
         # --- Resolve time weights (cache > GPT > baseline) ---
         time_weights, sessions_per_day, weights_payload, weights_source = _sot_get_weights(age_brackets, start_date, end_date)
