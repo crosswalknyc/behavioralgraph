@@ -992,6 +992,38 @@
         #shareOfTimeIQView .sot-focus-btn.active { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.4); color: #c4b5fd; }
         .sot-cmp-focus-hide { display: none !important; }
 
+        /* --- Cohort Analysis Mode --- */
+        #shareOfTimeIQView .sot-cohort-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; align-items: center; }
+        #shareOfTimeIQView .sot-cohort-chip { padding: 0.3rem 0.7rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.03em; cursor: pointer; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); transition: all 0.2s; text-transform: uppercase; }
+        #shareOfTimeIQView .sot-cohort-chip.active { background: rgba(139,92,246,0.18); border-color: rgba(139,92,246,0.5); color: #c4b5fd; }
+        #shareOfTimeIQView .sot-cohort-chip.baseline { background: rgba(6,182,212,0.15); border-color: rgba(6,182,212,0.5); color: var(--accent-cyan); cursor: default; font-weight: 800; }
+        #shareOfTimeIQView .sot-cohort-chip-label { font-size: 0.6rem; color: var(--text-secondary); margin-right: 0.5rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+
+        #shareOfTimeIQView .sot-cohort-baseline { display: flex; gap: 1rem; margin-bottom: 1.25rem; align-items: stretch; }
+        #shareOfTimeIQView .sot-cohort-baseline-card { background: var(--bg-card); border: 2px solid rgba(6,182,212,0.3); border-radius: 12px; padding: 1rem 1.1rem; min-width: 200px; flex: 0 0 auto; }
+        #shareOfTimeIQView .sot-cohort-baseline-card .cb-title { font-size: 0.7rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; margin-bottom: 0.5rem; }
+        #shareOfTimeIQView .sot-cohort-baseline-card .cb-metric { font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+        #shareOfTimeIQView .sot-cohort-baseline-card .cb-value { font-size: 1.05rem; font-weight: 800; color: var(--text-primary); }
+        #shareOfTimeIQView .sot-cohort-dev-grid { display: flex; gap: 0.6rem; flex: 1 1 0%; overflow-x: auto; min-width: 0; }
+        #shareOfTimeIQView .sot-cohort-dev-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.65rem 0.75rem; min-width: 120px; flex: 1 1 0%; }
+        #shareOfTimeIQView .sot-cohort-dev-card .cd-label { font-size: 0.65rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem; white-space: nowrap; }
+        #shareOfTimeIQView .sot-cohort-dev-card .cd-row { font-size: 0.62rem; color: var(--text-secondary); margin-top: 0.15rem; display: flex; justify-content: space-between; }
+
+        #shareOfTimeIQView .sot-heatmap { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 1.25rem; }
+        #shareOfTimeIQView .sot-heatmap th { text-align: center; padding: 0.45rem 0.5rem; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); font-weight: 700; white-space: nowrap; }
+        #shareOfTimeIQView .sot-heatmap th:first-child { text-align: left; }
+        #shareOfTimeIQView .sot-heatmap td { padding: 0.5rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.04); font-weight: 700; font-variant-numeric: tabular-nums; cursor: default; position: relative; transition: transform 0.15s; }
+        #shareOfTimeIQView .sot-heatmap td:first-child { text-align: left; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+        #shareOfTimeIQView .sot-heatmap td:hover { transform: scale(1.05); z-index: 2; }
+        #shareOfTimeIQView .sot-heatmap .hm-tooltip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.5rem; font-size: 0.62rem; white-space: nowrap; z-index: 10; color: var(--text-primary); font-weight: 400; pointer-events: none; }
+        #shareOfTimeIQView .sot-heatmap td:hover .hm-tooltip { display: block; }
+
+        #shareOfTimeIQView .sot-insights { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; }
+        @media (max-width: 800px) { #shareOfTimeIQView .sot-insights { grid-template-columns: 1fr; } }
+        #shareOfTimeIQView .sot-insight-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem 0.8rem; font-size: 0.75rem; color: var(--text-primary); display: flex; align-items: flex-start; gap: 0.5rem; }
+        #shareOfTimeIQView .sot-insight-icon { font-size: 0.9rem; flex-shrink: 0; line-height: 1.2; }
+        #shareOfTimeIQView .sot-insight-text b { color: var(--accent-cyan); }
+
         @keyframes sotSpin { to { transform: rotate(360deg); } }
         #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #llmoIQView .llmo-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
@@ -24279,6 +24311,25 @@
         }
 
         var _sotCmpFocusMode = false;
+        var _sotCohortMode = false;
+        var _sotCohortFilter = {};
+
+        function _sotAgeSort(a, b) {
+            var order = {'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
+            var aLabel = _sotAgeDisplayLabel(a.data.age_brackets || []);
+            var bLabel = _sotAgeDisplayLabel(b.data.age_brackets || []);
+            if (aLabel === 'All Ages') return 1;
+            if (bLabel === 'All Ages') return -1;
+            var aMin = Math.min.apply(null, (a.data.age_brackets || []).map(function(x) { return order[x] || 99; }));
+            var bMin = Math.min.apply(null, (b.data.age_brackets || []).map(function(x) { return order[x] || 99; }));
+            return aMin - bMin;
+        }
+
+        function sotToggleCohortFilter(label) {
+            if (label === 'All Ages') return;
+            _sotCohortFilter[label] = !_sotCohortFilter[label];
+            sotRenderCompare();
+        }
 
         function _sotSparklineSVG(vals, color) {
             if (!vals || vals.length < 3) return '';
@@ -24296,239 +24347,221 @@
                 '</svg></span>';
         }
 
+        function _sotIsCohortMode(tabs) {
+            if (tabs.length < 2) return false;
+            var hasAll = false, hasSpecific = false;
+            tabs.forEach(function(t) {
+                if ((t.data.age_brackets || []).length >= 7) hasAll = true;
+                else hasSpecific = true;
+            });
+            return hasAll && hasSpecific;
+        }
+
+        function _sotCohortLabel(t) {
+            return _sotAgeDisplayLabel(t.data.age_brackets || []);
+        }
+
+        function _sotHeatColor(delta) {
+            var abs = Math.min(Math.abs(delta), 15);
+            var intensity = abs / 15;
+            if (delta > 0) return 'rgba(52,211,153,' + (0.1 + intensity * 0.55).toFixed(2) + ')';
+            if (delta < 0) return 'rgba(248,113,113,' + (0.1 + intensity * 0.55).toFixed(2) + ')';
+            return 'transparent';
+        }
+
         function sotRenderCompare() {
             _sotDestroyCompareCharts();
             var area = document.getElementById('sotCompareArea');
             var gran = _sotGranularity;
             var shareKey = _sotShareKey(gran);
-            var tabs = _sotOpenTabs.slice().sort(function(a, b) {
-                return (b.data.start_date || '').localeCompare(a.data.start_date || '')
-                    || (b.data.end_date || '').localeCompare(a.data.end_date || '');
+
+            var isCohort = _sotIsCohortMode(_sotOpenTabs);
+            _sotCohortMode = isCohort;
+
+            if (isCohort) {
+                _sotRenderCohortCompare(area, gran, shareKey);
+            } else {
+                _sotRenderTimeCompare(area, gran, shareKey);
+            }
+        }
+
+        function _sotRenderCohortCompare(area, gran, shareKey) {
+            var allTabs = _sotOpenTabs.slice();
+            var baseTab = allTabs.find(function(t) { return (t.data.age_brackets || []).length >= 7; });
+            var cohortTabs = allTabs.filter(function(t) { return (t.data.age_brackets || []).length < 7; });
+            cohortTabs.sort(_sotAgeSort);
+
+            var base = baseTab.data;
+            var filteredCohorts = cohortTabs.filter(function(t) {
+                var lbl = _sotCohortLabel(t);
+                return _sotCohortFilter[lbl] !== false;
             });
-            if (!tabs.length) { area.innerHTML = ''; return; }
-            var base = tabs[tabs.length - 1].data;
 
             var catNames = [];
-            tabs.forEach(function(t) {
+            allTabs.forEach(function(t) {
                 (t.data.categories || []).forEach(function(c) {
                     if (catNames.indexOf(c.name) === -1) catNames.push(c.name);
                 });
             });
             catNames.sort(function(a, b) {
-                var aSum = 0, bSum = 0;
-                tabs.forEach(function(t) {
-                    var aCat = (t.data.categories || []).find(function(c) { return c.name === a; });
-                    var bCat = (t.data.categories || []).find(function(c) { return c.name === b; });
-                    aSum += aCat ? (aCat[shareKey] || 0) : 0;
-                    bSum += bCat ? (bCat[shareKey] || 0) : 0;
-                });
-                return bSum - aSum;
-            });
-
-            var _catShareVals = {};
-            catNames.forEach(function(cn) {
-                _catShareVals[cn] = tabs.map(function(t) {
-                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
-                    return cat ? (cat[shareKey] || 0) : 0;
-                });
+                var aCat = (base.categories || []).find(function(c) { return c.name === a; });
+                var bCat = (base.categories || []).find(function(c) { return c.name === b; });
+                return ((bCat ? bCat[shareKey] : 0) || 0) - ((aCat ? aCat[shareKey] : 0) || 0);
             });
 
             var html = '';
 
-            // --- Top bar: granularity + focus toggle ---
+            // --- Top bar ---
             html += '<div class="sot-focus-bar">';
             html += '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:0;">' +
                 '<button class="sot-gran-btn' + (gran==='session'?' active':'') + '" onclick="sotSetCompareGran(\'session\')">Per Session</button>' +
                 '<button class="sot-gran-btn' + (gran==='daily'?' active':'') + '" onclick="sotSetCompareGran(\'daily\')">Per Day</button>' +
                 '<button class="sot-gran-btn' + (gran==='total'?' active':'') + '" onclick="sotSetCompareGran(\'total\')">Total Time Frame</button>' +
             '</div>';
-            html += '<button class="sot-focus-btn' + (_sotCmpFocusMode ? ' active' : '') + '" onclick="sotToggleFocusMode()" title="Hide summary cards and show only detail tables">FOCUS</button>';
+            html += '<button class="sot-focus-btn' + (_sotCmpFocusMode ? ' active' : '') + '" onclick="sotToggleFocusMode()" title="Hide summary sections">FOCUS</button>';
             html += '</div>';
-
             var focusHide = _sotCmpFocusMode ? ' sot-cmp-focus-hide' : '';
 
-            // === SECTION 1: KPI Comparison Cards ===
-            var kpiMetrics = [
-                { label: 'Sample Participants', key: 'matched_users', color: 'var(--accent-lime)' },
-                { label: 'US Projection', key: 'projected_us_users', color: '#a855f7' },
-                { label: 'Projected US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
-                { label: 'Adj. Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
-            ];
-            html += '<div class="sot-cmp-kpi-grid' + focusHide + '" id="sotCmpKpiSection" style="grid-template-columns:repeat(' + tabs.length + ',1fr);">';
-            tabs.forEach(function(t, ti) {
-                var lbl = _sotTabLabel(t.data);
-                var hue = _sotTabHue(ti);
-                html += '<div class="sot-cmp-kpi-col" style="border-top:3px solid hsla(' + hue + ',70%,60%,0.8);">';
-                html += '<div class="sot-cmp-kpi-label" title="' + lbl + '">' + lbl + '</div>';
-                kpiMetrics.forEach(function(m) {
-                    var val = t.data[m.key] || 0;
-                    var baseVal = base[m.key] || 0;
-                    html += '<div style="margin-top:0.4rem;">';
-                    html += '<div class="sot-cmp-kpi-metric">' + m.label + '</div>';
-                    html += '<div class="sot-cmp-kpi-value" style="color:' + m.color + ';">' + _sotCmpFmtNum(val);
-                    if (ti > 0) html += ' ' + _sotCmpDelta(val, baseVal);
-                    html += '</div></div>';
-                });
-                html += '</div>';
+            // === Cohort Filter Chips ===
+            html += '<div class="sot-cohort-chips' + focusHide + '">';
+            html += '<span class="sot-cohort-chip-label">Baseline:</span>';
+            html += '<span class="sot-cohort-chip baseline">All Ages</span>';
+            html += '<span class="sot-cohort-chip-label" style="margin-left:0.5rem;">Cohorts:</span>';
+            cohortTabs.forEach(function(t) {
+                var lbl = _sotCohortLabel(t);
+                var isOn = _sotCohortFilter[lbl] !== false;
+                html += '<span class="sot-cohort-chip' + (isOn ? ' active' : '') + '" onclick="sotToggleCohortFilter(\'' + lbl.replace(/'/g, "\\'") + '\')">' + lbl + '</span>';
             });
             html += '</div>';
 
-            // === SECTION 1b: Clickable Category Cards ===
+            // === Baseline + Deviation KPI Cards ===
+            var kpiMetrics = [
+                { label: 'Sample', key: 'matched_users', color: 'var(--accent-lime)' },
+                { label: 'US Projection', key: 'projected_us_users', color: '#a855f7' },
+                { label: 'US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
+                { label: 'Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
+            ];
+            html += '<div class="sot-cohort-baseline' + focusHide + '" id="sotCmpKpiSection">';
+            html += '<div class="sot-cohort-baseline-card">';
+            html += '<div class="cb-title">All Ages — Baseline</div>';
+            kpiMetrics.forEach(function(m) {
+                html += '<div class="cb-metric">' + m.label + '</div>';
+                html += '<div class="cb-value" style="color:' + m.color + ';">' + _sotCmpFmtNum(base[m.key] || 0) + '</div>';
+            });
+            html += '</div>';
+            html += '<div class="sot-cohort-dev-grid">';
+            filteredCohorts.forEach(function(t) {
+                var lbl = _sotCohortLabel(t);
+                html += '<div class="sot-cohort-dev-card">';
+                html += '<div class="cd-label">' + lbl + '</div>';
+                kpiMetrics.forEach(function(m) {
+                    var val = t.data[m.key] || 0;
+                    var bv = base[m.key] || 0;
+                    html += '<div class="cd-row"><span>' + m.label + '</span>' + _sotCmpDelta(val, bv) + '</div>';
+                });
+                html += '</div>';
+            });
+            html += '</div></div>';
+
+            // === Category Cards (sparkline = across cohorts, delta = spread) ===
             html += '<div class="sot-cmp-cat-cards' + focusHide + '" id="sotCmpCatCards">';
             catNames.forEach(function(cn) {
-                var vals = _catShareVals[cn];
                 var col = _sotCatColors[cn] || '#888';
-                var newestVal = vals[0] || 0;
-                var delta = tabs.length >= 2 ? vals[0] - vals[vals.length - 1] : 0;
-                var deltaHtml = tabs.length >= 2 ? _sotCmpDeltaPP(vals[0], vals[vals.length - 1]) : '';
-                var spark = tabs.length >= 3 ? _sotSparklineSVG(vals.slice().reverse(), col) : '';
+                var baseVal = 0;
+                var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                if (baseCat) baseVal = baseCat[shareKey] || 0;
+                var cohortVals = filteredCohorts.map(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    return cat ? (cat[shareKey] || 0) : 0;
+                });
+                var allVals = [baseVal].concat(cohortVals);
+                var spread = allVals.length >= 2 ? (Math.max.apply(null, allVals) - Math.min.apply(null, allVals)) : 0;
+                var spark = allVals.length >= 3 ? _sotSparklineSVG(allVals, col) : '';
                 var catId = cn.replace(/[^a-zA-Z]/g, '');
                 html += '<div class="sot-cmp-cat-card" data-sot-cat="' + cn + '" onclick="sotDrillCategory(\'' + catId + '\',this)">';
                 html += '<div class="ccard-name">' + cn + '</div>';
-                html += '<div class="ccard-val" style="color:' + col + ';">' + newestVal.toFixed(1) + '% ' + deltaHtml + ' ' + spark + '</div>';
-                html += '<div class="ccard-bar" style="width:' + Math.min(100, newestVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
+                html += '<div class="ccard-val" style="color:' + col + ';">' + baseVal.toFixed(1) + '% <span style="font-size:0.6rem;color:var(--text-secondary);">spread ' + spread.toFixed(1) + 'pp</span> ' + spark + '</div>';
+                html += '<div class="ccard-bar" style="width:' + Math.min(100, baseVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
                 html += '</div>';
             });
             html += '</div>';
 
-            // === SECTION 2: Top Movers ===
-            if (tabs.length >= 2) {
-                var newest = tabs[0].data;
-                var catMovers = catNames.map(function(cn) {
-                    var oldCat = (base.categories || []).find(function(c) { return c.name === cn; });
-                    var newCat = (newest.categories || []).find(function(c) { return c.name === cn; });
-                    var ov = oldCat ? (oldCat[shareKey] || 0) : 0;
-                    var nv = newCat ? (newCat[shareKey] || 0) : 0;
-                    return { name: cn, baseVal: ov, lastVal: nv, delta: nv - ov };
-                }).sort(function(a, b) { return Math.abs(b.delta) - Math.abs(a.delta); }).slice(0, 6);
-
-                var brandMovers = [];
-                catNames.forEach(function(cn) {
-                    var oldCat = (base.categories || []).find(function(c) { return c.name === cn; });
-                    var newCat = (newest.categories || []).find(function(c) { return c.name === cn; });
-                    var oldBrands = {}; var newBrands = {};
-                    if (oldCat && oldCat.brands) oldCat.brands.forEach(function(b) { oldBrands[b.name] = b; });
-                    if (newCat && newCat.brands) newCat.brands.forEach(function(b) { newBrands[b.name] = b; });
-                    var allB = {};
-                    Object.keys(oldBrands).forEach(function(k) { allB[k] = true; });
-                    Object.keys(newBrands).forEach(function(k) { allB[k] = true; });
-                    Object.keys(allB).forEach(function(bn) {
-                        var ov = oldBrands[bn] ? (oldBrands[bn].category_share_pct || 0) : 0;
-                        var nv = newBrands[bn] ? (newBrands[bn].category_share_pct || 0) : 0;
-                        if (Math.abs(nv - ov) >= 0.5) {
-                            brandMovers.push({ name: bn, category: cn, baseVal: ov, lastVal: nv, delta: nv - ov });
-                        }
-                    });
+            // === "Who's Different?" Insights ===
+            var insights = [];
+            catNames.forEach(function(cn) {
+                var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                var bv = baseCat ? (baseCat[shareKey] || 0) : 0;
+                var cohortVals = [];
+                filteredCohorts.forEach(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    var cv = cat ? (cat[shareKey] || 0) : 0;
+                    cohortVals.push(cv);
+                    var d = cv - bv;
+                    if (Math.abs(d) >= 1.5) {
+                        var dir = d > 0 ? 'over-indexes' : 'under-indexes';
+                        insights.push({ abs: Math.abs(d), text: '<b>' + _sotCohortLabel(t) + '</b> ' + dir + ' on <b>' + cn + '</b> by ' + Math.abs(d).toFixed(1) + 'pp vs All Ages', icon: d > 0 ? '📈' : '📉' });
+                    }
                 });
-                brandMovers.sort(function(a, b) { return Math.abs(b.delta) - Math.abs(a.delta); });
-                brandMovers = brandMovers.slice(0, 10);
-
-                var newestLabel = _sotTabLabel(newest);
-                var oldestLabel = _sotTabLabel(base);
-
-                html += '<div class="sot-cmp-movers' + focusHide + '" id="sotCmpMoversSection">';
-                html += '<div class="sot-cmp-mover-card"><h4>Category Shifts</h4>';
-                html += '<div style="font-size:0.62rem;color:var(--text-secondary);margin-bottom:0.5rem;">' + newestLabel + ' vs ' + oldestLabel + '</div>';
-                catMovers.forEach(function(m) {
-                    var cls = m.delta > 0 ? 'up' : m.delta < 0 ? 'down' : 'neutral';
-                    var arrow = m.delta > 0 ? '▲' : m.delta < 0 ? '▼' : '–';
-                    html += '<div class="sot-cmp-mover-row" data-sot-cat="' + m.name + '">' +
-                        '<div class="sot-cmp-mover-name">' + m.name + '</div>' +
-                        '<div class="sot-cmp-mover-vals">' + m.baseVal.toFixed(1) + '% → ' + m.lastVal.toFixed(1) + '%</div>' +
-                        '<span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(m.delta).toFixed(1) + 'pp</span>' +
-                    '</div>';
-                });
-                html += '</div>';
-
-                html += '<div class="sot-cmp-mover-card"><h4>Top Brand Movers</h4>';
-                html += '<div style="font-size:0.62rem;color:var(--text-secondary);margin-bottom:0.5rem;">Within-category share shifts</div>';
-                if (!brandMovers.length) {
-                    html += '<div style="padding:0.5rem 0;color:var(--text-secondary);font-size:0.75rem;">No significant brand shifts detected.</div>';
+                if (filteredCohorts.length >= 2) {
+                    var allV = cohortVals.concat([bv]);
+                    var sp = Math.max.apply(null, allV) - Math.min.apply(null, allV);
+                    if (sp < 2.5) {
+                        insights.push({ abs: 0.01, text: '<b>' + cn + '</b> is remarkably consistent across cohorts (max spread: ' + sp.toFixed(1) + 'pp)', icon: '≈' });
+                    }
                 }
-                brandMovers.forEach(function(m) {
-                    var cls = m.delta > 0 ? 'up' : 'down';
-                    var arrow = m.delta > 0 ? '▲' : '▼';
-                    var catCol = _sotCatColors[m.category] || '#888';
-                    html += '<div class="sot-cmp-mover-row" data-sot-cat="' + m.category + '">' +
-                        '<div style="flex:1;"><span class="sot-cmp-mover-name">' + m.name + '</span> <span class="sot-cmp-mover-cat" style="color:' + catCol + ';">' + m.category + '</span></div>' +
-                        '<div class="sot-cmp-mover-vals">' + m.baseVal.toFixed(1) + '% → ' + m.lastVal.toFixed(1) + '%</div>' +
-                        '<span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(m.delta).toFixed(1) + 'pp</span>' +
-                    '</div>';
+            });
+            insights.sort(function(a, b) { return b.abs - a.abs; });
+            insights = insights.slice(0, 8);
+
+            if (insights.length) {
+                html += '<div class="sot-chart-card' + focusHide + '" id="sotCmpMoversSection" style="margin-bottom:1.25rem;padding:0.85rem;">';
+                html += '<h3 class="sot-cmp-section-title">Who\'s Different?</h3>';
+                html += '<div class="sot-insights">';
+                insights.forEach(function(ins) {
+                    html += '<div class="sot-insight-card"><span class="sot-insight-icon">' + ins.icon + '</span><span class="sot-insight-text">' + ins.text + '</span></div>';
                 });
                 html += '</div></div>';
             }
 
-            // === SECTION 3: Overall Category Chart ===
+            // === Category Heatmap Grid ===
+            html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;overflow-x:auto;">';
+            html += '<h3 class="sot-cmp-section-title">Category Share vs All Ages — Heatmap</h3>';
+            html += '<table class="sot-heatmap"><thead><tr><th>Category</th><th>All Ages</th>';
+            filteredCohorts.forEach(function(t) { html += '<th>' + _sotCohortLabel(t) + '</th>'; });
+            html += '</tr></thead><tbody>';
+            catNames.forEach(function(cn) {
+                var col = _sotCatColors[cn] || '#888';
+                var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                var bv = baseCat ? (baseCat[shareKey] || 0) : 0;
+                html += '<tr data-sot-cat="' + cn + '">';
+                html += '<td><span class="sot-cmp-mini-bar" style="width:' + Math.max(2, bv * 1.2) + 'px;background:' + col + ';"></span>' + cn + '</td>';
+                html += '<td style="color:var(--accent-cyan);font-weight:800;">' + bv.toFixed(1) + '%</td>';
+                filteredCohorts.forEach(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    var cv = cat ? (cat[shareKey] || 0) : 0;
+                    var d = cv - bv;
+                    var bg = _sotHeatColor(d);
+                    var sign = d > 0 ? '+' : '';
+                    html += '<td style="background:' + bg + ';color:#fff;">' + sign + d.toFixed(1) + 'pp';
+                    html += '<div class="hm-tooltip">' + _sotCohortLabel(t) + ': ' + cv.toFixed(1) + '% vs All Ages: ' + bv.toFixed(1) + '%</div>';
+                    html += '</td>';
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+
+            // === Overall Category Chart ===
+            var chartTabs = [baseTab].concat(filteredCohorts);
             html += '<div class="sot-chart-card" style="margin-bottom:1rem;">' +
                 '<h3 class="sot-chart-title">Overall Share of Time by Category</h3>' +
                 '<div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div>' +
             '</div>';
 
-            // === SECTION 3b: Category Detail Table (sortable + expandable) ===
-            var colCount = tabs.length + 1 + (tabs.length >= 2 ? 1 : 0);
-            html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;overflow-x:auto;">';
-            html += '<h3 class="sot-cmp-section-title">Category Detail</h3>';
-            html += '<table class="sot-cmp-table" id="sotCmpCatTable"><thead><tr>';
-            html += '<th class="sortable" data-sort-col="name" onclick="sotSortTable(\'sotCmpCatTable\',\'name\')">Category <span class="sort-arrow">▼</span></th>';
-            tabs.forEach(function(t, ti) {
-                var short = _sotQuarterLabel(t.data.start_date, t.data.end_date) || (_sotFmtDateShort(t.data.start_date).replace(/, \d{4}$/, ''));
-                html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'sotCmpCatTable\',\'v' + ti + '\')">' + short + ' <span class="sort-arrow">▼</span></th>';
-            });
-            if (tabs.length >= 2) html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'sotCmpCatTable\',\'delta\')">Delta <span class="sort-arrow">▼</span></th>';
-            html += '</tr></thead><tbody>';
-            catNames.forEach(function(cn) {
-                var vals = _catShareVals[cn];
-                var maxVal = Math.max.apply(null, vals.concat([1]));
-                var col = _sotCatColors[cn] || '#888';
-                var delta = tabs.length >= 2 ? vals[0] - vals[vals.length - 1] : 0;
-                var isHighlight = Math.abs(delta) >= 3;
-                var spark = tabs.length >= 3 ? _sotSparklineSVG(vals.slice().reverse(), col) : '';
-                html += '<tr class="expandable' + (isHighlight ? ' highlight' : '') + '" data-sot-cat="' + cn + '" data-sort-name="' + cn + '" data-sort-delta="' + Math.abs(delta).toFixed(4) + '"';
-                vals.forEach(function(v, vi) { html += ' data-sort-v' + vi + '="' + v.toFixed(4) + '"'; });
-                html += ' onclick="sotToggleExpandRow(this)">';
-                html += '<td style="font-weight:600;white-space:nowrap;"><span class="expand-chevron">▶</span><span class="sot-cmp-mini-bar" style="width:' + Math.max(2, vals[0]/maxVal*40) + 'px;background:' + col + ';"></span>' + cn + spark + '</td>';
-                vals.forEach(function(v) {
-                    html += '<td class="num">' + v.toFixed(1) + '%</td>';
-                });
-                if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(vals[0], vals[vals.length-1]) + '</td>';
-                html += '</tr>';
-
-                // Expandable sub-row with top-5 brands inline
-                html += '<tr class="expand-row" data-expand-for="' + cn + '"><td colspan="' + colCount + '"><div class="expand-inner"><div class="sot-cmp-expand-brands">';
-                var catBrands = {};
-                tabs.forEach(function(t) {
-                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
-                    if (cat && cat.brands) cat.brands.forEach(function(b) {
-                        if (!catBrands[b.name]) catBrands[b.name] = 0;
-                        catBrands[b.name] = Math.max(catBrands[b.name], b.category_share_pct || 0);
-                    });
-                });
-                var top5 = Object.keys(catBrands).sort(function(a, b) { return catBrands[b] - catBrands[a]; }).slice(0, 5);
-                html += '<table>';
-                top5.forEach(function(bn) {
-                    html += '<tr><td>' + bn + '</td>';
-                    tabs.forEach(function(t) {
-                        var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
-                        var b = cat && cat.brands ? cat.brands.find(function(x) { return x.name === bn; }) : null;
-                        var v = b ? (b.category_share_pct || 0) : 0;
-                        html += '<td class="num">' + v.toFixed(1) + '%</td>';
-                    });
-                    if (tabs.length >= 2) {
-                        var firstB = (function() { var cat = (tabs[0].data.categories || []).find(function(c) { return c.name === cn; }); var b = cat && cat.brands ? cat.brands.find(function(x) { return x.name === bn; }) : null; return b ? (b.category_share_pct || 0) : 0; })();
-                        var lastB = (function() { var cat = (tabs[tabs.length-1].data.categories || []).find(function(c) { return c.name === cn; }); var b = cat && cat.brands ? cat.brands.find(function(x) { return x.name === bn; }) : null; return b ? (b.category_share_pct || 0) : 0; })();
-                        html += '<td class="num">' + _sotCmpDeltaPP(firstB, lastB) + '</td>';
-                    }
-                    html += '</tr>';
-                });
-                html += '</table></div></div></td></tr>';
-            });
-            html += '</tbody></table></div>';
-
-            // === SECTION 4: Per-category brand charts + sortable tables ===
+            // === Per-category brand charts + tables (delta vs All Ages) ===
             catNames.forEach(function(catName) {
                 var allBrands = {};
                 var tabCatShares = [];
-                tabs.forEach(function(t) {
+                chartTabs.forEach(function(t) {
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
                     var catShare = cat ? (cat[shareKey] || 0) : 0;
                     tabCatShares.push(catShare);
@@ -24553,74 +24586,74 @@
                 html += '<div style="margin-top:0.75rem;overflow-x:auto;">';
                 html += '<table class="sot-cmp-table" id="' + brandTableId + '"><thead><tr>';
                 html += '<th class="sortable" data-sort-col="name" onclick="sotSortTable(\'' + brandTableId + '\',\'name\')">Brand <span class="sort-arrow">▼</span></th>';
-                tabs.forEach(function(t, ti) {
-                    var short = _sotQuarterLabel(t.data.start_date, t.data.end_date) || (_sotFmtDateShort(t.data.start_date).replace(/, \d{4}$/, ''));
-                    html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'' + brandTableId + '\',\'v' + ti + '\')">' + short + ' <span class="sort-arrow">▼</span></th>';
+                html += '<th class="num">All Ages</th>';
+                filteredCohorts.forEach(function(t, ti) {
+                    html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'' + brandTableId + '\',\'v' + ti + '\')">' + _sotCohortLabel(t) + ' <span class="sort-arrow">▼</span></th>';
                 });
-                if (tabs.length >= 2) html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'' + brandTableId + '\',\'delta\')">Delta <span class="sort-arrow">▼</span></th>';
+                html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'' + brandTableId + '\',\'delta\')">Max Δ <span class="sort-arrow">▼</span></th>';
                 html += '</tr></thead><tbody>';
 
+                var baseCat = (base.categories || []).find(function(c) { return c.name === catName; });
+                var baseBrandMap = {};
+                if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseBrandMap[b.name] = b; });
+
                 var brandRows = brandNames.map(function(bn) {
-                    var vals = tabs.map(function(t, ti) {
-                        if (tabCatShares[ti] < 0.5) return 0;
+                    var baseB = baseBrandMap[bn];
+                    var baseV = baseB ? (baseB.category_share_pct || 0) : 0;
+                    var vals = filteredCohorts.map(function(t, ti) {
+                        if (tabCatShares[ti + 1] < 0.5) return 0;
                         var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
                         if (!cat || !cat.brands) return 0;
                         var b = cat.brands.find(function(x) { return x.name === bn; });
                         return b ? (b.category_share_pct || 0) : 0;
                     });
-                    var delta = tabs.length >= 2 ? vals[0] - vals[vals.length-1] : 0;
-                    return { name: bn, vals: vals, delta: delta };
+                    var maxDelta = 0;
+                    vals.forEach(function(v) { var d = Math.abs(v - baseV); if (d > maxDelta) maxDelta = d; });
+                    return { name: bn, baseV: baseV, vals: vals, delta: maxDelta };
                 });
-                brandRows.sort(function(a, b) { return Math.abs(b.delta) - Math.abs(a.delta); });
+                brandRows.sort(function(a, b) { return b.delta - a.delta; });
 
                 brandRows.forEach(function(br) {
-                    var isHighlight = Math.abs(br.delta) >= 3;
-                    var spark = tabs.length >= 3 ? _sotSparklineSVG(br.vals.slice().reverse(), col) : '';
-                    html += '<tr' + (isHighlight ? ' class="highlight"' : '') + ' data-sort-name="' + br.name + '" data-sort-delta="' + Math.abs(br.delta).toFixed(4) + '"';
+                    var isHighlight = br.delta >= 3;
+                    html += '<tr' + (isHighlight ? ' class="highlight"' : '') + ' data-sort-name="' + br.name + '" data-sort-delta="' + br.delta.toFixed(4) + '"';
                     br.vals.forEach(function(v, vi) { html += ' data-sort-v' + vi + '="' + v.toFixed(4) + '"'; });
                     html += '>';
-                    html += '<td style="font-weight:600;white-space:nowrap;">' + br.name + spark + '</td>';
+                    html += '<td style="font-weight:600;white-space:nowrap;">' + br.name + '</td>';
+                    html += '<td class="num" style="color:var(--accent-cyan);">' + br.baseV.toFixed(1) + '%</td>';
                     br.vals.forEach(function(v) {
-                        html += '<td class="num">' + v.toFixed(1) + '%</td>';
+                        var d = v - br.baseV;
+                        html += '<td class="num">' + v.toFixed(1) + '% ' + _sotCmpDeltaPP(v, br.baseV) + '</td>';
                     });
-                    if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(br.vals[0], br.vals[br.vals.length-1]) + '</td>';
+                    html += '<td class="num">' + br.delta.toFixed(1) + 'pp</td>';
                     html += '</tr>';
                 });
-                html += '</tbody></table></div>';
-                html += '</div>';
+                html += '</tbody></table></div></div>';
             });
 
             area.innerHTML = html;
 
-            // --- Wire up hover-linked highlighting via event delegation ---
+            // --- Hover-linked highlighting ---
             area.addEventListener('mouseover', function(e) {
                 var el = e.target.closest('[data-sot-cat]');
                 if (!el) return;
                 var cat = el.getAttribute('data-sot-cat');
                 area.querySelectorAll('[data-sot-cat]').forEach(function(node) {
-                    if (node.getAttribute('data-sot-cat') === cat) {
-                        node.classList.add('sot-cat-glow');
-                        node.classList.remove('sot-cat-dim');
-                    } else {
-                        node.classList.add('sot-cat-dim');
-                        node.classList.remove('sot-cat-glow');
-                    }
+                    if (node.getAttribute('data-sot-cat') === cat) { node.classList.add('sot-cat-glow'); node.classList.remove('sot-cat-dim'); }
+                    else { node.classList.add('sot-cat-dim'); node.classList.remove('sot-cat-glow'); }
                 });
             });
             area.addEventListener('mouseout', function(e) {
                 var el = e.target.closest('[data-sot-cat]');
                 if (!el) return;
-                area.querySelectorAll('[data-sot-cat]').forEach(function(node) {
-                    node.classList.remove('sot-cat-glow', 'sot-cat-dim');
-                });
+                area.querySelectorAll('[data-sot-cat]').forEach(function(n) { n.classList.remove('sot-cat-glow','sot-cat-dim'); });
             });
 
             // --- Render Charts ---
             var mainCanvas = document.getElementById('sotCmpMain');
             if (mainCanvas && typeof Chart !== 'undefined') {
                 var mainDS = [];
-                tabs.forEach(function(t, i) {
-                    var label = _sotTabLabel(t.data);
+                chartTabs.forEach(function(t, i) {
+                    var label = i === 0 ? 'All Ages' : _sotCohortLabel(t);
                     var cats = t.data.categories || [];
                     var vals = catNames.map(function(cn) {
                         var found = cats.find(function(c) { return c.name === cn; });
@@ -24628,11 +24661,12 @@
                     });
                     mainDS.push({
                         label: label, data: vals,
-                        backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
-                        borderWidth: 0, borderRadius: 4, barPercentage: 0.9
+                        backgroundColor: i === 0 ? 'rgba(6,182,212,0.6)' : 'hsla(' + _sotTabHue(i) + ',70%,60%,0.65)',
+                        borderWidth: i === 0 ? 2 : 0, borderColor: i === 0 ? 'rgba(6,182,212,0.9)' : 'transparent',
+                        borderRadius: 4, barPercentage: 0.9
                     });
                 });
-                var mainChart = new Chart(mainCanvas.getContext('2d'), {
+                _sotCompareCharts.push(new Chart(mainCanvas.getContext('2d'), {
                     type: 'bar', plugins: [ChartDataLabels],
                     data: { labels: catNames, datasets: mainDS },
                     options: {
@@ -24647,52 +24681,39 @@
                             datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         }
                     }
-                });
-                _sotCompareCharts.push(mainChart);
+                }));
             }
 
             catNames.forEach(function(catName) {
                 var canvasId = 'sotCmpCat_' + catName.replace(/[^a-zA-Z]/g, '');
                 var canvas = document.getElementById(canvasId);
                 if (!canvas || typeof Chart === 'undefined') return;
-
-                var allBrands = {};
-                var tabCatShares = [];
-                tabs.forEach(function(t) {
+                var brandMap = {};
+                chartTabs.forEach(function(t) {
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
-                    var catShare = cat ? (cat[shareKey] || 0) : 0;
-                    tabCatShares.push(catShare);
-                    if (cat && cat.brands && catShare >= 0.5) {
-                        cat.brands.forEach(function(b) {
-                            if (!allBrands[b.name]) allBrands[b.name] = 0;
-                            allBrands[b.name] = Math.max(allBrands[b.name], b.category_share_pct || 0);
-                        });
-                    }
+                    if (cat && cat.brands) cat.brands.forEach(function(b) {
+                        if (!brandMap[b.name]) brandMap[b.name] = 0;
+                        brandMap[b.name] = Math.max(brandMap[b.name], b.category_share_pct || 0);
+                    });
                 });
-                var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
-                if (!brandNames.length) return;
-
+                var bNames = Object.keys(brandMap).sort(function(a, b) { return brandMap[b] - brandMap[a]; }).slice(0, 20);
+                if (!bNames.length) return;
                 var catDS = [];
-                tabs.forEach(function(t, i) {
-                    var label = _sotTabLabel(t.data);
-                    var negligible = tabCatShares[i] < 0.5;
+                chartTabs.forEach(function(t, i) {
+                    var lbl = i === 0 ? 'All Ages' : _sotCohortLabel(t);
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
-                    var brandMap = {};
-                    if (cat && cat.brands && !negligible) cat.brands.forEach(function(b) { brandMap[b.name] = b; });
-                    var vals = brandNames.map(function(bn) {
-                        var b = brandMap[bn];
-                        return b ? (b.category_share_pct || 0) : 0;
-                    });
+                    var bm = {};
+                    if (cat && cat.brands) cat.brands.forEach(function(b) { bm[b.name] = b; });
                     catDS.push({
-                        label: label, data: vals,
-                        backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
-                        borderWidth: 0, borderRadius: 3, barPercentage: 0.9
+                        label: lbl, data: bNames.map(function(bn) { var b = bm[bn]; return b ? (b.category_share_pct || 0) : 0; }),
+                        backgroundColor: i === 0 ? 'rgba(6,182,212,0.55)' : 'hsla(' + _sotTabHue(i) + ',70%,60%,0.65)',
+                        borderWidth: i === 0 ? 2 : 0, borderColor: i === 0 ? 'rgba(6,182,212,0.9)' : 'transparent',
+                        borderRadius: 3, barPercentage: 0.9
                     });
                 });
-
-                var catChart = new Chart(canvas.getContext('2d'), {
+                _sotCompareCharts.push(new Chart(canvas.getContext('2d'), {
                     type: 'bar', plugins: [ChartDataLabels],
-                    data: { labels: brandNames, datasets: catDS },
+                    data: { labels: bNames, datasets: catDS },
                     options: {
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                         scales: {
@@ -24701,15 +24722,180 @@
                         },
                         plugins: {
                             legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 10 }, padding: 12, usePointStyle: true } },
-                            tooltip: { callbacks: { label: function(ctx) {
-                                if (ctx.parsed.x === 0 && tabCatShares[ctx.datasetIndex] < 0.5) return ctx.dataset.label + ': N/A (category < 0.5% for this cohort)';
-                                return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName;
-                            } } },
+                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName; } } },
                             datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         }
                     }
+                }));
+            });
+        }
+
+        function _sotRenderTimeCompare(area, gran, shareKey) {
+            var tabs = _sotOpenTabs.slice().sort(function(a, b) {
+                return (b.data.start_date || '').localeCompare(a.data.start_date || '')
+                    || (b.data.end_date || '').localeCompare(a.data.end_date || '');
+            });
+            if (!tabs.length) { area.innerHTML = ''; return; }
+            var base = tabs[tabs.length - 1].data;
+
+            var catNames = [];
+            tabs.forEach(function(t) { (t.data.categories || []).forEach(function(c) { if (catNames.indexOf(c.name) === -1) catNames.push(c.name); }); });
+            catNames.sort(function(a, b) {
+                var aSum = 0, bSum = 0;
+                tabs.forEach(function(t) {
+                    var aC = (t.data.categories || []).find(function(c) { return c.name === a; });
+                    var bC = (t.data.categories || []).find(function(c) { return c.name === b; });
+                    aSum += aC ? (aC[shareKey] || 0) : 0; bSum += bC ? (bC[shareKey] || 0) : 0;
                 });
-                _sotCompareCharts.push(catChart);
+                return bSum - aSum;
+            });
+            var _catShareVals = {};
+            catNames.forEach(function(cn) {
+                _catShareVals[cn] = tabs.map(function(t) { var cat = (t.data.categories || []).find(function(c) { return c.name === cn; }); return cat ? (cat[shareKey] || 0) : 0; });
+            });
+
+            var html = '';
+            html += '<div class="sot-focus-bar">';
+            html += '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:0;">' +
+                '<button class="sot-gran-btn' + (gran==='session'?' active':'') + '" onclick="sotSetCompareGran(\'session\')">Per Session</button>' +
+                '<button class="sot-gran-btn' + (gran==='daily'?' active':'') + '" onclick="sotSetCompareGran(\'daily\')">Per Day</button>' +
+                '<button class="sot-gran-btn' + (gran==='total'?' active':'') + '" onclick="sotSetCompareGran(\'total\')">Total Time Frame</button>' +
+            '</div>';
+            html += '<button class="sot-focus-btn' + (_sotCmpFocusMode ? ' active' : '') + '" onclick="sotToggleFocusMode()" title="Hide summary sections">FOCUS</button>';
+            html += '</div>';
+            var focusHide = _sotCmpFocusMode ? ' sot-cmp-focus-hide' : '';
+
+            var kpiMetrics = [
+                { label: 'Sample Participants', key: 'matched_users', color: 'var(--accent-lime)' },
+                { label: 'US Projection', key: 'projected_us_users', color: '#a855f7' },
+                { label: 'Projected US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
+                { label: 'Adj. Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
+            ];
+            html += '<div class="sot-cmp-kpi-grid' + focusHide + '" id="sotCmpKpiSection" style="grid-template-columns:repeat(' + tabs.length + ',1fr);">';
+            tabs.forEach(function(t, ti) {
+                var lbl = _sotTabLabel(t.data); var hue = _sotTabHue(ti);
+                html += '<div class="sot-cmp-kpi-col" style="border-top:3px solid hsla(' + hue + ',70%,60%,0.8);">';
+                html += '<div class="sot-cmp-kpi-label" title="' + lbl + '">' + lbl + '</div>';
+                kpiMetrics.forEach(function(m) {
+                    var val = t.data[m.key] || 0; var baseVal = base[m.key] || 0;
+                    html += '<div style="margin-top:0.4rem;"><div class="sot-cmp-kpi-metric">' + m.label + '</div>';
+                    html += '<div class="sot-cmp-kpi-value" style="color:' + m.color + ';">' + _sotCmpFmtNum(val);
+                    if (ti > 0) html += ' ' + _sotCmpDelta(val, baseVal);
+                    html += '</div></div>';
+                });
+                html += '</div>';
+            });
+            html += '</div>';
+
+            html += '<div class="sot-cmp-cat-cards' + focusHide + '" id="sotCmpCatCards">';
+            catNames.forEach(function(cn) {
+                var vals = _catShareVals[cn]; var col = _sotCatColors[cn] || '#888';
+                var newestVal = vals[0] || 0; var delta = tabs.length >= 2 ? vals[0] - vals[vals.length - 1] : 0;
+                var deltaHtml = tabs.length >= 2 ? _sotCmpDeltaPP(vals[0], vals[vals.length - 1]) : '';
+                var spark = tabs.length >= 3 ? _sotSparklineSVG(vals.slice().reverse(), col) : '';
+                var catId = cn.replace(/[^a-zA-Z]/g, '');
+                html += '<div class="sot-cmp-cat-card" data-sot-cat="' + cn + '" onclick="sotDrillCategory(\'' + catId + '\',this)">';
+                html += '<div class="ccard-name">' + cn + '</div>';
+                html += '<div class="ccard-val" style="color:' + col + ';">' + newestVal.toFixed(1) + '% ' + deltaHtml + ' ' + spark + '</div>';
+                html += '<div class="ccard-bar" style="width:' + Math.min(100, newestVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
+                html += '</div>';
+            });
+            html += '</div>';
+
+            if (tabs.length >= 2) {
+                var newest = tabs[0].data;
+                var catMovers = catNames.map(function(cn) {
+                    var oC = (base.categories || []).find(function(c) { return c.name === cn; });
+                    var nC = (newest.categories || []).find(function(c) { return c.name === cn; });
+                    return { name: cn, baseVal: oC ? (oC[shareKey]||0) : 0, lastVal: nC ? (nC[shareKey]||0) : 0, delta: (nC?(nC[shareKey]||0):0) - (oC?(oC[shareKey]||0):0) };
+                }).sort(function(a, b) { return Math.abs(b.delta) - Math.abs(a.delta); }).slice(0, 6);
+
+                html += '<div class="sot-cmp-movers' + focusHide + '" id="sotCmpMoversSection">';
+                html += '<div class="sot-cmp-mover-card"><h4>Category Shifts</h4>';
+                html += '<div style="font-size:0.62rem;color:var(--text-secondary);margin-bottom:0.5rem;">' + _sotTabLabel(newest) + ' vs ' + _sotTabLabel(base) + '</div>';
+                catMovers.forEach(function(m) {
+                    var cls = m.delta > 0 ? 'up' : m.delta < 0 ? 'down' : 'neutral';
+                    var arrow = m.delta > 0 ? '▲' : m.delta < 0 ? '▼' : '–';
+                    html += '<div class="sot-cmp-mover-row" data-sot-cat="' + m.name + '"><div class="sot-cmp-mover-name">' + m.name + '</div><div class="sot-cmp-mover-vals">' + m.baseVal.toFixed(1) + '% → ' + m.lastVal.toFixed(1) + '%</div><span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(m.delta).toFixed(1) + 'pp</span></div>';
+                });
+                html += '</div></div>';
+            }
+
+            html += '<div class="sot-chart-card" style="margin-bottom:1rem;"><h3 class="sot-chart-title">Overall Share of Time by Category</h3><div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div></div>';
+
+            var colCount = tabs.length + 1 + (tabs.length >= 2 ? 1 : 0);
+            html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;overflow-x:auto;"><h3 class="sot-cmp-section-title">Category Detail</h3>';
+            html += '<table class="sot-cmp-table" id="sotCmpCatTable"><thead><tr><th class="sortable" data-sort-col="name" onclick="sotSortTable(\'sotCmpCatTable\',\'name\')">Category <span class="sort-arrow">▼</span></th>';
+            tabs.forEach(function(t, ti) {
+                var short = _sotQuarterLabel(t.data.start_date, t.data.end_date) || (_sotFmtDateShort(t.data.start_date).replace(/, \d{4}$/, ''));
+                html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'sotCmpCatTable\',\'v' + ti + '\')">' + short + ' <span class="sort-arrow">▼</span></th>';
+            });
+            if (tabs.length >= 2) html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'sotCmpCatTable\',\'delta\')">Delta <span class="sort-arrow">▼</span></th>';
+            html += '</tr></thead><tbody>';
+            catNames.forEach(function(cn) {
+                var vals = _catShareVals[cn]; var maxVal = Math.max.apply(null, vals.concat([1]));
+                var col = _sotCatColors[cn] || '#888'; var delta = tabs.length >= 2 ? vals[0] - vals[vals.length - 1] : 0;
+                var spark = tabs.length >= 3 ? _sotSparklineSVG(vals.slice().reverse(), col) : '';
+                html += '<tr class="expandable' + (Math.abs(delta)>=3?' highlight':'') + '" data-sot-cat="' + cn + '" data-sort-name="' + cn + '" data-sort-delta="' + Math.abs(delta).toFixed(4) + '"';
+                vals.forEach(function(v, vi) { html += ' data-sort-v' + vi + '="' + v.toFixed(4) + '"'; });
+                html += ' onclick="sotToggleExpandRow(this)"><td style="font-weight:600;white-space:nowrap;"><span class="expand-chevron">▶</span><span class="sot-cmp-mini-bar" style="width:' + Math.max(2, vals[0]/maxVal*40) + 'px;background:' + col + ';"></span>' + cn + spark + '</td>';
+                vals.forEach(function(v) { html += '<td class="num">' + v.toFixed(1) + '%</td>'; });
+                if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(vals[0], vals[vals.length-1]) + '</td>';
+                html += '</tr>';
+                html += '<tr class="expand-row" data-expand-for="' + cn + '"><td colspan="' + colCount + '"><div class="expand-inner"><div class="sot-cmp-expand-brands"><table>';
+                var catBrands = {};
+                tabs.forEach(function(t) { var cat = (t.data.categories || []).find(function(c) { return c.name === cn; }); if (cat && cat.brands) cat.brands.forEach(function(b) { if (!catBrands[b.name]) catBrands[b.name] = 0; catBrands[b.name] = Math.max(catBrands[b.name], b.category_share_pct || 0); }); });
+                Object.keys(catBrands).sort(function(a, b) { return catBrands[b] - catBrands[a]; }).slice(0, 5).forEach(function(bn) {
+                    html += '<tr><td>' + bn + '</td>';
+                    tabs.forEach(function(t) { var cat = (t.data.categories || []).find(function(c) { return c.name === cn; }); var b = cat && cat.brands ? cat.brands.find(function(x) { return x.name === bn; }) : null; html += '<td class="num">' + (b ? (b.category_share_pct||0) : 0).toFixed(1) + '%</td>'; });
+                    if (tabs.length >= 2) { var f = (function(){ var cat=(tabs[0].data.categories||[]).find(function(c){return c.name===cn;}); var b=cat&&cat.brands?cat.brands.find(function(x){return x.name===bn;}):null; return b?(b.category_share_pct||0):0; })(); var l = (function(){ var cat=(tabs[tabs.length-1].data.categories||[]).find(function(c){return c.name===cn;}); var b=cat&&cat.brands?cat.brands.find(function(x){return x.name===bn;}):null; return b?(b.category_share_pct||0):0; })(); html += '<td class="num">' + _sotCmpDeltaPP(f, l) + '</td>'; }
+                    html += '</tr>';
+                });
+                html += '</table></div></div></td></tr>';
+            });
+            html += '</tbody></table></div>';
+
+            catNames.forEach(function(catName) {
+                var allBrands = {}, tabCatShares = [];
+                tabs.forEach(function(t) { var cat = (t.data.categories || []).find(function(c) { return c.name === catName; }); var cs = cat ? (cat[shareKey]||0) : 0; tabCatShares.push(cs); if (cat && cat.brands && cs >= 0.5) cat.brands.forEach(function(b) { if (!allBrands[b.name]) allBrands[b.name] = 0; allBrands[b.name] = Math.max(allBrands[b.name], b.category_share_pct || 0); }); });
+                var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
+                if (!brandNames.length) return;
+                var col = _sotCatColors[catName] || '#888'; var catId = catName.replace(/[^a-zA-Z]/g, '');
+                html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';"><h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3><div style="position:relative;height:' + Math.max(250, brandNames.length * 28 + 60) + 'px;"><canvas id="sotCmpCat_' + catId + '"></canvas></div>';
+                var btid = 'sotCmpBrandTbl_' + catId;
+                html += '<div style="margin-top:0.75rem;overflow-x:auto;"><table class="sot-cmp-table" id="' + btid + '"><thead><tr><th class="sortable" data-sort-col="name" onclick="sotSortTable(\'' + btid + '\',\'name\')">Brand <span class="sort-arrow">▼</span></th>';
+                tabs.forEach(function(t, ti) { var short = _sotQuarterLabel(t.data.start_date, t.data.end_date) || (_sotFmtDateShort(t.data.start_date).replace(/, \d{4}$/, '')); html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'' + btid + '\',\'v' + ti + '\')">' + short + ' <span class="sort-arrow">▼</span></th>'; });
+                if (tabs.length >= 2) html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'' + btid + '\',\'delta\')">Delta <span class="sort-arrow">▼</span></th>';
+                html += '</tr></thead><tbody>';
+                brandNames.map(function(bn) { var vals = tabs.map(function(t, ti) { if (tabCatShares[ti]<0.5) return 0; var cat=(t.data.categories||[]).find(function(c){return c.name===catName;}); if (!cat||!cat.brands) return 0; var b=cat.brands.find(function(x){return x.name===bn;}); return b?(b.category_share_pct||0):0; }); return { name: bn, vals: vals, delta: tabs.length>=2?vals[0]-vals[vals.length-1]:0 }; }).sort(function(a, b) { return Math.abs(b.delta)-Math.abs(a.delta); }).forEach(function(br) {
+                    html += '<tr' + (Math.abs(br.delta)>=3?' class="highlight"':'') + ' data-sort-name="' + br.name + '" data-sort-delta="' + Math.abs(br.delta).toFixed(4) + '"';
+                    br.vals.forEach(function(v, vi) { html += ' data-sort-v' + vi + '="' + v.toFixed(4) + '"'; });
+                    html += '><td style="font-weight:600;white-space:nowrap;">' + br.name + '</td>';
+                    br.vals.forEach(function(v) { html += '<td class="num">' + v.toFixed(1) + '%</td>'; });
+                    if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(br.vals[0], br.vals[br.vals.length-1]) + '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div></div>';
+            });
+
+            area.innerHTML = html;
+
+            area.addEventListener('mouseover', function(e) { var el=e.target.closest('[data-sot-cat]'); if (!el) return; var cat=el.getAttribute('data-sot-cat'); area.querySelectorAll('[data-sot-cat]').forEach(function(n) { if (n.getAttribute('data-sot-cat')===cat){n.classList.add('sot-cat-glow');n.classList.remove('sot-cat-dim');} else {n.classList.add('sot-cat-dim');n.classList.remove('sot-cat-glow');}}); });
+            area.addEventListener('mouseout', function(e) { var el=e.target.closest('[data-sot-cat]'); if (!el) return; area.querySelectorAll('[data-sot-cat]').forEach(function(n){n.classList.remove('sot-cat-glow','sot-cat-dim');}); });
+
+            var mainCanvas = document.getElementById('sotCmpMain');
+            if (mainCanvas && typeof Chart !== 'undefined') {
+                var mainDS = [];
+                tabs.forEach(function(t, i) { var lbl=_sotTabLabel(t.data); var cats=t.data.categories||[]; var vals=catNames.map(function(cn){var f=cats.find(function(c){return c.name===cn;});return f?(f[shareKey]||0):0;}); mainDS.push({label:lbl,data:vals,backgroundColor:'hsla('+_sotTabHue(i)+',70%,60%,0.75)',borderWidth:0,borderRadius:4,barPercentage:0.9}); });
+                _sotCompareCharts.push(new Chart(mainCanvas.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:catNames,datasets:mainDS},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:'rgba(255,255,255,0.06)'},ticks:{color:'#aaa',callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:'#e8e8e8',font:{size:12,weight:'600'}}}},plugins:{legend:{position:'top',labels:{color:'#e8e8e8',font:{size:11},padding:16,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'%';}}},datalabels:{anchor:'end',align:'end',offset:4,color:'#fff',font:{weight:'700',size:11},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}}));
+            }
+            catNames.forEach(function(catName) {
+                var cid='sotCmpCat_'+catName.replace(/[^a-zA-Z]/g,''); var cv=document.getElementById(cid); if (!cv||typeof Chart==='undefined') return;
+                var ab={},tcs=[]; tabs.forEach(function(t){var cat=(t.data.categories||[]).find(function(c){return c.name===catName;});var cs=cat?(cat[shareKey]||0):0;tcs.push(cs);if(cat&&cat.brands&&cs>=0.5)cat.brands.forEach(function(b){if(!ab[b.name])ab[b.name]=0;ab[b.name]=Math.max(ab[b.name],b.category_share_pct||0);});});
+                var bn=Object.keys(ab).sort(function(a,b){return ab[b]-ab[a];}).slice(0,20); if(!bn.length) return;
+                var ds=[]; tabs.forEach(function(t,i){var lbl=_sotTabLabel(t.data);var neg=tcs[i]<0.5;var cat=(t.data.categories||[]).find(function(c){return c.name===catName;});var bm={};if(cat&&cat.brands&&!neg)cat.brands.forEach(function(b){bm[b.name]=b;});ds.push({label:lbl,data:bn.map(function(n){var b=bm[n];return b?(b.category_share_pct||0):0;}),backgroundColor:'hsla('+_sotTabHue(i)+',70%,60%,0.75)',borderWidth:0,borderRadius:3,barPercentage:0.9});});
+                _sotCompareCharts.push(new Chart(cv.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:bn,datasets:ds},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:'rgba(255,255,255,0.06)'},ticks:{color:'#aaa',callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:'#e8e8e8',font:{size:11}}}},plugins:{legend:{position:'top',labels:{color:'#e8e8e8',font:{size:10},padding:12,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'% of '+catName;}}},datalabels:{anchor:'end',align:'end',offset:4,color:'#fff',font:{weight:'600',size:10},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}})
+                );
             });
         }
 
