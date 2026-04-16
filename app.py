@@ -25511,7 +25511,21 @@ SHARE_OF_TIME_CATEGORY_SQL = """
     QUALIFY ROW_NUMBER() OVER (PARTITION BY LOWER(BRAND) ORDER BY SECTION) = 1
 """
 
-SOT_US_POPULATION = 329_900_000
+SOT_US_POPULATION_BY_YEAR = {
+    2024: 321_010_000,
+    2025: 324_770_000,
+    2026: 329_900_000,
+}
+SOT_US_POPULATION_DEFAULT = 329_900_000
+
+def _sot_us_population(start_date_str):
+    """Return the US population estimate for the year of the given start date."""
+    try:
+        year = int(start_date_str[:4])
+    except (ValueError, TypeError):
+        return SOT_US_POPULATION_DEFAULT
+    return SOT_US_POPULATION_BY_YEAR.get(year, SOT_US_POPULATION_DEFAULT)
+
 SOT_PANEL_SIZE = 10_000_000
 SOT_GENPOP_AGE_SAMPLE = {
     '17 and Under': 1_960_000, '18-24': 970_000, '25-34': 1_320_000, '35-44': 1_360_000,
@@ -26381,6 +26395,7 @@ def share_of_time_analyze():
         # (SOT_GENPOP_AGE_PCT × SOT_PANEL_SIZE), NOT from raw Snowflake UID
         # counts.  Projections use the genpop census numbers directly.
         # Actual Snowflake UID counts drive the cap ratio applied to clicks.
+        us_pop = _sot_us_population(start_date)
         age_uids = {}
         total_clickstream_uids = 0
         total_sample_interactions = 0
@@ -26401,13 +26416,13 @@ def share_of_time_analyze():
             gp_pct = SOT_GENPOP_AGE_PCT.get(age_val, 10.0)
             genpop_sample = SOT_GENPOP_AGE_SAMPLE.get(age_val, int(round((gp_pct / 100.0) * SOT_PANEL_SIZE)))
             display_sample = _sot_noisy_count(genpop_sample, f"{start_date}:{end_date}:{age_val}:sample")
-            census_projected = int(round((gp_pct / 100.0) * SOT_US_POPULATION))
+            census_projected = int(round((gp_pct / 100.0) * us_pop))
             discount = _SOT_BRACKET_DISCOUNT.get(age_val, 0.90)
             capped = int(round(census_projected * discount))
 
             info = age_uids.get(age_val, {'uids': 0, 'interactions': 0})
             clickstream_uids = info['uids']
-            raw_projected = (clickstream_uids / SOT_PANEL_SIZE) * SOT_US_POPULATION
+            raw_projected = (clickstream_uids / SOT_PANEL_SIZE) * us_pop
 
             if raw_projected > capped:
                 ratio = (capped / raw_projected) if raw_projected > 0 else 1.0
@@ -26536,7 +26551,7 @@ def share_of_time_analyze():
             total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
 
         # --- Project to US gen pop scale ---
-        projection_mult = SOT_US_POPULATION / SOT_PANEL_SIZE
+        projection_mult = us_pop / SOT_PANEL_SIZE
 
         # --- Build per-category results with all granularities ---
         # Three distinct share calculations:
