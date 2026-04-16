@@ -24077,6 +24077,32 @@
             return s;
         }
 
+        function _sotRenderAgeRuns(runs, openKeys) {
+            var html = '';
+            var _ageOrder = {'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
+            runs.sort(function(a, b) {
+                var aAll = (a.age_brackets || []).length >= 7 ? 1 : 0;
+                var bAll = (b.age_brackets || []).length >= 7 ? 1 : 0;
+                if (aAll !== bAll) return bAll - aAll;
+                var aMin = Math.min.apply(null, (a.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
+                var bMin = Math.min.apply(null, (b.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
+                if (aMin !== bMin) return aMin - bMin;
+                return (a.age_brackets || []).length - (b.age_brackets || []).length;
+            });
+            runs.forEach(function(r) {
+                var ages = _sotAgeDisplayLabel(r.age_brackets || []);
+                var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
+                var isOpen = openKeys.indexOf(rKey) !== -1;
+                var isActive = _sotSelectedRunKey === r.s3_key;
+                var cls = 'profile-select-item sot-run-item' + (isActive ? ' active' : '');
+                var openBadge = isOpen ? '<span style="font-size:0.62rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:0.04em;">TAB</span>' : '';
+                html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
+                    '<div class="sot-run-top"><div class="sot-run-date">' + ages + '</div>' + openBadge + '</div>' +
+                '</div>';
+            });
+            return html;
+        }
+
         function sotRenderRunTree() {
             var tree = document.getElementById('sotRunTree');
             var search = (document.getElementById('sotRunSearch').value || '').toLowerCase();
@@ -24094,17 +24120,29 @@
             var openKeys = _sotOpenTabs.map(function(t) { return _sotTabKey(t.data); });
 
             var grouped = {};
+            var quarterGrouped = {};
             runs.forEach(function(r) {
                 var y = _sotYearLabel(r);
-                if (!grouped[y]) grouped[y] = {};
-                var startMonth = _sotRunMonth(r);
-                if (!grouped[y][startMonth]) grouped[y][startMonth] = {};
-                var rk = (r.start_date || '') + '|' + (r.end_date || '');
-                if (!grouped[y][startMonth][rk]) grouped[y][startMonth][rk] = { start: r.start_date, end: r.end_date, runs: [] };
-                grouped[y][startMonth][rk].runs.push(r);
+                var qLabel = _sotQuarterLabel(r.start_date, r.end_date);
+                if (qLabel) {
+                    if (!quarterGrouped[y]) quarterGrouped[y] = {};
+                    var rk = (r.start_date || '') + '|' + (r.end_date || '');
+                    if (!quarterGrouped[y][rk]) quarterGrouped[y][rk] = { start: r.start_date, end: r.end_date, label: qLabel, runs: [] };
+                    quarterGrouped[y][rk].runs.push(r);
+                } else {
+                    if (!grouped[y]) grouped[y] = {};
+                    var startMonth = _sotRunMonth(r);
+                    if (!grouped[y][startMonth]) grouped[y][startMonth] = {};
+                    var rk2 = (r.start_date || '') + '|' + (r.end_date || '');
+                    if (!grouped[y][startMonth][rk2]) grouped[y][startMonth][rk2] = { start: r.start_date, end: r.end_date, runs: [] };
+                    grouped[y][startMonth][rk2].runs.push(r);
+                }
             });
 
-            var years = Object.keys(grouped).sort(function(a, b) {
+            var allYears = {};
+            Object.keys(grouped).forEach(function(y) { allYears[y] = true; });
+            Object.keys(quarterGrouped).forEach(function(y) { allYears[y] = true; });
+            var years = Object.keys(allYears).sort(function(a, b) {
                 return parseInt(b, 10) - parseInt(a, 10);
             });
 
@@ -24118,60 +24156,76 @@
                 '</div>';
                 if (!yearOpen) return;
 
-                var months = Object.keys(grouped[year]).map(Number).sort(function(a, b) { return b - a; });
                 html += '<div class="sot-tree-children">';
-                months.forEach(function(month) {
-                    var monthId = year + '||' + month;
-                    var monthOpen = !!_sotExpandedMonths[monthId];
-                    var monthArg = monthId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                    html += '<div class="sot-tree-row" onclick="sotToggleRunMonth(\'' + monthArg + '\')">' +
-                        '<div class="sot-tree-range">' + _sotMonthName(month) + '</div>' +
-                        '<div class="sot-tree-chevron">' + (monthOpen ? '▼' : '▶') + '</div>' +
+
+                if (quarterGrouped[year]) {
+                    var qMonthId = year + '||Q';
+                    var qOpen = !!_sotExpandedMonths[qMonthId];
+                    var qArg = qMonthId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    html += '<div class="sot-tree-row" onclick="sotToggleRunMonth(\'' + qArg + '\')">' +
+                        '<div class="sot-tree-range" style="font-weight:700;">By Quarter</div>' +
+                        '<div class="sot-tree-chevron">' + (qOpen ? '▼' : '▶') + '</div>' +
                     '</div>';
-                    if (!monthOpen) return;
-
-                    var ranges = Object.keys(grouped[year][month]).sort(function(a, b) {
-                        return (grouped[year][month][b].end || '').localeCompare(grouped[year][month][a].end || '');
-                    });
-                    html += '<div class="sot-tree-children">';
-                    ranges.forEach(function(rangeKey) {
-                        var g = grouped[year][month][rangeKey];
-                        var rangeId = year + '||' + month + '||' + rangeKey;
-                        var rangeOpen = !!_sotExpandedRanges[rangeId];
-                        var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                        var rangeLabel = _sotQuarterLabel(g.start, g.end) || (_sotFmtDateShort(g.start) + ' \u2013 ' + _sotFmtDateShort(g.end));
-                        html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
-                            '<div class="sot-tree-range">' + rangeLabel + '</div>' +
-                            '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
-                        '</div>';
-                        if (!rangeOpen) return;
-
-                        html += '<div class="sot-tree-children">';
-                        var _ageOrder = {'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
-                        g.runs.sort(function(a, b) {
-                            var aAll = (a.age_brackets || []).length >= 7 ? 1 : 0;
-                            var bAll = (b.age_brackets || []).length >= 7 ? 1 : 0;
-                            if (aAll !== bAll) return bAll - aAll;
-                            var aMin = Math.min.apply(null, (a.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
-                            var bMin = Math.min.apply(null, (b.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
-                            if (aMin !== bMin) return aMin - bMin;
-                            return (a.age_brackets || []).length - (b.age_brackets || []).length;
+                    if (qOpen) {
+                        var qRanges = Object.keys(quarterGrouped[year]).sort(function(a, b) {
+                            return (quarterGrouped[year][b].start || '').localeCompare(quarterGrouped[year][a].start || '');
                         });
-                        g.runs.forEach(function(r) {
-                            var ages = _sotAgeDisplayLabel(r.age_brackets || []);
-                            var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
-                            var isOpen = openKeys.indexOf(rKey) !== -1;
-                            var isActive = _sotSelectedRunKey === r.s3_key;
-                            var cls = 'profile-select-item sot-run-item' + (isActive ? ' active' : '');
-                            var openBadge = isOpen ? '<span style="font-size:0.62rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:0.04em;">TAB</span>' : '';
-                            html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
-                                '<div class="sot-run-top"><div class="sot-run-date">' + ages + '</div>' + openBadge + '</div>' +
+                        html += '<div class="sot-tree-children">';
+                        qRanges.forEach(function(rk) {
+                            var g = quarterGrouped[year][rk];
+                            var rangeId = year + '||Q||' + rk;
+                            var rangeOpen = !!_sotExpandedRanges[rangeId];
+                            var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                            html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
+                                '<div class="sot-tree-range">' + g.label + '</div>' +
+                                '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
                             '</div>';
+                            if (rangeOpen) {
+                                html += '<div class="sot-tree-children">';
+                                html += _sotRenderAgeRuns(g.runs, openKeys);
+                                html += '</div>';
+                            }
+                        });
+                        html += '</div>';
+                    }
+                }
+
+                if (grouped[year]) {
+                    var months = Object.keys(grouped[year]).map(Number).sort(function(a, b) { return b - a; });
+                    months.forEach(function(month) {
+                        var monthId = year + '||' + month;
+                        var monthOpen = !!_sotExpandedMonths[monthId];
+                        var monthArg = monthId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        html += '<div class="sot-tree-row" onclick="sotToggleRunMonth(\'' + monthArg + '\')">' +
+                            '<div class="sot-tree-range">' + _sotMonthName(month) + '</div>' +
+                            '<div class="sot-tree-chevron">' + (monthOpen ? '▼' : '▶') + '</div>' +
+                        '</div>';
+                        if (!monthOpen) return;
+
+                        var ranges = Object.keys(grouped[year][month]).sort(function(a, b) {
+                            return (grouped[year][month][b].end || '').localeCompare(grouped[year][month][a].end || '');
+                        });
+                        html += '<div class="sot-tree-children">';
+                        ranges.forEach(function(rangeKey) {
+                            var g = grouped[year][month][rangeKey];
+                            var rangeId = year + '||' + month + '||' + rangeKey;
+                            var rangeOpen = !!_sotExpandedRanges[rangeId];
+                            var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                            var rangeLabel = _sotFmtDateShort(g.start) + ' \u2013 ' + _sotFmtDateShort(g.end);
+                            html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
+                                '<div class="sot-tree-range">' + rangeLabel + '</div>' +
+                                '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
+                            '</div>';
+                            if (!rangeOpen) return;
+
+                            html += '<div class="sot-tree-children">';
+                            html += _sotRenderAgeRuns(g.runs, openKeys);
+                            html += '</div>';
                         });
                         html += '</div>';
                     });
-                    html += '</div>';
-                });
+                }
+
                 html += '</div>';
             });
             tree.innerHTML = html;
