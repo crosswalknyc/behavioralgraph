@@ -25549,6 +25549,7 @@ SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Soc
 SOT_TREND_GUARD_VERSION = 2
 SOT_BRAND_TARGET_VERSION = 3
 SOT_TIKTOK_BOOST = 3.0
+SOT_NETFLIX_BOOST = 2.0
 SOT_STREAMING_VIDEO_NON_NETFLIX_BOOST = 5.0
 SOT_TIKTOK_TARGET_SHARE_BY_AGE_YEAR = {
     # Target TikTok share within Social Media brand mix (%).
@@ -26095,6 +26096,28 @@ def _sot_apply_streaming_video_non_netflix_boost(categories):
         sv['adj_clicks'] = sum(float(v.get('adj_clicks') or 0.0) for v in brands.values())
         categories['Streaming Video'] = sv
     return applied
+
+
+def _sot_apply_netflix_boost(categories):
+    """Apply SOT_NETFLIX_BOOST multiplier to Netflix within Streaming Video."""
+    sv = categories.get('Streaming Video')
+    if not sv or not sv.get('brands'):
+        return False
+    brands = sv['brands']
+    netflix_key = None
+    for bn in brands:
+        if _sot_norm_brand_token(bn) == 'netflix':
+            netflix_key = bn
+            break
+    if not netflix_key:
+        return False
+    bv = brands[netflix_key]
+    bv['est_minutes'] = float(bv.get('est_minutes') or 0.0) * SOT_NETFLIX_BOOST
+    bv['adj_clicks'] = float(bv.get('adj_clicks') or 0.0) * SOT_NETFLIX_BOOST
+    sv['est_minutes'] = sum(float(v.get('est_minutes') or 0.0) for v in brands.values())
+    sv['adj_clicks'] = sum(float(v.get('adj_clicks') or 0.0) for v in brands.values())
+    categories['Streaming Video'] = sv
+    return True
 
 
 def _sot_generate_weights_via_gpt(age_brackets, quarter, history):
@@ -26692,6 +26715,11 @@ def share_of_time_analyze():
 
         # --- TikTok 3x boost ---
         if _sot_apply_tiktok_boost(categories):
+            total_est_minutes = sum(c['est_minutes'] for c in categories.values())
+            total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
+
+        # --- Netflix 2x boost ---
+        if _sot_apply_netflix_boost(categories):
             total_est_minutes = sum(c['est_minutes'] for c in categories.values())
             total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
 
