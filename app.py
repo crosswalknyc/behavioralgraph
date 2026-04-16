@@ -26565,6 +26565,7 @@ def share_of_time_analyze():
 
         # --- Apply cap ratios to interactions per age/category/brand ---
         categories = {}
+        _brand_canon = {}
         total_weighted_interactions = 0
         for age_val, share_cat, brand, clicks in rows:
             ratio = age_cap_ratios.get(age_val, 1.0)
@@ -26573,10 +26574,14 @@ def share_of_time_analyze():
                 categories[share_cat] = {'name': share_cat, 'clicks': 0, 'adj_clicks': 0.0, 'brands': {}}
             categories[share_cat]['clicks'] += clicks
             categories[share_cat]['adj_clicks'] += adj_clicks
-            if brand not in categories[share_cat]['brands']:
-                categories[share_cat]['brands'][brand] = {'clicks': 0, 'adj_clicks': 0.0}
-            categories[share_cat]['brands'][brand]['clicks'] += clicks
-            categories[share_cat]['brands'][brand]['adj_clicks'] += adj_clicks
+            canon_key = (share_cat, (brand or '').strip().lower())
+            if canon_key not in _brand_canon:
+                _brand_canon[canon_key] = brand
+            brand_name = _brand_canon[canon_key]
+            if brand_name not in categories[share_cat]['brands']:
+                categories[share_cat]['brands'][brand_name] = {'clicks': 0, 'adj_clicks': 0.0}
+            categories[share_cat]['brands'][brand_name]['clicks'] += clicks
+            categories[share_cat]['brands'][brand_name]['adj_clicks'] += adj_clicks
             total_weighted_interactions += adj_clicks
 
         # --- Compute per-session est_minutes (base layer) ---
