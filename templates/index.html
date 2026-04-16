@@ -23787,7 +23787,7 @@
         function _sotTabLabel(d) {
             var ages = (d.age_brackets || []);
             var ageStr = ages.length > 2 ? ages[0] + ' +' + (ages.length-1) : ages.join(', ');
-            return d.start_date + ' to ' + d.end_date + ' · ' + ageStr;
+            return _sotFmtDateShort(d.start_date) + ' - ' + _sotFmtDateShort(d.end_date) + ' · ' + ageStr;
         }
 
         function sotLoadRuns() {
@@ -23815,7 +23815,10 @@
             if (!isoDate || typeof isoDate !== 'string') return isoDate || '';
             var p = isoDate.split('-');
             if (p.length !== 3) return isoDate;
-            return p[1] + '-' + p[2] + '-' + p[0].slice(2);
+            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var m = parseInt(p[1], 10);
+            var d = parseInt(p[2], 10);
+            return months[m - 1] + ' ' + d + ', ' + p[0];
         }
 
         function _sotYearLabel(run) {
@@ -23906,7 +23909,6 @@
                     html += '<div class="sot-tree-children">';
                     g.runs.forEach(function(r) {
                         var ages = _sotAgeDisplayLabel(r.age_brackets || []);
-                        var users = r.matched_users ? r.matched_users.toLocaleString() + ' users' : '';
                         var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
                         var isOpen = openKeys.indexOf(rKey) !== -1;
                         var isActive = _sotSelectedRunKey === r.s3_key;
@@ -23914,10 +23916,6 @@
                         var openBadge = isOpen ? '<span style="font-size:0.62rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:0.04em;">TAB</span>' : '';
                         html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
                             '<div class="sot-run-top"><div class="sot-run-date">' + ages + '</div>' + openBadge + '</div>' +
-                            '<div class="sot-run-meta">' +
-                                '<div class="sot-run-ages"></div>' +
-                                (users ? '<div class="sot-run-users">' + users + '</div>' : '<div></div>') +
-                            '</div>' +
                         '</div>';
                     });
                     html += '</div>';
