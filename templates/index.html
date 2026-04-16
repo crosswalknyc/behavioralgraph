@@ -24115,6 +24115,16 @@
                         if (!rangeOpen) return;
 
                         html += '<div class="sot-tree-children">';
+                        var _ageOrder = {'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
+                        g.runs.sort(function(a, b) {
+                            var aAll = (a.age_brackets || []).length >= 7 ? 1 : 0;
+                            var bAll = (b.age_brackets || []).length >= 7 ? 1 : 0;
+                            if (aAll !== bAll) return bAll - aAll;
+                            var aMin = Math.min.apply(null, (a.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
+                            var bMin = Math.min.apply(null, (b.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
+                            if (aMin !== bMin) return aMin - bMin;
+                            return (a.age_brackets || []).length - (b.age_brackets || []).length;
+                        });
                         g.runs.forEach(function(r) {
                             var ages = _sotAgeDisplayLabel(r.age_brackets || []);
                             var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
