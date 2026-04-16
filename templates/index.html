@@ -23885,7 +23885,8 @@
         function _sotTabLabel(d) {
             var ages = (d.age_brackets || []);
             var ageStr = ages.length > 2 ? ages[0] + ' +' + (ages.length-1) : ages.join(', ');
-            return _sotFmtDateShort(d.start_date) + ' - ' + _sotFmtDateShort(d.end_date) + ' · ' + ageStr;
+            var dateLabel = _sotQuarterLabel(d.start_date, d.end_date) || (_sotFmtDateShort(d.start_date) + ' \u2013 ' + _sotFmtDateShort(d.end_date));
+            return dateLabel + ' · ' + ageStr;
         }
 
         function sotLoadRuns() {
@@ -23917,6 +23918,21 @@
             var m = parseInt(p[1], 10);
             var d = parseInt(p[2], 10);
             return months[m - 1] + ' ' + d + ', ' + p[0];
+        }
+
+        function _sotQuarterLabel(startDate, endDate) {
+            if (!startDate || !endDate) return null;
+            var s = startDate.split('-'), e = endDate.split('-');
+            if (s.length !== 3 || e.length !== 3) return null;
+            var sy = s[0], sm = parseInt(s[1],10), sd = parseInt(s[2],10);
+            var ey = e[0], em = parseInt(e[1],10), ed = parseInt(e[2],10);
+            if (sy !== ey || sd !== 1) return null;
+            var quarters = [[1,3,31,'Q1'],[4,6,30,'Q2'],[7,9,30,'Q3'],[10,12,31,'Q4']];
+            for (var i = 0; i < quarters.length; i++) {
+                var q = quarters[i];
+                if (sm === q[0] && em === q[1] && ed === q[2]) return q[3] + ' ' + sy;
+            }
+            return null;
         }
 
         function _sotYearLabel(run) {
@@ -23997,7 +24013,7 @@
                     var rangeId = year + '||' + rangeKey;
                     var rangeOpen = !!_sotExpandedRanges[rangeId];
                     var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                    var rangeLabel = _sotFmtDateShort(g.start) + ' - ' + _sotFmtDateShort(g.end);
+                    var rangeLabel = _sotQuarterLabel(g.start, g.end) || (_sotFmtDateShort(g.start) + ' \u2013 ' + _sotFmtDateShort(g.end));
                     html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
                         '<div class="sot-tree-range">' + rangeLabel + '</div>' +
                         '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
