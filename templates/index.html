@@ -24647,10 +24647,13 @@
             html += '<div style="margin-top:1rem;">';
             html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">';
             html += '<h3 class="sot-cmp-section-title" style="margin:0;font-size:0.75rem;">Population vs Usage by Age Group</h3>';
+            html += '<div style="display:flex;gap:0.5rem;align-items:center;">';
+            html += '<select id="sotBarMetricFilter" style="background:var(--card-bg);color:var(--text-primary);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.7rem;cursor:pointer;">';
+            html += '<option value="hours" selected>Hours</option><option value="interactions">Interactions</option></select>';
             html += '<select id="sotBarCatFilter" style="background:var(--card-bg);color:var(--text-primary);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.7rem;cursor:pointer;">';
             html += '<option value="all" selected>All Categories</option>';
             catNames.forEach(function(cn) { html += '<option value="' + cn + '">' + cn + '</option>'; });
-            html += '</select></div>';
+            html += '</select></div></div>';
             html += '<div style="position:relative;height:260px;"><canvas id="sotCohortBarChart"></canvas></div>';
             html += '</div>';
 
@@ -25156,48 +25159,40 @@
             var usageLeg = document.getElementById('sotPieLegendUsage');
             if (usageLeg) usageLeg.innerHTML = _pieLegendHtml;
 
-            // --- Cohort Column Chart (Population vs Usage) with category filter ---
+            // --- Cohort Column Chart (Population vs Usage) with category + metric filter ---
             var _sotBarChart = null;
-            function _sotRenderBarChart(catFilter) {
+            function _sotCohortHrs(tData, catFilter) {
+                var total = 0;
+                var cats = tData.categories || [];
+                cats.forEach(function(c) {
+                    if (catFilter && catFilter !== 'all' && c.name !== catFilter) return;
+                    if (c.brands) c.brands.forEach(function(b) { total += (b.est_minutes || 0); });
+                });
+                return total;
+            }
+            function _sotCohortInt(tData, catFilter) {
+                var totalHrs = _sotCohortHrs(tData, null);
+                var catHrs = _sotCohortHrs(tData, catFilter);
+                if (!catFilter || catFilter === 'all') return tData.total_interactions || 0;
+                return totalHrs > 0 ? (tData.total_interactions || 0) * (catHrs / totalHrs) : 0;
+            }
+            function _sotRenderBarChart(catFilter, metric) {
                 var barCanvas = document.getElementById('sotCohortBarChart');
                 if (!barCanvas || typeof Chart === 'undefined') return;
                 if (_sotBarChart) { _sotBarChart.destroy(); _sotBarChart = null; }
 
                 var barLabels = filteredCohorts.map(function(t) { return _sotCohortLabel(t); });
-                var usagePcts;
-                if (!catFilter || catFilter === 'all') {
-                    usagePcts = hoursPcts;
-                } else {
-                    var baseCatHrs = 0;
-                    var bCat = (base.categories || []).find(function(c) { return c.name === catFilter; });
-                    if (bCat && bCat.brands) bCat.brands.forEach(function(b) { baseCatHrs += (b.est_minutes || 0); });
-                    var totalBaseHrs = 0;
-                    (base.categories || []).forEach(function(c) {
-                        if (c.brands) c.brands.forEach(function(b) { totalBaseHrs += (b.est_minutes || 0); });
-                    });
-                    usagePcts = filteredCohorts.map(function(t) {
-                        var cCat = (t.data.categories || []).find(function(c) { return c.name === catFilter; });
-                        var cHrs = 0;
-                        if (cCat && cCat.brands) cCat.brands.forEach(function(b) { cHrs += (b.est_minutes || 0); });
-                        var totalCHrs = 0;
-                        (t.data.categories || []).forEach(function(c) {
-                            if (c.brands) c.brands.forEach(function(b) { totalCHrs += (b.est_minutes || 0); });
-                        });
-                        return totalBaseHrs > 0 ? (cHrs / totalBaseHrs) / (baseCatHrs / totalBaseHrs || 1) * (baseCatHrs > 0 ? cHrs / baseCatHrs * 100 : 0) : 0;
-                    });
-                    var catTotalHrs = filteredCohorts.reduce(function(sum, t) {
-                        var cCat = (t.data.categories || []).find(function(c) { return c.name === catFilter; });
-                        var h = 0;
-                        if (cCat && cCat.brands) cCat.brands.forEach(function(b) { h += (b.est_minutes || 0); });
-                        return sum + h;
-                    }, 0);
-                    usagePcts = filteredCohorts.map(function(t) {
-                        var cCat = (t.data.categories || []).find(function(c) { return c.name === catFilter; });
-                        var cHrs = 0;
-                        if (cCat && cCat.brands) cCat.brands.forEach(function(b) { cHrs += (b.est_minutes || 0); });
-                        return catTotalHrs > 0 ? cHrs / catTotalHrs * 100 : 0;
-                    });
-                }
+                var isInt = metric === 'interactions';
+                var usageLabel = isInt ? '% of Interactions' : '% of Usage (Hours)';
+                var usageColor = isInt ? 'rgba(251,146,60,0.7)' : 'rgba(6,182,212,0.7)';
+
+                var allTotal = filteredCohorts.reduce(function(s, t) {
+                    return s + (isInt ? _sotCohortInt(t.data, catFilter) : _sotCohortHrs(t.data, catFilter));
+                }, 0);
+                var usagePcts = filteredCohorts.map(function(t) {
+                    var v = isInt ? _sotCohortInt(t.data, catFilter) : _sotCohortHrs(t.data, catFilter);
+                    return allTotal > 0 ? v / allTotal * 100 : 0;
+                });
 
                 _sotBarChart = new Chart(barCanvas.getContext('2d'), {
                     type: 'bar', plugins: [ChartDataLabels],
@@ -25205,7 +25200,7 @@
                         labels: barLabels,
                         datasets: [
                             { label: '% of Population', data: popPcts, backgroundColor: 'rgba(139,92,246,0.7)', borderRadius: 4, barPercentage: 0.8 },
-                            { label: '% of Usage (Hours)', data: usagePcts, backgroundColor: 'rgba(6,182,212,0.7)', borderRadius: 4, barPercentage: 0.8 }
+                            { label: usageLabel, data: usagePcts, backgroundColor: usageColor, borderRadius: 4, barPercentage: 0.8 }
                         ]
                     },
                     options: {
@@ -25222,12 +25217,16 @@
                     }
                 });
             }
-            _sotRenderBarChart('all');
+            _sotRenderBarChart('all', 'hours');
             (function() {
                 setTimeout(function() {
-                    var sel = document.getElementById('sotBarCatFilter');
-                    if (!sel) return;
-                    sel.addEventListener('change', function() { _sotRenderBarChart(sel.value); });
+                    var catSel = document.getElementById('sotBarCatFilter');
+                    var metSel = document.getElementById('sotBarMetricFilter');
+                    function _rerender() {
+                        _sotRenderBarChart(catSel ? catSel.value : 'all', metSel ? metSel.value : 'hours');
+                    }
+                    if (catSel) catSel.addEventListener('change', _rerender);
+                    if (metSel) metSel.addEventListener('change', _rerender);
                 }, 50);
             })();
 
