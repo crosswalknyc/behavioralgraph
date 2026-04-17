@@ -25567,7 +25567,7 @@
             var chartTabs = [baseTab].concat(filteredCohorts);
             html += '<div class="sot-chart-card" style="margin-bottom:1rem;">';
             html += '<h3 class="sot-chart-title">Overall Share of Time by Category</h3>';
-            html += '<div style="display:flex;justify-content:center;align-items:center;"><div style="position:relative;width:520px;height:520px;"><canvas id="sotCmpMain"></canvas></div></div>';
+            html += '<div style="display:flex;justify-content:center;align-items:center;"><div style="position:relative;width:640px;height:640px;"><canvas id="sotCmpMain"></canvas></div></div>';
             html += '<div id="sotSunburstLegend" style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.5rem 1.2rem;margin-top:0.5rem;font-size:0.7rem;"></div>';
             html += '</div>';
 
@@ -25947,28 +25947,40 @@
                     innerColors.push(_sotCatColors[cn] || '#888');
                 });
 
+                var genDefs = [
+                    { name: 'Gen Z', ages: ['17 and Under', '18-24'], hue: 240 },
+                    { name: 'Millennials', ages: ['25-34', '35-44'], hue: 160 },
+                    { name: 'Gen X', ages: ['45-54', '55-64'], hue: 35 },
+                    { name: 'Boomers+', ages: ['65 or Older'], hue: 340 }
+                ];
+                var genColors = ['#818cf8', '#34d399', '#fb923c', '#f472b6'];
+
                 var outerLabels = [];
                 var outerVals = [];
                 var outerColors = [];
                 var outerCatRef = [];
                 catNames.forEach(function(cn, ci) {
-                    var catColor = _sotCatColors[cn] || '#888';
                     var catTotal = innerVals[ci];
-                    var cohortShares = filteredCohorts.map(function(t) {
+                    var cohortShareMap = {};
+                    filteredCohorts.forEach(function(t) {
+                        var lbl = _sotCohortLabel(t);
                         var cats = t.data.categories || [];
                         var found = cats.find(function(c) { return c.name === cn; });
-                        return found ? (found[shareKey] || 0) : 0;
+                        cohortShareMap[lbl] = found ? (found[shareKey] || 0) : 0;
                     });
-                    var cohortSum = cohortShares.reduce(function(s, v) { return s + v; }, 0);
 
-                    filteredCohorts.forEach(function(t, ti) {
-                        var proportion = cohortSum > 0 ? cohortShares[ti] / cohortSum : 0;
+                    var genShares = genDefs.map(function(g) {
+                        return g.ages.reduce(function(s, a) { return s + (cohortShareMap[a] || 0); }, 0);
+                    });
+                    var genSum = genShares.reduce(function(s, v) { return s + v; }, 0);
+
+                    genDefs.forEach(function(g, gi) {
+                        var proportion = genSum > 0 ? genShares[gi] / genSum : 0;
                         var wedgeVal = catTotal * proportion;
-                        outerLabels.push(_sotCohortLabel(t) + ' · ' + cn);
+                        outerLabels.push(g.name + ' · ' + cn);
                         outerVals.push(wedgeVal);
-                        var hue = cohortHues[ti % cohortHues.length];
-                        var light = 35 + (ci % 3) * 10;
-                        outerColors.push('hsla(' + hue + ',60%,' + light + '%,0.85)');
+                        var light = 40 + (ci % 3) * 8;
+                        outerColors.push('hsla(' + g.hue + ',55%,' + light + '%,0.85)');
                         outerCatRef.push(cn);
                     });
                 });
@@ -26008,14 +26020,14 @@
                                     var ly = cy + labelR * Math.sin(midAngle);
                                     ctx.save();
                                     ctx.fillStyle = '#fff';
-                                    ctx.font = '700 11px sans-serif';
+                                    ctx.font = '700 13px sans-serif';
                                     ctx.textAlign = 'center';
                                     ctx.textBaseline = 'middle';
                                     var name = innerLabels[i] || '';
-                                    if (name.length > 10) name = name.substring(0, 8) + '…';
-                                    ctx.fillText(name, lx, ly - 6);
-                                    ctx.font = '600 10px sans-serif';
-                                    ctx.fillText(val.toFixed(1) + '%', lx, ly + 7);
+                                    if (name.length > 14) name = name.substring(0, 12) + '…';
+                                    ctx.fillText(name, lx, ly - 7);
+                                    ctx.font = '600 12px sans-serif';
+                                    ctx.fillText(val.toFixed(1) + '%', lx, ly + 8);
                                     ctx.restore();
                                 }
 
@@ -26051,13 +26063,13 @@
                             },
                             datalabels: {
                                 display: function(ctx) {
-                                    return ctx.dataset.data[ctx.dataIndex] >= 1.5;
+                                    return ctx.dataset.data[ctx.dataIndex] >= 1.8;
                                 },
                                 color: '#fff',
-                                font: { weight: '600', size: 9 },
+                                font: { weight: '600', size: 10 },
                                 formatter: function(v, ctx) {
                                     var parts = (outerLabels[ctx.dataIndex] || '').split(' · ');
-                                    return (parts[0] || '').replace(/ or Older/, '+') + '\n' + v.toFixed(1) + '%';
+                                    return (parts[0] || '') + '\n' + v.toFixed(1) + '%';
                                 },
                                 textAlign: 'center'
                             }
@@ -26078,13 +26090,13 @@
                     });
                     lh += '</div>';
                     lh += '<div style="display:flex;flex-wrap:wrap;gap:0.3rem 0.8rem;">';
-                    lh += '<span style="font-weight:700;color:var(--text-secondary);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;width:100%;">Outer Ring — Age Cohorts</span>';
-                    filteredCohorts.forEach(function(t, ti) {
-                        var hue = cohortHues[ti % cohortHues.length];
-                        var col = 'hsla(' + hue + ',60%,45%,1)';
+                    lh += '<span style="font-weight:700;color:var(--text-secondary);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;width:100%;">Outer Ring — Generations</span>';
+                    genDefs.forEach(function(g, gi) {
+                        var col = 'hsla(' + g.hue + ',55%,45%,1)';
                         lh += '<span style="display:inline-flex;align-items:center;gap:0.25rem;">';
                         lh += '<span style="width:10px;height:10px;border-radius:50%;background:' + col + ';display:inline-block;"></span>';
-                        lh += '<span style="color:#e8e8e8;font-weight:600;">' + _sotCohortLabel(t) + '</span></span>';
+                        lh += '<span style="color:#e8e8e8;font-weight:600;">' + g.name + '</span>';
+                        lh += '<span style="color:var(--text-secondary);font-size:0.6rem;">(' + g.ages.join(', ') + ')</span></span>';
                     });
                     lh += '</div>';
                     legendDiv.innerHTML = lh;
