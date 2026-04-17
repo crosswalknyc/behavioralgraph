@@ -24684,13 +24684,20 @@
             html += '<th class="num" style="min-width:100px;">% of All Ages</th>';
             html += '</tr></thead><tbody>';
 
+            var baseRawUsers = base.matched_users || 1;
+            var baseMultiplier = basePopTotal / baseRawUsers;
+            var baseProjHours = (base.total_projected_hours || 0) * baseMultiplier;
+            var baseProjInteractions = (base.total_interactions || 0) * baseMultiplier;
+
             html += '<tr style="background:rgba(6,182,212,0.08);font-weight:700;">';
             html += '<td style="color:var(--accent-cyan);">All Ages (Baseline)</td>';
             kpiDefs.forEach(function(m) {
                 var bv;
                 if (m.key === '_cohort_pop') bv = basePopTotal;
-                else if (m.key === '_avg_hours') bv = basePopTotal > 0 ? (base.total_projected_hours || 0) / basePopTotal : 0;
-                else if (m.key === '_avg_interactions') bv = basePopTotal > 0 ? (base.total_interactions || 0) / basePopTotal : 0;
+                else if (m.key === 'total_projected_hours') bv = baseProjHours;
+                else if (m.key === 'total_interactions') bv = baseProjInteractions;
+                else if (m.key === '_avg_hours') bv = basePopTotal > 0 ? baseProjHours / basePopTotal : 0;
+                else if (m.key === '_avg_interactions') bv = basePopTotal > 0 ? baseProjInteractions / basePopTotal : 0;
                 else bv = base[m.key] || 0;
                 var display = (m.key === '_avg_hours' || m.key === '_avg_interactions') ? bv.toFixed(1) : _sotCmpFmtNum(bv);
                 html += '<td class="num" style="color:' + m.color + ';">' + display + '</td>';
@@ -24701,14 +24708,20 @@
             filteredCohorts.forEach(function(t, ci) {
                 var lbl = _sotCohortLabel(t);
                 var cohortPop = _sotCohortPop(t.data);
+                var cohortRaw = t.data.matched_users || 1;
+                var cohortMult = cohortPop / cohortRaw;
+                var cohortProjHours = (t.data.total_projected_hours || 0) * cohortMult;
+                var cohortProjInteractions = (t.data.total_interactions || 0) * cohortMult;
                 var samplePct = (base.matched_users || 0) > 0 ? ((t.data.matched_users || 0) / base.matched_users * 100) : 0;
                 html += '<tr>';
                 html += '<td style="font-weight:700;">' + lbl + '</td>';
                 kpiDefs.forEach(function(m) {
                     var val;
                     if (m.key === '_cohort_pop') val = cohortPop;
-                    else if (m.key === '_avg_hours') val = cohortPop > 0 ? (t.data.total_projected_hours || 0) / cohortPop : 0;
-                    else if (m.key === '_avg_interactions') val = cohortPop > 0 ? (t.data.total_interactions || 0) / cohortPop : 0;
+                    else if (m.key === 'total_projected_hours') val = cohortProjHours;
+                    else if (m.key === 'total_interactions') val = cohortProjInteractions;
+                    else if (m.key === '_avg_hours') val = cohortPop > 0 ? cohortProjHours / cohortPop : 0;
+                    else if (m.key === '_avg_interactions') val = cohortPop > 0 ? cohortProjInteractions / cohortPop : 0;
                     else val = t.data[m.key] || 0;
                     var display = (m.key === '_avg_hours' || m.key === '_avg_interactions') ? val.toFixed(1) : _sotCmpFmtNum(val);
                     html += '<td class="num"><span style="font-weight:600;">' + display + '</span></td>';
