@@ -24668,10 +24668,11 @@
             }
 
             var kpiDefs = [
-                { label: 'Sample', key: 'matched_users', color: 'var(--accent-lime)' },
-                { label: 'Projected Pop', key: '_cohort_pop', color: '#a855f7' },
+                { label: 'Sample', key: '_cohort_pop', color: '#a855f7' },
                 { label: 'US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
-                { label: 'Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
+                { label: 'Interactions', key: 'total_interactions', color: 'var(--accent-orange)' },
+                { label: 'Avg Hours/User', key: '_avg_hours', color: 'var(--accent-cyan)' },
+                { label: 'Avg Interactions/User', key: '_avg_interactions', color: 'var(--accent-orange)' }
             ];
 
             html += '<div style="overflow-x:auto;margin-bottom:1.25rem;">';
@@ -24686,8 +24687,13 @@
             html += '<tr style="background:rgba(6,182,212,0.08);font-weight:700;">';
             html += '<td style="color:var(--accent-cyan);">All Ages (Baseline)</td>';
             kpiDefs.forEach(function(m) {
-                var bv = m.key === '_cohort_pop' ? basePopTotal : (base[m.key] || 0);
-                html += '<td class="num" style="color:' + m.color + ';">' + _sotCmpFmtNum(bv) + '</td>';
+                var bv;
+                if (m.key === '_cohort_pop') bv = basePopTotal;
+                else if (m.key === '_avg_hours') bv = basePopTotal > 0 ? (base.total_projected_hours || 0) / basePopTotal : 0;
+                else if (m.key === '_avg_interactions') bv = basePopTotal > 0 ? (base.total_interactions || 0) / basePopTotal : 0;
+                else bv = base[m.key] || 0;
+                var display = (m.key === '_avg_hours' || m.key === '_avg_interactions') ? bv.toFixed(1) : _sotCmpFmtNum(bv);
+                html += '<td class="num" style="color:' + m.color + ';">' + display + '</td>';
             });
             html += '<td class="num" style="color:var(--accent-cyan);">100%</td>';
             html += '</tr>';
@@ -24699,9 +24705,13 @@
                 html += '<tr>';
                 html += '<td style="font-weight:700;">' + lbl + '</td>';
                 kpiDefs.forEach(function(m) {
-                    var val = m.key === '_cohort_pop' ? cohortPop : (t.data[m.key] || 0);
-                    var bv = m.key === '_cohort_pop' ? basePopTotal : (base[m.key] || 0);
-                    html += '<td class="num"><span style="font-weight:600;">' + _sotCmpFmtNum(val) + '</span></td>';
+                    var val;
+                    if (m.key === '_cohort_pop') val = cohortPop;
+                    else if (m.key === '_avg_hours') val = cohortPop > 0 ? (t.data.total_projected_hours || 0) / cohortPop : 0;
+                    else if (m.key === '_avg_interactions') val = cohortPop > 0 ? (t.data.total_interactions || 0) / cohortPop : 0;
+                    else val = t.data[m.key] || 0;
+                    var display = (m.key === '_avg_hours' || m.key === '_avg_interactions') ? val.toFixed(1) : _sotCmpFmtNum(val);
+                    html += '<td class="num"><span style="font-weight:600;">' + display + '</span></td>';
                 });
                 html += '<td class="num"><div style="display:flex;align-items:center;gap:0.3rem;">';
                 html += '<div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;">';
