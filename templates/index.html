@@ -24520,7 +24520,7 @@
             var h = '<div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.75rem;padding:0.4rem 0.5rem;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06);">';
             h += '<span style="font-size:0.62rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-right:0.2rem;">Spotlight View:</span>';
             var allActive = activeIdx < 0 ? ' active' : '';
-            h += '<span class="sot-cohort-chip' + allActive + '" onclick="sotSetViewOnly(-1)" style="cursor:pointer;">All (Compare)</span>';
+            h += '<span class="sot-cohort-chip' + allActive + '" onclick="sotSetViewOnly(-1)" style="cursor:pointer;">Home</span>';
             sorted.forEach(function(item) {
                 var lbl = (item.t.data.age_brackets || []).length >= 7 ? 'All Ages' : (item.t.data.age_brackets || []).join(', ');
                 var cls = item.i === activeIdx ? ' active' : '';
