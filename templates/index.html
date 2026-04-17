@@ -24735,8 +24735,15 @@
             });
             html += '</tbody></table></div>';
 
+            // === Spread Section Header ===
+            html += '<div style="margin-bottom:0.6rem;">';
+            html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.2rem;">Category Spread by Age Group</h3>';
+            html += '<p style="font-size:0.68rem;color:var(--text-secondary);margin:0;line-height:1.4;">The spread measures the percentage-point gap between the highest and lowest age cohorts for each media category. A large spread means that category skews heavily toward a specific age group.</p>';
+            html += '</div>';
+
             // === Category Cards with cohort composition bars ===
             html += '<div class="sot-cmp-cat-cards" id="sotCmpCatCards">';
+            var allLabelsForSpread = ['All Ages'].concat(filteredCohorts.map(function(t) { return _sotCohortLabel(t); }));
             catNames.forEach(function(cn) {
                 var col = _sotCatColors[cn] || '#888';
                 var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
@@ -24748,10 +24755,21 @@
                 var allVals = [baseVal].concat(cohortVals);
                 var spread = allVals.length >= 2 ? (Math.max.apply(null, allVals) - Math.min.apply(null, allVals)) : 0;
                 var spark = allVals.length >= 3 ? _sotSparklineSVG(allVals, col) : '';
+
+                var maxVal = Math.max.apply(null, allVals);
+                var minVal = Math.min.apply(null, allVals);
+                var highLabel = allLabelsForSpread[allVals.indexOf(maxVal)] || '—';
+                var lowLabel = allLabelsForSpread[allVals.lastIndexOf(minVal)] || '—';
+
                 var catId = cn.replace(/[^a-zA-Z]/g, '');
                 html += '<div class="sot-cmp-cat-card" data-sot-cat="' + cn + '" onclick="sotDrillCategory(\'' + catId + '\',this)">';
                 html += '<div class="ccard-name">' + cn + '</div>';
                 html += '<div class="ccard-val" style="color:' + col + ';">' + baseVal.toFixed(1) + '% <span style="font-size:0.6rem;color:var(--text-secondary);">spread ' + spread.toFixed(1) + 'pp</span> ' + spark + '</div>';
+                html += '<div style="font-size:0.58rem;color:var(--text-secondary);margin-top:0.2rem;line-height:1.35;">';
+                html += '<span style="color:#4ade80;">▲ ' + highLabel + ' ' + maxVal.toFixed(1) + '%</span>';
+                html += ' &nbsp;·&nbsp; ';
+                html += '<span style="color:#f87171;">▼ ' + lowLabel + ' ' + minVal.toFixed(1) + '%</span>';
+                html += '</div>';
                 html += '<div class="ccard-bar" style="width:' + Math.min(100, baseVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
                 html += '</div>';
             });
