@@ -24676,25 +24676,34 @@
                     '<span style="font-size:0.6rem;color:var(--text-secondary);min-width:32px;text-align:right;">' + pct.toFixed(1) + '%</span></div>';
             }
 
+            var _numDays = base.num_days || 1;
+            var _granDiv = (gran === 'daily') ? _numDays : 1;
+            var _hrsLabel = gran === 'daily' ? 'US Hours/Day' : 'US Hours';
+            var _intLabel = gran === 'daily' ? 'Interactions/Day' : 'Interactions';
+            var _avgHrsLabel = gran === 'daily' ? 'Avg Hours/User/Day' : 'Avg Hours/User';
+            var _avgIntLabel = gran === 'daily' ? 'Avg Interactions/User/Day' : 'Avg Interactions/User';
+
             var kpiDefs = [
                 { label: 'Sample', key: '_cohort_pop', color: '#a855f7' },
-                { label: 'US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
-                { label: 'Interactions', key: 'total_interactions', color: 'var(--accent-orange)' },
-                { label: 'Avg Hours/User', key: '_avg_hours', color: 'var(--accent-cyan)' },
-                { label: 'Avg Interactions/User', key: '_avg_interactions', color: 'var(--accent-orange)' }
+                { label: _hrsLabel, key: 'total_projected_hours', color: 'var(--accent-cyan)' },
+                { label: _intLabel, key: 'total_interactions', color: 'var(--accent-orange)' },
+                { label: _avgHrsLabel, key: '_avg_hours', color: 'var(--accent-cyan)' },
+                { label: _avgIntLabel, key: '_avg_interactions', color: 'var(--accent-orange)' }
             ];
 
             var baseRawUsers = base.matched_users || 1;
             var baseMultiplier = basePopTotal / baseRawUsers;
-            var baseProjHours = (base.total_projected_hours || 0) * baseMultiplier;
-            var baseProjInteractions = (base.total_interactions || 0) * baseMultiplier;
+            var baseProjHours = (base.total_projected_hours || 0) * baseMultiplier / _granDiv;
+            var baseProjInteractions = (base.total_interactions || 0) * baseMultiplier / _granDiv;
 
             var _sotKpiRows = filteredCohorts.map(function(t, ci) {
                 var cohortPop = _sotCohortPop(t.data);
                 var cohortRaw = t.data.matched_users || 1;
                 var cohortMult = cohortPop / cohortRaw;
-                var cohortProjHours = (t.data.total_projected_hours || 0) * cohortMult;
-                var cohortProjInteractions = (t.data.total_interactions || 0) * cohortMult;
+                var cDays = t.data.num_days || _numDays;
+                var cDiv = (gran === 'daily') ? cDays : 1;
+                var cohortProjHours = (t.data.total_projected_hours || 0) * cohortMult / cDiv;
+                var cohortProjInteractions = (t.data.total_interactions || 0) * cohortMult / cDiv;
                 var samplePct = basePopTotal > 0 ? (cohortPop / basePopTotal * 100) : 0;
                 return {
                     label: _sotCohortLabel(t), ci: ci,
