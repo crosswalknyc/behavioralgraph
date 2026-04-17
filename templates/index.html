@@ -24917,6 +24917,7 @@
             // === Category Cards with cohort composition bars ===
             html += '<div class="sot-cmp-cat-cards" id="sotCmpCatCards">';
             var allLabelsForSpread = ['All Ages'].concat(filteredCohorts.map(function(t) { return _sotCohortLabel(t); }));
+            var _spreadChartData = [];
             catNames.forEach(function(cn) {
                 var col = _sotCatColors[cn] || '#888';
                 var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
@@ -24934,6 +24935,8 @@
                 var highLabel = allLabelsForSpread[allVals.indexOf(maxVal)] || '—';
                 var lowLabel = allLabelsForSpread[allVals.lastIndexOf(minVal)] || '—';
 
+                _spreadChartData.push({ name: cn, col: col, base: baseVal, high: maxVal, low: minVal, highLbl: highLabel, lowLbl: lowLabel, spread: spread });
+
                 var catId = cn.replace(/[^a-zA-Z]/g, '');
                 html += '<div class="sot-cmp-cat-card" data-sot-cat="' + cn + '" onclick="sotDrillCategory(\'' + catId + '\',this)">';
                 html += '<div class="ccard-name">' + cn + '</div>';
@@ -24945,6 +24948,12 @@
                 html += '<div class="ccard-bar" style="width:' + Math.min(100, baseVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
                 html += '</div>';
             });
+            html += '</div>';
+
+            // === Spread Range Chart ===
+            html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
+            html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.5rem;">Category Range — High / All Ages / Low by Age Group</h3>';
+            html += '<div style="position:relative;height:300px;"><canvas id="sotSpreadRangeChart"></canvas></div>';
             html += '</div>';
 
             if (false) { // "Who's Different?" removed
@@ -25251,6 +25260,136 @@
             if (popLeg) popLeg.innerHTML = _pieLegendHtml;
             var usageLeg = document.getElementById('sotPieLegendUsage');
             if (usageLeg) usageLeg.innerHTML = _pieLegendHtml;
+
+            // --- Spread Range Chart (stock-style high-low + All Ages marker) ---
+            var spreadCanvas = document.getElementById('sotSpreadRangeChart');
+            if (spreadCanvas && typeof Chart !== 'undefined' && _spreadChartData.length) {
+                var spLabels = _spreadChartData.map(function(d) { return d.name; });
+                var spRanges = _spreadChartData.map(function(d) { return [d.low, d.high]; });
+                var spBaseVals = _spreadChartData.map(function(d) { return d.base; });
+                var spColors = _spreadChartData.map(function(d) { return d.col; });
+                var spSpreads = _spreadChartData.map(function(d) { return d.spread; });
+                var spRangeColors = spColors.map(function(c) { return c.replace(')', ',0.45)').replace('rgb(', 'rgba('); });
+                var spRangeColorsFinal = spColors.map(function(c) {
+                    if (c.indexOf('rgba') === 0) return c;
+                    if (c.indexOf('rgb') === 0) return c.replace('rgb(', 'rgba(').replace(')', ',0.45)');
+                    return c;
+                });
+                var spreadChart = new Chart(spreadCanvas.getContext('2d'), {
+                    type: 'bar',
+                    plugins: [ChartDataLabels],
+                    data: {
+                        labels: spLabels,
+                        datasets: [
+                            {
+                                label: 'Range (Low — High)',
+                                data: spRanges,
+                                backgroundColor: spColors.map(function(c) {
+                                    var el = document.createElement('div');
+                                    el.style.color = c;
+                                    document.body.appendChild(el);
+                                    var rgb = getComputedStyle(el).color;
+                                    document.body.removeChild(el);
+                                    return rgb.replace('rgb(', 'rgba(').replace(')', ', 0.35)');
+                                }),
+                                borderColor: spColors,
+                                borderWidth: 2,
+                                borderSkipped: false,
+                                barPercentage: 0.55,
+                                categoryPercentage: 0.7
+                            },
+                            {
+                                label: 'All Ages %',
+                                type: 'line',
+                                data: spBaseVals,
+                                borderColor: '#e8e8e8',
+                                backgroundColor: '#e8e8e8',
+                                pointBackgroundColor: spColors,
+                                pointBorderColor: '#fff',
+                                pointRadius: 6,
+                                pointHoverRadius: 8,
+                                borderWidth: 2,
+                                borderDash: [5, 4],
+                                fill: false,
+                                tension: 0.3,
+                                order: 0
+                            },
+                            {
+                                label: 'Spread (pp)',
+                                type: 'line',
+                                data: spSpreads,
+                                borderColor: 'rgba(250,204,21,0.8)',
+                                backgroundColor: 'rgba(250,204,21,0.15)',
+                                pointBackgroundColor: 'rgba(250,204,21,1)',
+                                pointBorderColor: '#fff',
+                                pointRadius: 5,
+                                pointHoverRadius: 7,
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.3,
+                                yAxisID: 'ySpread',
+                                order: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                title: { display: true, text: '% Share', color: '#aaa', font: { size: 11 } },
+                                grid: { color: 'rgba(255,255,255,0.06)' },
+                                ticks: { color: '#aaa', callback: function(v) { return v + '%'; } },
+                                beginAtZero: true
+                            },
+                            ySpread: {
+                                position: 'right',
+                                title: { display: true, text: 'Spread (pp)', color: 'rgba(250,204,21,0.8)', font: { size: 11 } },
+                                grid: { drawOnChartArea: false },
+                                ticks: { color: 'rgba(250,204,21,0.8)', callback: function(v) { return v + 'pp'; } },
+                                beginAtZero: true
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: { color: '#e8e8e8', font: { size: 11 }, padding: 16, usePointStyle: true }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        if (ctx.datasetIndex === 0) {
+                                            var v = ctx.raw;
+                                            return 'Low: ' + v[0].toFixed(1) + '% — High: ' + v[1].toFixed(1) + '%';
+                                        }
+                                        if (ctx.datasetIndex === 2) return 'Spread: ' + ctx.parsed.y.toFixed(1) + 'pp';
+                                        return 'All Ages: ' + ctx.parsed.y.toFixed(1) + '%';
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: function(ctx) {
+                                    return ctx.datasetIndex === 0;
+                                },
+                                anchor: 'end',
+                                align: 'end',
+                                offset: 2,
+                                color: '#fff',
+                                font: { weight: '700', size: 10 },
+                                formatter: function(v) {
+                                    if (Array.isArray(v)) return (v[1] - v[0]).toFixed(1) + 'pp';
+                                    return '';
+                                }
+                            }
+                        }
+                    }
+                });
+                _sotCompareCharts.push(spreadChart);
+            }
 
             // --- Cohort Column Chart (Population vs Usage) with category + metric filter ---
             var _sotBarChart = null;
