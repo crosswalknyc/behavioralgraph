@@ -24612,6 +24612,42 @@
             });
             html += '</div>';
 
+            // === Cohort Composition (% of All Ages) ===
+            var baseSample = base.matched_users || 0;
+            var baseHours = base.total_projected_hours || 0;
+            var cohortHues = ['210','260','150','35','330','180','20'];
+            html += '<div class="sot-chart-card' + focusHide + '" style="margin-bottom:1rem;padding:0.85rem 1rem;">';
+            html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition — % of All Ages</h3>';
+            html += '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">';
+
+            var compMetrics = [
+                { label: 'Sample Participants', key: 'matched_users' },
+                { label: 'Projected US Hours', key: 'total_projected_hours' }
+            ];
+            compMetrics.forEach(function(cm) {
+                var baseV = base[cm.key] || 0;
+                html += '<div style="flex:1;min-width:250px;">';
+                html += '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">' + cm.label + ' <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseV) + ' total)</span></div>';
+                html += '<div style="display:flex;height:18px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,0.04);margin-bottom:0.35rem;">';
+                filteredCohorts.forEach(function(t, ci) {
+                    var v = t.data[cm.key] || 0;
+                    var pct = baseV > 0 ? (v / baseV * 100) : 0;
+                    if (pct < 0.5) return;
+                    var hue = cohortHues[ci % cohortHues.length];
+                    html += '<div style="width:' + pct.toFixed(1) + '%;background:hsla(' + hue + ',65%,55%,0.7);position:relative;min-width:2px;" title="' + _sotCohortLabel(t) + ': ' + pct.toFixed(1) + '%"></div>';
+                });
+                html += '</div>';
+                html += '<div style="display:flex;flex-wrap:wrap;gap:0.25rem 0.7rem;">';
+                filteredCohorts.forEach(function(t, ci) {
+                    var v = t.data[cm.key] || 0;
+                    var pct = baseV > 0 ? (v / baseV * 100) : 0;
+                    var hue = cohortHues[ci % cohortHues.length];
+                    html += '<div style="font-size:0.65rem;display:flex;align-items:center;gap:0.25rem;"><span style="width:8px;height:8px;border-radius:50%;background:hsla(' + hue + ',65%,55%,0.9);display:inline-block;"></span><span style="color:var(--text-secondary);">' + _sotCohortLabel(t) + '</span> <span style="font-weight:700;color:var(--text-primary);">' + pct.toFixed(1) + '%</span></div>';
+                });
+                html += '</div></div>';
+            });
+            html += '</div></div>';
+
             // === Baseline + Deviation KPI Cards ===
             var kpiMetrics = [
                 { label: 'Sample', key: 'matched_users', color: 'var(--accent-lime)' },
