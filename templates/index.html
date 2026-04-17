@@ -24930,6 +24930,7 @@
                 html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">';
                 html += '<h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3>';
 
+                var baseCat = (base.categories || []).find(function(c) { return c.name === catName; });
                 var baseCatHrs = 0;
                 if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseCatHrs += (b.est_minutes || 0); });
                 html += '<div style="padding:0.5rem 0 0.6rem;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:0.5rem;">';
@@ -24964,12 +24965,11 @@
                 html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'' + brandTableId + '\',\'delta\')">Max Δ <span class="sort-arrow">▼</span></th>';
                 html += '</tr></thead><tbody>';
 
-                var baseCat2 = (base.categories || []).find(function(c) { return c.name === catName; });
                 var baseBrandMap = {};
-                if (baseCat2 && baseCat2.brands) baseCat2.brands.forEach(function(b) { baseBrandMap[b.name] = b; });
+                if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseBrandMap[b.name] = b; });
 
                 var baseBrandMins = {};
-                if (baseCat2 && baseCat2.brands) baseCat2.brands.forEach(function(b) { baseBrandMins[b.name] = b.est_minutes || 0; });
+                if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseBrandMins[b.name] = b.est_minutes || 0; });
 
                 var brandRows = brandNames.map(function(bn) {
                     var baseB = baseBrandMap[bn];
