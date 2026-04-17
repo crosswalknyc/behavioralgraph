@@ -24638,27 +24638,15 @@
 
             html += '<div class="sot-chart-card' + focusHide + '" style="margin-bottom:1rem;padding:0.85rem 1rem;">';
             html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition — % of All Ages</h3>';
-            html += '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">';
-
-            var compMetrics = [
-                { label: 'Sample Participants', key: 'matched_users' },
-                { label: 'Projected US Hours', key: 'total_projected_hours' }
-            ];
-            compMetrics.forEach(function(cm) {
-                var baseV = base[cm.key] || 0;
-                var pcts = filteredCohorts.map(function(t) { return baseV > 0 ? (t.data[cm.key] || 0) / baseV * 100 : 0; });
-                html += '<div style="flex:1;min-width:250px;">';
-                html += _sotStackedBar(cm.label, baseV, pcts, cohortLabels, cohortHues);
-                html += '</div>';
-            });
+            html += '<div style="display:flex;gap:2rem;flex-wrap:wrap;justify-content:center;">';
+            html += '<div style="flex:1;min-width:220px;max-width:320px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Sample Participants <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseSample) + ' total)</span></div><div style="position:relative;height:240px;"><canvas id="sotCohortPiePop"></canvas></div></div>';
+            html += '<div style="flex:1;min-width:220px;max-width:320px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Projected US Hours <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseHours) + ' total)</span></div><div style="position:relative;height:240px;"><canvas id="sotCohortPieUsage"></canvas></div></div>';
             html += '</div>';
 
-            // === Cohort Composition Pie Charts (Population vs Usage) ===
-            html += '<div style="margin-top:1rem;"><h3 class="sot-cmp-section-title" style="margin-bottom:0.5rem;font-size:0.75rem;">Population Share vs Usage Share</h3>';
-            html += '<div style="display:flex;gap:2rem;flex-wrap:wrap;justify-content:center;">';
-            html += '<div style="flex:1;min-width:220px;max-width:320px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">% of Population</div><div style="position:relative;height:240px;"><canvas id="sotCohortPiePop"></canvas></div></div>';
-            html += '<div style="flex:1;min-width:220px;max-width:320px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">% of Usage (Hours)</div><div style="position:relative;height:240px;"><canvas id="sotCohortPieUsage"></canvas></div></div>';
-            html += '</div></div>';
+            // === Column Chart (Population vs Usage by Age Group) ===
+            html += '<div style="margin-top:1rem;"><h3 class="sot-cmp-section-title" style="margin-bottom:0.5rem;font-size:0.75rem;">Population vs Usage by Age Group</h3>';
+            html += '<div style="position:relative;height:260px;"><canvas id="sotCohortBarChart"></canvas></div>';
+            html += '</div>';
 
             html += '</div>';
 
@@ -25069,6 +25057,34 @@
                     type: 'doughnut', plugins: [ChartDataLabels],
                     data: { labels: pieLabels, datasets: [{ data: hoursPcts, backgroundColor: pieColors, borderWidth: 0 }] },
                     options: pieOpts('Usage')
+                }));
+            }
+
+            // --- Cohort Column Chart (Population vs Usage) ---
+            var barCanvas = document.getElementById('sotCohortBarChart');
+            if (barCanvas && typeof Chart !== 'undefined') {
+                var barLabels = filteredCohorts.map(function(t) { return _sotCohortLabel(t); });
+                _sotCompareCharts.push(new Chart(barCanvas.getContext('2d'), {
+                    type: 'bar', plugins: [ChartDataLabels],
+                    data: {
+                        labels: barLabels,
+                        datasets: [
+                            { label: '% of Population', data: popPcts, backgroundColor: 'rgba(139,92,246,0.7)', borderRadius: 4, barPercentage: 0.8 },
+                            { label: '% of Usage (Hours)', data: hoursPcts, backgroundColor: 'rgba(6,182,212,0.7)', borderRadius: 4, barPercentage: 0.8 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } } },
+                            y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v) { return v + '%'; } }, beginAtZero: true }
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 16, usePointStyle: true } },
+                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%'; } } },
+                            datalabels: { anchor: 'end', align: 'end', offset: 2, color: '#fff', font: { weight: '700', size: 10 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
+                        }
+                    }
                 }));
             }
 
