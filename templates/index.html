@@ -14436,17 +14436,8 @@
                                 <label style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">End Date</label>
                                 <input type="date" id="iqSotEndDate" style="padding:0.45rem 0.6rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:0.85rem;">
                             </div>
-                            <div style="display:flex;flex-direction:column;gap:0.3rem;flex:1;">
-                                <label style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Age Range</label>
-                                <div id="iqSotAgeGrid" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="17 and Under" checked>Under 18</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="18-24" checked>18-24</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="25-34" checked>25-34</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="35-44" checked>35-44</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="45-54" checked>45-54</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="55-64" checked>55-64</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="65 or Older" checked>65+</label>
-                                </div>
+                            <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                                <span style="font-size:0.7rem;color:var(--text-secondary);line-height:1.3;">Runs All Ages + each individual bracket automatically</span>
                             </div>
                             <button type="button" id="iqSotRunBtn" onclick="iqSotRunAnalysis()" style="padding:0.5rem 1.5rem;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-lime));border:none;border-radius:8px;color:#000;font-weight:700;font-size:0.85rem;cursor:pointer;white-space:nowrap;">Run Analysis</button>
                         </div>
@@ -23729,48 +23720,71 @@
             sotLoadRuns();
         };
 
-        // --- Analysis IQ: Share of Time tab ---
-        (function() {
-            var chips = document.querySelectorAll('#iqSotAgeGrid .iq-sot-age-chip');
-            chips.forEach(function(chip) {
-                chip.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    var cb = chip.querySelector('input');
-                    cb.checked = !cb.checked;
-                    chip.classList.toggle('active', cb.checked);
-                });
-            });
-        })();
-
         function iqSotRunAnalysis() {
             var start = document.getElementById('iqSotStartDate')?.value;
             var end = document.getElementById('iqSotEndDate')?.value;
             if (!start || !end) { alert('Please select both start and end dates.'); return; }
-            var checks = document.querySelectorAll('#iqSotAgeGrid input:checked');
-            if (!checks.length) { alert('Please select at least one age bracket.'); return; }
 
-            var sotStart = document.getElementById('sotStartDate');
-            var sotEnd = document.getElementById('sotEndDate');
-            if (sotStart) sotStart.value = start;
-            if (sotEnd) sotEnd.value = end;
-
-            var sotChips = document.querySelectorAll('#sotAgeGrid .sot-age-chip');
-            var selectedAges = new Set();
-            checks.forEach(function(c) { selectedAges.add(c.value); });
-            sotChips.forEach(function(chip) {
-                var cb = chip.querySelector('input');
-                if (cb) {
-                    cb.checked = selectedAges.has(cb.value);
-                    chip.classList.toggle('active', cb.checked);
-                }
-            });
+            var allBrackets = ['17 and Under','18-24','25-34','35-44','45-54','55-64','65 or Older'];
+            var runs = [allBrackets].concat(allBrackets.map(function(b) { return [b]; }));
 
             showAnalysisStatusModal();
-            updateAnalysisStatusModal({ display_name: 'Share of Time', message: 'Pulling data for ' + start + ' to ' + end + '…', progress: 10 });
-            window._sotIqModalActive = true;
+            updateAnalysisStatusModal({ display_name: 'Share of Time', message: 'Running 8 analyses for ' + start + ' to ' + end + '…', progress: 5 });
+
+            var completed = 0;
+            var total = runs.length;
+            var results = [];
 
             showShareOfTimeIQ();
-            sotRunAnalysis();
+            sotCloseAllTabs();
+
+            runs.forEach(function(ages) {
+                fetch('/api/share-of-time/analyze', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_date: start, end_date: end, age_brackets: ages })
+                }).then(function(r) { return r.json(); }).then(function(resp) {
+                    completed++;
+                    var pct = Math.round((completed / total) * 90) + 10;
+                    updateAnalysisStatusModal({ display_name: 'Share of Time', message: completed + ' of ' + total + ' age groups complete…', progress: pct });
+                    if (resp.success && resp.data) results.push(resp.data);
+                    if (completed === total) _iqSotFinishBatch(results);
+                }).catch(function() {
+                    completed++;
+                    if (completed === total) _iqSotFinishBatch(results);
+                });
+            });
+        }
+
+        function _iqSotFinishBatch(results) {
+            showAnalysisStatusModalComplete();
+            setTimeout(function() { closeAnalysisStatusModal(); }, 1200);
+
+            results.forEach(function(data) {
+                var key = _sotTabKey(data);
+                var exists = false;
+                _sotOpenTabs.forEach(function(t) { if (_sotTabKey(t.data) === key) exists = true; });
+                if (!exists) _sotOpenTabs.push({ data: data, key: key });
+            });
+
+            sotLoadRuns();
+
+            if (_sotOpenTabs.length >= 2) {
+                _sotCompareMode = true;
+                _sotActiveTabIdx = -1;
+                sotRenderTabs();
+                sotRenderRunTree();
+                document.getElementById('sotResultsArea').style.display = 'none';
+                document.getElementById('sotEmptyState').style.display = 'none';
+                sotRenderCompare();
+                document.getElementById('sotCompareArea').style.display = 'block';
+            } else if (_sotOpenTabs.length === 1) {
+                _sotActiveTabIdx = 0;
+                _sotData = _sotOpenTabs[0].data;
+                sotRenderTabs();
+                sotRenderRunTree();
+                sotRenderResults(_sotData);
+            }
         }
 
         function sotRunAnalysis(forceRefresh) {
@@ -24582,6 +24596,9 @@
             html += '<button class="sot-focus-btn' + (_sotCmpFocusMode ? ' active' : '') + '" onclick="sotToggleFocusMode()" title="Hide summary sections">FOCUS</button>';
             html += '</div>';
             var focusHide = _sotCmpFocusMode ? ' sot-cmp-focus-hide' : '';
+
+            var timeLabel = _sotQuarterLabel(base.start_date, base.end_date) || (_sotFmtDateShort(base.start_date) + ' \u2013 ' + _sotFmtDateShort(base.end_date));
+            html += '<div style="text-align:center;margin-bottom:0.75rem;"><span style="font-size:0.85rem;font-weight:700;color:var(--accent-cyan);letter-spacing:0.03em;">' + timeLabel + '</span> <span style="font-size:0.72rem;color:var(--text-secondary);margin-left:0.4rem;">Cohort Analysis \u00b7 ' + (filteredCohorts.length + 1) + ' age groups</span></div>';
 
             // === Cohort Filter Chips ===
             html += '<div class="sot-cohort-chips' + focusHide + '">';
