@@ -19832,17 +19832,10 @@
             
             // Update KPIs - Show regular sample values as main
             const totalViewersGenPop = parseInt(conversionSummary.totalViewersGenPop) || 0;
-            // Calculate CONVERTED USERS as SUM of per-platform conversions (for consistency)
-            const sumPerPlatGenPop = perPlatformConversion.reduce((sum, p) => sum + (parseInt(p.convertedGenPop) || 0), 0);
-            const sumPerPlatRaw = perPlatformConversion.reduce((sum, p) => sum + (parseInt(p.converted) || 0), 0);
-            
-            // Use sum of per-platform values if available, otherwise fall back to overall
-            const convertedGenPop = sumPerPlatGenPop > 0 ? sumPerPlatGenPop : (parseInt(conversionSummary.convertedGenPop) || 0);
-            const convertedSample = sumPerPlatRaw > 0 ? sumPerPlatRaw : (parseInt(conversionSummary.converted) || 0);
+            // Use overall converted (unique users, not sum of per-platform which double-counts overlap)
+            const convertedGenPop = parseInt(conversionSummary.convertedGenPop) || 0;
+            const convertedSample = parseInt(conversionSummary.converted) || 0;
             const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
-            
-            console.log('[SF-LF DEBUG] Per-platform sum GenPop:', sumPerPlatGenPop, 'Per-platform sum raw:', sumPerPlatRaw);
-            console.log('[SF-LF DEBUG] Using convertedGenPop:', convertedGenPop);
             
             // Main values - ALWAYS show projected values (with null checks)
             const kpiTotalViewersEl = document.getElementById('sfConvKpiTotalViewers');
@@ -19888,18 +19881,13 @@
                 const platformColors = { 'Youtube': '#ef4444', 'TikTok': '#10b981', 'Instagram': '#ec4899' };
                 perPlatCards.innerHTML = perPlatformConversion.map(p => {
                     const viewersProj = parseInt(p.viewersGenPop) || 0;
-                    const convertedProj = parseInt(p.convertedGenPop) || 0;
+                    let convertedProj = parseInt(p.convertedGenPop) || 0;
                     const viewersRaw = parseInt(p.viewers) || 0;
-                    const convertedRaw = parseInt(p.converted) || 0;
+                    let convertedRaw = parseInt(p.converted) || 0;
+                    if (convertedRaw > viewersRaw) convertedRaw = viewersRaw;
+                    if (convertedProj > viewersProj && viewersProj > 0) convertedProj = viewersProj;
                     const viewersDisplay = viewersProj > 0 ? formatGenPop(viewersProj) : viewersRaw.toLocaleString();
-                    let convDisplay = convertedRaw.toLocaleString();
-                    if (convertedProj > 0 && viewersProj > 0 && convertedProj <= viewersProj) {
-                        convDisplay = formatGenPop(convertedProj);
-                    } else if (convertedProj > 0 && viewersProj > 0) {
-                        convDisplay = formatGenPop(Math.round(viewersProj * Math.min(convertedRaw / Math.max(viewersRaw, 1), 1)));
-                    } else if (convertedProj > 0) {
-                        convDisplay = formatGenPop(convertedProj);
-                    }
+                    let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedRaw.toLocaleString();
                     let platRate = viewersRaw > 0 ? Math.min((convertedRaw / viewersRaw) * 100, 100) : parseFloat(p.convRate || 0);
                     if (platRate > 100) platRate = 100;
                     return `
@@ -19934,9 +19922,13 @@
                 urlTbody.innerHTML = top20Urls.map((u, idx) => {
                     const uniqueViewsProj = parseInt(u.uniqueViewsGenPop) || 0;
                     const duplicatedViewsProj = parseInt(u.duplicatedViewsGenPop) || 0;
-                    const convertedProj = parseInt(u.convertedGenPop) || 0;
-                    const convertedSample = parseInt(u.converted) || 0;
+                    let convertedProj = parseInt(u.convertedGenPop) || 0;
+                    let convertedSample = parseInt(u.converted) || 0;
                     const uniqueSample = parseInt(u.uniqueViews) || 0;
+
+                    // Hard cap: converted can never exceed unique views
+                    if (convertedSample > uniqueSample) convertedSample = uniqueSample;
+                    if (convertedProj > uniqueViewsProj && uniqueViewsProj > 0) convertedProj = uniqueViewsProj;
 
                     const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : uniqueSample.toLocaleString();
                     let dupDisplay = duplicatedViewsProj > 0 ? formatGenPop(duplicatedViewsProj) : (parseInt(u.duplicatedViews) || 0).toLocaleString();
@@ -19944,12 +19936,7 @@
                         dupDisplay = formatGenPop(Math.round(uniqueViewsProj * 1.8));
                     }
 
-                    let convDisplay = convertedSample.toLocaleString();
-                    if (convertedProj > 0 && uniqueViewsProj > 0 && convertedProj > uniqueViewsProj) {
-                        convDisplay = formatGenPop(Math.round(uniqueViewsProj * (convertedSample / Math.max(uniqueSample, 1))));
-                    } else if (convertedProj > 0) {
-                        convDisplay = formatGenPop(convertedProj);
-                    }
+                    let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedSample.toLocaleString();
 
                     let convRate = 0;
                     if (uniqueSample > 0) convRate = Math.min((convertedSample / uniqueSample) * 100, 100);
@@ -19983,9 +19970,13 @@
                 platTbody.innerHTML = platformMetrics.map(p => {
                     const uniqueViewsProj = parseInt(p.uniqueViewsGenPop) || 0;
                     const duplicatedViewsProj = parseInt(p.duplicatedViewsGenPop) || 0;
-                    const convertedProj = parseInt(p.convertedGenPop) || 0;
+                    let convertedProj = parseInt(p.convertedGenPop) || 0;
                     const uniqueRaw = parseInt(p.uniqueViews) || 0;
-                    const convertedRaw = parseInt(p.converted) || 0;
+                    let convertedRaw = parseInt(p.converted) || 0;
+
+                    // Hard cap: converted can never exceed unique viewers
+                    if (convertedRaw > uniqueRaw) convertedRaw = uniqueRaw;
+                    if (convertedProj > uniqueViewsProj && uniqueViewsProj > 0) convertedProj = uniqueViewsProj;
 
                     const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : uniqueRaw.toLocaleString();
                     let dupDisplay = duplicatedViewsProj > 0 ? formatGenPop(duplicatedViewsProj) : (parseInt(p.duplicatedViews) || 0).toLocaleString();
@@ -19993,14 +19984,7 @@
                         dupDisplay = formatGenPop(Math.round(uniqueViewsProj * 1.8));
                     }
 
-                    let convDisplay = convertedRaw.toLocaleString();
-                    if (convertedProj > 0 && uniqueViewsProj > 0 && convertedProj <= uniqueViewsProj) {
-                        convDisplay = formatGenPop(convertedProj);
-                    } else if (convertedProj > 0 && uniqueViewsProj > 0) {
-                        convDisplay = formatGenPop(Math.round(uniqueViewsProj * Math.min(convertedRaw / Math.max(uniqueRaw, 1), 1)));
-                    } else if (convertedProj > 0) {
-                        convDisplay = formatGenPop(convertedProj);
-                    }
+                    let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedRaw.toLocaleString();
 
                     let platConvRate = uniqueRaw > 0 ? Math.min((convertedRaw / uniqueRaw) * 100, 100) : parseFloat(p.convRate || 0);
                     if (platConvRate > 100) platConvRate = 100;

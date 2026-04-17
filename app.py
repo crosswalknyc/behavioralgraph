@@ -21810,10 +21810,11 @@ def run_sf_lf_conversion(job_id):
                 per_platform_data[platform]['converted'] = add_small_noise(0)
                 per_platform_data[platform]['conversion_rate'] = 0.00000001
         
-        # OVERALL conversion = SUM of all per-platform conversions (for consistency)
+        # OVERALL conversion = actual unique converted users (NOT sum of per-platform,
+        # since a user on multiple platforms would be double-counted)
         sum_plat_converted = sum(pd.get('converted', 0) for pd in per_platform_data.values())
-        # Use the sum of platforms as the overall, ensuring data consistency
-        converted = sum_plat_converted if sum_plat_converted > 0 else add_small_noise(converted_raw)
+        converted = add_small_noise(converted_raw) if converted_raw > 0 else add_small_noise(0)
+        print(f"[SF-LF] Using converted_raw={converted_raw} as overall (sum of platforms={sum_plat_converted} would inflate via overlap)")
         
         conversion_rate = round((converted / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0.00000001
         print(f"[SF-LF] Overall Conversion final: {converted:,} users converted (sum of {len(per_platform_data)} platforms) ({conversion_rate:.8f}% rate)")
@@ -22005,14 +22006,20 @@ def run_sf_lf_conversion(job_id):
             for pm in results['platform_metrics']:
                 p_unique = add_noise_if_zero(pm['unique_views'])
                 p_dup = add_noise_if_zero(pm['duplicated_views'])
-                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Unique Views', 'Count': p_unique, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(p_unique)})
+                p_unique_genpop = project_to_gen_pop(p_unique)
+                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Unique Views', 'Count': p_unique, 'Percentage': '', 'Gen_Pop_Projection': p_unique_genpop})
                 csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Duplicated Views', 'Count': p_dup, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(p_dup)})
                 if 'converted_to_title' in pm:
                     p_conv = add_noise_if_zero(pm['converted_to_title'])
-                    p_conv_rate = pm.get('conversion_rate_to_title', 0.00000001)
+                    if p_conv > p_unique:
+                        p_conv = p_unique
+                    p_conv_rate = round((p_conv / p_unique * 100), 8) if p_unique > 0 else 0.00000001
                     if p_conv_rate == 0:
                         p_conv_rate = 0.00000001
-                    csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Converted to Title', 'Count': p_conv, 'Percentage': f"{p_conv_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(p_conv)})
+                    p_conv_genpop = project_to_gen_pop(p_conv)
+                    if p_conv_genpop > p_unique_genpop:
+                        p_conv_genpop = p_unique_genpop
+                    csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Converted to Title', 'Count': p_conv, 'Percentage': f"{p_conv_rate:.8f}%", 'Gen_Pop_Projection': p_conv_genpop})
         
         # Individual URL Metrics Section (Top 20 input URLs)
         if results.get('individual_url_metrics'):
@@ -22023,17 +22030,23 @@ def run_sf_lf_conversion(job_id):
                 u_dup = url_m['duplicated_views']
                 u_reach = url_m.get('reach_rate', 0.00000001)
                 u_conv = url_m['converted_to_lf']
-                u_conv_rate = url_m.get('conversion_rate', 0.00000001)
+                # Hard cap: converted can never exceed unique views for a URL
+                if u_conv > u_unique:
+                    u_conv = u_unique
+                u_conv_rate = round((u_conv / u_unique * 100), 8) if u_unique > 0 else 0.00000001
                 if u_reach == 0:
                     u_reach = 0.00000001
                 if u_conv_rate == 0:
                     u_conv_rate = 0.00000001
                 url_val = url_m['url_display']
-                # Unique Views with Reach % (what % of total SF viewers saw this URL)
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Views', 'Count': u_unique, 'Percentage': f"{u_reach:.8f}% of total SF viewers", 'Gen_Pop_Projection': project_to_gen_pop(u_unique)})
+                u_unique_genpop = project_to_gen_pop(u_unique)
+                u_conv_genpop = project_to_gen_pop(u_conv)
+                # Cap projected converted to projected unique
+                if u_conv_genpop > u_unique_genpop:
+                    u_conv_genpop = u_unique_genpop
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Views', 'Count': u_unique, 'Percentage': f"{u_reach:.8f}% of total SF viewers", 'Gen_Pop_Projection': u_unique_genpop})
                 csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Duplicated Views', 'Count': u_dup, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(u_dup)})
-                # Converted with Conversion % (what % of THIS URL's viewers converted to LF)
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted to LF Title', 'Count': u_conv, 'Percentage': f"{u_conv_rate:.8f}% of URL viewers", 'Gen_Pop_Projection': project_to_gen_pop(u_conv)})
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted to LF Title', 'Count': u_conv, 'Percentage': f"{u_conv_rate:.8f}% of URL viewers", 'Gen_Pop_Projection': u_conv_genpop})
         
         # Conversion Summary Section - OVERALL
         # Use pre-calculated values directly (noise already applied) - DO NOT add noise again!
@@ -22056,7 +22069,7 @@ def run_sf_lf_conversion(job_id):
                     'rate': pm.get('conversion_rate_to_title', 0.00000001)
                 }
         
-        # OVERALL converted = SUM of per-platform converted (for consistency)
+        # OVERALL converted = actual unique converted (from converted variable, NOT sum of per-platform)
         print(f"[SF-LF] DEBUG: platform_conversions has {len(platform_conversions)} platforms: {list(platform_conversions.keys())}")
         per_plat_values = []
         for plat_name, pc in platform_conversions.items():
@@ -22065,13 +22078,10 @@ def run_sf_lf_conversion(job_id):
             per_plat_values.append((plat_name, plat_conv, plat_genpop))
             print(f"[SF-LF] DEBUG: {plat_name} converted (raw) = {plat_conv}, GenPop = {plat_genpop}")
         
-        conv_users = sum(pc['converted'] for pc in platform_conversions.values())
+        conv_users = converted
         conv_users_genpop = project_to_gen_pop(conv_users)
-        sum_individual_genpop = sum(v[2] for v in per_plat_values)
-        print(f"[SF-LF] DEBUG: conv_users (raw sum) = {conv_users}")
+        print(f"[SF-LF] DEBUG: conv_users (unique overall) = {conv_users}")
         print(f"[SF-LF] DEBUG: conv_users GenPop = {conv_users_genpop}")
-        print(f"[SF-LF] DEBUG: Sum of individual GenPops = {sum_individual_genpop}")
-        print(f"[SF-LF] DEBUG: CSV will write: Count={conv_users}, Gen_Pop_Projection={conv_users_genpop}")
         conv_rate = round((conv_users / total_viewers * 100), 8) if total_viewers > 0 else 0.00000001
         
         overall_conv_genpop = project_to_gen_pop(conv_users)
