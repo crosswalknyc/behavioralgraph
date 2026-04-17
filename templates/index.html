@@ -952,14 +952,14 @@
         #shareOfTimeIQView .sot-cmp-section-title { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin: 0 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border-color); }
 
         /* --- Interactive compare enhancements --- */
-        #shareOfTimeIQView .sot-cmp-cat-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin-bottom: 1.25rem; }
-        #shareOfTimeIQView .sot-cmp-cat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.7rem 0.8rem; cursor: pointer; transition: all 0.2s ease; position: relative; overflow: hidden; }
+        #shareOfTimeIQView .sot-cmp-cat-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
+        #shareOfTimeIQView .sot-cmp-cat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem 1.1rem; cursor: pointer; transition: all 0.2s ease; position: relative; overflow: hidden; }
         #shareOfTimeIQView .sot-cmp-cat-card:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
         #shareOfTimeIQView .sot-cmp-cat-card.active { border-color: rgba(255,255,255,0.3); box-shadow: 0 0 12px rgba(139,92,246,0.25); }
-        #shareOfTimeIQView .sot-cmp-cat-card .ccard-name { font-size: 0.72rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        #shareOfTimeIQView .sot-cmp-cat-card .ccard-val { font-size: 1.15rem; font-weight: 800; }
-        #shareOfTimeIQView .sot-cmp-cat-card .ccard-sub { font-size: 0.6rem; color: var(--text-secondary); margin-top: 0.2rem; }
-        #shareOfTimeIQView .sot-cmp-cat-card .ccard-bar { position: absolute; bottom: 0; left: 0; height: 3px; border-radius: 0 0 10px 10px; transition: width 0.3s ease; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-name { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-val { font-size: 1.35rem; font-weight: 800; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-sub { font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-bar { position: absolute; bottom: 0; left: 0; height: 4px; border-radius: 0 0 12px 12px; transition: width 0.3s ease; }
 
         #shareOfTimeIQView .sot-cmp-table th.sortable { cursor: pointer; user-select: none; transition: color 0.15s; }
         #shareOfTimeIQView .sot-cmp-table th.sortable:hover { color: var(--accent-cyan); }
