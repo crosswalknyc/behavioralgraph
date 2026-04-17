@@ -24633,6 +24633,8 @@
             // === Cohort Composition (% of All Ages) ===
             var cohortHues = ['210','260','150','35','330','180','20'];
             var cohortLabels = filteredCohorts.map(function(t) { return _sotCohortLabel(t); });
+            var baseSample = base.matched_users || 0;
+            var baseHours = base.total_projected_hours || 0;
 
             html += '<div class="sot-chart-card' + focusHide + '" style="margin-bottom:1rem;padding:0.85rem 1rem;">';
             html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition — % of All Ages</h3>';
@@ -24711,15 +24713,7 @@
                 kpiDefs.forEach(function(m) {
                     var val = m.key === '_cohort_pop' ? cohortPop : (t.data[m.key] || 0);
                     var bv = m.key === '_cohort_pop' ? basePopTotal : (base[m.key] || 0);
-                    var pctOfBase = bv > 0 ? (val / bv * 100) : 0;
-                    var diff = bv > 0 ? ((val - bv) / bv * 100) : 0;
-                    var cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral';
-                    var arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '';
-                    html += '<td class="num"><span style="font-weight:600;">' + _sotCmpFmtNum(val) + '</span>';
-                    if (m.key !== '_cohort_pop') {
-                        html += ' <span class="sot-cmp-delta ' + cls + '" title="vs All Ages" style="font-size:0.62rem;">' + arrow + Math.abs(diff).toFixed(1) + '% vs All Ages</span>';
-                    }
-                    html += '</td>';
+                    html += '<td class="num"><span style="font-weight:600;">' + _sotCmpFmtNum(val) + '</span></td>';
                 });
                 html += '<td class="num"><div style="display:flex;align-items:center;gap:0.3rem;">';
                 html += '<div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;">';
