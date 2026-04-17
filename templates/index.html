@@ -24630,9 +24630,6 @@
             });
             html += '</div>';
 
-            // === Spotlight View Bar ===
-            html += _sotBuildSpotlightBar(-1);
-
             // === Cohort Composition (% of All Ages) ===
             var cohortHues = ['210','260','150','35','330','180','20'];
             var cohortLabels = filteredCohorts.map(function(t) { return _sotCohortLabel(t); });
@@ -25119,21 +25116,35 @@
                     }
                 };
             };
+            var _pieCohortTabIndices = filteredCohorts.map(function(t) { return _sotOpenTabs.indexOf(t); });
+            function _sotPieClick(chart, evt) {
+                var points = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+                if (points.length > 0) {
+                    var idx = _pieCohortTabIndices[points[0].index];
+                    if (idx >= 0) sotSetViewOnly(idx);
+                }
+            }
             var popCanvas = document.getElementById('sotCohortPiePop');
             if (popCanvas && typeof Chart !== 'undefined') {
-                _sotCompareCharts.push(new Chart(popCanvas.getContext('2d'), {
+                var popChart = new Chart(popCanvas.getContext('2d'), {
                     type: 'doughnut', plugins: [ChartDataLabels],
                     data: { labels: pieLabels, datasets: [{ data: popPcts, backgroundColor: pieColors, borderWidth: 0 }] },
                     options: pieOpts('Population')
-                }));
+                });
+                popCanvas.style.cursor = 'pointer';
+                popCanvas.addEventListener('click', function(e) { _sotPieClick(popChart, e); });
+                _sotCompareCharts.push(popChart);
             }
             var usageCanvas = document.getElementById('sotCohortPieUsage');
             if (usageCanvas && typeof Chart !== 'undefined') {
-                _sotCompareCharts.push(new Chart(usageCanvas.getContext('2d'), {
+                var usageChart = new Chart(usageCanvas.getContext('2d'), {
                     type: 'doughnut', plugins: [ChartDataLabels],
                     data: { labels: pieLabels, datasets: [{ data: hoursPcts, backgroundColor: pieColors, borderWidth: 0 }] },
                     options: pieOpts('Usage')
-                }));
+                });
+                usageCanvas.style.cursor = 'pointer';
+                usageCanvas.addEventListener('click', function(e) { _sotPieClick(usageChart, e); });
+                _sotCompareCharts.push(usageChart);
             }
 
             // --- Cohort Column Chart (Population vs Usage) with category filter ---
