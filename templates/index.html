@@ -24821,10 +24821,18 @@
 
             // === Per-Category Cohort Composition (Hours / Interactions toggle) ===
             html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">';
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">';
             html += '<h3 class="sot-cmp-section-title" style="margin:0;">Cohort Composition by Category</h3>';
             html += '<select id="sotCohortCompMetric" style="background:var(--card-bg);color:var(--text-primary);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.7rem;cursor:pointer;">';
             html += '<option value="hours" selected>Hours</option><option value="interactions">Interactions</option></select>';
+            html += '</div>';
+            html += '<div id="sotCatCheckboxes" style="display:flex;flex-wrap:wrap;gap:0.3rem 0.7rem;margin-bottom:0.6rem;">';
+            catNames.forEach(function(cn) {
+                var col = _sotCatColors[cn] || '#888';
+                html += '<label style="display:flex;align-items:center;gap:0.25rem;font-size:0.65rem;color:#e8e8e8;cursor:pointer;">';
+                html += '<input type="checkbox" checked data-cat="' + cn + '" style="accent-color:' + col + ';width:13px;height:13px;cursor:pointer;">';
+                html += '<span style="color:' + col + ';font-weight:600;">' + cn + '</span></label>';
+            });
             html += '</div>';
 
             html += '<div id="sotCohortCompHours">';
@@ -24840,7 +24848,7 @@
                     return bHrs > 0 ? Math.min(cHrs / bHrs * 100, 100) : 0;
                 });
                 var catCol = _sotCatColors[cn] || '#888';
-                html += '<div style="margin-bottom:0.6rem;">';
+                html += '<div class="sotCompCatRow" data-comp-cat="' + cn + '" style="margin-bottom:0.6rem;">';
                 html += _sotStackedBar('<span style="color:' + catCol + ';">' + cn + '</span>', bHrsProj, pcts, cohortLabels, cohortHues);
                 html += '</div>';
             });
@@ -24869,7 +24877,7 @@
                     return bIntRaw > 0 ? Math.min(cIntRaw / bIntRaw * 100, 100) : 0;
                 });
                 var catCol = _sotCatColors[cn] || '#888';
-                html += '<div style="margin-bottom:0.6rem;">';
+                html += '<div class="sotCompCatRow" data-comp-cat="' + cn + '" style="margin-bottom:0.6rem;">';
                 html += _sotStackedBar('<span style="color:' + catCol + ';">' + cn + '</span>', bInt, pcts, cohortLabels, cohortHues);
                 html += '</div>';
             });
@@ -24885,6 +24893,15 @@
                         if (!hDiv || !iDiv) return;
                         if (sel.value === 'hours') { hDiv.style.display = ''; iDiv.style.display = 'none'; }
                         else { hDiv.style.display = 'none'; iDiv.style.display = ''; }
+                    });
+                    document.querySelectorAll('#sotCatCheckboxes input[data-cat]').forEach(function(cb) {
+                        cb.addEventListener('change', function() {
+                            var cat = cb.getAttribute('data-cat');
+                            var show = cb.checked;
+                            document.querySelectorAll('.sotCompCatRow[data-comp-cat="' + cat + '"]').forEach(function(el) {
+                                el.style.display = show ? '' : 'none';
+                            });
+                        });
                     });
                 }, 50);
             })();
