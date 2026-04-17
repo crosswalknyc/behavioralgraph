@@ -24638,9 +24638,9 @@
 
             html += '<div class="sot-chart-card' + focusHide + '" style="margin-bottom:1rem;padding:0.85rem 1rem;">';
             html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition — % of All Ages</h3>';
-            html += '<div style="display:flex;gap:2rem;flex-wrap:wrap;justify-content:center;">';
-            html += '<div style="flex:1;min-width:220px;max-width:320px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Projected Population <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(basePopTotal) + ' total)</span></div><div style="position:relative;height:240px;"><canvas id="sotCohortPiePop"></canvas></div></div>';
-            html += '<div style="flex:1;min-width:220px;max-width:320px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Projected US Hours <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseHours) + ' total)</span></div><div style="position:relative;height:240px;"><canvas id="sotCohortPieUsage"></canvas></div></div>';
+            html += '<div style="display:flex;gap:2rem;flex-wrap:wrap;">';
+            html += '<div style="flex:1;min-width:300px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Sample Participants <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseSample) + ' total)</span></div><div style="position:relative;height:340px;"><canvas id="sotCohortPiePop"></canvas></div></div>';
+            html += '<div style="flex:1;min-width:300px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Projected US Hours <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseHours) + ' total)</span></div><div style="position:relative;height:340px;"><canvas id="sotCohortPieUsage"></canvas></div></div>';
             html += '</div>';
 
             // === Column Chart (Population vs Usage by Age Group) ===
