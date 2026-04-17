@@ -24749,10 +24749,12 @@
                 html += '<div class="ccard-val" style="color:' + col + ';">' + baseVal.toFixed(1) + '% <span style="font-size:0.6rem;color:var(--text-secondary);">spread ' + spread.toFixed(1) + 'pp</span> ' + spark + '</div>';
                 html += '<div class="ccard-bar" style="width:' + Math.min(100, baseVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
                 html += '<div style="margin-top:0.3rem;">';
-                var catHoursBase = baseCat ? (baseCat.est_minutes_total || 0) : 0;
+                var catHoursBase = 0;
+                if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { catHoursBase += (b.est_minutes || 0); });
                 filteredCohorts.forEach(function(t, ci) {
                     var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
-                    var cHrs = cat ? (cat.est_minutes_total || 0) : 0;
+                    var cHrs = 0;
+                    if (cat && cat.brands) cat.brands.forEach(function(b) { cHrs += (b.est_minutes || 0); });
                     var pctOfBase = catHoursBase > 0 ? (cHrs / catHoursBase * 100) : 0;
                     if (pctOfBase > 100) pctOfBase = 100;
                     html += '<div style="display:flex;align-items:center;gap:4px;margin-top:2px;">';
