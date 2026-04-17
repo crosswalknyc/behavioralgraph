@@ -24684,19 +24684,68 @@
                 { label: 'Avg Interactions/User', key: '_avg_interactions', color: 'var(--accent-orange)' }
             ];
 
-            html += '<div style="overflow-x:auto;margin-bottom:1.25rem;">';
-            html += '<table class="sot-cmp-table" style="min-width:700px;"><thead><tr>';
-            html += '<th style="text-align:left;min-width:100px;">Age Group</th>';
-            kpiDefs.forEach(function(m) {
-                html += '<th class="num" style="min-width:110px;">' + m.label + '</th>';
-            });
-            html += '<th class="num" style="min-width:100px;">% of All Ages</th>';
-            html += '</tr></thead><tbody>';
-
             var baseRawUsers = base.matched_users || 1;
             var baseMultiplier = basePopTotal / baseRawUsers;
             var baseProjHours = (base.total_projected_hours || 0) * baseMultiplier;
             var baseProjInteractions = (base.total_interactions || 0) * baseMultiplier;
+
+            var _sotKpiRows = filteredCohorts.map(function(t, ci) {
+                var cohortPop = _sotCohortPop(t.data);
+                var cohortRaw = t.data.matched_users || 1;
+                var cohortMult = cohortPop / cohortRaw;
+                var cohortProjHours = (t.data.total_projected_hours || 0) * cohortMult;
+                var cohortProjInteractions = (t.data.total_interactions || 0) * cohortMult;
+                var samplePct = (base.matched_users || 0) > 0 ? ((t.data.matched_users || 0) / base.matched_users * 100) : 0;
+                return {
+                    label: _sotCohortLabel(t), ci: ci,
+                    _cohort_pop: cohortPop,
+                    total_projected_hours: cohortProjHours,
+                    total_interactions: cohortProjInteractions,
+                    _avg_hours: cohortPop > 0 ? cohortProjHours / cohortPop : 0,
+                    _avg_interactions: cohortPop > 0 ? cohortProjInteractions / cohortPop : 0,
+                    _pct: samplePct
+                };
+            });
+            var _sotKpiSortKey = null, _sotKpiSortDir = -1;
+
+            function _sotRenderKpiTable() {
+                var sorted = _sotKpiRows.slice();
+                if (_sotKpiSortKey) {
+                    sorted.sort(function(a, b) { return ((a[_sotKpiSortKey] || 0) - (b[_sotKpiSortKey] || 0)) * _sotKpiSortDir; });
+                }
+                var h = '';
+                sorted.forEach(function(r) {
+                    h += '<tr>';
+                    h += '<td style="font-weight:700;">' + r.label + '</td>';
+                    kpiDefs.forEach(function(m) {
+                        var val = r[m.key] || 0;
+                        var display = (m.key === '_avg_hours' || m.key === '_avg_interactions') ? val.toFixed(1) : _sotCmpFmtNum(val);
+                        h += '<td class="num"><span style="font-weight:600;">' + display + '</span></td>';
+                    });
+                    h += '<td class="num"><div style="display:flex;align-items:center;gap:0.3rem;">';
+                    h += '<div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;">';
+                    h += '<div style="width:' + r._pct.toFixed(1) + '%;height:100%;border-radius:4px;background:hsla(' + cohortHues[r.ci % cohortHues.length] + ',65%,55%,0.8);"></div></div>';
+                    h += '<span style="font-weight:700;font-size:0.72rem;">' + r._pct.toFixed(1) + '%</span>';
+                    h += '</div></td>';
+                    h += '</tr>';
+                });
+                var tbody = document.getElementById('sotKpiTbody');
+                if (tbody) tbody.innerHTML = h;
+                document.querySelectorAll('#sotKpiTable th[data-sort]').forEach(function(th) {
+                    var arrow = '';
+                    if (th.getAttribute('data-sort') === _sotKpiSortKey) arrow = _sotKpiSortDir > 0 ? ' ▲' : ' ▼';
+                    th.querySelector('.sort-arrow').textContent = arrow;
+                });
+            }
+
+            html += '<div style="overflow-x:auto;margin-bottom:1.25rem;">';
+            html += '<table class="sot-cmp-table" id="sotKpiTable" style="min-width:700px;"><thead><tr>';
+            html += '<th style="text-align:left;min-width:100px;cursor:pointer;" data-sort="_label">Age Group<span class="sort-arrow"></span></th>';
+            kpiDefs.forEach(function(m) {
+                html += '<th class="num" style="min-width:110px;cursor:pointer;" data-sort="' + m.key + '">' + m.label + '<span class="sort-arrow"></span></th>';
+            });
+            html += '<th class="num" style="min-width:100px;cursor:pointer;" data-sort="_pct">% of All Ages<span class="sort-arrow"></span></th>';
+            html += '</tr></thead>';
 
             html += '<tr style="background:rgba(6,182,212,0.08);font-weight:700;">';
             html += '<td style="color:var(--accent-cyan);">All Ages (Baseline)</td>';
@@ -24714,35 +24763,21 @@
             html += '<td class="num" style="color:var(--accent-cyan);">100%</td>';
             html += '</tr>';
 
-            filteredCohorts.forEach(function(t, ci) {
-                var lbl = _sotCohortLabel(t);
-                var cohortPop = _sotCohortPop(t.data);
-                var cohortRaw = t.data.matched_users || 1;
-                var cohortMult = cohortPop / cohortRaw;
-                var cohortProjHours = (t.data.total_projected_hours || 0) * cohortMult;
-                var cohortProjInteractions = (t.data.total_interactions || 0) * cohortMult;
-                var samplePct = (base.matched_users || 0) > 0 ? ((t.data.matched_users || 0) / base.matched_users * 100) : 0;
-                html += '<tr>';
-                html += '<td style="font-weight:700;">' + lbl + '</td>';
-                kpiDefs.forEach(function(m) {
-                    var val;
-                    if (m.key === '_cohort_pop') val = cohortPop;
-                    else if (m.key === 'total_projected_hours') val = cohortProjHours;
-                    else if (m.key === 'total_interactions') val = cohortProjInteractions;
-                    else if (m.key === '_avg_hours') val = cohortPop > 0 ? cohortProjHours / cohortPop : 0;
-                    else if (m.key === '_avg_interactions') val = cohortPop > 0 ? cohortProjInteractions / cohortPop : 0;
-                    else val = t.data[m.key] || 0;
-                    var display = (m.key === '_avg_hours' || m.key === '_avg_interactions') ? val.toFixed(1) : _sotCmpFmtNum(val);
-                    html += '<td class="num"><span style="font-weight:600;">' + display + '</span></td>';
-                });
-                html += '<td class="num"><div style="display:flex;align-items:center;gap:0.3rem;">';
-                html += '<div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;">';
-                html += '<div style="width:' + samplePct.toFixed(1) + '%;height:100%;border-radius:4px;background:hsla(' + cohortHues[ci % cohortHues.length] + ',65%,55%,0.8);"></div></div>';
-                html += '<span style="font-weight:700;font-size:0.72rem;">' + samplePct.toFixed(1) + '%</span>';
-                html += '</div></td>';
-                html += '</tr>';
-            });
-            html += '</tbody></table></div>';
+            html += '<tbody id="sotKpiTbody"></tbody></table></div>';
+
+            (function() {
+                setTimeout(function() {
+                    _sotRenderKpiTable();
+                    document.querySelectorAll('#sotKpiTable th[data-sort]').forEach(function(th) {
+                        th.addEventListener('click', function() {
+                            var key = th.getAttribute('data-sort');
+                            if (key === _sotKpiSortKey) { _sotKpiSortDir *= -1; }
+                            else { _sotKpiSortKey = key; _sotKpiSortDir = -1; }
+                            _sotRenderKpiTable();
+                        });
+                    });
+                }, 50);
+            })();
 
             // === Per-Category Cohort Composition (Hours / Interactions toggle) ===
             html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
