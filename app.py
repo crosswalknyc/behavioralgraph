@@ -21891,31 +21891,27 @@ def run_sf_lf_conversion(job_id):
         # URL conversions should sum to overall conversion (for consistency)
         if results.get('individual_url_metrics'):
             total_url_views = sum(u['unique_views'] for u in results['individual_url_metrics'])
-            remaining_conversions = converted  # Total conversions to distribute
-            
+            remaining_conversions = converted
+
             print(f"[SF-LF] Redistributing {converted:,} conversions across {len(results['individual_url_metrics'])} URLs (total views: {total_url_views:,})")
-            
+
             for idx, url_m in enumerate(results['individual_url_metrics']):
                 if total_url_views > 0:
-                    # Distribute proportionally based on view share
                     url_view_share = url_m['unique_views'] / total_url_views
                     url_conv = int(round(converted * url_view_share))
-                    
-                    # Ensure at least 1 conversion for URLs with significant views, and sum matches total
+                    url_conv = min(url_conv, url_m['unique_views'])
                     if idx == len(results['individual_url_metrics']) - 1:
-                        # Last URL gets remaining to ensure sum matches exactly
-                        url_conv = remaining_conversions
+                        url_conv = min(remaining_conversions, url_m['unique_views'])
                     else:
                         remaining_conversions -= url_conv
                 else:
                     url_conv = 0
-                
+
                 url_m['converted_to_lf'] = url_conv
                 url_m['conversion_rate'] = round((url_conv / url_m['unique_views'] * 100), 8) if url_m['unique_views'] > 0 else 0.00000001
-            
-            # Verify sum
+
             url_conv_sum = sum(u['converted_to_lf'] for u in results['individual_url_metrics'])
-            print(f"[SF-LF] URL conversions redistributed: sum={url_conv_sum:,} (should equal {converted:,})")
+            print(f"[SF-LF] URL conversions redistributed: sum={url_conv_sum:,} (target={converted:,}, capped to unique views)")
         
         update_job_status(job_id, progress=70, message='Querying demographics of converted users...')
         print(f"[SF-LF] Step 3: Get demographics of converted users")
@@ -25549,6 +25545,7 @@ SOT_CATEGORIES = ['Streaming Video', 'Streaming Music', 'Games', 'Betting', 'Soc
 SOT_TREND_GUARD_VERSION = 2
 SOT_BRAND_TARGET_VERSION = 3
 SOT_TIKTOK_BOOST = 3.0
+SOT_NETFLIX_BOOST = 2.0
 SOT_STREAMING_VIDEO_NON_NETFLIX_BOOST = 5.0
 SOT_TIKTOK_TARGET_SHARE_BY_AGE_YEAR = {
     # Target TikTok share within Social Media brand mix (%).
@@ -25740,40 +25737,53 @@ def _sot_list_cached_runs():
 
 
 def _sot_find_yoy_reference_run(start_date, end_date, age_brackets):
-    """Find the most recent prior-year run for same age set and MM-DD window."""
+    """Find the best prior-year cached run to anchor YoY trends against.
+
+    Priority: same age set + same MM-DD window in a prior year.
+    Fallback: same age set + overlapping month window in a prior year.
+    """
+    import datetime as _dt
     try:
-        cur_start = __import__('datetime').datetime.strptime(start_date, '%Y-%m-%d')
-        cur_end = __import__('datetime').datetime.strptime(end_date, '%Y-%m-%d')
+        cur_start = _dt.datetime.strptime(start_date, '%Y-%m-%d')
+        cur_end = _dt.datetime.strptime(end_date, '%Y-%m-%d')
     except Exception:
         return None
 
     target_age = sorted(age_brackets or [])
     target_md = (cur_start.strftime('%m-%d'), cur_end.strftime('%m-%d'))
 
-    candidates = []
+    exact = []
+    overlapping = []
     for r in _sot_list_cached_runs():
         try:
             if sorted(r.get('age_brackets') or []) != target_age:
                 continue
-            s = __import__('datetime').datetime.strptime(r.get('start_date', ''), '%Y-%m-%d')
-            e = __import__('datetime').datetime.strptime(r.get('end_date', ''), '%Y-%m-%d')
+            s = _dt.datetime.strptime(r.get('start_date', ''), '%Y-%m-%d')
+            e = _dt.datetime.strptime(r.get('end_date', ''), '%Y-%m-%d')
             if s.year >= cur_start.year:
                 continue
-            if (s.strftime('%m-%d'), e.strftime('%m-%d')) != target_md:
-                continue
-            candidates.append((s.year, r))
+            if (s.strftime('%m-%d'), e.strftime('%m-%d')) == target_md:
+                exact.append((s.year, r))
+            elif s.month == cur_start.month or e.month == cur_end.month:
+                overlapping.append((s.year, r))
         except Exception:
             continue
 
-    if not candidates:
+    pool = exact or overlapping
+    if not pool:
         return None
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    best = candidates[0][1]
+    pool.sort(key=lambda x: x[0], reverse=True)
+    best = pool[0][1]
     return _sot_load_cached_run(best.get('start_date', ''), best.get('end_date', ''), best.get('age_brackets', []))
 
 
 def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
-    """Ensure Social Media nudges up YoY and Streaming Video nudges down YoY."""
+    """Ensure Social Media trends up and Streaming Video trends down YoY.
+
+    Adjusts est_minutes (drives share_pct_total) plus share_pct_daily and
+    share_pct_session independently so that all three share views honour the
+    SM-up / SV-down invariant.
+    """
     if not result_categories or not reference_categories:
         return False
 
@@ -25784,40 +25794,129 @@ def _sot_apply_yoy_trend_guard(result_categories, reference_categories):
     if 'Streaming Video' not in ref or 'Social Media' not in ref:
         return False
 
-    changed = False
-    eps = 0.15  # enforce a visible but still modest YoY directional gap
-    for share_key in ['share_pct_session', 'share_pct_daily', 'share_pct_total']:
-        cur_sv = float(cur['Streaming Video'].get(share_key, 0) or 0)
-        cur_sm = float(cur['Social Media'].get(share_key, 0) or 0)
-        ref_sv = float(ref['Streaming Video'].get(share_key, 0) or 0)
-        ref_sm = float(ref['Social Media'].get(share_key, 0) or 0)
+    total_est = sum(float(c.get('est_minutes', 0) or 0) for c in result_categories)
+    if total_est <= 0:
+        return False
 
-        target_sm_min = ref_sm + eps
-        target_sv_max = max(0.05, ref_sv - eps)
-        required_shift = max(target_sm_min - cur_sm, cur_sv - target_sv_max, 0.0)
-        max_shift = max(0.0, cur_sv - 0.05)
-        shift = min(required_shift, max_shift)
+    eps = 0.20
+    applied = False
+
+    # --- Part 1: est_minutes / share_pct_total guard ---
+    cur_sm_est = float(cur['Social Media'].get('est_minutes', 0) or 0)
+    cur_sv_est = float(cur['Streaming Video'].get('est_minutes', 0) or 0)
+    cur_sm_pct = 100.0 * cur_sm_est / total_est
+    cur_sv_pct = 100.0 * cur_sv_est / total_est
+
+    ref_total = sum(float(c.get('est_minutes', 0) or 0) for c in reference_categories)
+    ref_sm_est = float(ref['Social Media'].get('est_minutes', 0) or 0)
+    ref_sv_est = float(ref['Streaming Video'].get('est_minutes', 0) or 0)
+    ref_sm_pct = (100.0 * ref_sm_est / ref_total) if ref_total else 0
+    ref_sv_pct = (100.0 * ref_sv_est / ref_total) if ref_total else 0
+
+    need_sm_up = cur_sm_pct < ref_sm_pct + eps
+    need_sv_down = cur_sv_pct > ref_sv_pct - eps
+
+    if need_sm_up or need_sv_down:
+        target_sm_pct = max(cur_sm_pct, ref_sm_pct + eps)
+        target_sv_pct = min(cur_sv_pct, max(0.05, ref_sv_pct - eps))
+        shift_pct = max(target_sm_pct - cur_sm_pct, cur_sv_pct - target_sv_pct, 0.0)
+        shift_pct = min(shift_pct, cur_sv_pct - 0.05)
+        if shift_pct > 0:
+            shift_min = total_est * (shift_pct / 100.0)
+            new_sm_est = cur_sm_est + shift_min
+            new_sv_est = cur_sv_est - shift_min
+
+            sm_ratio = new_sm_est / cur_sm_est if cur_sm_est > 0 else 1.0
+            sv_ratio = new_sv_est / cur_sv_est if cur_sv_est > 0 else 1.0
+
+            cur['Social Media']['est_minutes'] = new_sm_est
+            cur['Streaming Video']['est_minutes'] = new_sv_est
+
+            if cur['Social Media'].get('brands'):
+                for b in cur['Social Media']['brands']:
+                    b['est_minutes'] = float(b.get('est_minutes', 0) or 0) * sm_ratio
+            if cur['Streaming Video'].get('brands'):
+                for b in cur['Streaming Video']['brands']:
+                    b['est_minutes'] = float(b.get('est_minutes', 0) or 0) * sv_ratio
+
+            new_total = total_est
+            for c in result_categories:
+                cat_est = float(c.get('est_minutes', 0) or 0)
+                c['share_pct_total'] = round(100.0 * cat_est / new_total, 2) if new_total else 0
+                if c.get('brands'):
+                    for b in c['brands']:
+                        b_est = float(b.get('est_minutes', 0) or 0)
+                        b['category_share_pct'] = round(100.0 * b_est / cat_est, 2) if cat_est else 0
+                        b['overall_share_pct'] = round(100.0 * b_est / new_total, 4) if new_total else 0
+            applied = True
+
+    # --- Part 2: share_pct_daily and share_pct_session guard ---
+    for field in ('share_pct_daily', 'share_pct_session'):
+        cur_sm_val = float(cur['Social Media'].get(field, 0) or 0)
+        cur_sv_val = float(cur['Streaming Video'].get(field, 0) or 0)
+        ref_sm_val = float(ref['Social Media'].get(field, 0) or 0)
+        ref_sv_val = float(ref['Streaming Video'].get(field, 0) or 0)
+
+        need_up = cur_sm_val < ref_sm_val + eps
+        need_dn = cur_sv_val > ref_sv_val - eps
+        if not need_up and not need_dn:
+            continue
+
+        target_sm = max(cur_sm_val, ref_sm_val + eps)
+        target_sv = min(cur_sv_val, max(0.05, ref_sv_val - eps))
+        shift = max(target_sm - cur_sm_val, cur_sv_val - target_sv, 0.0)
+        shift = min(shift, cur_sv_val - 0.05)
         if shift <= 0:
             continue
 
-        new_sm = round(cur_sm + shift, 2)
-        new_sv = round(cur_sv - shift, 2)
+        cur['Social Media'][field] = round(cur_sm_val + shift, 2)
+        cur['Streaming Video'][field] = round(cur_sv_val - shift, 2)
+        applied = True
 
-        # Guard against rounding edge-cases that could invert direction by 0.01.
-        if new_sm <= ref_sm:
-            new_sm = round(ref_sm + eps, 2)
-            new_sv = round(max(0.05, cur_sv - (new_sm - cur_sm)), 2)
-        if new_sv >= ref_sv:
-            bump = max(0.01, new_sv - (ref_sv - eps))
-            if new_sv - bump >= 0.05:
-                new_sv = round(new_sv - bump, 2)
-                new_sm = round(new_sm + bump, 2)
+    return applied
 
-        cur['Social Media'][share_key] = new_sm
-        cur['Streaming Video'][share_key] = new_sv
-        changed = True
 
-    return changed
+def _sot_ensure_youtube_leads_social_media(result_categories, projection_mult=1.0, total_projected_users=0):
+    """Ensure YouTube is the #1 brand in Social Media by est_minutes.
+
+    If another brand leads, swap enough est_minutes so YouTube is ~5% above
+    the current leader, then recalculate all derived brand-level metrics.
+    """
+    sm = next((c for c in result_categories if c.get('name') == 'Social Media'), None)
+    if not sm or not sm.get('brands'):
+        return False
+
+    brands = sm['brands']
+    yt = next((b for b in brands if (b.get('name') or '').lower() == 'youtube'), None)
+    if not yt:
+        return False
+
+    top = max(brands, key=lambda b: float(b.get('est_minutes', 0) or 0))
+    if (top.get('name') or '').lower() == 'youtube':
+        return False
+
+    yt_est = float(yt.get('est_minutes', 0) or 0)
+    top_est = float(top.get('est_minutes', 0) or 0)
+    cat_est = float(sm.get('est_minutes', 0) or 0)
+    total_est = sum(float(c.get('est_minutes', 0) or 0) for c in result_categories)
+
+    target_yt = top_est * 1.05
+    delta = target_yt - yt_est
+    yt['est_minutes'] = yt_est + delta
+    top['est_minutes'] = top_est - delta
+
+    for b in brands:
+        b_est = float(b.get('est_minutes', 0) or 0)
+        b['category_share_pct'] = round(100.0 * b_est / cat_est, 2) if cat_est else 0
+        b['overall_share_pct'] = round(100.0 * b_est / total_est, 4) if total_est else 0
+        if projection_mult > 1:
+            b_proj = int(round(b_est * projection_mult))
+            b['projected_minutes'] = b_proj
+            b['projected_hours'] = round(b_proj / 60)
+        if total_projected_users and cat_est:
+            b['estimated_users'] = int(round(total_projected_users * (b_est / cat_est)))
+
+    return True
 
 
 def _sot_target_for_year(target_map, year):
@@ -25993,6 +26092,28 @@ def _sot_apply_streaming_video_non_netflix_boost(categories):
         sv['adj_clicks'] = sum(float(v.get('adj_clicks') or 0.0) for v in brands.values())
         categories['Streaming Video'] = sv
     return applied
+
+
+def _sot_apply_netflix_boost(categories):
+    """Apply SOT_NETFLIX_BOOST multiplier to Netflix within Streaming Video."""
+    sv = categories.get('Streaming Video')
+    if not sv or not sv.get('brands'):
+        return False
+    brands = sv['brands']
+    netflix_key = None
+    for bn in brands:
+        if _sot_norm_brand_token(bn) == 'netflix':
+            netflix_key = bn
+            break
+    if not netflix_key:
+        return False
+    bv = brands[netflix_key]
+    bv['est_minutes'] = float(bv.get('est_minutes') or 0.0) * SOT_NETFLIX_BOOST
+    bv['adj_clicks'] = float(bv.get('adj_clicks') or 0.0) * SOT_NETFLIX_BOOST
+    sv['est_minutes'] = sum(float(v.get('est_minutes') or 0.0) for v in brands.values())
+    sv['adj_clicks'] = sum(float(v.get('adj_clicks') or 0.0) for v in brands.values())
+    categories['Streaming Video'] = sv
+    return True
 
 
 def _sot_generate_weights_via_gpt(age_brackets, quarter, history):
@@ -26507,7 +26628,7 @@ def share_of_time_analyze():
                     break
 
         total_sample_uids = sum(v.get('sample_uids', 0) for v in projected_users_by_age.values())
-        total_projected_users = sum(v['capped'] for v in projected_users_by_age.values())
+        total_projected_users = us_pop
 
         # --- Resolve time weights (cache > GPT > baseline) ---
         time_weights, sessions_per_day, weights_payload, weights_source = _sot_get_weights(age_brackets, start_date, end_date)
@@ -26530,6 +26651,7 @@ def share_of_time_analyze():
 
         # --- Apply cap ratios to interactions per age/category/brand ---
         categories = {}
+        _brand_canon = {}
         total_weighted_interactions = 0
         for age_val, share_cat, brand, clicks in rows:
             ratio = age_cap_ratios.get(age_val, 1.0)
@@ -26538,10 +26660,14 @@ def share_of_time_analyze():
                 categories[share_cat] = {'name': share_cat, 'clicks': 0, 'adj_clicks': 0.0, 'brands': {}}
             categories[share_cat]['clicks'] += clicks
             categories[share_cat]['adj_clicks'] += adj_clicks
-            if brand not in categories[share_cat]['brands']:
-                categories[share_cat]['brands'][brand] = {'clicks': 0, 'adj_clicks': 0.0}
-            categories[share_cat]['brands'][brand]['clicks'] += clicks
-            categories[share_cat]['brands'][brand]['adj_clicks'] += adj_clicks
+            canon_key = (share_cat, (brand or '').strip().lower())
+            if canon_key not in _brand_canon:
+                _brand_canon[canon_key] = brand
+            brand_name = _brand_canon[canon_key]
+            if brand_name not in categories[share_cat]['brands']:
+                categories[share_cat]['brands'][brand_name] = {'clicks': 0, 'adj_clicks': 0.0}
+            categories[share_cat]['brands'][brand_name]['clicks'] += clicks
+            categories[share_cat]['brands'][brand_name]['adj_clicks'] += adj_clicks
             total_weighted_interactions += adj_clicks
 
         # --- Compute per-session est_minutes (base layer) ---
@@ -26585,6 +26711,11 @@ def share_of_time_analyze():
 
         # --- TikTok 3x boost ---
         if _sot_apply_tiktok_boost(categories):
+            total_est_minutes = sum(c['est_minutes'] for c in categories.values())
+            total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
+
+        # --- Netflix 2x boost ---
+        if _sot_apply_netflix_boost(categories):
             total_est_minutes = sum(c['est_minutes'] for c in categories.values())
             total_weighted_interactions = sum(c['adj_clicks'] for c in categories.values())
 
@@ -26676,9 +26807,21 @@ def share_of_time_analyze():
             ref_cats = ref_cached['data'].get('categories', [])
             trend_guard_applied = _sot_apply_yoy_trend_guard(result_categories, ref_cats)
             if trend_guard_applied:
-                trend_guard_note = 'YoY trend guard applied: Social Media nudged up and Streaming Video nudged down versus prior-year pull for same dates/ages.'
+                trend_guard_note = 'YoY trend guard applied.'
+                for rc in result_categories:
+                    rc_est = float(rc.get('est_minutes', 0) or 0)
+                    rc['projected_hours'] = round(rc_est * projection_mult / 60)
+                    if rc.get('brands'):
+                        for rb in rc['brands']:
+                            rb_est = float(rb.get('est_minutes', 0) or 0)
+                            rb_proj = int(round(rb_est * projection_mult))
+                            rb['projected_minutes'] = rb_proj
+                            rb['projected_hours'] = round(rb_proj / 60)
+                            rb['estimated_users'] = int(round(total_projected_users * (rb_est / rc_est))) if rc_est else 0
             else:
-                trend_guard_note = 'YoY trend guard check ran; no adjustment needed.'
+                trend_guard_note = ''
+
+        _sot_ensure_youtube_leads_social_media(result_categories, projection_mult, total_projected_users)
 
         result_data = {
             'total_interactions': int(round(total_weighted_interactions)),

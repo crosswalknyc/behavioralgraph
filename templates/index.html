@@ -920,15 +920,110 @@
             border-left: 1px dashed rgba(255,255,255,0.14);
             margin-bottom: 0.45rem;
         }
-        #shareOfTimeIQView .sot-compare-grid { display: grid; gap: 1rem; margin-bottom: 1rem; }
-        #shareOfTimeIQView .sot-compare-col { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; overflow: hidden; }
-        #shareOfTimeIQView .sot-compare-col h4 { font-size: 0.82rem; margin: 0 0 0.5rem; color: var(--accent-cyan); }
-        #shareOfTimeIQView .sot-compare-row { display: flex; justify-content: space-between; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.78rem; }
-        #shareOfTimeIQView .sot-compare-row:last-child { border-bottom: none; }
-        #shareOfTimeIQView .sot-compare-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
         #shareOfTimeIQView .sot-compare-btn { padding: 0.4rem 1rem; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 8px; color: #fff; font-weight: 700; font-size: 0.78rem; cursor: pointer; transition: opacity 0.2s; white-space: nowrap; }
         #shareOfTimeIQView .sot-compare-btn:hover { opacity: 0.85; }
         #shareOfTimeIQView .sot-compare-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        #shareOfTimeIQView .sot-cmp-kpi-grid { display: grid; gap: 0.75rem; margin-bottom: 1.25rem; }
+        #shareOfTimeIQView .sot-cmp-kpi-col { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.85rem 0.9rem; overflow: hidden; }
+        #shareOfTimeIQView .sot-cmp-kpi-col .sot-cmp-kpi-label { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #shareOfTimeIQView .sot-cmp-kpi-col .sot-cmp-kpi-value { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
+        #shareOfTimeIQView .sot-cmp-kpi-col .sot-cmp-kpi-metric { font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.35rem; font-weight: 600; }
+        #shareOfTimeIQView .sot-cmp-delta { display: inline-flex; align-items: center; gap: 2px; font-size: 0.65rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
+        #shareOfTimeIQView .sot-cmp-delta.up { color: #34d399; background: rgba(52,211,153,0.12); }
+        #shareOfTimeIQView .sot-cmp-delta.down { color: #f87171; background: rgba(248,113,113,0.12); }
+        #shareOfTimeIQView .sot-cmp-delta.neutral { color: #94a3b8; background: rgba(148,163,184,0.1); }
+        #shareOfTimeIQView .sot-cmp-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+        #shareOfTimeIQView .sot-cmp-table th { text-align: left; padding: 0.45rem 0.6rem; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); font-weight: 600; white-space: nowrap; }
+        #shareOfTimeIQView .sot-cmp-table th.num { text-align: right; }
+        #shareOfTimeIQView .sot-cmp-table td { padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text-primary); vertical-align: middle; }
+        #shareOfTimeIQView .sot-cmp-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        #shareOfTimeIQView .sot-cmp-table tr:last-child td { border-bottom: none; }
+        #shareOfTimeIQView .sot-cmp-table tr.highlight td { background: rgba(139,92,246,0.06); }
+        #shareOfTimeIQView .sot-cmp-mini-bar { display: inline-block; height: 5px; border-radius: 3px; vertical-align: middle; margin-right: 5px; min-width: 2px; }
+        #shareOfTimeIQView .sot-cmp-movers { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; }
+        @media (max-width: 800px) { #shareOfTimeIQView .sot-cmp-movers { grid-template-columns: 1fr; } }
+        #shareOfTimeIQView .sot-cmp-mover-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.85rem 1rem; }
+        #shareOfTimeIQView .sot-cmp-mover-card h4 { font-size: 0.75rem; margin: 0 0 0.6rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.04em; }
+        #shareOfTimeIQView .sot-cmp-mover-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.78rem; }
+        #shareOfTimeIQView .sot-cmp-mover-row:last-child { border-bottom: none; }
+        #shareOfTimeIQView .sot-cmp-mover-name { flex: 1; color: var(--text-primary); font-weight: 600; }
+        #shareOfTimeIQView .sot-cmp-mover-cat { font-size: 0.62rem; color: var(--text-secondary); }
+        #shareOfTimeIQView .sot-cmp-mover-vals { font-size: 0.72rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+        #shareOfTimeIQView .sot-cmp-section-title { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin: 0 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border-color); }
+
+        /* --- Interactive compare enhancements --- */
+        #shareOfTimeIQView .sot-cmp-cat-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin-bottom: 1.25rem; }
+        #shareOfTimeIQView .sot-cmp-cat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.7rem 0.8rem; cursor: pointer; transition: all 0.2s ease; position: relative; overflow: hidden; }
+        #shareOfTimeIQView .sot-cmp-cat-card:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+        #shareOfTimeIQView .sot-cmp-cat-card.active { border-color: rgba(255,255,255,0.3); box-shadow: 0 0 12px rgba(139,92,246,0.25); }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-name { font-size: 0.72rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-val { font-size: 1.15rem; font-weight: 800; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-sub { font-size: 0.6rem; color: var(--text-secondary); margin-top: 0.2rem; }
+        #shareOfTimeIQView .sot-cmp-cat-card .ccard-bar { position: absolute; bottom: 0; left: 0; height: 3px; border-radius: 0 0 10px 10px; transition: width 0.3s ease; }
+
+        #shareOfTimeIQView .sot-cmp-table th.sortable { cursor: pointer; user-select: none; transition: color 0.15s; }
+        #shareOfTimeIQView .sot-cmp-table th.sortable:hover { color: var(--accent-cyan); }
+        #shareOfTimeIQView .sot-cmp-table th .sort-arrow { font-size: 0.55rem; margin-left: 3px; opacity: 0.3; }
+        #shareOfTimeIQView .sot-cmp-table th.sort-active .sort-arrow { opacity: 1; color: var(--accent-cyan); }
+
+        #shareOfTimeIQView .sot-cmp-table tr.expandable { cursor: pointer; }
+        #shareOfTimeIQView .sot-cmp-table tr.expandable:hover td { background: rgba(255,255,255,0.03); }
+        #shareOfTimeIQView .sot-cmp-table tr.expandable .expand-chevron { display: inline-block; font-size: 0.55rem; margin-right: 4px; transition: transform 0.2s; color: var(--text-secondary); }
+        #shareOfTimeIQView .sot-cmp-table tr.expandable.expanded .expand-chevron { transform: rotate(90deg); }
+        #shareOfTimeIQView .sot-cmp-table tr.expand-row td { padding: 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        #shareOfTimeIQView .sot-cmp-table tr.expand-row .expand-inner { overflow: hidden; transition: max-height 0.3s ease, opacity 0.3s ease; max-height: 0; opacity: 0; }
+        #shareOfTimeIQView .sot-cmp-table tr.expand-row.open .expand-inner { max-height: 500px; opacity: 1; }
+        #shareOfTimeIQView .sot-cmp-expand-brands { padding: 0.4rem 0.6rem 0.6rem 1.6rem; }
+        #shareOfTimeIQView .sot-cmp-expand-brands table { width: 100%; font-size: 0.72rem; border-collapse: collapse; }
+        #shareOfTimeIQView .sot-cmp-expand-brands td { padding: 0.2rem 0.4rem; color: var(--text-secondary); }
+        #shareOfTimeIQView .sot-cmp-expand-brands td:first-child { color: var(--text-primary); font-weight: 600; }
+        #shareOfTimeIQView .sot-cmp-expand-brands td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+        [data-sot-cat].sot-cat-dim { opacity: 0.25; transition: opacity 0.2s; }
+        [data-sot-cat].sot-cat-glow { background: rgba(139,92,246,0.08) !important; transition: background 0.2s; }
+        #shareOfTimeIQView .sot-cmp-mover-row[data-sot-cat].sot-cat-glow { background: rgba(139,92,246,0.12); border-radius: 4px; }
+
+        #shareOfTimeIQView .sot-sparkline { display: inline-block; vertical-align: middle; margin-left: 5px; }
+        #shareOfTimeIQView .sot-sparkline svg { vertical-align: middle; }
+
+        #shareOfTimeIQView .sot-focus-bar { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+        #shareOfTimeIQView .sot-focus-btn { background: transparent; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.3rem 0.7rem; font-size: 0.68rem; color: var(--text-secondary); cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; transition: all 0.2s; }
+        #shareOfTimeIQView .sot-focus-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text-primary); }
+        #shareOfTimeIQView .sot-focus-btn.active { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.4); color: #c4b5fd; }
+        .sot-cmp-focus-hide { display: none !important; }
+
+        /* --- Cohort Analysis Mode --- */
+        #shareOfTimeIQView .sot-cohort-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; align-items: center; }
+        #shareOfTimeIQView .sot-cohort-chip { padding: 0.3rem 0.7rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.03em; cursor: pointer; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); transition: all 0.2s; text-transform: uppercase; }
+        #shareOfTimeIQView .sot-cohort-chip.active { background: rgba(139,92,246,0.18); border-color: rgba(139,92,246,0.5); color: #c4b5fd; }
+        #shareOfTimeIQView .sot-cohort-chip.baseline { background: rgba(6,182,212,0.15); border-color: rgba(6,182,212,0.5); color: var(--accent-cyan); cursor: default; font-weight: 800; }
+        #shareOfTimeIQView .sot-cohort-chip-label { font-size: 0.6rem; color: var(--text-secondary); margin-right: 0.5rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+
+        #shareOfTimeIQView .sot-cohort-baseline { display: flex; gap: 1rem; margin-bottom: 1.25rem; align-items: stretch; }
+        #shareOfTimeIQView .sot-cohort-baseline-card { background: var(--bg-card); border: 2px solid rgba(6,182,212,0.3); border-radius: 12px; padding: 1rem 1.1rem; min-width: 200px; flex: 0 0 auto; }
+        #shareOfTimeIQView .sot-cohort-baseline-card .cb-title { font-size: 0.7rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; margin-bottom: 0.5rem; }
+        #shareOfTimeIQView .sot-cohort-baseline-card .cb-metric { font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+        #shareOfTimeIQView .sot-cohort-baseline-card .cb-value { font-size: 1.05rem; font-weight: 800; color: var(--text-primary); }
+        #shareOfTimeIQView .sot-cohort-dev-grid { display: flex; gap: 0.6rem; flex: 1 1 0%; overflow-x: auto; min-width: 0; }
+        #shareOfTimeIQView .sot-cohort-dev-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.65rem 0.75rem; min-width: 120px; flex: 1 1 0%; }
+        #shareOfTimeIQView .sot-cohort-dev-card .cd-label { font-size: 0.65rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem; white-space: nowrap; }
+        #shareOfTimeIQView .sot-cohort-dev-card .cd-row { font-size: 0.62rem; color: var(--text-secondary); margin-top: 0.15rem; display: flex; justify-content: space-between; }
+
+        #shareOfTimeIQView .sot-heatmap { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 1.25rem; }
+        #shareOfTimeIQView .sot-heatmap th { text-align: center; padding: 0.45rem 0.5rem; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); font-weight: 700; white-space: nowrap; }
+        #shareOfTimeIQView .sot-heatmap th:first-child { text-align: left; }
+        #shareOfTimeIQView .sot-heatmap td { padding: 0.5rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.04); font-weight: 700; font-variant-numeric: tabular-nums; cursor: default; position: relative; transition: transform 0.15s; }
+        #shareOfTimeIQView .sot-heatmap td:first-child { text-align: left; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+        #shareOfTimeIQView .sot-heatmap td:hover { transform: scale(1.05); z-index: 2; }
+        #shareOfTimeIQView .sot-heatmap .hm-tooltip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.5rem; font-size: 0.62rem; white-space: nowrap; z-index: 10; color: var(--text-primary); font-weight: 400; pointer-events: none; }
+        #shareOfTimeIQView .sot-heatmap td:hover .hm-tooltip { display: block; }
+
+        #shareOfTimeIQView .sot-insights { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; }
+        @media (max-width: 800px) { #shareOfTimeIQView .sot-insights { grid-template-columns: 1fr; } }
+        #shareOfTimeIQView .sot-insight-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem 0.8rem; font-size: 0.75rem; color: var(--text-primary); display: flex; align-items: flex-start; gap: 0.5rem; }
+        #shareOfTimeIQView .sot-insight-icon { font-size: 0.9rem; flex-shrink: 0; line-height: 1.2; }
+        #shareOfTimeIQView .sot-insight-text b { color: var(--accent-cyan); }
+
         @keyframes sotSpin { to { transform: rotate(360deg); } }
         #llmoIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #llmoIQView .llmo-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
@@ -14341,17 +14436,8 @@
                                 <label style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">End Date</label>
                                 <input type="date" id="iqSotEndDate" style="padding:0.45rem 0.6rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:0.85rem;">
                             </div>
-                            <div style="display:flex;flex-direction:column;gap:0.3rem;flex:1;">
-                                <label style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Age Range</label>
-                                <div id="iqSotAgeGrid" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="17 and Under" checked>Under 18</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="18-24" checked>18-24</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="25-34" checked>25-34</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="35-44" checked>35-44</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="45-54" checked>45-54</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="55-64" checked>55-64</label>
-                                    <label class="iq-sot-age-chip active"><input type="checkbox" value="65 or Older" checked>65+</label>
-                                </div>
+                            <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                                <span style="font-size:0.7rem;color:var(--text-secondary);line-height:1.3;">Runs All Ages + each individual bracket automatically</span>
                             </div>
                             <button type="button" id="iqSotRunBtn" onclick="iqSotRunAnalysis()" style="padding:0.5rem 1.5rem;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-lime));border:none;border-radius:8px;color:#000;font-weight:700;font-size:0.85rem;cursor:pointer;white-space:nowrap;">Run Analysis</button>
                         </div>
@@ -16103,13 +16189,9 @@
                 </div>
                 <!-- Main content -->
                 <div class="dashboard-tab-content" style="flex:1;overflow-y:auto;padding:0 0.5rem;">
-                    <div class="sot-form-panel" id="sotControlsPanel" {% if not has_share_of_time_run_access %}style="display:none;"{% endif %}>
-                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
-                            <span style="font-size:1.5rem;">⏱️</span>
-                            <h2 style="margin:0;font-size:1.2rem;">Share of Time</h2>
-                            <span style="color:var(--text-secondary);font-size:0.8rem;">Analyze how time is distributed across entertainment categories</span>
-                        </div>
-                        <div class="sot-form-row">
+                    <!-- SOT form hidden from top-level; lives in Analysis IQ tab -->
+                    <div class="sot-form-panel" id="sotControlsPanel" style="display:none;">
+                        <div class="sot-form-row" style="display:none;">
                             <div class="sot-field">
                                 <label>Start Date</label>
                                 <input type="date" id="sotStartDate">
@@ -16130,10 +16212,10 @@
                                     <label class="sot-age-chip active"><input type="checkbox" value="65 or Older" checked>65+</label>
                                 </div>
                             </div>
-                            <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()">Run Analysis</button>
+                            <button type="button" class="sot-run-btn" id="sotRunBtn" onclick="sotRunAnalysis()" style="display:none;">Run Analysis</button>
                         </div>
                     </div>
-                    <div id="sotViewOnlyNotice" class="sot-form-panel" {% if has_share_of_time_run_access %}style="display:none;"{% endif %}>
+                    <div id="sotViewOnlyNotice" class="sot-form-panel" style="display:none;">
                         <div style="display:flex;align-items:center;gap:0.65rem;">
                             <span style="font-size:1.1rem;">👁️</span>
                             <div>
@@ -16142,8 +16224,9 @@
                             </div>
                         </div>
                     </div>
-                    <div style="display:flex;justify-content:flex-end;align-items:center;margin:0.25rem 0 0.6rem;">
+                    <div style="display:flex;justify-content:flex-end;align-items:center;gap:0.5rem;margin:0.25rem 0 0.6rem;">
                         <button type="button" class="sot-compare-btn" id="sotCompareBtn" onclick="sotToggleCompare()" disabled title="Open 2+ tabs to compare">Compare Open Tabs</button>
+                        <button type="button" class="sot-compare-btn" id="sotCloseAllBtn" onclick="sotCloseAllTabs()" style="display:none;background:#991b1b;border-color:#dc2626;font-size:0.7rem;padding:0.4rem 0.8rem;" title="Close all open tabs">Close All</button>
                     </div>
                     <div id="sotTabBar" class="profile-tabs-bar sot-tab-bar" style="display:none;"></div>
                     <div id="sotCompareArea" style="display:none;"></div>
@@ -19806,15 +19889,26 @@
                 perPlatCards.innerHTML = perPlatformConversion.map(p => {
                     const viewersProj = parseInt(p.viewersGenPop) || 0;
                     const convertedProj = parseInt(p.convertedGenPop) || 0;
-                    const viewersDisplay = viewersProj > 0 ? formatGenPop(viewersProj) : (parseInt(p.viewers) || 0).toLocaleString();
-                    const convertedDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : (parseInt(p.converted) || 0).toLocaleString();
+                    const viewersRaw = parseInt(p.viewers) || 0;
+                    const convertedRaw = parseInt(p.converted) || 0;
+                    const viewersDisplay = viewersProj > 0 ? formatGenPop(viewersProj) : viewersRaw.toLocaleString();
+                    let convDisplay = convertedRaw.toLocaleString();
+                    if (convertedProj > 0 && viewersProj > 0 && convertedProj <= viewersProj) {
+                        convDisplay = formatGenPop(convertedProj);
+                    } else if (convertedProj > 0 && viewersProj > 0) {
+                        convDisplay = formatGenPop(Math.round(viewersProj * Math.min(convertedRaw / Math.max(viewersRaw, 1), 1)));
+                    } else if (convertedProj > 0) {
+                        convDisplay = formatGenPop(convertedProj);
+                    }
+                    let platRate = viewersRaw > 0 ? Math.min((convertedRaw / viewersRaw) * 100, 100) : parseFloat(p.convRate || 0);
+                    if (platRate > 100) platRate = 100;
                     return `
                     <div style="background: var(--bg-card); border-radius: 10px; padding: 1rem; border: 1px solid var(--border-color); border-left: 4px solid ${platformColors[p.platform] || 'var(--accent-primary)'};">
                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">${platformIcons[p.platform] || '📱'} ${p.platform}</div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.75rem;">
                             <div><span style="color: var(--text-secondary);">Duplicated Views:</span> <span style="font-weight: 600;">${viewersDisplay}</span></div>
-                            <div><span style="color: var(--text-secondary);">Converted:</span> <span style="font-weight: 600; color: var(--accent-lime);">${convertedDisplay}</span></div>
-                            <div style="grid-column: span 2;"><span style="color: var(--text-secondary);">Conv. Rate:</span> <span style="font-weight: 600; color: var(--accent-primary);">${p.convRate || '0'}%</span></div>
+                            <div><span style="color: var(--text-secondary);">Converted:</span> <span style="font-weight: 600; color: var(--accent-lime);">${convDisplay}</span></div>
+                            <div style="grid-column: span 2;"><span style="color: var(--text-secondary);">Conv. Rate:</span> <span style="font-weight: 600; color: var(--accent-primary);">${platRate.toFixed(5)}%</span></div>
                         </div>
                     </div>
                 `}).join('');
@@ -19841,14 +19935,29 @@
                     const uniqueViewsProj = parseInt(u.uniqueViewsGenPop) || 0;
                     const duplicatedViewsProj = parseInt(u.duplicatedViewsGenPop) || 0;
                     const convertedProj = parseInt(u.convertedGenPop) || 0;
-                    // Show projected values - ensure duplicated >= unique
-                    const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : (parseInt(u.uniqueViews) || 0).toLocaleString();
+                    const convertedSample = parseInt(u.converted) || 0;
+                    const uniqueSample = parseInt(u.uniqueViews) || 0;
+
+                    const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : uniqueSample.toLocaleString();
                     let dupDisplay = duplicatedViewsProj > 0 ? formatGenPop(duplicatedViewsProj) : (parseInt(u.duplicatedViews) || 0).toLocaleString();
-                    // Sanity check: if duplicated < unique, show unique * 1.5
                     if (duplicatedViewsProj > 0 && uniqueViewsProj > 0 && duplicatedViewsProj < uniqueViewsProj) {
                         dupDisplay = formatGenPop(Math.round(uniqueViewsProj * 1.8));
                     }
-                    const convertedDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : (parseInt(u.converted) || 0).toLocaleString();
+
+                    let convDisplay = convertedSample.toLocaleString();
+                    if (convertedProj > 0 && uniqueViewsProj > 0 && convertedProj > uniqueViewsProj) {
+                        convDisplay = formatGenPop(Math.round(uniqueViewsProj * (convertedSample / Math.max(uniqueSample, 1))));
+                    } else if (convertedProj > 0) {
+                        convDisplay = formatGenPop(convertedProj);
+                    }
+
+                    let convRate = 0;
+                    if (uniqueSample > 0) convRate = Math.min((convertedSample / uniqueSample) * 100, 100);
+                    else convRate = parseFloat(u.convRate || 0);
+                    if (convRate > 100) convRate = 100;
+
+                    const projDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : '-';
+
                     return `
                     <tr>
                         <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); max-width: 350px;">
@@ -19859,9 +19968,9 @@
                         </td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueDisplay}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${dupDisplay}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convertedDisplay}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${parseFloat(u.convRate || 0).toFixed(2)}%</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan); font-size: 0.8rem;">${convertedProj > 0 ? formatGenPop(convertedProj) : '-'}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convDisplay}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${convRate.toFixed(2)}%</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan); font-size: 0.8rem;">${projDisplay}</td>
                     </tr>
                 `}).join('');
             }
@@ -19875,22 +19984,35 @@
                     const uniqueViewsProj = parseInt(p.uniqueViewsGenPop) || 0;
                     const duplicatedViewsProj = parseInt(p.duplicatedViewsGenPop) || 0;
                     const convertedProj = parseInt(p.convertedGenPop) || 0;
-                    // Show projected values
-                    const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : (parseInt(p.uniqueViews) || 0).toLocaleString();
+                    const uniqueRaw = parseInt(p.uniqueViews) || 0;
+                    const convertedRaw = parseInt(p.converted) || 0;
+
+                    const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : uniqueRaw.toLocaleString();
                     let dupDisplay = duplicatedViewsProj > 0 ? formatGenPop(duplicatedViewsProj) : (parseInt(p.duplicatedViews) || 0).toLocaleString();
-                    // Sanity check: if duplicated < unique, show unique * 1.8
                     if (duplicatedViewsProj > 0 && uniqueViewsProj > 0 && duplicatedViewsProj < uniqueViewsProj) {
                         dupDisplay = formatGenPop(Math.round(uniqueViewsProj * 1.8));
                     }
-                    const convertedDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : (parseInt(p.converted) || 0).toLocaleString();
+
+                    let convDisplay = convertedRaw.toLocaleString();
+                    if (convertedProj > 0 && uniqueViewsProj > 0 && convertedProj <= uniqueViewsProj) {
+                        convDisplay = formatGenPop(convertedProj);
+                    } else if (convertedProj > 0 && uniqueViewsProj > 0) {
+                        convDisplay = formatGenPop(Math.round(uniqueViewsProj * Math.min(convertedRaw / Math.max(uniqueRaw, 1), 1)));
+                    } else if (convertedProj > 0) {
+                        convDisplay = formatGenPop(convertedProj);
+                    }
+
+                    let platConvRate = uniqueRaw > 0 ? Math.min((convertedRaw / uniqueRaw) * 100, 100) : parseFloat(p.convRate || 0);
+                    if (platConvRate > 100) platConvRate = 100;
+
                     return `
                     <tr style="${p.platform.includes('OVERALL') ? 'background: var(--bg-dark); font-weight: 600;' : ''}">
                         <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${p.platform}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueDisplay}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${dupDisplay}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convertedDisplay}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${p.convRate || '0'}%</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan); font-size: 0.8rem;">${uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : '-'}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convDisplay}</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${platConvRate.toFixed(5)}%</td>
+                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan); font-size: 0.8rem;">${convertedProj > 0 ? formatGenPop(convertedProj) : '-'}</td>
                     </tr>
                 `}).join('');
             } else if (platSection) {
@@ -23580,11 +23702,7 @@
         })();
 
         function sotApplyRunAccessVisibility() {
-            var controls = document.getElementById('sotControlsPanel');
-            var notice = document.getElementById('sotViewOnlyNotice');
-            var canRun = !!window.hasShareOfTimeRunAccess;
-            if (controls) controls.style.display = canRun ? '' : 'none';
-            if (notice) notice.style.display = canRun ? 'none' : '';
+            // SOT form now lives in Analysis IQ — keep top-level panel hidden
         }
 
         window.showShareOfTimeIQ = function() {
@@ -23602,44 +23720,71 @@
             sotLoadRuns();
         };
 
-        // --- Analysis IQ: Share of Time tab ---
-        (function() {
-            var chips = document.querySelectorAll('#iqSotAgeGrid .iq-sot-age-chip');
-            chips.forEach(function(chip) {
-                chip.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    var cb = chip.querySelector('input');
-                    cb.checked = !cb.checked;
-                    chip.classList.toggle('active', cb.checked);
-                });
-            });
-        })();
-
         function iqSotRunAnalysis() {
             var start = document.getElementById('iqSotStartDate')?.value;
             var end = document.getElementById('iqSotEndDate')?.value;
             if (!start || !end) { alert('Please select both start and end dates.'); return; }
-            var checks = document.querySelectorAll('#iqSotAgeGrid input:checked');
-            if (!checks.length) { alert('Please select at least one age bracket.'); return; }
 
-            var sotStart = document.getElementById('sotStartDate');
-            var sotEnd = document.getElementById('sotEndDate');
-            if (sotStart) sotStart.value = start;
-            if (sotEnd) sotEnd.value = end;
+            var allBrackets = ['17 and Under','18-24','25-34','35-44','45-54','55-64','65 or Older'];
+            var runs = [allBrackets].concat(allBrackets.map(function(b) { return [b]; }));
 
-            var sotChips = document.querySelectorAll('#sotAgeGrid .sot-age-chip');
-            var selectedAges = new Set();
-            checks.forEach(function(c) { selectedAges.add(c.value); });
-            sotChips.forEach(function(chip) {
-                var cb = chip.querySelector('input');
-                if (cb) {
-                    cb.checked = selectedAges.has(cb.value);
-                    chip.classList.toggle('active', cb.checked);
-                }
-            });
+            showAnalysisStatusModal();
+            updateAnalysisStatusModal({ display_name: 'Share of Time', message: 'Running 8 analyses for ' + start + ' to ' + end + '…', progress: 5 });
+
+            var completed = 0;
+            var total = runs.length;
+            var results = [];
 
             showShareOfTimeIQ();
-            sotRunAnalysis();
+            sotCloseAllTabs();
+
+            runs.forEach(function(ages) {
+                fetch('/api/share-of-time/analyze', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_date: start, end_date: end, age_brackets: ages })
+                }).then(function(r) { return r.json(); }).then(function(resp) {
+                    completed++;
+                    var pct = Math.round((completed / total) * 90) + 10;
+                    updateAnalysisStatusModal({ display_name: 'Share of Time', message: completed + ' of ' + total + ' age groups complete…', progress: pct });
+                    if (resp.success && resp.data) results.push(resp.data);
+                    if (completed === total) _iqSotFinishBatch(results);
+                }).catch(function() {
+                    completed++;
+                    if (completed === total) _iqSotFinishBatch(results);
+                });
+            });
+        }
+
+        function _iqSotFinishBatch(results) {
+            showAnalysisStatusModalComplete();
+            setTimeout(function() { closeAnalysisStatusModal(); }, 1200);
+
+            results.forEach(function(data) {
+                var key = _sotTabKey(data);
+                var exists = false;
+                _sotOpenTabs.forEach(function(t) { if (_sotTabKey(t.data) === key) exists = true; });
+                if (!exists) _sotOpenTabs.push({ data: data, key: key });
+            });
+
+            sotLoadRuns();
+
+            if (_sotOpenTabs.length >= 2) {
+                _sotCompareMode = true;
+                _sotActiveTabIdx = -1;
+                sotRenderTabs();
+                sotRenderRunTree();
+                document.getElementById('sotResultsArea').style.display = 'none';
+                document.getElementById('sotEmptyState').style.display = 'none';
+                sotRenderCompare();
+                document.getElementById('sotCompareArea').style.display = 'block';
+            } else if (_sotOpenTabs.length === 1) {
+                _sotActiveTabIdx = 0;
+                _sotData = _sotOpenTabs[0].data;
+                sotRenderTabs();
+                sotRenderRunTree();
+                sotRenderResults(_sotData);
+            }
         }
 
         function sotRunAnalysis(forceRefresh) {
@@ -23667,6 +23812,10 @@
             var payload = { start_date: start, end_date: end, age_brackets: ages };
             if (forceRefresh) payload.force_refresh = true;
 
+            if (window._sotIqModalActive) {
+                updateAnalysisStatusModal({ display_name: 'Share of Time', message: 'Analyzing ' + start + ' to ' + end + '…', progress: 40 });
+            }
+
             fetch('/api/share-of-time/analyze', {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
@@ -23675,7 +23824,17 @@
                 btn.disabled = false; btn.textContent = 'Run Analysis';
                 if (freshBtn) freshBtn.disabled = false;
                 document.getElementById('sotLoadingArea').style.display = 'none';
-                if (!resp.success) { alert('Error: ' + (resp.error || 'Unknown')); document.getElementById('sotEmptyState').style.display = 'flex'; return; }
+                if (!resp.success) {
+                    if (window._sotIqModalActive) { showAnalysisStatusModalError(resp.error || 'Unknown error'); window._sotIqModalActive = false; }
+                    else { alert('Error: ' + (resp.error || 'Unknown')); }
+                    document.getElementById('sotEmptyState').style.display = 'flex';
+                    return;
+                }
+                if (window._sotIqModalActive) {
+                    showAnalysisStatusModalComplete();
+                    window._sotIqModalActive = false;
+                    setTimeout(function() { closeAnalysisStatusModal(); }, 1200);
+                }
                 document.getElementById('sotCompareArea').style.display = 'none';
                 _sotCompareMode = false;
                 sotOpenTab(resp.data);
@@ -23685,7 +23844,8 @@
                 if (freshBtn) freshBtn.disabled = false;
                 document.getElementById('sotLoadingArea').style.display = 'none';
                 document.getElementById('sotEmptyState').style.display = 'flex';
-                alert('Request failed: ' + err);
+                if (window._sotIqModalActive) { showAnalysisStatusModalError('Request failed: ' + err); window._sotIqModalActive = false; }
+                else { alert('Request failed: ' + err); }
             });
         }
 
@@ -23724,13 +23884,8 @@
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
             var trendNoteEl = document.getElementById('sotTrendGuardNote');
             if (trendNoteEl) {
-                if (data.trend_guard_note) {
-                    trendNoteEl.textContent = 'Trend check: ' + data.trend_guard_note;
-                    trendNoteEl.style.display = 'block';
-                } else {
-                    trendNoteEl.style.display = 'none';
-                    trendNoteEl.textContent = '';
-                }
+                trendNoteEl.style.display = 'none';
+                trendNoteEl.textContent = '';
             }
 
             var gran = _sotGranularity;
@@ -23873,14 +24028,18 @@
         var _sotActiveTabIdx = -1;
         var _sotCompareMode = false;
         var _sotExpandedYears = {};
+        var _sotExpandedMonths = {};
         var _sotExpandedRanges = {};
 
         function _sotTabKey(d) { return d.start_date + '|' + d.end_date + '|' + (d.age_brackets||[]).slice().sort().join(','); }
         function _sotTabLabel(d) {
             var ages = (d.age_brackets || []);
-            var ageStr = ages.length > 2 ? ages[0] + ' +' + (ages.length-1) : ages.join(', ');
-            return _sotFmtDateShort(d.start_date) + ' - ' + _sotFmtDateShort(d.end_date) + ' · ' + ageStr;
+            var ageStr = ages.length >= 7 ? 'All Ages' : ages.length > 2 ? ages[0] + ' +' + (ages.length-1) : ages.join(', ');
+            var dateLabel = _sotQuarterLabel(d.start_date, d.end_date) || (_sotFmtDateShort(d.start_date) + ' \u2013 ' + _sotFmtDateShort(d.end_date));
+            return dateLabel + ' · ' + ageStr;
         }
+
+        var _sotHasAutoOpened = false;
 
         function sotLoadRuns() {
             fetch('/api/share-of-time/runs', { credentials: 'same-origin' })
@@ -23889,10 +24048,76 @@
                     if (resp.success) {
                         _sotCachedRuns = resp.runs || [];
                         sotRenderRunTree();
+                        if (_sotOpenTabs.length === 0 && !_sotHasAutoOpened) {
+                            _sotHasAutoOpened = true;
+                            _sotAutoOpenLatestQuarter();
+                        }
                     }
                 }).catch(function() {
                     document.getElementById('sotRunTree').innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.78rem;">Could not load runs.</div>';
                 });
+        }
+
+        function _sotAutoOpenLatestQuarter() {
+            var quarterRuns = _sotCachedRuns.filter(function(r) {
+                return !!_sotQuarterLabel(r.start_date, r.end_date);
+            });
+            if (!quarterRuns.length) return;
+
+            quarterRuns.sort(function(a, b) {
+                return (b.start_date || '').localeCompare(a.start_date || '');
+            });
+            var latestStart = quarterRuns[0].start_date;
+            var latestEnd = quarterRuns[0].end_date;
+            var runsForQuarter = quarterRuns.filter(function(r) {
+                return r.start_date === latestStart && r.end_date === latestEnd;
+            });
+            if (!runsForQuarter.length) return;
+
+            var loaded = 0;
+            var total = runsForQuarter.length;
+            runsForQuarter.forEach(function(r) {
+                fetch('/api/share-of-time/run', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_date: r.start_date, end_date: r.end_date, age_brackets: r.age_brackets })
+                }).then(function(resp) { return resp.json(); }).then(function(resp) {
+                    if (resp.success && resp.data) {
+                        var key = _sotTabKey(resp.data);
+                        var exists = false;
+                        _sotOpenTabs.forEach(function(t) { if (_sotTabKey(t.data) === key) exists = true; });
+                        if (!exists) {
+                            _sotOpenTabs.push({ data: resp.data, key: key });
+                        }
+                    }
+                    loaded++;
+                    if (loaded === total) _sotFinishAutoOpen();
+                }).catch(function() {
+                    loaded++;
+                    if (loaded === total) _sotFinishAutoOpen();
+                });
+            });
+        }
+
+        function _sotFinishAutoOpen() {
+            if (_sotOpenTabs.length < 2) {
+                if (_sotOpenTabs.length === 1) {
+                    _sotActiveTabIdx = 0;
+                    _sotData = _sotOpenTabs[0].data;
+                    sotRenderTabs();
+                    sotRenderRunTree();
+                    sotRenderResults(_sotData);
+                }
+                return;
+            }
+            _sotCompareMode = true;
+            _sotActiveTabIdx = -1;
+            sotRenderTabs();
+            sotRenderRunTree();
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            sotRenderCompare();
+            document.getElementById('sotCompareArea').style.display = 'block';
         }
 
         function sotRefreshRuns() {
@@ -23911,6 +24136,21 @@
             var m = parseInt(p[1], 10);
             var d = parseInt(p[2], 10);
             return months[m - 1] + ' ' + d + ', ' + p[0];
+        }
+
+        function _sotQuarterLabel(startDate, endDate) {
+            if (!startDate || !endDate) return null;
+            var s = startDate.split('-'), e = endDate.split('-');
+            if (s.length !== 3 || e.length !== 3) return null;
+            var sy = s[0], sm = parseInt(s[1],10), sd = parseInt(s[2],10);
+            var ey = e[0], em = parseInt(e[1],10), ed = parseInt(e[2],10);
+            if (sy !== ey || sd !== 1) return null;
+            var quarters = [[1,3,31,'Q1'],[4,6,30,'Q2'],[7,9,30,'Q3'],[10,12,31,'Q4']];
+            for (var i = 0; i < quarters.length; i++) {
+                var q = quarters[i];
+                if (sm === q[0] && em === q[1] && ed === q[2]) return q[3] + ' ' + sy;
+            }
+            return null;
         }
 
         function _sotYearLabel(run) {
@@ -23937,9 +24177,52 @@
             sotRenderRunTree();
         }
 
+        function sotToggleRunMonth(monthId) {
+            _sotExpandedMonths[monthId] = !_sotExpandedMonths[monthId];
+            sotRenderRunTree();
+        }
+
         function sotToggleRunRange(rangeId) {
             _sotExpandedRanges[rangeId] = !_sotExpandedRanges[rangeId];
             sotRenderRunTree();
+        }
+
+        function _sotMonthName(m) {
+            var names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            return names[m - 1] || ('Month ' + m);
+        }
+
+        function _sotRunMonth(r) {
+            var s = parseInt((r.start_date || '').slice(5, 7), 10);
+            var e = parseInt((r.end_date || '').slice(5, 7), 10);
+            if (!s) return 0;
+            return s;
+        }
+
+        function _sotRenderAgeRuns(runs, openKeys) {
+            var html = '';
+            var _ageOrder = {'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
+            runs.sort(function(a, b) {
+                var aAll = (a.age_brackets || []).length >= 7 ? 1 : 0;
+                var bAll = (b.age_brackets || []).length >= 7 ? 1 : 0;
+                if (aAll !== bAll) return bAll - aAll;
+                var aMin = Math.min.apply(null, (a.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
+                var bMin = Math.min.apply(null, (b.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
+                if (aMin !== bMin) return aMin - bMin;
+                return (a.age_brackets || []).length - (b.age_brackets || []).length;
+            });
+            runs.forEach(function(r) {
+                var ages = _sotAgeDisplayLabel(r.age_brackets || []);
+                var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
+                var isOpen = openKeys.indexOf(rKey) !== -1;
+                var isActive = _sotSelectedRunKey === r.s3_key;
+                var cls = 'profile-select-item sot-run-item' + (isActive ? ' active' : '');
+                var openBadge = isOpen ? '<span style="font-size:0.62rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:0.04em;">TAB</span>' : '';
+                html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
+                    '<div class="sot-run-top"><div class="sot-run-date">' + ages + '</div>' + openBadge + '</div>' +
+                '</div>';
+            });
+            return html;
         }
 
         function sotRenderRunTree() {
@@ -23957,19 +24240,32 @@
                 return;
             }
             var openKeys = _sotOpenTabs.map(function(t) { return _sotTabKey(t.data); });
+
             var grouped = {};
+            var quarterGrouped = {};
             runs.forEach(function(r) {
                 var y = _sotYearLabel(r);
-                if (!grouped[y]) grouped[y] = {};
-                var rk = (r.start_date || '') + '|' + (r.end_date || '');
-                if (!grouped[y][rk]) grouped[y][rk] = { start: r.start_date, end: r.end_date, runs: [] };
-                grouped[y][rk].runs.push(r);
+                var qLabel = _sotQuarterLabel(r.start_date, r.end_date);
+                if (qLabel) {
+                    if (!quarterGrouped[y]) quarterGrouped[y] = {};
+                    var rk = (r.start_date || '') + '|' + (r.end_date || '');
+                    if (!quarterGrouped[y][rk]) quarterGrouped[y][rk] = { start: r.start_date, end: r.end_date, label: qLabel, runs: [] };
+                    quarterGrouped[y][rk].runs.push(r);
+                } else {
+                    if (!grouped[y]) grouped[y] = {};
+                    var startMonth = _sotRunMonth(r);
+                    if (!grouped[y][startMonth]) grouped[y][startMonth] = {};
+                    var rk2 = (r.start_date || '') + '|' + (r.end_date || '');
+                    if (!grouped[y][startMonth][rk2]) grouped[y][startMonth][rk2] = { start: r.start_date, end: r.end_date, runs: [] };
+                    grouped[y][startMonth][rk2].runs.push(r);
+                }
             });
 
-            var years = Object.keys(grouped).sort(function(a, b) {
-                var ay = parseInt((a.split('-')[0] || '0'), 10);
-                var by = parseInt((b.split('-')[0] || '0'), 10);
-                return by - ay;
+            var allYears = {};
+            Object.keys(grouped).forEach(function(y) { allYears[y] = true; });
+            Object.keys(quarterGrouped).forEach(function(y) { allYears[y] = true; });
+            var years = Object.keys(allYears).sort(function(a, b) {
+                return parseInt(b, 10) - parseInt(a, 10);
             });
 
             var html = '';
@@ -23982,36 +24278,76 @@
                 '</div>';
                 if (!yearOpen) return;
 
-                var ranges = Object.keys(grouped[year]).sort(function(a, b) {
-                    return (grouped[year][b].end || '').localeCompare(grouped[year][a].end || '');
-                });
                 html += '<div class="sot-tree-children">';
-                ranges.forEach(function(rangeKey) {
-                    var g = grouped[year][rangeKey];
-                    var rangeId = year + '||' + rangeKey;
-                    var rangeOpen = !!_sotExpandedRanges[rangeId];
-                    var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                    var rangeLabel = _sotFmtDateShort(g.start) + ' - ' + _sotFmtDateShort(g.end);
-                    html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
-                        '<div class="sot-tree-range">' + rangeLabel + '</div>' +
-                        '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
-                    '</div>';
-                    if (!rangeOpen) return;
 
-                    html += '<div class="sot-tree-children">';
-                    g.runs.forEach(function(r) {
-                        var ages = _sotAgeDisplayLabel(r.age_brackets || []);
-                        var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
-                        var isOpen = openKeys.indexOf(rKey) !== -1;
-                        var isActive = _sotSelectedRunKey === r.s3_key;
-                        var cls = 'profile-select-item sot-run-item' + (isActive ? ' active' : '');
-                        var openBadge = isOpen ? '<span style="font-size:0.62rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:0.04em;">TAB</span>' : '';
-                        html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
-                            '<div class="sot-run-top"><div class="sot-run-date">' + ages + '</div>' + openBadge + '</div>' +
+                if (quarterGrouped[year]) {
+                    var qMonthId = year + '||Q';
+                    var qOpen = !!_sotExpandedMonths[qMonthId];
+                    var qArg = qMonthId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    html += '<div class="sot-tree-row" onclick="sotToggleRunMonth(\'' + qArg + '\')">' +
+                        '<div class="sot-tree-range" style="font-weight:700;">By Quarter</div>' +
+                        '<div class="sot-tree-chevron">' + (qOpen ? '▼' : '▶') + '</div>' +
+                    '</div>';
+                    if (qOpen) {
+                        var qRanges = Object.keys(quarterGrouped[year]).sort(function(a, b) {
+                            return (quarterGrouped[year][b].start || '').localeCompare(quarterGrouped[year][a].start || '');
+                        });
+                        html += '<div class="sot-tree-children">';
+                        qRanges.forEach(function(rk) {
+                            var g = quarterGrouped[year][rk];
+                            var rangeId = year + '||Q||' + rk;
+                            var rangeOpen = !!_sotExpandedRanges[rangeId];
+                            var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                            html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
+                                '<div class="sot-tree-range">' + g.label + '</div>' +
+                                '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
+                            '</div>';
+                            if (rangeOpen) {
+                                html += '<div class="sot-tree-children">';
+                                html += _sotRenderAgeRuns(g.runs, openKeys);
+                                html += '</div>';
+                            }
+                        });
+                        html += '</div>';
+                    }
+                }
+
+                if (grouped[year]) {
+                    var months = Object.keys(grouped[year]).map(Number).sort(function(a, b) { return b - a; });
+                    months.forEach(function(month) {
+                        var monthId = year + '||' + month;
+                        var monthOpen = !!_sotExpandedMonths[monthId];
+                        var monthArg = monthId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        html += '<div class="sot-tree-row" onclick="sotToggleRunMonth(\'' + monthArg + '\')">' +
+                            '<div class="sot-tree-range">' + _sotMonthName(month) + '</div>' +
+                            '<div class="sot-tree-chevron">' + (monthOpen ? '▼' : '▶') + '</div>' +
                         '</div>';
+                        if (!monthOpen) return;
+
+                        var ranges = Object.keys(grouped[year][month]).sort(function(a, b) {
+                            return (grouped[year][month][b].end || '').localeCompare(grouped[year][month][a].end || '');
+                        });
+                        html += '<div class="sot-tree-children">';
+                        ranges.forEach(function(rangeKey) {
+                            var g = grouped[year][month][rangeKey];
+                            var rangeId = year + '||' + month + '||' + rangeKey;
+                            var rangeOpen = !!_sotExpandedRanges[rangeId];
+                            var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                            var rangeLabel = _sotFmtDateShort(g.start) + ' \u2013 ' + _sotFmtDateShort(g.end);
+                            html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
+                                '<div class="sot-tree-range">' + rangeLabel + '</div>' +
+                                '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
+                            '</div>';
+                            if (!rangeOpen) return;
+
+                            html += '<div class="sot-tree-children">';
+                            html += _sotRenderAgeRuns(g.runs, openKeys);
+                            html += '</div>';
+                        });
+                        html += '</div>';
                     });
-                    html += '</div>';
-                });
+                }
+
                 html += '</div>';
             });
             tree.innerHTML = html;
@@ -24090,7 +24426,22 @@
                     '<button class="profile-tab-close" onclick="sotCloseTab(' + i + ', event)" title="Close tab">&times;</button>' +
                 '</div>';
             });
+            var closeAllBtn = document.getElementById('sotCloseAllBtn');
+            if (closeAllBtn) closeAllBtn.style.display = _sotOpenTabs.length >= 1 ? '' : 'none';
             bar.innerHTML = html;
+        }
+
+        function sotCloseAllTabs() {
+            _sotOpenTabs = [];
+            _sotActiveTabIdx = -1;
+            _sotCompareMode = false;
+            _sotData = null;
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotCompareArea').style.display = 'none';
+            var empty = document.getElementById('sotEmptyState');
+            if (empty) empty.style.display = 'block';
+            sotRenderTabs();
+            sotRenderRunTree();
         }
 
         function sotToggleCompare() {
@@ -24117,70 +24468,513 @@
         }
 
         function _sotTabHue(i) { return [200, 280, 40, 150, 340, 60][i % 6]; }
+        function _sotCmpFmtNum(n) { if (n >= 1e9) return (n/1e9).toFixed(1)+'B'; if (n >= 1e6) return (n/1e6).toFixed(1)+'M'; if (n >= 1e3) return (n/1e3).toFixed(1)+'K'; return n.toLocaleString(); }
+        function _sotCmpDelta(val, base) {
+            if (!base) return '<span class="sot-cmp-delta neutral">—</span>';
+            var diff = val - base;
+            var pct = ((diff / Math.abs(base)) * 100);
+            var cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral';
+            var arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '–';
+            return '<span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(pct).toFixed(1) + '%</span>';
+        }
+        function _sotCmpDeltaPP(val, base) {
+            var diff = val - base;
+            if (Math.abs(diff) < 0.05) return '<span class="sot-cmp-delta neutral">—</span>';
+            var cls = diff > 0 ? 'up' : 'down';
+            var arrow = diff > 0 ? '▲' : '▼';
+            return '<span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(diff).toFixed(1) + 'pp</span>';
+        }
+
+        var _sotCmpFocusMode = false;
+        var _sotCohortMode = false;
+        var _sotCohortFilter = {};
+
+        function _sotAgeSort(a, b) {
+            var order = {'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
+            var aLabel = _sotAgeDisplayLabel(a.data.age_brackets || []);
+            var bLabel = _sotAgeDisplayLabel(b.data.age_brackets || []);
+            if (aLabel === 'All Ages') return 1;
+            if (bLabel === 'All Ages') return -1;
+            var aMin = Math.min.apply(null, (a.data.age_brackets || []).map(function(x) { return order[x] || 99; }));
+            var bMin = Math.min.apply(null, (b.data.age_brackets || []).map(function(x) { return order[x] || 99; }));
+            return aMin - bMin;
+        }
+
+        function sotToggleCohortFilter(label) {
+            if (label === 'All Ages') return;
+            _sotCohortFilter[label] = !_sotCohortFilter[label];
+            sotRenderCompare();
+        }
+
+        function _sotSparklineSVG(vals, color) {
+            if (!vals || vals.length < 3) return '';
+            var w = 36, h = 12, pad = 1;
+            var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+            var range = mx - mn || 1;
+            var pts = vals.map(function(v, i) {
+                var x = pad + (i / (vals.length - 1)) * (w - 2 * pad);
+                var y = pad + (1 - (v - mn) / range) * (h - 2 * pad);
+                return x.toFixed(1) + ',' + y.toFixed(1);
+            });
+            return '<span class="sot-sparkline"><svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+                '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<circle cx="' + pts[pts.length - 1].split(',')[0] + '" cy="' + pts[pts.length - 1].split(',')[1] + '" r="1.5" fill="' + color + '"/>' +
+                '</svg></span>';
+        }
+
+        function _sotIsCohortMode(tabs) {
+            if (tabs.length < 2) return false;
+            var hasAll = false, hasSpecific = false;
+            tabs.forEach(function(t) {
+                if ((t.data.age_brackets || []).length >= 7) hasAll = true;
+                else hasSpecific = true;
+            });
+            return hasAll && hasSpecific;
+        }
+
+        function _sotCohortLabel(t) {
+            return _sotAgeDisplayLabel(t.data.age_brackets || []);
+        }
+
+        function _sotHeatColor(delta) {
+            var abs = Math.min(Math.abs(delta), 15);
+            var intensity = abs / 15;
+            if (delta > 0) return 'rgba(52,211,153,' + (0.1 + intensity * 0.55).toFixed(2) + ')';
+            if (delta < 0) return 'rgba(248,113,113,' + (0.1 + intensity * 0.55).toFixed(2) + ')';
+            return 'transparent';
+        }
 
         function sotRenderCompare() {
             _sotDestroyCompareCharts();
             var area = document.getElementById('sotCompareArea');
             var gran = _sotGranularity;
             var shareKey = _sotShareKey(gran);
-            var tabs = _sotOpenTabs;
-            if (!tabs.length) { area.innerHTML = ''; return; }
+
+            var isCohort = _sotIsCohortMode(_sotOpenTabs);
+            _sotCohortMode = isCohort;
+
+            if (isCohort) {
+                _sotRenderCohortCompare(area, gran, shareKey);
+            } else {
+                _sotRenderTimeCompare(area, gran, shareKey);
+            }
+        }
+
+        function _sotRenderCohortCompare(area, gran, shareKey) {
+            var allTabs = _sotOpenTabs.slice();
+            var baseTab = allTabs.find(function(t) { return (t.data.age_brackets || []).length >= 7; });
+            var cohortTabs = allTabs.filter(function(t) { return (t.data.age_brackets || []).length < 7; });
+            cohortTabs.sort(_sotAgeSort);
+
+            var base = baseTab.data;
+            var filteredCohorts = cohortTabs.filter(function(t) {
+                var lbl = _sotCohortLabel(t);
+                return _sotCohortFilter[lbl] !== false;
+            });
 
             var catNames = [];
-            tabs.forEach(function(t) {
+            allTabs.forEach(function(t) {
                 (t.data.categories || []).forEach(function(c) {
                     if (catNames.indexOf(c.name) === -1) catNames.push(c.name);
                 });
             });
             catNames.sort(function(a, b) {
-                var aSum = 0;
-                var bSum = 0;
-                tabs.forEach(function(t) {
-                    var aCat = (t.data.categories || []).find(function(c) { return c.name === a; });
-                    var bCat = (t.data.categories || []).find(function(c) { return c.name === b; });
-                    aSum += aCat ? (aCat[shareKey] || 0) : 0;
-                    bSum += bCat ? (bCat[shareKey] || 0) : 0;
-                });
-                return bSum - aSum;
+                var aCat = (base.categories || []).find(function(c) { return c.name === a; });
+                var bCat = (base.categories || []).find(function(c) { return c.name === b; });
+                return ((bCat ? bCat[shareKey] : 0) || 0) - ((aCat ? aCat[shareKey] : 0) || 0);
             });
 
-            var html = '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:1rem;">' +
+            var html = '';
+
+            // --- Top bar ---
+            html += '<div class="sot-focus-bar">';
+            html += '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:0;">' +
                 '<button class="sot-gran-btn' + (gran==='session'?' active':'') + '" onclick="sotSetCompareGran(\'session\')">Per Session</button>' +
                 '<button class="sot-gran-btn' + (gran==='daily'?' active':'') + '" onclick="sotSetCompareGran(\'daily\')">Per Day</button>' +
                 '<button class="sot-gran-btn' + (gran==='total'?' active':'') + '" onclick="sotSetCompareGran(\'total\')">Total Time Frame</button>' +
             '</div>';
+            html += '</div>';
+            var focusHide = '';
 
+            var timeLabel = _sotQuarterLabel(base.start_date, base.end_date) || (_sotFmtDateShort(base.start_date) + ' \u2013 ' + _sotFmtDateShort(base.end_date));
+            html += '<div style="margin-bottom:0.75rem;"><span style="font-size:0.85rem;font-weight:700;color:var(--accent-cyan);letter-spacing:0.03em;">' + timeLabel + '</span> <span style="font-size:0.72rem;color:var(--text-secondary);margin-left:0.4rem;">Cohort Analysis \u00b7 ' + (filteredCohorts.length + 1) + ' age groups</span></div>';
+
+            // === Cohort Filter Chips ===
+            html += '<div class="sot-cohort-chips' + focusHide + '">';
+            html += '<span class="sot-cohort-chip-label">Baseline:</span>';
+            html += '<span class="sot-cohort-chip baseline">All Ages</span>';
+            html += '<span class="sot-cohort-chip-label" style="margin-left:0.5rem;">Cohorts:</span>';
+            cohortTabs.forEach(function(t) {
+                var lbl = _sotCohortLabel(t);
+                var isOn = _sotCohortFilter[lbl] !== false;
+                html += '<span class="sot-cohort-chip' + (isOn ? ' active' : '') + '" onclick="sotToggleCohortFilter(\'' + lbl.replace(/'/g, "\\'") + '\')">' + lbl + '</span>';
+            });
+            html += '</div>';
+
+            // === Cohort Composition (% of All Ages) ===
+            var baseSample = base.matched_users || 0;
+            var baseHours = base.total_projected_hours || 0;
+            var cohortHues = ['210','260','150','35','330','180','20'];
+            html += '<div class="sot-chart-card' + focusHide + '" style="margin-bottom:1rem;padding:0.85rem 1rem;">';
+            html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition — % of All Ages</h3>';
+            html += '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">';
+
+            var compMetrics = [
+                { label: 'Sample Participants', key: 'matched_users' },
+                { label: 'Projected US Hours', key: 'total_projected_hours' }
+            ];
+            compMetrics.forEach(function(cm) {
+                var baseV = base[cm.key] || 0;
+                html += '<div style="flex:1;min-width:250px;">';
+                html += '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">' + cm.label + ' <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseV) + ' total)</span></div>';
+                html += '<div style="display:flex;height:18px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,0.04);margin-bottom:0.35rem;">';
+                filteredCohorts.forEach(function(t, ci) {
+                    var v = t.data[cm.key] || 0;
+                    var pct = baseV > 0 ? (v / baseV * 100) : 0;
+                    if (pct < 0.5) return;
+                    var hue = cohortHues[ci % cohortHues.length];
+                    html += '<div style="width:' + pct.toFixed(1) + '%;background:hsla(' + hue + ',65%,55%,0.7);position:relative;min-width:2px;" title="' + _sotCohortLabel(t) + ': ' + pct.toFixed(1) + '%"></div>';
+                });
+                html += '</div>';
+                html += '<div style="display:flex;flex-wrap:wrap;gap:0.25rem 0.7rem;">';
+                filteredCohorts.forEach(function(t, ci) {
+                    var v = t.data[cm.key] || 0;
+                    var pct = baseV > 0 ? (v / baseV * 100) : 0;
+                    var hue = cohortHues[ci % cohortHues.length];
+                    html += '<div style="font-size:0.65rem;display:flex;align-items:center;gap:0.25rem;"><span style="width:8px;height:8px;border-radius:50%;background:hsla(' + hue + ',65%,55%,0.9);display:inline-block;"></span><span style="color:var(--text-secondary);">' + _sotCohortLabel(t) + '</span> <span style="font-weight:700;color:var(--text-primary);">' + pct.toFixed(1) + '%</span></div>';
+                });
+                html += '</div></div>';
+            });
+            html += '</div></div>';
+
+            // === Baseline + Deviation KPI Cards ===
+            function _sotCohortPop(tData) {
+                var detail = tData.age_group_detail || {};
+                var total = 0;
+                Object.keys(detail).forEach(function(k) { total += (detail[k].projected || detail[k].capped || 0); });
+                return total;
+            }
+            var basePopTotal = _sotCohortPop(base);
+            var kpiMetrics = [
+                { label: 'Sample', key: 'matched_users', color: 'var(--accent-lime)' },
+                { label: 'Projected Pop', key: '_cohort_pop', color: '#a855f7' },
+                { label: 'US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
+                { label: 'Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
+            ];
+            html += '<div class="sot-cohort-baseline' + focusHide + '" id="sotCmpKpiSection">';
+            html += '<div class="sot-cohort-baseline-card">';
+            html += '<div class="cb-title">All Ages — Baseline</div>';
+            kpiMetrics.forEach(function(m) {
+                html += '<div class="cb-metric">' + m.label + '</div>';
+                var bv = m.key === '_cohort_pop' ? basePopTotal : (base[m.key] || 0);
+                html += '<div class="cb-value" style="color:' + m.color + ';">' + _sotCmpFmtNum(bv) + '</div>';
+            });
+            html += '</div>';
+            html += '<div class="sot-cohort-dev-grid">';
+            filteredCohorts.forEach(function(t) {
+                var lbl = _sotCohortLabel(t);
+                var cohortPop = _sotCohortPop(t.data);
+                var cohortPopPct = basePopTotal > 0 ? ((cohortPop / basePopTotal) * 100).toFixed(1) + '% of total' : '';
+                html += '<div class="sot-cohort-dev-card">';
+                html += '<div class="cd-label">' + lbl + '</div>';
+                kpiMetrics.forEach(function(m) {
+                    if (m.key === '_cohort_pop') {
+                        html += '<div class="cd-row"><span>' + m.label + '</span><span style="font-weight:700;color:#a855f7;">' + _sotCmpFmtNum(cohortPop) + '</span></div>';
+                        html += '<div class="cd-row"><span></span><span style="font-size:0.58rem;color:var(--text-secondary);">' + cohortPopPct + '</span></div>';
+                    } else {
+                        var val = t.data[m.key] || 0;
+                        var bv = base[m.key] || 0;
+                        html += '<div class="cd-row"><span>' + m.label + '</span>' + _sotCmpDelta(val, bv) + '</div>';
+                    }
+                });
+                html += '</div>';
+            });
+            html += '</div></div>';
+
+            // === Category Cards (sparkline = across cohorts, delta = spread) ===
+            html += '<div class="sot-cmp-cat-cards' + focusHide + '" id="sotCmpCatCards">';
+            catNames.forEach(function(cn) {
+                var col = _sotCatColors[cn] || '#888';
+                var baseVal = 0;
+                var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                if (baseCat) baseVal = baseCat[shareKey] || 0;
+                var cohortVals = filteredCohorts.map(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    return cat ? (cat[shareKey] || 0) : 0;
+                });
+                var allVals = [baseVal].concat(cohortVals);
+                var spread = allVals.length >= 2 ? (Math.max.apply(null, allVals) - Math.min.apply(null, allVals)) : 0;
+                var spark = allVals.length >= 3 ? _sotSparklineSVG(allVals, col) : '';
+                var catId = cn.replace(/[^a-zA-Z]/g, '');
+                html += '<div class="sot-cmp-cat-card" data-sot-cat="' + cn + '" onclick="sotDrillCategory(\'' + catId + '\',this)">';
+                html += '<div class="ccard-name">' + cn + '</div>';
+                html += '<div class="ccard-val" style="color:' + col + ';">' + baseVal.toFixed(1) + '% <span style="font-size:0.6rem;color:var(--text-secondary);">spread ' + spread.toFixed(1) + 'pp</span> ' + spark + '</div>';
+                html += '<div class="ccard-bar" style="width:' + Math.min(100, baseVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
+                html += '</div>';
+            });
+            html += '</div>';
+
+            // === "Who's Different?" Insights ===
+            var insights = [];
+            catNames.forEach(function(cn) {
+                var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                var bv = baseCat ? (baseCat[shareKey] || 0) : 0;
+                var cohortVals = [];
+                filteredCohorts.forEach(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    var cv = cat ? (cat[shareKey] || 0) : 0;
+                    cohortVals.push(cv);
+                    var d = cv - bv;
+                    if (Math.abs(d) >= 1.5) {
+                        var dir = d > 0 ? 'over-indexes' : 'under-indexes';
+                        insights.push({ abs: Math.abs(d), text: '<b>' + _sotCohortLabel(t) + '</b> ' + dir + ' on <b>' + cn + '</b> by ' + Math.abs(d).toFixed(1) + 'pp vs All Ages', icon: d > 0 ? '📈' : '📉' });
+                    }
+                });
+                if (filteredCohorts.length >= 2) {
+                    var allV = cohortVals.concat([bv]);
+                    var sp = Math.max.apply(null, allV) - Math.min.apply(null, allV);
+                    if (sp < 2.5) {
+                        insights.push({ abs: 0.01, text: '<b>' + cn + '</b> is remarkably consistent across cohorts (max spread: ' + sp.toFixed(1) + 'pp)', icon: '≈' });
+                    }
+                }
+            });
+            insights.sort(function(a, b) { return b.abs - a.abs; });
+            insights = insights.slice(0, 8);
+
+            if (insights.length) {
+                html += '<div class="sot-chart-card' + focusHide + '" id="sotCmpMoversSection" style="margin-bottom:1.25rem;padding:0.85rem;">';
+                html += '<h3 class="sot-cmp-section-title">Who\'s Different?</h3>';
+                html += '<div class="sot-insights">';
+                insights.forEach(function(ins) {
+                    html += '<div class="sot-insight-card"><span class="sot-insight-icon">' + ins.icon + '</span><span class="sot-insight-text">' + ins.text + '</span></div>';
+                });
+                html += '</div></div>';
+            }
+
+            // === Category Heatmap Grid ===
+            html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;overflow-x:auto;">';
+            html += '<h3 class="sot-cmp-section-title">Category Share vs All Ages — Heatmap</h3>';
+            html += '<table class="sot-heatmap"><thead><tr><th>Category</th><th>All Ages</th>';
+            filteredCohorts.forEach(function(t) { html += '<th>' + _sotCohortLabel(t) + '</th>'; });
+            html += '</tr></thead><tbody>';
+            catNames.forEach(function(cn) {
+                var col = _sotCatColors[cn] || '#888';
+                var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                var bv = baseCat ? (baseCat[shareKey] || 0) : 0;
+                html += '<tr data-sot-cat="' + cn + '">';
+                html += '<td><span class="sot-cmp-mini-bar" style="width:' + Math.max(2, bv * 1.2) + 'px;background:' + col + ';"></span>' + cn + '</td>';
+                html += '<td style="color:var(--accent-cyan);font-weight:800;">' + bv.toFixed(1) + '%</td>';
+                filteredCohorts.forEach(function(t) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    var cv = cat ? (cat[shareKey] || 0) : 0;
+                    var d = cv - bv;
+                    var bg = _sotHeatColor(d);
+                    var sign = d > 0 ? '+' : '';
+                    html += '<td style="background:' + bg + ';color:#fff;">' + sign + d.toFixed(1) + 'pp';
+                    html += '<div class="hm-tooltip">' + _sotCohortLabel(t) + ': ' + cv.toFixed(1) + '% vs All Ages: ' + bv.toFixed(1) + '%</div>';
+                    html += '</td>';
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+
+            // === Historical Time-over-Time Section ===
+            (function() {
+                var currentRange = base.start_date + '|' + base.end_date;
+                var historicalAllAges = [];
+                var historicalByRange = {};
+                (_sotCachedRuns || []).forEach(function(r) {
+                    var rRange = (r.start_date || '') + '|' + (r.end_date || '');
+                    if (rRange === currentRange) return;
+                    if ((r.age_brackets || []).length >= 7) {
+                        if (!historicalByRange[rRange]) historicalByRange[rRange] = r;
+                    }
+                });
+                var histRanges = Object.keys(historicalByRange).sort(function(a, b) { return b.localeCompare(a); });
+
+                var histLoaded = [];
+                _sotOpenTabs.forEach(function(t) {
+                    var tr = t.data.start_date + '|' + t.data.end_date;
+                    if (tr !== currentRange && (t.data.age_brackets || []).length >= 7) {
+                        histLoaded.push(t.data);
+                    }
+                });
+
+                if (histRanges.length > 0 || histLoaded.length > 0) {
+                    html += '<div class="sot-chart-card' + focusHide + '" id="sotHistoricalSection" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
+                    html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Time-over-Time Trends (All Ages)</h3>';
+
+                    if (histLoaded.length > 0) {
+                        var allPeriods = [base].concat(histLoaded).sort(function(a, b) {
+                            return (b.start_date || '').localeCompare(a.start_date || '');
+                        });
+
+                        var trendKpis = [
+                            { label: 'Sample', key: 'matched_users', color: 'var(--accent-lime)' },
+                            { label: 'US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
+                            { label: 'Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
+                        ];
+                        html += '<div style="overflow-x:auto;margin-bottom:0.75rem;"><table class="sot-cmp-table"><thead><tr><th>Metric</th>';
+                        allPeriods.forEach(function(p) {
+                            var pLabel = _sotQuarterLabel(p.start_date, p.end_date) || (_sotFmtDateShort(p.start_date).replace(/, \d{4}$/, ''));
+                            var isCurrent = p.start_date === base.start_date && p.end_date === base.end_date;
+                            html += '<th class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);' : '') + '">' + pLabel + (isCurrent ? ' ●' : '') + '</th>';
+                        });
+                        if (allPeriods.length >= 2) html += '<th class="num">Change</th>';
+                        html += '</tr></thead><tbody>';
+
+                        trendKpis.forEach(function(kpi) {
+                            html += '<tr><td style="font-weight:600;">' + kpi.label + '</td>';
+                            var vals = allPeriods.map(function(p) { return p[kpi.key] || 0; });
+                            vals.forEach(function(v, i) {
+                                var isCurrent = allPeriods[i].start_date === base.start_date;
+                                html += '<td class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);font-weight:700;' : '') + '">' + _sotCmpFmtNum(v) + '</td>';
+                            });
+                            if (allPeriods.length >= 2) {
+                                html += '<td class="num">' + _sotCmpDelta(vals[0], vals[vals.length - 1]) + '</td>';
+                            }
+                            html += '</tr>';
+                        });
+
+                        catNames.forEach(function(cn) {
+                            var catVals = allPeriods.map(function(p) {
+                                var cat = (p.categories || []).find(function(c) { return c.name === cn; });
+                                return cat ? (cat[shareKey] || 0) : 0;
+                            });
+                            var col = _sotCatColors[cn] || '#888';
+                            html += '<tr><td style="font-weight:600;color:' + col + ';">' + cn + '</td>';
+                            catVals.forEach(function(v, i) {
+                                var isCurrent = allPeriods[i].start_date === base.start_date;
+                                html += '<td class="num" style="' + (isCurrent ? 'font-weight:700;' : '') + '">' + v.toFixed(1) + '%</td>';
+                            });
+                            if (allPeriods.length >= 2) {
+                                html += '<td class="num">' + _sotCmpDeltaPP(catVals[0], catVals[catVals.length - 1]) + '</td>';
+                            }
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table></div>';
+                    }
+
+                    if (histRanges.length > 0) {
+                        html += '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:0.25rem;">Historical periods available — load to compare: ';
+                        histRanges.slice(0, 6).forEach(function(rk, ri) {
+                            var parts = rk.split('|');
+                            var label = _sotQuarterLabel(parts[0], parts[1]) || (_sotFmtDateShort(parts[0]) + ' – ' + _sotFmtDateShort(parts[1]));
+                            if (ri > 0) html += ', ';
+                            var r = historicalByRange[rk];
+                            html += '<a href="javascript:void(0)" style="color:var(--accent-cyan);text-decoration:underline;cursor:pointer;" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')">' + label + '</a>';
+                        });
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                }
+            })();
+
+            // === Overall Category Chart ===
+            var chartTabs = [baseTab].concat(filteredCohorts);
             html += '<div class="sot-chart-card" style="margin-bottom:1rem;">' +
                 '<h3 class="sot-chart-title">Overall Share of Time by Category</h3>' +
                 '<div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div>' +
             '</div>';
 
+            // === Per-category brand charts + tables (delta vs All Ages) ===
             catNames.forEach(function(catName) {
                 var allBrands = {};
-                tabs.forEach(function(t) {
+                var tabCatShares = [];
+                chartTabs.forEach(function(t) {
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
-                    if (cat && cat.brands) {
+                    var catShare = cat ? (cat[shareKey] || 0) : 0;
+                    tabCatShares.push(catShare);
+                    if (cat && cat.brands && catShare >= 0.5) {
                         cat.brands.forEach(function(b) {
-                            if (!allBrands[b.name]) allBrands[b.name] = true;
+                            if (!allBrands[b.name]) allBrands[b.name] = 0;
+                            allBrands[b.name] = Math.max(allBrands[b.name], b.category_share_pct || 0);
                         });
                     }
                 });
-                var brandNames = Object.keys(allBrands).slice(0, 20);
+                var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
+                if (!brandNames.length) return;
+
                 var chartH = Math.max(250, brandNames.length * 28 + 60);
                 var col = _sotCatColors[catName] || '#888';
-                html += '<div class="sot-chart-card" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">' +
-                    '<h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3>' +
-                    '<div style="position:relative;height:' + chartH + 'px;"><canvas id="sotCmpCat_' + catName.replace(/[^a-zA-Z]/g, '') + '"></canvas></div>' +
-                '</div>';
+                var catId = catName.replace(/[^a-zA-Z]/g, '');
+                html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">';
+                html += '<h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3>';
+                html += '<div style="position:relative;height:' + chartH + 'px;"><canvas id="sotCmpCat_' + catId + '"></canvas></div>';
+
+                var brandTableId = 'sotCmpBrandTbl_' + catId;
+                html += '<div style="margin-top:0.75rem;overflow-x:auto;">';
+                html += '<table class="sot-cmp-table" id="' + brandTableId + '"><thead><tr>';
+                html += '<th class="sortable" data-sort-col="name" onclick="sotSortTable(\'' + brandTableId + '\',\'name\')">Brand <span class="sort-arrow">▼</span></th>';
+                html += '<th class="num">All Ages</th>';
+                filteredCohorts.forEach(function(t, ti) {
+                    html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'' + brandTableId + '\',\'v' + ti + '\')">' + _sotCohortLabel(t) + ' <span class="sort-arrow">▼</span></th>';
+                });
+                html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'' + brandTableId + '\',\'delta\')">Max Δ <span class="sort-arrow">▼</span></th>';
+                html += '</tr></thead><tbody>';
+
+                var baseCat = (base.categories || []).find(function(c) { return c.name === catName; });
+                var baseBrandMap = {};
+                if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseBrandMap[b.name] = b; });
+
+                var brandRows = brandNames.map(function(bn) {
+                    var baseB = baseBrandMap[bn];
+                    var baseV = baseB ? (baseB.category_share_pct || 0) : 0;
+                    var vals = filteredCohorts.map(function(t, ti) {
+                        if (tabCatShares[ti + 1] < 0.5) return 0;
+                        var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
+                        if (!cat || !cat.brands) return 0;
+                        var b = cat.brands.find(function(x) { return x.name === bn; });
+                        return b ? (b.category_share_pct || 0) : 0;
+                    });
+                    var maxDelta = 0;
+                    vals.forEach(function(v) { var d = Math.abs(v - baseV); if (d > maxDelta) maxDelta = d; });
+                    return { name: bn, baseV: baseV, vals: vals, delta: maxDelta };
+                });
+                brandRows.sort(function(a, b) { return b.delta - a.delta; });
+
+                brandRows.forEach(function(br) {
+                    var isHighlight = br.delta >= 3;
+                    html += '<tr' + (isHighlight ? ' class="highlight"' : '') + ' data-sort-name="' + br.name + '" data-sort-delta="' + br.delta.toFixed(4) + '"';
+                    br.vals.forEach(function(v, vi) { html += ' data-sort-v' + vi + '="' + v.toFixed(4) + '"'; });
+                    html += '>';
+                    html += '<td style="font-weight:600;white-space:nowrap;">' + br.name + '</td>';
+                    html += '<td class="num" style="color:var(--accent-cyan);">' + br.baseV.toFixed(1) + '%</td>';
+                    br.vals.forEach(function(v) {
+                        var d = v - br.baseV;
+                        html += '<td class="num">' + v.toFixed(1) + '% ' + _sotCmpDeltaPP(v, br.baseV) + '</td>';
+                    });
+                    html += '<td class="num">' + br.delta.toFixed(1) + 'pp</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div></div>';
             });
 
             area.innerHTML = html;
 
+            // --- Hover-linked highlighting ---
+            area.addEventListener('mouseover', function(e) {
+                var el = e.target.closest('[data-sot-cat]');
+                if (!el) return;
+                var cat = el.getAttribute('data-sot-cat');
+                area.querySelectorAll('[data-sot-cat]').forEach(function(node) {
+                    if (node.getAttribute('data-sot-cat') === cat) { node.classList.add('sot-cat-glow'); node.classList.remove('sot-cat-dim'); }
+                    else { node.classList.add('sot-cat-dim'); node.classList.remove('sot-cat-glow'); }
+                });
+            });
+            area.addEventListener('mouseout', function(e) {
+                var el = e.target.closest('[data-sot-cat]');
+                if (!el) return;
+                area.querySelectorAll('[data-sot-cat]').forEach(function(n) { n.classList.remove('sot-cat-glow','sot-cat-dim'); });
+            });
+
+            // --- Render Charts ---
             var mainCanvas = document.getElementById('sotCmpMain');
             if (mainCanvas && typeof Chart !== 'undefined') {
                 var mainDS = [];
-                tabs.forEach(function(t, i) {
-                    var label = _sotTabLabel(t.data);
+                chartTabs.forEach(function(t, i) {
+                    var label = i === 0 ? 'All Ages' : _sotCohortLabel(t);
                     var cats = t.data.categories || [];
                     var vals = catNames.map(function(cn) {
                         var found = cats.find(function(c) { return c.name === cn; });
@@ -24188,11 +24982,12 @@
                     });
                     mainDS.push({
                         label: label, data: vals,
-                        backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
-                        borderWidth: 0, borderRadius: 4, barPercentage: 0.9
+                        backgroundColor: i === 0 ? 'rgba(6,182,212,0.6)' : 'hsla(' + _sotTabHue(i) + ',70%,60%,0.65)',
+                        borderWidth: i === 0 ? 2 : 0, borderColor: i === 0 ? 'rgba(6,182,212,0.9)' : 'transparent',
+                        borderRadius: 4, barPercentage: 0.9
                     });
                 });
-                var mainChart = new Chart(mainCanvas.getContext('2d'), {
+                _sotCompareCharts.push(new Chart(mainCanvas.getContext('2d'), {
                     type: 'bar', plugins: [ChartDataLabels],
                     data: { labels: catNames, datasets: mainDS },
                     options: {
@@ -24207,52 +25002,39 @@
                             datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         }
                     }
-                });
-                _sotCompareCharts.push(mainChart);
+                }));
             }
 
             catNames.forEach(function(catName) {
                 var canvasId = 'sotCmpCat_' + catName.replace(/[^a-zA-Z]/g, '');
                 var canvas = document.getElementById(canvasId);
                 if (!canvas || typeof Chart === 'undefined') return;
-
-                var allBrands = {};
-                var tabCatShares = [];
-                tabs.forEach(function(t) {
+                var brandMap = {};
+                chartTabs.forEach(function(t) {
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
-                    var catShare = cat ? (cat[shareKey] || 0) : 0;
-                    tabCatShares.push(catShare);
-                    if (cat && cat.brands && catShare >= 0.5) {
-                        cat.brands.forEach(function(b) {
-                            if (!allBrands[b.name]) allBrands[b.name] = 0;
-                            allBrands[b.name] = Math.max(allBrands[b.name], b.category_share_pct || 0);
-                        });
-                    }
+                    if (cat && cat.brands) cat.brands.forEach(function(b) {
+                        if (!brandMap[b.name]) brandMap[b.name] = 0;
+                        brandMap[b.name] = Math.max(brandMap[b.name], b.category_share_pct || 0);
+                    });
                 });
-                var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
-                if (!brandNames.length) return;
-
+                var bNames = Object.keys(brandMap).sort(function(a, b) { return brandMap[b] - brandMap[a]; }).slice(0, 20);
+                if (!bNames.length) return;
                 var catDS = [];
-                tabs.forEach(function(t, i) {
-                    var label = _sotTabLabel(t.data);
-                    var negligible = tabCatShares[i] < 0.5;
+                chartTabs.forEach(function(t, i) {
+                    var lbl = i === 0 ? 'All Ages' : _sotCohortLabel(t);
                     var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
-                    var brandMap = {};
-                    if (cat && cat.brands && !negligible) cat.brands.forEach(function(b) { brandMap[b.name] = b; });
-                    var vals = brandNames.map(function(bn) {
-                        var b = brandMap[bn];
-                        return b ? (b.category_share_pct || 0) : 0;
-                    });
+                    var bm = {};
+                    if (cat && cat.brands) cat.brands.forEach(function(b) { bm[b.name] = b; });
                     catDS.push({
-                        label: label, data: vals,
-                        backgroundColor: 'hsla(' + _sotTabHue(i) + ',70%,60%,0.75)',
-                        borderWidth: 0, borderRadius: 3, barPercentage: 0.9
+                        label: lbl, data: bNames.map(function(bn) { var b = bm[bn]; return b ? (b.category_share_pct || 0) : 0; }),
+                        backgroundColor: i === 0 ? 'rgba(6,182,212,0.55)' : 'hsla(' + _sotTabHue(i) + ',70%,60%,0.65)',
+                        borderWidth: i === 0 ? 2 : 0, borderColor: i === 0 ? 'rgba(6,182,212,0.9)' : 'transparent',
+                        borderRadius: 3, barPercentage: 0.9
                     });
                 });
-
-                var catChart = new Chart(canvas.getContext('2d'), {
+                _sotCompareCharts.push(new Chart(canvas.getContext('2d'), {
                     type: 'bar', plugins: [ChartDataLabels],
-                    data: { labels: brandNames, datasets: catDS },
+                    data: { labels: bNames, datasets: catDS },
                     options: {
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                         scales: {
@@ -24261,15 +25043,258 @@
                         },
                         plugins: {
                             legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 10 }, padding: 12, usePointStyle: true } },
-                            tooltip: { callbacks: { label: function(ctx) {
-                                if (ctx.parsed.x === 0 && tabCatShares[ctx.datasetIndex] < 0.5) return ctx.dataset.label + ': N/A (category < 0.5% for this cohort)';
-                                return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName;
-                            } } },
+                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName; } } },
                             datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         }
                     }
+                }));
+            });
+        }
+
+        function _sotRenderTimeCompare(area, gran, shareKey) {
+            var tabs = _sotOpenTabs.slice().sort(function(a, b) {
+                return (b.data.start_date || '').localeCompare(a.data.start_date || '')
+                    || (b.data.end_date || '').localeCompare(a.data.end_date || '');
+            });
+            if (!tabs.length) { area.innerHTML = ''; return; }
+            var base = tabs[tabs.length - 1].data;
+
+            var catNames = [];
+            tabs.forEach(function(t) { (t.data.categories || []).forEach(function(c) { if (catNames.indexOf(c.name) === -1) catNames.push(c.name); }); });
+            catNames.sort(function(a, b) {
+                var aSum = 0, bSum = 0;
+                tabs.forEach(function(t) {
+                    var aC = (t.data.categories || []).find(function(c) { return c.name === a; });
+                    var bC = (t.data.categories || []).find(function(c) { return c.name === b; });
+                    aSum += aC ? (aC[shareKey] || 0) : 0; bSum += bC ? (bC[shareKey] || 0) : 0;
                 });
-                _sotCompareCharts.push(catChart);
+                return bSum - aSum;
+            });
+            var _catShareVals = {};
+            catNames.forEach(function(cn) {
+                _catShareVals[cn] = tabs.map(function(t) { var cat = (t.data.categories || []).find(function(c) { return c.name === cn; }); return cat ? (cat[shareKey] || 0) : 0; });
+            });
+
+            var html = '';
+            html += '<div class="sot-focus-bar">';
+            html += '<div class="sot-granularity-bar" id="sotCompareGranBar" style="margin-bottom:0;">' +
+                '<button class="sot-gran-btn' + (gran==='session'?' active':'') + '" onclick="sotSetCompareGran(\'session\')">Per Session</button>' +
+                '<button class="sot-gran-btn' + (gran==='daily'?' active':'') + '" onclick="sotSetCompareGran(\'daily\')">Per Day</button>' +
+                '<button class="sot-gran-btn' + (gran==='total'?' active':'') + '" onclick="sotSetCompareGran(\'total\')">Total Time Frame</button>' +
+            '</div>';
+            html += '</div>';
+            var focusHide = '';
+
+            var kpiMetrics = [
+                { label: 'Sample Participants', key: 'matched_users', color: 'var(--accent-lime)' },
+                { label: 'US Projection', key: 'projected_us_users', color: '#a855f7' },
+                { label: 'Projected US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
+                { label: 'Adj. Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
+            ];
+            html += '<div class="sot-cmp-kpi-grid' + focusHide + '" id="sotCmpKpiSection" style="grid-template-columns:repeat(' + tabs.length + ',1fr);">';
+            tabs.forEach(function(t, ti) {
+                var lbl = _sotTabLabel(t.data); var hue = _sotTabHue(ti);
+                html += '<div class="sot-cmp-kpi-col" style="border-top:3px solid hsla(' + hue + ',70%,60%,0.8);">';
+                html += '<div class="sot-cmp-kpi-label" title="' + lbl + '">' + lbl + '</div>';
+                kpiMetrics.forEach(function(m) {
+                    var val = t.data[m.key] || 0; var baseVal = base[m.key] || 0;
+                    html += '<div style="margin-top:0.4rem;"><div class="sot-cmp-kpi-metric">' + m.label + '</div>';
+                    html += '<div class="sot-cmp-kpi-value" style="color:' + m.color + ';">' + _sotCmpFmtNum(val);
+                    if (ti > 0) html += ' ' + _sotCmpDelta(val, baseVal);
+                    html += '</div></div>';
+                });
+                html += '</div>';
+            });
+            html += '</div>';
+
+            html += '<div class="sot-cmp-cat-cards' + focusHide + '" id="sotCmpCatCards">';
+            catNames.forEach(function(cn) {
+                var vals = _catShareVals[cn]; var col = _sotCatColors[cn] || '#888';
+                var newestVal = vals[0] || 0; var delta = tabs.length >= 2 ? vals[0] - vals[vals.length - 1] : 0;
+                var deltaHtml = tabs.length >= 2 ? _sotCmpDeltaPP(vals[0], vals[vals.length - 1]) : '';
+                var spark = tabs.length >= 3 ? _sotSparklineSVG(vals.slice().reverse(), col) : '';
+                var catId = cn.replace(/[^a-zA-Z]/g, '');
+                html += '<div class="sot-cmp-cat-card" data-sot-cat="' + cn + '" onclick="sotDrillCategory(\'' + catId + '\',this)">';
+                html += '<div class="ccard-name">' + cn + '</div>';
+                html += '<div class="ccard-val" style="color:' + col + ';">' + newestVal.toFixed(1) + '% ' + deltaHtml + ' ' + spark + '</div>';
+                html += '<div class="ccard-bar" style="width:' + Math.min(100, newestVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
+                html += '</div>';
+            });
+            html += '</div>';
+
+            if (tabs.length >= 2) {
+                var newest = tabs[0].data;
+                var catMovers = catNames.map(function(cn) {
+                    var oC = (base.categories || []).find(function(c) { return c.name === cn; });
+                    var nC = (newest.categories || []).find(function(c) { return c.name === cn; });
+                    return { name: cn, baseVal: oC ? (oC[shareKey]||0) : 0, lastVal: nC ? (nC[shareKey]||0) : 0, delta: (nC?(nC[shareKey]||0):0) - (oC?(oC[shareKey]||0):0) };
+                }).sort(function(a, b) { return Math.abs(b.delta) - Math.abs(a.delta); }).slice(0, 6);
+
+                html += '<div class="sot-cmp-movers' + focusHide + '" id="sotCmpMoversSection">';
+                html += '<div class="sot-cmp-mover-card"><h4>Category Shifts</h4>';
+                html += '<div style="font-size:0.62rem;color:var(--text-secondary);margin-bottom:0.5rem;">' + _sotTabLabel(newest) + ' vs ' + _sotTabLabel(base) + '</div>';
+                catMovers.forEach(function(m) {
+                    var cls = m.delta > 0 ? 'up' : m.delta < 0 ? 'down' : 'neutral';
+                    var arrow = m.delta > 0 ? '▲' : m.delta < 0 ? '▼' : '–';
+                    html += '<div class="sot-cmp-mover-row" data-sot-cat="' + m.name + '"><div class="sot-cmp-mover-name">' + m.name + '</div><div class="sot-cmp-mover-vals">' + m.baseVal.toFixed(1) + '% → ' + m.lastVal.toFixed(1) + '%</div><span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(m.delta).toFixed(1) + 'pp</span></div>';
+                });
+                html += '</div></div>';
+            }
+
+            html += '<div class="sot-chart-card" style="margin-bottom:1rem;"><h3 class="sot-chart-title">Overall Share of Time by Category</h3><div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div></div>';
+
+            var colCount = tabs.length + 1 + (tabs.length >= 2 ? 1 : 0);
+            html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;overflow-x:auto;"><h3 class="sot-cmp-section-title">Category Detail</h3>';
+            html += '<table class="sot-cmp-table" id="sotCmpCatTable"><thead><tr><th class="sortable" data-sort-col="name" onclick="sotSortTable(\'sotCmpCatTable\',\'name\')">Category <span class="sort-arrow">▼</span></th>';
+            tabs.forEach(function(t, ti) {
+                var short = _sotQuarterLabel(t.data.start_date, t.data.end_date) || (_sotFmtDateShort(t.data.start_date).replace(/, \d{4}$/, ''));
+                html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'sotCmpCatTable\',\'v' + ti + '\')">' + short + ' <span class="sort-arrow">▼</span></th>';
+            });
+            if (tabs.length >= 2) html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'sotCmpCatTable\',\'delta\')">Delta <span class="sort-arrow">▼</span></th>';
+            html += '</tr></thead><tbody>';
+            catNames.forEach(function(cn) {
+                var vals = _catShareVals[cn]; var maxVal = Math.max.apply(null, vals.concat([1]));
+                var col = _sotCatColors[cn] || '#888'; var delta = tabs.length >= 2 ? vals[0] - vals[vals.length - 1] : 0;
+                var spark = tabs.length >= 3 ? _sotSparklineSVG(vals.slice().reverse(), col) : '';
+                html += '<tr class="expandable' + (Math.abs(delta)>=3?' highlight':'') + '" data-sot-cat="' + cn + '" data-sort-name="' + cn + '" data-sort-delta="' + Math.abs(delta).toFixed(4) + '"';
+                vals.forEach(function(v, vi) { html += ' data-sort-v' + vi + '="' + v.toFixed(4) + '"'; });
+                html += ' onclick="sotToggleExpandRow(this)"><td style="font-weight:600;white-space:nowrap;"><span class="expand-chevron">▶</span><span class="sot-cmp-mini-bar" style="width:' + Math.max(2, vals[0]/maxVal*40) + 'px;background:' + col + ';"></span>' + cn + spark + '</td>';
+                vals.forEach(function(v) { html += '<td class="num">' + v.toFixed(1) + '%</td>'; });
+                if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(vals[0], vals[vals.length-1]) + '</td>';
+                html += '</tr>';
+                html += '<tr class="expand-row" data-expand-for="' + cn + '"><td colspan="' + colCount + '"><div class="expand-inner"><div class="sot-cmp-expand-brands"><table>';
+                var catBrands = {};
+                tabs.forEach(function(t) { var cat = (t.data.categories || []).find(function(c) { return c.name === cn; }); if (cat && cat.brands) cat.brands.forEach(function(b) { if (!catBrands[b.name]) catBrands[b.name] = 0; catBrands[b.name] = Math.max(catBrands[b.name], b.category_share_pct || 0); }); });
+                Object.keys(catBrands).sort(function(a, b) { return catBrands[b] - catBrands[a]; }).slice(0, 5).forEach(function(bn) {
+                    html += '<tr><td>' + bn + '</td>';
+                    tabs.forEach(function(t) { var cat = (t.data.categories || []).find(function(c) { return c.name === cn; }); var b = cat && cat.brands ? cat.brands.find(function(x) { return x.name === bn; }) : null; html += '<td class="num">' + (b ? (b.category_share_pct||0) : 0).toFixed(1) + '%</td>'; });
+                    if (tabs.length >= 2) { var f = (function(){ var cat=(tabs[0].data.categories||[]).find(function(c){return c.name===cn;}); var b=cat&&cat.brands?cat.brands.find(function(x){return x.name===bn;}):null; return b?(b.category_share_pct||0):0; })(); var l = (function(){ var cat=(tabs[tabs.length-1].data.categories||[]).find(function(c){return c.name===cn;}); var b=cat&&cat.brands?cat.brands.find(function(x){return x.name===bn;}):null; return b?(b.category_share_pct||0):0; })(); html += '<td class="num">' + _sotCmpDeltaPP(f, l) + '</td>'; }
+                    html += '</tr>';
+                });
+                html += '</table></div></div></td></tr>';
+            });
+            html += '</tbody></table></div>';
+
+            catNames.forEach(function(catName) {
+                var allBrands = {}, tabCatShares = [];
+                tabs.forEach(function(t) { var cat = (t.data.categories || []).find(function(c) { return c.name === catName; }); var cs = cat ? (cat[shareKey]||0) : 0; tabCatShares.push(cs); if (cat && cat.brands && cs >= 0.5) cat.brands.forEach(function(b) { if (!allBrands[b.name]) allBrands[b.name] = 0; allBrands[b.name] = Math.max(allBrands[b.name], b.category_share_pct || 0); }); });
+                var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
+                if (!brandNames.length) return;
+                var col = _sotCatColors[catName] || '#888'; var catId = catName.replace(/[^a-zA-Z]/g, '');
+                html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';"><h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3><div style="position:relative;height:' + Math.max(250, brandNames.length * 28 + 60) + 'px;"><canvas id="sotCmpCat_' + catId + '"></canvas></div>';
+                var btid = 'sotCmpBrandTbl_' + catId;
+                html += '<div style="margin-top:0.75rem;overflow-x:auto;"><table class="sot-cmp-table" id="' + btid + '"><thead><tr><th class="sortable" data-sort-col="name" onclick="sotSortTable(\'' + btid + '\',\'name\')">Brand <span class="sort-arrow">▼</span></th>';
+                tabs.forEach(function(t, ti) { var short = _sotQuarterLabel(t.data.start_date, t.data.end_date) || (_sotFmtDateShort(t.data.start_date).replace(/, \d{4}$/, '')); html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'' + btid + '\',\'v' + ti + '\')">' + short + ' <span class="sort-arrow">▼</span></th>'; });
+                if (tabs.length >= 2) html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'' + btid + '\',\'delta\')">Delta <span class="sort-arrow">▼</span></th>';
+                html += '</tr></thead><tbody>';
+                brandNames.map(function(bn) { var vals = tabs.map(function(t, ti) { if (tabCatShares[ti]<0.5) return 0; var cat=(t.data.categories||[]).find(function(c){return c.name===catName;}); if (!cat||!cat.brands) return 0; var b=cat.brands.find(function(x){return x.name===bn;}); return b?(b.category_share_pct||0):0; }); return { name: bn, vals: vals, delta: tabs.length>=2?vals[0]-vals[vals.length-1]:0 }; }).sort(function(a, b) { return Math.abs(b.delta)-Math.abs(a.delta); }).forEach(function(br) {
+                    html += '<tr' + (Math.abs(br.delta)>=3?' class="highlight"':'') + ' data-sort-name="' + br.name + '" data-sort-delta="' + Math.abs(br.delta).toFixed(4) + '"';
+                    br.vals.forEach(function(v, vi) { html += ' data-sort-v' + vi + '="' + v.toFixed(4) + '"'; });
+                    html += '><td style="font-weight:600;white-space:nowrap;">' + br.name + '</td>';
+                    br.vals.forEach(function(v) { html += '<td class="num">' + v.toFixed(1) + '%</td>'; });
+                    if (tabs.length >= 2) html += '<td class="num">' + _sotCmpDeltaPP(br.vals[0], br.vals[br.vals.length-1]) + '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div></div>';
+            });
+
+            area.innerHTML = html;
+
+            area.addEventListener('mouseover', function(e) { var el=e.target.closest('[data-sot-cat]'); if (!el) return; var cat=el.getAttribute('data-sot-cat'); area.querySelectorAll('[data-sot-cat]').forEach(function(n) { if (n.getAttribute('data-sot-cat')===cat){n.classList.add('sot-cat-glow');n.classList.remove('sot-cat-dim');} else {n.classList.add('sot-cat-dim');n.classList.remove('sot-cat-glow');}}); });
+            area.addEventListener('mouseout', function(e) { var el=e.target.closest('[data-sot-cat]'); if (!el) return; area.querySelectorAll('[data-sot-cat]').forEach(function(n){n.classList.remove('sot-cat-glow','sot-cat-dim');}); });
+
+            var mainCanvas = document.getElementById('sotCmpMain');
+            if (mainCanvas && typeof Chart !== 'undefined') {
+                var mainDS = [];
+                tabs.forEach(function(t, i) { var lbl=_sotTabLabel(t.data); var cats=t.data.categories||[]; var vals=catNames.map(function(cn){var f=cats.find(function(c){return c.name===cn;});return f?(f[shareKey]||0):0;}); mainDS.push({label:lbl,data:vals,backgroundColor:'hsla('+_sotTabHue(i)+',70%,60%,0.75)',borderWidth:0,borderRadius:4,barPercentage:0.9}); });
+                _sotCompareCharts.push(new Chart(mainCanvas.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:catNames,datasets:mainDS},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:'rgba(255,255,255,0.06)'},ticks:{color:'#aaa',callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:'#e8e8e8',font:{size:12,weight:'600'}}}},plugins:{legend:{position:'top',labels:{color:'#e8e8e8',font:{size:11},padding:16,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'%';}}},datalabels:{anchor:'end',align:'end',offset:4,color:'#fff',font:{weight:'700',size:11},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}}));
+            }
+            catNames.forEach(function(catName) {
+                var cid='sotCmpCat_'+catName.replace(/[^a-zA-Z]/g,''); var cv=document.getElementById(cid); if (!cv||typeof Chart==='undefined') return;
+                var ab={},tcs=[]; tabs.forEach(function(t){var cat=(t.data.categories||[]).find(function(c){return c.name===catName;});var cs=cat?(cat[shareKey]||0):0;tcs.push(cs);if(cat&&cat.brands&&cs>=0.5)cat.brands.forEach(function(b){if(!ab[b.name])ab[b.name]=0;ab[b.name]=Math.max(ab[b.name],b.category_share_pct||0);});});
+                var bn=Object.keys(ab).sort(function(a,b){return ab[b]-ab[a];}).slice(0,20); if(!bn.length) return;
+                var ds=[]; tabs.forEach(function(t,i){var lbl=_sotTabLabel(t.data);var neg=tcs[i]<0.5;var cat=(t.data.categories||[]).find(function(c){return c.name===catName;});var bm={};if(cat&&cat.brands&&!neg)cat.brands.forEach(function(b){bm[b.name]=b;});ds.push({label:lbl,data:bn.map(function(n){var b=bm[n];return b?(b.category_share_pct||0):0;}),backgroundColor:'hsla('+_sotTabHue(i)+',70%,60%,0.75)',borderWidth:0,borderRadius:3,barPercentage:0.9});});
+                _sotCompareCharts.push(new Chart(cv.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:bn,datasets:ds},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:'rgba(255,255,255,0.06)'},ticks:{color:'#aaa',callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:'#e8e8e8',font:{size:11}}}},plugins:{legend:{position:'top',labels:{color:'#e8e8e8',font:{size:10},padding:12,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'% of '+catName;}}},datalabels:{anchor:'end',align:'end',offset:4,color:'#fff',font:{weight:'600',size:10},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}})
+                );
+            });
+        }
+
+        function sotDrillCategory(catId, cardEl) {
+            document.querySelectorAll('.sot-cmp-cat-card.active').forEach(function(c) { c.classList.remove('active'); });
+            cardEl.classList.add('active');
+            var section = document.getElementById('sotCmpBrandSection_' + catId);
+            if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function sotToggleExpandRow(tr) {
+            var cn = tr.getAttribute('data-sot-cat');
+            var expandRow = tr.parentElement.querySelector('tr.expand-row[data-expand-for="' + cn + '"]');
+            if (!expandRow) return;
+            var isOpen = tr.classList.contains('expanded');
+            tr.parentElement.querySelectorAll('tr.expandable').forEach(function(r) { r.classList.remove('expanded'); });
+            tr.parentElement.querySelectorAll('tr.expand-row').forEach(function(r) { r.classList.remove('open'); });
+            if (!isOpen) {
+                tr.classList.add('expanded');
+                expandRow.classList.add('open');
+            }
+        }
+
+        function sotSortTable(tableId, colKey) {
+            var table = document.getElementById(tableId);
+            if (!table) return;
+            var tbody = table.querySelector('tbody');
+            var ths = table.querySelectorAll('thead th');
+            var currentDir = 'desc';
+            ths.forEach(function(th) {
+                if (th.getAttribute('data-sort-col') === colKey && th.classList.contains('sort-active')) {
+                    currentDir = th.getAttribute('data-sort-dir') === 'desc' ? 'asc' : 'desc';
+                }
+                th.classList.remove('sort-active');
+                th.removeAttribute('data-sort-dir');
+            });
+            var activeTh = table.querySelector('th[data-sort-col="' + colKey + '"]');
+            if (activeTh) {
+                activeTh.classList.add('sort-active');
+                activeTh.setAttribute('data-sort-dir', currentDir);
+                var arrow = activeTh.querySelector('.sort-arrow');
+                if (arrow) arrow.textContent = currentDir === 'desc' ? '▼' : '▲';
+            }
+
+            var rows = [];
+            var expandRows = {};
+            tbody.querySelectorAll('tr').forEach(function(tr) {
+                if (tr.classList.contains('expand-row')) {
+                    expandRows[tr.getAttribute('data-expand-for')] = tr;
+                } else if (tr.hasAttribute('data-sort-' + colKey)) {
+                    rows.push(tr);
+                }
+            });
+
+            rows.sort(function(a, b) {
+                var av = a.getAttribute('data-sort-' + colKey) || '';
+                var bv = b.getAttribute('data-sort-' + colKey) || '';
+                var an = parseFloat(av), bn = parseFloat(bv);
+                if (!isNaN(an) && !isNaN(bn)) {
+                    return currentDir === 'desc' ? bn - an : an - bn;
+                }
+                return currentDir === 'desc' ? bv.localeCompare(av) : av.localeCompare(bv);
+            });
+
+            while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+            rows.forEach(function(tr) {
+                tbody.appendChild(tr);
+                var cn = tr.getAttribute('data-sot-cat') || tr.getAttribute('data-sort-name');
+                if (cn && expandRows[cn]) tbody.appendChild(expandRows[cn]);
+            });
+        }
+
+        function sotToggleFocusMode() {
+            _sotCmpFocusMode = !_sotCmpFocusMode;
+            var btn = document.querySelector('.sot-focus-btn');
+            if (btn) btn.classList.toggle('active', _sotCmpFocusMode);
+            ['sotCmpKpiSection', 'sotCmpMoversSection', 'sotCmpCatCards'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.classList.toggle('sot-cmp-focus-hide', _sotCmpFocusMode);
             });
         }
 
