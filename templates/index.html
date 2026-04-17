@@ -24270,6 +24270,18 @@
                 document.getElementById('sotEmptyState').style.display = 'block';
                 return;
             }
+            if (_sotOpenTabs.length === 1) {
+                _sotCompareMode = false;
+                _sotActiveTabIdx = 0;
+                _sotData = _sotOpenTabs[0].data;
+                sotRenderTabs();
+                sotRenderRunTree();
+                document.getElementById('sotEmptyState').style.display = 'none';
+                document.getElementById('sotCompareArea').style.display = 'none';
+                document.getElementById('sotResultsArea').style.display = 'block';
+                sotRenderResults(_sotData);
+                return;
+            }
             _sotCompareMode = true;
             _sotActiveTabIdx = -1;
             _sotViewOnlyIdx = -1;
@@ -24497,19 +24509,33 @@
             var gran = _sotGranularity;
             var shareKey = _sotShareKey(gran);
 
+            if (_sotOpenTabs.length === 0) {
+                area.innerHTML = '<div style="padding:2rem;color:var(--text-secondary);">No data loaded.</div>';
+                return;
+            }
+
             var isCohort = _sotIsCohortMode(_sotOpenTabs);
             _sotCohortMode = isCohort;
 
-            if (isCohort) {
-                _sotRenderCohortCompare(area, gran, shareKey);
-            } else {
-                _sotRenderTimeCompare(area, gran, shareKey);
+            try {
+                if (isCohort) {
+                    _sotRenderCohortCompare(area, gran, shareKey);
+                } else {
+                    _sotRenderTimeCompare(area, gran, shareKey);
+                }
+            } catch(err) {
+                console.error('SOT compare render error:', err);
+                area.innerHTML = '<div style="padding:2rem;color:#f87171;">Error rendering dashboard: ' + (err.message || err) + '</div>';
             }
         }
 
         function _sotRenderCohortCompare(area, gran, shareKey) {
             var allTabs = _sotOpenTabs.slice();
             var baseTab = allTabs.find(function(t) { return (t.data.age_brackets || []).length >= 7; });
+            if (!baseTab) {
+                area.innerHTML = '<div style="padding:2rem;color:var(--text-secondary);">Missing All Ages baseline data. Try reloading.</div>';
+                return;
+            }
             var cohortTabs = allTabs.filter(function(t) { return (t.data.age_brackets || []).length < 7; });
             cohortTabs.sort(_sotAgeSort);
 
