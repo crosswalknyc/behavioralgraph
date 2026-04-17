@@ -25227,12 +25227,87 @@
 
                             var hasCohorts = Object.keys(checkedCohorts).length > 0;
 
+                            function _linRegForecast(vals) {
+                                var n = vals.length;
+                                if (n < 2) return { mid: vals[n - 1] || 0, hi: vals[n - 1] || 0, lo: vals[n - 1] || 0 };
+                                var sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+                                for (var i = 0; i < n; i++) { sumX += i; sumY += vals[i]; sumXY += i * vals[i]; sumX2 += i * i; }
+                                var slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+                                var intercept = (sumY - slope * sumX) / n;
+                                var mid = intercept + slope * n;
+                                var residuals = vals.map(function(v, i) { return v - (intercept + slope * i); });
+                                var stdDev = Math.sqrt(residuals.reduce(function(s, r) { return s + r * r; }, 0) / n);
+                                return { mid: mid, hi: mid + stdDev * 1.5, lo: Math.max(0, mid - stdDev * 1.5) };
+                            }
+
+                            var lastQ = periodLabels[periodLabels.length - 1] || '';
+                            var nextQLabel = 'Next Q (est)';
+                            var forecastLabels = periodLabels.concat([nextQLabel]);
+
+                            var forecastDatasets = [];
+                            datasets.forEach(function(ds) {
+                                if (ds.order === 10 || ds._cohortAge) return;
+                                var rawVals = ds.data;
+                                if (!rawVals || rawVals.length < 2) return;
+                                var fc = _linRegForecast(rawVals);
+                                var lastVal = rawVals[rawVals.length - 1];
+                                var nullPad = rawVals.map(function(_, i) { return i < rawVals.length - 1 ? null : lastVal; });
+
+                                forecastDatasets.push({
+                                    label: ds.label + ' (forecast)',
+                                    data: nullPad.concat([fc.mid]),
+                                    borderColor: ds.borderColor,
+                                    backgroundColor: 'transparent',
+                                    pointBackgroundColor: ds.borderColor,
+                                    pointBorderColor: '#fff',
+                                    pointRadius: [0, 0, 0, 0, 0, 0, 0, 0, 4].slice(-(rawVals.length + 1)),
+                                    borderWidth: 2,
+                                    borderDash: [4, 4],
+                                    fill: false,
+                                    tension: 0,
+                                    order: 3,
+                                    spanGaps: true
+                                });
+
+                                var hiPad = rawVals.map(function(_, i) { return i < rawVals.length - 1 ? null : lastVal; });
+                                var loPad = rawVals.map(function(_, i) { return i < rawVals.length - 1 ? null : lastVal; });
+                                forecastDatasets.push({
+                                    label: ds.label + ' (high)',
+                                    data: hiPad.concat([fc.hi]),
+                                    borderColor: 'transparent',
+                                    backgroundColor: (ds.borderColor || '').replace(/[\d.]+\)$/, '0.10)'),
+                                    pointRadius: 0,
+                                    borderWidth: 0,
+                                    fill: '+1',
+                                    tension: 0,
+                                    order: 8,
+                                    spanGaps: true
+                                });
+                                forecastDatasets.push({
+                                    label: ds.label + ' (low)',
+                                    data: loPad.concat([fc.lo]),
+                                    borderColor: 'transparent',
+                                    backgroundColor: 'transparent',
+                                    pointRadius: 0,
+                                    borderWidth: 0,
+                                    fill: false,
+                                    tension: 0,
+                                    order: 8,
+                                    spanGaps: true
+                                });
+                            });
+
+                            var allDS = datasets.map(function(ds) {
+                                var padded = ds.data.concat([null]);
+                                return Object.assign({}, ds, { data: padded });
+                            }).concat(forecastDatasets);
+
                             var yLabel = isShare ? 'Category Share %' : (metric === 'interactions' ? 'Interactions' : 'US Hours');
 
                             _sotTrendChart = new Chart(canvas.getContext('2d'), {
                                 type: 'line',
                                 plugins: [ChartDataLabels],
-                                data: { labels: periodLabels, datasets: datasets },
+                                data: { labels: forecastLabels, datasets: allDS },
                                 options: {
                                     responsive: true,
                                     maintainAspectRatio: false,
@@ -25259,14 +25334,26 @@
                                         }
                                     },
                                     plugins: {
-                                        legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 14, usePointStyle: true } },
+                                        legend: {
+                                            position: 'top',
+                                            labels: {
+                                                color: '#e8e8e8', font: { size: 11 }, padding: 14, usePointStyle: true,
+                                                filter: function(item) {
+                                                    return item.text.indexOf('(forecast)') === -1 && item.text.indexOf('(high)') === -1 && item.text.indexOf('(low)') === -1;
+                                                }
+                                            }
+                                        },
                                         tooltip: {
+                                            filter: function(item) {
+                                                return item.dataset.label.indexOf('(high)') === -1 && item.dataset.label.indexOf('(low)') === -1;
+                                            },
                                             callbacks: {
                                                 label: function(ctx) {
                                                     var v = ctx.parsed.y;
-                                                    if (v == null) return ctx.dataset.label + ': N/A';
-                                                    if (isShare) return ctx.dataset.label + ': ' + v.toFixed(1) + '%';
-                                                    return ctx.dataset.label + ': ' + _sotCmpFmtNum(Math.round(v));
+                                                    if (v == null) return null;
+                                                    var lbl = ctx.dataset.label.replace(' (forecast)', ' est.');
+                                                    if (isShare) return lbl + ': ' + v.toFixed(1) + '%';
+                                                    return lbl + ': ' + _sotCmpFmtNum(Math.round(v));
                                                 }
                                             }
                                         },
