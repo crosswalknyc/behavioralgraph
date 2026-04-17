@@ -24717,6 +24717,31 @@
             });
             var _sotKpiSortKey = null, _sotKpiSortDir = -1;
 
+            var _maxAvgHrs = Math.max.apply(null, _sotKpiRows.map(function(r) { return r._avg_hours || 0; }));
+            var _maxAvgInt = Math.max.apply(null, _sotKpiRows.map(function(r) { return r._avg_interactions || 0; }));
+
+            function _sotGaugeSVG(val, maxVal, color) {
+                var pct = maxVal > 0 ? Math.min(val / maxVal, 1) : 0;
+                var r = 18, cx = 22, cy = 22, sw = 4;
+                var startAngle = Math.PI * 0.75;
+                var endAngle = Math.PI * 2.25;
+                var totalArc = endAngle - startAngle;
+                var needleAngle = startAngle + totalArc * pct;
+                var x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle);
+                var x2 = cx + r * Math.cos(endAngle), y2 = cy + r * Math.sin(endAngle);
+                var arcPath = 'M ' + x1.toFixed(1) + ' ' + y1.toFixed(1) + ' A ' + r + ' ' + r + ' 0 1 1 ' + x2.toFixed(1) + ' ' + y2.toFixed(1);
+                var ax = cx + r * Math.cos(startAngle), ay = cy + r * Math.sin(startAngle);
+                var bx = cx + r * Math.cos(needleAngle), by = cy + r * Math.sin(needleAngle);
+                var fillArc = 'M ' + ax.toFixed(1) + ' ' + ay.toFixed(1) + ' A ' + r + ' ' + r + ' 0 ' + (totalArc * pct > Math.PI ? '1' : '0') + ' 1 ' + bx.toFixed(1) + ' ' + by.toFixed(1);
+                var nx = cx + (r - 2) * Math.cos(needleAngle), ny = cy + (r - 2) * Math.sin(needleAngle);
+                return '<svg width="44" height="32" viewBox="0 0 44 32" style="vertical-align:middle;margin-right:4px;">' +
+                    '<path d="' + arcPath + '" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="' + sw + '" stroke-linecap="round"/>' +
+                    '<path d="' + fillArc + '" fill="none" stroke="' + color + '" stroke-width="' + sw + '" stroke-linecap="round"/>' +
+                    '<line x1="' + cx + '" y1="' + cy + '" x2="' + nx.toFixed(1) + '" y2="' + ny.toFixed(1) + '" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>' +
+                    '<circle cx="' + cx + '" cy="' + cy + '" r="2" fill="#fff"/>' +
+                    '</svg>';
+            }
+
             function _sotRenderKpiTable() {
                 var sorted = _sotKpiRows.slice();
                 if (_sotKpiSortKey) {
@@ -24729,7 +24754,13 @@
                     kpiDefs.forEach(function(m) {
                         var val = r[m.key] || 0;
                         var display = (m.key === '_avg_hours' || m.key === '_avg_interactions') ? val.toFixed(1) : _sotCmpFmtNum(val);
-                        h += '<td class="num"><span style="font-weight:600;">' + display + '</span></td>';
+                        if (m.key === '_avg_hours') {
+                            h += '<td class="num">' + _sotGaugeSVG(val, _maxAvgHrs, 'var(--accent-cyan)') + '<span style="font-weight:600;">' + display + '</span></td>';
+                        } else if (m.key === '_avg_interactions') {
+                            h += '<td class="num">' + _sotGaugeSVG(val, _maxAvgInt, 'var(--accent-orange)') + '<span style="font-weight:600;">' + display + '</span></td>';
+                        } else {
+                            h += '<td class="num"><span style="font-weight:600;">' + display + '</span></td>';
+                        }
                     });
                     h += '<td class="num"><div style="display:flex;align-items:center;gap:0.3rem;">';
                     h += '<div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;">';
