@@ -23879,7 +23879,7 @@
             document.getElementById('sotResultsArea').style.display = 'block';
             document.getElementById('sotKpiUsers').textContent = data.matched_users.toLocaleString();
             var projUsers = data.projected_us_users || 0;
-            document.getElementById('sotKpiProjUsers').textContent = projUsers >= 1000000 ? (projUsers / 1000000).toFixed(1) + 'M' : projUsers.toLocaleString();
+            document.getElementById('sotKpiProjUsers').textContent = Math.round(projUsers).toLocaleString();
             document.getElementById('sotKpiHours').textContent = (data.total_projected_hours || 0) >= 1000000 ? ((data.total_projected_hours / 1000000).toFixed(1) + 'M') : (data.total_projected_hours || 0).toLocaleString();
             document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
             var trendNoteEl = document.getElementById('sotTrendGuardNote');
@@ -24468,7 +24468,7 @@
         }
 
         function _sotTabHue(i) { return [200, 280, 40, 150, 340, 60][i % 6]; }
-        function _sotCmpFmtNum(n) { if (n >= 1e9) return (n/1e9).toFixed(1)+'B'; if (n >= 1e6) return (n/1e6).toFixed(1)+'M'; if (n >= 1e3) return (n/1e3).toFixed(1)+'K'; return n.toLocaleString(); }
+        function _sotCmpFmtNum(n) { return Math.round(n).toLocaleString(); }
         function _sotCmpDelta(val, base) {
             if (!base) return '<span class="sot-cmp-delta neutral">—</span>';
             var diff = val - base;
