@@ -24764,11 +24764,7 @@
                             h += '<td class="num"><span style="font-weight:600;">' + display + '</span></td>';
                         }
                     });
-                    h += '<td class="num"><div style="display:flex;align-items:center;gap:0.3rem;">';
-                    h += '<div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;">';
-                    h += '<div style="width:' + r._pct.toFixed(1) + '%;height:100%;border-radius:4px;background:hsla(' + cohortHues[r.ci % cohortHues.length] + ',65%,55%,0.8);"></div></div>';
-                    h += '<span style="font-weight:700;font-size:0.72rem;">' + r._pct.toFixed(1) + '%</span>';
-                    h += '</div></td>';
+                    h += '<td class="num">' + _sotGaugeSVG(r._pct, 100, 'hsla(' + cohortHues[r.ci % cohortHues.length] + ',65%,55%,0.9)') + '<span style="font-weight:700;font-size:0.72rem;">' + r._pct.toFixed(1) + '%</span></td>';
                     h += '</tr>';
                 });
                 var tbody = document.getElementById('sotKpiTbody');
