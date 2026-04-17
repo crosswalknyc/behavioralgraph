@@ -25003,6 +25003,7 @@
                 html += '<select id="sotTrendMetric" style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:0.25rem 0.5rem;font-size:0.7rem;">';
                 html += '<option value="hours">US Hours</option><option value="interactions">Interactions</option><option value="share">Category Share %</option></select>';
                 html += '</div>';
+                html += '<div id="sotTrendCohortChecks" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.75rem;margin-bottom:0.4rem;font-size:0.65rem;"></div>';
                 html += '<div id="sotTrendChecks" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.75rem;margin-bottom:0.6rem;font-size:0.65rem;"></div>';
                 html += '<div style="position:relative;height:340px;"><canvas id="sotTrendLineChart"></canvas></div>';
                 html += '<div id="sotTrendDrillWrap" style="display:none;margin-top:0.75rem;border-top:1px solid rgba(255,255,255,0.08);padding-top:0.75rem;">';
@@ -25073,9 +25074,35 @@
                             });
                         });
 
+                        var ageLabels = ['17 and Under','18-24','25-34','35-44','45-54','55-64','65 or Older'];
+                        var cohortDataByAge = {};
+                        ageLabels.forEach(function(ag) {
+                            cohortDataByAge[ag] = {};
+                            allPeriods.forEach(function(p) {
+                                var key = p.start_date + '|' + p.end_date;
+                                var match = (_sotCachedRuns || []).find(function(r) {
+                                    return r.start_date === p.start_date && r.end_date === p.end_date
+                                        && (r.age_brackets || []).length === 1 && r.age_brackets[0] === ag;
+                                });
+                                cohortDataByAge[ag][key] = match || null;
+                            });
+                        });
+
+                        var cohortChecksDiv = document.getElementById('sotTrendCohortChecks');
+                        if (cohortChecksDiv) {
+                            var cch = '<span style="color:var(--text-secondary);font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Cohorts:</span>';
+                            ageLabels.forEach(function(ag, ai) {
+                                var hue = cohortHues[ai % cohortHues.length];
+                                var col = 'hsla(' + hue + ',65%,55%,1)';
+                                cch += '<label style="display:inline-flex;align-items:center;gap:0.2rem;cursor:pointer;color:' + col + ';font-weight:600;">';
+                                cch += '<input type="checkbox" class="sotTrendCohortCb" value="' + ag + '" style="accent-color:' + col + ';"> ' + ag + '</label>';
+                            });
+                            cohortChecksDiv.innerHTML = cch;
+                        }
+
                         var checksDiv = document.getElementById('sotTrendChecks');
                         if (checksDiv) {
-                            var ch = '';
+                            var ch = '<span style="color:var(--text-secondary);font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Categories:</span>';
                             ch += '<label style="display:inline-flex;align-items:center;gap:0.2rem;cursor:pointer;color:#e8e8e8;font-weight:600;">';
                             ch += '<input type="checkbox" class="sotTrendCatCb" value="__total__" checked style="accent-color:var(--accent-cyan);"> Total</label>';
                             _histCatNames.forEach(function(cn) {
@@ -25098,6 +25125,10 @@
                             document.querySelectorAll('.sotTrendCatCb').forEach(function(cb) {
                                 if (cb.checked) checked[cb.value] = true;
                             });
+                            var checkedCohorts = {};
+                            document.querySelectorAll('.sotTrendCohortCb').forEach(function(cb) {
+                                if (cb.checked) checkedCohorts[cb.value] = true;
+                            });
 
                             var datasets = [];
                             var isShare = metric === 'share';
@@ -25107,15 +25138,16 @@
                                 datasets.push({
                                     label: metric === 'interactions' ? 'Total Interactions' : 'Total US Hours',
                                     data: rawData,
-                                    borderColor: 'rgba(6,182,212,1)',
-                                    backgroundColor: 'rgba(6,182,212,0.1)',
-                                    pointBackgroundColor: 'rgba(6,182,212,1)',
-                                    pointBorderColor: '#fff',
-                                    pointRadius: 5,
-                                    pointHoverRadius: 7,
-                                    borderWidth: 2.5,
+                                    borderColor: 'rgba(6,182,212,0.5)',
+                                    backgroundColor: 'rgba(6,182,212,0.08)',
+                                    pointBackgroundColor: 'rgba(6,182,212,0.6)',
+                                    pointBorderColor: 'rgba(6,182,212,0.3)',
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5,
+                                    borderWidth: 1.5,
                                     fill: true,
-                                    tension: 0.35
+                                    tension: 0.35,
+                                    order: 10
                                 });
                             }
 
@@ -25154,9 +25186,46 @@
                                     pointHoverRadius: 6,
                                     borderWidth: 2,
                                     fill: false,
-                                    tension: 0.35
+                                    tension: 0.35,
+                                    order: 1
                                 });
                             });
+
+                            ageLabels.forEach(function(ag, ai) {
+                                if (!checkedCohorts[ag]) return;
+                                var hue = cohortHues[ai % cohortHues.length];
+                                var col = 'hsla(' + hue + ',65%,55%,1)';
+                                var data = allPeriods.map(function(p) {
+                                    var key = p.start_date + '|' + p.end_date;
+                                    var run = cohortDataByAge[ag][key];
+                                    if (!run) return null;
+                                    return fetch('/api/share-of-time/run', {
+                                        method: 'POST', credentials: 'same-origin',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ start_date: run.start_date, end_date: run.end_date, age_brackets: [ag] })
+                                    }).then(function(r) { return r.json(); }).then(function(resp) {
+                                        return resp.success && resp.data ? resp.data : null;
+                                    }).catch(function() { return null; });
+                                });
+                                datasets.push({
+                                    label: ag,
+                                    data: [],
+                                    borderColor: col,
+                                    backgroundColor: 'transparent',
+                                    pointBackgroundColor: col,
+                                    pointBorderColor: '#fff',
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6,
+                                    borderWidth: 2,
+                                    borderDash: [6, 3],
+                                    fill: false,
+                                    tension: 0.35,
+                                    order: 2,
+                                    _cohortAge: ag, _cohortIdx: ai
+                                });
+                            });
+
+                            var hasCohorts = Object.keys(checkedCohorts).length > 0;
 
                             var yLabel = isShare ? 'Category Share %' : (metric === 'interactions' ? 'Interactions' : 'US Hours');
 
@@ -25195,6 +25264,7 @@
                                             callbacks: {
                                                 label: function(ctx) {
                                                     var v = ctx.parsed.y;
+                                                    if (v == null) return ctx.dataset.label + ': N/A';
                                                     if (isShare) return ctx.dataset.label + ': ' + v.toFixed(1) + '%';
                                                     return ctx.dataset.label + ': ' + _sotCmpFmtNum(Math.round(v));
                                                 }
@@ -25205,6 +25275,45 @@
                                 }
                             });
                             _sotCompareCharts.push(_sotTrendChart);
+
+                            if (hasCohorts) {
+                                var cohortPromises = [];
+                                var cohortDsMap = {};
+                                datasets.forEach(function(ds, di) {
+                                    if (!ds._cohortAge) return;
+                                    var ag = ds._cohortAge;
+                                    cohortDsMap[ag] = di;
+                                    allPeriods.forEach(function(p, pi) {
+                                        cohortPromises.push(
+                                            fetch('/api/share-of-time/run', {
+                                                method: 'POST', credentials: 'same-origin',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ start_date: p.start_date, end_date: p.end_date, age_brackets: [ag] })
+                                            }).then(function(r) { return r.json(); }).then(function(resp) {
+                                                return { age: ag, pi: pi, data: resp.success && resp.data ? resp.data : null };
+                                            }).catch(function() { return { age: ag, pi: pi, data: null }; })
+                                        );
+                                    });
+                                });
+                                Promise.all(cohortPromises).then(function(cResults) {
+                                    cResults.forEach(function(cr) {
+                                        var di = cohortDsMap[cr.age];
+                                        if (di == null || !_sotTrendChart) return;
+                                        var ds = _sotTrendChart.data.datasets[di];
+                                        if (!ds) return;
+                                        if (!cr.data) { ds.data[cr.pi] = null; return; }
+                                        var m = _trendProjMult(cr.data);
+                                        if (isShare) {
+                                            ds.data[cr.pi] = null;
+                                        } else if (metric === 'interactions') {
+                                            ds.data[cr.pi] = (cr.data.total_interactions || 0) * m;
+                                        } else {
+                                            ds.data[cr.pi] = (cr.data.total_projected_hours || 0) * m;
+                                        }
+                                    });
+                                    if (_sotTrendChart) _sotTrendChart.update();
+                                });
+                            }
                         }
 
                         _sotRenderTrendChart();
@@ -25216,6 +25325,9 @@
                             if (dw && dw.style.display !== 'none' && _sotDrillCat) _sotRenderDrillChart(_sotDrillCat);
                         });
                         document.querySelectorAll('.sotTrendCatCb').forEach(function(cb) {
+                            cb.addEventListener('change', _sotRenderTrendChart);
+                        });
+                        document.querySelectorAll('.sotTrendCohortCb').forEach(function(cb) {
                             cb.addEventListener('change', _sotRenderTrendChart);
                         });
 
