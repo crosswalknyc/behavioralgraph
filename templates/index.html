@@ -24651,10 +24651,12 @@
             });
             html += '</div>';
 
-            // === Cohort Composition Column Chart (% of Pop vs % of Usage) ===
-            html += '<div style="margin-top:1rem;"><h3 class="sot-cmp-section-title" style="margin-bottom:0.5rem;font-size:0.75rem;">Population Share vs Usage Share by Age Group</h3>';
-            html += '<div style="position:relative;height:260px;"><canvas id="sotCohortCompChart"></canvas></div>';
-            html += '</div>';
+            // === Cohort Composition Pie Charts (Population vs Usage) ===
+            html += '<div style="margin-top:1rem;"><h3 class="sot-cmp-section-title" style="margin-bottom:0.5rem;font-size:0.75rem;">Population Share vs Usage Share</h3>';
+            html += '<div style="display:flex;gap:2rem;flex-wrap:wrap;justify-content:center;">';
+            html += '<div style="flex:1;min-width:220px;max-width:320px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">% of Population</div><div style="position:relative;height:240px;"><canvas id="sotCohortPiePop"></canvas></div></div>';
+            html += '<div style="flex:1;min-width:220px;max-width:320px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">% of Usage (Hours)</div><div style="position:relative;height:240px;"><canvas id="sotCohortPieUsage"></canvas></div></div>';
+            html += '</div></div>';
 
             html += '</div>';
 
@@ -25044,37 +25046,35 @@
                 area.querySelectorAll('[data-sot-cat]').forEach(function(n) { n.classList.remove('sot-cat-glow','sot-cat-dim'); });
             });
 
-            // --- Cohort Composition Column Chart ---
-            var compCanvas = document.getElementById('sotCohortCompChart');
-            if (compCanvas && typeof Chart !== 'undefined') {
-                var compLabels = filteredCohorts.map(function(t) { return _sotCohortLabel(t); });
-                var popPcts = filteredCohorts.map(function(t) {
-                    return baseSample > 0 ? (t.data.matched_users || 0) / baseSample * 100 : 0;
-                });
-                var hoursPcts = filteredCohorts.map(function(t) {
-                    return baseHours > 0 ? (t.data.total_projected_hours || 0) / baseHours * 100 : 0;
-                });
-                _sotCompareCharts.push(new Chart(compCanvas.getContext('2d'), {
-                    type: 'bar', plugins: [ChartDataLabels],
-                    data: {
-                        labels: compLabels,
-                        datasets: [
-                            { label: '% of Population', data: popPcts, backgroundColor: 'rgba(139,92,246,0.7)', borderRadius: 4, barPercentage: 0.8 },
-                            { label: '% of Usage (Hours)', data: hoursPcts, backgroundColor: 'rgba(6,182,212,0.7)', borderRadius: 4, barPercentage: 0.8 }
-                        ]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        scales: {
-                            x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } } },
-                            y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v) { return v + '%'; } }, beginAtZero: true }
-                        },
-                        plugins: {
-                            legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 16, usePointStyle: true } },
-                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%'; } } },
-                            datalabels: { anchor: 'end', align: 'end', offset: 2, color: '#fff', font: { weight: '700', size: 10 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
-                        }
+            // --- Cohort Composition Pie Charts ---
+            var pieColors = filteredCohorts.map(function(t, ci) { return 'hsla(' + cohortHues[ci % cohortHues.length] + ',65%,55%,0.8)'; });
+            var pieLabels = filteredCohorts.map(function(t) { return _sotCohortLabel(t); });
+            var popPcts = filteredCohorts.map(function(t) { return baseSample > 0 ? (t.data.matched_users || 0) / baseSample * 100 : 0; });
+            var hoursPcts = filteredCohorts.map(function(t) { return baseHours > 0 ? (t.data.total_projected_hours || 0) / baseHours * 100 : 0; });
+            var pieOpts = function(title) {
+                return {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 10 }, padding: 10, usePointStyle: true } },
+                        tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + ctx.parsed.toFixed(1) + '%'; } } },
+                        datalabels: { color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 3 ? v.toFixed(1) + '%' : ''; } }
                     }
+                };
+            };
+            var popCanvas = document.getElementById('sotCohortPiePop');
+            if (popCanvas && typeof Chart !== 'undefined') {
+                _sotCompareCharts.push(new Chart(popCanvas.getContext('2d'), {
+                    type: 'doughnut', plugins: [ChartDataLabels],
+                    data: { labels: pieLabels, datasets: [{ data: popPcts, backgroundColor: pieColors, borderWidth: 0 }] },
+                    options: pieOpts('Population')
+                }));
+            }
+            var usageCanvas = document.getElementById('sotCohortPieUsage');
+            if (usageCanvas && typeof Chart !== 'undefined') {
+                _sotCompareCharts.push(new Chart(usageCanvas.getContext('2d'), {
+                    type: 'doughnut', plugins: [ChartDataLabels],
+                    data: { labels: pieLabels, datasets: [{ data: hoursPcts, backgroundColor: pieColors, borderWidth: 0 }] },
+                    options: pieOpts('Usage')
                 }));
             }
 
