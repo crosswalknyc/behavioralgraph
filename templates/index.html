@@ -24998,7 +24998,13 @@
                 if (histRanges.length === 0) return;
 
                 html += '<div class="sot-chart-card" id="sotHistoricalSection" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
-                html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Time-over-Time Trends (All Ages)</h3>';
+                html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.75rem;margin-bottom:0.6rem;">';
+                html += '<h3 class="sot-cmp-section-title" style="margin:0;">Time-over-Time Trends</h3>';
+                html += '<select id="sotTrendMetric" style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:0.25rem 0.5rem;font-size:0.7rem;">';
+                html += '<option value="hours">US Hours</option><option value="interactions">Interactions</option><option value="share">Category Share %</option></select>';
+                html += '</div>';
+                html += '<div id="sotTrendChecks" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.75rem;margin-bottom:0.6rem;font-size:0.65rem;"></div>';
+                html += '<div style="position:relative;height:340px;"><canvas id="sotTrendLineChart"></canvas></div>';
                 html += '<div id="sotHistTrendBody" style="font-size:0.72rem;color:var(--text-secondary);">Loading historical data...</div>';
                 html += '</div>';
 
@@ -25027,9 +25033,10 @@
                             if (body) body.textContent = 'No historical data could be loaded.';
                             return;
                         }
+                        body.style.display = 'none';
 
                         var allPeriods = [_histBase].concat(loaded).sort(function(a, b) {
-                            return (b.start_date || '').localeCompare(a.start_date || '');
+                            return (a.start_date || '').localeCompare(b.start_date || '');
                         });
 
                         function _trendProjMult(p) {
@@ -25037,55 +25044,167 @@
                             var raw = p.matched_users || 1;
                             return pop > 0 ? pop / raw : 1;
                         }
-                        var trendKpis = [
-                            { label: 'Sample', key: '_proj_pop', proj: true },
-                            { label: 'US Hours', key: 'total_projected_hours', proj: true },
-                            { label: 'Interactions', key: 'total_interactions', proj: true }
-                        ];
-                        var h = '<div style="overflow-x:auto;"><table class="sot-cmp-table"><thead><tr><th>Metric</th>';
-                        allPeriods.forEach(function(p) {
-                            var pLabel = _sotQuarterLabel(p.start_date, p.end_date) || (_sotFmtDateShort(p.start_date).replace(/, \d{4}$/, ''));
-                            var isCurrent = p.start_date === _histBase.start_date && p.end_date === _histBase.end_date;
-                            h += '<th class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);' : '') + '">' + pLabel + (isCurrent ? ' ●' : '') + '</th>';
-                        });
-                        if (allPeriods.length >= 2) h += '<th class="num">Change</th>';
-                        h += '</tr></thead><tbody>';
 
-                        trendKpis.forEach(function(kpi) {
-                            h += '<tr><td style="font-weight:600;">' + kpi.label + '</td>';
-                            var vals = allPeriods.map(function(p) {
-                                if (kpi.key === '_proj_pop') return _sotCohortPop(p);
-                                var m = _trendProjMult(p);
-                                return (p[kpi.key] || 0) * m;
-                            });
-                            vals.forEach(function(v, i) {
-                                var isCurrent = allPeriods[i].start_date === _histBase.start_date;
-                                h += '<td class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);font-weight:700;' : '') + '">' + _sotCmpFmtNum(v) + '</td>';
-                            });
-                            if (allPeriods.length >= 2) {
-                                h += '<td class="num">' + _sotCmpDelta(vals[0], vals[vals.length - 1]) + '</td>';
-                            }
-                            h += '</tr>';
+                        var periodLabels = allPeriods.map(function(p) {
+                            return _sotQuarterLabel(p.start_date, p.end_date) || _sotFmtDateShort(p.start_date).replace(/, \d{4}$/, '');
                         });
 
+                        var trendSeriesHours = allPeriods.map(function(p) {
+                            return (p.total_projected_hours || 0) * _trendProjMult(p);
+                        });
+                        var trendSeriesInt = allPeriods.map(function(p) {
+                            return (p.total_interactions || 0) * _trendProjMult(p);
+                        });
+
+                        var catSeriesMap = {};
                         _histCatNames.forEach(function(cn) {
-                            var catVals = allPeriods.map(function(p) {
+                            catSeriesMap[cn] = allPeriods.map(function(p) {
                                 var cat = (p.categories || []).find(function(c) { return c.name === cn; });
                                 return cat ? (cat[_histShareKey] || 0) : 0;
                             });
-                            var col = _sotCatColors[cn] || '#888';
-                            h += '<tr><td style="font-weight:600;color:' + col + ';">' + cn + '</td>';
-                            catVals.forEach(function(v, i) {
-                                var isCurrent = allPeriods[i].start_date === _histBase.start_date;
-                                h += '<td class="num" style="' + (isCurrent ? 'font-weight:700;' : '') + '">' + v.toFixed(1) + '%</td>';
-                            });
-                            if (allPeriods.length >= 2) {
-                                h += '<td class="num">' + _sotCmpDeltaPP(catVals[0], catVals[catVals.length - 1]) + '</td>';
-                            }
-                            h += '</tr>';
                         });
-                        h += '</tbody></table></div>';
-                        body.innerHTML = h;
+
+                        var checksDiv = document.getElementById('sotTrendChecks');
+                        if (checksDiv) {
+                            var ch = '';
+                            ch += '<label style="display:inline-flex;align-items:center;gap:0.2rem;cursor:pointer;color:#e8e8e8;font-weight:600;">';
+                            ch += '<input type="checkbox" class="sotTrendCatCb" value="__total__" checked style="accent-color:var(--accent-cyan);"> Total</label>';
+                            _histCatNames.forEach(function(cn) {
+                                var col = _sotCatColors[cn] || '#888';
+                                ch += '<label style="display:inline-flex;align-items:center;gap:0.2rem;cursor:pointer;color:' + col + ';font-weight:600;">';
+                                ch += '<input type="checkbox" class="sotTrendCatCb" value="' + cn + '" checked style="accent-color:' + col + ';"> ' + cn + '</label>';
+                            });
+                            checksDiv.innerHTML = ch;
+                        }
+
+                        var _sotTrendChart = null;
+
+                        function _sotRenderTrendChart() {
+                            var metric = (document.getElementById('sotTrendMetric') || {}).value || 'hours';
+                            var canvas = document.getElementById('sotTrendLineChart');
+                            if (!canvas || typeof Chart === 'undefined') return;
+                            if (_sotTrendChart) { _sotTrendChart.destroy(); _sotTrendChart = null; }
+
+                            var checked = {};
+                            document.querySelectorAll('.sotTrendCatCb').forEach(function(cb) {
+                                if (cb.checked) checked[cb.value] = true;
+                            });
+
+                            var datasets = [];
+                            var isShare = metric === 'share';
+
+                            if (checked['__total__'] && !isShare) {
+                                var rawData = metric === 'interactions' ? trendSeriesInt : trendSeriesHours;
+                                datasets.push({
+                                    label: metric === 'interactions' ? 'Total Interactions' : 'Total US Hours',
+                                    data: rawData,
+                                    borderColor: 'rgba(6,182,212,1)',
+                                    backgroundColor: 'rgba(6,182,212,0.1)',
+                                    pointBackgroundColor: 'rgba(6,182,212,1)',
+                                    pointBorderColor: '#fff',
+                                    pointRadius: 5,
+                                    pointHoverRadius: 7,
+                                    borderWidth: 2.5,
+                                    fill: true,
+                                    tension: 0.35
+                                });
+                            }
+
+                            _histCatNames.forEach(function(cn) {
+                                if (!checked[cn]) return;
+                                var col = _sotCatColors[cn] || '#888';
+                                var data;
+                                if (isShare) {
+                                    data = catSeriesMap[cn];
+                                } else {
+                                    data = allPeriods.map(function(p, pi) {
+                                        var totalMins = 0;
+                                        var catMins = 0;
+                                        (p.categories || []).forEach(function(c) {
+                                            var hrs = 0;
+                                            if (c.brands) c.brands.forEach(function(b) { hrs += (b.est_minutes || 0); });
+                                            totalMins += hrs;
+                                            if (c.name === cn) catMins = hrs;
+                                        });
+                                        var m = _trendProjMult(p);
+                                        if (metric === 'interactions') {
+                                            var totalInt = (p.total_interactions || 0) * m;
+                                            return totalMins > 0 ? totalInt * (catMins / totalMins) : 0;
+                                        }
+                                        return catMins / 60 * m;
+                                    });
+                                }
+                                datasets.push({
+                                    label: cn,
+                                    data: data,
+                                    borderColor: col,
+                                    backgroundColor: 'transparent',
+                                    pointBackgroundColor: col,
+                                    pointBorderColor: '#fff',
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6,
+                                    borderWidth: 2,
+                                    fill: false,
+                                    tension: 0.35
+                                });
+                            });
+
+                            var yLabel = isShare ? 'Category Share %' : (metric === 'interactions' ? 'Interactions' : 'US Hours');
+
+                            _sotTrendChart = new Chart(canvas.getContext('2d'), {
+                                type: 'line',
+                                plugins: [ChartDataLabels],
+                                data: { labels: periodLabels, datasets: datasets },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    interaction: { mode: 'index', intersect: false },
+                                    scales: {
+                                        y: {
+                                            title: { display: true, text: yLabel, color: '#aaa', font: { size: 11 } },
+                                            grid: { color: 'rgba(255,255,255,0.06)' },
+                                            ticks: {
+                                                color: '#aaa',
+                                                callback: function(v) {
+                                                    if (isShare) return v.toFixed(1) + '%';
+                                                    if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
+                                                    if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+                                                    if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
+                                                    return v;
+                                                }
+                                            },
+                                            beginAtZero: isShare
+                                        },
+                                        x: {
+                                            grid: { color: 'rgba(255,255,255,0.04)' },
+                                            ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } }
+                                        }
+                                    },
+                                    plugins: {
+                                        legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 14, usePointStyle: true } },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(ctx) {
+                                                    var v = ctx.parsed.y;
+                                                    if (isShare) return ctx.dataset.label + ': ' + v.toFixed(1) + '%';
+                                                    return ctx.dataset.label + ': ' + _sotCmpFmtNum(Math.round(v));
+                                                }
+                                            }
+                                        },
+                                        datalabels: { display: false }
+                                    }
+                                }
+                            });
+                            _sotCompareCharts.push(_sotTrendChart);
+                        }
+
+                        _sotRenderTrendChart();
+
+                        var metricSel = document.getElementById('sotTrendMetric');
+                        if (metricSel) metricSel.addEventListener('change', _sotRenderTrendChart);
+                        document.querySelectorAll('.sotTrendCatCb').forEach(function(cb) {
+                            cb.addEventListener('change', _sotRenderTrendChart);
+                        });
                     });
                 }, 100);
             })();
