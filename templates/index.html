@@ -16225,12 +16225,12 @@
                         </div>
                     </div>
                     <div style="display:flex;justify-content:flex-end;align-items:center;gap:0.5rem;margin:0.25rem 0 0.6rem;">
-                        <button type="button" class="sot-compare-btn" id="sotCompareBtn" onclick="sotToggleCompare()" disabled title="Open 2+ tabs to compare">Compare Open Tabs</button>
-                        <button type="button" class="sot-compare-btn" id="sotCloseAllBtn" onclick="sotCloseAllTabs()" style="display:none;background:#991b1b;border-color:#dc2626;font-size:0.7rem;padding:0.4rem 0.8rem;" title="Close all open tabs">Close All</button>
+                        <button type="button" class="sot-compare-btn" id="sotCloseAllBtn" onclick="sotCloseAllTabs()" style="display:none;background:#991b1b;border-color:#dc2626;font-size:0.7rem;padding:0.4rem 0.8rem;" title="Close dashboard">Close</button>
                     </div>
                     <div id="sotTabBar" class="profile-tabs-bar sot-tab-bar" style="display:none;"></div>
                     <div id="sotCompareArea" style="display:none;"></div>
                     <div id="sotResultsArea" style="display:none;">
+                        <div id="sotSpotlightBar" style="display:none;"></div>
                         <div class="sot-kpi-grid" style="grid-template-columns:repeat(4,1fr);">
                             <div class="sot-kpi">
                                 <div class="sot-kpi-label">Sample Participants</div>
@@ -19832,17 +19832,10 @@
             
             // Update KPIs - Show regular sample values as main
             const totalViewersGenPop = parseInt(conversionSummary.totalViewersGenPop) || 0;
-            // Calculate CONVERTED USERS as SUM of per-platform conversions (for consistency)
-            const sumPerPlatGenPop = perPlatformConversion.reduce((sum, p) => sum + (parseInt(p.convertedGenPop) || 0), 0);
-            const sumPerPlatRaw = perPlatformConversion.reduce((sum, p) => sum + (parseInt(p.converted) || 0), 0);
-            
-            // Use sum of per-platform values if available, otherwise fall back to overall
-            const convertedGenPop = sumPerPlatGenPop > 0 ? sumPerPlatGenPop : (parseInt(conversionSummary.convertedGenPop) || 0);
-            const convertedSample = sumPerPlatRaw > 0 ? sumPerPlatRaw : (parseInt(conversionSummary.converted) || 0);
+            // Use overall converted (unique users, not sum of per-platform which double-counts overlap)
+            const convertedGenPop = parseInt(conversionSummary.convertedGenPop) || 0;
+            const convertedSample = parseInt(conversionSummary.converted) || 0;
             const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
-            
-            console.log('[SF-LF DEBUG] Per-platform sum GenPop:', sumPerPlatGenPop, 'Per-platform sum raw:', sumPerPlatRaw);
-            console.log('[SF-LF DEBUG] Using convertedGenPop:', convertedGenPop);
             
             // Main values - ALWAYS show projected values (with null checks)
             const kpiTotalViewersEl = document.getElementById('sfConvKpiTotalViewers');
@@ -19888,18 +19881,13 @@
                 const platformColors = { 'Youtube': '#ef4444', 'TikTok': '#10b981', 'Instagram': '#ec4899' };
                 perPlatCards.innerHTML = perPlatformConversion.map(p => {
                     const viewersProj = parseInt(p.viewersGenPop) || 0;
-                    const convertedProj = parseInt(p.convertedGenPop) || 0;
+                    let convertedProj = parseInt(p.convertedGenPop) || 0;
                     const viewersRaw = parseInt(p.viewers) || 0;
-                    const convertedRaw = parseInt(p.converted) || 0;
+                    let convertedRaw = parseInt(p.converted) || 0;
+                    if (convertedRaw > viewersRaw) convertedRaw = viewersRaw;
+                    if (convertedProj > viewersProj && viewersProj > 0) convertedProj = viewersProj;
                     const viewersDisplay = viewersProj > 0 ? formatGenPop(viewersProj) : viewersRaw.toLocaleString();
-                    let convDisplay = convertedRaw.toLocaleString();
-                    if (convertedProj > 0 && viewersProj > 0 && convertedProj <= viewersProj) {
-                        convDisplay = formatGenPop(convertedProj);
-                    } else if (convertedProj > 0 && viewersProj > 0) {
-                        convDisplay = formatGenPop(Math.round(viewersProj * Math.min(convertedRaw / Math.max(viewersRaw, 1), 1)));
-                    } else if (convertedProj > 0) {
-                        convDisplay = formatGenPop(convertedProj);
-                    }
+                    let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedRaw.toLocaleString();
                     let platRate = viewersRaw > 0 ? Math.min((convertedRaw / viewersRaw) * 100, 100) : parseFloat(p.convRate || 0);
                     if (platRate > 100) platRate = 100;
                     return `
@@ -19934,9 +19922,13 @@
                 urlTbody.innerHTML = top20Urls.map((u, idx) => {
                     const uniqueViewsProj = parseInt(u.uniqueViewsGenPop) || 0;
                     const duplicatedViewsProj = parseInt(u.duplicatedViewsGenPop) || 0;
-                    const convertedProj = parseInt(u.convertedGenPop) || 0;
-                    const convertedSample = parseInt(u.converted) || 0;
+                    let convertedProj = parseInt(u.convertedGenPop) || 0;
+                    let convertedSample = parseInt(u.converted) || 0;
                     const uniqueSample = parseInt(u.uniqueViews) || 0;
+
+                    // Hard cap: converted can never exceed unique views
+                    if (convertedSample > uniqueSample) convertedSample = uniqueSample;
+                    if (convertedProj > uniqueViewsProj && uniqueViewsProj > 0) convertedProj = uniqueViewsProj;
 
                     const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : uniqueSample.toLocaleString();
                     let dupDisplay = duplicatedViewsProj > 0 ? formatGenPop(duplicatedViewsProj) : (parseInt(u.duplicatedViews) || 0).toLocaleString();
@@ -19944,12 +19936,7 @@
                         dupDisplay = formatGenPop(Math.round(uniqueViewsProj * 1.8));
                     }
 
-                    let convDisplay = convertedSample.toLocaleString();
-                    if (convertedProj > 0 && uniqueViewsProj > 0 && convertedProj > uniqueViewsProj) {
-                        convDisplay = formatGenPop(Math.round(uniqueViewsProj * (convertedSample / Math.max(uniqueSample, 1))));
-                    } else if (convertedProj > 0) {
-                        convDisplay = formatGenPop(convertedProj);
-                    }
+                    let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedSample.toLocaleString();
 
                     let convRate = 0;
                     if (uniqueSample > 0) convRate = Math.min((convertedSample / uniqueSample) * 100, 100);
@@ -19983,9 +19970,13 @@
                 platTbody.innerHTML = platformMetrics.map(p => {
                     const uniqueViewsProj = parseInt(p.uniqueViewsGenPop) || 0;
                     const duplicatedViewsProj = parseInt(p.duplicatedViewsGenPop) || 0;
-                    const convertedProj = parseInt(p.convertedGenPop) || 0;
+                    let convertedProj = parseInt(p.convertedGenPop) || 0;
                     const uniqueRaw = parseInt(p.uniqueViews) || 0;
-                    const convertedRaw = parseInt(p.converted) || 0;
+                    let convertedRaw = parseInt(p.converted) || 0;
+
+                    // Hard cap: converted can never exceed unique viewers
+                    if (convertedRaw > uniqueRaw) convertedRaw = uniqueRaw;
+                    if (convertedProj > uniqueViewsProj && uniqueViewsProj > 0) convertedProj = uniqueViewsProj;
 
                     const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : uniqueRaw.toLocaleString();
                     let dupDisplay = duplicatedViewsProj > 0 ? formatGenPop(duplicatedViewsProj) : (parseInt(p.duplicatedViews) || 0).toLocaleString();
@@ -19993,14 +19984,7 @@
                         dupDisplay = formatGenPop(Math.round(uniqueViewsProj * 1.8));
                     }
 
-                    let convDisplay = convertedRaw.toLocaleString();
-                    if (convertedProj > 0 && uniqueViewsProj > 0 && convertedProj <= uniqueViewsProj) {
-                        convDisplay = formatGenPop(convertedProj);
-                    } else if (convertedProj > 0 && uniqueViewsProj > 0) {
-                        convDisplay = formatGenPop(Math.round(uniqueViewsProj * Math.min(convertedRaw / Math.max(uniqueRaw, 1), 1)));
-                    } else if (convertedProj > 0) {
-                        convDisplay = formatGenPop(convertedProj);
-                    }
+                    let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedRaw.toLocaleString();
 
                     let platConvRate = uniqueRaw > 0 ? Math.min((convertedRaw / uniqueRaw) * 100, 100) : parseFloat(p.convRate || 0);
                     if (platConvRate > 100) platConvRate = 100;
@@ -23760,6 +23744,7 @@
             showAnalysisStatusModalComplete();
             setTimeout(function() { closeAnalysisStatusModal(); }, 1200);
 
+            _sotOpenTabs = [];
             results.forEach(function(data) {
                 var key = _sotTabKey(data);
                 var exists = false;
@@ -23767,24 +23752,22 @@
                 if (!exists) _sotOpenTabs.push({ data: data, key: key });
             });
 
+            if (results.length > 0) {
+                var first = results[0];
+                _sotActiveQuarterKey = first.start_date + '|' + first.end_date;
+            }
+
             sotLoadRuns();
 
-            if (_sotOpenTabs.length >= 2) {
-                _sotCompareMode = true;
-                _sotActiveTabIdx = -1;
-                sotRenderTabs();
-                sotRenderRunTree();
-                document.getElementById('sotResultsArea').style.display = 'none';
-                document.getElementById('sotEmptyState').style.display = 'none';
-                sotRenderCompare();
-                document.getElementById('sotCompareArea').style.display = 'block';
-            } else if (_sotOpenTabs.length === 1) {
-                _sotActiveTabIdx = 0;
-                _sotData = _sotOpenTabs[0].data;
-                sotRenderTabs();
-                sotRenderRunTree();
-                sotRenderResults(_sotData);
-            }
+            _sotCompareMode = true;
+            _sotActiveTabIdx = -1;
+            _sotViewOnlyIdx = -1;
+            sotRenderTabs();
+            sotRenderRunTree();
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            sotRenderCompare();
+            document.getElementById('sotCompareArea').style.display = 'block';
         }
 
         function sotRunAnalysis(forceRefresh) {
@@ -24069,55 +24052,9 @@
             });
             var latestStart = quarterRuns[0].start_date;
             var latestEnd = quarterRuns[0].end_date;
-            var runsForQuarter = quarterRuns.filter(function(r) {
-                return r.start_date === latestStart && r.end_date === latestEnd;
-            });
-            if (!runsForQuarter.length) return;
 
-            var loaded = 0;
-            var total = runsForQuarter.length;
-            runsForQuarter.forEach(function(r) {
-                fetch('/api/share-of-time/run', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ start_date: r.start_date, end_date: r.end_date, age_brackets: r.age_brackets })
-                }).then(function(resp) { return resp.json(); }).then(function(resp) {
-                    if (resp.success && resp.data) {
-                        var key = _sotTabKey(resp.data);
-                        var exists = false;
-                        _sotOpenTabs.forEach(function(t) { if (_sotTabKey(t.data) === key) exists = true; });
-                        if (!exists) {
-                            _sotOpenTabs.push({ data: resp.data, key: key });
-                        }
-                    }
-                    loaded++;
-                    if (loaded === total) _sotFinishAutoOpen();
-                }).catch(function() {
-                    loaded++;
-                    if (loaded === total) _sotFinishAutoOpen();
-                });
-            });
-        }
-
-        function _sotFinishAutoOpen() {
-            if (_sotOpenTabs.length < 2) {
-                if (_sotOpenTabs.length === 1) {
-                    _sotActiveTabIdx = 0;
-                    _sotData = _sotOpenTabs[0].data;
-                    sotRenderTabs();
-                    sotRenderRunTree();
-                    sotRenderResults(_sotData);
-                }
-                return;
-            }
-            _sotCompareMode = true;
-            _sotActiveTabIdx = -1;
-            sotRenderTabs();
-            sotRenderRunTree();
-            document.getElementById('sotResultsArea').style.display = 'none';
-            document.getElementById('sotEmptyState').style.display = 'none';
-            sotRenderCompare();
-            document.getElementById('sotCompareArea').style.display = 'block';
+            _sotExpandedYears[_sotYearLabel(quarterRuns[0])] = true;
+            sotOpenQuarter(latestStart, latestEnd);
         }
 
         function sotRefreshRuns() {
@@ -24199,31 +24136,7 @@
             return s;
         }
 
-        function _sotRenderAgeRuns(runs, openKeys) {
-            var html = '';
-            var _ageOrder = {'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
-            runs.sort(function(a, b) {
-                var aAll = (a.age_brackets || []).length >= 7 ? 1 : 0;
-                var bAll = (b.age_brackets || []).length >= 7 ? 1 : 0;
-                if (aAll !== bAll) return bAll - aAll;
-                var aMin = Math.min.apply(null, (a.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
-                var bMin = Math.min.apply(null, (b.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
-                if (aMin !== bMin) return aMin - bMin;
-                return (a.age_brackets || []).length - (b.age_brackets || []).length;
-            });
-            runs.forEach(function(r) {
-                var ages = _sotAgeDisplayLabel(r.age_brackets || []);
-                var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
-                var isOpen = openKeys.indexOf(rKey) !== -1;
-                var isActive = _sotSelectedRunKey === r.s3_key;
-                var cls = 'profile-select-item sot-run-item' + (isActive ? ' active' : '');
-                var openBadge = isOpen ? '<span style="font-size:0.62rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:0.04em;">TAB</span>' : '';
-                html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
-                    '<div class="sot-run-top"><div class="sot-run-date">' + ages + '</div>' + openBadge + '</div>' +
-                '</div>';
-            });
-            return html;
-        }
+        var _sotActiveQuarterKey = null;
 
         function sotRenderRunTree() {
             var tree = document.getElementById('sotRunTree');
@@ -24239,34 +24152,26 @@
                 tree.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.78rem;">No saved runs yet. Run an analysis to save it here.</div>';
                 return;
             }
-            var openKeys = _sotOpenTabs.map(function(t) { return _sotTabKey(t.data); });
 
-            var grouped = {};
             var quarterGrouped = {};
             runs.forEach(function(r) {
-                var y = _sotYearLabel(r);
                 var qLabel = _sotQuarterLabel(r.start_date, r.end_date);
-                if (qLabel) {
-                    if (!quarterGrouped[y]) quarterGrouped[y] = {};
-                    var rk = (r.start_date || '') + '|' + (r.end_date || '');
-                    if (!quarterGrouped[y][rk]) quarterGrouped[y][rk] = { start: r.start_date, end: r.end_date, label: qLabel, runs: [] };
-                    quarterGrouped[y][rk].runs.push(r);
-                } else {
-                    if (!grouped[y]) grouped[y] = {};
-                    var startMonth = _sotRunMonth(r);
-                    if (!grouped[y][startMonth]) grouped[y][startMonth] = {};
-                    var rk2 = (r.start_date || '') + '|' + (r.end_date || '');
-                    if (!grouped[y][startMonth][rk2]) grouped[y][startMonth][rk2] = { start: r.start_date, end: r.end_date, runs: [] };
-                    grouped[y][startMonth][rk2].runs.push(r);
-                }
+                if (!qLabel) return;
+                var y = _sotYearLabel(r);
+                if (!quarterGrouped[y]) quarterGrouped[y] = {};
+                var rk = (r.start_date || '') + '|' + (r.end_date || '');
+                if (!quarterGrouped[y][rk]) quarterGrouped[y][rk] = { start: r.start_date, end: r.end_date, label: qLabel };
+                quarterGrouped[y][rk].label = qLabel;
             });
 
-            var allYears = {};
-            Object.keys(grouped).forEach(function(y) { allYears[y] = true; });
-            Object.keys(quarterGrouped).forEach(function(y) { allYears[y] = true; });
-            var years = Object.keys(allYears).sort(function(a, b) {
+            var years = Object.keys(quarterGrouped).sort(function(a, b) {
                 return parseInt(b, 10) - parseInt(a, 10);
             });
+
+            if (!years.length) {
+                tree.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.78rem;">No quarterly runs available.</div>';
+                return;
+            }
 
             var html = '';
             years.forEach(function(year) {
@@ -24279,79 +24184,101 @@
                 if (!yearOpen) return;
 
                 html += '<div class="sot-tree-children">';
-
-                if (quarterGrouped[year]) {
-                    var qMonthId = year + '||Q';
-                    var qOpen = !!_sotExpandedMonths[qMonthId];
-                    var qArg = qMonthId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                    html += '<div class="sot-tree-row" onclick="sotToggleRunMonth(\'' + qArg + '\')">' +
-                        '<div class="sot-tree-range" style="font-weight:700;">By Quarter</div>' +
-                        '<div class="sot-tree-chevron">' + (qOpen ? '▼' : '▶') + '</div>' +
-                    '</div>';
-                    if (qOpen) {
-                        var qRanges = Object.keys(quarterGrouped[year]).sort(function(a, b) {
-                            return (quarterGrouped[year][b].start || '').localeCompare(quarterGrouped[year][a].start || '');
-                        });
-                        html += '<div class="sot-tree-children">';
-                        qRanges.forEach(function(rk) {
-                            var g = quarterGrouped[year][rk];
-                            var rangeId = year + '||Q||' + rk;
-                            var rangeOpen = !!_sotExpandedRanges[rangeId];
-                            var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                            html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
-                                '<div class="sot-tree-range">' + g.label + '</div>' +
-                                '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
-                            '</div>';
-                            if (rangeOpen) {
-                                html += '<div class="sot-tree-children">';
-                                html += _sotRenderAgeRuns(g.runs, openKeys);
-                                html += '</div>';
-                            }
-                        });
-                        html += '</div>';
-                    }
-                }
-
-                if (grouped[year]) {
-                    var months = Object.keys(grouped[year]).map(Number).sort(function(a, b) { return b - a; });
-                    months.forEach(function(month) {
-                        var monthId = year + '||' + month;
-                        var monthOpen = !!_sotExpandedMonths[monthId];
-                        var monthArg = monthId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                        html += '<div class="sot-tree-row" onclick="sotToggleRunMonth(\'' + monthArg + '\')">' +
-                            '<div class="sot-tree-range">' + _sotMonthName(month) + '</div>' +
-                            '<div class="sot-tree-chevron">' + (monthOpen ? '▼' : '▶') + '</div>' +
-                        '</div>';
-                        if (!monthOpen) return;
-
-                        var ranges = Object.keys(grouped[year][month]).sort(function(a, b) {
-                            return (grouped[year][month][b].end || '').localeCompare(grouped[year][month][a].end || '');
-                        });
-                        html += '<div class="sot-tree-children">';
-                        ranges.forEach(function(rangeKey) {
-                            var g = grouped[year][month][rangeKey];
-                            var rangeId = year + '||' + month + '||' + rangeKey;
-                            var rangeOpen = !!_sotExpandedRanges[rangeId];
-                            var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                            var rangeLabel = _sotFmtDateShort(g.start) + ' \u2013 ' + _sotFmtDateShort(g.end);
-                            html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
-                                '<div class="sot-tree-range">' + rangeLabel + '</div>' +
-                                '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
-                            '</div>';
-                            if (!rangeOpen) return;
-
-                            html += '<div class="sot-tree-children">';
-                            html += _sotRenderAgeRuns(g.runs, openKeys);
-                            html += '</div>';
-                        });
-                        html += '</div>';
-                    });
-                }
-
+                var qRanges = Object.keys(quarterGrouped[year]).sort(function(a, b) {
+                    return (quarterGrouped[year][b].start || '').localeCompare(quarterGrouped[year][a].start || '');
+                });
+                qRanges.forEach(function(rk) {
+                    var g = quarterGrouped[year][rk];
+                    var isActive = _sotActiveQuarterKey === rk;
+                    var cls = 'profile-select-item sot-run-item' + (isActive ? ' active' : '');
+                    html += '<div class="' + cls + '" onclick="sotOpenQuarter(\'' + g.start + '\',\'' + g.end + '\')" style="padding:0.5rem 0.75rem;cursor:pointer;">' +
+                        '<div class="sot-run-top"><div class="sot-run-date" style="font-weight:700;font-size:0.85rem;">' + g.label + '</div>' +
+                        (isActive ? '<span style="font-size:0.6rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;">OPEN</span>' : '') +
+                        '</div></div>';
+                });
                 html += '</div>';
             });
             tree.innerHTML = html;
         }
+
+        function sotOpenQuarter(startDate, endDate) {
+            var qKey = startDate + '|' + endDate;
+            if (_sotActiveQuarterKey === qKey && _sotCompareMode && _sotOpenTabs.length >= 2) return;
+
+            _sotActiveQuarterKey = qKey;
+            _sotOpenTabs = [];
+            _sotActiveTabIdx = -1;
+            _sotCompareMode = false;
+            _sotViewOnlyIdx = -1;
+            sotRenderRunTree();
+
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotCompareArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            document.getElementById('sotLoadingArea').style.display = 'block';
+
+            var runsForQ = _sotCachedRuns.filter(function(r) {
+                return r.start_date === startDate && r.end_date === endDate && !!_sotQuarterLabel(r.start_date, r.end_date);
+            });
+            if (!runsForQ.length) {
+                document.getElementById('sotLoadingArea').style.display = 'none';
+                document.getElementById('sotEmptyState').style.display = 'block';
+                return;
+            }
+
+            var loaded = 0;
+            var total = runsForQ.length;
+            runsForQ.forEach(function(r) {
+                fetch('/api/share-of-time/run', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_date: r.start_date, end_date: r.end_date, age_brackets: r.age_brackets })
+                }).then(function(resp) { return resp.json(); }).then(function(resp) {
+                    if (resp.success && resp.data) {
+                        var key = _sotTabKey(resp.data);
+                        var exists = false;
+                        _sotOpenTabs.forEach(function(t) { if (_sotTabKey(t.data) === key) exists = true; });
+                        if (!exists) _sotOpenTabs.push({ data: resp.data, key: key });
+                    }
+                    loaded++;
+                    if (loaded === total) _sotFinishQuarterOpen();
+                }).catch(function() {
+                    loaded++;
+                    if (loaded === total) _sotFinishQuarterOpen();
+                });
+            });
+        }
+
+        function _sotFinishQuarterOpen() {
+            document.getElementById('sotLoadingArea').style.display = 'none';
+            if (_sotOpenTabs.length < 1) {
+                document.getElementById('sotEmptyState').style.display = 'block';
+                return;
+            }
+            if (_sotOpenTabs.length === 1) {
+                _sotCompareMode = false;
+                _sotActiveTabIdx = 0;
+                _sotData = _sotOpenTabs[0].data;
+                sotRenderTabs();
+                sotRenderRunTree();
+                document.getElementById('sotEmptyState').style.display = 'none';
+                document.getElementById('sotCompareArea').style.display = 'none';
+                document.getElementById('sotResultsArea').style.display = 'block';
+                sotRenderResults(_sotData);
+                return;
+            }
+            _sotCompareMode = true;
+            _sotActiveTabIdx = -1;
+            _sotViewOnlyIdx = -1;
+            sotRenderTabs();
+            sotRenderRunTree();
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            sotRenderCompare();
+            document.getElementById('sotCompareArea').style.display = 'block';
+        }
+
+        var _sotViewOnlyIdx = -1;
 
         function sotOpenTab(data) {
             var key = _sotTabKey(data);
@@ -24401,31 +24328,23 @@
 
         function sotRenderTabs() {
             var bar = document.getElementById('sotTabBar');
-            var compareBtn = document.getElementById('sotCompareBtn');
             if (_sotOpenTabs.length === 0) {
                 bar.style.display = 'none';
-                if (compareBtn) compareBtn.disabled = true;
+                var closeAllBtn = document.getElementById('sotCloseAllBtn');
+                if (closeAllBtn) closeAllBtn.style.display = 'none';
                 return;
             }
             bar.style.display = 'flex';
-            if (compareBtn) compareBtn.disabled = _sotOpenTabs.length < 2;
             var html = '';
-            if (_sotCompareMode) {
-                html += '<div class="profile-tab active" style="cursor:default;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6;"><span class="profile-tab-name">Comparing ' + _sotOpenTabs.length + ' Runs</span></div>';
+            if (_sotCompareMode && _sotOpenTabs.length >= 1) {
+                var firstData = _sotOpenTabs[0].data;
+                var qLabel = _sotQuarterLabel(firstData.start_date, firstData.end_date) || (_sotFmtDateShort(firstData.start_date) + ' \u2013 ' + _sotFmtDateShort(firstData.end_date));
+                var viewLabel = _sotViewOnlyIdx >= 0
+                    ? qLabel + ' \u00b7 ' + _sotAgeDisplayLabel(_sotOpenTabs[_sotViewOnlyIdx].data.age_brackets || [])
+                    : qLabel + ' \u00b7 Cohort Dashboard';
+                html += '<div class="profile-tab active" style="cursor:default;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6;">' +
+                    '<span class="profile-tab-name">' + viewLabel + '</span></div>';
             }
-            _sotOpenTabs.forEach(function(t, i) {
-                var cls = 'profile-tab';
-                if (_sotCompareMode) {
-                    cls += ' active';
-                } else if (i === _sotActiveTabIdx) {
-                    cls += ' active';
-                }
-                var label = _sotTabLabel(t.data);
-                html += '<div class="' + cls + '" onclick="sotSwitchTab(' + i + ')">' +
-                    '<span class="profile-tab-name">' + label + '</span>' +
-                    '<button class="profile-tab-close" onclick="sotCloseTab(' + i + ', event)" title="Close tab">&times;</button>' +
-                '</div>';
-            });
             var closeAllBtn = document.getElementById('sotCloseAllBtn');
             if (closeAllBtn) closeAllBtn.style.display = _sotOpenTabs.length >= 1 ? '' : 'none';
             bar.innerHTML = html;
@@ -24435,6 +24354,8 @@
             _sotOpenTabs = [];
             _sotActiveTabIdx = -1;
             _sotCompareMode = false;
+            _sotViewOnlyIdx = -1;
+            _sotActiveQuarterKey = null;
             _sotData = null;
             document.getElementById('sotResultsArea').style.display = 'none';
             document.getElementById('sotCompareArea').style.display = 'none';
@@ -24469,6 +24390,28 @@
 
         function _sotTabHue(i) { return [200, 280, 40, 150, 340, 60][i % 6]; }
         function _sotCmpFmtNum(n) { return Math.round(n).toLocaleString(); }
+
+        function _sotStackedBar(label, baseVal, cohortVals, cohortLabels, hues) {
+            var h = '<div style="margin-bottom:0.15rem;">';
+            h += '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">' + label;
+            if (baseVal != null) h += ' <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseVal) + ' total)</span>';
+            h += '</div>';
+            h += '<div style="display:flex;height:18px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,0.04);margin-bottom:0.35rem;">';
+            cohortVals.forEach(function(pct, ci) {
+                if (pct < 0.3) return;
+                h += '<div style="width:' + pct.toFixed(1) + '%;background:hsla(' + hues[ci % hues.length] + ',65%,55%,0.7);min-width:2px;" title="' + cohortLabels[ci] + ': ' + pct.toFixed(1) + '%"></div>';
+            });
+            h += '</div>';
+            h += '<div style="display:flex;flex-wrap:wrap;gap:0.25rem 0.7rem;">';
+            cohortVals.forEach(function(pct, ci) {
+                h += '<div style="font-size:0.65rem;display:flex;align-items:center;gap:0.25rem;">' +
+                    '<span style="width:8px;height:8px;border-radius:50%;background:hsla(' + hues[ci % hues.length] + ',65%,55%,0.9);display:inline-block;"></span>' +
+                    '<span style="color:var(--text-secondary);">' + cohortLabels[ci] + '</span> ' +
+                    '<span style="font-weight:700;color:var(--text-primary);">' + pct.toFixed(1) + '%</span></div>';
+            });
+            h += '</div></div>';
+            return h;
+        }
         function _sotCmpDelta(val, base) {
             if (!base) return '<span class="sot-cmp-delta neutral">—</span>';
             var diff = val - base;
@@ -24546,11 +24489,73 @@
             return 'transparent';
         }
 
+        function _sotBuildSpotlightBar(activeIdx) {
+            var _ageOrder = {'All Ages':0,'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
+            var sorted = _sotOpenTabs.map(function(t, i) { return { t: t, i: i }; });
+            sorted.sort(function(a, b) {
+                var aAll = (a.t.data.age_brackets || []).length >= 7 ? 1 : 0;
+                var bAll = (b.t.data.age_brackets || []).length >= 7 ? 1 : 0;
+                if (aAll !== bAll) return bAll - aAll;
+                var aLbl = (a.t.data.age_brackets || []).length >= 7 ? 'All Ages' : (a.t.data.age_brackets || [])[0] || '';
+                var bLbl = (b.t.data.age_brackets || []).length >= 7 ? 'All Ages' : (b.t.data.age_brackets || [])[0] || '';
+                return (_ageOrder[aLbl] || 99) - (_ageOrder[bLbl] || 99);
+            });
+
+            var h = '<div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.75rem;padding:0.4rem 0.5rem;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06);">';
+            h += '<span style="font-size:0.62rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-right:0.2rem;">Spotlight View:</span>';
+            var allActive = activeIdx < 0 ? ' active' : '';
+            h += '<span class="sot-cohort-chip' + allActive + '" onclick="sotSetViewOnly(-1)" style="cursor:pointer;">Home</span>';
+            sorted.forEach(function(item) {
+                var lbl = (item.t.data.age_brackets || []).length >= 7 ? 'All Ages' : (item.t.data.age_brackets || []).join(', ');
+                var cls = item.i === activeIdx ? ' active' : '';
+                h += '<span class="sot-cohort-chip' + cls + '" onclick="sotSetViewOnly(' + item.i + ')" style="cursor:pointer;">' + lbl + '</span>';
+            });
+            h += '</div>';
+            return h;
+        }
+
+        function sotSetViewOnly(idx) {
+            _sotViewOnlyIdx = idx;
+            sotRenderTabs();
+            if (idx >= 0 && idx < _sotOpenTabs.length) {
+                var data = _sotOpenTabs[idx].data;
+                _sotData = data;
+                _sotActiveTabIdx = idx;
+
+                document.getElementById('sotCompareArea').style.display = 'none';
+                document.getElementById('sotResultsArea').style.display = 'block';
+
+                var spotBar = document.getElementById('sotSpotlightBar');
+                if (spotBar) {
+                    spotBar.style.display = 'block';
+                    spotBar.innerHTML = _sotBuildSpotlightBar(idx);
+                }
+
+                sotRenderResults(data);
+            } else {
+                _sotViewOnlyIdx = -1;
+                _sotActiveTabIdx = -1;
+
+                var spotBar = document.getElementById('sotSpotlightBar');
+                if (spotBar) { spotBar.style.display = 'none'; spotBar.innerHTML = ''; }
+
+                document.getElementById('sotResultsArea').style.display = 'none';
+                sotRenderCompare();
+                document.getElementById('sotCompareArea').style.display = 'block';
+            }
+        }
+
         function sotRenderCompare() {
             _sotDestroyCompareCharts();
+            _sotViewOnlyIdx = -1;
             var area = document.getElementById('sotCompareArea');
             var gran = _sotGranularity;
             var shareKey = _sotShareKey(gran);
+
+            if (_sotOpenTabs.length === 0) {
+                area.innerHTML = '<div style="padding:2rem;color:var(--text-secondary);">No data loaded.</div>';
+                return;
+            }
 
             var isCohort = _sotIsCohortMode(_sotOpenTabs);
             _sotCohortMode = isCohort;
@@ -24561,15 +24566,19 @@
                 } else {
                     _sotRenderTimeCompare(area, gran, shareKey);
                 }
-            } catch (e) {
-                console.error('SOT compare render error:', e);
-                area.innerHTML = '<div style="padding:2rem;color:#f87171;font-weight:600;">⚠ Render error — check console for details.</div>';
+            } catch(err) {
+                console.error('SOT compare render error:', err);
+                area.innerHTML = '<div style="padding:2rem;color:#f87171;">Error rendering dashboard: ' + (err.message || err) + '</div>';
             }
         }
 
         function _sotRenderCohortCompare(area, gran, shareKey) {
             var allTabs = _sotOpenTabs.slice();
             var baseTab = allTabs.find(function(t) { return (t.data.age_brackets || []).length >= 7; });
+            if (!baseTab) {
+                area.innerHTML = '<div style="padding:2rem;color:var(--text-secondary);">Missing All Ages baseline data. Try reloading.</div>';
+                return;
+            }
             var cohortTabs = allTabs.filter(function(t) { return (t.data.age_brackets || []).length < 7; });
             cohortTabs.sort(_sotAgeSort);
 
@@ -24618,10 +24627,13 @@
             });
             html += '</div>';
 
+            // === Spotlight View Bar ===
+            html += _sotBuildSpotlightBar(-1);
+
             // === Cohort Composition (% of All Ages) ===
-            var baseSample = base.matched_users || 0;
-            var baseHours = base.total_projected_hours || 0;
             var cohortHues = ['210','260','150','35','330','180','20'];
+            var cohortLabels = filteredCohorts.map(function(t) { return _sotCohortLabel(t); });
+
             html += '<div class="sot-chart-card' + focusHide + '" style="margin-bottom:1rem;padding:0.85rem 1rem;">';
             html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition — % of All Ages</h3>';
             html += '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">';
@@ -24632,25 +24644,10 @@
             ];
             compMetrics.forEach(function(cm) {
                 var baseV = base[cm.key] || 0;
+                var pcts = filteredCohorts.map(function(t) { return baseV > 0 ? (t.data[cm.key] || 0) / baseV * 100 : 0; });
                 html += '<div style="flex:1;min-width:250px;">';
-                html += '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">' + cm.label + ' <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseV) + ' total)</span></div>';
-                html += '<div style="display:flex;height:18px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,0.04);margin-bottom:0.35rem;">';
-                filteredCohorts.forEach(function(t, ci) {
-                    var v = t.data[cm.key] || 0;
-                    var pct = baseV > 0 ? (v / baseV * 100) : 0;
-                    if (pct < 0.5) return;
-                    var hue = cohortHues[ci % cohortHues.length];
-                    html += '<div style="width:' + pct.toFixed(1) + '%;background:hsla(' + hue + ',65%,55%,0.7);position:relative;min-width:2px;" title="' + _sotCohortLabel(t) + ': ' + pct.toFixed(1) + '%"></div>';
-                });
+                html += _sotStackedBar(cm.label, baseV, pcts, cohortLabels, cohortHues);
                 html += '</div>';
-                html += '<div style="display:flex;flex-wrap:wrap;gap:0.25rem 0.7rem;">';
-                filteredCohorts.forEach(function(t, ci) {
-                    var v = t.data[cm.key] || 0;
-                    var pct = baseV > 0 ? (v / baseV * 100) : 0;
-                    var hue = cohortHues[ci % cohortHues.length];
-                    html += '<div style="font-size:0.65rem;display:flex;align-items:center;gap:0.25rem;"><span style="width:8px;height:8px;border-radius:50%;background:hsla(' + hue + ',65%,55%,0.9);display:inline-block;"></span><span style="color:var(--text-secondary);">' + _sotCohortLabel(t) + '</span> <span style="font-weight:700;color:var(--text-primary);">' + pct.toFixed(1) + '%</span></div>';
-                });
-                html += '</div></div>';
             });
             html += '</div>';
 
@@ -24749,20 +24746,6 @@
                 html += '<div class="ccard-name">' + cn + '</div>';
                 html += '<div class="ccard-val" style="color:' + col + ';">' + baseVal.toFixed(1) + '% <span style="font-size:0.6rem;color:var(--text-secondary);">spread ' + spread.toFixed(1) + 'pp</span> ' + spark + '</div>';
                 html += '<div class="ccard-bar" style="width:' + Math.min(100, baseVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
-                html += '<div style="margin-top:0.3rem;">';
-                var catHoursBase = baseCat ? (baseCat.est_minutes_total || 0) : 0;
-                filteredCohorts.forEach(function(t, ci) {
-                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
-                    var cHrs = cat ? (cat.est_minutes_total || 0) : 0;
-                    var pctOfBase = catHoursBase > 0 ? (cHrs / catHoursBase * 100) : 0;
-                    if (pctOfBase > 100) pctOfBase = 100;
-                    html += '<div style="display:flex;align-items:center;gap:4px;margin-top:2px;">';
-                    html += '<span style="font-size:0.5rem;color:var(--text-secondary);min-width:56px;text-align:right;white-space:nowrap;">' + _sotCohortLabel(t) + '</span>';
-                    html += '<div style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;">';
-                    html += '<div style="width:' + pctOfBase.toFixed(1) + '%;height:100%;border-radius:2px;background:hsla(' + cohortHues[ci % cohortHues.length] + ',65%,55%,0.7);"></div></div>';
-                    html += '<span style="font-size:0.5rem;color:var(--text-secondary);min-width:28px;">' + pctOfBase.toFixed(0) + '%</span></div>';
-                });
-                html += '</div>';
                 html += '</div>';
             });
             html += '</div>';
@@ -24831,10 +24814,9 @@
             });
             html += '</tbody></table></div>';
 
-            // === Historical Time-over-Time Section ===
+            // === Historical Time-over-Time Section (auto-loading) ===
             (function() {
                 var currentRange = base.start_date + '|' + base.end_date;
-                var historicalAllAges = [];
                 var historicalByRange = {};
                 (_sotCachedRuns || []).forEach(function(r) {
                     var rRange = (r.start_date || '') + '|' + (r.end_date || '');
@@ -24843,85 +24825,92 @@
                         if (!historicalByRange[rRange]) historicalByRange[rRange] = r;
                     }
                 });
-                var histRanges = Object.keys(historicalByRange).sort(function(a, b) { return b.localeCompare(a); });
+                var histRanges = Object.keys(historicalByRange).sort(function(a, b) { return b.localeCompare(a); }).slice(0, 6);
 
-                var histLoaded = [];
-                _sotOpenTabs.forEach(function(t) {
-                    var tr = t.data.start_date + '|' + t.data.end_date;
-                    if (tr !== currentRange && (t.data.age_brackets || []).length >= 7) {
-                        histLoaded.push(t.data);
-                    }
-                });
+                if (histRanges.length === 0) return;
 
-                if (histRanges.length > 0 || histLoaded.length > 0) {
-                    html += '<div class="sot-chart-card' + focusHide + '" id="sotHistoricalSection" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
-                    html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Time-over-Time Trends (All Ages)</h3>';
+                html += '<div class="sot-chart-card" id="sotHistoricalSection" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
+                html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Time-over-Time Trends (All Ages)</h3>';
+                html += '<div id="sotHistTrendBody" style="font-size:0.72rem;color:var(--text-secondary);">Loading historical data...</div>';
+                html += '</div>';
 
-                    if (histLoaded.length > 0) {
-                        var allPeriods = [base].concat(histLoaded).sort(function(a, b) {
+                var _histBase = base;
+                var _histCatNames = catNames;
+                var _histShareKey = shareKey;
+                var _histRangeData = historicalByRange;
+                var _histKeys = histRanges;
+
+                setTimeout(function() {
+                    var promises = _histKeys.map(function(rk) {
+                        var r = _histRangeData[rk];
+                        return fetch('/api/share-of-time/run', {
+                            method: 'POST', credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ start_date: r.start_date, end_date: r.end_date, age_brackets: r.age_brackets })
+                        }).then(function(res) { return res.json(); }).then(function(resp) {
+                            return resp.success && resp.data ? resp.data : null;
+                        }).catch(function() { return null; });
+                    });
+
+                    Promise.all(promises).then(function(results) {
+                        var loaded = results.filter(function(d) { return d; });
+                        var body = document.getElementById('sotHistTrendBody');
+                        if (!body || loaded.length === 0) {
+                            if (body) body.textContent = 'No historical data could be loaded.';
+                            return;
+                        }
+
+                        var allPeriods = [_histBase].concat(loaded).sort(function(a, b) {
                             return (b.start_date || '').localeCompare(a.start_date || '');
                         });
 
                         var trendKpis = [
-                            { label: 'Sample', key: 'matched_users', color: 'var(--accent-lime)' },
-                            { label: 'US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
-                            { label: 'Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
+                            { label: 'Sample', key: 'matched_users' },
+                            { label: 'US Hours', key: 'total_projected_hours' },
+                            { label: 'Interactions', key: 'total_interactions' }
                         ];
-                        html += '<div style="overflow-x:auto;margin-bottom:0.75rem;"><table class="sot-cmp-table"><thead><tr><th>Metric</th>';
+                        var h = '<div style="overflow-x:auto;"><table class="sot-cmp-table"><thead><tr><th>Metric</th>';
                         allPeriods.forEach(function(p) {
                             var pLabel = _sotQuarterLabel(p.start_date, p.end_date) || (_sotFmtDateShort(p.start_date).replace(/, \d{4}$/, ''));
-                            var isCurrent = p.start_date === base.start_date && p.end_date === base.end_date;
-                            html += '<th class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);' : '') + '">' + pLabel + (isCurrent ? ' ●' : '') + '</th>';
+                            var isCurrent = p.start_date === _histBase.start_date && p.end_date === _histBase.end_date;
+                            h += '<th class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);' : '') + '">' + pLabel + (isCurrent ? ' ●' : '') + '</th>';
                         });
-                        if (allPeriods.length >= 2) html += '<th class="num">Change</th>';
-                        html += '</tr></thead><tbody>';
+                        if (allPeriods.length >= 2) h += '<th class="num">Change</th>';
+                        h += '</tr></thead><tbody>';
 
                         trendKpis.forEach(function(kpi) {
-                            html += '<tr><td style="font-weight:600;">' + kpi.label + '</td>';
+                            h += '<tr><td style="font-weight:600;">' + kpi.label + '</td>';
                             var vals = allPeriods.map(function(p) { return p[kpi.key] || 0; });
                             vals.forEach(function(v, i) {
-                                var isCurrent = allPeriods[i].start_date === base.start_date;
-                                html += '<td class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);font-weight:700;' : '') + '">' + _sotCmpFmtNum(v) + '</td>';
+                                var isCurrent = allPeriods[i].start_date === _histBase.start_date;
+                                h += '<td class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);font-weight:700;' : '') + '">' + _sotCmpFmtNum(v) + '</td>';
                             });
                             if (allPeriods.length >= 2) {
-                                html += '<td class="num">' + _sotCmpDelta(vals[0], vals[vals.length - 1]) + '</td>';
+                                h += '<td class="num">' + _sotCmpDelta(vals[0], vals[vals.length - 1]) + '</td>';
                             }
-                            html += '</tr>';
+                            h += '</tr>';
                         });
 
-                        catNames.forEach(function(cn) {
+                        _histCatNames.forEach(function(cn) {
                             var catVals = allPeriods.map(function(p) {
                                 var cat = (p.categories || []).find(function(c) { return c.name === cn; });
-                                return cat ? (cat[shareKey] || 0) : 0;
+                                return cat ? (cat[_histShareKey] || 0) : 0;
                             });
                             var col = _sotCatColors[cn] || '#888';
-                            html += '<tr><td style="font-weight:600;color:' + col + ';">' + cn + '</td>';
+                            h += '<tr><td style="font-weight:600;color:' + col + ';">' + cn + '</td>';
                             catVals.forEach(function(v, i) {
-                                var isCurrent = allPeriods[i].start_date === base.start_date;
-                                html += '<td class="num" style="' + (isCurrent ? 'font-weight:700;' : '') + '">' + v.toFixed(1) + '%</td>';
+                                var isCurrent = allPeriods[i].start_date === _histBase.start_date;
+                                h += '<td class="num" style="' + (isCurrent ? 'font-weight:700;' : '') + '">' + v.toFixed(1) + '%</td>';
                             });
                             if (allPeriods.length >= 2) {
-                                html += '<td class="num">' + _sotCmpDeltaPP(catVals[0], catVals[catVals.length - 1]) + '</td>';
+                                h += '<td class="num">' + _sotCmpDeltaPP(catVals[0], catVals[catVals.length - 1]) + '</td>';
                             }
-                            html += '</tr>';
+                            h += '</tr>';
                         });
-                        html += '</tbody></table></div>';
-                    }
-
-                    if (histRanges.length > 0) {
-                        html += '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:0.25rem;">Historical periods available — load to compare: ';
-                        histRanges.slice(0, 6).forEach(function(rk, ri) {
-                            var parts = rk.split('|');
-                            var label = _sotQuarterLabel(parts[0], parts[1]) || (_sotFmtDateShort(parts[0]) + ' – ' + _sotFmtDateShort(parts[1]));
-                            if (ri > 0) html += ', ';
-                            var r = historicalByRange[rk];
-                            html += '<a href="javascript:void(0)" style="color:var(--accent-cyan);text-decoration:underline;cursor:pointer;" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')">' + label + '</a>';
-                        });
-                        html += '</div>';
-                    }
-
-                    html += '</div>';
-                }
+                        h += '</tbody></table></div>';
+                        body.innerHTML = h;
+                    });
+                }, 100);
             })();
 
             // === Overall Category Chart ===
@@ -24931,9 +24920,28 @@
                 '<div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div>' +
             '</div>';
 
+            // === Per-Category Cohort Composition ===
+            html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
+            html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition by Category</h3>';
+            catNames.forEach(function(cn) {
+                var bCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                var bHrs = 0;
+                if (bCat && bCat.brands) bCat.brands.forEach(function(b) { bHrs += (b.est_minutes || 0); });
+                var pcts = filteredCohorts.map(function(t) {
+                    var cCat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    var cHrs = 0;
+                    if (cCat && cCat.brands) cCat.brands.forEach(function(b) { cHrs += (b.est_minutes || 0); });
+                    return bHrs > 0 ? Math.min(cHrs / bHrs * 100, 100) : 0;
+                });
+                var catCol = _sotCatColors[cn] || '#888';
+                html += '<div style="margin-bottom:0.6rem;">';
+                html += _sotStackedBar('<span style="color:' + catCol + ';">' + cn + '</span>', bHrs, pcts, cohortLabels, cohortHues);
+                html += '</div>';
+            });
+            html += '</div>';
+
             // === Per-category brand charts + tables (delta vs All Ages) ===
             catNames.forEach(function(catName) {
-                var baseCat = (base.categories || []).find(function(c) { return c.name === catName; });
                 var allBrands = {};
                 var tabCatShares = [];
                 chartTabs.forEach(function(t) {
@@ -24956,26 +24964,19 @@
                 html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">';
                 html += '<h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3>';
 
+                var baseCat = (base.categories || []).find(function(c) { return c.name === catName; });
                 var baseCatHrs = 0;
                 if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseCatHrs += (b.est_minutes || 0); });
-                html += '<div style="padding:0.5rem 0 0.6rem;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:0.5rem;">';
-                html += '<div style="font-size:0.62rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.35rem;">Cohort % of All Ages — ' + catName + '</div>';
-
-                html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;">';
-                filteredCohorts.forEach(function(t, ci) {
+                var cohortCatPcts = filteredCohorts.map(function(t) {
                     var cCat = (t.data.categories || []).find(function(c) { return c.name === catName; });
                     var cMins = 0;
                     if (cCat && cCat.brands) cCat.brands.forEach(function(b) { cMins += (b.est_minutes || 0); });
-                    var catPct = baseCatHrs > 0 ? (cMins / baseCatHrs * 100) : 0;
-                    if (catPct > 100) catPct = 100;
-                    html += '<div style="flex:1;min-width:70px;max-width:140px;">';
-                    html += '<div style="font-size:0.55rem;color:var(--text-secondary);margin-bottom:2px;white-space:nowrap;">' + _sotCohortLabel(t) + '</div>';
-                    html += '<div style="display:flex;align-items:center;gap:4px;">';
-                    html += '<div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;">';
-                    html += '<div style="width:' + catPct.toFixed(1) + '%;height:100%;border-radius:3px;background:hsla(' + cohortHues[ci % cohortHues.length] + ',65%,55%,0.7);"></div></div>';
-                    html += '<span style="font-size:0.6rem;font-weight:700;min-width:32px;">' + catPct.toFixed(1) + '%</span></div></div>';
+                    return baseCatHrs > 0 ? Math.min(cMins / baseCatHrs * 100, 100) : 0;
                 });
-                html += '</div></div>';
+
+                html += '<div style="padding:0.4rem 0 0.5rem;margin-bottom:0.4rem;">';
+                html += _sotStackedBar('Cohort Share of ' + catName + ' Hours', baseCatHrs, cohortCatPcts, cohortLabels, cohortHues);
+                html += '</div>';
 
                 html += '<div style="position:relative;height:' + chartH + 'px;"><canvas id="sotCmpCat_' + catId + '"></canvas></div>';
 
@@ -24990,12 +24991,8 @@
                 html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'' + brandTableId + '\',\'delta\')">Max Δ <span class="sort-arrow">▼</span></th>';
                 html += '</tr></thead><tbody>';
 
-                var baseCat2 = (base.categories || []).find(function(c) { return c.name === catName; });
                 var baseBrandMap = {};
-                if (baseCat2 && baseCat2.brands) baseCat2.brands.forEach(function(b) { baseBrandMap[b.name] = b; });
-
-                var baseBrandMins = {};
-                if (baseCat2 && baseCat2.brands) baseCat2.brands.forEach(function(b) { baseBrandMins[b.name] = b.est_minutes || 0; });
+                if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseBrandMap[b.name] = b; });
 
                 var brandRows = brandNames.map(function(bn) {
                     var baseB = baseBrandMap[bn];
@@ -25007,15 +25004,9 @@
                         var b = cat.brands.find(function(x) { return x.name === bn; });
                         return b ? (b.category_share_pct || 0) : 0;
                     });
-                    var cohortMins = filteredCohorts.map(function(t) {
-                        var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
-                        if (!cat || !cat.brands) return 0;
-                        var b = cat.brands.find(function(x) { return x.name === bn; });
-                        return b ? (b.est_minutes || 0) : 0;
-                    });
                     var maxDelta = 0;
                     vals.forEach(function(v) { var d = Math.abs(v - baseV); if (d > maxDelta) maxDelta = d; });
-                    return { name: bn, baseV: baseV, vals: vals, delta: maxDelta, baseMins: baseBrandMins[bn] || 0, cohortMins: cohortMins };
+                    return { name: bn, baseV: baseV, vals: vals, delta: maxDelta };
                 });
                 brandRows.sort(function(a, b) { return b.delta - a.delta; });
 
@@ -25027,14 +25018,7 @@
                     html += '<td style="font-weight:600;white-space:nowrap;">' + br.name + '</td>';
                     html += '<td class="num" style="color:var(--accent-cyan);">' + br.baseV.toFixed(1) + '%</td>';
                     br.vals.forEach(function(v, vi) {
-                        var mPct = br.baseMins > 0 ? (br.cohortMins[vi] / br.baseMins * 100) : 0;
-                        if (mPct > 100) mPct = 100;
-                        html += '<td class="num">' + v.toFixed(1) + '% ' + _sotCmpDeltaPP(v, br.baseV);
-                        html += '<div style="display:flex;align-items:center;gap:3px;margin-top:2px;">';
-                        html += '<div style="flex:1;height:3px;border-radius:1.5px;background:rgba(255,255,255,0.06);overflow:hidden;">';
-                        html += '<div style="width:' + mPct.toFixed(1) + '%;height:100%;border-radius:1.5px;background:hsla(' + cohortHues[vi % cohortHues.length] + ',65%,55%,0.6);"></div></div>';
-                        html += '<span style="font-size:0.48rem;color:var(--text-secondary);">' + mPct.toFixed(0) + '% of total</span></div>';
-                        html += '</td>';
+                        html += '<td class="num">' + v.toFixed(1) + '% ' + _sotCmpDeltaPP(v, br.baseV) + '</td>';
                     });
                     html += '<td class="num">' + br.delta.toFixed(1) + 'pp</td>';
                     html += '</tr>';
