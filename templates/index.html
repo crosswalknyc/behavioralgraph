@@ -23863,8 +23863,11 @@
             document.getElementById('sotKpiUsers').textContent = data.matched_users.toLocaleString();
             var projUsers = data.projected_us_users || 0;
             document.getElementById('sotKpiProjUsers').textContent = Math.round(projUsers).toLocaleString();
-            document.getElementById('sotKpiHours').textContent = (data.total_projected_hours || 0) >= 1000000 ? ((data.total_projected_hours / 1000000).toFixed(1) + 'M') : (data.total_projected_hours || 0).toLocaleString();
-            document.getElementById('sotKpiInteractions').textContent = data.total_interactions.toLocaleString();
+            var _singleMult = (data.matched_users > 0 && projUsers > 0) ? projUsers / data.matched_users : 1;
+            var _projHours = Math.round((data.total_projected_hours || 0) * _singleMult);
+            var _projInteractions = Math.round((data.total_interactions || 0) * _singleMult);
+            document.getElementById('sotKpiHours').textContent = _projHours.toLocaleString();
+            document.getElementById('sotKpiInteractions').textContent = _projInteractions.toLocaleString();
             var trendNoteEl = document.getElementById('sotTrendGuardNote');
             if (trendNoteEl) {
                 trendNoteEl.style.display = 'none';
@@ -24639,8 +24642,8 @@
             html += '<div class="sot-chart-card' + focusHide + '" style="margin-bottom:1rem;padding:0.85rem 1rem;">';
             html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition — % of All Ages</h3>';
             html += '<div style="display:flex;gap:2rem;flex-wrap:wrap;">';
-            html += '<div style="flex:1;min-width:300px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Sample Participants <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseSample) + ' total)</span></div><div style="position:relative;height:340px;"><canvas id="sotCohortPiePop"></canvas></div></div>';
-            html += '<div style="flex:1;min-width:300px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Projected US Hours <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseHours) + ' total)</span></div><div style="position:relative;height:340px;"><canvas id="sotCohortPieUsage"></canvas></div></div>';
+            html += '<div style="flex:1;min-width:300px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Sample <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(basePopTotal) + ' total)</span></div><div style="position:relative;height:340px;"><canvas id="sotCohortPiePop"></canvas></div></div>';
+            html += '<div style="flex:1;min-width:300px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Projected US Hours <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseProjHours) + ' total)</span></div><div style="position:relative;height:340px;"><canvas id="sotCohortPieUsage"></canvas></div></div>';
             html += '</div>';
 
             // === Column Chart (Population vs Usage by Age Group) ===
@@ -24748,6 +24751,7 @@
                 var bCat = (base.categories || []).find(function(c) { return c.name === cn; });
                 var bHrs = 0;
                 if (bCat && bCat.brands) bCat.brands.forEach(function(b) { bHrs += (b.est_minutes || 0); });
+                var bHrsProj = Math.round(bHrs * baseMultiplier);
                 var pcts = filteredCohorts.map(function(t) {
                     var cCat = (t.data.categories || []).find(function(c) { return c.name === cn; });
                     var cHrs = 0;
@@ -24756,7 +24760,7 @@
                 });
                 var catCol = _sotCatColors[cn] || '#888';
                 html += '<div style="margin-bottom:0.6rem;">';
-                html += _sotStackedBar('<span style="color:' + catCol + ';">' + cn + '</span>', bHrs, pcts, cohortLabels, cohortHues);
+                html += _sotStackedBar('<span style="color:' + catCol + ';">' + cn + '</span>', bHrsProj, pcts, cohortLabels, cohortHues);
                 html += '</div>';
             });
             html += '</div>';
@@ -24770,7 +24774,8 @@
                 (base.categories || []).forEach(function(c) {
                     if (c.brands) c.brands.forEach(function(b) { baseTotalHrs += (b.est_minutes || 0); });
                 });
-                var bInt = baseTotalHrs > 0 ? Math.round((base.total_interactions || 0) * (bHrs / baseTotalHrs)) : 0;
+                var bIntRaw = baseTotalHrs > 0 ? (base.total_interactions || 0) * (bHrs / baseTotalHrs) : 0;
+                var bInt = Math.round(bIntRaw * baseMultiplier);
                 var pcts = filteredCohorts.map(function(t) {
                     var cCat = (t.data.categories || []).find(function(c) { return c.name === cn; });
                     var cHrs = 0;
@@ -24779,8 +24784,8 @@
                     (t.data.categories || []).forEach(function(c) {
                         if (c.brands) c.brands.forEach(function(b) { cTotalHrs += (b.est_minutes || 0); });
                     });
-                    var cInt = cTotalHrs > 0 ? (t.data.total_interactions || 0) * (cHrs / cTotalHrs) : 0;
-                    return bInt > 0 ? Math.min(cInt / bInt * 100, 100) : 0;
+                    var cIntRaw = cTotalHrs > 0 ? (t.data.total_interactions || 0) * (cHrs / cTotalHrs) : 0;
+                    return bIntRaw > 0 ? Math.min(cIntRaw / bIntRaw * 100, 100) : 0;
                 });
                 var catCol = _sotCatColors[cn] || '#888';
                 html += '<div style="margin-bottom:0.6rem;">';
@@ -24923,10 +24928,15 @@
                             return (b.start_date || '').localeCompare(a.start_date || '');
                         });
 
+                        function _trendProjMult(p) {
+                            var pop = _sotCohortPop(p);
+                            var raw = p.matched_users || 1;
+                            return pop > 0 ? pop / raw : 1;
+                        }
                         var trendKpis = [
-                            { label: 'Sample', key: 'matched_users' },
-                            { label: 'US Hours', key: 'total_projected_hours' },
-                            { label: 'Interactions', key: 'total_interactions' }
+                            { label: 'Sample', key: '_proj_pop', proj: true },
+                            { label: 'US Hours', key: 'total_projected_hours', proj: true },
+                            { label: 'Interactions', key: 'total_interactions', proj: true }
                         ];
                         var h = '<div style="overflow-x:auto;"><table class="sot-cmp-table"><thead><tr><th>Metric</th>';
                         allPeriods.forEach(function(p) {
@@ -24939,7 +24949,11 @@
 
                         trendKpis.forEach(function(kpi) {
                             h += '<tr><td style="font-weight:600;">' + kpi.label + '</td>';
-                            var vals = allPeriods.map(function(p) { return p[kpi.key] || 0; });
+                            var vals = allPeriods.map(function(p) {
+                                if (kpi.key === '_proj_pop') return _sotCohortPop(p);
+                                var m = _trendProjMult(p);
+                                return (p[kpi.key] || 0) * m;
+                            });
                             vals.forEach(function(v, i) {
                                 var isCurrent = allPeriods[i].start_date === _histBase.start_date;
                                 h += '<td class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);font-weight:700;' : '') + '">' + _sotCmpFmtNum(v) + '</td>';
@@ -25006,6 +25020,7 @@
                 var baseCat = (base.categories || []).find(function(c) { return c.name === catName; });
                 var baseCatHrs = 0;
                 if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseCatHrs += (b.est_minutes || 0); });
+                var baseCatHrsProj = Math.round(baseCatHrs * baseMultiplier);
                 var cohortCatPcts = filteredCohorts.map(function(t) {
                     var cCat = (t.data.categories || []).find(function(c) { return c.name === catName; });
                     var cMins = 0;
@@ -25014,7 +25029,7 @@
                 });
 
                 html += '<div style="padding:0.4rem 0 0.5rem;margin-bottom:0.4rem;">';
-                html += _sotStackedBar('Cohort Share of ' + catName + ' Hours', baseCatHrs, cohortCatPcts, cohortLabels, cohortHues);
+                html += _sotStackedBar('Cohort Share of ' + catName + ' Hours', baseCatHrsProj, cohortCatPcts, cohortLabels, cohortHues);
                 html += '</div>';
 
                 html += '<div style="position:relative;height:' + chartH + 'px;"><canvas id="sotCmpCat_' + catId + '"></canvas></div>';
@@ -25260,18 +25275,30 @@
             var focusHide = '';
 
             var kpiMetrics = [
-                { label: 'Sample Participants', key: 'matched_users', color: 'var(--accent-lime)' },
-                { label: 'US Projection', key: 'projected_us_users', color: '#a855f7' },
-                { label: 'Projected US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
-                { label: 'Adj. Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
+                { label: 'Sample', key: '_proj_pop', color: '#a855f7' },
+                { label: 'Projected US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)', proj: true },
+                { label: 'Projected Interactions', key: 'total_interactions', color: 'var(--accent-orange)', proj: true }
             ];
+            function _tabProjMult(tData) {
+                var pop = _sotCohortPop(tData);
+                var raw = tData.matched_users || 1;
+                return pop > 0 ? pop / raw : 1;
+            }
             html += '<div class="sot-cmp-kpi-grid' + focusHide + '" id="sotCmpKpiSection" style="grid-template-columns:repeat(' + tabs.length + ',1fr);">';
             tabs.forEach(function(t, ti) {
                 var lbl = _sotTabLabel(t.data); var hue = _sotTabHue(ti);
+                var tMult = _tabProjMult(t.data);
                 html += '<div class="sot-cmp-kpi-col" style="border-top:3px solid hsla(' + hue + ',70%,60%,0.8);">';
                 html += '<div class="sot-cmp-kpi-label" title="' + lbl + '">' + lbl + '</div>';
                 kpiMetrics.forEach(function(m) {
-                    var val = t.data[m.key] || 0; var baseVal = base[m.key] || 0;
+                    var val, baseVal;
+                    if (m.key === '_proj_pop') {
+                        val = _sotCohortPop(t.data);
+                        baseVal = _sotCohortPop(base);
+                    } else {
+                        val = (t.data[m.key] || 0) * tMult;
+                        baseVal = (base[m.key] || 0) * _tabProjMult(base);
+                    }
                     html += '<div style="margin-top:0.4rem;"><div class="sot-cmp-kpi-metric">' + m.label + '</div>';
                     html += '<div class="sot-cmp-kpi-value" style="color:' + m.color + ';">' + _sotCmpFmtNum(val);
                     if (ti > 0) html += ' ' + _sotCmpDelta(val, baseVal);
