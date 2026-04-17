@@ -14274,6 +14274,194 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 rows_written += 1
 
     print(f"   ✅ Wrote BP for {rows_written} behavioral rows across {len(results_map)} categories")
+
+    print("   🛡️  Running post-agent quality gate...")
+    df = post_agent_quality_gate(df, persona_doc)
+
+    return df
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  POST-AGENT QUALITY GATE — deterministic validators that catch bad
+#  AI output before it reaches the final CSV.
+# ═══════════════════════════════════════════════════════════════════════
+
+_DEMO_SUM_CATEGORIES = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
+
+_UNIVERSAL_HIGH_BP = {
+    'GOOGLE', 'YOUTUBE', 'AMAZON', 'GMAIL', 'FACEBOOK', 'NETFLIX', 'INSTAGRAM',
+}
+
+_CLAMP_EXEMPT_CATS = {'BRAND INPUT', 'SAMPLE SIZE', 'INPUT_METADATA', 'BRAND CATEGORY'}
+
+
+def _organic_4dp(val: float) -> float:
+    """Generate an organic value near `val` with 4 non-zero decimal digits."""
+    pct_shift = random.uniform(0.005, 0.02) * random.choice([-1, 1])
+    shift = max(0.1, abs(val * pct_shift)) * (1 if pct_shift > 0 else -1)
+    base = val + shift
+    base = max(0.1, min(99.9, base))
+    integer_part = int(base)
+    d1 = random.randint(1, 9)
+    d2 = random.randint(1, 9)
+    d3 = random.randint(1, 9)
+    d4 = random.randint(1, 9)
+    v = integer_part + d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
+    return max(0.1111, min(99.8999, round(v, 4)))
+
+
+def _has_bad_decimals(val: float) -> bool:
+    """True if the 4-decimal representation has consecutive zeros or .0000."""
+    s = f"{val:.4f}"
+    if '.' not in s:
+        return True
+    frac = s.split('.')[1]
+    if frac == '0000':
+        return True
+    if '000' in frac:
+        return True
+    if frac[:2] == '00':
+        return True
+    return False
+
+
+def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None) -> pd.DataFrame:
+    """Run all quality validators on the DataFrame after agent processing.
+
+    Called between Step 2 (parallel_category_agents) and Step 3 (sanity check).
+    Auto-corrects where possible, logs warnings otherwise.
+    """
+    df = df.copy()
+    bp_col = 'Brand Penetration (Row)'
+    pct_col = 'Category Share'
+
+    if bp_col not in df.columns:
+        return df
+
+    corrections = 0
+
+    # ── Validator 1: Demographic Sum Check ────────────────────────────
+    for demo_cat in _DEMO_SUM_CATEGORIES:
+        mask = df['Column'].astype(str).str.strip().str.upper() == demo_cat
+        if not mask.any():
+            continue
+        idxs = df[mask].index.tolist()
+        vals = []
+        for idx in idxs:
+            try:
+                vals.append((idx, float(df.at[idx, bp_col])))
+            except (ValueError, TypeError):
+                continue
+        if not vals:
+            continue
+        total = sum(v for _, v in vals)
+        if abs(total - 100.0) > 2.0:
+            factor = 100.0 / total if total > 0 else 1.0
+            adj_pct = abs(total - 100.0)
+            if adj_pct > 5.0:
+                print(f"   ⚠️  QualityGate: {demo_cat} sum was {total:.2f}% (off by {adj_pct:.1f}%), normalizing")
+            for idx, v in vals:
+                new_v = round(v * factor, 4)
+                df.at[idx, bp_col] = new_v
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = new_v
+                corrections += 1
+
+    # ── Validator 2: BP Distribution Gate ─────────────────────────────
+    all_cats = df['Column'].astype(str).str.strip().str.upper().unique()
+    behavioral_cats = [c for c in all_cats
+                       if c not in _DEMO_SUM_CATEGORIES
+                       and c not in _CLAMP_EXEMPT_CATS
+                       and c != 'LOCATION']
+    for cat in behavioral_cats:
+        mask = df['Column'].astype(str).str.strip().str.upper() == cat
+        if not mask.any():
+            continue
+        idxs = df[mask].index.tolist()
+        bp_vals = []
+        for idx in idxs:
+            try:
+                bp_vals.append((idx, float(df.at[idx, bp_col])))
+            except (ValueError, TypeError):
+                continue
+        if not bp_vals:
+            continue
+
+        above_50 = [(idx, v) for idx, v in bp_vals if v > 50.0]
+        if len(above_50) > 3:
+            above_50_sorted = sorted(above_50, key=lambda x: -x[1])
+            for idx, v in above_50_sorted[3:]:
+                val_name = str(df.at[idx, 'Value']).strip().upper()
+                if val_name in _UNIVERSAL_HIGH_BP:
+                    continue
+                clamped = _organic_4dp(random.uniform(25.0, 45.0))
+                df.at[idx, bp_col] = clamped
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = clamped
+                corrections += 1
+                print(f"   ⚠️  QualityGate: {cat}/{val_name} clamped {v:.2f}% → {clamped:.4f}% (>3 items above 50%)")
+
+        for idx, v in bp_vals:
+            val_name = str(df.at[idx, 'Value']).strip().upper()
+            if v > 90.0 and val_name not in _UNIVERSAL_HIGH_BP:
+                cat_upper = str(df.at[idx, 'Column']).strip().upper()
+                if cat_upper in _CLAMP_EXEMPT_CATS:
+                    continue
+                clamped = _organic_4dp(random.uniform(55.0, 80.0))
+                df.at[idx, bp_col] = clamped
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = clamped
+                corrections += 1
+                print(f"   ⚠️  QualityGate: {cat}/{val_name} clamped {v:.2f}% → {clamped:.4f}% (>90% non-universal)")
+
+    # ── Validator 3: Location Uniqueness ──────────────────────────────
+    loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
+    if loc_mask.any():
+        loc_idxs = df[loc_mask].index.tolist()
+        seen_vals = {}
+        for idx in loc_idxs:
+            try:
+                v = round(float(df.at[idx, bp_col]), 4)
+            except (ValueError, TypeError):
+                continue
+            if v in seen_vals:
+                d4 = random.randint(1, 9)
+                jitter = d4 * 0.0001 * random.choice([-1, 1])
+                new_v = round(max(0.0011, v + jitter), 4)
+                while new_v in seen_vals:
+                    d4 = random.randint(1, 9)
+                    jitter = d4 * 0.0001 * random.choice([-1, 1])
+                    new_v = round(max(0.0011, v + jitter), 4)
+                df.at[idx, bp_col] = new_v
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = new_v
+                seen_vals[new_v] = idx
+                corrections += 1
+            else:
+                seen_vals[v] = idx
+
+    # ── Validator 4: Noise Quality Check ──────────────────────────────
+    skip_cats = {'INPUT_METADATA', 'SAMPLE SIZE'}
+    for idx in df.index:
+        cat = str(df.at[idx, 'Column']).strip().upper()
+        if cat in skip_cats:
+            continue
+        try:
+            v = float(df.at[idx, bp_col])
+        except (ValueError, TypeError):
+            continue
+        if v >= 99.999 or v <= 0.0001:
+            continue
+        if _has_bad_decimals(v):
+            new_v = _organic_4dp(v)
+            df.at[idx, bp_col] = new_v
+            if pct_col in df.columns:
+                df.at[idx, pct_col] = new_v
+            corrections += 1
+
+    gate_status = "PASS" if corrections == 0 else f"{corrections} auto-corrections"
+    print(f"   🛡️  QualityGate: {gate_status}")
     return df
 
 
@@ -14311,7 +14499,16 @@ def agent_pipeline_final_sanity_check(df: pd.DataFrame,
         df = reconcile_final_output_from_bp_and_sample_size(df)
         df = add_us_gen_pop_projection(df)
 
-    print("   ✅ Step 3: Sanity check complete (brand lock + consistency + reconciliation)")
+    # 5. Final quality gate (catch noise/distribution issues introduced by steps 1-4)
+    df = post_agent_quality_gate(df)
+
+    # Re-reconcile after quality gate corrections
+    df = reconcile_final_output_from_bp_and_sample_size(df)
+    df = add_us_gen_pop_projection(df)
+    if brands:
+        df = enforce_input_brand_100(df, brands)
+
+    print("   ✅ Step 3: Sanity check complete (brand lock + consistency + reconciliation + quality gate)")
     return df
 
 
