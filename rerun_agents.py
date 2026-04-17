@@ -90,8 +90,9 @@ def quality_gate(df, persona_doc=None, brands=None):
 
     corrections = 0
 
-    # V1: Demographic sum check
-    for demo_cat in _DEMO_SUM_CATEGORIES:
+    # V1: Demographic + Location sum check (must be exactly 100%)
+    sum_categories = _DEMO_SUM_CATEGORIES | {'LOCATION'}
+    for demo_cat in sum_categories:
         mask = df['Column'].astype(str).str.strip().str.upper() == demo_cat
         if not mask.any():
             continue
@@ -105,7 +106,7 @@ def quality_gate(df, persona_doc=None, brands=None):
         if not vals:
             continue
         total = sum(v for _, v in vals)
-        if abs(total - 100.0) > 2.0:
+        if abs(total - 100.0) > 0.05:
             factor = 100.0 / total if total > 0 else 1.0
             adj_pct = abs(total - 100.0)
             if adj_pct > 5.0:
@@ -208,6 +209,29 @@ def quality_gate(df, persona_doc=None, brands=None):
             if pct_col in df.columns:
                 df.at[idx, pct_col] = new_v
             corrections += 1
+
+    # Final pass: re-normalize any sums drifted by V3/V4
+    for cat in sum_categories:
+        mask = df['Column'].astype(str).str.strip().str.upper() == cat
+        if not mask.any():
+            continue
+        idxs = df[mask].index.tolist()
+        vals = []
+        for idx in idxs:
+            try:
+                vals.append((idx, float(df.at[idx, bp_col])))
+            except (ValueError, TypeError):
+                continue
+        if not vals:
+            continue
+        total = sum(v for _, v in vals)
+        if abs(total - 100.0) > 0.01:
+            factor = 100.0 / total if total > 0 else 1.0
+            for idx, v in vals:
+                new_v = round(v * factor, 4)
+                df.at[idx, bp_col] = new_v
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = new_v
 
     gate_status = "PASS" if corrections == 0 else f"{corrections} auto-corrections"
     print(f"   🛡️  QualityGate: {gate_status}")
@@ -704,7 +728,7 @@ def reprocess(filepath, subject, brand_category):
 
     # QA summary
     print(f"\n--- QA Validation: {subject} ---")
-    for cat in sorted(_DEMO_SUM_CATEGORIES):
+    for cat in sorted(_DEMO_SUM_CATEGORIES | {'LOCATION'}):
         mask = df['Column'].astype(str).str.strip().str.upper() == cat
         if not mask.any():
             continue
@@ -715,8 +739,8 @@ def reprocess(filepath, subject, brand_category):
             except:
                 pass
         total = sum(vals)
-        status = 'PASS' if abs(total - 100.0) <= 2.0 else f'FAIL ({total:.2f}%)'
-        print(f"  Demo sum {cat}: {total:.2f}% → {status}")
+        status = 'PASS' if abs(total - 100.0) <= 0.05 else f'FAIL ({total:.2f}%)'
+        print(f"  Sum {cat}: {total:.4f}% → {status}")
 
     loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
     if loc_mask.any():
@@ -739,8 +763,7 @@ def reprocess(filepath, subject, brand_category):
 # ── Run ──────────────────────────────────────────────────────────────
 
 FILES = [
-    ("/Users/jennamenking/Downloads/Laura_Dern_04_17_2026_18_21.csv", "Laura Dern", "ACTOR"),
-    ("/Users/jennamenking/Downloads/Sean_Kaufman_04_17_2026_18_19.csv", "Sean Kaufman", "ACTOR"),
+    ("/Users/jennamenking/Downloads/Sean_Kaufman_04_17_2026_18_19_FIXED.csv", "Sean Kaufman", "ACTOR"),
 ]
 
 for filepath, subject, brand_category in FILES:

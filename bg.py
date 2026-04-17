@@ -14351,8 +14351,9 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
 
     corrections = 0
 
-    # ── Validator 1: Demographic Sum Check ────────────────────────────
-    for demo_cat in _DEMO_SUM_CATEGORIES:
+    # ── Validator 1: Demographic + Location Sum Check ───────────────
+    sum_categories = _DEMO_SUM_CATEGORIES | {'LOCATION'}
+    for demo_cat in sum_categories:
         mask = df['Column'].astype(str).str.strip().str.upper() == demo_cat
         if not mask.any():
             continue
@@ -14366,7 +14367,7 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
         if not vals:
             continue
         total = sum(v for _, v in vals)
-        if abs(total - 100.0) > 2.0:
+        if abs(total - 100.0) > 0.05:
             factor = 100.0 / total if total > 0 else 1.0
             adj_pct = abs(total - 100.0)
             if adj_pct > 5.0:
@@ -14469,6 +14470,29 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
             if pct_col in df.columns:
                 df.at[idx, pct_col] = new_v
             corrections += 1
+
+    # ── Final pass: re-normalize any sums drifted by V3/V4 ─────────
+    for cat in sum_categories:
+        mask = df['Column'].astype(str).str.strip().str.upper() == cat
+        if not mask.any():
+            continue
+        idxs = df[mask].index.tolist()
+        vals = []
+        for idx in idxs:
+            try:
+                vals.append((idx, float(df.at[idx, bp_col])))
+            except (ValueError, TypeError):
+                continue
+        if not vals:
+            continue
+        total = sum(v for _, v in vals)
+        if abs(total - 100.0) > 0.01:
+            factor = 100.0 / total if total > 0 else 1.0
+            for idx, v in vals:
+                new_v = round(v * factor, 4)
+                df.at[idx, bp_col] = new_v
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = new_v
 
     gate_status = "PASS" if corrections == 0 else f"{corrections} auto-corrections"
     print(f"   🛡️  QualityGate: {gate_status}")
