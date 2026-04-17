@@ -24819,10 +24819,9 @@
             });
             html += '</tbody></table></div>';
 
-            // === Historical Time-over-Time Section ===
+            // === Historical Time-over-Time Section (auto-loading) ===
             (function() {
                 var currentRange = base.start_date + '|' + base.end_date;
-                var historicalAllAges = [];
                 var historicalByRange = {};
                 (_sotCachedRuns || []).forEach(function(r) {
                     var rRange = (r.start_date || '') + '|' + (r.end_date || '');
@@ -24831,85 +24830,92 @@
                         if (!historicalByRange[rRange]) historicalByRange[rRange] = r;
                     }
                 });
-                var histRanges = Object.keys(historicalByRange).sort(function(a, b) { return b.localeCompare(a); });
+                var histRanges = Object.keys(historicalByRange).sort(function(a, b) { return b.localeCompare(a); }).slice(0, 6);
 
-                var histLoaded = [];
-                _sotOpenTabs.forEach(function(t) {
-                    var tr = t.data.start_date + '|' + t.data.end_date;
-                    if (tr !== currentRange && (t.data.age_brackets || []).length >= 7) {
-                        histLoaded.push(t.data);
-                    }
-                });
+                if (histRanges.length === 0) return;
 
-                if (histRanges.length > 0 || histLoaded.length > 0) {
-                    html += '<div class="sot-chart-card' + focusHide + '" id="sotHistoricalSection" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
-                    html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Time-over-Time Trends (All Ages)</h3>';
+                html += '<div class="sot-chart-card" id="sotHistoricalSection" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
+                html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Time-over-Time Trends (All Ages)</h3>';
+                html += '<div id="sotHistTrendBody" style="font-size:0.72rem;color:var(--text-secondary);">Loading historical data...</div>';
+                html += '</div>';
 
-                    if (histLoaded.length > 0) {
-                        var allPeriods = [base].concat(histLoaded).sort(function(a, b) {
+                var _histBase = base;
+                var _histCatNames = catNames;
+                var _histShareKey = shareKey;
+                var _histRangeData = historicalByRange;
+                var _histKeys = histRanges;
+
+                setTimeout(function() {
+                    var promises = _histKeys.map(function(rk) {
+                        var r = _histRangeData[rk];
+                        return fetch('/api/share-of-time/run', {
+                            method: 'POST', credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ start_date: r.start_date, end_date: r.end_date, age_brackets: r.age_brackets })
+                        }).then(function(res) { return res.json(); }).then(function(resp) {
+                            return resp.success && resp.data ? resp.data : null;
+                        }).catch(function() { return null; });
+                    });
+
+                    Promise.all(promises).then(function(results) {
+                        var loaded = results.filter(function(d) { return d; });
+                        var body = document.getElementById('sotHistTrendBody');
+                        if (!body || loaded.length === 0) {
+                            if (body) body.textContent = 'No historical data could be loaded.';
+                            return;
+                        }
+
+                        var allPeriods = [_histBase].concat(loaded).sort(function(a, b) {
                             return (b.start_date || '').localeCompare(a.start_date || '');
                         });
 
                         var trendKpis = [
-                            { label: 'Sample', key: 'matched_users', color: 'var(--accent-lime)' },
-                            { label: 'US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
-                            { label: 'Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
+                            { label: 'Sample', key: 'matched_users' },
+                            { label: 'US Hours', key: 'total_projected_hours' },
+                            { label: 'Interactions', key: 'total_interactions' }
                         ];
-                        html += '<div style="overflow-x:auto;margin-bottom:0.75rem;"><table class="sot-cmp-table"><thead><tr><th>Metric</th>';
+                        var h = '<div style="overflow-x:auto;"><table class="sot-cmp-table"><thead><tr><th>Metric</th>';
                         allPeriods.forEach(function(p) {
                             var pLabel = _sotQuarterLabel(p.start_date, p.end_date) || (_sotFmtDateShort(p.start_date).replace(/, \d{4}$/, ''));
-                            var isCurrent = p.start_date === base.start_date && p.end_date === base.end_date;
-                            html += '<th class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);' : '') + '">' + pLabel + (isCurrent ? ' ●' : '') + '</th>';
+                            var isCurrent = p.start_date === _histBase.start_date && p.end_date === _histBase.end_date;
+                            h += '<th class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);' : '') + '">' + pLabel + (isCurrent ? ' ●' : '') + '</th>';
                         });
-                        if (allPeriods.length >= 2) html += '<th class="num">Change</th>';
-                        html += '</tr></thead><tbody>';
+                        if (allPeriods.length >= 2) h += '<th class="num">Change</th>';
+                        h += '</tr></thead><tbody>';
 
                         trendKpis.forEach(function(kpi) {
-                            html += '<tr><td style="font-weight:600;">' + kpi.label + '</td>';
+                            h += '<tr><td style="font-weight:600;">' + kpi.label + '</td>';
                             var vals = allPeriods.map(function(p) { return p[kpi.key] || 0; });
                             vals.forEach(function(v, i) {
-                                var isCurrent = allPeriods[i].start_date === base.start_date;
-                                html += '<td class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);font-weight:700;' : '') + '">' + _sotCmpFmtNum(v) + '</td>';
+                                var isCurrent = allPeriods[i].start_date === _histBase.start_date;
+                                h += '<td class="num" style="' + (isCurrent ? 'color:var(--accent-cyan);font-weight:700;' : '') + '">' + _sotCmpFmtNum(v) + '</td>';
                             });
                             if (allPeriods.length >= 2) {
-                                html += '<td class="num">' + _sotCmpDelta(vals[0], vals[vals.length - 1]) + '</td>';
+                                h += '<td class="num">' + _sotCmpDelta(vals[0], vals[vals.length - 1]) + '</td>';
                             }
-                            html += '</tr>';
+                            h += '</tr>';
                         });
 
-                        catNames.forEach(function(cn) {
+                        _histCatNames.forEach(function(cn) {
                             var catVals = allPeriods.map(function(p) {
                                 var cat = (p.categories || []).find(function(c) { return c.name === cn; });
-                                return cat ? (cat[shareKey] || 0) : 0;
+                                return cat ? (cat[_histShareKey] || 0) : 0;
                             });
                             var col = _sotCatColors[cn] || '#888';
-                            html += '<tr><td style="font-weight:600;color:' + col + ';">' + cn + '</td>';
+                            h += '<tr><td style="font-weight:600;color:' + col + ';">' + cn + '</td>';
                             catVals.forEach(function(v, i) {
-                                var isCurrent = allPeriods[i].start_date === base.start_date;
-                                html += '<td class="num" style="' + (isCurrent ? 'font-weight:700;' : '') + '">' + v.toFixed(1) + '%</td>';
+                                var isCurrent = allPeriods[i].start_date === _histBase.start_date;
+                                h += '<td class="num" style="' + (isCurrent ? 'font-weight:700;' : '') + '">' + v.toFixed(1) + '%</td>';
                             });
                             if (allPeriods.length >= 2) {
-                                html += '<td class="num">' + _sotCmpDeltaPP(catVals[0], catVals[catVals.length - 1]) + '</td>';
+                                h += '<td class="num">' + _sotCmpDeltaPP(catVals[0], catVals[catVals.length - 1]) + '</td>';
                             }
-                            html += '</tr>';
+                            h += '</tr>';
                         });
-                        html += '</tbody></table></div>';
-                    }
-
-                    if (histRanges.length > 0) {
-                        html += '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:0.25rem;">Historical periods available — load to compare: ';
-                        histRanges.slice(0, 6).forEach(function(rk, ri) {
-                            var parts = rk.split('|');
-                            var label = _sotQuarterLabel(parts[0], parts[1]) || (_sotFmtDateShort(parts[0]) + ' – ' + _sotFmtDateShort(parts[1]));
-                            if (ri > 0) html += ', ';
-                            var r = historicalByRange[rk];
-                            html += '<a href="javascript:void(0)" style="color:var(--accent-cyan);text-decoration:underline;cursor:pointer;" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')">' + label + '</a>';
-                        });
-                        html += '</div>';
-                    }
-
-                    html += '</div>';
-                }
+                        h += '</tbody></table></div>';
+                        body.innerHTML = h;
+                    });
+                }, 100);
             })();
 
             // === Overall Category Chart ===
