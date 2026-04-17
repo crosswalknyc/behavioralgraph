@@ -25476,12 +25476,13 @@
                 }, 100);
             })();
 
-            // === Overall Category Chart ===
+            // === Overall Category Sunburst Chart ===
             var chartTabs = [baseTab].concat(filteredCohorts);
-            html += '<div class="sot-chart-card" style="margin-bottom:1rem;">' +
-                '<h3 class="sot-chart-title">Overall Share of Time by Category</h3>' +
-                '<div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div>' +
-            '</div>';
+            html += '<div class="sot-chart-card" style="margin-bottom:1rem;">';
+            html += '<h3 class="sot-chart-title">Overall Share of Time by Category</h3>';
+            html += '<div style="display:flex;justify-content:center;align-items:center;"><div style="position:relative;width:520px;height:520px;"><canvas id="sotCmpMain"></canvas></div></div>';
+            html += '<div id="sotSunburstLegend" style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.5rem 1.2rem;margin-top:0.5rem;font-size:0.7rem;"></div>';
+            html += '</div>';
 
             // === Per-category brand charts + tables (delta vs All Ages) ===
             catNames.forEach(function(catName) {
@@ -25844,40 +25845,129 @@
                 }, 50);
             })();
 
-            // --- Render Charts ---
+            // --- Render Sunburst Chart (inner = categories, outer = cohort breakdown) ---
             var mainCanvas = document.getElementById('sotCmpMain');
             if (mainCanvas && typeof Chart !== 'undefined') {
-                var mainDS = [];
-                chartTabs.forEach(function(t, i) {
-                    var label = i === 0 ? 'All Ages' : _sotCohortLabel(t);
-                    var cats = t.data.categories || [];
-                    var vals = catNames.map(function(cn) {
+                var baseCats = base.categories || [];
+                var innerLabels = [];
+                var innerVals = [];
+                var innerColors = [];
+                catNames.forEach(function(cn) {
+                    var cat = baseCats.find(function(c) { return c.name === cn; });
+                    var val = cat ? (cat[shareKey] || 0) : 0;
+                    innerLabels.push(cn);
+                    innerVals.push(val);
+                    innerColors.push(_sotCatColors[cn] || '#888');
+                });
+
+                var outerLabels = [];
+                var outerVals = [];
+                var outerColors = [];
+                var outerCatRef = [];
+                catNames.forEach(function(cn, ci) {
+                    var catColor = _sotCatColors[cn] || '#888';
+                    var catTotal = innerVals[ci];
+                    var cohortShares = filteredCohorts.map(function(t) {
+                        var cats = t.data.categories || [];
                         var found = cats.find(function(c) { return c.name === cn; });
                         return found ? (found[shareKey] || 0) : 0;
                     });
-                    mainDS.push({
-                        label: label, data: vals,
-                        backgroundColor: i === 0 ? 'rgba(6,182,212,0.6)' : 'hsla(' + _sotTabHue(i) + ',70%,60%,0.65)',
-                        borderWidth: i === 0 ? 2 : 0, borderColor: i === 0 ? 'rgba(6,182,212,0.9)' : 'transparent',
-                        borderRadius: 4, barPercentage: 0.9
+                    var cohortSum = cohortShares.reduce(function(s, v) { return s + v; }, 0);
+
+                    filteredCohorts.forEach(function(t, ti) {
+                        var proportion = cohortSum > 0 ? cohortShares[ti] / cohortSum : 0;
+                        var wedgeVal = catTotal * proportion;
+                        outerLabels.push(_sotCohortLabel(t) + ' · ' + cn);
+                        outerVals.push(wedgeVal);
+                        var hue = cohortHues[ti % cohortHues.length];
+                        var light = 35 + (ci % 3) * 10;
+                        outerColors.push('hsla(' + hue + ',60%,' + light + '%,0.85)');
+                        outerCatRef.push(cn);
                     });
                 });
-                _sotCompareCharts.push(new Chart(mainCanvas.getContext('2d'), {
-                    type: 'bar', plugins: [ChartDataLabels],
-                    data: { labels: catNames, datasets: mainDS },
+
+                var sunburstChart = new Chart(mainCanvas.getContext('2d'), {
+                    type: 'doughnut',
+                    plugins: [ChartDataLabels],
+                    data: {
+                        labels: innerLabels.concat(outerLabels),
+                        datasets: [
+                            {
+                                label: 'Category Share',
+                                data: innerVals,
+                                backgroundColor: innerColors,
+                                borderColor: 'rgba(15,23,42,0.9)',
+                                borderWidth: 2,
+                                weight: 1.2
+                            },
+                            {
+                                label: 'Cohort Breakdown',
+                                data: outerVals,
+                                backgroundColor: outerColors,
+                                borderColor: 'rgba(15,23,42,0.6)',
+                                borderWidth: 1,
+                                weight: 0.8
+                            }
+                        ]
+                    },
                     options: {
-                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                        scales: {
-                            x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v) { return v + '%'; } } },
-                            y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12, weight: '600' } } }
-                        },
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        cutout: '25%',
                         plugins: {
-                            legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 16, usePointStyle: true } },
-                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '%'; } } },
-                            datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        if (ctx.datasetIndex === 0) {
+                                            return ctx.label + ': ' + ctx.parsed.toFixed(1) + '%';
+                                        }
+                                        var parts = ctx.label.split(' · ');
+                                        return (parts[0] || '') + ': ' + ctx.parsed.toFixed(1) + '% of total (' + (parts[1] || '') + ')';
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: function(ctx) {
+                                    return ctx.datasetIndex === 0 && ctx.dataset.data[ctx.dataIndex] >= 2;
+                                },
+                                color: '#fff',
+                                font: { weight: '700', size: 11 },
+                                formatter: function(v, ctx) {
+                                    var name = innerLabels[ctx.dataIndex] || '';
+                                    if (name.length > 12) name = name.substring(0, 10) + '…';
+                                    return name + '\n' + v.toFixed(1) + '%';
+                                },
+                                textAlign: 'center'
+                            }
                         }
                     }
-                }));
+                });
+                _sotCompareCharts.push(sunburstChart);
+
+                var legendDiv = document.getElementById('sotSunburstLegend');
+                if (legendDiv) {
+                    var lh = '<div style="display:flex;flex-wrap:wrap;gap:0.3rem 0.8rem;margin-bottom:0.4rem;">';
+                    lh += '<span style="font-weight:700;color:var(--text-secondary);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;width:100%;">Inner Ring — Categories</span>';
+                    catNames.forEach(function(cn, ci) {
+                        lh += '<span style="display:inline-flex;align-items:center;gap:0.25rem;">';
+                        lh += '<span style="width:10px;height:10px;border-radius:50%;background:' + innerColors[ci] + ';display:inline-block;"></span>';
+                        lh += '<span style="color:#e8e8e8;font-weight:600;">' + cn + '</span>';
+                        lh += '<span style="color:var(--text-secondary);">' + innerVals[ci].toFixed(1) + '%</span></span>';
+                    });
+                    lh += '</div>';
+                    lh += '<div style="display:flex;flex-wrap:wrap;gap:0.3rem 0.8rem;">';
+                    lh += '<span style="font-weight:700;color:var(--text-secondary);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;width:100%;">Outer Ring — Age Cohorts</span>';
+                    filteredCohorts.forEach(function(t, ti) {
+                        var hue = cohortHues[ti % cohortHues.length];
+                        var col = 'hsla(' + hue + ',60%,45%,1)';
+                        lh += '<span style="display:inline-flex;align-items:center;gap:0.25rem;">';
+                        lh += '<span style="width:10px;height:10px;border-radius:50%;background:' + col + ';display:inline-block;"></span>';
+                        lh += '<span style="color:#e8e8e8;font-weight:600;">' + _sotCohortLabel(t) + '</span></span>';
+                    });
+                    lh += '</div>';
+                    legendDiv.innerHTML = lh;
+                }
             }
 
             catNames.forEach(function(catName) {
