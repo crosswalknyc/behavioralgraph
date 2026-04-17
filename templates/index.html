@@ -24395,14 +24395,16 @@
         function _sotCmpFmtNum(n) { return Math.round(n).toLocaleString(); }
 
         function _sotStackedBar(label, baseVal, cohortVals, cohortLabels, hues) {
+            var total = cohortVals.reduce(function(s, v) { return s + v; }, 0);
+            var norm = cohortVals.map(function(v) { return total > 0 ? v / total * 100 : 0; });
             var h = '<div style="margin-bottom:0.15rem;">';
             h += '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">' + label;
             if (baseVal != null) h += ' <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseVal) + ' total)</span>';
             h += '</div>';
-            h += '<div style="display:flex;height:18px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,0.04);margin-bottom:0.35rem;">';
-            cohortVals.forEach(function(pct, ci) {
-                if (pct < 0.3) return;
-                h += '<div style="width:' + pct.toFixed(1) + '%;background:hsla(' + hues[ci % hues.length] + ',65%,55%,0.7);min-width:2px;" title="' + cohortLabels[ci] + ': ' + pct.toFixed(1) + '%"></div>';
+            h += '<div style="display:flex;height:18px;border-radius:9px;overflow:hidden;margin-bottom:0.35rem;">';
+            norm.forEach(function(pct, ci) {
+                if (pct < 0.2) return;
+                h += '<div style="width:' + pct.toFixed(2) + '%;background:hsla(' + hues[ci % hues.length] + ',65%,55%,0.85);min-width:2px;" title="' + cohortLabels[ci] + ': ' + cohortVals[ci].toFixed(1) + '%"></div>';
             });
             h += '</div>';
             h += '<div style="display:flex;flex-wrap:wrap;gap:0.25rem 0.7rem;">';
@@ -24631,7 +24633,7 @@
             html += '</div>';
 
             // === Cohort Composition (% of All Ages) ===
-            var cohortHues = ['210','260','150','35','330','180','20'];
+            var cohortHues = ['210','270','150','45','330','175','350'];
             var cohortLabels = filteredCohorts.map(function(t) { return _sotCohortLabel(t); });
             var baseSample = base.matched_users || 0;
             var baseHours = base.total_projected_hours || 0;
