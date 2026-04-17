@@ -16230,6 +16230,7 @@
                     <div id="sotTabBar" class="profile-tabs-bar sot-tab-bar" style="display:none;"></div>
                     <div id="sotCompareArea" style="display:none;"></div>
                     <div id="sotResultsArea" style="display:none;">
+                        <div id="sotSpotlightBar" style="display:none;"></div>
                         <div class="sot-kpi-grid" style="grid-template-columns:repeat(4,1fr);">
                             <div class="sot-kpi">
                                 <div class="sot-kpi-label">Sample Participants</div>
@@ -24482,6 +24483,31 @@
             return 'transparent';
         }
 
+        function _sotBuildSpotlightBar(activeIdx) {
+            var _ageOrder = {'All Ages':0,'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
+            var sorted = _sotOpenTabs.map(function(t, i) { return { t: t, i: i }; });
+            sorted.sort(function(a, b) {
+                var aAll = (a.t.data.age_brackets || []).length >= 7 ? 1 : 0;
+                var bAll = (b.t.data.age_brackets || []).length >= 7 ? 1 : 0;
+                if (aAll !== bAll) return bAll - aAll;
+                var aLbl = (a.t.data.age_brackets || []).length >= 7 ? 'All Ages' : (a.t.data.age_brackets || [])[0] || '';
+                var bLbl = (b.t.data.age_brackets || []).length >= 7 ? 'All Ages' : (b.t.data.age_brackets || [])[0] || '';
+                return (_ageOrder[aLbl] || 99) - (_ageOrder[bLbl] || 99);
+            });
+
+            var h = '<div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.75rem;padding:0.4rem 0.5rem;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06);">';
+            h += '<span style="font-size:0.62rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-right:0.2rem;">Spotlight View:</span>';
+            var allActive = activeIdx < 0 ? ' active' : '';
+            h += '<span class="sot-cohort-chip' + allActive + '" onclick="sotSetViewOnly(-1)" style="cursor:pointer;">All (Compare)</span>';
+            sorted.forEach(function(item) {
+                var lbl = (item.t.data.age_brackets || []).length >= 7 ? 'All Ages' : (item.t.data.age_brackets || []).join(', ');
+                var cls = item.i === activeIdx ? ' active' : '';
+                h += '<span class="sot-cohort-chip' + cls + '" onclick="sotSetViewOnly(' + item.i + ')" style="cursor:pointer;">' + lbl + '</span>';
+            });
+            h += '</div>';
+            return h;
+        }
+
         function sotSetViewOnly(idx) {
             _sotViewOnlyIdx = idx;
             sotRenderTabs();
@@ -24492,10 +24518,21 @@
 
                 document.getElementById('sotCompareArea').style.display = 'none';
                 document.getElementById('sotResultsArea').style.display = 'block';
+
+                var spotBar = document.getElementById('sotSpotlightBar');
+                if (spotBar) {
+                    spotBar.style.display = 'block';
+                    spotBar.innerHTML = _sotBuildSpotlightBar(idx);
+                }
+
                 sotRenderResults(data);
             } else {
                 _sotViewOnlyIdx = -1;
                 _sotActiveTabIdx = -1;
+
+                var spotBar = document.getElementById('sotSpotlightBar');
+                if (spotBar) { spotBar.style.display = 'none'; spotBar.innerHTML = ''; }
+
                 document.getElementById('sotResultsArea').style.display = 'none';
                 sotRenderCompare();
                 document.getElementById('sotCompareArea').style.display = 'block';
@@ -24572,16 +24609,6 @@
             var timeLabel = _sotQuarterLabel(base.start_date, base.end_date) || (_sotFmtDateShort(base.start_date) + ' \u2013 ' + _sotFmtDateShort(base.end_date));
             html += '<div style="margin-bottom:1rem;"><div style="font-size:1.5rem;font-weight:800;color:var(--accent-cyan);letter-spacing:0.02em;line-height:1.2;">' + timeLabel + '</div><div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.2rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Cohort Analysis \u00b7 ' + (filteredCohorts.length + 1) + ' age groups</div></div>';
 
-            // === View Only Chips ===
-            html += '<div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.6rem;padding:0.4rem 0.5rem;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06);">';
-            html += '<span style="font-size:0.62rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-right:0.2rem;">View:</span>';
-            html += '<span class="sot-cohort-chip active" onclick="sotSetViewOnly(-1)" style="cursor:pointer;">All (Compare)</span>';
-            _sotOpenTabs.forEach(function(t, i) {
-                var lbl = (t.data.age_brackets || []).length >= 7 ? 'All Ages' : (t.data.age_brackets || []).join(', ');
-                html += '<span class="sot-cohort-chip" onclick="sotSetViewOnly(' + i + ')" style="cursor:pointer;">' + lbl + '</span>';
-            });
-            html += '</div>';
-
             // === Cohort Filter Chips ===
             html += '<div class="sot-cohort-chips' + focusHide + '">';
             html += '<span class="sot-cohort-chip-label">Baseline:</span>';
@@ -24593,6 +24620,9 @@
                 html += '<span class="sot-cohort-chip' + (isOn ? ' active' : '') + '" onclick="sotToggleCohortFilter(\'' + lbl.replace(/'/g, "\\'") + '\')">' + lbl + '</span>';
             });
             html += '</div>';
+
+            // === Spotlight View Bar ===
+            html += _sotBuildSpotlightBar(-1);
 
             // === Cohort Composition (% of All Ages) ===
             var baseSample = base.matched_users || 0;
