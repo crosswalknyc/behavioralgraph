@@ -24775,41 +24775,7 @@
             });
             html += '</div>';
 
-            // === "Who's Different?" Insights ===
-            var insights = [];
-            catNames.forEach(function(cn) {
-                var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
-                var bv = baseCat ? (baseCat[shareKey] || 0) : 0;
-                var cohortVals = [];
-                filteredCohorts.forEach(function(t) {
-                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
-                    var cv = cat ? (cat[shareKey] || 0) : 0;
-                    cohortVals.push(cv);
-                    var d = cv - bv;
-                    if (Math.abs(d) >= 1.5) {
-                        var dir = d > 0 ? 'over-indexes' : 'under-indexes';
-                        insights.push({ abs: Math.abs(d), text: '<b>' + _sotCohortLabel(t) + '</b> ' + dir + ' on <b>' + cn + '</b> by ' + Math.abs(d).toFixed(1) + 'pp vs All Ages', icon: d > 0 ? '📈' : '📉' });
-                    }
-                });
-                if (filteredCohorts.length >= 2) {
-                    var allV = cohortVals.concat([bv]);
-                    var sp = Math.max.apply(null, allV) - Math.min.apply(null, allV);
-                    if (sp < 2.5) {
-                        insights.push({ abs: 0.01, text: '<b>' + cn + '</b> is remarkably consistent across cohorts (max spread: ' + sp.toFixed(1) + 'pp)', icon: '≈' });
-                    }
-                }
-            });
-            insights.sort(function(a, b) { return b.abs - a.abs; });
-            insights = insights.slice(0, 8);
-
-            if (insights.length) {
-                html += '<div class="sot-chart-card' + focusHide + '" id="sotCmpMoversSection" style="margin-bottom:1.25rem;padding:0.85rem;">';
-                html += '<h3 class="sot-cmp-section-title">Who\'s Different?</h3>';
-                html += '<div class="sot-insights">';
-                insights.forEach(function(ins) {
-                    html += '<div class="sot-insight-card"><span class="sot-insight-icon">' + ins.icon + '</span><span class="sot-insight-text">' + ins.text + '</span></div>';
-                });
-                html += '</div></div>';
+            if (false) { // "Who's Different?" removed
             }
 
             // === Category Heatmap Grid ===
