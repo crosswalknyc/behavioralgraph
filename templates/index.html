@@ -24735,6 +24735,74 @@
             });
             html += '</tbody></table></div>';
 
+            // === Per-Category Cohort Composition (Hours / Interactions toggle) ===
+            html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">';
+            html += '<h3 class="sot-cmp-section-title" style="margin:0;">Cohort Composition by Category</h3>';
+            html += '<select id="sotCohortCompMetric" style="background:var(--card-bg);color:var(--text-primary);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.7rem;cursor:pointer;">';
+            html += '<option value="hours" selected>Hours</option><option value="interactions">Interactions</option></select>';
+            html += '</div>';
+
+            html += '<div id="sotCohortCompHours">';
+            catNames.forEach(function(cn) {
+                var bCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                var bHrs = 0;
+                if (bCat && bCat.brands) bCat.brands.forEach(function(b) { bHrs += (b.est_minutes || 0); });
+                var pcts = filteredCohorts.map(function(t) {
+                    var cCat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    var cHrs = 0;
+                    if (cCat && cCat.brands) cCat.brands.forEach(function(b) { cHrs += (b.est_minutes || 0); });
+                    return bHrs > 0 ? Math.min(cHrs / bHrs * 100, 100) : 0;
+                });
+                var catCol = _sotCatColors[cn] || '#888';
+                html += '<div style="margin-bottom:0.6rem;">';
+                html += _sotStackedBar('<span style="color:' + catCol + ';">' + cn + '</span>', bHrs, pcts, cohortLabels, cohortHues);
+                html += '</div>';
+            });
+            html += '</div>';
+
+            html += '<div id="sotCohortCompInteractions" style="display:none;">';
+            catNames.forEach(function(cn) {
+                var bCat = (base.categories || []).find(function(c) { return c.name === cn; });
+                var bHrs = 0;
+                if (bCat && bCat.brands) bCat.brands.forEach(function(b) { bHrs += (b.est_minutes || 0); });
+                var baseTotalHrs = 0;
+                (base.categories || []).forEach(function(c) {
+                    if (c.brands) c.brands.forEach(function(b) { baseTotalHrs += (b.est_minutes || 0); });
+                });
+                var bInt = baseTotalHrs > 0 ? Math.round((base.total_interactions || 0) * (bHrs / baseTotalHrs)) : 0;
+                var pcts = filteredCohorts.map(function(t) {
+                    var cCat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    var cHrs = 0;
+                    if (cCat && cCat.brands) cCat.brands.forEach(function(b) { cHrs += (b.est_minutes || 0); });
+                    var cTotalHrs = 0;
+                    (t.data.categories || []).forEach(function(c) {
+                        if (c.brands) c.brands.forEach(function(b) { cTotalHrs += (b.est_minutes || 0); });
+                    });
+                    var cInt = cTotalHrs > 0 ? (t.data.total_interactions || 0) * (cHrs / cTotalHrs) : 0;
+                    return bInt > 0 ? Math.min(cInt / bInt * 100, 100) : 0;
+                });
+                var catCol = _sotCatColors[cn] || '#888';
+                html += '<div style="margin-bottom:0.6rem;">';
+                html += _sotStackedBar('<span style="color:' + catCol + ';">' + cn + '</span>', bInt, pcts, cohortLabels, cohortHues);
+                html += '</div>';
+            });
+            html += '</div>';
+            html += '</div>';
+            (function() {
+                setTimeout(function() {
+                    var sel = document.getElementById('sotCohortCompMetric');
+                    if (!sel) return;
+                    sel.addEventListener('change', function() {
+                        var hDiv = document.getElementById('sotCohortCompHours');
+                        var iDiv = document.getElementById('sotCohortCompInteractions');
+                        if (!hDiv || !iDiv) return;
+                        if (sel.value === 'hours') { hDiv.style.display = ''; iDiv.style.display = 'none'; }
+                        else { hDiv.style.display = 'none'; iDiv.style.display = ''; }
+                    });
+                }, 50);
+            })();
+
             // === Spread Section Header ===
             html += '<div style="margin-bottom:0.6rem;">';
             html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.2rem;">Category Spread by Age Group</h3>';
@@ -24910,26 +24978,6 @@
                 '<h3 class="sot-chart-title">Overall Share of Time by Category</h3>' +
                 '<div style="position:relative;height:' + Math.max(300, catNames.length * 50) + 'px;"><canvas id="sotCmpMain"></canvas></div>' +
             '</div>';
-
-            // === Per-Category Cohort Composition ===
-            html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
-            html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition by Category</h3>';
-            catNames.forEach(function(cn) {
-                var bCat = (base.categories || []).find(function(c) { return c.name === cn; });
-                var bHrs = 0;
-                if (bCat && bCat.brands) bCat.brands.forEach(function(b) { bHrs += (b.est_minutes || 0); });
-                var pcts = filteredCohorts.map(function(t) {
-                    var cCat = (t.data.categories || []).find(function(c) { return c.name === cn; });
-                    var cHrs = 0;
-                    if (cCat && cCat.brands) cCat.brands.forEach(function(b) { cHrs += (b.est_minutes || 0); });
-                    return bHrs > 0 ? Math.min(cHrs / bHrs * 100, 100) : 0;
-                });
-                var catCol = _sotCatColors[cn] || '#888';
-                html += '<div style="margin-bottom:0.6rem;">';
-                html += _sotStackedBar('<span style="color:' + catCol + ';">' + cn + '</span>', bHrs, pcts, cohortLabels, cohortHues);
-                html += '</div>';
-            });
-            html += '</div>';
 
             // === Per-category brand charts + tables (delta vs All Ages) ===
             catNames.forEach(function(catName) {
