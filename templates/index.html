@@ -24555,10 +24555,15 @@
             var isCohort = _sotIsCohortMode(_sotOpenTabs);
             _sotCohortMode = isCohort;
 
-            if (isCohort) {
-                _sotRenderCohortCompare(area, gran, shareKey);
-            } else {
-                _sotRenderTimeCompare(area, gran, shareKey);
+            try {
+                if (isCohort) {
+                    _sotRenderCohortCompare(area, gran, shareKey);
+                } else {
+                    _sotRenderTimeCompare(area, gran, shareKey);
+                }
+            } catch (e) {
+                console.error('SOT compare render error:', e);
+                area.innerHTML = '<div style="padding:2rem;color:#f87171;font-weight:600;">⚠ Render error — check console for details.</div>';
             }
         }
 
@@ -24921,6 +24926,7 @@
 
             // === Per-category brand charts + tables (delta vs All Ages) ===
             catNames.forEach(function(catName) {
+                var baseCat = (base.categories || []).find(function(c) { return c.name === catName; });
                 var allBrands = {};
                 var tabCatShares = [];
                 chartTabs.forEach(function(t) {
