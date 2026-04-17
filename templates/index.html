@@ -24938,10 +24938,9 @@
                 html += '<div class="sot-cmp-cat-card" data-sot-cat="' + cn + '" onclick="sotDrillCategory(\'' + catId + '\',this)">';
                 html += '<div class="ccard-name">' + cn + '</div>';
                 html += '<div class="ccard-val" style="color:' + col + ';">' + baseVal.toFixed(1) + '% <span style="font-size:0.6rem;color:var(--text-secondary);">spread ' + spread.toFixed(1) + 'pp</span> ' + spark + '</div>';
-                html += '<div style="font-size:0.58rem;color:var(--text-secondary);margin-top:0.2rem;line-height:1.35;">';
-                html += '<span style="color:#4ade80;">▲ ' + highLabel + ' ' + maxVal.toFixed(1) + '%</span>';
-                html += ' &nbsp;·&nbsp; ';
-                html += '<span style="color:#f87171;">▼ ' + lowLabel + ' ' + minVal.toFixed(1) + '%</span>';
+                html += '<div style="font-size:0.58rem;margin-top:0.25rem;line-height:1.5;">';
+                html += '<div style="color:#4ade80;">▲ ' + highLabel + ' ' + maxVal.toFixed(1) + '%</div>';
+                html += '<div style="color:#f87171;">▼ ' + lowLabel + ' ' + minVal.toFixed(1) + '%</div>';
                 html += '</div>';
                 html += '<div class="ccard-bar" style="width:' + Math.min(100, baseVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
                 html += '</div>';
