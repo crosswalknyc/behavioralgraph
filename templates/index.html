@@ -24633,7 +24633,7 @@
             html += '</div>';
 
             // === Cohort Composition (% of All Ages) ===
-            var cohortHues = ['210','270','150','45','330','175','350'];
+            var cohortHues = ['210','270','150','45','315','175','345'];
             var cohortLabels = filteredCohorts.map(function(t) { return _sotCohortLabel(t); });
             var baseSample = base.matched_users || 0;
             var baseHours = base.total_projected_hours || 0;
@@ -24820,7 +24820,7 @@
             // === Per-Category Cohort Composition (Hours / Interactions toggle) ===
             html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;padding:0.85rem 1rem;">';
             html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">';
-            html += '<h3 class="sot-cmp-section-title" style="margin:0;">Cohort Composition by Category</h3>';
+            html += '<h3 class="sot-cmp-section-title" style="margin:0;">Cohort Composition<br><span style="font-size:0.85em;font-weight:500;">by Category</span></h3>';
             html += '<select id="sotCohortCompMetric" style="background:var(--card-bg);color:var(--text-primary);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.7rem;cursor:pointer;">';
             html += '<option value="hours" selected>Hours</option><option value="interactions">Interactions</option></select>';
             html += '</div>';
