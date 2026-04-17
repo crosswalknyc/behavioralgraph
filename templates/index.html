@@ -25996,6 +25996,96 @@
                     var ds = sunburstChart.data.datasets[0];
                     ds.backgroundColor = outerColors.slice();
                     sunburstChart.update('none');
+                    var tip = document.getElementById('sotSunburstTip');
+                    if (tip) tip.style.display = 'none';
+                });
+
+                var innerBrands = {};
+                catNames.forEach(function(cn) {
+                    var cat = baseCats.find(function(c) { return c.name === cn; });
+                    if (!cat || !cat.brands) { innerBrands[cn] = []; return; }
+                    innerBrands[cn] = cat.brands.slice().sort(function(a, b) {
+                        return (b.category_share_pct || 0) - (a.category_share_pct || 0);
+                    }).slice(0, 10);
+                });
+
+                var tipDiv = document.createElement('div');
+                tipDiv.id = 'sotSunburstTip';
+                tipDiv.style.cssText = 'display:none;position:absolute;background:rgba(15,23,42,0.95);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:0.6rem 0.8rem;font-size:0.7rem;color:#e8e8e8;pointer-events:none;z-index:50;min-width:180px;max-width:260px;box-shadow:0 4px 16px rgba(0,0,0,0.4);';
+                mainCanvas.parentElement.appendChild(tipDiv);
+
+                var _innerSliceAngles = [];
+                (function() {
+                    var total = innerVals.reduce(function(s, v) { return s + v; }, 0);
+                    var start = -Math.PI / 2;
+                    innerVals.forEach(function(val) {
+                        var sweep = total > 0 ? (val / total) * Math.PI * 2 : 0;
+                        _innerSliceAngles.push({ start: start, end: start + sweep });
+                        start += sweep;
+                    });
+                })();
+
+                mainCanvas.addEventListener('mousemove', function(e) {
+                    var rect = mainCanvas.getBoundingClientRect();
+                    var mx = e.clientX - rect.left;
+                    var my = e.clientY - rect.top;
+                    var scaleX = mainCanvas.width / rect.width;
+                    var scaleY = mainCanvas.height / rect.height;
+                    var px = mx * scaleX;
+                    var py = my * scaleY;
+                    var cx = mainCanvas.width / 2;
+                    var cy = mainCanvas.height / 2;
+                    var dx = px - cx, dy = py - cy;
+                    var dist = Math.sqrt(dx * dx + dy * dy);
+                    var outerR = Math.min(cx, cy) * 0.92;
+                    var innerCutout = outerR * 0.18;
+                    var gapR = outerR * 0.54;
+
+                    var tip = document.getElementById('sotSunburstTip');
+                    if (!tip) return;
+
+                    if (dist >= innerCutout && dist <= gapR) {
+                        var angle = Math.atan2(dy, dx);
+                        var hitIdx = -1;
+                        for (var i = 0; i < _innerSliceAngles.length; i++) {
+                            var sa = _innerSliceAngles[i];
+                            var a = angle;
+                            var s = sa.start, en = sa.end;
+                            if (a < s) a += Math.PI * 2;
+                            if (s < -Math.PI) { s += Math.PI * 2; en += Math.PI * 2; }
+                            var normA = ((a - s) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+                            var normSweep = ((en - s) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+                            if (normA <= normSweep) { hitIdx = i; break; }
+                        }
+                        if (hitIdx >= 0) {
+                            var cn = innerLabels[hitIdx];
+                            var col = innerColors[hitIdx];
+                            var brands = innerBrands[cn] || [];
+                            var h = '<div style="font-weight:700;font-size:0.8rem;color:' + col + ';margin-bottom:0.3rem;">' + cn + ' — ' + innerVals[hitIdx].toFixed(1) + '%</div>';
+                            if (brands.length) {
+                                brands.forEach(function(b) {
+                                    var pct = (b.category_share_pct || 0).toFixed(1);
+                                    h += '<div style="display:flex;justify-content:space-between;gap:0.5rem;padding:1px 0;">';
+                                    h += '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + b.name + '</span>';
+                                    h += '<span style="font-weight:700;flex-shrink:0;">' + pct + '%</span></div>';
+                                });
+                            } else {
+                                h += '<div style="color:var(--text-secondary);">No brand data</div>';
+                            }
+                            tip.innerHTML = h;
+                            tip.style.display = 'block';
+                            var tipX = mx + 16;
+                            var tipY = my - 10;
+                            var pw = mainCanvas.parentElement.offsetWidth;
+                            if (tipX + 260 > pw) tipX = mx - 270;
+                            tip.style.left = tipX + 'px';
+                            tip.style.top = tipY + 'px';
+                            mainCanvas.style.cursor = 'pointer';
+                            return;
+                        }
+                    }
+                    tip.style.display = 'none';
+                    mainCanvas.style.cursor = 'default';
                 });
 
                 var legendDiv = document.getElementById('sotSunburstLegend');
