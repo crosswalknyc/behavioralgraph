@@ -25887,56 +25887,90 @@
                 });
 
                 var sunburstChart = new Chart(mainCanvas.getContext('2d'), {
-                    type: 'doughnut',
-                    plugins: [ChartDataLabels],
+                    type: 'pie',
+                    plugins: [ChartDataLabels, {
+                        id: 'sunburstInner',
+                        beforeDraw: function(chart) {
+                            var ctx = chart.ctx;
+                            var w = chart.width, h = chart.height;
+                            var cx = w / 2, cy = h / 2;
+                            var outerR = Math.min(cx, cy) * 0.92;
+                            var innerR = outerR * 0.55;
+                            var gapR = outerR * 0.54;
+
+                            var total = innerVals.reduce(function(s, v) { return s + v; }, 0);
+                            if (total <= 0) return;
+                            var startAngle = -Math.PI / 2;
+
+                            innerVals.forEach(function(val, i) {
+                                var sliceAngle = (val / total) * Math.PI * 2;
+                                ctx.beginPath();
+                                ctx.arc(cx, cy, gapR, startAngle, startAngle + sliceAngle);
+                                ctx.arc(cx, cy, outerR * 0.18, startAngle + sliceAngle, startAngle, true);
+                                ctx.closePath();
+                                ctx.fillStyle = innerColors[i];
+                                ctx.fill();
+                                ctx.strokeStyle = 'rgba(15,23,42,0.9)';
+                                ctx.lineWidth = 2;
+                                ctx.stroke();
+
+                                if (val >= 2) {
+                                    var midAngle = startAngle + sliceAngle / 2;
+                                    var labelR = (outerR * 0.18 + gapR) / 2;
+                                    var lx = cx + labelR * Math.cos(midAngle);
+                                    var ly = cy + labelR * Math.sin(midAngle);
+                                    ctx.save();
+                                    ctx.fillStyle = '#fff';
+                                    ctx.font = '700 11px sans-serif';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    var name = innerLabels[i] || '';
+                                    if (name.length > 10) name = name.substring(0, 8) + '…';
+                                    ctx.fillText(name, lx, ly - 6);
+                                    ctx.font = '600 10px sans-serif';
+                                    ctx.fillText(val.toFixed(1) + '%', lx, ly + 7);
+                                    ctx.restore();
+                                }
+
+                                startAngle += sliceAngle;
+                            });
+                        }
+                    }],
                     data: {
-                        labels: innerLabels.concat(outerLabels),
-                        datasets: [
-                            {
-                                label: 'Category Share',
-                                data: innerVals,
-                                backgroundColor: innerColors,
-                                borderColor: 'rgba(15,23,42,0.9)',
-                                borderWidth: 2,
-                                weight: 1.2
-                            },
-                            {
-                                label: 'Cohort Breakdown',
-                                data: outerVals,
-                                backgroundColor: outerColors,
-                                borderColor: 'rgba(15,23,42,0.6)',
-                                borderWidth: 1,
-                                weight: 0.8
-                            }
-                        ]
+                        labels: outerLabels,
+                        datasets: [{
+                            data: outerVals,
+                            backgroundColor: outerColors,
+                            borderColor: 'rgba(15,23,42,0.6)',
+                            borderWidth: 1
+                        }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: true,
-                        cutout: '25%',
+                        radius: '92%',
+                        cutout: '55%',
                         plugins: {
                             legend: { display: false },
                             tooltip: {
                                 callbacks: {
                                     label: function(ctx) {
-                                        if (ctx.datasetIndex === 0) {
-                                            return ctx.label + ': ' + ctx.parsed.toFixed(1) + '%';
-                                        }
-                                        var parts = ctx.label.split(' · ');
-                                        return (parts[0] || '') + ': ' + ctx.parsed.toFixed(1) + '% of total (' + (parts[1] || '') + ')';
+                                        var parts = (ctx.label || '').split(' · ');
+                                        var cohort = parts[0] || '';
+                                        var cat = parts[1] || '';
+                                        return cohort + ': ' + ctx.parsed.toFixed(1) + '% (' + cat + ')';
                                     }
                                 }
                             },
                             datalabels: {
                                 display: function(ctx) {
-                                    return ctx.datasetIndex === 0 && ctx.dataset.data[ctx.dataIndex] >= 2;
+                                    return ctx.dataset.data[ctx.dataIndex] >= 1.5;
                                 },
                                 color: '#fff',
-                                font: { weight: '700', size: 11 },
+                                font: { weight: '600', size: 9 },
                                 formatter: function(v, ctx) {
-                                    var name = innerLabels[ctx.dataIndex] || '';
-                                    if (name.length > 12) name = name.substring(0, 10) + '…';
-                                    return name + '\n' + v.toFixed(1) + '%';
+                                    var parts = (outerLabels[ctx.dataIndex] || '').split(' · ');
+                                    return (parts[0] || '').replace(/ or Older/, '+') + '\n' + v.toFixed(1) + '%';
                                 },
                                 textAlign: 'center'
                             }
