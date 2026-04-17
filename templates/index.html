@@ -31856,7 +31856,7 @@
         }
         const TST_AGE_ORDER = ['<16','16-18','18-20','21-25','26-30','31-40','41-59','60+'];
         const TST_AGE_ORDER_EXTRA = ['<16','under 16','16-18','18-20','21-25','26-30','31-40','41-59','60+','65+','over 65'];
-        const TST_INCOME_ORDER = ['$40k-$60k','$40k - $60k','$60k-$75k','$60k - $75k','$75k-$100k','$75k - $100k','$100k-$150k','$100k - $150k','$150k-$250k','$150k - $250k','$250k+','$250k +'];
+        const TST_INCOME_ORDER = ['under $25,000','under $25000','$25,000-$49,999','$25,000 - $49,999','$40k-$60k','$40k - $60k','$50,000-$74,999','$50,000 - $74,999','$60k-$75k','$60k - $75k','$75,000-$99,999','$75,000 - $99,999','$75k-$100k','$75k - $100k','$100,000-$149,999','$100,000 - $149,999','$100k-$150k','$100k - $150k','$150,000-$249,999','$150,000 - $249,999','$150k-$250k','$150k - $250k','$250,000 or more','$250,000+','$250k+','$250k +'];
         const TST_ETHNICITY_ORDER = ['White','Black or African American','Hispanic or Latino','Asian','Another Race/Ethnicity'];
         const TST_GENDER_ORDER = ['Female','Male','Trans Male','Trans Female','Non-Binary'];
         // Display label for demographics: actual category names + overrides; match Profile IQ (income $40,000 - $59,999; age 17-18, 19-20, etc.)
@@ -31939,9 +31939,11 @@
         }
         function _tstIncomeOrderIndex(val) {
             if (val == null) return 999;
-            const v = String(val).trim().toLowerCase().replace(/\s/g, '');
+            const v = String(val).trim().toLowerCase();
+            if (v.startsWith('under')) return -1;
+            const vs = v.replace(/\s/g, '');
             for (let i = 0; i < TST_INCOME_ORDER.length; i++) {
-                if (String(TST_INCOME_ORDER[i]).toLowerCase().replace(/\s/g, '') === v) return i;
+                if (String(TST_INCOME_ORDER[i]).toLowerCase().replace(/\s/g, '') === vs) return i;
             }
             return 999;
         }
@@ -41796,8 +41798,21 @@
             '$250,000+': '$250,000+'
         };
         
-        // Income level order (lowest to highest)
-        const INCOME_ORDER = ['$40k-$60k', '$40k - $60k', '$60k-$75k', '$60k - $75k', '$75k-$100k', '$75k - $100k', '$100k-$150k', '$100k - $150k', '$150k-$250k', '$150k - $250k', '$250k+', '$250k +'];
+        // Income level order (lowest to highest) — "Under" is always the lowest
+        const INCOME_ORDER = [
+            'under $25,000', 'under $25000',
+            '$25,000-$49,999', '$25,000 - $49,999', '$25,000-$49,999',
+            '$40k-$60k', '$40k - $60k',
+            '$50,000-$74,999', '$50,000 - $74,999',
+            '$60k-$75k', '$60k - $75k',
+            '$75,000-$99,999', '$75,000 - $99,999',
+            '$75k-$100k', '$75k - $100k',
+            '$100,000-$149,999', '$100,000 - $149,999',
+            '$100k-$150k', '$100k - $150k',
+            '$150,000-$249,999', '$150,000 - $249,999',
+            '$150k-$250k', '$150k - $250k',
+            '$250,000 or more', '$250,000+', '$250k+', '$250k +'
+        ];
         
         function getIncomeDisplayLabel(originalLabel) {
             const lower = originalLabel.toLowerCase();
@@ -41816,10 +41831,13 @@
                 // Sort by income level order (ascending)
                 entries.sort((a, b) => {
                     const getOrderIndex = (label) => {
-                        const lower = label.toLowerCase();
-                        let idx = INCOME_ORDER.findIndex(o => o.toLowerCase() === lower || lower.includes(o.toLowerCase().replace(/[\$\,\s\+]/g, '')));
+                        const lower = label.toLowerCase().trim();
+                        if (lower.startsWith('under')) return -1;
+                        let idx = INCOME_ORDER.findIndex(o => o.toLowerCase() === lower);
                         if (idx !== -1) return idx;
-                        // Extract numeric value for fallback
+                        const stripped = lower.replace(/[\$\,\s\+]/g, '');
+                        idx = INCOME_ORDER.findIndex(o => stripped.includes(o.toLowerCase().replace(/[\$\,\s\+]/g, '')));
+                        if (idx !== -1) return idx;
                         const match = lower.match(/(\d+)/);
                         return match ? parseInt(match[1]) : 999;
                     };
