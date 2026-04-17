@@ -24989,11 +24989,11 @@
                 (_sotCachedRuns || []).forEach(function(r) {
                     var rRange = (r.start_date || '') + '|' + (r.end_date || '');
                     if (rRange === currentRange) return;
-                    if ((r.age_brackets || []).length >= 7) {
+                    if ((r.age_brackets || []).length >= 7 && _sotQuarterLabel(r.start_date, r.end_date)) {
                         if (!historicalByRange[rRange]) historicalByRange[rRange] = r;
                     }
                 });
-                var histRanges = Object.keys(historicalByRange).sort(function(a, b) { return b.localeCompare(a); }).slice(0, 6);
+                var histRanges = Object.keys(historicalByRange).sort().slice(-8);
 
                 if (histRanges.length === 0) return;
 
@@ -25005,6 +25005,13 @@
                 html += '</div>';
                 html += '<div id="sotTrendChecks" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.75rem;margin-bottom:0.6rem;font-size:0.65rem;"></div>';
                 html += '<div style="position:relative;height:340px;"><canvas id="sotTrendLineChart"></canvas></div>';
+                html += '<div id="sotTrendDrillWrap" style="display:none;margin-top:0.75rem;border-top:1px solid rgba(255,255,255,0.08);padding-top:0.75rem;">';
+                html += '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">';
+                html += '<button id="sotTrendDrillBack" style="background:rgba(255,255,255,0.08);border:none;color:var(--text-primary);border-radius:6px;padding:0.25rem 0.6rem;font-size:0.7rem;cursor:pointer;">← Back</button>';
+                html += '<span id="sotTrendDrillTitle" style="font-weight:700;font-size:0.8rem;"></span></div>';
+                html += '<div id="sotTrendDrillChecks" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.75rem;margin-bottom:0.6rem;font-size:0.65rem;"></div>';
+                html += '<div style="position:relative;height:300px;"><canvas id="sotTrendDrillChart"></canvas></div>';
+                html += '</div>';
                 html += '<div id="sotHistTrendBody" style="font-size:0.72rem;color:var(--text-secondary);">Loading historical data...</div>';
                 html += '</div>';
 
@@ -25035,7 +25042,9 @@
                         }
                         body.style.display = 'none';
 
-                        var allPeriods = [_histBase].concat(loaded).sort(function(a, b) {
+                        var allPeriods = [_histBase].concat(loaded).filter(function(p) {
+                            return !!_sotQuarterLabel(p.start_date, p.end_date);
+                        }).sort(function(a, b) {
                             return (a.start_date || '').localeCompare(b.start_date || '');
                         });
 
@@ -25201,9 +25210,155 @@
                         _sotRenderTrendChart();
 
                         var metricSel = document.getElementById('sotTrendMetric');
-                        if (metricSel) metricSel.addEventListener('change', _sotRenderTrendChart);
+                        if (metricSel) metricSel.addEventListener('change', function() {
+                            _sotRenderTrendChart();
+                            var dw = document.getElementById('sotTrendDrillWrap');
+                            if (dw && dw.style.display !== 'none' && _sotDrillCat) _sotRenderDrillChart(_sotDrillCat);
+                        });
                         document.querySelectorAll('.sotTrendCatCb').forEach(function(cb) {
                             cb.addEventListener('change', _sotRenderTrendChart);
+                        });
+
+                        // --- Category drill-down (click a line to see brand breakdown over time) ---
+                        var _sotDrillChart = null;
+                        var _sotDrillCat = null;
+                        var brandColors = ['#06b6d4','#a78bfa','#4ade80','#fb923c','#f472b6','#facc15','#38bdf8','#ef4444','#34d399','#e879f7','#f59e0b','#6366f1','#14b8a6','#ec4899','#84cc16'];
+
+                        function _sotOpenDrill(catName) {
+                            _sotDrillCat = catName;
+                            var wrap = document.getElementById('sotTrendDrillWrap');
+                            var title = document.getElementById('sotTrendDrillTitle');
+                            if (wrap) wrap.style.display = 'block';
+                            if (title) {
+                                var col = _sotCatColors[catName] || '#888';
+                                title.innerHTML = '<span style="color:' + col + ';">' + catName + '</span> — Brand Breakdown Over Time';
+                            }
+                            _sotRenderDrillChart(catName);
+                        }
+
+                        function _sotRenderDrillChart(catName) {
+                            var canvas = document.getElementById('sotTrendDrillChart');
+                            if (!canvas || typeof Chart === 'undefined') return;
+                            if (_sotDrillChart) { _sotDrillChart.destroy(); _sotDrillChart = null; }
+                            var metric = (document.getElementById('sotTrendMetric') || {}).value || 'hours';
+                            var isShare = metric === 'share';
+
+                            var allBrandNames = {};
+                            allPeriods.forEach(function(p) {
+                                var cat = (p.categories || []).find(function(c) { return c.name === catName; });
+                                if (cat && cat.brands) cat.brands.forEach(function(b) {
+                                    if (!allBrandNames[b.name]) allBrandNames[b.name] = 0;
+                                    allBrandNames[b.name] += (b.est_minutes || 0);
+                                });
+                            });
+                            var topBrands = Object.keys(allBrandNames).sort(function(a, b) { return allBrandNames[b] - allBrandNames[a]; }).slice(0, 12);
+
+                            var checksDiv = document.getElementById('sotTrendDrillChecks');
+                            if (checksDiv) {
+                                var ch = '';
+                                topBrands.forEach(function(bn, bi) {
+                                    var bc = brandColors[bi % brandColors.length];
+                                    ch += '<label style="display:inline-flex;align-items:center;gap:0.2rem;cursor:pointer;color:' + bc + ';font-weight:600;">';
+                                    ch += '<input type="checkbox" class="sotDrillBrandCb" value="' + bn.replace(/"/g, '&quot;') + '" checked style="accent-color:' + bc + ';"> ' + bn + '</label>';
+                                });
+                                checksDiv.innerHTML = ch;
+                                document.querySelectorAll('.sotDrillBrandCb').forEach(function(cb) {
+                                    cb.addEventListener('change', function() { _sotRenderDrillChart(catName); });
+                                });
+                            }
+
+                            var checkedBrands = {};
+                            document.querySelectorAll('.sotDrillBrandCb').forEach(function(cb) {
+                                if (cb.checked) checkedBrands[cb.value] = true;
+                            });
+
+                            var datasets = [];
+                            topBrands.forEach(function(bn, bi) {
+                                if (!checkedBrands[bn]) return;
+                                var bc = brandColors[bi % brandColors.length];
+                                var data = allPeriods.map(function(p) {
+                                    var cat = (p.categories || []).find(function(c) { return c.name === catName; });
+                                    if (!cat || !cat.brands) return 0;
+                                    var brand = cat.brands.find(function(b) { return b.name === bn; });
+                                    if (!brand) return 0;
+                                    if (isShare) return brand.category_share_pct || 0;
+                                    var m = _trendProjMult(p);
+                                    if (metric === 'interactions') {
+                                        var catMins = 0;
+                                        cat.brands.forEach(function(b) { catMins += (b.est_minutes || 0); });
+                                        var totalMins = 0;
+                                        (p.categories || []).forEach(function(c) {
+                                            if (c.brands) c.brands.forEach(function(b) { totalMins += (b.est_minutes || 0); });
+                                        });
+                                        var catInt = totalMins > 0 ? (p.total_interactions || 0) * m * (catMins / totalMins) : 0;
+                                        return catMins > 0 ? catInt * ((brand.est_minutes || 0) / catMins) : 0;
+                                    }
+                                    return (brand.est_minutes || 0) / 60 * m;
+                                });
+                                datasets.push({
+                                    label: bn, data: data, borderColor: bc,
+                                    backgroundColor: 'transparent', pointBackgroundColor: bc,
+                                    pointBorderColor: '#fff', pointRadius: 3, pointHoverRadius: 5,
+                                    borderWidth: 2, fill: false, tension: 0.35
+                                });
+                            });
+
+                            var yLabel = isShare ? 'Share of ' + catName + ' %' : (metric === 'interactions' ? 'Interactions' : 'Hours');
+                            _sotDrillChart = new Chart(canvas.getContext('2d'), {
+                                type: 'line', plugins: [ChartDataLabels],
+                                data: { labels: periodLabels, datasets: datasets },
+                                options: {
+                                    responsive: true, maintainAspectRatio: false,
+                                    interaction: { mode: 'index', intersect: false },
+                                    scales: {
+                                        y: {
+                                            title: { display: true, text: yLabel, color: '#aaa', font: { size: 11 } },
+                                            grid: { color: 'rgba(255,255,255,0.06)' },
+                                            ticks: { color: '#aaa', callback: function(v) {
+                                                if (isShare) return v.toFixed(1) + '%';
+                                                if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
+                                                if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+                                                if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
+                                                return v;
+                                            }},
+                                            beginAtZero: isShare
+                                        },
+                                        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } } }
+                                    },
+                                    plugins: {
+                                        legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 10 }, padding: 12, usePointStyle: true } },
+                                        tooltip: { callbacks: { label: function(ctx) {
+                                            var v = ctx.parsed.y;
+                                            if (isShare) return ctx.dataset.label + ': ' + v.toFixed(1) + '%';
+                                            return ctx.dataset.label + ': ' + _sotCmpFmtNum(Math.round(v));
+                                        }}},
+                                        datalabels: { display: false }
+                                    }
+                                }
+                            });
+                            _sotCompareCharts.push(_sotDrillChart);
+                        }
+
+                        var trendCanvas = document.getElementById('sotTrendLineChart');
+                        if (trendCanvas) {
+                            trendCanvas.style.cursor = 'pointer';
+                            trendCanvas.addEventListener('click', function(e) {
+                                if (!_sotTrendChart) return;
+                                var points = _sotTrendChart.getElementsAtEventForMode(e, 'nearest', { intersect: true }, true);
+                                if (!points.length) return;
+                                var dsIdx = points[0].datasetIndex;
+                                var dsLabel = _sotTrendChart.data.datasets[dsIdx].label;
+                                var catHit = _histCatNames.find(function(cn) { return cn === dsLabel; });
+                                if (catHit) _sotOpenDrill(catHit);
+                            });
+                        }
+
+                        var backBtn = document.getElementById('sotTrendDrillBack');
+                        if (backBtn) backBtn.addEventListener('click', function() {
+                            _sotDrillCat = null;
+                            var wrap = document.getElementById('sotTrendDrillWrap');
+                            if (wrap) wrap.style.display = 'none';
+                            if (_sotDrillChart) { _sotDrillChart.destroy(); _sotDrillChart = null; }
                         });
                     });
                 }, 100);
