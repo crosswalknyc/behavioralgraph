@@ -16225,8 +16225,7 @@
                         </div>
                     </div>
                     <div style="display:flex;justify-content:flex-end;align-items:center;gap:0.5rem;margin:0.25rem 0 0.6rem;">
-                        <button type="button" class="sot-compare-btn" id="sotCompareBtn" onclick="sotToggleCompare()" disabled title="Open 2+ tabs to compare">Compare Open Tabs</button>
-                        <button type="button" class="sot-compare-btn" id="sotCloseAllBtn" onclick="sotCloseAllTabs()" style="display:none;background:#991b1b;border-color:#dc2626;font-size:0.7rem;padding:0.4rem 0.8rem;" title="Close all open tabs">Close All</button>
+                        <button type="button" class="sot-compare-btn" id="sotCloseAllBtn" onclick="sotCloseAllTabs()" style="display:none;background:#991b1b;border-color:#dc2626;font-size:0.7rem;padding:0.4rem 0.8rem;" title="Close dashboard">Close</button>
                     </div>
                     <div id="sotTabBar" class="profile-tabs-bar sot-tab-bar" style="display:none;"></div>
                     <div id="sotCompareArea" style="display:none;"></div>
@@ -23760,6 +23759,7 @@
             showAnalysisStatusModalComplete();
             setTimeout(function() { closeAnalysisStatusModal(); }, 1200);
 
+            _sotOpenTabs = [];
             results.forEach(function(data) {
                 var key = _sotTabKey(data);
                 var exists = false;
@@ -23767,24 +23767,22 @@
                 if (!exists) _sotOpenTabs.push({ data: data, key: key });
             });
 
+            if (results.length > 0) {
+                var first = results[0];
+                _sotActiveQuarterKey = first.start_date + '|' + first.end_date;
+            }
+
             sotLoadRuns();
 
-            if (_sotOpenTabs.length >= 2) {
-                _sotCompareMode = true;
-                _sotActiveTabIdx = -1;
-                sotRenderTabs();
-                sotRenderRunTree();
-                document.getElementById('sotResultsArea').style.display = 'none';
-                document.getElementById('sotEmptyState').style.display = 'none';
-                sotRenderCompare();
-                document.getElementById('sotCompareArea').style.display = 'block';
-            } else if (_sotOpenTabs.length === 1) {
-                _sotActiveTabIdx = 0;
-                _sotData = _sotOpenTabs[0].data;
-                sotRenderTabs();
-                sotRenderRunTree();
-                sotRenderResults(_sotData);
-            }
+            _sotCompareMode = true;
+            _sotActiveTabIdx = -1;
+            _sotViewOnlyIdx = -1;
+            sotRenderTabs();
+            sotRenderRunTree();
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            sotRenderCompare();
+            document.getElementById('sotCompareArea').style.display = 'block';
         }
 
         function sotRunAnalysis(forceRefresh) {
@@ -24069,55 +24067,9 @@
             });
             var latestStart = quarterRuns[0].start_date;
             var latestEnd = quarterRuns[0].end_date;
-            var runsForQuarter = quarterRuns.filter(function(r) {
-                return r.start_date === latestStart && r.end_date === latestEnd;
-            });
-            if (!runsForQuarter.length) return;
 
-            var loaded = 0;
-            var total = runsForQuarter.length;
-            runsForQuarter.forEach(function(r) {
-                fetch('/api/share-of-time/run', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ start_date: r.start_date, end_date: r.end_date, age_brackets: r.age_brackets })
-                }).then(function(resp) { return resp.json(); }).then(function(resp) {
-                    if (resp.success && resp.data) {
-                        var key = _sotTabKey(resp.data);
-                        var exists = false;
-                        _sotOpenTabs.forEach(function(t) { if (_sotTabKey(t.data) === key) exists = true; });
-                        if (!exists) {
-                            _sotOpenTabs.push({ data: resp.data, key: key });
-                        }
-                    }
-                    loaded++;
-                    if (loaded === total) _sotFinishAutoOpen();
-                }).catch(function() {
-                    loaded++;
-                    if (loaded === total) _sotFinishAutoOpen();
-                });
-            });
-        }
-
-        function _sotFinishAutoOpen() {
-            if (_sotOpenTabs.length < 2) {
-                if (_sotOpenTabs.length === 1) {
-                    _sotActiveTabIdx = 0;
-                    _sotData = _sotOpenTabs[0].data;
-                    sotRenderTabs();
-                    sotRenderRunTree();
-                    sotRenderResults(_sotData);
-                }
-                return;
-            }
-            _sotCompareMode = true;
-            _sotActiveTabIdx = -1;
-            sotRenderTabs();
-            sotRenderRunTree();
-            document.getElementById('sotResultsArea').style.display = 'none';
-            document.getElementById('sotEmptyState').style.display = 'none';
-            sotRenderCompare();
-            document.getElementById('sotCompareArea').style.display = 'block';
+            _sotExpandedYears[_sotYearLabel(quarterRuns[0])] = true;
+            sotOpenQuarter(latestStart, latestEnd);
         }
 
         function sotRefreshRuns() {
@@ -24199,31 +24151,7 @@
             return s;
         }
 
-        function _sotRenderAgeRuns(runs, openKeys) {
-            var html = '';
-            var _ageOrder = {'17 and Under':1,'18-24':2,'25-34':3,'35-44':4,'45-54':5,'55-64':6,'65 or Older':7};
-            runs.sort(function(a, b) {
-                var aAll = (a.age_brackets || []).length >= 7 ? 1 : 0;
-                var bAll = (b.age_brackets || []).length >= 7 ? 1 : 0;
-                if (aAll !== bAll) return bAll - aAll;
-                var aMin = Math.min.apply(null, (a.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
-                var bMin = Math.min.apply(null, (b.age_brackets || []).map(function(x) { return _ageOrder[x] || 99; }));
-                if (aMin !== bMin) return aMin - bMin;
-                return (a.age_brackets || []).length - (b.age_brackets || []).length;
-            });
-            runs.forEach(function(r) {
-                var ages = _sotAgeDisplayLabel(r.age_brackets || []);
-                var rKey = r.start_date + '|' + r.end_date + '|' + (r.age_brackets||[]).slice().sort().join(',');
-                var isOpen = openKeys.indexOf(rKey) !== -1;
-                var isActive = _sotSelectedRunKey === r.s3_key;
-                var cls = 'profile-select-item sot-run-item' + (isActive ? ' active' : '');
-                var openBadge = isOpen ? '<span style="font-size:0.62rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;letter-spacing:0.04em;">TAB</span>' : '';
-                html += '<div class="' + cls + '" onclick="sotSelectRun(\'' + r.start_date + '\',\'' + r.end_date + '\',' + JSON.stringify(r.age_brackets).replace(/"/g, '&quot;') + ')" title="' + ages + '">' +
-                    '<div class="sot-run-top"><div class="sot-run-date">' + ages + '</div>' + openBadge + '</div>' +
-                '</div>';
-            });
-            return html;
-        }
+        var _sotActiveQuarterKey = null;
 
         function sotRenderRunTree() {
             var tree = document.getElementById('sotRunTree');
@@ -24239,34 +24167,26 @@
                 tree.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.78rem;">No saved runs yet. Run an analysis to save it here.</div>';
                 return;
             }
-            var openKeys = _sotOpenTabs.map(function(t) { return _sotTabKey(t.data); });
 
-            var grouped = {};
             var quarterGrouped = {};
             runs.forEach(function(r) {
-                var y = _sotYearLabel(r);
                 var qLabel = _sotQuarterLabel(r.start_date, r.end_date);
-                if (qLabel) {
-                    if (!quarterGrouped[y]) quarterGrouped[y] = {};
-                    var rk = (r.start_date || '') + '|' + (r.end_date || '');
-                    if (!quarterGrouped[y][rk]) quarterGrouped[y][rk] = { start: r.start_date, end: r.end_date, label: qLabel, runs: [] };
-                    quarterGrouped[y][rk].runs.push(r);
-                } else {
-                    if (!grouped[y]) grouped[y] = {};
-                    var startMonth = _sotRunMonth(r);
-                    if (!grouped[y][startMonth]) grouped[y][startMonth] = {};
-                    var rk2 = (r.start_date || '') + '|' + (r.end_date || '');
-                    if (!grouped[y][startMonth][rk2]) grouped[y][startMonth][rk2] = { start: r.start_date, end: r.end_date, runs: [] };
-                    grouped[y][startMonth][rk2].runs.push(r);
-                }
+                if (!qLabel) return;
+                var y = _sotYearLabel(r);
+                if (!quarterGrouped[y]) quarterGrouped[y] = {};
+                var rk = (r.start_date || '') + '|' + (r.end_date || '');
+                if (!quarterGrouped[y][rk]) quarterGrouped[y][rk] = { start: r.start_date, end: r.end_date, label: qLabel };
+                quarterGrouped[y][rk].label = qLabel;
             });
 
-            var allYears = {};
-            Object.keys(grouped).forEach(function(y) { allYears[y] = true; });
-            Object.keys(quarterGrouped).forEach(function(y) { allYears[y] = true; });
-            var years = Object.keys(allYears).sort(function(a, b) {
+            var years = Object.keys(quarterGrouped).sort(function(a, b) {
                 return parseInt(b, 10) - parseInt(a, 10);
             });
+
+            if (!years.length) {
+                tree.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.78rem;">No quarterly runs available.</div>';
+                return;
+            }
 
             var html = '';
             years.forEach(function(year) {
@@ -24279,79 +24199,89 @@
                 if (!yearOpen) return;
 
                 html += '<div class="sot-tree-children">';
-
-                if (quarterGrouped[year]) {
-                    var qMonthId = year + '||Q';
-                    var qOpen = !!_sotExpandedMonths[qMonthId];
-                    var qArg = qMonthId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                    html += '<div class="sot-tree-row" onclick="sotToggleRunMonth(\'' + qArg + '\')">' +
-                        '<div class="sot-tree-range" style="font-weight:700;">By Quarter</div>' +
-                        '<div class="sot-tree-chevron">' + (qOpen ? '▼' : '▶') + '</div>' +
-                    '</div>';
-                    if (qOpen) {
-                        var qRanges = Object.keys(quarterGrouped[year]).sort(function(a, b) {
-                            return (quarterGrouped[year][b].start || '').localeCompare(quarterGrouped[year][a].start || '');
-                        });
-                        html += '<div class="sot-tree-children">';
-                        qRanges.forEach(function(rk) {
-                            var g = quarterGrouped[year][rk];
-                            var rangeId = year + '||Q||' + rk;
-                            var rangeOpen = !!_sotExpandedRanges[rangeId];
-                            var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                            html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
-                                '<div class="sot-tree-range">' + g.label + '</div>' +
-                                '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
-                            '</div>';
-                            if (rangeOpen) {
-                                html += '<div class="sot-tree-children">';
-                                html += _sotRenderAgeRuns(g.runs, openKeys);
-                                html += '</div>';
-                            }
-                        });
-                        html += '</div>';
-                    }
-                }
-
-                if (grouped[year]) {
-                    var months = Object.keys(grouped[year]).map(Number).sort(function(a, b) { return b - a; });
-                    months.forEach(function(month) {
-                        var monthId = year + '||' + month;
-                        var monthOpen = !!_sotExpandedMonths[monthId];
-                        var monthArg = monthId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                        html += '<div class="sot-tree-row" onclick="sotToggleRunMonth(\'' + monthArg + '\')">' +
-                            '<div class="sot-tree-range">' + _sotMonthName(month) + '</div>' +
-                            '<div class="sot-tree-chevron">' + (monthOpen ? '▼' : '▶') + '</div>' +
-                        '</div>';
-                        if (!monthOpen) return;
-
-                        var ranges = Object.keys(grouped[year][month]).sort(function(a, b) {
-                            return (grouped[year][month][b].end || '').localeCompare(grouped[year][month][a].end || '');
-                        });
-                        html += '<div class="sot-tree-children">';
-                        ranges.forEach(function(rangeKey) {
-                            var g = grouped[year][month][rangeKey];
-                            var rangeId = year + '||' + month + '||' + rangeKey;
-                            var rangeOpen = !!_sotExpandedRanges[rangeId];
-                            var rangeArg = rangeId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                            var rangeLabel = _sotFmtDateShort(g.start) + ' \u2013 ' + _sotFmtDateShort(g.end);
-                            html += '<div class="sot-tree-row" onclick="sotToggleRunRange(\'' + rangeArg + '\')">' +
-                                '<div class="sot-tree-range">' + rangeLabel + '</div>' +
-                                '<div class="sot-tree-chevron">' + (rangeOpen ? '▼' : '▶') + '</div>' +
-                            '</div>';
-                            if (!rangeOpen) return;
-
-                            html += '<div class="sot-tree-children">';
-                            html += _sotRenderAgeRuns(g.runs, openKeys);
-                            html += '</div>';
-                        });
-                        html += '</div>';
-                    });
-                }
-
+                var qRanges = Object.keys(quarterGrouped[year]).sort(function(a, b) {
+                    return (quarterGrouped[year][b].start || '').localeCompare(quarterGrouped[year][a].start || '');
+                });
+                qRanges.forEach(function(rk) {
+                    var g = quarterGrouped[year][rk];
+                    var isActive = _sotActiveQuarterKey === rk;
+                    var cls = 'profile-select-item sot-run-item' + (isActive ? ' active' : '');
+                    html += '<div class="' + cls + '" onclick="sotOpenQuarter(\'' + g.start + '\',\'' + g.end + '\')" style="padding:0.5rem 0.75rem;cursor:pointer;">' +
+                        '<div class="sot-run-top"><div class="sot-run-date" style="font-weight:700;font-size:0.85rem;">' + g.label + '</div>' +
+                        (isActive ? '<span style="font-size:0.6rem;background:var(--accent-cyan);color:#001018;padding:1px 6px;border-radius:999px;font-weight:700;">OPEN</span>' : '') +
+                        '</div></div>';
+                });
                 html += '</div>';
             });
             tree.innerHTML = html;
         }
+
+        function sotOpenQuarter(startDate, endDate) {
+            var qKey = startDate + '|' + endDate;
+            if (_sotActiveQuarterKey === qKey && _sotCompareMode && _sotOpenTabs.length >= 2) return;
+
+            _sotActiveQuarterKey = qKey;
+            _sotOpenTabs = [];
+            _sotActiveTabIdx = -1;
+            _sotCompareMode = false;
+            _sotViewOnlyIdx = -1;
+            sotRenderRunTree();
+
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotCompareArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            document.getElementById('sotLoadingArea').style.display = 'block';
+
+            var runsForQ = _sotCachedRuns.filter(function(r) {
+                return r.start_date === startDate && r.end_date === endDate && !!_sotQuarterLabel(r.start_date, r.end_date);
+            });
+            if (!runsForQ.length) {
+                document.getElementById('sotLoadingArea').style.display = 'none';
+                document.getElementById('sotEmptyState').style.display = 'block';
+                return;
+            }
+
+            var loaded = 0;
+            var total = runsForQ.length;
+            runsForQ.forEach(function(r) {
+                fetch('/api/share-of-time/run', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_date: r.start_date, end_date: r.end_date, age_brackets: r.age_brackets })
+                }).then(function(resp) { return resp.json(); }).then(function(resp) {
+                    if (resp.success && resp.data) {
+                        var key = _sotTabKey(resp.data);
+                        var exists = false;
+                        _sotOpenTabs.forEach(function(t) { if (_sotTabKey(t.data) === key) exists = true; });
+                        if (!exists) _sotOpenTabs.push({ data: resp.data, key: key });
+                    }
+                    loaded++;
+                    if (loaded === total) _sotFinishQuarterOpen();
+                }).catch(function() {
+                    loaded++;
+                    if (loaded === total) _sotFinishQuarterOpen();
+                });
+            });
+        }
+
+        function _sotFinishQuarterOpen() {
+            document.getElementById('sotLoadingArea').style.display = 'none';
+            if (_sotOpenTabs.length < 1) {
+                document.getElementById('sotEmptyState').style.display = 'block';
+                return;
+            }
+            _sotCompareMode = true;
+            _sotActiveTabIdx = -1;
+            _sotViewOnlyIdx = -1;
+            sotRenderTabs();
+            sotRenderRunTree();
+            document.getElementById('sotResultsArea').style.display = 'none';
+            document.getElementById('sotEmptyState').style.display = 'none';
+            sotRenderCompare();
+            document.getElementById('sotCompareArea').style.display = 'block';
+        }
+
+        var _sotViewOnlyIdx = -1;
 
         function sotOpenTab(data) {
             var key = _sotTabKey(data);
@@ -24401,31 +24331,23 @@
 
         function sotRenderTabs() {
             var bar = document.getElementById('sotTabBar');
-            var compareBtn = document.getElementById('sotCompareBtn');
             if (_sotOpenTabs.length === 0) {
                 bar.style.display = 'none';
-                if (compareBtn) compareBtn.disabled = true;
+                var closeAllBtn = document.getElementById('sotCloseAllBtn');
+                if (closeAllBtn) closeAllBtn.style.display = 'none';
                 return;
             }
             bar.style.display = 'flex';
-            if (compareBtn) compareBtn.disabled = _sotOpenTabs.length < 2;
             var html = '';
-            if (_sotCompareMode) {
-                html += '<div class="profile-tab active" style="cursor:default;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6;"><span class="profile-tab-name">Comparing ' + _sotOpenTabs.length + ' Runs</span></div>';
+            if (_sotCompareMode && _sotOpenTabs.length >= 1) {
+                var firstData = _sotOpenTabs[0].data;
+                var qLabel = _sotQuarterLabel(firstData.start_date, firstData.end_date) || (_sotFmtDateShort(firstData.start_date) + ' \u2013 ' + _sotFmtDateShort(firstData.end_date));
+                var viewLabel = _sotViewOnlyIdx >= 0
+                    ? qLabel + ' \u00b7 ' + _sotAgeDisplayLabel(_sotOpenTabs[_sotViewOnlyIdx].data.age_brackets || [])
+                    : qLabel + ' \u00b7 Cohort Dashboard';
+                html += '<div class="profile-tab active" style="cursor:default;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6;">' +
+                    '<span class="profile-tab-name">' + viewLabel + '</span></div>';
             }
-            _sotOpenTabs.forEach(function(t, i) {
-                var cls = 'profile-tab';
-                if (_sotCompareMode) {
-                    cls += ' active';
-                } else if (i === _sotActiveTabIdx) {
-                    cls += ' active';
-                }
-                var label = _sotTabLabel(t.data);
-                html += '<div class="' + cls + '" onclick="sotSwitchTab(' + i + ')">' +
-                    '<span class="profile-tab-name">' + label + '</span>' +
-                    '<button class="profile-tab-close" onclick="sotCloseTab(' + i + ', event)" title="Close tab">&times;</button>' +
-                '</div>';
-            });
             var closeAllBtn = document.getElementById('sotCloseAllBtn');
             if (closeAllBtn) closeAllBtn.style.display = _sotOpenTabs.length >= 1 ? '' : 'none';
             bar.innerHTML = html;
@@ -24435,6 +24357,8 @@
             _sotOpenTabs = [];
             _sotActiveTabIdx = -1;
             _sotCompareMode = false;
+            _sotViewOnlyIdx = -1;
+            _sotActiveQuarterKey = null;
             _sotData = null;
             document.getElementById('sotResultsArea').style.display = 'none';
             document.getElementById('sotCompareArea').style.display = 'none';
@@ -24546,8 +24470,29 @@
             return 'transparent';
         }
 
+        function sotSetViewOnly(idx) {
+            _sotViewOnlyIdx = idx;
+            sotRenderTabs();
+            if (idx >= 0 && idx < _sotOpenTabs.length) {
+                var data = _sotOpenTabs[idx].data;
+                _sotData = data;
+                _sotActiveTabIdx = idx;
+
+                document.getElementById('sotCompareArea').style.display = 'none';
+                document.getElementById('sotResultsArea').style.display = 'block';
+                sotRenderResults(data);
+            } else {
+                _sotViewOnlyIdx = -1;
+                _sotActiveTabIdx = -1;
+                document.getElementById('sotResultsArea').style.display = 'none';
+                sotRenderCompare();
+                document.getElementById('sotCompareArea').style.display = 'block';
+            }
+        }
+
         function sotRenderCompare() {
             _sotDestroyCompareCharts();
+            _sotViewOnlyIdx = -1;
             var area = document.getElementById('sotCompareArea');
             var gran = _sotGranularity;
             var shareKey = _sotShareKey(gran);
@@ -24600,6 +24545,16 @@
 
             var timeLabel = _sotQuarterLabel(base.start_date, base.end_date) || (_sotFmtDateShort(base.start_date) + ' \u2013 ' + _sotFmtDateShort(base.end_date));
             html += '<div style="margin-bottom:1rem;"><div style="font-size:1.5rem;font-weight:800;color:var(--accent-cyan);letter-spacing:0.02em;line-height:1.2;">' + timeLabel + '</div><div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.2rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Cohort Analysis \u00b7 ' + (filteredCohorts.length + 1) + ' age groups</div></div>';
+
+            // === View Only Chips ===
+            html += '<div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.6rem;padding:0.4rem 0.5rem;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.06);">';
+            html += '<span style="font-size:0.62rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-right:0.2rem;">View:</span>';
+            html += '<span class="sot-cohort-chip active" onclick="sotSetViewOnly(-1)" style="cursor:pointer;">All (Compare)</span>';
+            _sotOpenTabs.forEach(function(t, i) {
+                var lbl = (t.data.age_brackets || []).length >= 7 ? 'All Ages' : (t.data.age_brackets || []).join(', ');
+                html += '<span class="sot-cohort-chip" onclick="sotSetViewOnly(' + i + ')" style="cursor:pointer;">' + lbl + '</span>';
+            });
+            html += '</div>';
 
             // === Cohort Filter Chips ===
             html += '<div class="sot-cohort-chips' + focusHide + '">';
