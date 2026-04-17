@@ -24597,7 +24597,7 @@
             var focusHide = '';
 
             var timeLabel = _sotQuarterLabel(base.start_date, base.end_date) || (_sotFmtDateShort(base.start_date) + ' \u2013 ' + _sotFmtDateShort(base.end_date));
-            html += '<div style="margin-bottom:0.75rem;"><span style="font-size:0.85rem;font-weight:700;color:var(--accent-cyan);letter-spacing:0.03em;">' + timeLabel + '</span> <span style="font-size:0.72rem;color:var(--text-secondary);margin-left:0.4rem;">Cohort Analysis \u00b7 ' + (filteredCohorts.length + 1) + ' age groups</span></div>';
+            html += '<div style="margin-bottom:1rem;"><div style="font-size:1.5rem;font-weight:800;color:var(--accent-cyan);letter-spacing:0.02em;line-height:1.2;">' + timeLabel + '</div><div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.2rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Cohort Analysis \u00b7 ' + (filteredCohorts.length + 1) + ' age groups</div></div>';
 
             // === Cohort Filter Chips ===
             html += '<div class="sot-cohort-chips' + focusHide + '">';
