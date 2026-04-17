@@ -13862,8 +13862,9 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
 
 RULES:
 - Each demographic category MUST sum to exactly 100.
-- Use realistic decimals with 4 decimal places (e.g. 23.7142, not 24 or 23.7).
+- NEVER return round numbers. Every value must have meaningful variation in all 4 decimal places, as if from a real survey. Good: 29.6283, 44.3718, 7.8142, 15.2694. Bad: 30.0000, 45.0000, 8.0000, 15.0000. The integer part should also not be a clean multiple of 5 when possible (use 29.6 instead of 30.0, 44.3 instead of 45.0).
 - Trans population ≈ 0.5-1% of US; Native American ≈ 1%; LGBTQ+ ≈ 7% (higher only if brand has known affinity).
+- ETHNICITY IS CRITICAL: Research the subject's OWN race/ethnicity/heritage. If the subject is a person of color (Asian, Black, Hispanic, etc.), their fan base will significantly over-index on that ethnicity vs. general US population. For example, a Chinese-American actor's audience should have ASIAN as one of the top ethnicities (30-50%+), not just 7% US average. A Black rapper's audience should have BLACK OR AFRICAN AMERICAN at 40-60%+. Never default to generic US census proportions — the subject's identity strongly shapes their audience demographics.
 - Do NOT include "Prefer Not to Say" or "Other" in AGE, GENDER, ETHNICITY, or INCOME. Those categories must only contain the exact buckets listed above.
 - Location percentages should sum to ≤ 100; remainder is auto-spread to the other 190+ DMAs.
 - category_guidance: cover every major behavioral category. Be specific about which items should rank high vs low for THIS audience.
@@ -13944,9 +13945,9 @@ def _run_single_category_agent(category: str, values: list[str],
 
     values_list = '\n'.join(f"  - {v}" for v in values)
 
-    prompt = f"""You are setting Brand Penetration (BP) values for the **{category}** category of a consumer profile for **{subject}**.
+    prompt = f"""You are a consumer research analyst setting Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
 
-Brand Penetration = the % of THIS specific audience that uses, engages with, or purchases each item. This is NOT a general popularity score — it must reflect the realistic overlap between this persona and each item.
+Brand Penetration = the % of THIS specific audience that engages with each item in a digital clickstream panel. This is NOT popularity, awareness, or favorability. It measures actual observed digital behavior — what fraction of panelists who follow/engage with {subject} ALSO visited, used, streamed, purchased, or clicked on each item during the study period.
 
 PERSONA:
 {summary}
@@ -13957,9 +13958,7 @@ KEY DEMOGRAPHICS:
 CATEGORY GUIDANCE:
 {guidance}
 
-Below are the items in this category (from the panel). For each one, set a realistic BP percentage.
-
-ITEMS:
+ITEMS TO SCORE:
 {values_list}
 
 Return ONLY a JSON array — no markdown, no commentary:
@@ -13968,15 +13967,43 @@ Return ONLY a JSON array — no markdown, no commentary:
   …
 ]
 
-CRITICAL RULES — READ CAREFULLY:
-1. REALISTIC SCALE: Even the most popular item in any category rarely exceeds 85% BP for a niche audience. Most items should be 1-40%. Only truly universal items (Google, YouTube, Amazon, Netflix for a digital audience) can reach 60-85%.
-2. FOUR DECIMAL PLACES: Every BP value MUST have 4 decimal places of precision, e.g. 37.2148, 12.8034, 63.4291, 4.7082, 22.1467. This simulates real survey data. Never return a value with fewer than 4 decimal digits.
-3. SPREAD DISTRIBUTION: Most items (60-70%) should be in the 1-25% range. Only 3-5 items per category should exceed 50%. Many niche items should be under 5%.
-4. RANK ORDER MUST MAKE SENSE: For a young female pop-star audience, TikTok > Facebook; Google > Quora; Netflix > ESPN; Amazon > Etsy.
-5. INTEREST CATEGORY REALISM: "Interest" does NOT mean 80%+. Having interest in "FOOTWEAR" might be 25% for this audience (the subset who are sneaker/shoe enthusiasts), not 80%. Having interest in "MUSIC" for a pop star audience might be 72%, not 90%.
-6. LOW-AFFINITY ITEMS: Items unrelated to the persona (e.g. HEAVY MACHINERY, GOLF, BETTING for a young female pop audience) should be 0.5-5%.
-7. DIGITAL PANEL CONTEXT: This data comes from a DIGITAL behavioral panel (online/app clickstream). For MOST PURCHASED BRANDS and CPG categories, traditional grocery/supermarket CPG brands (Coca-Cola, Oreo, Doritos, Tide, Hershey's, M&Ms, etc.) should be LOW (2-15%) because people rarely purchase those online — they buy them in physical stores. Digital-native brands, DTC brands, fashion, beauty, and tech brands should rank higher since those are actually purchased online.
-8. Every item from the list MUST appear in your output.
+MANDATORY CALIBRATION — THESE ARE HARD CONSTRAINTS:
+Think of BP as "what % of this audience had clickstream activity on this item."  Use real-world digital behavior baselines:
+
+TIER 1 (60-85% BP) — ONLY for near-universal digital platforms that almost everyone uses daily:
+  Google, YouTube, Amazon, Gmail, Facebook, Netflix, Instagram.  At most 3-5 items in the ENTIRE profile should be in this tier.
+
+TIER 2 (25-55% BP) — Major platforms with strong persona affinity:
+  e.g. TikTok for Gen-Z, Spotify for music fans, Hulu for cord-cutters, Target for suburban moms.  5-10 items per category max.
+
+TIER 3 (8-25% BP) — Moderate-affinity brands/platforms. This is where MOST items should land.
+  e.g. HBO Max, Starbucks, Nike, Sephora, Reddit, Disney+, Southwest Airlines.
+
+TIER 4 (1-8% BP) — Low-affinity or niche items. Many items should be here.
+  e.g. niche credit unions, regional brands, obscure apps, specialty retailers.
+
+TIER 5 (<1% BP) — Items with virtually no connection to this persona.
+  e.g. farm equipment brands for urban audiences, military brands for teen pop fans.
+
+DISTRIBUTION REQUIREMENT:
+- At least 50% of items MUST be below 15% BP
+- At least 25% of items MUST be below 5% BP
+- No more than 3 items per category above 50% BP
+- No more than 8 items per category above 30% BP
+
+EVENTS/VENUES CALIBRATION:
+Even for a celebrity closely associated with film festivals, most of their digital audience does NOT attend those events. Sundance Film Festival might be 5-12% for an indie film actress's audience, not 70%. Comic-Con might be 3-8% for a superhero actor. Music festivals 2-10% for a musician. Think about what % of the ONLINE audience actually buys tickets or engages with the event digitally.
+
+BANKING/FINANCIAL CALIBRATION:
+Regional credit unions should be 0.5-3% unless there is a specific geographic reason. National banks (Chase, BofA, Wells Fargo) typically 8-20%. Investment platforms (Vanguard, Fidelity) 3-12%. Fintech (SoFi, Robinhood) 2-10%.
+
+DECIMAL PRECISION:
+Every value MUST have 4 genuinely random-looking decimal places (simulating real panel data). Use varied, organic decimals like 14.3827, 7.0614, 22.9153, 3.4281. Do NOT use sequential patterns like x.1234, x.4321, x.5678 — those look fake. Each decimal should appear independently random.
+
+ADDITIONAL RULES:
+- Rank order must make sense for this specific persona
+- DIGITAL PANEL: CPG/grocery brands (Coca-Cola, Tide, Oreo) should be LOW (1-10%) — people buy these in stores, not online
+- Every item from the list MUST appear in your output
 """
 
     token_budget = max(4096, len(values) * 80)
@@ -14064,15 +14091,23 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         return s
 
     def _demo_4dp_noise(val: float) -> float:
-        """Ensure demographic BP has 4 meaningful decimal digits."""
-        v = round(val, 4)
-        s = f"{v:.4f}"
-        frac = s.split('.')[1] if '.' in s else '0000'
-        if frac.endswith('000') or frac.endswith('00') or frac.endswith('0'):
-            noise = random.uniform(0.0001, 0.0099)
-            v = v + noise if v < 99.5 else v - noise
-            v = round(max(0.0001, min(99.9999, v)), 4)
-        return v
+        """Add organic noise so the value looks like real survey data.
+
+        Shifts the integer portion slightly and generates 4 non-zero
+        random decimal digits so no consecutive zeros ever appear.
+        Example: 30.0 → 29.6283 or 30.4718 (never 30.0008).
+        """
+        pct_shift = random.uniform(0.01, 0.03) * random.choice([-1, 1])
+        shift = max(0.15, abs(val * pct_shift)) * (1 if pct_shift > 0 else -1)
+        base = val + shift
+        base = max(0.2, min(99.8, base))
+        integer_part = int(base)
+        d1 = random.randint(1, 9)
+        d2 = random.randint(1, 9)
+        d3 = random.randint(1, 9)
+        d4 = random.randint(1, 9)
+        v = integer_part + d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
+        return max(0.1111, min(99.8999, round(v, 4)))
 
     demos = persona_doc.get('demographics', {})
 
@@ -14195,16 +14230,22 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
     # --- D) Write agent BP values back into DataFrame --------------------
     def _add_4dp_noise(val: float) -> float:
-        """Ensure value has 4 meaningful decimal digits (no trailing zeros)."""
-        v = round(val, 4)
-        s = f"{v:.4f}"
-        # If fewer than 4 non-zero trailing decimals, add micro-noise
-        frac = s.split('.')[1] if '.' in s else '0000'
-        if frac.endswith('000') or frac.endswith('00') or frac.endswith('0'):
-            noise = random.uniform(0.0001, 0.0099)
-            v = v + noise if v < 99.99 else v - noise
-            v = round(max(0.0001, min(99.9999, v)), 4)
-        return v
+        """Add organic noise so the value looks like real panel data.
+
+        Preserves the approximate magnitude while ensuring all 4 decimal
+        digits are non-zero. Example: 12.0 → 11.7294 or 12.3618.
+        """
+        pct_shift = random.uniform(0.005, 0.02) * random.choice([-1, 1])
+        shift = max(0.1, abs(val * pct_shift)) * (1 if pct_shift > 0 else -1)
+        base = val + shift
+        base = max(0.1, min(99.9, base))
+        integer_part = int(base)
+        d1 = random.randint(1, 9)
+        d2 = random.randint(1, 9)
+        d3 = random.randint(1, 9)
+        d4 = random.randint(1, 9)
+        v = integer_part + d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
+        return max(0.1111, min(99.8999, round(v, 4)))
 
     rows_written = 0
     for cat, (vals, idxs) in category_values.items():
@@ -30024,23 +30065,21 @@ def perturb_brand_penetration_avoid_dot_0000(df: pd.DataFrame) -> pd.DataFrame:
         if frac_mod != 0:
             df.at[idx, bp_col] = f"{x4:.4f}"
             continue
-        # Exactly *.0000 at 4dp (or zero): add slight noise
-        noise = random.uniform(0.0001, 0.0099)
+        # Exactly *.0000 at 4dp (or zero): replace with organic-looking value
+        d1 = random.randint(1, 9)
+        d2 = random.randint(1, 9)
+        d3 = random.randint(1, 9)
+        d4 = random.randint(1, 9)
+        frac = d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
         if x4 <= 0:
-            new_x = noise
+            new_x = round(frac, 4)
         else:
-            new_x = x4 + noise
-            if new_x > 100.0:
-                new_x = max(0.0001, x4 - noise)
-            if new_x >= 99.999:
-                new_x = 99.9999 - random.uniform(0.0001, 0.0099)
-        new_x = max(0.0001, min(round(new_x, 4), 99.9999))
-        # Re-check suffix (e.g. round edge)
+            integer_part = int(x4)
+            new_x = round(integer_part + frac, 4)
+            if new_x > 99.9:
+                new_x = round(99.0 + frac, 4)
+        new_x = max(0.1111, min(round(new_x, 4), 99.8999))
         s = f"{new_x:.4f}"
-        if s.endswith('0000'):
-            new_x = round(new_x + random.uniform(0.0001, 0.0099), 4)
-            new_x = min(new_x, 99.9999)
-            s = f"{new_x:.4f}"
         df.at[idx, bp_col] = s
         n_adj += 1
     if n_adj:
