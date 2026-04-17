@@ -14276,7 +14276,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     print(f"   ✅ Wrote BP for {rows_written} behavioral rows across {len(results_map)} categories")
 
     print("   🛡️  Running post-agent quality gate...")
-    df = post_agent_quality_gate(df, persona_doc)
+    df = post_agent_quality_gate(df, persona_doc, brands)
 
     return df
 
@@ -14326,7 +14326,8 @@ def _has_bad_decimals(val: float) -> bool:
     return False
 
 
-def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None) -> pd.DataFrame:
+def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
+                            brands: list[str] | None = None) -> pd.DataFrame:
     """Run all quality validators on the DataFrame after agent processing.
 
     Called between Step 2 (parallel_category_agents) and Step 3 (sanity check).
@@ -14338,6 +14339,15 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None) -
 
     if bp_col not in df.columns:
         return df
+
+    brand_variants = set()
+    if brands:
+        for b in brands:
+            bu = b.strip().upper()
+            brand_variants.add(bu)
+            brand_variants.add(bu.replace(' ', '-'))
+            brand_variants.add(bu.replace(' ', '_'))
+            brand_variants.add(bu.replace(' ', ''))
 
     corrections = 0
 
@@ -14393,7 +14403,7 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None) -
             above_50_sorted = sorted(above_50, key=lambda x: -x[1])
             for idx, v in above_50_sorted[3:]:
                 val_name = str(df.at[idx, 'Value']).strip().upper()
-                if val_name in _UNIVERSAL_HIGH_BP:
+                if val_name in _UNIVERSAL_HIGH_BP or val_name in brand_variants:
                     continue
                 clamped = _organic_4dp(random.uniform(25.0, 45.0))
                 df.at[idx, bp_col] = clamped
@@ -14404,7 +14414,7 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None) -
 
         for idx, v in bp_vals:
             val_name = str(df.at[idx, 'Value']).strip().upper()
-            if v > 90.0 and val_name not in _UNIVERSAL_HIGH_BP:
+            if v > 90.0 and val_name not in _UNIVERSAL_HIGH_BP and val_name not in brand_variants:
                 cat_upper = str(df.at[idx, 'Column']).strip().upper()
                 if cat_upper in _CLAMP_EXEMPT_CATS:
                     continue
@@ -14500,7 +14510,7 @@ def agent_pipeline_final_sanity_check(df: pd.DataFrame,
         df = add_us_gen_pop_projection(df)
 
     # 5. Final quality gate (catch noise/distribution issues introduced by steps 1-4)
-    df = post_agent_quality_gate(df)
+    df = post_agent_quality_gate(df, brands=brands)
 
     # Re-reconcile after quality gate corrections
     df = reconcile_final_output_from_bp_and_sample_size(df)

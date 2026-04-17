@@ -49,6 +49,171 @@ def behavioral_noise(val):
     return max(0.1111, min(99.8999, round(v, 4)))
 
 
+# ── Quality Gate (mirrors bg.py post_agent_quality_gate) ─────────────
+
+_DEMO_SUM_CATEGORIES = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
+
+_UNIVERSAL_HIGH_BP = {
+    'GOOGLE', 'YOUTUBE', 'AMAZON', 'GMAIL', 'FACEBOOK', 'NETFLIX', 'INSTAGRAM',
+}
+
+_CLAMP_EXEMPT_CATS = {'BRAND INPUT', 'SAMPLE SIZE', 'INPUT_METADATA', 'BRAND CATEGORY'}
+
+
+def _has_bad_decimals(val):
+    s = f"{val:.4f}"
+    if '.' not in s:
+        return True
+    frac = s.split('.')[1]
+    if frac == '0000' or '000' in frac or frac[:2] == '00':
+        return True
+    return False
+
+
+def quality_gate(df, persona_doc=None, brands=None):
+    """Run all quality validators — matches bg.py post_agent_quality_gate."""
+    df = df.copy()
+    bp_col = 'Brand Penetration (Row)'
+    pct_col = 'Category Share'
+    if bp_col not in df.columns:
+        return df
+
+    brand_variants = set()
+    if brands:
+        for b in brands:
+            bu = b.strip().upper()
+            brand_variants.add(bu)
+            brand_variants.add(bu.replace(' ', '-'))
+            brand_variants.add(bu.replace(' ', '_'))
+            brand_variants.add(bu.replace(' ', ''))
+
+    corrections = 0
+
+    # V1: Demographic sum check
+    for demo_cat in _DEMO_SUM_CATEGORIES:
+        mask = df['Column'].astype(str).str.strip().str.upper() == demo_cat
+        if not mask.any():
+            continue
+        idxs = df[mask].index.tolist()
+        vals = []
+        for idx in idxs:
+            try:
+                vals.append((idx, float(df.at[idx, bp_col])))
+            except (ValueError, TypeError):
+                continue
+        if not vals:
+            continue
+        total = sum(v for _, v in vals)
+        if abs(total - 100.0) > 2.0:
+            factor = 100.0 / total if total > 0 else 1.0
+            adj_pct = abs(total - 100.0)
+            if adj_pct > 5.0:
+                print(f"   ⚠️  QG: {demo_cat} sum was {total:.2f}% (off by {adj_pct:.1f}%), normalizing")
+            for idx, v in vals:
+                new_v = round(v * factor, 4)
+                df.at[idx, bp_col] = new_v
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = new_v
+                corrections += 1
+
+    # V2: BP distribution gate
+    all_cats = df['Column'].astype(str).str.strip().str.upper().unique()
+    behavioral_cats = [c for c in all_cats
+                       if c not in _DEMO_SUM_CATEGORIES
+                       and c not in _CLAMP_EXEMPT_CATS
+                       and c != 'LOCATION']
+    for cat in behavioral_cats:
+        mask = df['Column'].astype(str).str.strip().str.upper() == cat
+        if not mask.any():
+            continue
+        idxs = df[mask].index.tolist()
+        bp_vals = []
+        for idx in idxs:
+            try:
+                bp_vals.append((idx, float(df.at[idx, bp_col])))
+            except (ValueError, TypeError):
+                continue
+        if not bp_vals:
+            continue
+
+        above_50 = [(idx, v) for idx, v in bp_vals if v > 50.0]
+        if len(above_50) > 3:
+            above_50_sorted = sorted(above_50, key=lambda x: -x[1])
+            for idx, v in above_50_sorted[3:]:
+                val_name = str(df.at[idx, 'Value']).strip().upper()
+                if val_name in _UNIVERSAL_HIGH_BP or val_name in brand_variants:
+                    continue
+                clamped = behavioral_noise(random.uniform(25.0, 45.0))
+                df.at[idx, bp_col] = clamped
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = clamped
+                corrections += 1
+                print(f"   ⚠️  QG: {cat}/{val_name} clamped {v:.2f}→{clamped:.4f} (>3 items above 50%)")
+
+        for idx, v in bp_vals:
+            val_name = str(df.at[idx, 'Value']).strip().upper()
+            if v > 90.0 and val_name not in _UNIVERSAL_HIGH_BP and val_name not in brand_variants:
+                cat_upper = str(df.at[idx, 'Column']).strip().upper()
+                if cat_upper in _CLAMP_EXEMPT_CATS:
+                    continue
+                clamped = behavioral_noise(random.uniform(55.0, 80.0))
+                df.at[idx, bp_col] = clamped
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = clamped
+                corrections += 1
+                print(f"   ⚠️  QG: {cat}/{val_name} clamped {v:.2f}→{clamped:.4f} (>90% non-universal)")
+
+    # V3: Location uniqueness
+    loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
+    if loc_mask.any():
+        loc_idxs = df[loc_mask].index.tolist()
+        seen_vals = {}
+        for idx in loc_idxs:
+            try:
+                v = round(float(df.at[idx, bp_col]), 4)
+            except (ValueError, TypeError):
+                continue
+            if v in seen_vals:
+                d4 = random.randint(1, 9)
+                jitter = d4 * 0.0001 * random.choice([-1, 1])
+                new_v = round(max(0.0011, v + jitter), 4)
+                while new_v in seen_vals:
+                    d4 = random.randint(1, 9)
+                    jitter = d4 * 0.0001 * random.choice([-1, 1])
+                    new_v = round(max(0.0011, v + jitter), 4)
+                df.at[idx, bp_col] = new_v
+                if pct_col in df.columns:
+                    df.at[idx, pct_col] = new_v
+                seen_vals[new_v] = idx
+                corrections += 1
+            else:
+                seen_vals[v] = idx
+
+    # V4: Noise quality check
+    skip_cats = {'INPUT_METADATA', 'SAMPLE SIZE'}
+    for idx in df.index:
+        cat = str(df.at[idx, 'Column']).strip().upper()
+        if cat in skip_cats:
+            continue
+        try:
+            v = float(df.at[idx, bp_col])
+        except (ValueError, TypeError):
+            continue
+        if v >= 99.999 or v <= 0.0001:
+            continue
+        if _has_bad_decimals(v):
+            new_v = behavioral_noise(v)
+            df.at[idx, bp_col] = new_v
+            if pct_col in df.columns:
+                df.at[idx, pct_col] = new_v
+            corrections += 1
+
+    gate_status = "PASS" if corrections == 0 else f"{corrections} auto-corrections"
+    print(f"   🛡️  QualityGate: {gate_status}")
+    return df
+
+
 # ── Step 1: Persona Research Agent ───────────────────────────────────
 
 def persona_research_agent(subject, brand_category):
@@ -449,6 +614,10 @@ def reprocess(filepath, subject, brand_category):
 
     print(f"\n  ✅ Wrote BP for {rows_written} behavioral rows")
 
+    # ── Quality Gate ──────────────────────────────────────────────────
+    print(f"\n🛡️  Running post-agent quality gate...")
+    df = quality_gate(df, persona_doc, brands)
+
     # Step 3: Reconcile (sample size based)
     print(f"\n🔒 Step 3: Reconcile raw numbers and Category Share...")
     ss_mask = df['Column'].astype(str).str.strip().str.upper() == 'SAMPLE SIZE'
@@ -475,6 +644,46 @@ def reprocess(filepath, subject, brand_category):
             df.at[idx, bp_col] = 100.0
             if pct_col in df.columns:
                 df.at[idx, pct_col] = 100.0
+            df.at[idx, 'Original Raw Numbers'] = sample_size
+            df.at[idx, 'US Gen Pop Projection'] = int(round(sample_size * (324770000 / sample_size)))
+
+    # Lock the subject's own name to 100% in EVERY category
+    brand_name_u = subject.strip().upper()
+    brand_variants = {brand_name_u, brand_name_u.replace(' ', '-'),
+                      brand_name_u.replace(' ', '_')}
+    for idx in df.index:
+        val_u = str(df.at[idx, 'Value']).strip().upper()
+        if val_u in brand_variants or brand_name_u in val_u:
+            df.at[idx, bp_col] = 100.0
+            if pct_col in df.columns:
+                df.at[idx, pct_col] = 100.0
+            df.at[idx, 'Original Raw Numbers'] = sample_size
+            df.at[idx, 'US Gen Pop Projection'] = int(round(sample_size * (324770000 / sample_size)))
+
+    # Final quality gate pass (catch anything introduced by reconciliation)
+    print(f"   🛡️  Final quality gate pass...")
+    df = quality_gate(df, persona_doc, brands)
+
+    # Re-reconcile after final quality gate
+    for idx in df.index:
+        try:
+            bp = float(df.at[idx, bp_col])
+        except (ValueError, TypeError):
+            continue
+        raw = max(1, int(round(bp / 100.0 * sample_size)))
+        df.at[idx, 'Original Raw Numbers'] = raw
+        df.at[idx, 'US Gen Pop Projection'] = int(round(raw * (324770000 / sample_size)))
+
+    # Re-lock brand after final reconcile
+    for idx in df.index:
+        cat = str(df.at[idx, 'Column']).strip().upper()
+        val_u = str(df.at[idx, 'Value']).strip().upper()
+        if cat == 'BRAND INPUT' or val_u in brand_variants or brand_name_u in val_u:
+            df.at[idx, bp_col] = 100.0
+            if pct_col in df.columns:
+                df.at[idx, pct_col] = 100.0
+            df.at[idx, 'Original Raw Numbers'] = sample_size
+            df.at[idx, 'US Gen Pop Projection'] = int(round(sample_size * (324770000 / sample_size)))
 
     elapsed = time.time() - start
     print(f"\n✅ Done in {elapsed:.1f}s")
@@ -492,6 +701,39 @@ def reprocess(filepath, subject, brand_category):
             print(f"\n  {cat} (top 5):")
             for _, row in subset.iterrows():
                 print(f"    {row['Value']}: {row[bp_col]}")
+
+    # QA summary
+    print(f"\n--- QA Validation: {subject} ---")
+    for cat in sorted(_DEMO_SUM_CATEGORIES):
+        mask = df['Column'].astype(str).str.strip().str.upper() == cat
+        if not mask.any():
+            continue
+        vals = []
+        for idx in df[mask].index:
+            try:
+                vals.append(float(df.at[idx, bp_col]))
+            except:
+                pass
+        total = sum(vals)
+        status = 'PASS' if abs(total - 100.0) <= 2.0 else f'FAIL ({total:.2f}%)'
+        print(f"  Demo sum {cat}: {total:.2f}% → {status}")
+
+    loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
+    if loc_mask.any():
+        loc_bps = df.loc[loc_mask, bp_col].astype(float).round(4)
+        dupes = loc_bps.duplicated().sum()
+        print(f"  Location: {loc_bps.nunique()} unique / {len(loc_bps)} DMAs, {dupes} duplicates")
+
+    # Check brand at 100%
+    for idx in df.index:
+        val_u = str(df.at[idx, 'Value']).strip().upper()
+        if val_u in brand_variants or brand_name_u in val_u:
+            bp_v = float(df.at[idx, bp_col])
+            if bp_v != 100.0:
+                print(f"  ⚠️ Brand '{val_u}' at {bp_v}% in {df.at[idx, 'Column']} (should be 100%)")
+            break
+    else:
+        print(f"  Brand lock: OK")
 
 
 # ── Run ──────────────────────────────────────────────────────────────
