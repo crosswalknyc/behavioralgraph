@@ -25002,8 +25002,13 @@
                 html += '<h3 class="sot-cmp-section-title" style="margin:0;">Time-over-Time Trends</h3>';
                 html += '<select id="sotTrendMetric" style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:0.25rem 0.5rem;font-size:0.7rem;">';
                 html += '<option value="hours">US Hours</option><option value="interactions">Interactions</option><option value="share">Category Share %</option></select>';
+                html += '<select id="sotTrendCohort" style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:0.25rem 0.5rem;font-size:0.7rem;">';
+                html += '<option value="all">All Ages</option>';
+                ['17 and Under','18-24','25-34','35-44','45-54','55-64','65 or Older'].forEach(function(ag) {
+                    html += '<option value="' + ag + '">' + ag + '</option>';
+                });
+                html += '</select>';
                 html += '</div>';
-                html += '<div id="sotTrendCohortChecks" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.75rem;margin-bottom:0.4rem;font-size:0.65rem;"></div>';
                 html += '<div id="sotTrendChecks" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.75rem;margin-bottom:0.6rem;font-size:0.65rem;"></div>';
                 html += '<div style="position:relative;height:340px;"><canvas id="sotTrendLineChart"></canvas></div>';
                 html += '<div id="sotTrendDrillWrap" style="display:none;margin-top:0.75rem;border-top:1px solid rgba(255,255,255,0.08);padding-top:0.75rem;">';
@@ -25074,30 +25079,24 @@
                             });
                         });
 
-                        var ageLabels = ['17 and Under','18-24','25-34','35-44','45-54','55-64','65 or Older'];
-                        var cohortDataByAge = {};
-                        ageLabels.forEach(function(ag) {
-                            cohortDataByAge[ag] = {};
-                            allPeriods.forEach(function(p) {
-                                var key = p.start_date + '|' + p.end_date;
-                                var match = (_sotCachedRuns || []).find(function(r) {
-                                    return r.start_date === p.start_date && r.end_date === p.end_date
-                                        && (r.age_brackets || []).length === 1 && r.age_brackets[0] === ag;
-                                });
-                                cohortDataByAge[ag][key] = match || null;
-                            });
-                        });
+                        var _cohortPeriodCache = {};
 
-                        var cohortChecksDiv = document.getElementById('sotTrendCohortChecks');
-                        if (cohortChecksDiv) {
-                            var cch = '<span style="color:var(--text-secondary);font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Cohorts:</span>';
-                            ageLabels.forEach(function(ag, ai) {
-                                var hue = cohortHues[ai % cohortHues.length];
-                                var col = 'hsla(' + hue + ',65%,55%,1)';
-                                cch += '<label style="display:inline-flex;align-items:center;gap:0.2rem;cursor:pointer;color:' + col + ';font-weight:600;">';
-                                cch += '<input type="checkbox" class="sotTrendCohortCb" value="' + ag + '" style="accent-color:' + col + ';"> ' + ag + '</label>';
+                        function _fetchCohortPeriods(age) {
+                            var cacheKey = age;
+                            if (_cohortPeriodCache[cacheKey]) return Promise.resolve(_cohortPeriodCache[cacheKey]);
+                            var fetches = allPeriods.map(function(p) {
+                                return fetch('/api/share-of-time/run', {
+                                    method: 'POST', credentials: 'same-origin',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ start_date: p.start_date, end_date: p.end_date, age_brackets: [age] })
+                                }).then(function(r) { return r.json(); }).then(function(resp) {
+                                    return resp.success && resp.data ? resp.data : null;
+                                }).catch(function() { return null; });
                             });
-                            cohortChecksDiv.innerHTML = cch;
+                            return Promise.all(fetches).then(function(results) {
+                                _cohortPeriodCache[cacheKey] = results;
+                                return results;
+                            });
                         }
 
                         var checksDiv = document.getElementById('sotTrendChecks');
@@ -25115,290 +25114,189 @@
 
                         var _sotTrendChart = null;
 
-                        function _sotRenderTrendChart() {
-                            var metric = (document.getElementById('sotTrendMetric') || {}).value || 'hours';
+                        function _buildCatData(periods, cn, metric, shareKeyLocal) {
+                            var isShare = metric === 'share';
+                            if (isShare) {
+                                return periods.map(function(p) {
+                                    var cat = (p.categories || []).find(function(c) { return c.name === cn; });
+                                    return cat ? (cat[shareKeyLocal] || 0) : 0;
+                                });
+                            }
+                            return periods.map(function(p) {
+                                var totalMins = 0, catMins = 0;
+                                (p.categories || []).forEach(function(c) {
+                                    var hrs = 0;
+                                    if (c.brands) c.brands.forEach(function(b) { hrs += (b.est_minutes || 0); });
+                                    totalMins += hrs;
+                                    if (c.name === cn) catMins = hrs;
+                                });
+                                var m = _trendProjMult(p);
+                                if (metric === 'interactions') {
+                                    var totalInt = (p.total_interactions || 0) * m;
+                                    return totalMins > 0 ? totalInt * (catMins / totalMins) : 0;
+                                }
+                                return catMins / 60 * m;
+                            });
+                        }
+
+                        function _buildTotalData(periods, metric) {
+                            return periods.map(function(p) {
+                                var m = _trendProjMult(p);
+                                return metric === 'interactions' ? (p.total_interactions || 0) * m : (p.total_projected_hours || 0) * m;
+                            });
+                        }
+
+                        function _linRegForecast(vals) {
+                            var n = vals.length;
+                            if (n < 2) return { mid: vals[n - 1] || 0, hi: vals[n - 1] || 0, lo: vals[n - 1] || 0 };
+                            var sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+                            for (var i = 0; i < n; i++) { sumX += i; sumY += vals[i]; sumXY += i * vals[i]; sumX2 += i * i; }
+                            var slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+                            var intercept = (sumY - slope * sumX) / n;
+                            var mid = intercept + slope * n;
+                            var residuals = vals.map(function(v, i) { return v - (intercept + slope * i); });
+                            var stdDev = Math.sqrt(residuals.reduce(function(s, r) { return s + r * r; }, 0) / n);
+                            return { mid: mid, hi: mid + stdDev * 1.5, lo: Math.max(0, mid - stdDev * 1.5) };
+                        }
+
+                        function _sotDrawTrendChart(periods, metric, checked, isShare) {
                             var canvas = document.getElementById('sotTrendLineChart');
                             if (!canvas || typeof Chart === 'undefined') return;
                             if (_sotTrendChart) { _sotTrendChart.destroy(); _sotTrendChart = null; }
 
-                            var checked = {};
-                            document.querySelectorAll('.sotTrendCatCb').forEach(function(cb) {
-                                if (cb.checked) checked[cb.value] = true;
-                            });
-                            var checkedCohorts = {};
-                            document.querySelectorAll('.sotTrendCohortCb').forEach(function(cb) {
-                                if (cb.checked) checkedCohorts[cb.value] = true;
+                            var pLabels = periods.map(function(p) {
+                                return _sotQuarterLabel(p.start_date, p.end_date) || _sotFmtDateShort(p.start_date).replace(/, \d{4}$/, '');
                             });
 
                             var datasets = [];
-                            var isShare = metric === 'share';
 
                             if (checked['__total__'] && !isShare) {
-                                var rawData = metric === 'interactions' ? trendSeriesInt : trendSeriesHours;
                                 datasets.push({
                                     label: metric === 'interactions' ? 'Total Interactions' : 'Total US Hours',
-                                    data: rawData,
+                                    data: _buildTotalData(periods, metric),
                                     borderColor: 'rgba(6,182,212,0.5)',
                                     backgroundColor: 'rgba(6,182,212,0.08)',
                                     pointBackgroundColor: 'rgba(6,182,212,0.6)',
                                     pointBorderColor: 'rgba(6,182,212,0.3)',
-                                    pointRadius: 3,
-                                    pointHoverRadius: 5,
-                                    borderWidth: 1.5,
-                                    fill: true,
-                                    tension: 0.35,
-                                    order: 10
+                                    pointRadius: 3, pointHoverRadius: 5,
+                                    borderWidth: 1.5, fill: true, tension: 0.35, order: 10
                                 });
                             }
 
                             _histCatNames.forEach(function(cn) {
                                 if (!checked[cn]) return;
                                 var col = _sotCatColors[cn] || '#888';
-                                var data;
-                                if (isShare) {
-                                    data = catSeriesMap[cn];
-                                } else {
-                                    data = allPeriods.map(function(p, pi) {
-                                        var totalMins = 0;
-                                        var catMins = 0;
-                                        (p.categories || []).forEach(function(c) {
-                                            var hrs = 0;
-                                            if (c.brands) c.brands.forEach(function(b) { hrs += (b.est_minutes || 0); });
-                                            totalMins += hrs;
-                                            if (c.name === cn) catMins = hrs;
-                                        });
-                                        var m = _trendProjMult(p);
-                                        if (metric === 'interactions') {
-                                            var totalInt = (p.total_interactions || 0) * m;
-                                            return totalMins > 0 ? totalInt * (catMins / totalMins) : 0;
-                                        }
-                                        return catMins / 60 * m;
-                                    });
-                                }
                                 datasets.push({
                                     label: cn,
-                                    data: data,
-                                    borderColor: col,
-                                    backgroundColor: 'transparent',
-                                    pointBackgroundColor: col,
-                                    pointBorderColor: '#fff',
-                                    pointRadius: 4,
-                                    pointHoverRadius: 6,
-                                    borderWidth: 2,
-                                    fill: false,
-                                    tension: 0.35,
-                                    order: 1
+                                    data: _buildCatData(periods, cn, metric, _histShareKey),
+                                    borderColor: col, backgroundColor: 'transparent',
+                                    pointBackgroundColor: col, pointBorderColor: '#fff',
+                                    pointRadius: 4, pointHoverRadius: 6,
+                                    borderWidth: 2, fill: false, tension: 0.35, order: 1
                                 });
                             });
 
-                            ageLabels.forEach(function(ag, ai) {
-                                if (!checkedCohorts[ag]) return;
-                                var hue = cohortHues[ai % cohortHues.length];
-                                var col = 'hsla(' + hue + ',65%,55%,1)';
-                                var data = allPeriods.map(function(p) {
-                                    var key = p.start_date + '|' + p.end_date;
-                                    var run = cohortDataByAge[ag][key];
-                                    if (!run) return null;
-                                    return fetch('/api/share-of-time/run', {
-                                        method: 'POST', credentials: 'same-origin',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ start_date: run.start_date, end_date: run.end_date, age_brackets: [ag] })
-                                    }).then(function(r) { return r.json(); }).then(function(resp) {
-                                        return resp.success && resp.data ? resp.data : null;
-                                    }).catch(function() { return null; });
-                                });
-                                datasets.push({
-                                    label: ag,
-                                    data: [],
-                                    borderColor: col,
-                                    backgroundColor: 'transparent',
-                                    pointBackgroundColor: col,
-                                    pointBorderColor: '#fff',
-                                    pointRadius: 4,
-                                    pointHoverRadius: 6,
-                                    borderWidth: 2,
-                                    borderDash: [6, 3],
-                                    fill: false,
-                                    tension: 0.35,
-                                    order: 2,
-                                    _cohortAge: ag, _cohortIdx: ai
-                                });
-                            });
-
-                            var hasCohorts = Object.keys(checkedCohorts).length > 0;
-
-                            function _linRegForecast(vals) {
-                                var n = vals.length;
-                                if (n < 2) return { mid: vals[n - 1] || 0, hi: vals[n - 1] || 0, lo: vals[n - 1] || 0 };
-                                var sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-                                for (var i = 0; i < n; i++) { sumX += i; sumY += vals[i]; sumXY += i * vals[i]; sumX2 += i * i; }
-                                var slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-                                var intercept = (sumY - slope * sumX) / n;
-                                var mid = intercept + slope * n;
-                                var residuals = vals.map(function(v, i) { return v - (intercept + slope * i); });
-                                var stdDev = Math.sqrt(residuals.reduce(function(s, r) { return s + r * r; }, 0) / n);
-                                return { mid: mid, hi: mid + stdDev * 1.5, lo: Math.max(0, mid - stdDev * 1.5) };
-                            }
-
-                            var lastQ = periodLabels[periodLabels.length - 1] || '';
                             var nextQLabel = 'Next Q (est)';
-                            var forecastLabels = periodLabels.concat([nextQLabel]);
-
+                            var forecastLabels = pLabels.concat([nextQLabel]);
                             var forecastDatasets = [];
                             datasets.forEach(function(ds) {
-                                if (ds.order === 10 || ds._cohortAge) return;
+                                if (ds.order === 10) return;
                                 var rawVals = ds.data;
                                 if (!rawVals || rawVals.length < 2) return;
                                 var fc = _linRegForecast(rawVals);
                                 var lastVal = rawVals[rawVals.length - 1];
                                 var nullPad = rawVals.map(function(_, i) { return i < rawVals.length - 1 ? null : lastVal; });
-
                                 forecastDatasets.push({
-                                    label: ds.label + ' (forecast)',
-                                    data: nullPad.concat([fc.mid]),
-                                    borderColor: ds.borderColor,
-                                    backgroundColor: 'transparent',
-                                    pointBackgroundColor: ds.borderColor,
-                                    pointBorderColor: '#fff',
-                                    pointRadius: [0, 0, 0, 0, 0, 0, 0, 0, 4].slice(-(rawVals.length + 1)),
-                                    borderWidth: 2,
-                                    borderDash: [4, 4],
-                                    fill: false,
-                                    tension: 0,
-                                    order: 3,
-                                    spanGaps: true
+                                    label: ds.label + ' (forecast)', data: nullPad.concat([fc.mid]),
+                                    borderColor: ds.borderColor, backgroundColor: 'transparent',
+                                    pointBackgroundColor: ds.borderColor, pointBorderColor: '#fff',
+                                    pointRadius: [0,0,0,0,0,0,0,0,4].slice(-(rawVals.length+1)),
+                                    borderWidth: 2, borderDash: [4,4], fill: false, tension: 0, order: 3, spanGaps: true
                                 });
-
-                                var hiPad = rawVals.map(function(_, i) { return i < rawVals.length - 1 ? null : lastVal; });
-                                var loPad = rawVals.map(function(_, i) { return i < rawVals.length - 1 ? null : lastVal; });
+                                var hiPad = nullPad.slice(), loPad = nullPad.slice();
                                 forecastDatasets.push({
-                                    label: ds.label + ' (high)',
-                                    data: hiPad.concat([fc.hi]),
+                                    label: ds.label + ' (high)', data: hiPad.concat([fc.hi]),
                                     borderColor: 'transparent',
                                     backgroundColor: (ds.borderColor || '').replace(/[\d.]+\)$/, '0.10)'),
-                                    pointRadius: 0,
-                                    borderWidth: 0,
-                                    fill: '+1',
-                                    tension: 0,
-                                    order: 8,
-                                    spanGaps: true
+                                    pointRadius: 0, borderWidth: 0, fill: '+1', tension: 0, order: 8, spanGaps: true
                                 });
                                 forecastDatasets.push({
-                                    label: ds.label + ' (low)',
-                                    data: loPad.concat([fc.lo]),
-                                    borderColor: 'transparent',
-                                    backgroundColor: 'transparent',
-                                    pointRadius: 0,
-                                    borderWidth: 0,
-                                    fill: false,
-                                    tension: 0,
-                                    order: 8,
-                                    spanGaps: true
+                                    label: ds.label + ' (low)', data: loPad.concat([fc.lo]),
+                                    borderColor: 'transparent', backgroundColor: 'transparent',
+                                    pointRadius: 0, borderWidth: 0, fill: false, tension: 0, order: 8, spanGaps: true
                                 });
                             });
 
                             var allDS = datasets.map(function(ds) {
-                                var padded = ds.data.concat([null]);
-                                return Object.assign({}, ds, { data: padded });
+                                return Object.assign({}, ds, { data: ds.data.concat([null]) });
                             }).concat(forecastDatasets);
 
                             var yLabel = isShare ? 'Category Share %' : (metric === 'interactions' ? 'Interactions' : 'US Hours');
 
                             _sotTrendChart = new Chart(canvas.getContext('2d'), {
-                                type: 'line',
-                                plugins: [ChartDataLabels],
+                                type: 'line', plugins: [ChartDataLabels],
                                 data: { labels: forecastLabels, datasets: allDS },
                                 options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
+                                    responsive: true, maintainAspectRatio: false,
                                     interaction: { mode: 'index', intersect: false },
                                     scales: {
                                         y: {
                                             title: { display: true, text: yLabel, color: '#aaa', font: { size: 11 } },
                                             grid: { color: 'rgba(255,255,255,0.06)' },
-                                            ticks: {
-                                                color: '#aaa',
-                                                callback: function(v) {
-                                                    if (isShare) return v.toFixed(1) + '%';
-                                                    if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
-                                                    if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
-                                                    if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
-                                                    return v;
-                                                }
-                                            },
+                                            ticks: { color: '#aaa', callback: function(v) {
+                                                if (isShare) return v.toFixed(1) + '%';
+                                                if (v >= 1e9) return (v/1e9).toFixed(1)+'B';
+                                                if (v >= 1e6) return (v/1e6).toFixed(1)+'M';
+                                                if (v >= 1e3) return (v/1e3).toFixed(0)+'K';
+                                                return v;
+                                            }},
                                             beginAtZero: isShare
                                         },
-                                        x: {
-                                            grid: { color: 'rgba(255,255,255,0.04)' },
-                                            ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } }
-                                        }
+                                        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } } }
                                     },
                                     plugins: {
-                                        legend: {
-                                            position: 'top',
-                                            labels: {
-                                                color: '#e8e8e8', font: { size: 11 }, padding: 14, usePointStyle: true,
-                                                filter: function(item) {
-                                                    return item.text.indexOf('(forecast)') === -1 && item.text.indexOf('(high)') === -1 && item.text.indexOf('(low)') === -1;
-                                                }
-                                            }
-                                        },
+                                        legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 14, usePointStyle: true,
+                                            filter: function(item) { return item.text.indexOf('(forecast)')===-1 && item.text.indexOf('(high)')===-1 && item.text.indexOf('(low)')===-1; }
+                                        }},
                                         tooltip: {
-                                            filter: function(item) {
-                                                return item.dataset.label.indexOf('(high)') === -1 && item.dataset.label.indexOf('(low)') === -1;
-                                            },
-                                            callbacks: {
-                                                label: function(ctx) {
-                                                    var v = ctx.parsed.y;
-                                                    if (v == null) return null;
-                                                    var lbl = ctx.dataset.label.replace(' (forecast)', ' est.');
-                                                    if (isShare) return lbl + ': ' + v.toFixed(1) + '%';
-                                                    return lbl + ': ' + _sotCmpFmtNum(Math.round(v));
-                                                }
-                                            }
+                                            filter: function(item) { return item.dataset.label.indexOf('(high)')===-1 && item.dataset.label.indexOf('(low)')===-1; },
+                                            callbacks: { label: function(ctx) {
+                                                var v = ctx.parsed.y; if (v == null) return null;
+                                                var lbl = ctx.dataset.label.replace(' (forecast)',' est.');
+                                                if (isShare) return lbl+': '+v.toFixed(1)+'%';
+                                                return lbl+': '+_sotCmpFmtNum(Math.round(v));
+                                            }}
                                         },
                                         datalabels: { display: false }
                                     }
                                 }
                             });
                             _sotCompareCharts.push(_sotTrendChart);
+                        }
 
-                            if (hasCohorts) {
-                                var cohortPromises = [];
-                                var cohortDsMap = {};
-                                datasets.forEach(function(ds, di) {
-                                    if (!ds._cohortAge) return;
-                                    var ag = ds._cohortAge;
-                                    cohortDsMap[ag] = di;
-                                    allPeriods.forEach(function(p, pi) {
-                                        cohortPromises.push(
-                                            fetch('/api/share-of-time/run', {
-                                                method: 'POST', credentials: 'same-origin',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({ start_date: p.start_date, end_date: p.end_date, age_brackets: [ag] })
-                                            }).then(function(r) { return r.json(); }).then(function(resp) {
-                                                return { age: ag, pi: pi, data: resp.success && resp.data ? resp.data : null };
-                                            }).catch(function() { return { age: ag, pi: pi, data: null }; })
-                                        );
-                                    });
-                                });
-                                Promise.all(cohortPromises).then(function(cResults) {
-                                    cResults.forEach(function(cr) {
-                                        var di = cohortDsMap[cr.age];
-                                        if (di == null || !_sotTrendChart) return;
-                                        var ds = _sotTrendChart.data.datasets[di];
-                                        if (!ds) return;
-                                        if (!cr.data) { ds.data[cr.pi] = null; return; }
-                                        var m = _trendProjMult(cr.data);
-                                        if (isShare) {
-                                            ds.data[cr.pi] = null;
-                                        } else if (metric === 'interactions') {
-                                            ds.data[cr.pi] = (cr.data.total_interactions || 0) * m;
-                                        } else {
-                                            ds.data[cr.pi] = (cr.data.total_projected_hours || 0) * m;
-                                        }
-                                    });
-                                    if (_sotTrendChart) _sotTrendChart.update();
+                        function _sotRenderTrendChart() {
+                            var metric = (document.getElementById('sotTrendMetric') || {}).value || 'hours';
+                            var cohort = (document.getElementById('sotTrendCohort') || {}).value || 'all';
+                            var isShare = metric === 'share';
+
+                            var checked = {};
+                            document.querySelectorAll('.sotTrendCatCb').forEach(function(cb) {
+                                if (cb.checked) checked[cb.value] = true;
+                            });
+
+                            if (cohort === 'all') {
+                                _sotDrawTrendChart(allPeriods, metric, checked, isShare);
+                            } else {
+                                var loadingEl = document.getElementById('sotHistTrendBody');
+                                if (loadingEl) { loadingEl.style.display = 'block'; loadingEl.textContent = 'Loading ' + cohort + ' data…'; }
+                                _fetchCohortPeriods(cohort).then(function(cohortPeriods) {
+                                    var validPeriods = cohortPeriods.filter(function(d) { return d; });
+                                    if (loadingEl) loadingEl.style.display = 'none';
+                                    if (validPeriods.length === 0) {
+                                        if (loadingEl) { loadingEl.style.display = 'block'; loadingEl.textContent = 'No data for ' + cohort; }
+                                        return;
+                                    }
+                                    _sotDrawTrendChart(validPeriods, metric, checked, isShare);
                                 });
                             }
                         }
@@ -25411,10 +25309,9 @@
                             var dw = document.getElementById('sotTrendDrillWrap');
                             if (dw && dw.style.display !== 'none' && _sotDrillCat) _sotRenderDrillChart(_sotDrillCat);
                         });
+                        var cohortSel = document.getElementById('sotTrendCohort');
+                        if (cohortSel) cohortSel.addEventListener('change', _sotRenderTrendChart);
                         document.querySelectorAll('.sotTrendCatCb').forEach(function(cb) {
-                            cb.addEventListener('change', _sotRenderTrendChart);
-                        });
-                        document.querySelectorAll('.sotTrendCohortCb').forEach(function(cb) {
                             cb.addEventListener('change', _sotRenderTrendChart);
                         });
 
