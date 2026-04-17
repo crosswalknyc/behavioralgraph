@@ -25845,7 +25845,8 @@
                 });
 
                 var genDefs = [
-                    { name: 'Gen Z', ages: ['17 and Under', '18-24'], hue: 240 },
+                    { name: 'Gen Alpha', ages: ['17 and Under'], hue: 280 },
+                    { name: 'Gen Z', ages: ['18-24'], hue: 240 },
                     { name: 'Millennials', ages: ['25-34', '35-44'], hue: 160 },
                     { name: 'Gen X', ages: ['45-54', '55-64'], hue: 35 },
                     { name: 'Boomers+', ages: ['65 or Older'], hue: 340 }
@@ -25906,8 +25907,8 @@
                                 ctx.closePath();
                                 ctx.fillStyle = innerColors[i];
                                 ctx.fill();
-                                ctx.strokeStyle = 'rgba(15,23,42,0.9)';
-                                ctx.lineWidth = 2;
+                                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+                                ctx.lineWidth = 3;
                                 ctx.stroke();
 
                                 if (val >= 2) {
@@ -25937,8 +25938,8 @@
                         datasets: [{
                             data: outerVals,
                             backgroundColor: outerColors,
-                            borderColor: 'rgba(15,23,42,0.6)',
-                            borderWidth: 1
+                            borderColor: 'rgba(255,255,255,0.9)',
+                            borderWidth: 2.5
                         }]
                     },
                     options: {
@@ -25946,6 +25947,22 @@
                         maintainAspectRatio: true,
                         radius: '92%',
                         cutout: '55%',
+                        onHover: function(evt, elements, chart) {
+                            var ds = chart.data.datasets[0];
+                            if (!elements.length) {
+                                ds.backgroundColor = outerColors.slice();
+                                chart.update('none');
+                                return;
+                            }
+                            var idx = elements[0].index;
+                            var hoveredGen = (outerLabels[idx] || '').split(' · ')[0];
+                            ds.backgroundColor = outerColors.map(function(c, i) {
+                                var gen = (outerLabels[i] || '').split(' · ')[0];
+                                if (gen === hoveredGen) return c.replace(/[\d.]+\)$/, '1)');
+                                return c.replace(/[\d.]+\)$/, '0.2)');
+                            });
+                            chart.update('none');
+                        },
                         plugins: {
                             legend: { display: false },
                             tooltip: {
@@ -25974,6 +25991,12 @@
                     }
                 });
                 _sotCompareCharts.push(sunburstChart);
+
+                mainCanvas.addEventListener('mouseout', function() {
+                    var ds = sunburstChart.data.datasets[0];
+                    ds.backgroundColor = outerColors.slice();
+                    sunburstChart.update('none');
+                });
 
                 var legendDiv = document.getElementById('sotSunburstLegend');
                 if (legendDiv) {
