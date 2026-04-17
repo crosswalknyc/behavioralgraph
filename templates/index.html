@@ -24475,14 +24475,16 @@
             var pct = ((diff / Math.abs(base)) * 100);
             var cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral';
             var arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '–';
-            return '<span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(pct).toFixed(1) + '%</span>';
+            var suffix = _sotCohortMode ? ' vs All Ages' : '';
+            return '<span class="sot-cmp-delta ' + cls + '" title="vs All Ages baseline">' + arrow + ' ' + Math.abs(pct).toFixed(1) + '%' + suffix + '</span>';
         }
         function _sotCmpDeltaPP(val, base) {
             var diff = val - base;
             if (Math.abs(diff) < 0.05) return '<span class="sot-cmp-delta neutral">—</span>';
             var cls = diff > 0 ? 'up' : 'down';
             var arrow = diff > 0 ? '▲' : '▼';
-            return '<span class="sot-cmp-delta ' + cls + '">' + arrow + ' ' + Math.abs(diff).toFixed(1) + 'pp</span>';
+            var suffix = _sotCohortMode ? ' vs All Ages' : '';
+            return '<span class="sot-cmp-delta ' + cls + '" title="vs All Ages baseline">' + arrow + ' ' + Math.abs(diff).toFixed(1) + 'pp' + suffix + '</span>';
         }
 
         var _sotCmpFocusMode = false;
@@ -24647,7 +24649,7 @@
             });
             html += '</div></div>';
 
-            // === Baseline + Deviation KPI Cards ===
+            // === Baseline + Deviation KPI Cards (redesigned) ===
             function _sotCohortPop(tData) {
                 var detail = tData.age_group_detail || {};
                 var total = 0;
@@ -24655,49 +24657,74 @@
                 return total;
             }
             var basePopTotal = _sotCohortPop(base);
-            var kpiMetrics = [
+
+            function _sotMetricBar(val, baseVal, color) {
+                var pct = baseVal > 0 ? Math.min((val / baseVal) * 100, 100) : 0;
+                return '<div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.15rem;">' +
+                    '<div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;">' +
+                    '<div style="width:' + pct.toFixed(1) + '%;height:100%;border-radius:3px;background:' + color + ';"></div></div>' +
+                    '<span style="font-size:0.6rem;color:var(--text-secondary);min-width:32px;text-align:right;">' + pct.toFixed(1) + '%</span></div>';
+            }
+
+            var kpiDefs = [
                 { label: 'Sample', key: 'matched_users', color: 'var(--accent-lime)' },
                 { label: 'Projected Pop', key: '_cohort_pop', color: '#a855f7' },
                 { label: 'US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)' },
                 { label: 'Interactions', key: 'total_interactions', color: 'var(--accent-orange)' }
             ];
-            html += '<div class="sot-cohort-baseline' + focusHide + '" id="sotCmpKpiSection">';
-            html += '<div class="sot-cohort-baseline-card">';
-            html += '<div class="cb-title">All Ages — Baseline</div>';
-            kpiMetrics.forEach(function(m) {
-                html += '<div class="cb-metric">' + m.label + '</div>';
-                var bv = m.key === '_cohort_pop' ? basePopTotal : (base[m.key] || 0);
-                html += '<div class="cb-value" style="color:' + m.color + ';">' + _sotCmpFmtNum(bv) + '</div>';
+
+            html += '<div style="overflow-x:auto;margin-bottom:1.25rem;">';
+            html += '<table class="sot-cmp-table" style="min-width:700px;"><thead><tr>';
+            html += '<th style="text-align:left;min-width:100px;">Age Group</th>';
+            kpiDefs.forEach(function(m) {
+                html += '<th class="num" style="min-width:110px;">' + m.label + '</th>';
             });
-            html += '</div>';
-            html += '<div class="sot-cohort-dev-grid">';
-            filteredCohorts.forEach(function(t) {
+            html += '<th class="num" style="min-width:100px;">% of All Ages</th>';
+            html += '</tr></thead><tbody>';
+
+            html += '<tr style="background:rgba(6,182,212,0.08);font-weight:700;">';
+            html += '<td style="color:var(--accent-cyan);">All Ages (Baseline)</td>';
+            kpiDefs.forEach(function(m) {
+                var bv = m.key === '_cohort_pop' ? basePopTotal : (base[m.key] || 0);
+                html += '<td class="num" style="color:' + m.color + ';">' + _sotCmpFmtNum(bv) + '</td>';
+            });
+            html += '<td class="num" style="color:var(--accent-cyan);">100%</td>';
+            html += '</tr>';
+
+            filteredCohorts.forEach(function(t, ci) {
                 var lbl = _sotCohortLabel(t);
                 var cohortPop = _sotCohortPop(t.data);
-                var cohortPopPct = basePopTotal > 0 ? ((cohortPop / basePopTotal) * 100).toFixed(1) + '% of total' : '';
-                html += '<div class="sot-cohort-dev-card">';
-                html += '<div class="cd-label">' + lbl + '</div>';
-                kpiMetrics.forEach(function(m) {
-                    if (m.key === '_cohort_pop') {
-                        html += '<div class="cd-row"><span>' + m.label + '</span><span style="font-weight:700;color:#a855f7;">' + _sotCmpFmtNum(cohortPop) + '</span></div>';
-                        html += '<div class="cd-row"><span></span><span style="font-size:0.58rem;color:var(--text-secondary);">' + cohortPopPct + '</span></div>';
-                    } else {
-                        var val = t.data[m.key] || 0;
-                        var bv = base[m.key] || 0;
-                        html += '<div class="cd-row"><span>' + m.label + '</span>' + _sotCmpDelta(val, bv) + '</div>';
+                var samplePct = (base.matched_users || 0) > 0 ? ((t.data.matched_users || 0) / base.matched_users * 100) : 0;
+                html += '<tr>';
+                html += '<td style="font-weight:700;">' + lbl + '</td>';
+                kpiDefs.forEach(function(m) {
+                    var val = m.key === '_cohort_pop' ? cohortPop : (t.data[m.key] || 0);
+                    var bv = m.key === '_cohort_pop' ? basePopTotal : (base[m.key] || 0);
+                    var pctOfBase = bv > 0 ? (val / bv * 100) : 0;
+                    var diff = bv > 0 ? ((val - bv) / bv * 100) : 0;
+                    var cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral';
+                    var arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '';
+                    html += '<td class="num"><span style="font-weight:600;">' + _sotCmpFmtNum(val) + '</span>';
+                    if (m.key !== '_cohort_pop') {
+                        html += ' <span class="sot-cmp-delta ' + cls + '" title="vs All Ages" style="font-size:0.62rem;">' + arrow + Math.abs(diff).toFixed(1) + '% vs All Ages</span>';
                     }
+                    html += '</td>';
                 });
-                html += '</div>';
+                html += '<td class="num"><div style="display:flex;align-items:center;gap:0.3rem;">';
+                html += '<div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;">';
+                html += '<div style="width:' + samplePct.toFixed(1) + '%;height:100%;border-radius:4px;background:hsla(' + cohortHues[ci % cohortHues.length] + ',65%,55%,0.8);"></div></div>';
+                html += '<span style="font-weight:700;font-size:0.72rem;">' + samplePct.toFixed(1) + '%</span>';
+                html += '</div></td>';
+                html += '</tr>';
             });
-            html += '</div></div>';
+            html += '</tbody></table></div>';
 
-            // === Category Cards (sparkline = across cohorts, delta = spread) ===
-            html += '<div class="sot-cmp-cat-cards' + focusHide + '" id="sotCmpCatCards">';
+            // === Category Cards with cohort composition bars ===
+            html += '<div class="sot-cmp-cat-cards" id="sotCmpCatCards">';
             catNames.forEach(function(cn) {
                 var col = _sotCatColors[cn] || '#888';
-                var baseVal = 0;
                 var baseCat = (base.categories || []).find(function(c) { return c.name === cn; });
-                if (baseCat) baseVal = baseCat[shareKey] || 0;
+                var baseVal = baseCat ? (baseCat[shareKey] || 0) : 0;
                 var cohortVals = filteredCohorts.map(function(t) {
                     var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
                     return cat ? (cat[shareKey] || 0) : 0;
@@ -24710,6 +24737,20 @@
                 html += '<div class="ccard-name">' + cn + '</div>';
                 html += '<div class="ccard-val" style="color:' + col + ';">' + baseVal.toFixed(1) + '% <span style="font-size:0.6rem;color:var(--text-secondary);">spread ' + spread.toFixed(1) + 'pp</span> ' + spark + '</div>';
                 html += '<div class="ccard-bar" style="width:' + Math.min(100, baseVal * 1.5) + '%;background:' + col + ';opacity:0.3;"></div>';
+                html += '<div style="margin-top:0.3rem;">';
+                var catHoursBase = baseCat ? (baseCat.est_minutes_total || 0) : 0;
+                filteredCohorts.forEach(function(t, ci) {
+                    var cat = (t.data.categories || []).find(function(c) { return c.name === cn; });
+                    var cHrs = cat ? (cat.est_minutes_total || 0) : 0;
+                    var pctOfBase = catHoursBase > 0 ? (cHrs / catHoursBase * 100) : 0;
+                    if (pctOfBase > 100) pctOfBase = 100;
+                    html += '<div style="display:flex;align-items:center;gap:4px;margin-top:2px;">';
+                    html += '<span style="font-size:0.5rem;color:var(--text-secondary);min-width:56px;text-align:right;white-space:nowrap;">' + _sotCohortLabel(t) + '</span>';
+                    html += '<div style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;">';
+                    html += '<div style="width:' + pctOfBase.toFixed(1) + '%;height:100%;border-radius:2px;background:hsla(' + cohortHues[ci % cohortHues.length] + ',65%,55%,0.7);"></div></div>';
+                    html += '<span style="font-size:0.5rem;color:var(--text-secondary);min-width:28px;">' + pctOfBase.toFixed(0) + '%</span></div>';
+                });
+                html += '</div>';
                 html += '</div>';
             });
             html += '</div>';
@@ -24753,7 +24794,7 @@
 
             // === Category Heatmap Grid ===
             html += '<div class="sot-chart-card" style="margin-bottom:1.25rem;overflow-x:auto;">';
-            html += '<h3 class="sot-cmp-section-title">Category Share vs All Ages — Heatmap</h3>';
+            html += '<h3 class="sot-cmp-section-title">Category Share by Cohort — Difference vs All Ages (pp)</h3>';
             html += '<table class="sot-heatmap"><thead><tr><th>Category</th><th>All Ages</th>';
             filteredCohorts.forEach(function(t) { html += '<th>' + _sotCohortLabel(t) + '</th>'; });
             html += '</tr></thead><tbody>';
@@ -24901,6 +24942,28 @@
                 var catId = catName.replace(/[^a-zA-Z]/g, '');
                 html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">';
                 html += '<h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3>';
+
+                var baseCatHrs = 0;
+                if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseCatHrs += (b.est_minutes || 0); });
+                html += '<div style="padding:0.5rem 0 0.6rem;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:0.5rem;">';
+                html += '<div style="font-size:0.62rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.35rem;">Cohort % of All Ages — ' + catName + '</div>';
+
+                html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;">';
+                filteredCohorts.forEach(function(t, ci) {
+                    var cCat = (t.data.categories || []).find(function(c) { return c.name === catName; });
+                    var cMins = 0;
+                    if (cCat && cCat.brands) cCat.brands.forEach(function(b) { cMins += (b.est_minutes || 0); });
+                    var catPct = baseCatHrs > 0 ? (cMins / baseCatHrs * 100) : 0;
+                    if (catPct > 100) catPct = 100;
+                    html += '<div style="flex:1;min-width:70px;max-width:140px;">';
+                    html += '<div style="font-size:0.55rem;color:var(--text-secondary);margin-bottom:2px;white-space:nowrap;">' + _sotCohortLabel(t) + '</div>';
+                    html += '<div style="display:flex;align-items:center;gap:4px;">';
+                    html += '<div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;">';
+                    html += '<div style="width:' + catPct.toFixed(1) + '%;height:100%;border-radius:3px;background:hsla(' + cohortHues[ci % cohortHues.length] + ',65%,55%,0.7);"></div></div>';
+                    html += '<span style="font-size:0.6rem;font-weight:700;min-width:32px;">' + catPct.toFixed(1) + '%</span></div></div>';
+                });
+                html += '</div></div>';
+
                 html += '<div style="position:relative;height:' + chartH + 'px;"><canvas id="sotCmpCat_' + catId + '"></canvas></div>';
 
                 var brandTableId = 'sotCmpBrandTbl_' + catId;
@@ -24909,14 +24972,17 @@
                 html += '<th class="sortable" data-sort-col="name" onclick="sotSortTable(\'' + brandTableId + '\',\'name\')">Brand <span class="sort-arrow">▼</span></th>';
                 html += '<th class="num">All Ages</th>';
                 filteredCohorts.forEach(function(t, ti) {
-                    html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'' + brandTableId + '\',\'v' + ti + '\')">' + _sotCohortLabel(t) + ' <span class="sort-arrow">▼</span></th>';
+                    html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'' + brandTableId + '\',\'v' + ti + '\')">' + _sotCohortLabel(t) + '<br><span style="font-size:0.55rem;font-weight:400;color:var(--text-secondary);">vs All Ages</span> <span class="sort-arrow">▼</span></th>';
                 });
                 html += '<th class="num sortable sort-active" data-sort-col="delta" onclick="sotSortTable(\'' + brandTableId + '\',\'delta\')">Max Δ <span class="sort-arrow">▼</span></th>';
                 html += '</tr></thead><tbody>';
 
-                var baseCat = (base.categories || []).find(function(c) { return c.name === catName; });
+                var baseCat2 = (base.categories || []).find(function(c) { return c.name === catName; });
                 var baseBrandMap = {};
-                if (baseCat && baseCat.brands) baseCat.brands.forEach(function(b) { baseBrandMap[b.name] = b; });
+                if (baseCat2 && baseCat2.brands) baseCat2.brands.forEach(function(b) { baseBrandMap[b.name] = b; });
+
+                var baseBrandMins = {};
+                if (baseCat2 && baseCat2.brands) baseCat2.brands.forEach(function(b) { baseBrandMins[b.name] = b.est_minutes || 0; });
 
                 var brandRows = brandNames.map(function(bn) {
                     var baseB = baseBrandMap[bn];
@@ -24928,9 +24994,15 @@
                         var b = cat.brands.find(function(x) { return x.name === bn; });
                         return b ? (b.category_share_pct || 0) : 0;
                     });
+                    var cohortMins = filteredCohorts.map(function(t) {
+                        var cat = (t.data.categories || []).find(function(c) { return c.name === catName; });
+                        if (!cat || !cat.brands) return 0;
+                        var b = cat.brands.find(function(x) { return x.name === bn; });
+                        return b ? (b.est_minutes || 0) : 0;
+                    });
                     var maxDelta = 0;
                     vals.forEach(function(v) { var d = Math.abs(v - baseV); if (d > maxDelta) maxDelta = d; });
-                    return { name: bn, baseV: baseV, vals: vals, delta: maxDelta };
+                    return { name: bn, baseV: baseV, vals: vals, delta: maxDelta, baseMins: baseBrandMins[bn] || 0, cohortMins: cohortMins };
                 });
                 brandRows.sort(function(a, b) { return b.delta - a.delta; });
 
@@ -24941,9 +25013,15 @@
                     html += '>';
                     html += '<td style="font-weight:600;white-space:nowrap;">' + br.name + '</td>';
                     html += '<td class="num" style="color:var(--accent-cyan);">' + br.baseV.toFixed(1) + '%</td>';
-                    br.vals.forEach(function(v) {
-                        var d = v - br.baseV;
-                        html += '<td class="num">' + v.toFixed(1) + '% ' + _sotCmpDeltaPP(v, br.baseV) + '</td>';
+                    br.vals.forEach(function(v, vi) {
+                        var mPct = br.baseMins > 0 ? (br.cohortMins[vi] / br.baseMins * 100) : 0;
+                        if (mPct > 100) mPct = 100;
+                        html += '<td class="num">' + v.toFixed(1) + '% ' + _sotCmpDeltaPP(v, br.baseV);
+                        html += '<div style="display:flex;align-items:center;gap:3px;margin-top:2px;">';
+                        html += '<div style="flex:1;height:3px;border-radius:1.5px;background:rgba(255,255,255,0.06);overflow:hidden;">';
+                        html += '<div style="width:' + mPct.toFixed(1) + '%;height:100%;border-radius:1.5px;background:hsla(' + cohortHues[vi % cohortHues.length] + ',65%,55%,0.6);"></div></div>';
+                        html += '<span style="font-size:0.48rem;color:var(--text-secondary);">' + mPct.toFixed(0) + '% of total</span></div>';
+                        html += '</td>';
                     });
                     html += '<td class="num">' + br.delta.toFixed(1) + 'pp</td>';
                     html += '</tr>';
