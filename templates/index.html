@@ -25892,7 +25892,6 @@
                             var w = chart.width, h = chart.height;
                             var cx = w / 2, cy = h / 2;
                             var outerR = Math.min(cx, cy) * 0.92;
-                            var innerR = outerR * 0.55;
                             var gapR = outerR * 0.54;
 
                             var total = innerVals.reduce(function(s, v) { return s + v; }, 0);
@@ -25907,10 +25906,38 @@
                                 ctx.closePath();
                                 ctx.fillStyle = innerColors[i];
                                 ctx.fill();
-                                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-                                ctx.lineWidth = 3;
+                                ctx.strokeStyle = 'rgba(15,23,42,0.9)';
+                                ctx.lineWidth = 2;
                                 ctx.stroke();
+                                startAngle += sliceAngle;
+                            });
+                        },
+                        afterDraw: function(chart) {
+                            var ctx = chart.ctx;
+                            var w = chart.width, h = chart.height;
+                            var cx = w / 2, cy = h / 2;
+                            var outerR = Math.min(cx, cy) * 0.92;
 
+                            var total = innerVals.reduce(function(s, v) { return s + v; }, 0);
+                            if (total <= 0) return;
+
+                            var spokeAngle = -Math.PI / 2;
+                            ctx.save();
+                            ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+                            ctx.lineWidth = 3;
+                            innerVals.forEach(function(val) {
+                                ctx.beginPath();
+                                ctx.moveTo(cx + outerR * 0.18 * Math.cos(spokeAngle), cy + outerR * 0.18 * Math.sin(spokeAngle));
+                                ctx.lineTo(cx + (outerR + 2) * Math.cos(spokeAngle), cy + (outerR + 2) * Math.sin(spokeAngle));
+                                ctx.stroke();
+                                spokeAngle += (val / total) * Math.PI * 2;
+                            });
+                            ctx.restore();
+
+                            var startAngle = -Math.PI / 2;
+                            var gapR = outerR * 0.54;
+                            innerVals.forEach(function(val, i) {
+                                var sliceAngle = (val / total) * Math.PI * 2;
                                 if (val >= 2) {
                                     var midAngle = startAngle + sliceAngle / 2;
                                     var labelR = (outerR * 0.18 + gapR) / 2;
@@ -25928,22 +25955,8 @@
                                     ctx.fillText(val.toFixed(1) + '%', lx, ly + 8);
                                     ctx.restore();
                                 }
-
                                 startAngle += sliceAngle;
                             });
-
-                            var spokeAngle = -Math.PI / 2;
-                            ctx.save();
-                            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-                            ctx.lineWidth = 3;
-                            innerVals.forEach(function(val) {
-                                ctx.beginPath();
-                                ctx.moveTo(cx + outerR * 0.18 * Math.cos(spokeAngle), cy + outerR * 0.18 * Math.sin(spokeAngle));
-                                ctx.lineTo(cx + outerR * Math.cos(spokeAngle), cy + outerR * Math.sin(spokeAngle));
-                                ctx.stroke();
-                                spokeAngle += (val / total) * Math.PI * 2;
-                            });
-                            ctx.restore();
                         }
                     }],
                     data: {
