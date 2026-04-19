@@ -16426,7 +16426,7 @@
                                 <div class="kpi-value" id="sfConvKpiRate" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-primary); margin-top: 0.25rem;">-</div>
                             </div>
                             <div class="kpi-card" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color);">
-                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Avg Time to Convert</div>
+                                <div class="kpi-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Est. Avg Time</div>
                                 <div class="kpi-value" id="sfConvKpiAvgTime" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange); margin-top: 0.25rem;">-</div>
                             </div>
                             <div class="kpi-card" id="sfConvKpiLFPlatformCard" style="background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color); display: none;">
@@ -16469,7 +16469,6 @@
                                                 <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Total Views</th>
                                                 <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted to Long Form</th>
                                                 <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
-                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Projected</th>
                                             </tr>
                                         </thead>
                                         <tbody id="sfConvUrlTableBody"></tbody>
@@ -16490,7 +16489,6 @@
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Total Views</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted</th>
                                             <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
-                                            <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Projected</th>
                                         </tr>
                                     </thead>
                                     <tbody id="sfConvPlatformTableBody"></tbody>
@@ -19943,8 +19941,6 @@
                     else convRate = parseFloat(u.convRate || 0);
                     if (convRate > 100) convRate = 100;
 
-                    const projDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : '-';
-
                     return `
                     <tr>
                         <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); max-width: 350px;">
@@ -19957,7 +19953,6 @@
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${dupDisplay}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convDisplay}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${convRate.toFixed(2)}%</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan); font-size: 0.8rem;">${projDisplay}</td>
                     </tr>
                 `}).join('');
             }
@@ -19996,7 +19991,6 @@
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${dupDisplay}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convDisplay}</td>
                         <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${platConvRate.toFixed(5)}%</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--accent-cyan); font-size: 0.8rem;">${convertedProj > 0 ? formatGenPop(convertedProj) : '-'}</td>
                     </tr>
                 `}).join('');
             } else if (platSection) {
