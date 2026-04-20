@@ -462,6 +462,9 @@
         }
         .profile-msg.success { color: #a6e3a1; }
         .profile-msg.error { color: #f38ba8; }
+        .user-menu-hover-wrap {
+            position: relative;
+        }
         .user-menu-clickable {
             cursor: pointer;
             display: flex;
@@ -475,6 +478,40 @@
         }
         .user-menu-clickable:hover {
             background: rgba(255,255,255,0.08);
+        }
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.35rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            min-width: 180px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            z-index: 9999;
+            padding: 0.35rem 0;
+            overflow: hidden;
+        }
+        .user-menu-hover-wrap:hover .user-dropdown {
+            display: block;
+        }
+        .user-dropdown-item {
+            display: block;
+            padding: 0.55rem 1rem;
+            color: var(--text-primary);
+            font-size: 0.88rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.12s;
+        }
+        .user-dropdown-item:hover {
+            background: rgba(255,255,255,0.07);
+        }
+        .user-dropdown-divider {
+            border-top: 1px solid var(--border-color);
+            margin: 0.3rem 0;
         }
 
         .avatar-upload-modal {
@@ -12376,17 +12413,24 @@
                         <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
                     </div>
                     <div class="user-menu">
-                        <div class="user-menu-clickable" data-open-profile="1" role="button" tabindex="0" title="Click to edit profile">
-                            <div class="user-avatar">
-                                {% if profile_picture %}
-                                <img src="{{ profile_picture }}" alt="Profile">
-                                {% else %}
-                                <span class="user-avatar-initials">{{ username[:2] }}</span>
-                                {% endif %}
+                        <div class="user-menu-hover-wrap">
+                            <div class="user-menu-clickable">
+                                <div class="user-avatar" onclick="openAvatarUpload()" title="Change profile picture">
+                                    {% if profile_picture %}
+                                    <img src="{{ profile_picture }}" alt="Profile">
+                                    {% else %}
+                                    <span class="user-avatar-initials">{{ username[:2] }}</span>
+                                    {% endif %}
+                                </div>
+                                <span class="user-name">{{ username }}</span>
                             </div>
-                            <span class="user-name">{{ username }}</span>
+                            <div class="user-dropdown">
+                                <a class="user-dropdown-item" onclick="openProfileSettings()">Edit Profile</a>
+                                <a class="user-dropdown-item" onclick="openChangePasswordModal()">Change Password</a>
+                                <div class="user-dropdown-divider"></div>
+                                <a class="user-dropdown-item" href="/logout">Logout</a>
+                            </div>
                         </div>
-                        <a href="/logout" class="header-btn logout-btn">Logout</a>
                     </div>
                 </div>
                 <div class="view-toggle" id="iqTabsContainer">
@@ -72181,6 +72225,239 @@
             }
         }
         
+        // ============================================================================
+        // PROFILE SETTINGS MODAL
+        // ============================================================================
+
+        function openProfileSettings() {
+            var modal = document.getElementById('profileSettingsModal');
+            modal.classList.add('open');
+            document.getElementById('profileMsg').textContent = '';
+            fetch('/api/user/info', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (!d.success) return;
+                    document.getElementById('profileUsername').value = d.username || '';
+                    document.getElementById('profileFirstName').value = d.first_name || '';
+                    document.getElementById('profileLastName').value = d.last_name || '';
+                    document.getElementById('profileEmail').value = d.email || '';
+                    document.getElementById('profileCompany').value = d.company || '';
+                    document.getElementById('profileDepartment').value = d.department || '';
+                }).catch(function() {});
+        }
+
+        function closeProfileSettings() {
+            document.getElementById('profileSettingsModal').classList.remove('open');
+        }
+
+        function saveProfileSettings() {
+            var msg = document.getElementById('profileMsg');
+            msg.textContent = '';
+            msg.className = 'profile-msg';
+            var body = {
+                first_name: document.getElementById('profileFirstName').value,
+                last_name: document.getElementById('profileLastName').value,
+                email: document.getElementById('profileEmail').value,
+                company: document.getElementById('profileCompany').value,
+                department: document.getElementById('profileDepartment').value
+            };
+            var btn = document.getElementById('profileSaveBtn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            fetch('/api/user/profile', {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+                if (d.success) {
+                    msg.textContent = 'Profile updated successfully.';
+                    msg.classList.add('success');
+                } else {
+                    msg.textContent = d.error || 'Update failed.';
+                    msg.classList.add('error');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+                msg.textContent = 'Network error. Please try again.';
+                msg.classList.add('error');
+            });
+        }
+
+        function openChangePasswordModal() {
+            document.getElementById('changePasswordModal').classList.add('open');
+            document.getElementById('passwordMsg').textContent = '';
+            document.getElementById('profileCurrentPw').value = '';
+            document.getElementById('profileNewPw').value = '';
+            document.getElementById('profileConfirmPw').value = '';
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('changePasswordModal').classList.remove('open');
+        }
+
+        function saveNewPassword() {
+            var msg = document.getElementById('passwordMsg');
+            msg.textContent = '';
+            msg.className = 'profile-msg';
+            var currentPw = document.getElementById('profileCurrentPw').value;
+            var newPw = document.getElementById('profileNewPw').value;
+            var confirmPw = document.getElementById('profileConfirmPw').value;
+            if (!currentPw) {
+                msg.textContent = 'Please enter your current password.';
+                msg.classList.add('error');
+                return;
+            }
+            if (!newPw) {
+                msg.textContent = 'Please enter a new password.';
+                msg.classList.add('error');
+                return;
+            }
+            if (newPw.length < 8) {
+                msg.textContent = 'New password must be at least 8 characters.';
+                msg.classList.add('error');
+                return;
+            }
+            if (newPw !== confirmPw) {
+                msg.textContent = 'New passwords do not match.';
+                msg.classList.add('error');
+                return;
+            }
+            var btn = document.getElementById('passwordSaveBtn');
+            btn.disabled = true;
+            btn.textContent = 'Updating...';
+            fetch('/api/user/profile', {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password: currentPw, new_password: newPw })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                btn.textContent = 'Update Password';
+                if (d.success) {
+                    msg.textContent = 'Password updated successfully.';
+                    msg.classList.add('success');
+                    document.getElementById('profileCurrentPw').value = '';
+                    document.getElementById('profileNewPw').value = '';
+                    document.getElementById('profileConfirmPw').value = '';
+                } else {
+                    msg.textContent = d.error || 'Update failed.';
+                    msg.classList.add('error');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Update Password';
+                msg.textContent = 'Network error. Please try again.';
+                msg.classList.add('error');
+            });
+        }
+
+        // ============================================================================
+        // PROFILE PICTURE UPLOAD
+        // ============================================================================
+
+        function openAvatarUpload() {
+            document.getElementById('avatarUploadModal').classList.add('open');
+            updateAvatarPreview();
+        }
+        
+        function closeAvatarUpload() {
+            document.getElementById('avatarUploadModal').classList.remove('open');
+        }
+        
+        function updateAvatarPreview() {
+            const preview = document.getElementById('avatarPreview');
+            const currentPic = '{{ profile_picture }}';
+            if (currentPic) {
+                preview.innerHTML = `<img src="${currentPic}" alt="Current avatar">`;
+            } else {
+                preview.innerHTML = `<span class="avatar-preview-initials">{{ username[:2] }}</span>`;
+            }
+        }
+        
+        function triggerAvatarUpload() {
+            document.getElementById('avatarFileInput').click();
+        }
+        
+        async function handleAvatarUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const file = input.files[0];
+            
+            // Check file size (500KB max)
+            if (file.size > 500 * 1024) {
+                alert('File too large. Maximum size is 500KB.');
+                return;
+            }
+            
+            // Preview the image
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('avatarPreview').innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+            };
+            reader.readAsDataURL(file);
+            
+            // Upload to server
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/profile-picture', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update the header avatar
+                    const headerAvatar = document.querySelector('.user-avatar');
+                    headerAvatar.innerHTML = `<img src="${data.profile_picture}" alt="Profile">`;
+                    alert('Profile picture updated!');
+                    closeAvatarUpload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Upload failed: ' + e.message);
+            }
+        }
+        
+        async function removeAvatar() {
+            if (!confirm('Remove your profile picture?')) return;
+            
+            try {
+                const response = await fetch('/api/profile-picture', {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update the header avatar to initials
+                    const headerAvatar = document.querySelector('.user-avatar');
+                    headerAvatar.innerHTML = `<span class="user-avatar-initials">{{ username[:2] }}</span>`;
+                    updateAvatarPreview();
+                    alert('Profile picture removed.');
+                    closeAvatarUpload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Failed to remove: ' + e.message);
+            }
+        }
         
         // ============================================================================
         // TEAM CHAT WIDGET
@@ -72890,6 +73167,97 @@
             }).join('');
         }
     </script>
+    
+    <!-- Edit Profile Modal -->
+    <div id="profileSettingsModal" class="profile-settings-modal" onclick="if(event.target === this) closeProfileSettings()">
+        <div class="profile-settings-content">
+            <h3>Edit Profile</h3>
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+                <div class="user-avatar" id="profileAvatarPreview" onclick="openAvatarUpload()" title="Change picture" style="cursor:pointer;flex-shrink:0;">
+                    {% if profile_picture %}
+                    <img src="{{ profile_picture }}" alt="Profile">
+                    {% else %}
+                    <span class="user-avatar-initials">{{ username[:2] }}</span>
+                    {% endif %}
+                </div>
+                <button type="button" onclick="openAvatarUpload()" style="background:var(--bg-input);color:var(--text-secondary);border:1px solid var(--border-color);padding:0.45rem 0.9rem;border-radius:8px;cursor:pointer;font-size:0.85rem;">Change Photo</button>
+            </div>
+            <div class="profile-field">
+                <label>Username</label>
+                <input type="text" id="profileUsername" disabled>
+            </div>
+            <div class="profile-field">
+                <label>First Name</label>
+                <input type="text" id="profileFirstName" placeholder="First name">
+            </div>
+            <div class="profile-field">
+                <label>Last Name</label>
+                <input type="text" id="profileLastName" placeholder="Last name">
+            </div>
+            <div class="profile-field">
+                <label>Email</label>
+                <input type="email" id="profileEmail" placeholder="Email address">
+            </div>
+            <div class="profile-field">
+                <label>Company</label>
+                <input type="text" id="profileCompany" placeholder="Company">
+            </div>
+            <div class="profile-field">
+                <label>Department</label>
+                <input type="text" id="profileDepartment" placeholder="Department">
+            </div>
+            <div class="profile-msg" id="profileMsg"></div>
+            <div class="profile-btn-row">
+                <button type="button" class="profile-btn-cancel" onclick="closeProfileSettings()">Cancel</button>
+                <button type="button" class="profile-btn-save" id="profileSaveBtn" onclick="saveProfileSettings()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="profile-settings-modal" onclick="if(event.target === this) closeChangePasswordModal()">
+        <div class="profile-settings-content" style="max-width:420px;">
+            <h3>Change Password</h3>
+            <div class="profile-field">
+                <label>Current Password</label>
+                <input type="password" id="profileCurrentPw" placeholder="Enter current password">
+            </div>
+            <div class="profile-field">
+                <label>New Password</label>
+                <input type="password" id="profileNewPw" placeholder="Min 8 characters">
+            </div>
+            <div class="profile-field">
+                <label>Confirm New Password</label>
+                <input type="password" id="profileConfirmPw" placeholder="Re-enter new password">
+            </div>
+            <div class="profile-msg" id="passwordMsg"></div>
+            <div class="profile-btn-row">
+                <button type="button" class="profile-btn-cancel" onclick="closeChangePasswordModal()">Cancel</button>
+                <button type="button" class="profile-btn-save" id="passwordSaveBtn" onclick="saveNewPassword()">Update Password</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Picture Upload Modal -->
+    <div id="avatarUploadModal" class="avatar-upload-modal" onclick="if(event.target === this) closeAvatarUpload()">
+        <div class="avatar-upload-content">
+            <h3>📷 Profile Picture</h3>
+            <div class="avatar-preview" id="avatarPreview">
+                {% if profile_picture %}
+                <img src="{{ profile_picture }}" alt="Current avatar">
+                {% else %}
+                <span class="avatar-preview-initials">{{ username[:2] }}</span>
+                {% endif %}
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">Click to upload a new picture (PNG, JPG, GIF - max 500KB)</p>
+            <input type="file" id="avatarFileInput" class="avatar-upload-input" accept="image/*" onchange="handleAvatarUpload(this)">
+            <div>
+                <button class="avatar-upload-btn" onclick="triggerAvatarUpload()">📤 Upload New</button>
+                <button class="avatar-upload-btn danger" onclick="removeAvatar()">🗑️ Remove</button>
+                <button class="avatar-upload-btn secondary" onclick="closeAvatarUpload()">Cancel</button>
+            </div>
+        </div>
+    </div>
     
     <!-- Chat Widget -->
     <div class="chat-widget" id="chatWidget">
