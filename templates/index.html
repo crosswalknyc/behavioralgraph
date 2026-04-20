@@ -369,16 +369,16 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             background: rgba(0, 0, 0, 0.7);
             display: none;
             justify-content: center;
             align-items: center;
-            z-index: 200000; /* above .chat-widget (100000) so Account Settings is visible */
+            z-index: 2147483645;
         }
         .profile-settings-modal.open {
-            display: flex;
+            display: flex !important;
         }
         .profile-settings-content {
             background: var(--bg-card);
@@ -73076,76 +73076,6 @@
         }
     </script>
     
-    <!-- Edit Profile Modal -->
-    <div id="profileSettingsModal" class="profile-settings-modal" onclick="if(event.target === this) closeProfileSettings()">
-        <div class="profile-settings-content">
-            <h3>Edit Profile</h3>
-            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
-                <div class="user-avatar" id="profileAvatarPreview" onclick="openAvatarUpload()" title="Change picture" style="cursor:pointer;flex-shrink:0;">
-                    {% if profile_picture %}
-                    <img src="{{ profile_picture }}" alt="Profile">
-                    {% else %}
-                    <span class="user-avatar-initials">{{ username[:2] }}</span>
-                    {% endif %}
-                </div>
-                <button type="button" onclick="openAvatarUpload()" style="background:var(--bg-input);color:var(--text-secondary);border:1px solid var(--border-color);padding:0.45rem 0.9rem;border-radius:8px;cursor:pointer;font-size:0.85rem;">Change Photo</button>
-            </div>
-            <div class="profile-field">
-                <label>Username</label>
-                <input type="text" id="profileUsername" disabled>
-            </div>
-            <div class="profile-field">
-                <label>First Name</label>
-                <input type="text" id="profileFirstName" placeholder="First name">
-            </div>
-            <div class="profile-field">
-                <label>Last Name</label>
-                <input type="text" id="profileLastName" placeholder="Last name">
-            </div>
-            <div class="profile-field">
-                <label>Email</label>
-                <input type="email" id="profileEmail" placeholder="Email address">
-            </div>
-            <div class="profile-field">
-                <label>Company</label>
-                <input type="text" id="profileCompany" placeholder="Company">
-            </div>
-            <div class="profile-field">
-                <label>Department</label>
-                <input type="text" id="profileDepartment" placeholder="Department">
-            </div>
-            <div class="profile-msg" id="profileMsg"></div>
-            <div class="profile-btn-row">
-                <button type="button" class="profile-btn-cancel" onclick="closeProfileSettings()">Cancel</button>
-                <button type="button" class="profile-btn-save" id="profileSaveBtn" onclick="saveProfileSettings()">Save Changes</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Change Password Modal -->
-    <div id="changePasswordModal" class="profile-settings-modal" onclick="if(event.target === this) closeChangePasswordModal()">
-        <div class="profile-settings-content" style="max-width:420px;">
-            <h3>Change Password</h3>
-            <div class="profile-field">
-                <label>Current Password</label>
-                <input type="password" id="profileCurrentPw" placeholder="Enter current password">
-            </div>
-            <div class="profile-field">
-                <label>New Password</label>
-                <input type="password" id="profileNewPw" placeholder="Min 8 characters">
-            </div>
-            <div class="profile-field">
-                <label>Confirm New Password</label>
-                <input type="password" id="profileConfirmPw" placeholder="Re-enter new password">
-            </div>
-            <div class="profile-msg" id="passwordMsg"></div>
-            <div class="profile-btn-row">
-                <button type="button" class="profile-btn-cancel" onclick="closeChangePasswordModal()">Cancel</button>
-                <button type="button" class="profile-btn-save" id="passwordSaveBtn" onclick="saveNewPassword()">Update Password</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Profile Picture Upload Modal -->
     <div id="avatarUploadModal" class="avatar-upload-modal" onclick="if(event.target === this) closeAvatarUpload()">
         <div class="avatar-upload-content">
@@ -73237,7 +73167,77 @@
         <img src="/static/crosswalk-logo-small.png" alt="Crosswalk" class="app-footer-logo" onerror="this.src='/static/crosswalk-logo.png'; this.style.height='24px';">
         <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
     </footer>
-    
+
+    <!-- Edit Profile Modal (must be last in body for z-index to work) -->
+    <div id="profileSettingsModal" class="profile-settings-modal" onclick="if(event.target === this) closeProfileSettings()">
+        <div class="profile-settings-content">
+            <h3>Edit Profile</h3>
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+                <div class="user-avatar" onclick="openAvatarUpload()" title="Change picture" style="cursor:pointer;flex-shrink:0;">
+                    {% if profile_picture %}
+                    <img src="{{ profile_picture }}" alt="Profile">
+                    {% else %}
+                    <span class="user-avatar-initials">{{ username[:2] }}</span>
+                    {% endif %}
+                </div>
+                <button type="button" onclick="openAvatarUpload()" style="background:var(--bg-input);color:var(--text-secondary);border:1px solid var(--border-color);padding:0.45rem 0.9rem;border-radius:8px;cursor:pointer;font-size:0.85rem;">Change Photo</button>
+            </div>
+            <div class="profile-field">
+                <label>Username</label>
+                <input type="text" id="profileUsername" disabled>
+            </div>
+            <div class="profile-field">
+                <label>First Name</label>
+                <input type="text" id="profileFirstName" placeholder="First name">
+            </div>
+            <div class="profile-field">
+                <label>Last Name</label>
+                <input type="text" id="profileLastName" placeholder="Last name">
+            </div>
+            <div class="profile-field">
+                <label>Email</label>
+                <input type="email" id="profileEmail" placeholder="Email address">
+            </div>
+            <div class="profile-field">
+                <label>Company</label>
+                <input type="text" id="profileCompany" placeholder="Company">
+            </div>
+            <div class="profile-field">
+                <label>Department</label>
+                <input type="text" id="profileDepartment" placeholder="Department">
+            </div>
+            <div class="profile-msg" id="profileMsg"></div>
+            <div class="profile-btn-row">
+                <button type="button" class="profile-btn-cancel" onclick="closeProfileSettings()">Cancel</button>
+                <button type="button" class="profile-btn-save" id="profileSaveBtn" onclick="saveProfileSettings()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="profile-settings-modal" onclick="if(event.target === this) closeChangePasswordModal()">
+        <div class="profile-settings-content" style="max-width:420px;">
+            <h3>Change Password</h3>
+            <div class="profile-field">
+                <label>Current Password</label>
+                <input type="password" id="profileCurrentPw" placeholder="Enter current password">
+            </div>
+            <div class="profile-field">
+                <label>New Password</label>
+                <input type="password" id="profileNewPw" placeholder="Min 8 characters">
+            </div>
+            <div class="profile-field">
+                <label>Confirm New Password</label>
+                <input type="password" id="profileConfirmPw" placeholder="Re-enter new password">
+            </div>
+            <div class="profile-msg" id="passwordMsg"></div>
+            <div class="profile-btn-row">
+                <button type="button" class="profile-btn-cancel" onclick="closeChangePasswordModal()">Cancel</button>
+                <button type="button" class="profile-btn-save" id="passwordSaveBtn" onclick="saveNewPassword()">Update Password</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
 </html>
