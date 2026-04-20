@@ -484,13 +484,15 @@
             position: absolute;
             top: 100%;
             right: 0;
-            margin-top: 0.35rem;
+            padding-top: 0.5rem;
+            z-index: 9999;
+        }
+        .user-dropdown-inner {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 10px;
             min-width: 180px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-            z-index: 9999;
             padding: 0.35rem 0;
             overflow: hidden;
         }
@@ -12425,10 +12427,12 @@
                                 <span class="user-name">{{ username }}</span>
                             </div>
                             <div class="user-dropdown">
-                                <a class="user-dropdown-item" onclick="openProfileSettings()">Edit Profile</a>
-                                <a class="user-dropdown-item" onclick="openChangePasswordModal()">Change Password</a>
-                                <div class="user-dropdown-divider"></div>
-                                <a class="user-dropdown-item" href="/logout">Logout</a>
+                                <div class="user-dropdown-inner">
+                                    <a class="user-dropdown-item" onclick="openProfileSettings()">Edit Profile</a>
+                                    <a class="user-dropdown-item" onclick="openChangePasswordModal()">Change Password</a>
+                                    <div class="user-dropdown-divider"></div>
+                                    <a class="user-dropdown-item" href="/logout">Logout</a>
+                                </div>
                             </div>
                         </div>
                     </div>
