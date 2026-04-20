@@ -496,17 +496,23 @@
             padding: 0.35rem 0;
             overflow: hidden;
         }
-        .user-menu-hover-wrap:hover .user-dropdown {
+        .user-dropdown.open {
             display: block;
         }
         .user-dropdown-item {
             display: block;
+            width: 100%;
             padding: 0.55rem 1rem;
             color: var(--text-primary);
             font-size: 0.88rem;
             cursor: pointer;
             text-decoration: none;
             transition: background 0.12s;
+            background: none;
+            border: none;
+            text-align: left;
+            font-family: inherit;
+            box-sizing: border-box;
         }
         .user-dropdown-item:hover {
             background: rgba(255,255,255,0.07);
@@ -12415,9 +12421,9 @@
                         <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
                     </div>
                     <div class="user-menu">
-                        <div class="user-menu-hover-wrap">
-                            <div class="user-menu-clickable">
-                                <div class="user-avatar" onclick="openAvatarUpload()" title="Change profile picture">
+                        <div class="user-menu-hover-wrap" id="userMenuWrap">
+                            <div class="user-menu-clickable" id="userMenuTrigger">
+                                <div class="user-avatar">
                                     {% if profile_picture %}
                                     <img src="{{ profile_picture }}" alt="Profile">
                                     {% else %}
@@ -12426,10 +12432,10 @@
                                 </div>
                                 <span class="user-name">{{ username }}</span>
                             </div>
-                            <div class="user-dropdown">
+                            <div class="user-dropdown" id="userDropdown">
                                 <div class="user-dropdown-inner">
-                                    <a class="user-dropdown-item" onclick="openProfileSettings()">Edit Profile</a>
-                                    <a class="user-dropdown-item" onclick="openChangePasswordModal()">Change Password</a>
+                                    <button type="button" class="user-dropdown-item" id="btnEditProfile">Edit Profile</button>
+                                    <button type="button" class="user-dropdown-item" id="btnChangePassword">Change Password</button>
                                     <div class="user-dropdown-divider"></div>
                                     <a class="user-dropdown-item" href="/logout">Logout</a>
                                 </div>
@@ -18085,8 +18091,46 @@
     </div>
 
     <script>
-        // VERSION: 2026-04-07-v6 - Profile handlers at top of script (avoid never-defined if later code throws)
-        console.log('🔄 Script version: 2026-04-07-v6');
+        // VERSION: 2026-04-07-v7 - JS click-toggle user dropdown
+        console.log('🔄 Script version: 2026-04-07-v7');
+
+        // ============================================================================
+        // USER DROPDOWN (click-toggle, not CSS hover)
+        // ============================================================================
+
+        (function() {
+            document.addEventListener('DOMContentLoaded', function() {
+                var trigger = document.getElementById('userMenuTrigger');
+                var dropdown = document.getElementById('userDropdown');
+                var btnEdit = document.getElementById('btnEditProfile');
+                var btnPw = document.getElementById('btnChangePassword');
+                if (!trigger || !dropdown) return;
+
+                trigger.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    dropdown.classList.toggle('open');
+                });
+
+                document.addEventListener('click', function(e) {
+                    if (!dropdown.contains(e.target) && !trigger.contains(e.target)) {
+                        dropdown.classList.remove('open');
+                    }
+                });
+
+                if (btnEdit) {
+                    btnEdit.addEventListener('click', function() {
+                        dropdown.classList.remove('open');
+                        if (typeof window.openProfileSettings === 'function') window.openProfileSettings();
+                    });
+                }
+                if (btnPw) {
+                    btnPw.addEventListener('click', function() {
+                        dropdown.classList.remove('open');
+                        if (typeof window.openChangePasswordModal === 'function') window.openChangePasswordModal();
+                    });
+                }
+            });
+        })();
 
         // ============================================================================
         // PROFILE SETTINGS MODAL (window.* so inline onclick in HTML resolves reliably)
