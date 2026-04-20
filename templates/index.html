@@ -18039,16 +18039,32 @@
                 });
 
                 if (btnEdit) {
-                    btnEdit.addEventListener('click', function() {
+                    btnEdit.addEventListener('click', function(e) {
+                        e.stopPropagation();
                         dropdown.classList.remove('open');
-                        if (typeof window.openProfileSettings === 'function') window.openProfileSettings();
+                        console.log('Edit Profile clicked, openProfileSettings type:', typeof window.openProfileSettings);
+                        if (typeof window.openProfileSettings === 'function') {
+                            window.openProfileSettings();
+                        }
+                        var m = document.getElementById('profileSettingsModal');
+                        console.log('profileSettingsModal element:', m, 'classes:', m ? m.className : 'N/A');
                     });
+                } else {
+                    console.warn('btnEditProfile not found');
                 }
                 if (btnPw) {
-                    btnPw.addEventListener('click', function() {
+                    btnPw.addEventListener('click', function(e) {
+                        e.stopPropagation();
                         dropdown.classList.remove('open');
-                        if (typeof window.openChangePasswordModal === 'function') window.openChangePasswordModal();
+                        console.log('Change Password clicked, openChangePasswordModal type:', typeof window.openChangePasswordModal);
+                        if (typeof window.openChangePasswordModal === 'function') {
+                            window.openChangePasswordModal();
+                        }
+                        var m = document.getElementById('changePasswordModal');
+                        console.log('changePasswordModal element:', m, 'classes:', m ? m.className : 'N/A');
                     });
+                } else {
+                    console.warn('btnChangePassword not found');
                 }
             });
         })();
@@ -18058,9 +18074,12 @@
         // ============================================================================
 
         window.openProfileSettings = function openProfileSettings() {
+            console.log('openProfileSettings called');
             var modal = document.getElementById('profileSettingsModal');
+            console.log('modal found:', !!modal, modal);
             if (!modal) return;
             modal.classList.add('open');
+            console.log('modal classes after open:', modal.className, 'computed display:', window.getComputedStyle(modal).display);
             var pm = document.getElementById('profileMsg');
             if (pm) { pm.textContent = ''; pm.className = 'profile-msg'; }
             fetch('/api/user/info', { credentials: 'same-origin' })
@@ -18144,8 +18163,11 @@
         };
 
         window.openChangePasswordModal = function openChangePasswordModal() {
+            console.log('openChangePasswordModal called');
             var m = document.getElementById('changePasswordModal');
+            console.log('change pw modal found:', !!m, m);
             if (m) m.classList.add('open');
+            if (m) console.log('change pw modal classes after open:', m.className, 'computed display:', window.getComputedStyle(m).display);
             var pm = document.getElementById('passwordMsg');
             if (pm) { pm.textContent = ''; pm.className = 'profile-msg'; }
             var ids = ['profileCurrentPw', 'profileNewPw', 'profileConfirmPw'];
