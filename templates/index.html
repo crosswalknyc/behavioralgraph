@@ -19886,7 +19886,10 @@
                     if (convertedProj > viewersProj && viewersProj > 0) convertedProj = viewersProj;
                     const viewersDisplay = viewersProj > 0 ? formatGenPop(viewersProj) : viewersRaw.toLocaleString();
                     let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedRaw.toLocaleString();
-                    let platRate = viewersRaw > 0 ? Math.min((convertedRaw / viewersRaw) * 100, 100) : parseFloat(p.convRate || 0);
+                    let platRate = 0;
+                    if (viewersProj > 0 && convertedProj > 0) platRate = Math.min((convertedProj / viewersProj) * 100, 100);
+                    else if (viewersRaw > 0) platRate = Math.min((convertedRaw / viewersRaw) * 100, 100);
+                    else platRate = parseFloat(p.convRate || 0);
                     if (platRate > 100) platRate = 100;
                     return `
                     <div style="background: var(--bg-card); border-radius: 10px; padding: 1rem; border: 1px solid var(--border-color); border-left: 4px solid ${platformColors[p.platform] || 'var(--accent-primary)'};">
@@ -19937,7 +19940,8 @@
                     let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedSample.toLocaleString();
 
                     let convRate = 0;
-                    if (uniqueSample > 0) convRate = Math.min((convertedSample / uniqueSample) * 100, 100);
+                    if (uniqueViewsProj > 0 && convertedProj > 0) convRate = Math.min((convertedProj / uniqueViewsProj) * 100, 100);
+                    else if (uniqueSample > 0) convRate = Math.min((convertedSample / uniqueSample) * 100, 100);
                     else convRate = parseFloat(u.convRate || 0);
                     if (convRate > 100) convRate = 100;
 
@@ -19981,7 +19985,10 @@
 
                     let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedRaw.toLocaleString();
 
-                    let platConvRate = uniqueRaw > 0 ? Math.min((convertedRaw / uniqueRaw) * 100, 100) : parseFloat(p.convRate || 0);
+                    let platConvRate = 0;
+                    if (uniqueViewsProj > 0 && convertedProj > 0) platConvRate = Math.min((convertedProj / uniqueViewsProj) * 100, 100);
+                    else if (uniqueRaw > 0) platConvRate = Math.min((convertedRaw / uniqueRaw) * 100, 100);
+                    else platConvRate = parseFloat(p.convRate || 0);
                     if (platConvRate > 100) platConvRate = 100;
 
                     return `
