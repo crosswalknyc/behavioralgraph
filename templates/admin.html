@@ -1376,8 +1376,8 @@
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0.75rem;">
                                     <label style="font-size: 0.85rem;">Master Ticker</label>
-                                    <input type="text" id="tickerMasterTicker" placeholder="e.g., AAPL" style="font-size: 0.85rem;" title="Group this ticker under this category header in Hedge Fund IQ selector. Leave empty for no grouping.">
-                                    <small style="font-size: 0.75rem;">Category header in Hedge Fund IQ ticker selector; tickers with the same Master Ticker are grouped and collapsed.</small>
+                                    <input type="text" id="tickerMasterTicker" placeholder="e.g., AAPL" style="font-size: 0.85rem;" title="Group this ticker under this category header in Fin IQ selector. Leave empty for no grouping.">
+                                    <small style="font-size: 0.75rem;">Category header in Fin IQ ticker selector; tickers with the same Master Ticker are grouped and collapsed.</small>
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0.75rem;">
                                     <label style="font-size: 0.85rem;">Stock Impact Relevance (%)</label>
@@ -2118,7 +2118,7 @@
                                         <input type="checkbox" id="cdShareOfTimeRun" checked> Share of Time (Run)
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdHedgeFundIQ"> Hedge Fund IQ
+                                        <input type="checkbox" id="cdHedgeFundIQ"> Fin IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdAnalysisIQ"> Analysis IQ
@@ -2161,7 +2161,7 @@
                                         <input type="checkbox" id="cdAanLLMOIQ" checked> LLMO IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdAanHedgeFundIQ" checked> Hedge Fund IQ
+                                        <input type="checkbox" id="cdAanHedgeFundIQ" checked> Fin IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
                                         <input type="checkbox" id="cdAanAnalysisIQ" checked> Analysis IQ
@@ -2475,7 +2475,7 @@
                                 <input type="checkbox" id="aanLLMOIQ" checked> LLMO IQ
                             </label>
                             <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanHedgeFundIQ" checked> Hedge Fund IQ
+                                <input type="checkbox" id="aanHedgeFundIQ" checked> Fin IQ
                             </label>
                             <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                 <input type="checkbox" id="aanAnalysisIQ" checked> Analysis IQ
@@ -2665,12 +2665,12 @@
                         </div>
                     </div>
                     
-                    <!-- Hedge Fund IQ Access -->
+                    <!-- Fin IQ Access -->
                     <div class="dashboard-access-item">
                         <div class="dashboard-access-header" onclick="toggleDashboardSection('hedgeFundIQ')">
                             <label class="checkbox-group" onclick="event.stopPropagation()">
                                 <input type="checkbox" id="hasHedgeFundIQAccess" onchange="toggleHedgeFundIQSection()">
-                                <span style="font-weight: 600;">📈 HEDGE FUND IQ</span>
+                                <span style="font-weight: 600;">📈 FIN IQ</span>
                             </label>
                             <span class="collapse-icon rotated" id="hedgeFundIQIcon">▼</span>
                         </div>
@@ -2682,7 +2682,7 @@
                                         <span>Gets Emails (Mon-Fri market days)</span>
                                     </label>
                                     <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">
-                                        If enabled, this user receives automatic Hedge Fund IQ Alpha Ideas digests on weekdays.
+                                        If enabled, this user receives automatic Fin IQ Alpha Ideas digests on weekdays.
                                     </div>
                                 </div>
                                 <div style="margin-bottom: 1rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(255, 193, 7, 0.08);">
@@ -6779,7 +6779,7 @@
             document.getElementById('hasTicketSalesTrackerRun').checked = false;
             syncShareOfTimeAccess();
             
-            // Reset Hedge Fund IQ section
+            // Reset Fin IQ section
             document.getElementById('hedgeFundIQSection').style.display = 'none';
             document.getElementById('hedgeFundIQIcon').classList.add('rotated');
             document.querySelectorAll('.hedge-fund-tab-checkbox').forEach(cb => cb.checked = false);
@@ -6846,7 +6846,7 @@
             document.getElementById('userModalLogoUrl').value = '';
             window.userModalRemoveLogoRequested = false;
             
-            // Preload Hedge Fund tickers so they're ready when user expands section
+            // Preload Fin IQ tickers so they're ready when user expands section
             loadHedgeFundTickersForAccess();
 
             // Access to New Releases: default all ON for new users
@@ -6906,7 +6906,7 @@
             document.getElementById('hasTicketSalesTrackerView').checked = user.has_ticket_sales_tracker_access === true;
             syncTSTRunWithModule();
             
-            // Set Hedge Fund IQ access (tabs and tickers)
+            // Set Fin IQ access (tabs and tickers)
             setHedgeFundIQAccess(user);
             
             // Set Analysis IQ modules and show/hide section
@@ -7880,14 +7880,14 @@
             }
         }
         
-        // Hedge Fund IQ Tab Toggle
+        // Fin IQ Tab Toggle
         function toggleAllHedgeFundTabs() {
             const allTabsCheckbox = document.getElementById('allHedgeFundTabs');
             const tabCheckboxes = document.querySelectorAll('.hedge-fund-tab-checkbox');
             tabCheckboxes.forEach(cb => cb.checked = allTabsCheckbox.checked);
         }
         
-        // Hedge Fund IQ Ticker Toggle
+        // Fin IQ Ticker Toggle
         function toggleAllHedgeFundTickers() {
             const allTickersCheckbox = document.getElementById('allHedgeFundTickers');
             const tickerCheckboxes = document.querySelectorAll('.hedge-fund-ticker-checkbox');
@@ -8059,9 +8059,9 @@
             return Array.from(document.querySelectorAll('.team-member-checkbox-admin:checked')).map(cb => cb.value);
         }
         
-        // Load Hedge Fund Tickers for Access Control
+        // Load Fin IQ Tickers for Access Control
         async function loadHedgeFundTickersForAccess() {
-            console.log('🔄 Loading Hedge Fund tickers for access control...');
+            console.log('🔄 Loading Fin IQ tickers for access control...');
             try {
                 const response = await fetch('/api/hedge-fund-iq/tickers');
                 console.log('📡 Response status:', response.status);
@@ -8095,13 +8095,13 @@
                         '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">No tickers available</div>';
                 }
             } catch (error) {
-                console.error('❌ Error loading hedge fund tickers:', error);
+                console.error('❌ Error loading Fin IQ tickers:', error);
                 document.getElementById('hedgeFundTickersList').innerHTML = 
                     '<div style="padding: 0.5rem; color: var(--accent-red); font-size: 0.85rem;">Error loading tickers: ' + error.message + '</div>';
             }
         }
         
-        // Get Hedge Fund IQ Tabs
+        // Get Fin IQ Tabs
         function getHedgeFundIQTabs() {
             const tabs = [];
             document.querySelectorAll('.hedge-fund-tab-checkbox:checked').forEach(cb => {
@@ -8110,7 +8110,7 @@
             return tabs;
         }
         
-        // Get Hedge Fund IQ Tickers
+        // Get Fin IQ Tickers
         function getHedgeFundIQTickers() {
             const tickers = [];
             document.querySelectorAll('.hedge-fund-ticker-checkbox:checked').forEach(cb => {
@@ -8119,7 +8119,7 @@
             return tickers;
         }
         
-        // Set Hedge Fund IQ Access (for editing users)
+        // Set Fin IQ Access (for editing users)
         function setHedgeFundIQAccess(user) {
             // Set main checkbox
             const hasAccess = user.has_hedge_fund_iq_access === true;

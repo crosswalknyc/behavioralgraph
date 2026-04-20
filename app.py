@@ -152,7 +152,7 @@ GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
-HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
+HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Fin IQ ticker data
 TICKET_SALES_S3_BUCKET = 'ticket-sales-iq'  # Bucket for Ticket Sales IQ (talent-to-theater attribution)
 TICKET_SALES_TRACKER_S3_BUCKET = 'ticket-sales-tracker'  # Bucket for Ticket Sales Tracker (movie viewers → theater)
 SF_LF_CONV_S3_BUCKET = 'sf-lf-conversion'  # Bucket for Short Form to Long Form Conversion analysis
@@ -5664,7 +5664,7 @@ def index():
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     
-    # If user only has Hedge Fund IQ (no Profile IQ), default to Hedge Fund IQ landing page
+    # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
 
     # Purgatory: only super_admins or users explicitly allowed to access/approve (has_purgatory_approval) see it in the dropdown
@@ -11651,16 +11651,16 @@ def _load_hedge_fund_daily_cache(cache_slug):
                     cached_at = cached_at.replace(tzinfo=None)
                 age_seconds = (datetime.now() - cached_at).total_seconds()
                 if age_seconds > HEDGE_FUND_CACHE_MAX_AGE_SECONDS:
-                    print(f"🔄 Hedge Fund cache expired (age {int(age_seconds)}s): {cache_slug}")
+                    print(f"🔄 Fin IQ cache expired (age {int(age_seconds)}s): {cache_slug}")
                     return None
             except Exception:
                 pass
-        print(f"📦 Hedge Fund daily cache HIT: {cache_slug}")
+        print(f"📦 Fin IQ daily cache HIT: {cache_slug}")
         return cached.get('data')
     except s3_client.exceptions.NoSuchKey:
         pass
     except Exception as e:
-        print(f"⚠️ Hedge Fund cache read error: {e}")
+        print(f"⚠️ Fin IQ cache read error: {e}")
     return None
 
 def _save_hedge_fund_daily_cache(cache_slug, data):
@@ -11675,9 +11675,9 @@ def _save_hedge_fund_daily_cache(cache_slug, data):
             Body=json.dumps(entry, indent=2),
             ContentType='application/json'
         )
-        print(f"💾 Hedge Fund daily cache SAVED: {cache_slug}")
+        print(f"💾 Fin IQ daily cache SAVED: {cache_slug}")
     except Exception as e:
-        print(f"⚠️ Hedge Fund cache write error: {e}")
+        print(f"⚠️ Fin IQ cache write error: {e}")
 
 
 def _hf_alpha_today_str():
@@ -11918,7 +11918,7 @@ def _default_hf_alpha_packet(ticker_payload, generated_at, note):
 
 def _fetch_hf_ticker_payload_from_s3(s3_key):
     if not hedge_fund_s3_client:
-        raise RuntimeError('Hedge Fund S3 not configured')
+        raise RuntimeError('Fin IQ S3 not configured')
     response = hedge_fund_s3_client.get_object(Bucket=HEDGE_FUND_S3_BUCKET, Key=s3_key)
     csv_content = response['Body'].read().decode('utf-8')
     df = pd.read_csv(io.StringIO(csv_content)).fillna(0)
@@ -12122,7 +12122,7 @@ def _compute_hf_quarter_context(ticker_payload, generation_day):
 
 
 def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
-    """Generate weekly Hedge Fund IQ alpha ideas for one ticker.
+    """Generate weekly Fin IQ alpha ideas for one ticker.
 
     Philosophy: Crosswalk IQ's edge is RESEARCH SYNTHESIS. We combine:
     - Deep external research (Street, company, industry)
@@ -12539,7 +12539,7 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
                 {idea_html}
             </div>
         """)
-    cta = f'<p style="margin-top: 24px; text-align: center;"><a class="email-btn" href="{escape(app_base_url)}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%); color: #272822; font-weight: 700; text-decoration: none; border-radius: 6px;">Open Hedge Fund IQ Dashboard →</a></p>'
+    cta = f'<p style="margin-top: 24px; text-align: center;"><a class="email-btn" href="{escape(app_base_url)}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%); color: #272822; font-weight: 700; text-decoration: none; border-radius: 6px;">Open Fin IQ Dashboard →</a></p>'
     body = f"""
         <div style="text-align: center; margin-bottom: 24px;">
             <h2 style="color: #f8f8f2; margin: 0;">Weekly Alpha Ideas</h2>
@@ -12551,7 +12551,7 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
         {''.join(sections)}
         {cta}
     """
-    return _wrap_email_html(body, title="Hedge Fund IQ — Weekly Alpha Ideas")
+    return _wrap_email_html(body, title="Fin IQ — Weekly Alpha Ideas")
 
 
 def _get_hf_digest_recipients():
@@ -12669,8 +12669,8 @@ def send_hf_alpha_ideas_digest(
             skipped.append({'username': rec['username'], 'reason': 'No entitled ticker ideas'})
             continue
         html_content = _build_hf_alpha_email_html(rec['username'], packets, run_day, app_url)
-        subject = f"Hedge Fund IQ — Weekly Alpha Ideas ({run_day})"
-        text = f"Hedge Fund IQ Weekly Alpha Ideas (week of {run_day}) for {rec['username']}. Open dashboard: {app_url}"
+        subject = f"Fin IQ — Weekly Alpha Ideas ({run_day})"
+        text = f"Fin IQ Weekly Alpha Ideas (week of {run_day}) for {rec['username']}. Open dashboard: {app_url}"
         if dry_run:
             sent.append({'username': rec['username'], 'email': rec['email'], 'dry_run': True, 'ticker_count': len(packets)})
             continue
@@ -12704,10 +12704,10 @@ def send_hf_alpha_ideas_digest(
 def list_hedge_fund_tickers():
     """List all ticker CSV files from S3 aggregated-tickers bucket."""
     if not hedge_fund_s3_client:
-        return jsonify({'success': False, 'error': 'Hedge Fund S3 not configured'}), 500
+        return jsonify({'success': False, 'error': 'Fin IQ S3 not configured'}), 500
     
     try:
-        print(f"📊 Listing Hedge Fund IQ tickers from bucket: {HEDGE_FUND_S3_BUCKET} (region: {S3_REGION})")
+        print(f"📊 Listing Fin IQ tickers from bucket: {HEDGE_FUND_S3_BUCKET} (region: {S3_REGION})")
         
         tickers = []
         paginator = hedge_fund_s3_client.get_paginator('list_objects_v2')
@@ -12831,7 +12831,7 @@ def delete_hedge_fund_ticker():
             return jsonify({'success': False, 'error': 'Invalid s3_key'}), 400
 
         if not hedge_fund_s3_client:
-            return jsonify({'success': False, 'error': 'Hedge Fund S3 not configured'}), 500
+            return jsonify({'success': False, 'error': 'Fin IQ S3 not configured'}), 500
 
         # 1. Delete CSV from aggregated-tickers bucket
         try:
@@ -12901,8 +12901,8 @@ def get_hedge_fund_ticker_data(s3_key):
         print(f"🔄 Refresh requested: bypassing cache for {s3_key}")
     
     if not hedge_fund_s3_client:
-        print("❌ Hedge Fund S3 client not configured")
-        return jsonify({'success': False, 'error': 'Hedge Fund S3 not configured'}), 500
+        print("❌ Fin IQ S3 client not configured")
+        return jsonify({'success': False, 'error': 'Fin IQ S3 not configured'}), 500
     
     try:
         print(f"📂 Fetching from S3: {HEDGE_FUND_S3_BUCKET}/{s3_key} (region: {S3_REGION})")
@@ -13220,7 +13220,7 @@ def get_hedge_fund_alpha_ideas(ticker_or_s3_key):
         role = _normalize_role(user.get('role', 'user'))
         access = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
         if not access.get('has_hedge_fund_iq_access'):
-            return jsonify({'success': False, 'error': 'Hedge Fund IQ access denied'}), 403
+            return jsonify({'success': False, 'error': 'Fin IQ access denied'}), 403
 
         ticker_row = _resolve_hf_ticker_row(ticker_or_s3_key)
         if not ticker_row:
@@ -13252,7 +13252,7 @@ def get_hedge_fund_alpha_ideas(ticker_or_s3_key):
 
         return jsonify({'success': True, 'date': day, 'source': source, 'alpha': packet, 'logs': logs})
     except Exception as e:
-        print(f"❌ Error loading Hedge Fund alpha ideas: {e}")
+        print(f"❌ Error loading Fin IQ alpha ideas: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -13293,7 +13293,7 @@ def admin_run_hf_alpha_ideas():
 
 @app.route('/api/cron/hf-alpha-ideas', methods=['GET', 'POST'])
 def cron_hf_alpha_ideas():
-    """Weekly Monday cron endpoint for Hedge Fund IQ alpha generation + digest send."""
+    """Weekly Monday cron endpoint for Fin IQ alpha generation + digest send."""
     secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
     expected = os.environ.get('CRON_SECRET', '')
     if not expected or secret != expected:
@@ -15894,7 +15894,7 @@ TICKET_SALES_TRACKER_METADATA_KEY = 'system/ticket_sales_tracker_metadata.json'
 # SVOD pricing per platform (admin-configured): { "paramount+": { "ad_supported": 5.99, "premium": 11.99 }, ... }
 SVOD_PRICING_KEY = 'system/svod_pricing.json'
 
-# Hedge Fund IQ ticker metadata storage key
+# Fin IQ ticker metadata storage key
 TICKER_METADATA_KEY = 'system/ticker_metadata.json'
 
 # Purgatory metadata storage key - tracks files pending admin review

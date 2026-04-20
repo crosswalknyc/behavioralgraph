@@ -3575,7 +3575,7 @@
             color: var(--accent-cyan);
         }
 
-        /* Hedge Fund IQ Ticker tree: Master Ticker groups and list styling */
+        /* Fin IQ Ticker tree: Master Ticker groups and list styling */
         #tickerTree .sidebar-category-items.master-ticker-items.open {
             display: block !important;
         }
@@ -3650,7 +3650,7 @@
             color: var(--accent-cyan);
         }
 
-        /* Hedge Fund IQ Compare: sticky table header and scrollable body */
+        /* Fin IQ Compare: sticky table header and scrollable body */
         .ticker-compare-table-scroll {
             border: 1px solid var(--border-color);
             border-radius: 8px;
@@ -12455,7 +12455,7 @@
                             <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
                             <option value="shareOfTimeIQ" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
                             <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
-                            <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Hedge Fund IQ</option>
+                            <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="ecommerceIQ" {% if not has_ecommerce_iq_access %}disabled{% endif %}>🛒 E-Commerce IQ</option>
                             <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
@@ -17399,7 +17399,7 @@
             {% endif %}
         </div><!-- End llmoIQView -->
 
-        <!-- HEDGE FUND IQ VIEW -->
+        <!-- FIN IQ VIEW -->
         <div id="hedgeFundIQView"{% if default_view_hedge_fund_iq %} style="display: flex;"{% else %} style="display: none;"{% endif %}>
             <div class="dashboard-layout">
                 <!-- Persistent Sidebar - Left Side -->
@@ -18436,7 +18436,7 @@
         const expandedSubscriberCategories = new Set(); // For hierarchical tree (match Profile IQ)
         const expandedSubscriberShows = new Set(); // For nested season groups in Subscriber IQ sidebar
         
-        // When true, user only has Hedge Fund IQ (no Profile IQ) — default to Hedge Fund IQ landing on load
+        // When true, user only has Fin IQ (no Profile IQ) — default to Fin IQ landing on load
         window.defaultViewHedgeFundIQ = {{ 'true' if default_view_hedge_fund_iq else 'false' }};
         
         // Live Features - controls which Analysis Tools are visible to non-admin users
@@ -18744,7 +18744,7 @@
             await loadGenPopBaseline();
             
             loadJobs();
-            // If user only has Hedge Fund IQ, show Hedge Fund landing; otherwise apply selected product view so dashboard/content shows
+            // If user only has Fin IQ, show Fin IQ landing; otherwise apply selected product view so dashboard/content shows
             if (window.defaultViewHedgeFundIQ) {
                 showHedgeFundIQ();
             } else {
@@ -18843,7 +18843,7 @@
                 rankerIQ: 'Ranker: Compare and rank titles, genres, or properties by performance.',
                 ticketSalesIQ: 'Impact IQ: Measure impact and performance of titles via ticket sales and engagement.',
                 ticketSalesTracker: 'Ticket Sales Tracker: Track ticket sales and box office performance over time.',
-                hedgeFundIQ: 'Hedge Fund IQ: View hedge fund and institutional engagement and exposure.',
+                hedgeFundIQ: 'Fin IQ: View financial and institutional engagement and exposure.',
                 roasIQ: 'ROAS IQ: Analyze return on ad spend by channel, source, and campaign attribution.',
                 ecommerceIQ: 'E-Commerce IQ: Explore purchase funnel activity across retailers and product pages.',
                 shareOfTimeIQ: 'Share of Time: Analyze how audience time is distributed across streaming, music, games, betting, social media, and vMVPD/FAST.',
@@ -18883,7 +18883,7 @@
                     if (caOpt && d.has_analysis_iq_access !== undefined) caOpt.disabled = !d.has_analysis_iq_access;
                     window.hasShareOfTimeRunAccess = !!d.has_share_of_time_run_access && (d.has_share_of_time_access !== false);
                     if (typeof sotApplyRunAccessVisibility === 'function') sotApplyRunAccessVisibility();
-                    // Store Hedge Fund IQ data cutoff date for filtering
+                    // Store Fin IQ data cutoff date for filtering
                     window.hedgeFundIQDataCutoff = d.hedge_fund_iq_data_cutoff || null;
                 }
                 function rebuildViewNavCustomPanel() {
@@ -28346,7 +28346,7 @@
         });
         
         // ============================================================================
-        // HEDGE FUND IQ FUNCTIONS
+        // FIN IQ FUNCTIONS
         // ============================================================================
         
         let hedgeFundTickers = [];
@@ -29380,7 +29380,7 @@
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'hedgefund_iq_comparison_' + new Date().toISOString().slice(0,10) + '.csv';
+            a.download = 'fin_iq_comparison_' + new Date().toISOString().slice(0,10) + '.csv';
             a.click();
             URL.revokeObjectURL(a.href);
             if (typeof showToast === 'function') showToast('CSV exported.');
@@ -29694,7 +29694,7 @@
             
             // Parse the CSV data
             const parsed = parseAllData(csvData);
-            // Projected US = (Crosswalk Respondents / 10M) * 329,900,000 (Hedge Fund IQ consumer profile)
+            // Projected US = (Crosswalk Respondents / 10M) * 329,900,000 (Fin IQ consumer profile)
             if (parsed.sampleSize > 0) {
                 parsed.projectedUS = Math.round((parsed.sampleSize / 10000000) * 329900000);
             }
@@ -31014,7 +31014,7 @@
                         return rowDate <= cutoffDate;
                     });
                     if (data.data.length < originalLength) {
-                        console.log(`🔒 Hedge Fund IQ data filtered: showing ${data.data.length} of ${originalLength} days`);
+                        console.log(`🔒 Fin IQ data filtered: showing ${data.data.length} of ${originalLength} days`);
                     }
                 }
             } else {
@@ -32603,7 +32603,7 @@
         });
 
         // ============================================================================
-        // END HEDGE FUND IQ FUNCTIONS
+        // END FIN IQ FUNCTIONS
         // ============================================================================
         
         // Talent Search Form Handler (for standalone Talent Search IQ view)
