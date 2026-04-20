@@ -18074,26 +18074,64 @@
         // ============================================================================
 
         window.openProfileSettings = function openProfileSettings() {
-            console.log('openProfileSettings called');
-            var modal = document.getElementById('profileSettingsModal');
-            console.log('modal found:', !!modal, modal);
-            if (!modal) return;
-            modal.classList.add('open');
-            console.log('modal classes after open:', modal.className, 'computed display:', window.getComputedStyle(modal).display);
-            var pm = document.getElementById('profileMsg');
-            if (pm) { pm.textContent = ''; pm.className = 'profile-msg'; }
-            fetch('/api/user/info', { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (!d.success) return;
-                    var set = function(id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; };
-                    set('profileUsername', d.username);
-                    set('profileFirstName', d.first_name);
-                    set('profileLastName', d.last_name);
-                    set('profileEmail', d.email);
-                    set('profileCompany', d.company);
-                    set('profileDepartment', d.department);
-                }).catch(function() {});
+            if (document.getElementById('dynProfileModal')) { document.getElementById('dynProfileModal').remove(); }
+            var overlay = document.createElement('div');
+            overlay.id = 'dynProfileModal';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;z-index:2147483647;';
+            var card = document.createElement('div');
+            card.style.cssText = 'background:#1a2332;border-radius:12px;padding:2rem;max-width:480px;width:92%;max-height:85vh;overflow-y:auto;color:#e6f1ff;font-family:inherit;';
+            var fields = [
+                {label:'Username', id:'dynProfUser', disabled:true},
+                {label:'First Name', id:'dynProfFirst', ph:'First name'},
+                {label:'Last Name', id:'dynProfLast', ph:'Last name'},
+                {label:'Email', id:'dynProfEmail', ph:'Email address', type:'email'},
+                {label:'Company', id:'dynProfCompany', ph:'Company'},
+                {label:'Department', id:'dynProfDept', ph:'Department'}
+            ];
+            var html = '<h3 style="margin:0 0 1.5rem;font-size:1.2rem;">Edit Profile</h3>';
+            fields.forEach(function(f) {
+                html += '<div style="margin-bottom:1rem;"><label style="display:block;font-size:0.8rem;color:#8899aa;margin-bottom:0.35rem;font-weight:600;text-transform:uppercase;">' + f.label + '</label>';
+                html += '<input id="' + f.id + '" type="' + (f.type||'text') + '" placeholder="' + (f.ph||'') + '" ' + (f.disabled?'disabled':'') + ' style="width:100%;padding:0.6rem 0.75rem;border-radius:8px;border:1px solid #2a3a4a;background:#0d1a2a;color:#e6f1ff;font-size:0.9rem;box-sizing:border-box;' + (f.disabled?'opacity:0.6;':'') + '"></div>';
+            });
+            html += '<div id="dynProfMsg" style="margin-top:0.75rem;font-size:0.85rem;text-align:center;min-height:1.2em;"></div>';
+            html += '<div style="display:flex;gap:0.75rem;margin-top:1.5rem;">';
+            html += '<button id="dynProfCancel" style="flex:1;padding:0.65rem 1rem;border-radius:8px;border:1px solid #2a3a4a;background:#0d1a2a;color:#8899aa;font-weight:600;font-size:0.9rem;cursor:pointer;">Cancel</button>';
+            html += '<button id="dynProfSave" style="flex:1;padding:0.65rem 1rem;border-radius:8px;border:none;background:#00b4d8;color:#fff;font-weight:600;font-size:0.9rem;cursor:pointer;">Save Changes</button>';
+            html += '</div>';
+            card.innerHTML = html;
+            overlay.appendChild(card);
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+            card.querySelector('#dynProfCancel').addEventListener('click', function() { overlay.remove(); });
+            card.querySelector('#dynProfSave').addEventListener('click', function() {
+                var msg = document.getElementById('dynProfMsg');
+                var btn = card.querySelector('#dynProfSave');
+                btn.disabled = true; btn.textContent = 'Saving...';
+                fetch('/api/user/profile', {
+                    method:'PUT', credentials:'same-origin',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        first_name: document.getElementById('dynProfFirst').value,
+                        last_name: document.getElementById('dynProfLast').value,
+                        email: document.getElementById('dynProfEmail').value,
+                        company: document.getElementById('dynProfCompany').value,
+                        department: document.getElementById('dynProfDept').value
+                    })
+                }).then(function(r){return r.json();}).then(function(d){
+                    btn.disabled=false; btn.textContent='Save Changes';
+                    if(d.success){msg.style.color='#a6e3a1';msg.textContent='Profile updated successfully.';}
+                    else{msg.style.color='#f38ba8';msg.textContent=d.error||'Update failed.';}
+                }).catch(function(){btn.disabled=false;btn.textContent='Save Changes';msg.style.color='#f38ba8';msg.textContent='Network error.';});
+            });
+            fetch('/api/user/info',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){
+                if(!d.success) return;
+                document.getElementById('dynProfUser').value = d.username||'';
+                document.getElementById('dynProfFirst').value = d.first_name||'';
+                document.getElementById('dynProfLast').value = d.last_name||'';
+                document.getElementById('dynProfEmail').value = d.email||'';
+                document.getElementById('dynProfCompany').value = d.company||'';
+                document.getElementById('dynProfDept').value = d.department||'';
+            }).catch(function(){});
         };
 
         window.closeProfileSettings = function closeProfileSettings() {
@@ -18163,15 +18201,55 @@
         };
 
         window.openChangePasswordModal = function openChangePasswordModal() {
-            console.log('openChangePasswordModal called');
-            var m = document.getElementById('changePasswordModal');
-            console.log('change pw modal found:', !!m, m);
-            if (m) m.classList.add('open');
-            if (m) console.log('change pw modal classes after open:', m.className, 'computed display:', window.getComputedStyle(m).display);
-            var pm = document.getElementById('passwordMsg');
-            if (pm) { pm.textContent = ''; pm.className = 'profile-msg'; }
-            var ids = ['profileCurrentPw', 'profileNewPw', 'profileConfirmPw'];
-            ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
+            if (document.getElementById('dynPwModal')) { document.getElementById('dynPwModal').remove(); }
+            var overlay = document.createElement('div');
+            overlay.id = 'dynPwModal';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;z-index:2147483647;';
+            var card = document.createElement('div');
+            card.style.cssText = 'background:#1a2332;border-radius:12px;padding:2rem;max-width:420px;width:92%;color:#e6f1ff;font-family:inherit;';
+            var fields = [
+                {label:'Current Password', id:'dynPwCurrent', ph:'Enter current password'},
+                {label:'New Password', id:'dynPwNew', ph:'Min 8 characters'},
+                {label:'Confirm New Password', id:'dynPwConfirm', ph:'Re-enter new password'}
+            ];
+            var html = '<h3 style="margin:0 0 1.5rem;font-size:1.2rem;">Change Password</h3>';
+            fields.forEach(function(f) {
+                html += '<div style="margin-bottom:1rem;"><label style="display:block;font-size:0.8rem;color:#8899aa;margin-bottom:0.35rem;font-weight:600;text-transform:uppercase;">' + f.label + '</label>';
+                html += '<input id="' + f.id + '" type="password" placeholder="' + f.ph + '" style="width:100%;padding:0.6rem 0.75rem;border-radius:8px;border:1px solid #2a3a4a;background:#0d1a2a;color:#e6f1ff;font-size:0.9rem;box-sizing:border-box;"></div>';
+            });
+            html += '<div id="dynPwMsg" style="margin-top:0.75rem;font-size:0.85rem;text-align:center;min-height:1.2em;"></div>';
+            html += '<div style="display:flex;gap:0.75rem;margin-top:1.5rem;">';
+            html += '<button id="dynPwCancel" style="flex:1;padding:0.65rem 1rem;border-radius:8px;border:1px solid #2a3a4a;background:#0d1a2a;color:#8899aa;font-weight:600;font-size:0.9rem;cursor:pointer;">Cancel</button>';
+            html += '<button id="dynPwSave" style="flex:1;padding:0.65rem 1rem;border-radius:8px;border:none;background:#00b4d8;color:#fff;font-weight:600;font-size:0.9rem;cursor:pointer;">Update Password</button>';
+            html += '</div>';
+            card.innerHTML = html;
+            overlay.appendChild(card);
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+            card.querySelector('#dynPwCancel').addEventListener('click', function() { overlay.remove(); });
+            card.querySelector('#dynPwSave').addEventListener('click', function() {
+                var msg = document.getElementById('dynPwMsg');
+                var btn = card.querySelector('#dynPwSave');
+                var cur = document.getElementById('dynPwCurrent').value;
+                var np = document.getElementById('dynPwNew').value;
+                var cp = document.getElementById('dynPwConfirm').value;
+                msg.textContent = ''; msg.style.color = '#f38ba8';
+                if (!cur) { msg.textContent = 'Please enter your current password.'; return; }
+                if (!np) { msg.textContent = 'Please enter a new password.'; return; }
+                if (np.length < 8) { msg.textContent = 'New password must be at least 8 characters.'; return; }
+                if (np !== cp) { msg.textContent = 'New passwords do not match.'; return; }
+                btn.disabled = true; btn.textContent = 'Updating...';
+                fetch('/api/user/profile', {
+                    method:'PUT', credentials:'same-origin',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ current_password: cur, new_password: np })
+                }).then(function(r){return r.json();}).then(function(d){
+                    btn.disabled=false; btn.textContent='Update Password';
+                    if(d.success){msg.style.color='#a6e3a1';msg.textContent='Password updated successfully.';
+                        document.getElementById('dynPwCurrent').value='';document.getElementById('dynPwNew').value='';document.getElementById('dynPwConfirm').value='';
+                    } else {msg.textContent=d.error||'Update failed.';}
+                }).catch(function(){btn.disabled=false;btn.textContent='Update Password';msg.textContent='Network error.';});
+            });
         };
 
         window.closeChangePasswordModal = function closeChangePasswordModal() {
@@ -73168,75 +73246,6 @@
         <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
     </footer>
 
-    <!-- Edit Profile Modal (must be last in body for z-index to work) -->
-    <div id="profileSettingsModal" class="profile-settings-modal" onclick="if(event.target === this) closeProfileSettings()">
-        <div class="profile-settings-content">
-            <h3>Edit Profile</h3>
-            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
-                <div class="user-avatar" onclick="openAvatarUpload()" title="Change picture" style="cursor:pointer;flex-shrink:0;">
-                    {% if profile_picture %}
-                    <img src="{{ profile_picture }}" alt="Profile">
-                    {% else %}
-                    <span class="user-avatar-initials">{{ username[:2] }}</span>
-                    {% endif %}
-                </div>
-                <button type="button" onclick="openAvatarUpload()" style="background:var(--bg-input);color:var(--text-secondary);border:1px solid var(--border-color);padding:0.45rem 0.9rem;border-radius:8px;cursor:pointer;font-size:0.85rem;">Change Photo</button>
-            </div>
-            <div class="profile-field">
-                <label>Username</label>
-                <input type="text" id="profileUsername" disabled>
-            </div>
-            <div class="profile-field">
-                <label>First Name</label>
-                <input type="text" id="profileFirstName" placeholder="First name">
-            </div>
-            <div class="profile-field">
-                <label>Last Name</label>
-                <input type="text" id="profileLastName" placeholder="Last name">
-            </div>
-            <div class="profile-field">
-                <label>Email</label>
-                <input type="email" id="profileEmail" placeholder="Email address">
-            </div>
-            <div class="profile-field">
-                <label>Company</label>
-                <input type="text" id="profileCompany" placeholder="Company">
-            </div>
-            <div class="profile-field">
-                <label>Department</label>
-                <input type="text" id="profileDepartment" placeholder="Department">
-            </div>
-            <div class="profile-msg" id="profileMsg"></div>
-            <div class="profile-btn-row">
-                <button type="button" class="profile-btn-cancel" onclick="closeProfileSettings()">Cancel</button>
-                <button type="button" class="profile-btn-save" id="profileSaveBtn" onclick="saveProfileSettings()">Save Changes</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Change Password Modal -->
-    <div id="changePasswordModal" class="profile-settings-modal" onclick="if(event.target === this) closeChangePasswordModal()">
-        <div class="profile-settings-content" style="max-width:420px;">
-            <h3>Change Password</h3>
-            <div class="profile-field">
-                <label>Current Password</label>
-                <input type="password" id="profileCurrentPw" placeholder="Enter current password">
-            </div>
-            <div class="profile-field">
-                <label>New Password</label>
-                <input type="password" id="profileNewPw" placeholder="Min 8 characters">
-            </div>
-            <div class="profile-field">
-                <label>Confirm New Password</label>
-                <input type="password" id="profileConfirmPw" placeholder="Re-enter new password">
-            </div>
-            <div class="profile-msg" id="passwordMsg"></div>
-            <div class="profile-btn-row">
-                <button type="button" class="profile-btn-cancel" onclick="closeChangePasswordModal()">Cancel</button>
-                <button type="button" class="profile-btn-save" id="passwordSaveBtn" onclick="saveNewPassword()">Update Password</button>
-            </div>
-        </div>
-    </div>
 
 </body>
 </html>
