@@ -18097,13 +18097,7 @@
             if (!modal) return;
             modal.classList.add('open');
             var pm = document.getElementById('profileMsg');
-            if (pm) pm.textContent = '';
-            var cur = document.getElementById('profileCurrentPw');
-            var np = document.getElementById('profileNewPw');
-            var cp = document.getElementById('profileConfirmPw');
-            if (cur) cur.value = '';
-            if (np) np.value = '';
-            if (cp) cp.value = '';
+            if (pm) { pm.textContent = ''; pm.className = 'profile-msg'; }
             fetch('/api/user/info', { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
@@ -18179,6 +18173,65 @@
             .catch(function() {
                 btn.disabled = false;
                 btn.textContent = 'Save Changes';
+                msg.textContent = 'Network error. Please try again.';
+                msg.classList.add('error');
+            });
+        };
+
+        window.openChangePasswordModal = function openChangePasswordModal() {
+            var m = document.getElementById('changePasswordModal');
+            if (m) m.classList.add('open');
+            var pm = document.getElementById('passwordMsg');
+            if (pm) { pm.textContent = ''; pm.className = 'profile-msg'; }
+            var ids = ['profileCurrentPw', 'profileNewPw', 'profileConfirmPw'];
+            ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
+        };
+
+        window.closeChangePasswordModal = function closeChangePasswordModal() {
+            var m = document.getElementById('changePasswordModal');
+            if (m) m.classList.remove('open');
+        };
+
+        window.saveNewPassword = function saveNewPassword() {
+            var msg = document.getElementById('passwordMsg');
+            if (!msg) return;
+            msg.textContent = '';
+            msg.className = 'profile-msg';
+            var currentPw = document.getElementById('profileCurrentPw').value;
+            var newPw = document.getElementById('profileNewPw').value;
+            var confirmPw = document.getElementById('profileConfirmPw').value;
+            if (!currentPw) { msg.textContent = 'Please enter your current password.'; msg.classList.add('error'); return; }
+            if (!newPw) { msg.textContent = 'Please enter a new password.'; msg.classList.add('error'); return; }
+            if (newPw.length < 8) { msg.textContent = 'New password must be at least 8 characters.'; msg.classList.add('error'); return; }
+            if (newPw !== confirmPw) { msg.textContent = 'New passwords do not match.'; msg.classList.add('error'); return; }
+            var btn = document.getElementById('passwordSaveBtn');
+            if (!btn) return;
+            btn.disabled = true;
+            btn.textContent = 'Updating...';
+            fetch('/api/user/profile', {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password: currentPw, new_password: newPw })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                btn.textContent = 'Update Password';
+                if (d.success) {
+                    msg.textContent = 'Password updated successfully.';
+                    msg.classList.add('success');
+                    document.getElementById('profileCurrentPw').value = '';
+                    document.getElementById('profileNewPw').value = '';
+                    document.getElementById('profileConfirmPw').value = '';
+                } else {
+                    msg.textContent = d.error || 'Update failed.';
+                    msg.classList.add('error');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Update Password';
                 msg.textContent = 'Network error. Please try again.';
                 msg.classList.add('error');
             });
@@ -72229,142 +72282,6 @@
             }
         }
         
-        // ============================================================================
-        // PROFILE SETTINGS MODAL
-        // ============================================================================
-
-        function openProfileSettings() {
-            var modal = document.getElementById('profileSettingsModal');
-            modal.classList.add('open');
-            document.getElementById('profileMsg').textContent = '';
-            fetch('/api/user/info', { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (!d.success) return;
-                    document.getElementById('profileUsername').value = d.username || '';
-                    document.getElementById('profileFirstName').value = d.first_name || '';
-                    document.getElementById('profileLastName').value = d.last_name || '';
-                    document.getElementById('profileEmail').value = d.email || '';
-                    document.getElementById('profileCompany').value = d.company || '';
-                    document.getElementById('profileDepartment').value = d.department || '';
-                }).catch(function() {});
-        }
-
-        function closeProfileSettings() {
-            document.getElementById('profileSettingsModal').classList.remove('open');
-        }
-
-        function saveProfileSettings() {
-            var msg = document.getElementById('profileMsg');
-            msg.textContent = '';
-            msg.className = 'profile-msg';
-            var body = {
-                first_name: document.getElementById('profileFirstName').value,
-                last_name: document.getElementById('profileLastName').value,
-                email: document.getElementById('profileEmail').value,
-                company: document.getElementById('profileCompany').value,
-                department: document.getElementById('profileDepartment').value
-            };
-            var btn = document.getElementById('profileSaveBtn');
-            btn.disabled = true;
-            btn.textContent = 'Saving...';
-            fetch('/api/user/profile', {
-                method: 'PUT',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                btn.disabled = false;
-                btn.textContent = 'Save Changes';
-                if (d.success) {
-                    msg.textContent = 'Profile updated successfully.';
-                    msg.classList.add('success');
-                } else {
-                    msg.textContent = d.error || 'Update failed.';
-                    msg.classList.add('error');
-                }
-            })
-            .catch(function() {
-                btn.disabled = false;
-                btn.textContent = 'Save Changes';
-                msg.textContent = 'Network error. Please try again.';
-                msg.classList.add('error');
-            });
-        }
-
-        function openChangePasswordModal() {
-            document.getElementById('changePasswordModal').classList.add('open');
-            document.getElementById('passwordMsg').textContent = '';
-            document.getElementById('profileCurrentPw').value = '';
-            document.getElementById('profileNewPw').value = '';
-            document.getElementById('profileConfirmPw').value = '';
-        }
-
-        function closeChangePasswordModal() {
-            document.getElementById('changePasswordModal').classList.remove('open');
-        }
-
-        function saveNewPassword() {
-            var msg = document.getElementById('passwordMsg');
-            msg.textContent = '';
-            msg.className = 'profile-msg';
-            var currentPw = document.getElementById('profileCurrentPw').value;
-            var newPw = document.getElementById('profileNewPw').value;
-            var confirmPw = document.getElementById('profileConfirmPw').value;
-            if (!currentPw) {
-                msg.textContent = 'Please enter your current password.';
-                msg.classList.add('error');
-                return;
-            }
-            if (!newPw) {
-                msg.textContent = 'Please enter a new password.';
-                msg.classList.add('error');
-                return;
-            }
-            if (newPw.length < 8) {
-                msg.textContent = 'New password must be at least 8 characters.';
-                msg.classList.add('error');
-                return;
-            }
-            if (newPw !== confirmPw) {
-                msg.textContent = 'New passwords do not match.';
-                msg.classList.add('error');
-                return;
-            }
-            var btn = document.getElementById('passwordSaveBtn');
-            btn.disabled = true;
-            btn.textContent = 'Updating...';
-            fetch('/api/user/profile', {
-                method: 'PUT',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ current_password: currentPw, new_password: newPw })
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                btn.disabled = false;
-                btn.textContent = 'Update Password';
-                if (d.success) {
-                    msg.textContent = 'Password updated successfully.';
-                    msg.classList.add('success');
-                    document.getElementById('profileCurrentPw').value = '';
-                    document.getElementById('profileNewPw').value = '';
-                    document.getElementById('profileConfirmPw').value = '';
-                } else {
-                    msg.textContent = d.error || 'Update failed.';
-                    msg.classList.add('error');
-                }
-            })
-            .catch(function() {
-                btn.disabled = false;
-                btn.textContent = 'Update Password';
-                msg.textContent = 'Network error. Please try again.';
-                msg.classList.add('error');
-            });
-        }
-
         // ============================================================================
         // PROFILE PICTURE UPLOAD
         // ============================================================================
