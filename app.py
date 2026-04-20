@@ -12542,8 +12542,8 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
     cta = f'<p style="margin-top: 24px; text-align: center;"><a class="email-btn" href="{escape(app_base_url)}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%); color: #272822; font-weight: 700; text-decoration: none; border-radius: 6px;">Open Fin IQ Dashboard →</a></p>'
     body = f"""
         <div style="text-align: center; margin-bottom: 24px;">
-            <h2 style="color: #f8f8f2; margin: 0;">Weekly Alpha Ideas</h2>
-            <p style="color: #888; margin: 8px 0 0 0;">For <strong style="color:#66d9ef;">{escape(username)}</strong> — Week of {escape(as_of_date)} (ET)</p>
+            <h2 style="color: #f8f8f2; margin: 0;">Alpha Ideas</h2>
+            <p style="color: #888; margin: 8px 0 0 0;">For <strong style="color:#66d9ef;">{escape(username)}</strong> — {escape(as_of_date)} (ET)</p>
         </div>
         <p style="color:#a6e22e; font-size: 0.95em; margin-bottom: 24px; padding: 12px; background: rgba(166,226,46,0.1); border-radius: 6px; text-align: center;">
             <strong>Crosswalk IQ Research:</strong> Comprehensive analysis combining Street views, company guidance, industry trends, and proprietary signals — synthesized into actionable ideas.
@@ -12551,7 +12551,7 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
         {''.join(sections)}
         {cta}
     """
-    return _wrap_email_html(body, title="Fin IQ — Weekly Alpha Ideas")
+    return _wrap_email_html(body, title="Fin IQ — Alpha Ideas")
 
 
 def _get_hf_digest_recipients():
@@ -12669,8 +12669,8 @@ def send_hf_alpha_ideas_digest(
             skipped.append({'username': rec['username'], 'reason': 'No entitled ticker ideas'})
             continue
         html_content = _build_hf_alpha_email_html(rec['username'], packets, run_day, app_url)
-        subject = f"Fin IQ — Weekly Alpha Ideas ({run_day})"
-        text = f"Fin IQ Weekly Alpha Ideas (week of {run_day}) for {rec['username']}. Open dashboard: {app_url}"
+        subject = f"Fin IQ — Alpha Ideas ({run_day})"
+        text = f"Fin IQ Alpha Ideas for {run_day} — {rec['username']}. Open dashboard: {app_url}"
         if dry_run:
             sent.append({'username': rec['username'], 'email': rec['email'], 'dry_run': True, 'ticker_count': len(packets)})
             continue
@@ -13291,7 +13291,7 @@ def admin_run_hf_alpha_ideas():
 
 @app.route('/api/cron/hf-alpha-ideas', methods=['GET', 'POST'])
 def cron_hf_alpha_ideas():
-    """Weekly Monday cron endpoint for Fin IQ alpha generation + digest send."""
+    """Weekday cron endpoint for Fin IQ alpha generation + digest send."""
     secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
     expected = os.environ.get('CRON_SECRET', '')
     if not expected or secret != expected:
@@ -13310,8 +13310,6 @@ def cron_hf_alpha_ideas():
         now_et = datetime.now(HF_ALPHA_TZ)
         if now_et.weekday() >= 5 and not force:
             return jsonify({'success': True, 'skipped': True, 'reason': 'Weekend (ET)', 'timestamp_et': now_et.isoformat()})
-        if now_et.weekday() != 0 and not force:
-            return jsonify({'success': True, 'skipped': True, 'reason': 'Weekly send is Monday-only (ET)', 'weekday': now_et.strftime('%A'), 'timestamp_et': now_et.isoformat()})
         result = send_hf_alpha_ideas_digest(
             dry_run=dry_run,
             test_email=test_email,

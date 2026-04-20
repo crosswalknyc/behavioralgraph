@@ -83,6 +83,12 @@ def run_exports():
     return _post_with_retry('/api/cron/run-activity-export-jobs', 'exports')
 
 
+def run_fin_iq_alpha():
+    """Trigger Fin IQ alpha ideas generation + email digest (endpoint handles day-of-week logic)."""
+    print("Step 4: Running Fin IQ alpha ideas + digest ...")
+    return _post_with_retry('/api/cron/hf-alpha-ideas', 'fin-iq-alpha', timeout=600)
+
+
 def main():
     if not SECRET:
         print("FATAL: CRON_SECRET env var is not set on the cron service.")
@@ -93,12 +99,15 @@ def main():
     wake_up()
     sync_ok = sync_users()
     export_ok = run_exports()
+    alpha_ok = run_fin_iq_alpha()
 
-    if sync_ok and export_ok:
+    results = {'sync': sync_ok, 'exports': export_ok, 'alpha': alpha_ok}
+    if all(results.values()):
         print("=== ALL STEPS OK ===")
         sys.exit(0)
     else:
-        print(f"=== DONE WITH ERRORS  sync={'OK' if sync_ok else 'FAIL'}  exports={'OK' if export_ok else 'FAIL'} ===")
+        summary = '  '.join(f"{k}={'OK' if v else 'FAIL'}" for k, v in results.items())
+        print(f"=== DONE WITH ERRORS  {summary} ===")
         sys.exit(1)
 
 
