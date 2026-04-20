@@ -13039,15 +13039,13 @@ def get_hedge_fund_ticker_data(s3_key):
                 # QTD Net Growth % = actual growth so far in the quarter
                 net_growth_pct = (quarter_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
                 
-                # Projected net growth rate formula (linear extrapolation, not compounding):
-                # 1. Average daily net growth = (quarter_subs - quarter_cancels) / days_of_data_so_far
-                # 2. Projected net growth for full quarter = avg_daily_net_growth * total_days_in_quarter
-                # 3. Projected % = (projected_net_growth / quarter_start_consumers) * 100
+                # Projected net growth rate formula (linear extrapolation):
+                # 1. Average daily net growth rate % = (daily net growth / quarter_start_consumers) * 100
+                # 2. Projected growth % = avg_daily_rate * total_days_in_quarter
                 days_in_quarter = len(current_quarter_data)
-                avg_daily_net_growth = quarter_net_growth / days_in_quarter if days_in_quarter > 0 else 0
+                avg_daily_net_growth_pct = (quarter_net_growth / days_in_quarter / quarter_start_consumers * 100) if (days_in_quarter > 0 and quarter_start_consumers > 0) else 0
                 total_days_in_quarter = 92 if 'Q4' in latest_quarter else 90
-                projected_net_growth = avg_daily_net_growth * total_days_in_quarter
-                projected_net_growth_pct = (projected_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
+                projected_net_growth_pct = avg_daily_net_growth_pct * total_days_in_quarter
                 
                 # Calculate accuracy rating based on SEC actuals (comparing Growth % vs SEC %)
                 accuracy_rating = None

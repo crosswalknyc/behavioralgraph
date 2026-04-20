@@ -31182,7 +31182,7 @@
                 if (labelElement) {
                     labelElement.textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
                 }
-                projectedCard.setAttribute('data-tooltip', `Projected net growth rate for ${latestQuarter}. Formula: (QTD net growth ÷ days of data) × total days in quarter, as % of quarter-start consumers. Linear extrapolation from quarter-to-date performance. Click Refresh to recalculate from the latest data.`);
+                projectedCard.setAttribute('data-tooltip', `Projected net growth rate for ${latestQuarter}. Formula: average daily net growth rate % × total days in quarter. Daily rate = (daily net growth ÷ quarter-start consumers) × 100. Linear extrapolation from quarter-to-date performance. Click Refresh to recalculate from the latest data.`);
             }
             
             // Set tooltips for QTD metric cards
