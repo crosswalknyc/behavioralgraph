@@ -18042,29 +18042,15 @@
                     btnEdit.addEventListener('click', function(e) {
                         e.stopPropagation();
                         dropdown.classList.remove('open');
-                        console.log('Edit Profile clicked, openProfileSettings type:', typeof window.openProfileSettings);
-                        if (typeof window.openProfileSettings === 'function') {
-                            window.openProfileSettings();
-                        }
-                        var m = document.getElementById('profileSettingsModal');
-                        console.log('profileSettingsModal element:', m, 'classes:', m ? m.className : 'N/A');
+                        if (typeof window.openProfileSettings === 'function') window.openProfileSettings();
                     });
-                } else {
-                    console.warn('btnEditProfile not found');
                 }
                 if (btnPw) {
                     btnPw.addEventListener('click', function(e) {
                         e.stopPropagation();
                         dropdown.classList.remove('open');
-                        console.log('Change Password clicked, openChangePasswordModal type:', typeof window.openChangePasswordModal);
-                        if (typeof window.openChangePasswordModal === 'function') {
-                            window.openChangePasswordModal();
-                        }
-                        var m = document.getElementById('changePasswordModal');
-                        console.log('changePasswordModal element:', m, 'classes:', m ? m.className : 'N/A');
+                        if (typeof window.openChangePasswordModal === 'function') window.openChangePasswordModal();
                     });
-                } else {
-                    console.warn('btnChangePassword not found');
                 }
             });
         })();
