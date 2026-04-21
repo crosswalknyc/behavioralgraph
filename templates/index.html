@@ -16291,11 +16291,11 @@
                                 <div class="sot-kpi-value" id="sotKpiUsers" style="color:var(--accent-lime);">—</div>
                             </div>
                             <div class="sot-kpi">
-                                <div class="sot-kpi-label">US Projection</div>
+                                <div class="sot-kpi-label">US</div>
                                 <div class="sot-kpi-value" id="sotKpiProjUsers" style="color:#a855f7;">—</div>
                             </div>
                             <div class="sot-kpi">
-                                <div class="sot-kpi-label">Projected US Hours</div>
+                                <div class="sot-kpi-label">Hours</div>
                                 <div class="sot-kpi-value" id="sotKpiHours" style="color:var(--accent-cyan);">—</div>
                             </div>
                             <div class="sot-kpi">
@@ -23556,7 +23556,7 @@
                             <th style="padding:12px;text-align:left;border-bottom:1px solid var(--border-color);">Talent</th>
                             <th style="padding:12px;text-align:right;border-bottom:1px solid var(--border-color);">Overlap %</th>
                             <th style="padding:12px;text-align:right;border-bottom:1px solid var(--border-color);">Sample Users</th>
-                            <th style="padding:12px;text-align:right;border-bottom:1px solid var(--border-color);">US Projection</th>
+                            <th style="padding:12px;text-align:right;border-bottom:1px solid var(--border-color);">US</th>
                             <th style="padding:12px;text-align:center;border-bottom:1px solid var(--border-color);">Action</th>
                         </tr>
                     </thead>
@@ -24795,7 +24795,7 @@
             html += '<h3 class="sot-cmp-section-title" style="margin-bottom:0.6rem;">Cohort Composition — % of All Ages</h3>';
             html += '<div style="display:flex;gap:2rem;flex-wrap:wrap;">';
             html += '<div style="flex:1;min-width:300px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Sample <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(basePopTotal) + ' total)</span></div><div style="position:relative;height:300px;"><canvas id="sotCohortPiePop"></canvas></div><div id="sotPieLegendPop"></div></div>';
-            html += '<div style="flex:1;min-width:300px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Projected US Hours <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseProjHours) + ' total)</span></div><div style="position:relative;height:300px;"><canvas id="sotCohortPieUsage"></canvas></div><div id="sotPieLegendUsage"></div></div>';
+            html += '<div style="flex:1;min-width:300px;text-align:center;"><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Hours <span style="color:var(--text-primary);font-weight:700;">(' + _sotCmpFmtNum(baseProjHours) + ' total)</span></div><div style="position:relative;height:300px;"><canvas id="sotCohortPieUsage"></canvas></div><div id="sotPieLegendUsage"></div></div>';
             html += '</div>';
 
             // === Column Chart (Population vs Usage by Age Group) ===
@@ -26374,7 +26374,7 @@
 
             var kpiMetrics = [
                 { label: 'Sample', key: '_proj_pop', color: '#a855f7' },
-                { label: 'Projected US Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)', proj: true },
+                { label: 'Hours', key: 'total_projected_hours', color: 'var(--accent-cyan)', proj: true },
                 { label: 'Projected Interactions', key: 'total_interactions', color: 'var(--accent-orange)', proj: true }
             ];
             function _tabProjMult(tData) {
