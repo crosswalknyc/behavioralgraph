@@ -61533,7 +61533,7 @@
                                     }).join('')}
                                 </tr>
                                 <tr class="has-tooltip" data-tooltip="Projected US population for this audience segment.">
-                                    <td>Projected US Pop</td>
+                                    <td>US Pop</td>
                                     ${benchmarks.map(b => `<td>${formatNumber(b.projectedUS || 0)}</td>`).join('')}
                                 </tr>
                             </tbody>
@@ -65218,7 +65218,7 @@
             
             // Projected US
             overview.push({
-                label: 'Projected US Population',
+                label: 'US Population',
                 value: formatNumber(primaryBrand.projectedUS || 0)
             });
             
