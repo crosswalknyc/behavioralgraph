@@ -56729,7 +56729,7 @@
                 csvContent = `${profileName} - Insights Summary\n\n`;
                 csvContent += `Metric,Value\n`;
                 csvContent += `"Sample Size",${currentProfileData.sampleSize || currentDashboardData.sampleSize || 'N/A'}\n`;
-                csvContent += `"Projected US",${currentProfileData.projectedUS || currentDashboardData.projectedUS || 'N/A'}\n`;
+                csvContent += `"US",${currentProfileData.projectedUS || currentDashboardData.projectedUS || 'N/A'}\n`;
                 
                 // Add top demographics
                 csvContent += `\nTOP DEMOGRAPHICS\n`;
@@ -57006,7 +57006,7 @@
         <div style="margin-top: 60px; color: #64748b;">
             <p>Generated: ${formatDatePST(new Date())}</p>
             <p>Sample Size: n=${formatNumber(currentProfileData.sampleSize || 0)}</p>
-            <p>Projected US Reach: ${formatNumber(currentProfileData.projectedUS || 0)}</p>
+            <p>US Reach: ${formatNumber(currentProfileData.projectedUS || 0)}</p>
         </div>
     </div>
     
@@ -58734,7 +58734,7 @@
                                 <span class="profile-stat-value">n=${formatNumber(profile.sampleSize)}</span>
                             </div>
                             <div class="profile-stat-row">
-                                <span class="profile-stat-label">Projected US</span>
+                                <span class="profile-stat-label">US</span>
                                 <span class="profile-stat-value">${formatNumber(profile.projectedUS)}</span>
                             </div>
                         </div>
@@ -62438,7 +62438,7 @@
                 // Summary doesn't have index, just values
                 csvContent = 'Metric,' + profiles.map(p => `"${p.name}"`).join(',') + '\n';
                 csvContent += 'Crosswalk Respondents,' + profiles.map(p => p.sampleSize || 0).join(',') + '\n';
-                csvContent += 'Projected US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
+                csvContent += 'US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
                 csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
             } else if (moduleType.startsWith('behavioral_')) {
                 const catName = moduleType.replace('behavioral_', '').replace(/_/g, ' ');
@@ -62712,7 +62712,7 @@
                 if (moduleType === 'summary') {
                     csvContent = 'Metric,' + profiles.map(p => `"${p.name}"`).join(',') + '\n';
                     csvContent += 'Crosswalk Respondents,' + profiles.map(p => p.sampleSize || 0).join(',') + '\n';
-                    csvContent += 'Projected US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
+                    csvContent += 'US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
                     csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
                 } else if (moduleType === 'location') {
                     const headerRow = ['Value'];
@@ -62801,7 +62801,7 @@
                 if (moduleType === 'summary') {
                     csvContent = 'Metric,' + profiles.map(p => `"${p.name}"`).join(',') + '\n';
                     csvContent += 'Crosswalk Respondents,' + profiles.map(p => p.sampleSize || 0).join(',') + '\n';
-                    csvContent += 'Projected US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
+                    csvContent += 'US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
                     csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
                 } else if (moduleType === 'location') {
                     const headerRow = ['Value'];
@@ -64216,7 +64216,7 @@
                         <div class="summary-section">
                             <h3>Overview</h3>
                                 <p><strong>Primary Profile:</strong> ${primaryProfile.name}</p>
-                                <p><strong>Sample Size:</strong> ${formatNumber(primaryProfile.sampleSize || 0)} | <strong>Projected US:</strong> ${formatNumber(primaryProfile.projectedUS || 0)} | <strong>Median Age:</strong> ${primaryProfile.medianAge || 'N/A'}</p>
+                                <p><strong>Sample Size:</strong> ${formatNumber(primaryProfile.sampleSize || 0)} | <strong>US:</strong> ${formatNumber(primaryProfile.projectedUS || 0)} | <strong>Median Age:</strong> ${primaryProfile.medianAge || 'N/A'}</p>
                                 ${comparisons.length > 0 ? `<p><strong>Comparisons:</strong> ${comparisons.map(c => c.name).join(', ')}</p>` : ''}
                                 ${genPopProfile ? `<p><strong>Baseline:</strong> Gen Pop (General Population)</p>` : ''}
                             <p style="color: var(--text-secondary); font-size: 0.85rem;">Generated on ${formatDatePST(new Date())}</p>
@@ -64575,7 +64575,7 @@
                             <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">Primary Brand Analysis</p>
                             <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; font-size: 0.9rem;">
                                 <span><strong>Sample Size:</strong> ${formatNumber(primaryBrand.sampleSize || 0)}</span>
-                                <span><strong>Projected US:</strong> ${formatNumber(primaryBrand.projectedUS || 0)}</span>
+                                <span><strong>US:</strong> ${formatNumber(primaryBrand.projectedUS || 0)}</span>
                             </div>
                         </div>
                         
@@ -70502,7 +70502,7 @@
                             </thead>
                             <tbody>
                                 <tr><td>Respondents</td>${profiles.map(p => `<td>n=${formatNumber(p.sampleSize)}</td>`).join('')}</tr>
-                                <tr><td>Projected US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
+                                <tr><td>US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
                                 <tr><td>Median Age</td>${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '-'}</td>`).join('')}</tr>
                             </tbody>
                         </table>
