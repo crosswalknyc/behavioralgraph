@@ -62923,7 +62923,7 @@
         
         // Returns only the values currently displayed in the section (respects limit/sort)
         function getComparisonSectionDisplayedValues(moduleType, profiles) {
-            if (moduleType === 'summary') return ['Crosswalk Respondents', 'Projected US', 'Median Age'];
+            if (moduleType === 'summary') return ['Crosswalk Respondents', 'US', 'Median Age'];
             
             const getSortProfileIdx = (sectionKey) => (typeof currentSortSection !== 'undefined' && currentSortSection === sectionKey && currentSortColumn != null) ? currentSortColumn : (primaryProfileIndex >= 0 ? primaryProfileIndex : 0);
             
@@ -63448,7 +63448,7 @@
                     if (selectedValues && selectedValues.length > 0) {
                         const metricMap = {
                             'Crosswalk Respondents': 'sampleSize',
-                            'Projected US': 'projectedUS',
+                            'US': 'projectedUS',
                             'Median Age': 'medianAge'
                         };
                         const keep = selectedValues.map(v => metricMap[v]).filter(Boolean);
