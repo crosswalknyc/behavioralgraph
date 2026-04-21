@@ -12549,7 +12549,7 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
         {''.join(sections)}
         {cta}
     """
-    return _wrap_email_html(body, title="Fin IQ — Alpha Ideas")
+    return _wrap_email_html(body)
 
 
 def _get_hf_digest_recipients():
