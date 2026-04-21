@@ -12449,6 +12449,11 @@ RETRY: Be MORE creative and specific. Don't give generic ideas. Think about:
 
     fallback_note = research_warning or 'Model output failed quality checks.'
     fallback = _default_hf_alpha_packet(ticker_payload, generated_at, fallback_note)
+    fallback['current_value'] = current_val_str
+    fallback['qtd_change'] = qtd_projection_str
+    fallback['monthly_trend'] = monthly_trend_str
+    fallback['quarter'] = quarter_ctx.get('quarter', 'N/A')
+    fallback['days_remaining'] = quarter_ctx.get('days_left_in_quarter', 'N/A')
     return fallback, changes + [f'Fallback applied: {fallback_note}']
 
 
