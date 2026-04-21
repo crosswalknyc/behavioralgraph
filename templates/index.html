@@ -32948,15 +32948,15 @@
                 footnoteEl.textContent = 'Starting with a $15 ticket price we then multiply total digital transactions by 2x for group size, then divide by 0.75 to account for the 25% box office share.';
             }
             const cards = [];
-            if (d.total_tickets_us) cards.push({ label: 'Projected US Gen Pop Total Tickets Sold', value: d.total_tickets_us, isCurrency: false });
-            if (d.projected_ticket_sales_us) cards.push({ label: 'Projected US Gen Pop Ticket Sales', value: d.projected_ticket_sales_us, isCurrency: true });
+            if (d.total_tickets_us) cards.push({ label: 'US Gen Pop Total Tickets Sold', value: d.total_tickets_us, isCurrency: false });
+            if (d.projected_ticket_sales_us) cards.push({ label: 'US Gen Pop Ticket Sales', value: d.projected_ticket_sales_us, isCurrency: true });
             document.getElementById('tstSummaryCards').innerHTML = cards.map(c => {
                 const num = _tstParseNum(c.value);
                 const display = isNaN(num) ? (c.value||'').toString() : (c.isCurrency ? '$' : '') + Math.round(num).toLocaleString();
                 let tip = (c.label || '') + '. ' + TST_GENPOP_TOOLTIP;
-                if (c.label === 'Projected US Gen Pop Total Tickets Sold') {
-                    tip = 'Projected US Gen Pop Accounts purchasing tickets. US Gen Pop projections use the 2026 base of 329,900,000.';
-                } else if (c.label === 'Projected US Gen Pop Ticket Sales') {
+                if (c.label === 'US Gen Pop Total Tickets Sold') {
+                    tip = 'US Gen Pop Accounts purchasing tickets. US Gen Pop projections use the 2026 base of 329,900,000.';
+                } else if (c.label === 'US Gen Pop Ticket Sales') {
                     tip = 'Starting with a $15 ticket price we then multiply total digital transactions by 2x for group size, then divide by 0.75 to account for the 25% box office share. ' + TST_GENPOP_TOOLTIP;
                 }
                 return `<div class="exec-summary-metric has-tooltip" data-tooltip="${(tip||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div></div>`;
@@ -33057,7 +33057,7 @@
             const data = showSold
                 ? chartRows.map(r => r.sold)
                 : chartRows.map(r => totalTicketsNum > 0 ? (r.sold / totalTicketsNum) * totalProjNum : 0);
-            const chartLabel = showSold ? 'Tickets Sold' : 'Projected US Gen Pop Ticket Sales';
+            const chartLabel = showSold ? 'Tickets Sold' : 'US Gen Pop Ticket Sales';
             if (tstCharts.theaters) tstCharts.theaters.destroy();
             const colors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672'];
             tstCharts.theaters = new Chart(canvas.getContext('2d'), {
