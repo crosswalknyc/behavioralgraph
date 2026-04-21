@@ -2702,7 +2702,8 @@
           "credits_used": 5
         }
       ],
-      "has_llmo_iq_access": true
+      "has_llmo_iq_access": true,
+      "gets_hedge_fund_iq_emails": true
     },
     "liz": {
       "password_hash": "pbkdf2:sha256:600000$89a17ce0427b67f6fd677d9ce369bcca$adc15ffb15fba2bea91857fac6ce6d31f15126ed837dbfc669b29ce4c25d1c93",
