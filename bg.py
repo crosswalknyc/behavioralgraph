@@ -278,68 +278,14 @@ import io
 import pandas as pd
 import sys
 
-# ── Force Snowflake connector to ALWAYS use JSON results ────────────────
-# The nanoarrow C extension (snowflake-connector-python >=3.x) crashes on
-# certain integer values with 'Invalid value X for dtype float64'.
-#
-# Belt-and-suspenders strategy (6 layers):
-#   1. Block nanoarrow import via sys.modules
-#   2. Set CAN_USE_ARROW_RESULT_FORMAT = False
-#   3. Force JSON via _statement_params on every execute()
-#   4. Override _query_result_format to 'json' after every execute()
-#   5. Wrap fetchone/fetchall with try/except to catch arrow errors
-#   6. Replace fetch_pandas_all with JSON-safe alternative
-sys.modules['snowflake.connector.nanoarrow_arrow_iterator'] = None
-import snowflake.connector
-import snowflake.connector.cursor
-snowflake.connector.cursor.CAN_USE_ARROW_RESULT_FORMAT = False
-
-_ORIGINAL_SF_EXECUTE = snowflake.connector.cursor.SnowflakeCursor.execute
-_ORIGINAL_SF_FETCHONE = snowflake.connector.cursor.SnowflakeCursor.fetchone
-_ORIGINAL_SF_FETCHALL = snowflake.connector.cursor.SnowflakeCursor.fetchall
-_JSON_FMT_KEY = 'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT'
-
-def _force_json_execute(self, command, params=None, **kwargs):
-    sp = kwargs.get('_statement_params') or {}
-    sp[_JSON_FMT_KEY] = 'JSON'
-    kwargs['_statement_params'] = sp
-    result = _ORIGINAL_SF_EXECUTE(self, command, params, **kwargs)
-    # Layer 4: force result format to json after server response
-    if hasattr(self, '_query_result_format'):
-        self._query_result_format = 'json'
-    return result
-
-def _safe_fetchone(self):
-    try:
-        return _ORIGINAL_SF_FETCHONE(self)
-    except Exception as e:
-        if 'Invalid value' in str(e) and 'dtype' in str(e):
-            print(f"⚠️ Arrow fetchone error caught, retrying with JSON: {e}")
-            self._query_result_format = 'json'
-            return _ORIGINAL_SF_FETCHONE(self)
-        raise
-
-def _safe_fetchall(self):
-    try:
-        return _ORIGINAL_SF_FETCHALL(self)
-    except Exception as e:
-        if 'Invalid value' in str(e) and 'dtype' in str(e):
-            print(f"⚠️ Arrow fetchall error caught, retrying with JSON: {e}")
-            self._query_result_format = 'json'
-            return _ORIGINAL_SF_FETCHALL(self)
-        raise
-
-def _safe_fetch_pandas_all(self, **kwargs):
-    """JSON-safe replacement for fetch_pandas_all that works without arrow."""
-    cols = [desc.name for desc in self.description] if self.description else []
-    rows = _ORIGINAL_SF_FETCHALL(self)
-    return pd.DataFrame(rows, columns=cols) if cols else pd.DataFrame(rows)
-
-snowflake.connector.cursor.SnowflakeCursor.execute = _force_json_execute
-snowflake.connector.cursor.SnowflakeCursor.fetchone = _safe_fetchone
-snowflake.connector.cursor.SnowflakeCursor.fetchall = _safe_fetchall
-snowflake.connector.cursor.SnowflakeCursor.fetch_pandas_all = _safe_fetch_pandas_all
-print("✅ Snowflake cursor fully patched: JSON forced + arrow error safety net")
+# ── ClickHouse connector (replaces Snowflake) ────────────────────────────────
+# clickhouse_connector.py provides a Snowflake-compatible cursor API so the
+# rest of bg.py works unchanged.  SQL is auto-translated (table names,
+# functions, etc.) by the connector's translate_sql() layer.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
+from clickhouse_connector import connect_clickhouse
+print("✅ ClickHouse connector loaded (Snowflake-compatible API)")
 import numpy as np
 import re
 import random
@@ -11715,67 +11661,10 @@ def boost_clamp_renorm(
 
 def connect_snowflake():
     if not SILENCE_VERBOSE_OUTPUT:
-        print("🔌 Connecting to Snowflake...")
-    
-    # Credentials from environment (required for webapp; set in .env or deploy config)
-    import os
-    _user = os.environ.get("SNOWFLAKE_USER", "")
-    _token = os.environ.get("SNOWFLAKE_TOKEN", "")
-    _password = os.environ.get("SNOWFLAKE_PASSWORD", "")
-    _account = os.environ.get("SNOWFLAKE_ACCOUNT", "qsodrkt-hgb46445")
-    _warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE", "BEHAVIORGRAPH6X")
-    _database = os.environ.get("SNOWFLAKE_DATABASE", "BEHAVIORALGRAPH")
-    _schema = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
-    _role = os.environ.get("SNOWFLAKE_ROLE", "ACCOUNTADMIN")
-
-    # insecure_mode=True skips OCSP cert validation; avoids 254007 when Snowflake uses
-    # internal/customer-stage S3 URLs (e.g. sfc-va3-*-customer-stage.s3.amazonaws.com) with revoked certs
-    _json_session = {'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT': 'JSON'}
-    try:
-        conn = snowflake.connector.connect(
-            user=_user,
-            token=_token,
-            authenticator='PROGRAMMATIC_ACCESS_TOKEN',
-            account=_account,
-            warehouse=_warehouse,
-            database=_database,
-            schema=_schema,
-            role=_role,
-            insecure_mode=True,
-            session_parameters=_json_session,
-        )
-        if not SILENCE_VERBOSE_OUTPUT:
-            print("✅ Connected using programmatic access token")
-    except Exception as token_error:
-        if not SILENCE_VERBOSE_OUTPUT:
-            print(f"⚠️ Token authentication failed: {token_error}")
-            print("🔄 Falling back to password authentication...")
-        conn = snowflake.connector.connect(
-            user=_user,
-            password=_password,
-            account=_account,
-            warehouse=_warehouse,
-            database=_database,
-            schema=_schema,
-            role=_role,
-            insecure_mode=True,
-            session_parameters=_json_session,
-        )
-        if not SILENCE_VERBOSE_OUTPUT:
-            print("✅ Connected using password authentication")
-    with conn.cursor() as cur:
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-        # INTELLIGENT WAREHOUSE SCALING: Match warehouse size to data volume
-        # Will be dynamically adjusted based on date range in run_full_pipeline
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-LARGE'")  # Optimized for speed and cost
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET AUTO_SUSPEND = 60")  # Quick suspend after use
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")  # Maximum acceleration
-        # EXTREME SESSION OPTIMIZATIONS (only valid parameters)
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")  # 4 hour timeout for large queries
-        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
-        cur.execute("ALTER SESSION SET QUERY_TAG = 'ULTRA_FAST_YEARLY'")
+        print("🔌 Connecting to ClickHouse...")
+    conn = connect_clickhouse()
     if not SILENCE_VERBOSE_OUTPUT:
-        print("🚀 Connected to Snowflake with BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration).")
+        print("✅ Connected to ClickHouse.")
     return conn
 
 def clean_brand(brand):

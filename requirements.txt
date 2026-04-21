@@ -7,7 +7,7 @@ eventlet==0.35.1
 pandas==2.1.4
 numpy>=1.26.0
 setuptools>=70.0.0
-snowflake-connector-python==3.12.0
+clickhouse-connect
 gunicorn==21.2.0
 python-dotenv==1.0.0
 boto3==1.34.0

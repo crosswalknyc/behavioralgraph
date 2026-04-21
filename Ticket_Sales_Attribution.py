@@ -4,7 +4,8 @@ Input: date range, movie title, genre. Output: TOTAL HITS (MOVIE VIEWERS) → TH
 ticket sales projections, and demographics per theater and overall.
 """
 import pandas as pd
-import snowflake.connector
+import sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration')); _sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
+from clickhouse_connector import connect_clickhouse
 from datetime import datetime
 from pathlib import Path
 import sys
@@ -85,26 +86,9 @@ SNOWFLAKE_SCHEMA = "PUBLIC"
 
 
 def connect_snowflake():
-    import os
-    user = os.environ.get("SNOWFLAKE_USER") or SNOWFLAKE_USER
-    password = os.environ.get("SNOWFLAKE_PASSWORD") or SNOWFLAKE_PASSWORD
-    account = os.environ.get("SNOWFLAKE_ACCOUNT") or SNOWFLAKE_ACCOUNT
-    warehouse = os.environ.get("TICKET_SALES_TRACKER_WAREHOUSE") or os.environ.get("SNOWFLAKE_WAREHOUSE") or SNOWFLAKE_WAREHOUSE
-    database = os.environ.get("SNOWFLAKE_DATABASE") or SNOWFLAKE_DATABASE
-    schema = os.environ.get("SNOWFLAKE_SCHEMA") or SNOWFLAKE_SCHEMA
-    print("Connecting to Snowflake...")
-    conn = snowflake.connector.connect(
-        user=user,
-        password=password,
-        account=account,
-        warehouse=warehouse,
-        database=database,
-        schema=schema,
-        insecure_mode=True,
-        connection_timeout=90,
-        network_timeout=3600,
-    )
-    print("Connected to Snowflake.")
+    print("Connecting to ClickHouse...")
+    conn = connect_clickhouse()
+    print("Connected to ClickHouse.")
     return conn
 
 

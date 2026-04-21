@@ -1,5 +1,6 @@
 import pandas as pd
-import snowflake.connector
+import sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration')); _sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
+from clickhouse_connector import connect_clickhouse
 from datetime import datetime, timedelta
 from pathlib import Path
 import sys
@@ -85,28 +86,9 @@ SNOWFLAKE_SCHEMA = "PUBLIC"
 # === Snowflake connect ===
 # =========================
 def connect_snowflake():
-    import os
-    # Prefer env vars when set (e.g. on Render) so credentials aren't hardcoded in cloud
-    user = os.environ.get("SNOWFLAKE_USER") or SNOWFLAKE_USER
-    password = os.environ.get("SNOWFLAKE_PASSWORD") or SNOWFLAKE_PASSWORD
-    account = os.environ.get("SNOWFLAKE_ACCOUNT") or SNOWFLAKE_ACCOUNT
-    # SUBSCRIBERIQ_WAREHOUSE env var takes precedence for this pipeline
-    warehouse = os.environ.get("SUBSCRIBERIQ_WAREHOUSE") or os.environ.get("SNOWFLAKE_WAREHOUSE") or SNOWFLAKE_WAREHOUSE
-    database = os.environ.get("SNOWFLAKE_DATABASE") or SNOWFLAKE_DATABASE
-    schema = os.environ.get("SNOWFLAKE_SCHEMA") or SNOWFLAKE_SCHEMA
-    print(f"Connecting to Snowflake (warehouse: {warehouse})...")
-    conn = snowflake.connector.connect(
-        user=user,
-        password=password,
-        account=account,
-        warehouse=warehouse,
-        database=database,
-        schema=schema,
-        insecure_mode=True,  # Avoid OCSP/SSL timeouts (e.g. on Render) that can surface as concurrent.futures errors
-        connection_timeout=90,
-        network_timeout=3600,
-    )
-    print("Connected to Snowflake.")
+    print("Connecting to ClickHouse...")
+    conn = connect_clickhouse()
+    print("Connected to ClickHouse.")
     return conn
 
 

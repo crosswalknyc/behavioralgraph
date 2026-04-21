@@ -10,10 +10,10 @@ Includes S3 caching for existing results.
 import os
 import sys
 
-# Force Snowflake connector to use JSON results instead of Arrow.
-# The nanoarrow C extension in snowflake-connector-python 3.12.0 crashes
-# on certain numeric values. Blocking it before import forces JSON fallback.
-sys.modules['snowflake.connector.nanoarrow_arrow_iterator'] = None
+# ── ClickHouse connector (replaces Snowflake) ────────────────────────────────
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
+from clickhouse_connector import connect_clickhouse as _ch_connect
 
 import uuid
 import json
@@ -21404,27 +21404,10 @@ def run_sf_lf_conversion(job_id):
         sf_platforms = [p.strip() for p in sf_platforms_raw.split(',') if p.strip()] if sf_platforms_raw else []
         
         print(f"[SF-LF] Parsed {len(sf_urls)} URLs, {len(sf_platforms)} platforms")
-        update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
+        update_job_status(job_id, progress=10, message='Connecting to ClickHouse...')
 
-        # Direct Snowflake connection (original working method)
-        import snowflake.connector
-        
-        SF_LF_WAREHOUSE = 'SHORT2LONGCONV'
-        
-        # Debug: log which env vars are available
-        print(f"[SF-LF] SNOWFLAKE_USER set: {bool(os.environ.get('SNOWFLAKE_USER'))}")
-        print(f"[SF-LF] SNOWFLAKE_PASSWORD set: {bool(os.environ.get('SNOWFLAKE_PASSWORD'))}")
-        print(f"[SF-LF] SNOWFLAKE_ACCOUNT set: {bool(os.environ.get('SNOWFLAKE_ACCOUNT'))}")
-        
-        conn = snowflake.connector.connect(
-            user=os.environ.get('SNOWFLAKE_USER'),
-            password=os.environ.get('SNOWFLAKE_PASSWORD'),
-            account=os.environ.get('SNOWFLAKE_ACCOUNT'),
-            warehouse=SF_LF_WAREHOUSE,
-            database='PROCESSEDCLICKSTREAM',
-            schema='PUBLIC'
-        )
-        print(f"[SF-LF] Connected to Snowflake directly")
+        conn = _ch_connect()
+        print(f"[SF-LF] Connected to ClickHouse")
         cur = conn.cursor()
         
         # Ensure warehouse is running and set long timeout for complex queries
@@ -22844,28 +22827,13 @@ def run_flywheel_conversion(job_id):
                 print(f"[Flywheel] Error looking up SVOD show: {e}")
         
         print(f"[Flywheel] Entry point: {entry_point}, Flywheel points: {flywheel_points}, Compare: {has_comparison}, Viewer platform: {viewer_platform}, SVOD show: {svod_show}, SVOD sample: {svod_sample_size}, SVOD signups: {svod_platform_signups}")
-        update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
+        update_job_status(job_id, progress=10, message='Connecting to ClickHouse...')
 
-        import snowflake.connector
-        
-        FLYWHEEL_WAREHOUSE = 'BEHAVIORGRAPH6X'
-        
-        conn = snowflake.connector.connect(
-            user=os.environ.get('SNOWFLAKE_USER'),
-            password=os.environ.get('SNOWFLAKE_PASSWORD'),
-            account=os.environ.get('SNOWFLAKE_ACCOUNT'),
-            warehouse=FLYWHEEL_WAREHOUSE,
-            database='PROCESSEDCLICKSTREAM',
-            schema='PUBLIC'
-        )
-        print(f"[Flywheel] Connected to Snowflake")
+        conn = _ch_connect()
+        print(f"[Flywheel] Connected to ClickHouse")
         cur = conn.cursor()
         
-        cur.execute(f"USE WAREHOUSE {FLYWHEEL_WAREHOUSE}")
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 1800")
-        print(f"[Flywheel] Set query timeout to 30 minutes")
-        
-        update_job_status(job_id, progress=15, message='Connected to Snowflake...')
+        update_job_status(job_id, progress=15, message='Connected to ClickHouse...')
 
         BOOST_FACTOR = 150
         SAMPLE_SIZE = 10_000_000
@@ -26519,18 +26487,7 @@ def share_of_time_analyze():
 
         age_in = ",".join(f"'{a}'" for a in age_brackets)
 
-        import snowflake.connector as _sot_sf
-        conn = _sot_sf.connect(
-            user=os.environ.get('SNOWFLAKE_USER', ''),
-            password=os.environ.get('SNOWFLAKE_PASSWORD', ''),
-            account=os.environ.get('SNOWFLAKE_ACCOUNT', 'qsodrkt-hgb46445'),
-            role=os.environ.get('SNOWFLAKE_ROLE', 'ACCOUNTADMIN'),
-            warehouse='SHAREOFTIME',
-            database='PROCESSEDCLICKSTREAM',
-            schema='PUBLIC',
-            insecure_mode=True,
-            session_parameters={'PYTHON_CONNECTOR_QUERY_RESULT_FORMAT': 'JSON'},
-        )
+        conn = _ch_connect()
 
         try:
             cur = conn.cursor()
