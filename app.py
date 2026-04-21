@@ -2353,22 +2353,22 @@ def _email_base_styles():
 
 def _wrap_email_html(body_content, title=None):
     """Wrap body HTML in dashboard-style layout and Crosswalk IQ Team signature."""
-    header = f'<div class="email-header">{title}</div>' if title else ''
-    logo = '<div class="email-logo-wrap"><span class="email-logo-text">CROSSWALK</span></div>'
+    header = f'<div style="color:#66d9ef;font-size:20px;margin-bottom:20px;font-weight:600;">{title}</div>' if title else ''
     return f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <style>{_email_base_styles()}</style>
 </head>
-<body>
-    <div class="email-container">
-        {logo}
+<body style="font-family:'Poppins','DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;background:#0a1929;color:#e6f1ff;padding:20px;margin:0;">
+    <div style="max-width:600px;margin:0 auto;background:#0d2137;border-radius:12px;padding:30px;">
+        <div style="text-align:center;margin-bottom:14px;">
+            <span style="display:inline-block;font-size:13px;font-weight:800;letter-spacing:6px;color:#e6f1ff;text-transform:uppercase;font-family:'Poppins','DM Sans',-apple-system,sans-serif;">CROSSWALK</span>
+        </div>
         {header}
-        <div class="email-body">
+        <div style="line-height:1.7;color:#e6f1ff;">
             {body_content}
         </div>
-        <div class="email-footer">
+        <div style="margin-top:28px;padding-top:20px;border-top:1px solid #132f4c;font-size:12px;color:#8892b0;">
             <p>{EMAIL_SIGNATURE}</p>
         </div>
     </div>
@@ -12537,7 +12537,7 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
                 {idea_html}
             </div>
         """)
-    cta = f'<p style="margin-top: 24px; text-align: center;"><a class="email-btn" href="{escape(app_base_url)}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%); color: #272822; font-weight: 700; text-decoration: none; border-radius: 6px;">Open Fin IQ Dashboard →</a></p>'
+    cta = f'<p style="margin-top: 24px; text-align: center;"><a href="{escape(app_base_url)}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%); color: #272822; font-weight: 700; text-decoration: none; border-radius: 6px;">Open Fin IQ Dashboard →</a></p>'
     body = f"""
         <div style="text-align: center; margin-bottom: 24px;">
             <h2 style="color: #f8f8f2; margin: 0;">Alpha Ideas</h2>
