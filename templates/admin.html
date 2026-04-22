@@ -5193,10 +5193,7 @@
                 const data = await response.json();
                 const files = data.files || [];
                 
-                quickSelectProfiles = files.filter(f => {
-                    const cat = (f.category || '').toUpperCase();
-                    return cat !== 'OTHER' && cat !== 'UNCATEGORIZED' && cat !== '';
-                }).map(f => ({
+                quickSelectProfiles = files.map(f => ({
                     s3_key: f.key,
                     display_name: f.display_name || f.project_name || f.key,
                     category: f.category || 'Uncategorized'
@@ -5239,7 +5236,6 @@
             quickSelectProfiles.forEach(p => {
                 const cat = (p.category || 'Uncategorized').toUpperCase();
                 const master = _qsGetMaster(cat);
-                if (master === 'OTHER') return;
                 if (!grouped[master]) grouped[master] = {};
                 if (!grouped[master][cat]) grouped[master][cat] = [];
                 grouped[master][cat].push(p);
@@ -5252,7 +5248,7 @@
                 }
             }
             
-            const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'PLATFORMS', 'SPORT', 'TALENT', 'MUSIC', 'TRENDS'];
+            const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'PLATFORMS', 'SPORT', 'TALENT', 'MUSIC', 'TRENDS', 'OTHER'];
             const sortedMasters = masterOrder.filter(m => grouped[m]);
             Object.keys(grouped).forEach(m => { if (!sortedMasters.includes(m)) sortedMasters.push(m); });
             
@@ -8356,7 +8352,6 @@
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
-            'TRENDS': ['TRENDS'],
             'TRENDS': ['TRENDS'],
             'TALENT': ['ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'MUSIC': ['MUSIC', 'MUSICIAN/BAND']
