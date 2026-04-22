@@ -8646,10 +8646,7 @@
         }
         
         function _syncAllRunsFromState() {
-            const totalRuns = allRuns.filter(r => {
-                const cat = (r.category || '').toUpperCase();
-                return cat !== 'OTHER' && cat !== 'UNCATEGORIZED' && cat !== '' && getRunMasterCategory(cat) !== 'OTHER';
-            }).length;
+            const totalRuns = allRuns.length;
             const allChecked = _runAccessSelected.size >= totalRuns;
             _runAccessIsAll = allChecked;
             document.getElementById('allRuns').checked = allChecked;
