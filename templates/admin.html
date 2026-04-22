@@ -5174,7 +5174,8 @@
         }
         
         // Load Quick Select Profiles
-        let _qsExpandedMasters = new Set(); // Track which master categories are expanded in Quick Selects
+        let _qsExpandedMasters = new Set();
+        let _qsExpandedSubs = new Set();
         
         async function loadQuickSelectProfiles() {
             const container = document.getElementById('quickSelectProfilesList');
@@ -5213,10 +5214,29 @@
             return name.trim();
         }
         
+        const QS_MASTER_CATEGORIES = {
+            'TALENT': ['ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
+            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
+            'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'MOVIE THEATER', 'PODCAST', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - FOX', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
+            'GEN POP': ['GEN POP'],
+            'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
+            'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
+            'MUSIC': ['MUSIC', 'MUSICIAN/BAND'],
+            'TRENDS': ['TRENDS']
+        };
+
+        const QS_MASTER_ICONS = {
+            'BRAND': '📦', 'CONTENT': '🎬', 'GEN POP': '📊', 'PLATFORMS': '💻',
+            'SPORT': '🏆', 'TALENT': '🌟', 'MUSIC': '🎵', 'TRENDS': '📈', 'OTHER': '📁'
+        };
+
         function _qsGetMaster(cat) {
             const upper = (cat || '').toUpperCase();
-            for (const [master, subs] of Object.entries(MASTER_CATEGORIES)) {
-                if (subs.some(s => s === upper || upper.includes(s) || s.includes(upper))) return master;
+            for (const [master, subs] of Object.entries(QS_MASTER_CATEGORIES)) {
+                if (subs.includes(upper)) return master;
+            }
+            for (const [master, subs] of Object.entries(QS_MASTER_CATEGORIES)) {
+                if (subs.some(s => upper.includes(s) || s.includes(upper))) return master;
             }
             return 'OTHER';
         }
@@ -5247,6 +5267,7 @@
                     grouped[master][sub].sort((a, b) => _qsGetDisplayName(a).localeCompare(_qsGetDisplayName(b)));
                 }
             }
+            console.warn('📊 QS Profiles grouped:', Object.entries(grouped).map(([m, subs]) => `${m}: ${Object.entries(subs).map(([s, p]) => s + '(' + p.length + ')').join(', ')}`).join(' | '));
             
             const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'PLATFORMS', 'SPORT', 'TALENT', 'MUSIC', 'TRENDS', 'OTHER'];
             const sortedMasters = masterOrder.filter(m => grouped[m]);
@@ -5257,7 +5278,7 @@
             let selectedProfiles = 0;
             
             sortedMasters.forEach(master => {
-                const icon = MASTER_ICONS[master] || '📁';
+                const icon = QS_MASTER_ICONS[master] || '📁';
                 const subs = grouped[master];
                 const allKeysInMaster = [];
                 Object.values(subs).forEach(profiles => profiles.forEach(p => allKeysInMaster.push(p.s3_key)));
@@ -5299,25 +5320,32 @@
                         const subKeys = profiles.map(p => p.s3_key);
                         const subChecked = subKeys.filter(k => quickSelectProfilesData[k] !== false).length;
                         const subAllChecked = subChecked === profiles.length;
+                        const subKey = master + '::' + sub;
+                        const subExpanded = _qsExpandedSubs.has(subKey) || !!searchTerm;
+                        const escapedSubKey = subKey.replace(/'/g, "\\'");
                         
                         html += `<div style="margin-bottom: 0.3rem;">`;
-                        html += `<div style="display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 0.35rem; padding: 0.2rem 0.4rem; margin-bottom: 0.15rem;">`;
-                        html += `<input type="checkbox" class="qs-sub-cb" data-master="${master}" data-sub="${sub}" ${subAllChecked ? 'checked' : ''} onclick="toggleQSSubCheck('${master}', '${sub}', this.checked);" style="margin: 0;">`;
+                        html += `<div style="display: grid; grid-template-columns: 14px 18px 1fr auto; align-items: center; gap: 0.35rem; padding: 0.2rem 0.4rem; margin-bottom: 0.15rem; cursor: pointer; border-radius: 4px;" onclick="toggleQSSub('${escapedSubKey}')">`;
+                        html += `<span class="collapse-icon ${subExpanded ? '' : 'rotated'}" style="font-size: 0.6rem;">▼</span>`;
+                        html += `<input type="checkbox" class="qs-sub-cb" data-master="${master}" data-sub="${sub}" ${subAllChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleQSSubCheck('${master}', '${sub}', this.checked);" style="margin: 0;">`;
                         html += `<span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 500;">${sub}</span>`;
                         html += `<span style="font-size: 0.65rem; color: var(--text-secondary);">${subChecked}/${profiles.length}</span>`;
                         html += `</div>`;
-                        html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.3rem; margin-left: 1rem;">`;
-                        visibleProfiles.forEach(p => {
-                            const id = p.s3_key;
-                            const name = _qsGetDisplayName(p);
-                            const checked = quickSelectProfilesData[id] !== false;
-                            const escapedId = id.replace(/'/g, "\\'");
-                            html += `<label class="checkbox-group" style="padding: 0.35rem 0.5rem; background: var(--bg-card); border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.8rem;">`;
-                            html += `<input type="checkbox" class="quick-select-profile-checkbox" value="${id}" ${checked ? 'checked' : ''} onchange="updateQuickSelectProfile('${escapedId}', this.checked)">`;
-                            html += `<span>${name}</span>`;
-                            html += `</label>`;
-                        });
-                        html += `</div></div>`;
+                        if (subExpanded) {
+                            html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.3rem; margin-left: 1.5rem;">`;
+                            visibleProfiles.forEach(p => {
+                                const id = p.s3_key;
+                                const name = _qsGetDisplayName(p);
+                                const checked = quickSelectProfilesData[id] !== false;
+                                const escapedId = id.replace(/'/g, "\\'");
+                                html += `<label class="checkbox-group" style="padding: 0.35rem 0.5rem; background: var(--bg-card); border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.8rem;">`;
+                                html += `<input type="checkbox" class="quick-select-profile-checkbox" value="${id}" ${checked ? 'checked' : ''} onchange="updateQuickSelectProfile('${escapedId}', this.checked)">`;
+                                html += `<span>${name}</span>`;
+                                html += `</label>`;
+                            });
+                            html += `</div>`;
+                        }
+                        html += `</div>`;
                     });
                     html += `</div>`;
                 }
@@ -5356,6 +5384,12 @@
         function toggleQSMaster(master) {
             if (_qsExpandedMasters.has(master)) _qsExpandedMasters.delete(master);
             else _qsExpandedMasters.add(master);
+            renderQuickSelectProfiles();
+        }
+
+        function toggleQSSub(subKey) {
+            if (_qsExpandedSubs.has(subKey)) _qsExpandedSubs.delete(subKey);
+            else _qsExpandedSubs.add(subKey);
             renderQuickSelectProfiles();
         }
         
