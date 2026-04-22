@@ -17658,15 +17658,26 @@ def list_jobs():
         
         # Mark run access: tag each profile with 'accessible' flag instead of filtering
         allowed_runs = None
+        allowed_categories = None
         u = None
         try:
             _users_data = load_users()
             u = _users_data.get('users', {}).get(session.get('username')) if session.get('username') else None
             if u is not None:
                 allowed_runs = u.get('allowed_runs')
+                allowed_categories = u.get('allowed_categories')
         except Exception:
             pass
         has_all_access = allowed_runs is None or (isinstance(allowed_runs, list) and len(allowed_runs) == 1 and allowed_runs[0] == '*')
+        # Category Access also grants access: if a user is subscribed to a category,
+        # all profiles in that category are accessible (not just future ones).
+        has_all_cats = (
+            allowed_categories is None
+            or (isinstance(allowed_categories, list) and '*' in allowed_categories)
+        )
+        allowed_cats_upper = set()
+        if not has_all_cats and isinstance(allowed_categories, list):
+            allowed_cats_upper = {(c or '').upper() for c in allowed_categories if c}
         if has_all_access:
             for e in job_list:
                 e['accessible'] = True
@@ -17674,7 +17685,10 @@ def list_jobs():
             allowed_set = set(allowed_runs or [])
             for e in job_list:
                 sk = e.get('s3_key') or ''
+                cat_upper = (e.get('category') or '').upper()
                 if sk in allowed_set or 'gen_pop' in sk.lower():
+                    e['accessible'] = True
+                elif has_all_cats or (cat_upper and cat_upper in allowed_cats_upper):
                     e['accessible'] = True
                 else:
                     e['accessible'] = False

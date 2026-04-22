@@ -38653,8 +38653,18 @@
             });
             for (const savedTab of deduped) {
                 if (openProfileTabs.some(t => t.id === savedTab.id)) continue;
-                // Skip tabs whose profile is not in allowed runs
-                if (_allowedRunsSet && !_allowedRunsSet.has(savedTab.id) && !(savedTab.id || '').toLowerCase().includes('gen_pop')) continue;
+                // Skip tabs whose profile isn't accessible. Prefer the API's flag
+                // (which considers allowed_runs AND allowed_categories) over the
+                // template-bound allowed_runs list.
+                const _savedProf = (typeof dashboardProfiles !== 'undefined' && Array.isArray(dashboardProfiles))
+                    ? dashboardProfiles.find(p => (p.s3_key || p.job_id) === savedTab.id)
+                    : null;
+                const _savedIsGenPop = (savedTab.id || '').toLowerCase().includes('gen_pop');
+                if (_savedProf) {
+                    if (_savedProf.accessible === false && !_savedIsGenPop) continue;
+                } else if (_allowedRunsSet && !_allowedRunsSet.has(savedTab.id) && !_savedIsGenPop) {
+                    continue;
+                }
                 try {
                     const response = await fetch(`/api/get-csv-data/${encodeURIComponent(savedTab.id)}`, { credentials: 'same-origin' });
                     if (response.status === 401) continue;
@@ -39193,13 +39203,20 @@
         }
 
         async function selectDashboardProfile(profileId, forceReload) {
-            // Enforce run access: block opening profiles not in allowed_runs
-            if (_allowedRunsSet && !_allowedRunsSet.has(profileId)) {
-                // Gen Pop is always accessible
-                if (!profileId || !profileId.toLowerCase().includes('gen_pop')) {
-                    console.warn('Access denied: profile not in allowed runs');
+            // Enforce run access: block opening profiles the API marked inaccessible.
+            // The API considers both allowed_runs AND allowed_categories, so prefer that flag.
+            const _profEntry = (typeof dashboardProfiles !== 'undefined' && Array.isArray(dashboardProfiles))
+                ? dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId)
+                : null;
+            const _isGenPop = !profileId || profileId.toLowerCase().includes('gen_pop');
+            if (_profEntry) {
+                if (_profEntry.accessible === false && !_isGenPop) {
+                    console.warn('Access denied: profile not accessible');
                     return;
                 }
+            } else if (_allowedRunsSet && !_allowedRunsSet.has(profileId) && !_isGenPop) {
+                console.warn('Access denied: profile not in allowed runs');
+                return;
             }
             
             // Check if profile is already open in a tab (skip if forceReload, e.g. after profile list refresh)
