@@ -6524,8 +6524,6 @@
                     const runs = [];
                     
                     data.files.forEach(file => {
-                        const cat = (file.category || 'Uncategorized').toUpperCase();
-                        if (cat === 'OTHER' || cat === 'UNCATEGORIZED' || cat === '') return;
                         categories.add(file.category || 'Uncategorized');
                         runs.push({
                             key: file.key,
@@ -8491,9 +8489,7 @@
             const grouped = {};
             allRuns.forEach(run => {
                 const cat = (run.category || 'Uncategorized').toUpperCase();
-                if (cat === 'OTHER' || cat === 'UNCATEGORIZED' || cat === '') return;
                 const master = getRunMasterCategory(cat);
-                if (master === 'OTHER') return;
                 if (!grouped[master]) grouped[master] = {};
                 if (!grouped[master][cat]) grouped[master][cat] = [];
                 grouped[master][cat].push(run);
