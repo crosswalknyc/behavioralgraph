@@ -21423,20 +21423,16 @@ def run_sf_lf_conversion(job_id):
         conn = _ch_connect()
         print(f"[SF-LF] Connected to ClickHouse")
         cur = conn.cursor()
-        
-        # Ensure warehouse is running and set long timeout for complex queries
-        try:
-            cur.execute(f"USE WAREHOUSE {SF_LF_WAREHOUSE}")
-            print(f"[SF-LF] Using warehouse: {SF_LF_WAREHOUSE}")
-        except Exception as wh_err:
-            print(f"[SF-LF] Warehouse {SF_LF_WAREHOUSE} not available, using default")
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-        
-        # Set session timeout to 30 minutes for large URL sets
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 1800")
-        print(f"[SF-LF] Set query timeout to 30 minutes")
-        
-        update_job_status(job_id, progress=15, message='Connected to Snowflake...')
+
+        # ClickHouse has no concept of warehouses or session-level statement
+        # timeouts. Per-query timeout is controlled via the `max_execution_time`
+        # setting (default 1800s = 30 min for this endpoint), which we apply on
+        # each cur.execute() that needs it. The previous USE WAREHOUSE /
+        # ALTER SESSION block was leftover Snowflake code from before the
+        # migration and has been removed.
+        print(f"[SF-LF] Ready (ClickHouse, default per-query timeout)")
+
+        update_job_status(job_id, progress=15, message='Connected to ClickHouse...')
         
         results = {
             'project_name': project_name,
