@@ -21495,49 +21495,45 @@ def run_sf_lf_conversion(job_id):
         update_job_status(job_id, progress=20, message='Querying each platform individually...')
         print(f"[SF-LF] Step 1: Get viewers per platform: {platforms_to_query}")
         
-        # ===== QUERY EACH PLATFORM INDIVIDUALLY FIRST =====
+        # ===== ALL PLATFORMS IN ONE BATCHED QUERY (was N*2 scans, now 1) =====
+        # ClickHouse single-pass conditional aggregation over the year of data.
+        # Pre-filtered by COMMON_NAME so the engine only reads matching rows.
         per_platform_data = {}
-        
-        for platform in platforms_to_query:
-            print(f"[SF-LF] Querying platform: {platform}")
-            platform_lower = platform.lower()
-            
-            # Unique viewers for this platform
-            try:
-                cur.execute(f"""
-                    SELECT COUNT(DISTINCT UID)
-                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                    WHERE LOWER(COMMON_NAME) = '{platform_lower}'
-                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                """)
-                plat_unique = cur.fetchone()[0] or 0
-            except:
-                plat_unique = 0
-            
-            # Total views for this platform
-            try:
-                cur.execute(f"""
-                    SELECT COUNT(*)
-                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                    WHERE LOWER(COMMON_NAME) = '{platform_lower}'
-                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                """)
-                plat_total = cur.fetchone()[0] or 0
-            except:
-                plat_total = 0
-            
-            # Add noise and ensure duplicated > unique (duplicated includes repeat views)
+        plat_lowers = [p.lower() for p in platforms_to_query]
+        plat_list_sql = ', '.join("'" + pl.replace("'", "''") + "'" for pl in plat_lowers)
+
+        plat_select_parts = []
+        for i, pl in enumerate(plat_lowers):
+            pl_esc = pl.replace("'", "''")
+            plat_select_parts.append(f"uniqExactIf(UID, LOWER(COMMON_NAME) = '{pl_esc}') AS p{i}_uniq")
+            plat_select_parts.append(f"countIf(LOWER(COMMON_NAME) = '{pl_esc}') AS p{i}_total")
+
+        batch_plat_sql = f"""
+            SELECT {', '.join(plat_select_parts)}
+            FROM clickstream.clickstream_final
+            WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+              AND LOWER(COMMON_NAME) IN ({plat_list_sql})
+        """
+        try:
+            print(f"[SF-LF] Step 1: BATCH per-platform query for {len(plat_lowers)} platforms...")
+            cur.execute(batch_plat_sql)
+            plat_row = list(cur.fetchone() or [0] * (2 * len(plat_lowers)))
+        except Exception as e:
+            print(f"[SF-LF] Per-platform batch query error: {e}")
+            plat_row = [0] * (2 * len(plat_lowers))
+
+        for i, platform in enumerate(platforms_to_query):
+            plat_unique = int(plat_row[i * 2] or 0)
+            plat_total  = int(plat_row[i * 2 + 1] or 0)
             noisy_unique = add_noise_if_zero(plat_unique)
-            noisy_dup = add_noise_if_zero(plat_total)
-            # Ensure duplicated views >= unique views * 1.5 (minimum 50% more views from repeats)
+            noisy_dup    = add_noise_if_zero(plat_total)
             if noisy_dup <= noisy_unique:
                 noisy_dup = int(noisy_unique * random.uniform(1.5, 3.0))
-            
             per_platform_data[platform] = {
-                'unique_views': noisy_unique,
+                'unique_views':     noisy_unique,
                 'duplicated_views': noisy_dup,
-                'raw_unique': plat_unique,
-                'raw_duplicated': plat_total
+                'raw_unique':       plat_unique,
+                'raw_duplicated':   plat_total
             }
             print(f"[SF-LF]   {platform}: {noisy_unique:,} unique, {noisy_dup:,} duplicated")
         
@@ -21619,188 +21615,187 @@ def run_sf_lf_conversion(job_id):
                 'duplicated_views': per_platform_data[platform]['duplicated_views']
             })
         
-        # ===== INDIVIDUAL URL METRICS (Top 20 or all if less) =====
+        # ===== INDIVIDUAL URL METRICS — BATCHED (was ~5*N scans, now 2) =====
+        # Single scan computes unique+total for ALL URLs via conditional aggregation.
+        # A second scan (one user-state CTE) computes per-URL conversions to LF title.
         results['individual_url_metrics'] = []
-        urls_to_query = sf_urls[:20] if len(sf_urls) > 20 else sf_urls
-        
-        if urls_to_query and urls_to_query[0]:  # Check if we have actual URLs
-            update_job_status(job_id, progress=30, message=f'Querying {len(urls_to_query)} individual URLs...')
-            print(f"[SF-LF] Step 1b: Query individual URL metrics for {len(urls_to_query)} URLs")
-            
-            for idx, url in enumerate(urls_to_query):
-                if not url or not url.strip():
-                    continue
-                    
-                url_clean = url.strip()
-                url_pattern = url_clean.lower().replace("'", "''")
-                
-                # Extract a short display name from URL
-                url_display = url_clean
-                if len(url_display) > 80:
-                    url_display = url_display[:77] + '...'
-                
-                print(f"[SF-LF]   Querying URL {idx+1}/{len(urls_to_query)}: {url_display[:50]}...")
-                
-                try:
-                    # Unique viewers for this specific URL
-                    cur.execute(f"""
-                        SELECT COUNT(DISTINCT UID)
-                        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                        WHERE LOWER(URL) LIKE '%{url_pattern}%'
-                          AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                    """)
-                    url_unique = cur.fetchone()[0] or 0
-                except Exception as e:
-                    print(f"[SF-LF]     Error getting unique views: {e}")
-                    url_unique = 0
-                
-                try:
-                    # Total views for this specific URL
-                    cur.execute(f"""
-                        SELECT COUNT(*)
-                        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                        WHERE LOWER(URL) LIKE '%{url_pattern}%'
-                          AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                    """)
-                    url_total = cur.fetchone()[0] or 0
-                except Exception as e:
-                    print(f"[SF-LF]     Error getting total views: {e}")
-                    url_total = 0
-                
-                # Get conversion from this URL to LF title
-                url_converted = 0
-                url_conv_rate = 0.00000001
-                
-                if url_unique > 0:
-                    try:
-                        # Create temp table for this URL's viewers
-                        url_temp = f"URL_{idx}_{job_id.replace('-', '_')[:8]}"
-                        cur.execute(f"DROP TABLE IF EXISTS {url_temp}")
-                        cur.execute(f"""
-                            CREATE TEMPORARY TABLE {url_temp} AS
-                            SELECT DISTINCT UID
-                            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                            WHERE LOWER(URL) LIKE '%{url_pattern}%'
-                              AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                        """)
-                        
-                        # Check conversion to LF title
-                        lf_title_pattern = lf_title.lower().replace("'", "''")
-                        lf_plat_clause = ""
-                        if lf_platform:
-                            lf_plat_clause = f"AND LOWER(c.COMMON_NAME) = '{lf_platform.lower()}'"
-                        
-                        cur.execute(f"""
-                            SELECT COUNT(DISTINCT c.UID)
-                            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
-                            INNER JOIN {url_temp} u ON c.UID = u.UID
-                            WHERE LOWER(c.URL) LIKE '%{lf_title_pattern}%'
-                              {lf_plat_clause}
-                              AND c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                        """)
-                        url_converted = cur.fetchone()[0] or 0
-                        
-                        cur.execute(f"DROP TABLE IF EXISTS {url_temp}")
-                    except Exception as e:
-                        print(f"[SF-LF]     Error getting conversion: {e}")
-                        url_converted = 0
-                
-                # Calculate reach rate (what % of total SF viewers saw this URL)
+        urls_to_query_raw = sf_urls[:20] if len(sf_urls) > 20 else sf_urls
+        urls_to_query = [u.strip() for u in urls_to_query_raw if u and u.strip()]
+
+        if urls_to_query:
+            update_job_status(job_id, progress=30, message=f'Querying {len(urls_to_query)} URLs (batched)...')
+            print(f"[SF-LF] Step 1b: BATCH per-URL query for {len(urls_to_query)} URLs")
+
+            url_lowers = [u.lower() for u in urls_to_query]
+            url_escaped = [u.replace("\\", "\\\\").replace("'", "''") for u in url_lowers]
+            needles_arr = '[' + ', '.join(f"'{u}'" for u in url_escaped) + ']'
+
+            # ---- Query A: per-URL unique + total in ONE scan ----
+            sel_parts = []
+            for i, ue in enumerate(url_escaped):
+                sel_parts.append(f"uniqExactIf(UID, positionCaseInsensitive(URL, '{ue}') > 0) AS u{i}_uniq")
+                sel_parts.append(f"countIf(positionCaseInsensitive(URL, '{ue}') > 0) AS u{i}_total")
+
+            batch_url_sql = f"""
+                SELECT {', '.join(sel_parts)}
+                FROM clickstream.clickstream_final
+                WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                  AND multiSearchAnyCaseInsensitive(URL, {needles_arr}) > 0
+            """
+            try:
+                cur.execute(batch_url_sql)
+                url_row = list(cur.fetchone() or [0] * (2 * len(urls_to_query)))
+            except Exception as e:
+                print(f"[SF-LF] Per-URL batch query error: {e}")
+                url_row = [0] * (2 * len(urls_to_query))
+
+            # ---- Query B: per-URL conversion in ONE scan via user-state CTE ----
+            lf_title_pattern = lf_title.lower().replace("\\", "\\\\").replace("'", "''")
+            if lf_platform:
+                lf_plat_q = lf_platform.lower().replace("'", "''")
+                lf_match_expr = (f"(positionCaseInsensitive(URL, '{lf_title_pattern}') > 0 "
+                                 f"AND LOWER(COMMON_NAME) = '{lf_plat_q}')")
+            else:
+                lf_match_expr = f"positionCaseInsensitive(URL, '{lf_title_pattern}') > 0"
+
+            inner_parts = [
+                f"maxIf(1, positionCaseInsensitive(URL, '{ue}') > 0) AS saw_u{i}"
+                for i, ue in enumerate(url_escaped)
+            ]
+            inner_parts.append(f"maxIf(1, {lf_match_expr}) AS saw_lf")
+            sel_conv_parts = [
+                f"countIf(saw_u{i} = 1 AND saw_lf = 1) AS u{i}_conv"
+                for i in range(len(urls_to_query))
+            ]
+
+            batch_url_conv_sql = f"""
+                SELECT {', '.join(sel_conv_parts)}
+                FROM (
+                    SELECT UID, {', '.join(inner_parts)}
+                    FROM clickstream.clickstream_final
+                    WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                      AND (multiSearchAnyCaseInsensitive(URL, {needles_arr}) > 0
+                           OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)
+                    GROUP BY UID
+                )
+            """
+            try:
+                cur.execute(batch_url_conv_sql)
+                conv_row = list(cur.fetchone() or [0] * len(urls_to_query))
+            except Exception as e:
+                print(f"[SF-LF] Per-URL conversion batch error: {e}")
+                conv_row = [0] * len(urls_to_query)
+
+            for i, url_clean in enumerate(urls_to_query):
+                url_display = (url_clean[:77] + '...') if len(url_clean) > 80 else url_clean
+                url_unique    = int(url_row[i * 2] or 0)
+                url_total     = int(url_row[i * 2 + 1] or 0)
+                url_converted = int(conv_row[i] or 0)
+
                 url_unique_final = add_noise_if_zero(url_unique, min_noise=100, max_noise=2000)
-                
-                # Reach % = This URL's viewers / Total SF platform viewers
                 url_reach_rate = round((url_unique_final / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0.00000001
-                
-                # Ensure duplicated > unique for URL metrics too
                 url_dup_final = add_noise_if_zero(url_total, min_noise=200, max_noise=5000)
                 if url_dup_final <= url_unique_final:
                     url_dup_final = int(url_unique_final * random.uniform(1.5, 3.0))
-                
-                # Store raw conversion for later proportional distribution
+
                 results['individual_url_metrics'].append({
                     'url': url_clean,
                     'url_display': url_display,
                     'unique_views': url_unique_final,
                     'duplicated_views': url_dup_final,
                     'reach_rate': url_reach_rate,
-                    'raw_converted': url_converted,  # Will be recalculated proportionally later
-                    'converted_to_lf': 0,  # Placeholder - will be set after platform totals known
+                    'raw_converted': url_converted,
+                    'converted_to_lf': 0,
                     'conversion_rate': 0.00000001
                 })
-                
-                print(f"[SF-LF]     {url_unique_final:,} unique ({url_reach_rate:.8f}% reach), raw conv: {url_converted}")
-            
-            print(f"[SF-LF] Completed individual URL queries")
+                print(f"[SF-LF]     URL {i+1}/{len(urls_to_query)}: {url_unique_final:,} unique "
+                      f"({url_reach_rate:.6f}% reach), raw conv: {url_converted}")
+
+            print(f"[SF-LF] BATCH per-URL queries complete")
         
         update_job_status(job_id, progress=40, message='Calculating conversions to long-form content...')
         print(f"[SF-LF] Step 2: Check conversion to {lf_title} on {lf_platform or 'any platform'}")
         
-        # ===== CONVERSION: Combined SF Viewers → LF Title =====
-        lf_title_pattern = lf_title.lower().replace("'", "''")
+        # ===== ALL CONVERSIONS IN ONE BATCHED QUERY (was 1 + 3*N scans, now 1) =====
+        # Single user-state CTE: per UID, did they see each platform / LF title / LF platform?
+        # Outer aggregates derive overall + per-platform conversions in a single pass.
+        lf_title_pattern = lf_title.lower().replace("\\", "\\\\").replace("'", "''")
+        # Kept for downstream demographics query that still uses sf_temp_table join
         lf_platform_clause = ""
         if lf_platform:
             lf_platform_clause = f"AND LOWER(c.COMMON_NAME) = '{lf_platform.lower()}'"
-        
-        conversion_query = f"""
-            SELECT 
-                COUNT(DISTINCT c.UID) as converted_users,
-                COUNT(*) as total_lf_views
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
-            INNER JOIN {sf_temp_table} sf ON c.UID = sf.UID
-            WHERE LOWER(c.URL) LIKE '%{lf_title_pattern}%'
-              {lf_platform_clause}
-              AND c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+        if lf_platform:
+            lf_plat_q = lf_platform.lower().replace("'", "''")
+            lf_match_expr = (f"(positionCaseInsensitive(URL, '{lf_title_pattern}') > 0 "
+                             f"AND LOWER(COMMON_NAME) = '{lf_plat_q}')")
+            lf_plat_match_expr = f"LOWER(COMMON_NAME) = '{lf_plat_q}'"
+        else:
+            lf_match_expr = f"positionCaseInsensitive(URL, '{lf_title_pattern}') > 0"
+            lf_plat_match_expr = "0"
+
+        conv_inner_parts = []
+        for i, pl in enumerate(plat_lowers):
+            pl_esc = pl.replace("'", "''")
+            conv_inner_parts.append(f"maxIf(1, LOWER(COMMON_NAME) = '{pl_esc}') AS saw_p{i}")
+        conv_inner_parts.append(f"maxIf(1, LOWER(COMMON_NAME) IN ({plat_list_sql})) AS saw_any_sf")
+        conv_inner_parts.append(f"maxIf(1, {lf_match_expr}) AS saw_lf")
+        conv_inner_parts.append(f"maxIf(1, {lf_plat_match_expr}) AS saw_lf_plat")
+        conv_inner_parts.append(f"countIf({lf_match_expr}) AS lf_view_count")
+
+        conv_outer_parts = [
+            f"countIf(saw_p{i} = 1 AND saw_lf = 1) AS p{i}_conv"
+            for i in range(len(plat_lowers))
+        ]
+        conv_outer_parts.append("countIf(saw_any_sf = 1 AND saw_lf = 1) AS overall_conv")
+        conv_outer_parts.append("countIf(saw_any_sf = 1 AND saw_lf_plat = 1) AS overall_lf_plat_conv")
+        conv_outer_parts.append("sum(lf_view_count) AS lf_views_total")
+
+        # Pre-filter rows: only those that match an SF platform OR look like an LF hit.
+        # Drastically narrows the GROUP BY UID to relevant users only.
+        if lf_platform:
+            conv_prefilter = (f"(LOWER(COMMON_NAME) IN ({plat_list_sql}) "
+                              f"OR LOWER(COMMON_NAME) = '{lf_plat_q}' "
+                              f"OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)")
+        else:
+            conv_prefilter = (f"(LOWER(COMMON_NAME) IN ({plat_list_sql}) "
+                              f"OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)")
+
+        batch_conv_sql = f"""
+            SELECT {', '.join(conv_outer_parts)}
+            FROM (
+                SELECT UID, {', '.join(conv_inner_parts)}
+                FROM clickstream.clickstream_final
+                WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                  AND {conv_prefilter}
+                GROUP BY UID
+            )
         """
+
+        update_job_status(job_id, progress=45, message='Calculating all conversions in one scan...')
         try:
-            cur.execute(conversion_query)
-            row = cur.fetchone()
-            converted_raw = row[0] if row else 0
-            lf_views = add_noise_if_zero(row[1] if row else 0)
-            print(f"[SF-LF] Overall Conversion raw: {converted_raw}")
+            print(f"[SF-LF] Step 2: BATCH conversion query (overall + {len(plat_lowers)} platforms + LF platform)")
+            cur.execute(batch_conv_sql)
+            conv_full_row = list(cur.fetchone() or [0] * (len(plat_lowers) + 3))
         except Exception as e:
-            print(f"[SF-LF] Conversion query error: {e}")
-            converted_raw = 0
-            lf_views = add_noise_if_zero(0)
-        
-        # ===== PER-PLATFORM CONVERSIONS =====
-        update_job_status(job_id, progress=50, message='Calculating per-platform conversions...')
-        
-        for platform in platforms_to_query:
-            platform_lower = platform.lower()
-            try:
-                # Create temp table for this platform's viewers
-                plat_temp = f"SF_{platform[:3].upper()}_{job_id.replace('-', '_')[:10]}"
-                cur.execute(f"DROP TABLE IF EXISTS {plat_temp}")
-                cur.execute(f"""
-                    CREATE TEMPORARY TABLE {plat_temp} AS
-                    SELECT DISTINCT UID
-                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                    WHERE LOWER(COMMON_NAME) = '{platform_lower}'
-                      AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                """)
-                
-                # Check conversion for this platform's viewers
-                cur.execute(f"""
-                    SELECT COUNT(DISTINCT c.UID)
-                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
-                    INNER JOIN {plat_temp} pv ON c.UID = pv.UID
-                    WHERE LOWER(c.URL) LIKE '%{lf_title_pattern}%'
-                      {lf_platform_clause}
-                      AND c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                """)
-                plat_converted = add_small_noise(cur.fetchone()[0] or 0)
-                plat_viewers = per_platform_data[platform]['unique_views']
-                plat_conv_rate = round((plat_converted / plat_viewers * 100), 8) if plat_viewers > 0 else 0.00000001
-                
-                per_platform_data[platform]['converted'] = plat_converted
-                per_platform_data[platform]['conversion_rate'] = plat_conv_rate
-                print(f"[SF-LF]   {platform} conversion: {plat_converted:,} ({plat_conv_rate:.8f}%)")
-                
-                cur.execute(f"DROP TABLE IF EXISTS {plat_temp}")
-            except Exception as e:
-                print(f"[SF-LF] Error getting {platform} conversion: {e}")
-                per_platform_data[platform]['converted'] = add_small_noise(0)
-                per_platform_data[platform]['conversion_rate'] = 0.00000001
+            print(f"[SF-LF] Batch conversion query error: {e}")
+            conv_full_row = [0] * (len(plat_lowers) + 3)
+
+        # Per-platform results
+        for i, platform in enumerate(platforms_to_query):
+            plat_converted = add_small_noise(int(conv_full_row[i] or 0))
+            plat_viewers = per_platform_data[platform]['unique_views']
+            plat_conv_rate = round((plat_converted / plat_viewers * 100), 8) if plat_viewers > 0 else 0.00000001
+            per_platform_data[platform]['converted'] = plat_converted
+            per_platform_data[platform]['conversion_rate'] = plat_conv_rate
+            print(f"[SF-LF]   {platform} conversion: {plat_converted:,} ({plat_conv_rate:.8f}%)")
+
+        # Overall conversion (raw, then noised below)
+        converted_raw = int(conv_full_row[len(plat_lowers)] or 0)
+        # Stash LF-platform conversion for the section below to skip its query.
+        _lf_plat_conv_raw = int(conv_full_row[len(plat_lowers) + 1] or 0)
+        # Stash total LF view count (was COUNT(*) of LF rows previously)
+        lf_views = add_noise_if_zero(int(conv_full_row[len(plat_lowers) + 2] or 0))
+        print(f"[SF-LF] Overall Conversion raw: {converted_raw}")
         
         # OVERALL conversion = actual unique converted users (NOT sum of per-platform,
         # since a user on multiple platforms would be double-counted)
@@ -21837,22 +21832,10 @@ def run_sf_lf_conversion(job_id):
         update_job_status(job_id, progress=55, message='Getting long-form platform conversions...')
         
         # ===== CONVERSION: SF Platform Viewers → LF Platform (any content) =====
+        # Already computed in the batched conversion query above (no extra scan).
         if lf_platform:
-            platform_conv_query = f"""
-                SELECT COUNT(DISTINCT c.UID)
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
-                INNER JOIN {sf_temp_table} sf ON c.UID = sf.UID
-                WHERE LOWER(c.COMMON_NAME) = '{lf_platform.lower()}'
-                  AND c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-            """
-            try:
-                cur.execute(platform_conv_query)
-                platform_converted = add_noise_if_zero(cur.fetchone()[0] or 0, min_noise=100000, max_noise=500000)
-                print(f"[SF-LF] Platform conversion: {platform_converted:,} users visited {lf_platform}")
-            except Exception as e:
-                print(f"[SF-LF] Platform conversion error: {e}")
-                platform_converted = add_noise_if_zero(0)
-            
+            platform_converted = add_noise_if_zero(_lf_plat_conv_raw, min_noise=100000, max_noise=500000)
+            print(f"[SF-LF] Platform conversion: {platform_converted:,} users visited {lf_platform}")
             results['conversions']['sf_to_lf_platform'] = {
                 'total_sf_viewers': sf_total_unique,
                 'converted_users': platform_converted,
