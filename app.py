@@ -23984,9 +23984,19 @@ def submit_campaign_roi():
 
 
 def run_svod_acquisition(job_id):
-    """Run the SVOD_Churn_Attribution.py script."""
+    """Run the SVOD_Churn_Attribution.py script.
+
+    NOTE on the data backend: this job uses the
+    `migration/clickhouse_connector` drop-in (NOT Snowflake) — same backend
+    as SF→LF Conversion. The script's `connect_snowflake()` is now a thin
+    wrapper around `connect_clickhouse()`, so all queries go through the
+    SQL translator (DATEADD/DATEDIFF/TO_CHAR/TO_DATE/||/etc.) and per-query
+    `max_execution_time` + `max_memory_usage` settings configured in
+    `clickhouse_connector.DEFAULT_QUERY_SETTINGS`.
+    """
     try:
-        update_job_status(job_id, progress=10, message='Initializing...')
+        update_job_status(job_id, progress=10, message='Initializing (ClickHouse)...')
+        print(f"[Subscriber IQ] Starting job {job_id}  (backend: ClickHouse)")
         
         # Try script in repo root (parent of app dir), then same dir as app (e.g. bg-webapp on Render)
         app_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24002,7 +24012,7 @@ def run_svod_acquisition(job_id):
         job = jobs[job_id]
         params = job['params']
         
-        update_job_status(job_id, progress=30, message='Running analysis...')
+        update_job_status(job_id, progress=30, message='Running analysis on ClickHouse...')
         
         # Import and run the script
         import importlib.util
@@ -24073,10 +24083,15 @@ def run_svod_acquisition(job_id):
             'output_dir': str(output_folder),
         }
         
-        # Run the analysis function
+        # Run the analysis function. `module.connect_snowflake()` is just a
+        # named wrapper around `connect_clickhouse()` for backward compat;
+        # the connection has Subscriber-IQ tuned settings (long timeout,
+        # parallel aggregation, generous memory budget) baked in via
+        # `migration/clickhouse_connector.DEFAULT_QUERY_SETTINGS`.
         conn = module.connect_snowflake()
         try:
-            update_job_status(job_id, progress=50, message='Executing analysis...')
+            update_job_status(job_id, progress=50, message='Executing analysis on ClickHouse...')
+            print(f"[Subscriber IQ] Connected; running analysis (project={params.get('project_name')!r})")
             
             # Call run_query directly with our params
             if hasattr(module, 'run_query'):
