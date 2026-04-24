@@ -21803,12 +21803,35 @@ def run_sf_lf_conversion(job_id):
         converted = add_small_noise(converted_raw) if converted_raw > 0 else add_small_noise(0)
         print(f"[SF-LF] Using converted_raw={converted_raw} as overall (sum of platforms={sum_plat_converted} would inflate via overlap)")
         
-        # Cap each platform's converted count so it never exceeds the overall
-        for plat_name, plat_data in per_platform_data.items():
-            if plat_data.get('converted', 0) > converted:
-                plat_data['converted'] = converted
+        # Option A: proportional scale-down so sum(platforms) == overall.
+        # Without this, the per-platform `add_small_noise` calls (and any real
+        # cross-platform exposure overlap) push sum(platforms) above overall —
+        # which makes the dashboard look mathematically broken to customers
+        # (e.g. YT 28.2K + IG 17.8K + TT 15.8K = 61.8K vs Overall 28.2K).
+        # We scale every platform DOWN by the same ratio so the breakdown
+        # ladders up exactly to the overall converted-users KPI. We only scale
+        # down (never up) — if sum < overall, that's legitimate (means some
+        # converters came from outside the tracked SF platforms) and we leave
+        # the per-platform counts alone.
+        sum_plat_converted_post = sum(pd.get('converted', 0) for pd in per_platform_data.values())
+        if sum_plat_converted_post > converted and sum_plat_converted_post > 0:
+            scale = converted / sum_plat_converted_post
+            print(f"[SF-LF] Scaling per-platform converted DOWN by {scale:.4f} (was sum={sum_plat_converted_post:,}, overall={converted:,})")
+            running_total = 0
+            plat_items = list(per_platform_data.items())
+            for idx, (plat_name, plat_data) in enumerate(plat_items):
+                if idx == len(plat_items) - 1:
+                    # Last platform absorbs rounding error so sum == overall exactly
+                    new_conv = max(0, converted - running_total)
+                else:
+                    new_conv = int(round(plat_data.get('converted', 0) * scale))
+                    running_total += new_conv
+                # Safety: never exceed the platform's own unique viewers
                 plat_viewers = plat_data.get('unique_views', 1)
-                plat_data['conversion_rate'] = round((converted / plat_viewers * 100), 8) if plat_viewers > 0 else 0.00000001
+                if new_conv > plat_viewers:
+                    new_conv = plat_viewers
+                plat_data['converted'] = new_conv
+                plat_data['conversion_rate'] = round((new_conv / plat_viewers * 100), 8) if plat_viewers > 0 else 0.00000001
         
         conversion_rate = round((converted / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0.00000001
         print(f"[SF-LF] Overall Conversion final: {converted:,} users converted (sum of {len(per_platform_data)} platforms) ({conversion_rate:.8f}% rate)")
