@@ -22037,7 +22037,38 @@ def run_sf_lf_conversion(job_id):
         if results.get('individual_url_metrics'):
             csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
             csv_rows.append({'Column': 'INDIVIDUAL_URL_METRICS', 'Value': f'Top {len(results["individual_url_metrics"])} Input URLs', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            for url_m in results['individual_url_metrics']:
+
+            # Pre-compute per-URL converted gen-pop so the COLUMN sums to the
+            # OVERALL Converted Users gen-pop projection. Without this, each row
+            # is independently projected (and zero-converted URLs get noise
+            # injected from project_to_gen_pop's `if value == 0` branch),
+            # causing the per-row gen-pops to over-shoot the overall total —
+            # e.g. 33K vs 28K for Doc Season 2. We distribute the OVERALL
+            # gen-pop proportionally to each URL's raw conv count, with the
+            # last URL absorbing rounding remainder, so sum == overall exactly.
+            overall_conv_genpop_target = project_to_gen_pop(converted) if converted > 0 else project_to_gen_pop(0)
+            url_list = results['individual_url_metrics']
+            sum_url_conv_raw = sum(max(0, int(u.get('converted_to_lf', 0))) for u in url_list)
+            url_conv_genpops = {}
+            running_genpop = 0
+            for idx, u in enumerate(url_list):
+                u_unique = u['unique_views']
+                u_unique_genpop_cap = project_to_gen_pop(u_unique) if u_unique > 0 else 0
+                if sum_url_conv_raw > 0:
+                    if idx == len(url_list) - 1:
+                        gp = max(0, overall_conv_genpop_target - running_genpop)
+                    else:
+                        share = max(0, int(u.get('converted_to_lf', 0))) / sum_url_conv_raw
+                        gp = int(round(overall_conv_genpop_target * share))
+                        running_genpop += gp
+                else:
+                    gp = 0
+                # Never exceed the URL's own projected unique views
+                if u_unique_genpop_cap > 0 and gp > u_unique_genpop_cap:
+                    gp = u_unique_genpop_cap
+                url_conv_genpops[id(u)] = gp
+
+            for url_m in url_list:
                 u_unique = url_m['unique_views']
                 u_dup = url_m['duplicated_views']
                 u_reach = url_m.get('reach_rate', 0.00000001)
@@ -22052,7 +22083,7 @@ def run_sf_lf_conversion(job_id):
                     u_conv_rate = 0.00000001
                 url_val = url_m['url_display']
                 u_unique_genpop = project_to_gen_pop(u_unique)
-                u_conv_genpop = project_to_gen_pop(u_conv)
+                u_conv_genpop = url_conv_genpops.get(id(url_m), 0)
                 # Cap projected converted to projected unique
                 if u_conv_genpop > u_unique_genpop:
                     u_conv_genpop = u_unique_genpop
