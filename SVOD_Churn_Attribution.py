@@ -855,26 +855,38 @@ def run_query(conn, p):
 
     # Step 8: Demographic breakdown (AGE and GENDER)
     print("📊 Step 8: Calculating demographic breakdown (AGE and GENDER)...")
+    # Two-step form: ClickHouse disallows nested aggregates like SUM(COUNT(*)) OVER().
+    # Compute per-category totals in a separate CTE, then join.
     demo_query = """
     WITH demo_long AS (
         SELECT 'AGE' AS CATEGORY, AGE AS VALUE
         FROM TEMP_DEMOGRAPHICS
         WHERE AGE IS NOT NULL AND AGE != ''
-        
+
         UNION ALL
-        
+
         SELECT 'GENDER' AS CATEGORY, GENDER AS VALUE
         FROM TEMP_DEMOGRAPHICS
         WHERE GENDER IS NOT NULL AND GENDER != ''
+    ),
+    agg AS (
+        SELECT CATEGORY, VALUE, COUNT(*) AS CNT
+        FROM demo_long
+        GROUP BY CATEGORY, VALUE
+    ),
+    totals AS (
+        SELECT CATEGORY, SUM(CNT) AS TOT
+        FROM agg
+        GROUP BY CATEGORY
     )
     SELECT
-        CATEGORY,
-        VALUE,
-        COUNT(*) AS COUNT,
-        ROUND(COUNT(*) * 100.0 / NULLIF(SUM(COUNT(*)) OVER (PARTITION BY CATEGORY), 0), 2) AS PERCENTAGE
-    FROM demo_long
-    GROUP BY CATEGORY, VALUE
-    ORDER BY CATEGORY, COUNT DESC
+        a.CATEGORY,
+        a.VALUE,
+        a.CNT AS COUNT,
+        ROUND(a.CNT * 100.0 / NULLIF(t.TOT, 0), 2) AS PERCENTAGE
+    FROM agg a
+    LEFT JOIN totals t ON a.CATEGORY = t.CATEGORY
+    ORDER BY a.CATEGORY, a.CNT DESC
     """
     df_demo = pd.read_sql(demo_query, conn)
     print("   ✅ Demographics calculated\n")
@@ -896,18 +908,30 @@ def run_query(conn, p):
     # Step 9b: Per-episode signup timing (if tracking episodes)
     if track_episodes and episode_dates:
         print("📊 Step 9b: Analyzing per-episode signup timing...")
+        # ClickHouse disallows nested aggregates. Split into agg + totals.
         episode_timing_query = """
+        WITH agg AS (
+            SELECT
+                ATTRIBUTED_EPISODE AS EPISODE_NUM,
+                DAYS_TO_SIGNUP,
+                COUNT(*) AS SIGNUP_COUNT
+            FROM TEMP_NEW_PLATFORM_SIGNUPS
+            WHERE ATTRIBUTED_EPISODE IS NOT NULL
+            GROUP BY ATTRIBUTED_EPISODE, DAYS_TO_SIGNUP
+        ),
+        totals AS (
+            SELECT EPISODE_NUM, SUM(SIGNUP_COUNT) AS TOT
+            FROM agg
+            GROUP BY EPISODE_NUM
+        )
         SELECT
-            ATTRIBUTED_EPISODE AS EPISODE_NUM,
-            DAYS_TO_SIGNUP,
-            COUNT(*) AS SIGNUP_COUNT,
-            ROUND(COUNT(*) * 100.0 / NULLIF(
-                SUM(COUNT(*)) OVER (PARTITION BY ATTRIBUTED_EPISODE), 0
-            ), 2) AS PERCENTAGE
-        FROM TEMP_NEW_PLATFORM_SIGNUPS
-        WHERE ATTRIBUTED_EPISODE IS NOT NULL
-        GROUP BY ATTRIBUTED_EPISODE, DAYS_TO_SIGNUP
-        ORDER BY ATTRIBUTED_EPISODE, DAYS_TO_SIGNUP
+            a.EPISODE_NUM,
+            a.DAYS_TO_SIGNUP,
+            a.SIGNUP_COUNT,
+            ROUND(a.SIGNUP_COUNT * 100.0 / NULLIF(t.TOT, 0), 2) AS PERCENTAGE
+        FROM agg a
+        LEFT JOIN totals t ON a.EPISODE_NUM = t.EPISODE_NUM
+        ORDER BY a.EPISODE_NUM, a.DAYS_TO_SIGNUP
         """
         df_episode_timing = pd.read_sql(episode_timing_query, conn)
         print("   ✅ Per-episode timing calculated\n")

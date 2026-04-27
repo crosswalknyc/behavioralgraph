@@ -403,8 +403,8 @@ class ClickHouseCursor:
                 self._column_names = result.column_names if hasattr(result, 'column_names') else []
                 self._description = [
                     (name, None, None, None, None, None, True)
-                    for name in self._column_names
-                ] if self._column_names else None
+                    for name in (self._column_names or [])
+                ]
             except Exception as e:
                 logger.warning("ClickHouse query error: %s\nSQL: %s", e, translated[:500])
                 raise
@@ -412,7 +412,7 @@ class ClickHouseCursor:
             self._client.command(translated)
             self._rows = []
             self._column_names = []
-            self._description = None
+            self._description = []
 
         self._pos = 0
         self.rowcount = len(self._rows)
