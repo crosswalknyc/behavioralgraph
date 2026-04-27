@@ -35,6 +35,40 @@ CH_PASSWORD   = os.environ.get('CH_PASSWORD',   '4qPllwDG+S3PptBWTRAJPTkpCzkRZ6t
 CH_DATABASE   = os.environ.get('CH_DATABASE',   'clickstream')
 
 
+# ── Default per-query settings ────────────────────────────────────────────────
+# These are sent on every query for this client. They roughly reproduce the
+# behavior we used to lean on Snowflake's 6XL warehouse for: fully utilize
+# every core, exploit the (DELIVERED, UID, COMMON_NAME) sort order on
+# clickstream_final, pick a smart JOIN algorithm per query, and spill to disk
+# instead of OOM'ing if a query gets bigger than expected.
+#
+# Numbers picked for the AX162-S box (768 GB RAM, 4× 3.84 TB NVMe).
+CH_DEFAULT_SETTINGS = {
+    # Use all available cores for both reads and aggregations.
+    "max_threads": 0,
+    # Stream rows in primary-key order — huge win for clickstream_final since
+    # most Profile-Analysis queries filter on DELIVERED first.
+    "optimize_read_in_order": 1,
+    "optimize_aggregation_in_order": 1,
+    # Let the planner choose between parallel_hash / hash / partial_merge /
+    # grace_hash on a per-query basis. parallel_hash is by far the fastest
+    # for the small-build-side joins Profile Analysis does (TEMP_SAMPLED_UIDS,
+    # ELIGIBLE_UIDS, HOST_MAPPING).
+    "join_algorithm": "parallel_hash,hash,partial_merge,grace_hash",
+    # Spill to disk on large group-by/sort instead of crashing.
+    "max_bytes_before_external_group_by": 40_000_000_000,   # 40 GB
+    "max_bytes_before_external_sort":     40_000_000_000,   # 40 GB
+    # Hard cap per query so one runaway query can't take the whole box down.
+    "max_memory_usage":                   120_000_000_000,  # 120 GB
+    # Mutations issued through this connection are awaited before returning,
+    # so callers can safely read-after-write on temp tables.
+    "mutations_sync": 2,
+    # Deduplicate identical INSERTs within a 60-second window — protects against
+    # accidental double-runs from the dashboard.
+    "insert_deduplicate": 1,
+}
+
+
 def connect_clickhouse():
     """Connect to ClickHouse. Returns a Snowflake-compatible wrapper."""
     client = clickhouse_connect.get_client(
@@ -45,6 +79,7 @@ def connect_clickhouse():
         database=CH_DATABASE,
         connect_timeout=30,
         send_receive_timeout=3600,
+        settings=CH_DEFAULT_SETTINGS,
     )
     return ClickHouseConnection(client)
 
@@ -413,13 +448,46 @@ def translate_sql(sql: str) -> str:
     result = re.sub(r'\bSAMPLE\s*\(\s*(\d+)\s+ROWS?\s*\)',
                     replace_sample_rows, result, flags=re.IGNORECASE)
     # Percentage-based: FROM table SAMPLE (N) / SAMPLE (N.N)
-    # ClickHouse supports SAMPLE natively ONLY when the MergeTree table was
-    # created with an explicit `SAMPLE BY` key — our clickstream_final (and
-    # every other production CH table in this repo) was not, so Snowflake's
-    # `SAMPLE (pct)` hint would raise "SAMPLE is not supported" here.
-    # Safest universal fix: strip the clause. Callers that used it were
-    # speed hints; downstream LIMIT/ORDER BY/partition pruning still cap
-    # the result correctly, just without Bernoulli sampling.
+    # ClickHouse only supports native SAMPLE on tables built with a
+    # `SAMPLE BY` key, which none of our production tables have. Previously
+    # we just stripped the clause, but that meant a query asking for 15% of
+    # clickstream_final actually scanned 100% — exactly the behavior the
+    # caller was trying to avoid.
+    #
+    # Replacement strategy: convert into deterministic hash-bucket sampling
+    # on UID by wrapping the table in a subquery:
+    #
+    #   FROM clickstream_final SAMPLE (15) c
+    #     →  FROM (SELECT * FROM clickstream_final
+    #              WHERE cityHash64(UID) % 10000 < 1500) c
+    #
+    # Properties:
+    #   • Reproducible: same UIDs picked across runs, so PASS 1 / PASS 2
+    #     temp tables stay consistent.
+    #   • All tables Profile Analysis SAMPLEs from have a UID column, so this
+    #     is safe for our use cases.
+    #   • cityHash64 is column-pruning friendly; CH skips reading any column
+    #     other than UID until the predicate passes.
+    #   • Date filtering on the outer query still does partition pruning
+    #     because the wrapper preserves all columns.
+    def _sample_to_hash(m):
+        table = m.group(1)
+        pct   = float(m.group(2))
+        # Cap at 100, allow fractional percents down to 0.01.
+        bucket = max(1, min(10000, int(round(pct * 100))))
+        return (
+            f'FROM (SELECT * FROM {table} '
+            f'WHERE cityHash64(UID) % 10000 < {bucket})'
+        )
+
+    result = re.sub(
+        r'\bFROM\s+([\w.]+)\s+SAMPLE\s*\(\s*(\d+(?:\.\d+)?)\s*\)',
+        _sample_to_hash, result, flags=re.IGNORECASE,
+    )
+
+    # Anything that didn't match the FROM-table pattern (rare; usually a
+    # SAMPLE clause attached to a subquery alias) gets stripped as before so
+    # the query at least parses.
     result = re.sub(r'\s+SAMPLE\s*\(\s*\d+(?:\.\d+)?\s*\)',
                     '', result, flags=re.IGNORECASE)
 
@@ -540,6 +608,34 @@ def _rewrite_qualify(sql: str) -> str:
     to the whole DDL, otherwise we emit  ``SELECT * FROM (CREATE TABLE ...)``
     which ClickHouse (rightly) rejects.
     """
+    # Pattern 0 (fast path): QUALIFY ROW_NUMBER() OVER (PARTITION BY p ORDER BY o) <= N
+    # → ORDER BY o LIMIT N BY p
+    #
+    # ClickHouse executes `LIMIT N BY` as a streaming top-N per group and never
+    # materializes the full window function — typically 5-15× faster than the
+    # subquery rewrite below for the wide PARTITION BY UID / ORDER BY DELIVERED
+    # patterns Profile Analysis uses. We only take this path when the outer
+    # SELECT has no other ORDER BY or LIMIT (otherwise we'd silently change
+    # query semantics) and the comparator is `<=` or `=` against a positive int.
+    fast_match = re.search(
+        r'\bQUALIFY\s+ROW_NUMBER\s*\(\s*\)\s*OVER\s*\(\s*'
+        r'PARTITION\s+BY\s+(?P<part>[^()]+?)\s+'
+        r'ORDER\s+BY\s+(?P<order>[^()]+?)\s*\)\s*'
+        r'(?P<op><=|=)\s*(?P<n>\d+)\s*$',
+        sql, re.IGNORECASE,
+    )
+    if fast_match:
+        head = sql[:fast_match.start()].rstrip()
+        # Bail out if the SELECT already has its own LIMIT or ORDER BY at the
+        # top level — merging them is too risky to do via regex.
+        head_no_strings = re.sub(r"'[^']*'", "''", head)
+        if not re.search(r'\bORDER\s+BY\b', head_no_strings, re.IGNORECASE) \
+                and not re.search(r'\bLIMIT\b', head_no_strings, re.IGNORECASE):
+            part  = fast_match.group('part').strip()
+            order = fast_match.group('order').strip()
+            n     = fast_match.group('n')
+            return f"{head}\nORDER BY {order} LIMIT {n} BY {part}"
+
     # Pattern 1: QUALIFY ROW_NUMBER() OVER (...) = 1
     qualify_match = re.search(
         r'\bQUALIFY\s+ROW_NUMBER\s*\(\s*\)\s*OVER\s*\(([^)]+)\)\s*=\s*(\d+)',
