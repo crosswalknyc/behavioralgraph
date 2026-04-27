@@ -730,20 +730,18 @@ def run_query(conn, p):
     print(f"🎯 Step 4: Tracking first-time '{p['platform_name']}' visits within {p['attribution_window']} days...")
     
     if track_episodes and episode_dates:
-        # WITH EPISODE ATTRIBUTION: Find which episode they watched last before signing up
+        # WITH EPISODE ATTRIBUTION: Find which episode they watched last before signing up.
+        # Done in two steps so we don't reference an aggregate (MIN) from a correlated
+        # subquery's WHERE clause — Snowflake allowed it, ClickHouse rejects it with
+        # ILLEGAL_AGGREGATION. Step A computes FIRST_PLATFORM_VISIT per user, step B
+        # joins that to the episode table (no correlated subquery needed).
         cur.execute(f"""
-            CREATE OR REPLACE TEMP TABLE TEMP_NEW_PLATFORM_SIGNUPS AS
+            CREATE OR REPLACE TEMP TABLE TEMP_FIRST_PLATFORM_VISIT AS
             SELECT
                 sw.UID,
                 sw.FIRST_SHOW_WATCH,
                 MIN(cs.VISIT_TS) AS FIRST_PLATFORM_VISIT,
-                DATEDIFF(DAY, sw.FIRST_SHOW_WATCH, MIN(cs.VISIT_TS)) AS DAYS_TO_SIGNUP,
-                (
-                    SELECT MAX(epi.EPISODE_NUM)
-                    FROM TEMP_SHOW_WATCHERS_WITH_EPISODES epi
-                    WHERE epi.UID = sw.UID
-                      AND epi.VISIT_TS < MIN(cs.VISIT_TS)
-                ) AS ATTRIBUTED_EPISODE
+                DATEDIFF(DAY, sw.FIRST_SHOW_WATCH, MIN(cs.VISIT_TS)) AS DAYS_TO_SIGNUP
             FROM TEMP_CLEAN_SHOW_WATCHERS sw
             INNER JOIN PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cs
                 ON sw.UID = cs.UID
@@ -752,6 +750,24 @@ def run_query(conn, p):
               AND LOWER(cs.COMMON_NAME) LIKE '%{platform_filter}%'
               AND cs.VISIT_TS >= sw.FIRST_SHOW_WATCH
             GROUP BY sw.UID, sw.FIRST_SHOW_WATCH
+        """)
+        cur.execute("""
+            CREATE OR REPLACE TEMP TABLE TEMP_NEW_PLATFORM_SIGNUPS AS
+            SELECT
+                fpv.UID,
+                fpv.FIRST_SHOW_WATCH,
+                fpv.FIRST_PLATFORM_VISIT,
+                fpv.DAYS_TO_SIGNUP,
+                epi_max.ATTRIBUTED_EPISODE
+            FROM TEMP_FIRST_PLATFORM_VISIT fpv
+            LEFT JOIN (
+                SELECT fpv2.UID, MAX(epi.EPISODE_NUM) AS ATTRIBUTED_EPISODE
+                FROM TEMP_FIRST_PLATFORM_VISIT fpv2
+                INNER JOIN TEMP_SHOW_WATCHERS_WITH_EPISODES epi
+                    ON epi.UID = fpv2.UID
+                WHERE epi.VISIT_TS < fpv2.FIRST_PLATFORM_VISIT
+                GROUP BY fpv2.UID
+            ) epi_max ON epi_max.UID = fpv.UID
         """)
     else:
         # NO EPISODE TRACKING: Just track overall signups
