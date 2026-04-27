@@ -11943,6 +11943,16 @@ def _fetch_hf_ticker_payload_from_s3(s3_key):
         df.rename(columns={col_mapping['date']: 'Date'}, inplace=True)
     if 'quarter' in col_mapping:
         df.rename(columns={col_mapping['quarter']: 'Quarter'}, inplace=True)
+    # Defensive: sort by Date ascending so `data_rows[-1]` is always the
+    # most recent row, regardless of how the upstream CSV was written.
+    # (Prior Snowflake export wrote rows in insertion order, which made
+    # the physically-last row a stale 2021 entry and broke the
+    # "latest_quarter" KPI on the Fin IQ landing page.)
+    if 'Date' in df.columns and not df.empty:
+        try:
+            df = df.sort_values('Date', kind='stable').reset_index(drop=True)
+        except Exception:
+            pass
     filename = s3_key.replace('.csv', '').replace('_Daily', '')
     parts = filename.split('_')
     ticker_symbol = parts[0].upper() if parts else filename.upper()
@@ -12973,7 +12983,16 @@ def get_hedge_fund_ticker_data(s3_key):
             df.rename(columns={col_mapping['date']: 'Date'}, inplace=True)
         if 'quarter' in col_mapping:
             df.rename(columns={col_mapping['quarter']: 'Quarter'}, inplace=True)
-        
+
+        # Defensive: sort by Date ascending so `data[-1]` is always the
+        # most recent row, regardless of how the upstream CSV was written.
+        # (See matching comment in _fetch_hf_ticker_payload_from_s3.)
+        if 'Date' in df.columns and not df.empty:
+            try:
+                df = df.sort_values('Date', kind='stable').reset_index(drop=True)
+            except Exception:
+                pass
+
         # Extract ticker info from filename
         filename = s3_key.replace('.csv', '').replace('_Daily', '')
         parts = filename.split('_')
